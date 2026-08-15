@@ -35,7 +35,14 @@ type MetricType =
   | "gross_sales"
   | "order_count"
   | "payments_collected";
-type TimeRangeType = "1d" | "7d" | "30d" | "90d" | "180d" | "365d" | "all";
+export type TimeRangeType =
+  | "1d"
+  | "7d"
+  | "30d"
+  | "90d"
+  | "180d"
+  | "365d"
+  | "all";
 
 interface DailyDataPoint {
   date: string;
@@ -49,6 +56,8 @@ interface FinancialHeroChartProps {
   data: DailyDataPoint[];
   isLoading?: boolean;
   onTimeRangeChange?: (range: TimeRangeType) => void;
+  /** Controlled: the highlighted pill. `undefined` highlights none — used when
+   *  the parent's range came from a calendar and matches no preset span. */
   defaultTimeRange?: TimeRangeType;
 }
 
@@ -170,10 +179,11 @@ export function FinancialHeroChart({
   data,
   isLoading,
   onTimeRangeChange,
-  defaultTimeRange = "7d",
+  defaultTimeRange,
 }: FinancialHeroChartProps) {
   const [activeMetric, setActiveMetric] = useState<MetricType>("net_sales");
-  // Use prop directly - parent controls the time range
+  // Use prop directly - parent controls the time range. Undefined means the
+  // parent's range matches no pill, so none is highlighted.
   const activeTimeRange = defaultTimeRange;
 
   const config = metricConfig[activeMetric];

@@ -318,14 +318,12 @@ function InventoryItemActions({
 function PurchaseOrderActions({
   purchaseOrder,
   onStatusChange,
-  alwaysVisible = false,
 }: {
   purchaseOrder: PurchaseOrderWithDetails;
   onStatusChange: (
     status: "pending" | "received" | "paid" | "cancelled",
     receivedQuantities?: Record<string, number>,
   ) => void;
-  alwaysVisible?: boolean;
 }) {
   // Receiving only applies to a submitted (pending) order. Everything else —
   // draft, already received, paid, cancelled — leaves the button inert.
@@ -336,11 +334,7 @@ function PurchaseOrderActions({
       variant="outline"
       size="sm"
       disabled={!canReceive}
-      className={cn(
-        "h-8 rounded-full transition-opacity",
-        !alwaysVisible &&
-          "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-      )}
+      className="h-7 shrink-0 rounded-full px-2.5 text-xs font-medium"
       onClick={(event) => {
         event.stopPropagation();
         if (!canReceive) return;
@@ -1473,7 +1467,7 @@ export default function InventoryPage() {
                     {showMultiLocationContext && (
                       <div className="col-span-2">Location</div>
                     )}
-                    <div className="col-span-3">Vendor</div>
+                    <div className="col-span-2">Vendor</div>
                     <div className="col-span-2">Status</div>
                     <div
                       className={
@@ -1482,7 +1476,7 @@ export default function InventoryPage() {
                     >
                       Items
                     </div>
-                    <div className="col-span-2">Total</div>
+                    <div className="col-span-3 text-right">Total</div>
                   </div>
 
                   {/* Table Rows */}
@@ -1516,8 +1510,8 @@ export default function InventoryPage() {
                         </div>
                       )}
 
-                      <div className="col-span-3">
-                        <p className="font-medium">
+                      <div className="col-span-2 min-w-0">
+                        <p className="truncate font-medium">
                           {po.vendor?.name || "Unknown Vendor"}
                         </p>
                       </div>
@@ -1526,7 +1520,11 @@ export default function InventoryPage() {
                         <POStatusBadge status={po.status} />
                       </div>
 
-                      <div className="col-span-2">
+                      <div
+                        className={
+                          showMultiLocationContext ? "col-span-1" : "col-span-2"
+                        }
+                      >
                         <span className="font-medium">
                           {po.items?.length || 0}
                         </span>
@@ -1536,8 +1534,8 @@ export default function InventoryPage() {
                         </span>
                       </div>
 
-                      <div className="col-span-2 flex items-center justify-between">
-                        <span className="font-semibold">
+                      <div className="col-span-3 flex items-center justify-end gap-3">
+                        <span className="shrink-0 font-semibold tabular-nums">
                           ${po.total_amount.toFixed(2)}
                         </span>
                         <PurchaseOrderActions
@@ -1580,7 +1578,6 @@ export default function InventoryPage() {
                         <POStatusBadge status={po.status} />
                         <PurchaseOrderActions
                           purchaseOrder={po}
-                          alwaysVisible
                           onStatusChange={(status, receivedQuantities) =>
                             updatePOStatus.mutate({
                               poId: po.id,

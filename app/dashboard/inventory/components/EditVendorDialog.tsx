@@ -111,7 +111,10 @@ export function EditVendorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]" elevation="above-sheet">
+      <DialogContent
+        className="flex max-h-[90dvh] flex-col overflow-hidden sm:max-w-[500px] sm:rounded-3xl"
+        elevation="above-sheet"
+      >
         <DialogHeader>
           <div className="flex min-w-0 flex-wrap items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
@@ -141,7 +144,14 @@ export function EditVendorDialog({
           </div>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          {/* See AddVendorDialog: the negative margin puts the scrollbar on the
+              dialog edge, and the matching padding keeps focus rings from being
+              clipped by the overflow box. */}
+          <div className="-mx-6 min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pt-4">
           {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name">Vendor Name *</Label>
@@ -255,8 +265,9 @@ export function EditVendorDialog({
               />
             </div>
           </div>
+          </div>
 
-          <DialogFooter className="pt-4">
+          <DialogFooter className="shrink-0 pt-4">
             <Button
               type="button"
               variant="outline"

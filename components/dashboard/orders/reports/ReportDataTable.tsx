@@ -86,16 +86,16 @@ export function ReportDataTable<TData, TValue>({
 
   return (
     <div>
-      {/* No outer border: the table sits inside a report panel that already
-          provides the one visual boundary. Columns are separated by hairlines
-          under each row, the way the Overview lists read. */}
-      <div className="-mx-2 overflow-x-auto px-2">
-        <Table className="min-w-max">
-          <TableHeader>
+      {/* `variant="data"` is the shared staff-table treatment: a rounded tinted
+          container, a tinted header band, and borderless rows on `bg-card/70`.
+          Keeping it in the primitive means the reports and the staff directory
+          cannot drift apart. */}
+      <Table variant="data" containerClassName="-mx-2 px-2" className="min-w-max">
+          <TableHeader className="[&_tr]:border-0">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
-                className="border-b border-border/60 hover:bg-transparent"
+                className="hover:bg-transparent"
               >
                 {headerGroup.headers.map((header) => (
                   <TableHead
@@ -133,7 +133,7 @@ export function ReportDataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && 'selected'}
-                  className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
+                  className="border-0 bg-card/70 transition-colors hover:bg-muted/40"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
@@ -165,8 +165,7 @@ export function ReportDataTable<TData, TValue>({
               </TableRow>
             )}
           </TableBody>
-        </Table>
-      </div>
+      </Table>
 
       {/* Pagination hides itself on a single page rather than showing two
           permanently-disabled buttons. */}

@@ -367,7 +367,7 @@ export function EditItemDialog({
               </div>
               <Badge
                 variant="outline"
-                className="shrink-0 gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
+                className="shrink-0 gap-1 border-0 bg-muted text-muted-foreground"
               >
                 <Globe className="h-3 w-3" />
                 Global
@@ -546,7 +546,7 @@ export function EditItemDialog({
             {isSingleLocation ? null : isGlobalItem ? (
               <Badge
                 variant="outline"
-                className="hidden shrink-0 gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 sm:inline-flex"
+                className="hidden shrink-0 gap-1 border-0 bg-muted text-muted-foreground sm:inline-flex"
               >
                 <Globe className="h-3 w-3" />
                 Global

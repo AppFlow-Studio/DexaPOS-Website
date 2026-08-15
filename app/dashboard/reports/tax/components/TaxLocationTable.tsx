@@ -36,8 +36,8 @@ type SortDir = "asc" | "desc";
 function SortIcon({ col, active, dir }: { col: SortKey; active: SortKey; dir: SortDir }) {
   if (col !== active) return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1 shrink-0" />;
   return dir === "asc"
-    ? <ArrowUp className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
-    : <ArrowDown className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />;
+    ? <ArrowUp className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />
+    : <ArrowDown className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />;
 }
 
 function fmt(value: number) {
@@ -141,12 +141,12 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
         </div>
       </div>
 
-      <CardContent className="p-0 overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent border-b border-border/50">
+      <CardContent className="p-0">
+        <Table variant="data">
+          <TableHeader className="[&_tr]:border-0">
+            <TableRow className="hover:bg-transparent">
               <TableHead
-                className="pl-5 text-xs font-semibold text-muted-foreground cursor-pointer select-none"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none"
                 onClick={() => handleSort("locationName")}
               >
                 <div className="flex items-center">
@@ -154,11 +154,11 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                   <SortIcon col="locationName" active={sortKey} dir={sortDir} />
                 </div>
               </TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground text-right">
+              <TableHead className="text-[0.8125rem] font-normal text-muted-foreground text-right">
                 Tax Rate
               </TableHead>
               <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
                 onClick={() => handleSort("taxableSales")}
               >
                 <div className="flex items-center justify-end">
@@ -167,7 +167,7 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                 </div>
               </TableHead>
               <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
                 onClick={() => handleSort("grossTax")}
               >
                 <div className="flex items-center justify-end">
@@ -176,7 +176,7 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                 </div>
               </TableHead>
               <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
                 onClick={() => handleSort("taxRefunded")}
               >
                 <div className="flex items-center justify-end">
@@ -185,7 +185,7 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                 </div>
               </TableHead>
               <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right pr-5"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5"
                 onClick={() => handleSort("netLiability")}
               >
                 <div className="flex items-center justify-end">
@@ -198,7 +198,7 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
           <TableBody>
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i} className="border-b border-border/30">
+                <TableRow key={i} className="border-0">
                   {Array.from({ length: 6 }).map((_, j) => (
                     <TableCell key={j} className="py-3.5">
                       <div className="h-4 bg-muted animate-pulse rounded" />
@@ -222,7 +222,7 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                   return (
                     <TableRow
                       key={row.locationId}
-                      className="border-b border-border/30 hover:bg-muted/30 transition-colors"
+                      className="border-0 bg-card/70 transition-colors hover:bg-muted/40"
                     >
                       <TableCell className="pl-5 py-3.5">
                         <div className="flex items-center gap-2">

@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatMoney, formatDate, SHIFT_LABELS } from "../lib/constants";
+import { cn } from "@/lib/utils";
 import type { TipDistributionSession } from "@/app/dashboard/actions/tips";
 
 interface NeedsApprovalTableProps {
@@ -50,64 +51,75 @@ export function NeedsApprovalTable({
     );
   }
 
+  const varianceClass = (variance: number) =>
+    Math.abs(variance) > 0.01
+      ? variance > 0
+        ? "text-amber-700 dark:text-amber-400"
+        : "text-red-700 dark:text-red-400"
+      : "text-muted-foreground";
+
+  const calculatedAt = (session: TipDistributionSession) =>
+    session.calculated_at
+      ? new Date(session.calculated_at).toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : "—";
+
   return (
-    <div className="-mx-2 overflow-x-auto px-2">
-      <Table className="min-w-max">
-        <TableHeader>
-          <TableRow className="border-b border-border/60 hover:bg-transparent">
-            <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Date</TableHead>
-            <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Shift</TableHead>
-            <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Collected</TableHead>
-            <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Distributed</TableHead>
-            <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Variance</TableHead>
-            <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Calculated At</TableHead>
-            <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Actions</TableHead>
+    <>
+      {/* Wide screens get the table; phones and tablets get cards below, so a
+          7-column row never becomes a horizontal scroller. Matches
+          StaffDataTable. */}
+      <Table
+        variant="data"
+        containerClassName="hidden xl:block"
+        className="min-w-[900px]"
+      >
+        <TableHeader className="[&_tr]:border-0">
+          <TableRow>
+            <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Date</TableHead>
+            <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Shift</TableHead>
+            <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Collected</TableHead>
+            <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Distributed</TableHead>
+            <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Variance</TableHead>
+            <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Calculated At</TableHead>
+            <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {sessions.map((session) => {
             const variance = session.total_tips_collected - session.total_distributed;
             return (
-              <TableRow
-                key={session.id}
-                className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
-              >
-                <TableCell className="py-3 text-sm font-medium">
+              <TableRow key={session.id}>
+                <TableCell className="text-sm font-medium">
                   {formatDate(session.session_date)}
                 </TableCell>
-                <TableCell className="py-3 text-sm">
+                <TableCell className="text-sm">
                   <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                     {SHIFT_LABELS[session.shift_period] || session.shift_period}
                   </span>
                 </TableCell>
-                <TableCell className="py-3 text-right text-sm tabular-nums">
+                <TableCell className="text-right text-sm tabular-nums">
                   {formatMoney(session.total_tips_collected)}
                 </TableCell>
-                <TableCell className="py-3 text-right text-sm tabular-nums">
+                <TableCell className="text-right text-sm tabular-nums">
                   {formatMoney(session.total_distributed)}
                 </TableCell>
                 <TableCell
-                  className={`py-3 text-right text-sm font-medium tabular-nums ${
-                    Math.abs(variance) > 0.01
-                      ? variance > 0
-                        ? "text-amber-600 dark:text-amber-400"
-                        : "text-red-600 dark:text-red-400"
-                      : "text-muted-foreground"
-                  }`}
+                  className={cn(
+                    "text-right text-sm font-medium tabular-nums",
+                    varianceClass(variance)
+                  )}
                 >
                   {formatMoney(variance)}
                 </TableCell>
-                <TableCell className="py-3 text-muted-foreground text-sm">
-                  {session.calculated_at
-                    ? new Date(session.calculated_at).toLocaleString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })
-                    : "—"}
+                <TableCell className="text-sm tabular-nums text-muted-foreground">
+                  {calculatedAt(session)}
                 </TableCell>
-                <TableCell className="py-3 text-right text-sm">
+                <TableCell className="text-right text-sm">
                   <div className="flex items-center justify-end gap-1">
                     <Button
                       size="sm"
@@ -115,16 +127,17 @@ export function NeedsApprovalTable({
                       className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
                       onClick={() => router.push(`/dashboard/tips/${session.id}`)}
                     >
-                      <Eye className="w-3.5 h-3.5 mr-1" />
+                      <Eye className="mr-1.5 h-3.5 w-3.5" />
                       Review
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => onVoid(session)}
-                      className="text-destructive hover:text-destructive"
+                      className="h-9 w-9 rounded-full p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                     >
-                      <Ban className="w-3.5 h-3.5" />
+                      <Ban className="h-3.5 w-3.5" />
+                      <span className="sr-only">Void</span>
                     </Button>
                   </div>
                 </TableCell>
@@ -133,6 +146,80 @@ export function NeedsApprovalTable({
           })}
         </TableBody>
       </Table>
-    </div>
+
+      {/* Phones and tablets: cards instead of a scrolling table. */}
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+        {sessions.map((session) => {
+          const variance = session.total_tips_collected - session.total_distributed;
+          return (
+            <article
+              key={session.id}
+              className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
+            >
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">
+                    {formatDate(session.session_date)}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs tabular-nums text-muted-foreground">
+                    {calculatedAt(session)}
+                  </p>
+                </div>
+                <span className="inline-flex shrink-0 items-center rounded-full bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                  {SHIFT_LABELS[session.shift_period] || session.shift_period}
+                </span>
+              </div>
+
+              <div className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-5">
+                <div className="min-w-0">
+                  <p className="text-[0.8125rem] text-muted-foreground">Collected</p>
+                  <p className="mt-0.5 text-sm font-medium tabular-nums">
+                    {formatMoney(session.total_tips_collected)}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[0.8125rem] text-muted-foreground">Distributed</p>
+                  <p className="mt-0.5 text-sm font-medium tabular-nums">
+                    {formatMoney(session.total_distributed)}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[0.8125rem] text-muted-foreground">Variance</p>
+                  <p
+                    className={cn(
+                      "mt-0.5 text-sm font-medium tabular-nums",
+                      varianceClass(variance)
+                    )}
+                  >
+                    {formatMoney(variance)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-center justify-end gap-2 pt-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onVoid(session)}
+                  className="h-8 rounded-full px-3 text-[0.8125rem] font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Ban className="mr-1.5 h-3.5 w-3.5" />
+                  Void
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 rounded-full px-3 text-[0.8125rem] font-medium shadow-sm"
+                  onClick={() => router.push(`/dashboard/tips/${session.id}`)}
+                >
+                  <Eye className="mr-1.5 h-3.5 w-3.5" />
+                  Review
+                </Button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </>
   );
 }

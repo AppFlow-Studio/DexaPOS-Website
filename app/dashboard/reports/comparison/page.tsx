@@ -134,9 +134,12 @@ export default function ComparisonDashboardPage() {
       {/* Main Controls Card */}
       <Card>
         <CardContent className="p-6 space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* `min-w-0` on the tracks: a grid column takes an automatic minimum
+              width from its content, so a nowrap child (the compare-mode pills)
+              would otherwise push the column past the card edge. */}
+          <div className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-2">
             {/* Left: Location Selection */}
-            <div className="space-y-3">
+            <div className="min-w-0 space-y-3">
               <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
                 <Label className="text-sm font-medium text-muted-foreground">
                   Choose Locations

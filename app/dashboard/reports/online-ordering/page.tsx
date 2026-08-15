@@ -25,6 +25,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollableTabsBar } from "@/components/dashboard/ScrollableTabsBar";
 import { Badge } from "@/components/ui/badge";
 import {
   DateRangePicker,
@@ -470,16 +471,16 @@ function OnlineOrderingReportsContent() {
           onValueChange={setSelectedPlatform}
           className="w-full"
         >
-          <div className="w-full min-w-0 overflow-x-auto pb-1">
+          <ScrollableTabsBar activeValue={selectedPlatform}>
           <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
-            <TabsTrigger className="rounded-full px-4 py-2" value={ALL_PLATFORMS}>All</TabsTrigger>
+            <TabsTrigger className="shrink-0 whitespace-nowrap rounded-full px-4 py-2" value={ALL_PLATFORMS}>All</TabsTrigger>
             {PLATFORM_DISPLAY_ORDER.map((slug) => (
-              <TabsTrigger className="rounded-full px-4 py-2" key={slug} value={slug}>
+              <TabsTrigger className="shrink-0 whitespace-nowrap rounded-full px-4 py-2" key={slug} value={slug}>
                 {getPlatformLabel(slug)}
               </TabsTrigger>
             ))}
           </TabsList>
-          </div>
+          </ScrollableTabsBar>
         </Tabs>
       )}
 

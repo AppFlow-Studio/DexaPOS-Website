@@ -217,38 +217,44 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
         </div>
       ) : (
         <TooltipProvider>
-          <div className="-mx-2 overflow-x-auto px-2">
-            <Table className="min-w-max">
-              <TableHeader>
-                <TableRow className="border-b border-border/60 hover:bg-transparent">
-                  <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">
+          {/* Wide screens get the table; phones and tablets get cards below,
+              so an 8-column row never becomes a horizontal scroller. Matches
+              StaffDataTable. */}
+          <Table
+            variant="data"
+            containerClassName="hidden xl:block"
+            className="min-w-[1000px]"
+          >
+            <TableHeader className="[&_tr]:border-0">
+                <TableRow>
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">
                     <button className="flex items-center text-left" onClick={() => toggleSort("date")}>
                       Date <SortIcon field="date" />
                     </button>
                   </TableHead>
-                  <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Shift</TableHead>
-                  <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Shift</TableHead>
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">
                     <button className="flex items-center" onClick={() => toggleSort("status")}>
                       Status <SortIcon field="status" />
                     </button>
                   </TableHead>
-                  <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">
+                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">
                     <button className="flex items-center ml-auto" onClick={() => toggleSort("collected")}>
                       Collected <SortIcon field="collected" />
                     </button>
                   </TableHead>
-                  <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">
+                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">
                     <button className="flex items-center ml-auto" onClick={() => toggleSort("distributed")}>
                       Distributed <SortIcon field="distributed" />
                     </button>
                   </TableHead>
-                  <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">
+                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">
                     <button className="flex items-center ml-auto" onClick={() => toggleSort("pooled")}>
                       Pooled <SortIcon field="pooled" />
                     </button>
                   </TableHead>
-                  <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Config</TableHead>
-                  <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground"></TableHead>
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Config</TableHead>
+                  <TableHead className="w-8" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -259,11 +265,11 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
                   return (
                     <TableRow
                       key={session.id}
-                      className="cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
+                      className="cursor-pointer"
                       onClick={() => router.push(`/dashboard/tips/${session.id}`)}
                     >
                       {/* Date + sequence */}
-                      <TableCell className="py-3 text-sm font-medium">
+                      <TableCell className="text-sm font-medium">
                         <div className="flex items-center gap-1.5">
                           <span>{formatDate(session.session_date)}</span>
                           {session.sequence_number > 1 && (
@@ -281,14 +287,14 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
                       </TableCell>
 
                       {/* Shift */}
-                      <TableCell className="py-3 text-sm">
+                      <TableCell className="text-sm">
                         <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                           {SHIFT_LABELS[session.shift_period] || session.shift_period}
                         </span>
                       </TableCell>
 
                       {/* Status + timestamps */}
-                      <TableCell className="py-3 text-sm">
+                      <TableCell className="text-sm">
                         {/* A fixed cap, not just `truncate`: without a width
                             bound the reason string sets the column width and
                             pushes the money columns off the scroller. */}
@@ -315,22 +321,22 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
                       </TableCell>
 
                       {/* Collected */}
-                      <TableCell className="py-3 text-right text-sm font-medium tabular-nums">
+                      <TableCell className="text-right text-sm font-medium tabular-nums">
                         {formatMoney(session.total_tips_collected)}
                       </TableCell>
 
                       {/* Distributed */}
-                      <TableCell className="py-3 text-right text-sm font-medium tabular-nums">
+                      <TableCell className="text-right text-sm font-medium tabular-nums">
                         {formatMoney(session.total_distributed)}
                       </TableCell>
 
                       {/* Pooled */}
-                      <TableCell className="py-3 text-right text-sm text-muted-foreground tabular-nums">
+                      <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
                         {formatMoney(session.total_tips_pooled)}
                       </TableCell>
 
                       {/* Config snapshot summary */}
-                      <TableCell className="py-3 text-sm">
+                      <TableCell className="text-sm">
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div className="max-w-[150px]">
@@ -354,7 +360,7 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
                       </TableCell>
 
                       {/* Arrow */}
-                      <TableCell className="py-3 text-sm">
+                      <TableCell className="text-sm">
                         <ChevronRight className="w-4 h-4 text-muted-foreground" />
                       </TableCell>
                     </TableRow>
@@ -362,7 +368,91 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
                 })}
               </TableBody>
             </Table>
-          </div>
+
+            {/* Phones and tablets: cards instead of a scrolling table. */}
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+              {sorted.map((session) => {
+                const poolSummary = getPoolSummary(session.config_snapshot);
+                const variance =
+                  session.total_tips_collected - session.total_distributed;
+
+                return (
+                  <article
+                    key={session.id}
+                    className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
+                  >
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate text-sm font-semibold">
+                            {formatDate(session.session_date)}
+                          </span>
+                          {session.sequence_number > 1 && (
+                            <span className="shrink-0 rounded-full bg-background px-2 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground">
+                              #{session.sequence_number}
+                            </span>
+                          )}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {SHIFT_LABELS[session.shift_period] || session.shift_period}
+                        </p>
+                      </div>
+                      <TipStatusBadge status={session.status} />
+                    </div>
+
+                    <div className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-5">
+                      <div className="min-w-0">
+                        <p className="text-[0.8125rem] text-muted-foreground">Collected</p>
+                        <p className="mt-0.5 text-sm font-medium tabular-nums">
+                          {formatMoney(session.total_tips_collected)}
+                        </p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[0.8125rem] text-muted-foreground">Distributed</p>
+                        <p className="mt-0.5 text-sm font-medium tabular-nums">
+                          {formatMoney(session.total_distributed)}
+                        </p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[0.8125rem] text-muted-foreground">Pooled</p>
+                        <p className="mt-0.5 text-sm font-medium tabular-nums">
+                          {formatMoney(session.total_tips_pooled)}
+                        </p>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[0.8125rem] text-muted-foreground">Variance</p>
+                        <p
+                          className={cn(
+                            "mt-0.5 text-sm font-medium tabular-nums",
+                            Math.abs(variance) > 0.01
+                              ? "text-amber-700 dark:text-amber-400"
+                              : "text-muted-foreground"
+                          )}
+                        >
+                          {formatMoney(variance)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="mt-5 truncate text-xs text-muted-foreground">
+                      {poolSummary}
+                    </p>
+
+                    <div className="mt-4 flex items-center justify-end pt-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 shrink-0 rounded-full px-3 text-[0.8125rem] font-medium"
+                        onClick={() => router.push(`/dashboard/tips/${session.id}`)}
+                      >
+                        Review
+                        <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
         </TooltipProvider>
       )}
     </div>

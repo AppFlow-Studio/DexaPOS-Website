@@ -54,6 +54,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollableTabsBar } from "@/components/dashboard/ScrollableTabsBar";
 import {
   Select,
   SelectContent,
@@ -439,8 +440,8 @@ function SessionsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
 
       {/* Table */}
       <div className="-mx-2 overflow-x-auto px-2">
-        <Table>
-          <TableHeader>
+        <Table variant="data">
+          <TableHeader className="[&_tr]:border-0">
             <TableRow className="bg-muted/50">
               {/* Expand toggle col */}
               <TableHead className="w-8" />
@@ -599,8 +600,8 @@ function ExpandedOperations({ sessionId }: { sessionId: string }) {
         </p>
       </div>
       <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
+        <Table variant="data">
+          <TableHeader className="[&_tr]:border-0">
             <TableRow className="border-muted/50">
               <TableHead className="text-xs h-7 pl-4">Time</TableHead>
               <TableHead className="text-xs h-7">Type</TableHead>
@@ -613,7 +614,7 @@ function ExpandedOperations({ sessionId }: { sessionId: string }) {
           </TableHeader>
           <TableBody>
             {ops.map((op) => (
-              <TableRow key={op.id} className="border-muted/30 hover:bg-muted/30">
+              <TableRow key={op.id} className="border-0 bg-card/70 transition-colors hover:bg-muted/40">
                 <TableCell className="text-xs py-2 pl-4 text-muted-foreground whitespace-nowrap">
                   {format(new Date(op.performed_at), "h:mm a")}
                 </TableCell>
@@ -848,8 +849,8 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
         </div>
 
         <div className="-mx-2 overflow-x-auto px-2">
-          <Table>
-            <TableHeader>
+          <Table variant="data">
+            <TableHeader className="[&_tr]:border-0">
               <TableRow className="bg-muted/50">
                 <TableHead>Date / Time</TableHead>
                 <TableHead>Employee</TableHead>
@@ -1053,8 +1054,8 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
             <CardTitle className="text-base font-semibold">Drawer Summary</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
+            <Table variant="data">
+              <TableHeader className="[&_tr]:border-0">
                 <TableRow className="bg-muted/50">
                   <TableHead>Drawer</TableHead>
                   <TableHead>Avg Variance</TableHead>
@@ -1150,13 +1151,13 @@ export default function CashDrawerReportsPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="w-full min-w-0 overflow-x-auto pb-1">
+        <ScrollableTabsBar activeValue={activeTab}>
           <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
-            <TabsTrigger className="rounded-full px-4 py-2" value="sessions">Sessions</TabsTrigger>
-            <TabsTrigger className="rounded-full px-4 py-2" value="no-sale">No Sale Audit</TabsTrigger>
-            <TabsTrigger className="rounded-full px-4 py-2" value="variance">Variance Trends</TabsTrigger>
+            <TabsTrigger className="shrink-0 whitespace-nowrap rounded-full px-4 py-2" value="sessions">Sessions</TabsTrigger>
+            <TabsTrigger className="shrink-0 whitespace-nowrap rounded-full px-4 py-2" value="no-sale">No Sale Audit</TabsTrigger>
+            <TabsTrigger className="shrink-0 whitespace-nowrap rounded-full px-4 py-2" value="variance">Variance Trends</TabsTrigger>
           </TabsList>
-        </div>
+        </ScrollableTabsBar>
 
         <TabsContent value="sessions" className="mt-6">
           <SessionsTab dateFrom={queryDateRange.from} dateTo={queryDateRange.to} />

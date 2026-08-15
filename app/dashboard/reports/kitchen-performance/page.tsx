@@ -46,8 +46,8 @@ type SortDir = "asc" | "desc";
 function SortIcon({ col, active, dir }: { col: StationSort; active: StationSort; dir: SortDir }) {
   if (col !== active) return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1 shrink-0" />;
   return dir === "asc"
-    ? <ArrowUp className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
-    : <ArrowDown className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />;
+    ? <ArrowUp className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />
+    : <ArrowDown className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />;
 }
 
 const chartConfig = {
@@ -170,7 +170,7 @@ export default function KitchenPerformancePage() {
               <p className="text-sm text-muted-foreground text-center py-4">Failed to load</p>
             ) : (
               <>
-                <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-muted/35 p-3">
+                <div className="flex items-center justify-between rounded-2xl border-0 bg-muted/40 p-3">
                   <div>
                     <p className="text-xs font-semibold text-foreground">Rush Items</p>
                     <p className="text-xl font-bold tabular-nums text-foreground">{kitchen?.rush_stats?.avg_rush_time_minutes?.toFixed(1) ?? "—"} min</p>
@@ -180,7 +180,7 @@ export default function KitchenPerformancePage() {
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/40">
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground">Normal Items</p>
+                    <p className="text-[0.8125rem] font-normal text-muted-foreground">Normal Items</p>
                     <p className="text-xl font-bold tabular-nums">{kitchen?.rush_stats?.avg_normal_time_minutes?.toFixed(1) ?? "—"} min</p>
                     <p className="text-xs text-muted-foreground">{(kitchen?.rush_stats?.total_items ?? 0) - (kitchen?.rush_stats?.rush_items ?? 0)} items avg prep</p>
                   </div>
@@ -279,21 +279,21 @@ export default function KitchenPerformancePage() {
             </p>
           </div>
         </div>
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent border-b border-border/50">
-                <TableHead className="pl-5 text-xs font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => handleStationSort("display_name")}>
+        <CardContent className="p-0">
+          <Table variant="data">
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleStationSort("display_name")}>
                   <div className="flex items-center">Station <SortIcon col="display_name" active={stationSort} dir={stationDir} /></div>
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleStationSort("total_items")}>
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleStationSort("total_items")}>
                   <div className="flex items-center justify-end">Items Processed <SortIcon col="total_items" active={stationSort} dir={stationDir} /></div>
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleStationSort("avg_prep_minutes")}>
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleStationSort("avg_prep_minutes")}>
                   <div className="flex items-center justify-end">Avg Prep Time <SortIcon col="avg_prep_minutes" active={stationSort} dir={stationDir} /></div>
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground text-right">Manual Done</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleStationSort("auto_bumped")}>
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground text-right">Manual Done</TableHead>
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleStationSort("auto_bumped")}>
                   <div className="flex items-center justify-end">Auto-Bumped <SortIcon col="auto_bumped" active={stationSort} dir={stationDir} /></div>
                 </TableHead>
               </TableRow>
@@ -301,7 +301,7 @@ export default function KitchenPerformancePage() {
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i} className="border-b border-border/30">
+                  <TableRow key={i} className="border-0">
                     {Array.from({ length: 5 }).map((_, j) => (
                       <TableCell key={j} className="py-3.5"><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
                     ))}
@@ -335,7 +335,7 @@ export default function KitchenPerformancePage() {
                     ? ((station.auto_bumped / station.total_items) * 100).toFixed(1)
                     : "0.0";
                   return (
-                    <TableRow key={station.station_id} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
+                    <TableRow key={station.station_id} className="border-0 bg-card/70 transition-colors hover:bg-muted/40">
                       <TableCell className="pl-5 py-3.5">
                         <div className="flex items-center gap-2">
                           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted/60">

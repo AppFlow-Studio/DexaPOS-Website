@@ -26,6 +26,10 @@ import {
   Tag,
   GitCompare,
   Wallet,
+  Globe,
+  Calculator,
+  Timer,
+  Scale,
 } from "lucide-react";
 import Link from "next/link";
 import { useSelectedLocation } from "@/stores/location-store";
@@ -109,6 +113,36 @@ const SUB_REPORTS = [
     href: "/dashboard/reports/comparison",
     icon: GitCompare,
     desc: "Location vs location",
+  },
+  {
+    label: "Orders",
+    href: "/dashboard/orders/reports",
+    icon: ShoppingCart,
+    desc: "Order-level breakdown",
+  },
+  {
+    label: "Online Ordering",
+    href: "/dashboard/reports/online-ordering",
+    icon: Globe,
+    desc: "Delivery & pickup channels",
+  },
+  {
+    label: "Cash Drawers",
+    href: "/dashboard/reports/cash-drawers",
+    icon: Calculator,
+    desc: "Drawer sessions & counts",
+  },
+  {
+    label: "Kitchen Performance",
+    href: "/dashboard/reports/kitchen-performance",
+    icon: Timer,
+    desc: "Prep & ticket times",
+  },
+  {
+    label: "Discrepancy",
+    href: "/dashboard/reports/discrepancy",
+    icon: Scale,
+    desc: "Over & short variances",
   },
 ];
 
@@ -394,7 +428,7 @@ export default function ReportsPage() {
             label="Detailed reports"
             caption="Open a focused report for a deeper operational view."
           >
-            <div className="divide-y divide-border/60">
+            <div className="thin-scrollbar -mr-2 max-h-96 divide-y divide-border/60 overflow-y-auto pr-2">
               {SUB_REPORTS.map((report) => (
                 <Link
                   key={report.href}
@@ -402,7 +436,7 @@ export default function ReportsPage() {
                   className="group flex min-w-0 items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
                 >
                     <div className="flex min-w-0 items-center gap-3">
-                      <report.icon className="h-4 w-4 shrink-0 text-[#0C4FD1] dark:text-[#6CA0FF]" />
+                      <report.icon className="h-4 w-4 shrink-0 text-foreground" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium">{report.label}</p>
                         <p className="truncate text-[10px] text-muted-foreground">

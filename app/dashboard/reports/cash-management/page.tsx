@@ -46,8 +46,8 @@ type SortDir = "asc" | "desc";
 function SortIcon({ col, active, dir }: { col: SortKey; active: SortKey; dir: SortDir }) {
   if (col !== active) return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1 shrink-0" />;
   return dir === "asc"
-    ? <ArrowUp className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
-    : <ArrowDown className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />;
+    ? <ArrowUp className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />
+    : <ArrowDown className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />;
 }
 
 const exportColumns = [
@@ -201,22 +201,22 @@ export default function CashManagementPage() {
           </div>
         </div>
 
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent border-b border-border/50">
-                <TableHead className="pl-5 text-xs font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("created_at")}>
+        <CardContent className="p-0">
+          <Table variant="data">
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("created_at")}>
                   <div className="flex items-center">Time <SortIcon col="created_at" active={sortKey} dir={sortDir} /></div>
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground">Order #</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("staff_name")}>
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Order #</TableHead>
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("staff_name")}>
                   <div className="flex items-center">Staff <SortIcon col="staff_name" active={sortKey} dir={sortDir} /></div>
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground text-right">Sale Amount</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleSort("tip_amount")}>
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground text-right">Sale Amount</TableHead>
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleSort("tip_amount")}>
                   <div className="flex items-center justify-end">Tip <SortIcon col="tip_amount" active={sortKey} dir={sortDir} /></div>
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleSort("total_amount")}>
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleSort("total_amount")}>
                   <div className="flex items-center justify-end">Total Collected <SortIcon col="total_amount" active={sortKey} dir={sortDir} /></div>
                 </TableHead>
               </TableRow>
@@ -224,7 +224,7 @@ export default function CashManagementPage() {
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
-                  <TableRow key={i} className="border-b border-border/30">
+                  <TableRow key={i} className="border-0">
                     {Array.from({ length: 6 }).map((_, j) => (
                       <TableCell key={j} className="py-3.5"><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
                     ))}
@@ -255,7 +255,7 @@ export default function CashManagementPage() {
                 processed.map((item, index) => {
                   const barPct = maxTotal > 0 ? (item.total_amount / maxTotal) * 100 : 0;
                   return (
-                    <TableRow key={index} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
+                    <TableRow key={index} className="border-0 bg-card/70 transition-colors hover:bg-muted/40">
                       <TableCell className="pl-5 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
                         {format(new Date(item.created_at), "MMM d, h:mm a")}
                       </TableCell>

@@ -1,9 +1,15 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { subDays } from "date-fns";
+import {
+  differenceInCalendarDays,
+  endOfDay,
+  startOfDay,
+  subDays,
+} from "date-fns";
 import { CreditCard, FileSpreadsheet, Receipt } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollableTabsBar } from "@/components/dashboard/ScrollableTabsBar";
 import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
 import { PageHeader, PageShell, Panel, PanelSection } from "@/components/dashboard/shell";
 import { cn } from "@/lib/utils";
@@ -14,7 +20,10 @@ import {
   useDualPricingComparison,
 } from "../../hooks/useOrderAnalytics";
 import { useOrders } from "../../hooks/useOrder";
-import { FinancialHeroChart } from "@/app/dashboard/transactions/components/FinancialHeroChart";
+import {
+  FinancialHeroChart,
+  type TimeRangeType,
+} from "@/app/dashboard/transactions/components/FinancialHeroChart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReceiptModal } from "@/components/dashboard/orders/ReceiptModal";
 import { OrdersDataTable } from "@/components/dashboard/orders/OrdersDataTable";
@@ -31,6 +40,23 @@ import { ReportExportButtons } from "../components/ReportExportButtons";
 import type { ExportColumn } from "@/utils/export";
 
 type FinancialSummaryRow = { metric: string; amount: number };
+
+type ChartTimeRange = TimeRangeType;
+
+/** Day-spans behind the hero chart's range pills. `days: null` = "All time".
+ *  Inclusive counts, so 7d is today plus the six days before it — matching the
+ *  DateRangePicker's own last_7_days preset exactly. */
+const CHART_RANGE_DAYS: Array<{ value: ChartTimeRange; days: number | null }> = [
+  { value: "7d", days: 7 },
+  { value: "30d", days: 30 },
+  { value: "90d", days: 90 },
+  { value: "180d", days: 180 },
+  { value: "365d", days: 365 },
+  { value: "all", days: null },
+];
+
+/** Far enough back to precede any merchant's first order. */
+const ALL_TIME_START = new Date(2020, 0, 1);
 
 const financialSummaryColumns: ExportColumn<FinancialSummaryRow>[] = [
   { key: "metric", header: "Metric" },
@@ -93,6 +119,36 @@ export default function FinancialsPage() {
         payments_collected: stat.net_sales, // Placeholder as backend data is missing
       }));
   }, [dateRange, kpis?.daily_stats]);
+
+  // ─── Hero-chart range bar ↔ page date range ───
+  // The bar is a shortcut onto the same `dateRange` the DateRangePicker owns,
+  // so both controls stay one source of truth. Only 7d/30d have a DatePreset
+  // equivalent; the longer spans are expressed as an explicit custom range.
+  const chartTimeRange = useMemo<ChartTimeRange | undefined>(() => {
+    const days = differenceInCalendarDays(dateRange.to, dateRange.from) + 1;
+    const match = CHART_RANGE_DAYS.find((r) => r.days === days);
+    // No pill is highlighted when the range came from the calendar and doesn't
+    // line up with one of the presets — better than lighting up a wrong pill.
+    return match?.value;
+  }, [dateRange]);
+
+  const handleChartTimeRangeChange = (range: ChartTimeRange) => {
+    const days = CHART_RANGE_DAYS.find((r) => r.value === range)?.days;
+    const to = endOfDay(new Date());
+    const from = startOfDay(
+      // "All" has no fixed span; ALL_TIME_START anchors it far enough back to
+      // cover any merchant's history without an extra round-trip to find it.
+      days == null ? ALL_TIME_START : subDays(to, days - 1)
+    );
+    setDateRange({ from, to });
+    setPreset(
+      range === "7d"
+        ? "last_7_days"
+        : range === "30d"
+        ? "last_30_days"
+        : "custom"
+    );
+  };
 
   if (isLoading && !kpis) {
     return (
@@ -207,7 +263,7 @@ export default function FinancialsPage() {
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="w-full min-w-0 overflow-x-auto pb-1">
+        <ScrollableTabsBar activeValue={activeTab}>
           <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
             {[
               ["overview", "Overview"],
@@ -218,13 +274,13 @@ export default function FinancialsPage() {
               <TabsTrigger
                 key={value}
                 value={value}
-                className="shrink-0 rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
               >
                 {label}
               </TabsTrigger>
             ))}
           </TabsList>
-        </div>
+        </ScrollableTabsBar>
       </Tabs>
 
       {/* Transactions and Payments have no left-column summary, so the 440px
@@ -408,7 +464,12 @@ export default function FinancialsPage() {
       <div className="flex-1 h-full min-w-0">
         {activeTab === "overview" && (
           <div className="relative min-h-[420px] w-full overflow-hidden rounded-3xl border bg-card">
-            <FinancialHeroChart data={chartData} />
+            <FinancialHeroChart
+              data={chartData}
+              isLoading={isLoading}
+              defaultTimeRange={chartTimeRange}
+              onTimeRangeChange={handleChartTimeRangeChange}
+            />
           </div>
         )}
 

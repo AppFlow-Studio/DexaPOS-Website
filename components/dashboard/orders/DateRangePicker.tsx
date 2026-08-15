@@ -143,7 +143,11 @@ export function DateRangePicker({
     className,
     triggerClassName,
     contentClassName,
-    align = "start",
+    // Every caller renders this trigger in `PageHeader actions`, i.e. hard against
+    // the right edge of the page. Aligning the panel's *left* edge to the trigger
+    // pushed the two-month calendar off-screen; anchoring the right edge opens it
+    // leftward into available space instead.
+    align = "end",
 }: DateRangePickerProps) {
     const [open, setOpen] = React.useState(false)
     const [draftPreset, setDraftPreset] = React.useState<DatePreset>(preset)
@@ -295,7 +299,11 @@ export function DateRangePicker({
                             whatever height is left; the summary line and the
                             Cancel/Apply row stay pinned to the bottom so they
                             are always reachable on a short viewport. */}
-                        <div className="relative flex min-h-0 min-w-0 flex-col p-3 gap-3 sm:min-w-[300px]">
+                        {/* 300px left the month grid and the month/year dropdowns
+                            fighting for the same row; 340px gives the caption its
+                            own breathing room without widening the phone layout,
+                            where this column is full-width anyway. */}
+                        <div className="relative flex min-h-0 min-w-0 flex-col p-3 gap-3 sm:min-w-[340px]">
                             {/* `overflow-x-clip` (not `visible`, which CSS
                                 promotes to `auto` next to a scrolling axis)
                                 keeps the month grid at its natural width

@@ -331,54 +331,107 @@ function PreviewPanel({
                     </p>
                   </div>
 
-                  <div className="-mx-2 overflow-x-auto px-2">
-                    <Table className="min-w-max">
-                      <TableHeader>
-                        <TableRow className="border-b border-border/60 hover:bg-transparent">
-                          <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Role</TableHead>
-                          <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Own</TableHead>
-                          <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Pool Out</TableHead>
-                          <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Pool In</TableHead>
-                          <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">T-Out Given</TableHead>
-                          <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">T-Out Recv</TableHead>
+                  {/* Wide screens get the table; phones and tablets get cards
+                      below. Matches StaffDataTable. */}
+                  <Table
+                    variant="data"
+                    containerClassName="hidden xl:block"
+                    className="min-w-[820px]"
+                  >
+                    <TableHeader className="[&_tr]:border-0">
+                      <TableRow>
+                        <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Role</TableHead>
+                        <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Own</TableHead>
+                        <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Pool Out</TableHead>
+                        <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Pool In</TableHead>
+                        <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">T-Out Given</TableHead>
+                        <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">T-Out Recv</TableHead>
+                        {hasClipping && (
+                          <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Clipped</TableHead>
+                        )}
+                        <TableHead className="text-right text-[0.8125rem] font-normal text-foreground">Net</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {Object.entries(simulation).map(([code, s]) => (
+                        <TableRow key={code}>
+                          <TableCell className="text-sm font-medium">{code}</TableCell>
+                          <TableCell className="text-right text-sm tabular-nums">{fmt(s.own)}</TableCell>
+                          <TableCell className="text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
+                            {s.poolContrib > 0 ? `−${fmt(s.poolContrib)}` : "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
+                            {s.poolRecv > 0 ? `+${fmt(s.poolRecv)}` : "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
+                            {s.tipOutGiven > 0 ? `−${fmt(s.tipOutGiven)}` : "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
+                            {s.tipOutRecv > 0 ? `+${fmt(s.tipOutRecv)}` : "—"}
+                          </TableCell>
                           {hasClipping && (
-                            <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Clipped</TableHead>
+                            <TableCell className="text-right text-sm tabular-nums text-amber-700 dark:text-amber-400">
+                              {s.tipOutClipped > 0 ? fmt(s.tipOutClipped) : "—"}
+                            </TableCell>
                           )}
-                          <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-foreground">Net</TableHead>
+                          <TableCell className="text-right text-sm font-semibold tabular-nums">
+                            {fmt(s.net)}
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {Object.entries(simulation).map(([code, s]) => (
-                          <TableRow
-                            key={code}
-                            className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
-                          >
-                            <TableCell className="py-3 text-sm font-medium">{code}</TableCell>
-                            <TableCell className="py-3 text-right text-sm tabular-nums">{fmt(s.own)}</TableCell>
-                            <TableCell className="py-3 text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
-                              {s.poolContrib > 0 ? `−${fmt(s.poolContrib)}` : "—"}
-                            </TableCell>
-                            <TableCell className="py-3 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
-                              {s.poolRecv > 0 ? `+${fmt(s.poolRecv)}` : "—"}
-                            </TableCell>
-                            <TableCell className="py-3 text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
-                              {s.tipOutGiven > 0 ? `−${fmt(s.tipOutGiven)}` : "—"}
-                            </TableCell>
-                            <TableCell className="py-3 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
-                              {s.tipOutRecv > 0 ? `+${fmt(s.tipOutRecv)}` : "—"}
-                            </TableCell>
-                            {hasClipping && (
-                              <TableCell className="py-3 text-right text-sm tabular-nums text-amber-700 dark:text-amber-400">
-                                {s.tipOutClipped > 0 ? fmt(s.tipOutClipped) : "—"}
-                              </TableCell>
-                            )}
-                            <TableCell className="py-3 text-right text-sm font-semibold tabular-nums">
-                              {fmt(s.net)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+                    {Object.entries(simulation).map(([code, s]) => (
+                      <article key={code} className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
+                        <div className="flex min-w-0 items-start justify-between gap-3">
+                          <p className="min-w-0 truncate text-sm font-semibold">{code}</p>
+                          <p className="shrink-0 text-[1.375rem] font-medium leading-tight tracking-[-0.02em] tabular-nums">
+                            {fmt(s.net)}
+                          </p>
+                        </div>
+
+                        <div className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-5">
+                          <div className="min-w-0">
+                            <p className="text-[0.8125rem] text-muted-foreground">Own</p>
+                            <p className="mt-0.5 text-sm font-medium tabular-nums">{fmt(s.own)}</p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[0.8125rem] text-muted-foreground">Pool in / out</p>
+                            <p className="mt-0.5 text-sm font-medium tabular-nums">
+                              <span className="text-emerald-700 dark:text-emerald-400">
+                                {s.poolRecv > 0 ? `+${fmt(s.poolRecv)}` : "—"}
+                              </span>
+                              <span className="mx-1 text-muted-foreground">/</span>
+                              <span className="text-rose-700 dark:text-rose-400">
+                                {s.poolContrib > 0 ? `−${fmt(s.poolContrib)}` : "—"}
+                              </span>
+                            </p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[0.8125rem] text-muted-foreground">Tip-out in / out</p>
+                            <p className="mt-0.5 text-sm font-medium tabular-nums">
+                              <span className="text-emerald-700 dark:text-emerald-400">
+                                {s.tipOutRecv > 0 ? `+${fmt(s.tipOutRecv)}` : "—"}
+                              </span>
+                              <span className="mx-1 text-muted-foreground">/</span>
+                              <span className="text-rose-700 dark:text-rose-400">
+                                {s.tipOutGiven > 0 ? `−${fmt(s.tipOutGiven)}` : "—"}
+                              </span>
+                            </p>
+                          </div>
+                          {s.tipOutClipped > 0 && (
+                            <div className="min-w-0">
+                              <p className="text-[0.8125rem] text-muted-foreground">Clipped</p>
+                              <p className="mt-0.5 text-sm font-medium tabular-nums text-amber-700 dark:text-amber-400">
+                                {fmt(s.tipOutClipped)}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </article>
+                    ))}
                   </div>
 
                   {hasClipping && (

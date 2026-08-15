@@ -79,26 +79,28 @@ export function LocationLeaderboard({
           Location Rankings by Gross Sales
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-0 overflow-x-auto">
-        <Table className="min-w-[500px]">
-          <TableHeader>
-            <TableRow className="hover:bg-transparent border-white/5">
-              <TableHead className="w-[80px] pl-6 text-xs font-bold tracking-wider uppercase text-muted-foreground">
+      <CardContent className="p-0">
+        {/* Staff-table treatment: tinted rounded container, tinted header band,
+            borderless rows. See components/dashboard/staff/StaffDataTable.tsx. */}
+        <Table variant="data" className="min-w-[500px]">
+          <TableHeader className="[&_tr]:border-0">
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-[80px] text-[0.8125rem] font-normal text-muted-foreground">
                 Rank
               </TableHead>
-              <TableHead className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
+              <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">
                 Location
               </TableHead>
-              <TableHead className="text-right text-xs font-bold tracking-wider uppercase text-muted-foreground">
+              <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">
                 Gross Sales
               </TableHead>
-              <TableHead className="text-right text-xs font-bold tracking-wider uppercase text-muted-foreground">
+              <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">
                 Vs Avg
               </TableHead>
-              <TableHead className="text-right text-xs font-bold tracking-wider uppercase text-muted-foreground">
+              <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">
                 Trend
               </TableHead>
-              <TableHead className="w-[100px] text-right text-xs font-bold tracking-wider uppercase text-muted-foreground pr-6">
+              <TableHead className="w-[100px] text-right text-[0.8125rem] font-normal text-muted-foreground">
                 Actions
               </TableHead>
             </TableRow>
@@ -117,9 +119,9 @@ export function LocationLeaderboard({
               rankings.map((location) => (
                 <TableRow
                   key={location.location_id}
-                  className="group transition-colors"
+                  className="group border-0 bg-card/70 transition-colors hover:bg-muted/40"
                 >
-                  <TableCell className="pl-6 font-medium">
+                  <TableCell className="font-medium">
                     <div className="flex items-center gap-2">
                       <span className={cn("text-sm text-muted-foreground", location.rank === 1 && "font-bold text-foreground")}>
                         #{location.rank}
@@ -166,7 +168,7 @@ export function LocationLeaderboard({
                       {Math.abs(location.trend_pct).toFixed(1)}%
                     </div>
                   </TableCell>
-                  <TableCell className="text-right pr-6">
+                  <TableCell className="text-right">
                     <Button
                       variant="ghost"
                       size="sm"

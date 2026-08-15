@@ -47,8 +47,8 @@ type SortDir = "asc" | "desc";
 function SortIcon({ col, active, dir }: { col: SortKey; active: SortKey; dir: SortDir }) {
   if (col !== active) return <ArrowUpDown className="h-3 w-3 text-muted-foreground/40 ml-1" />;
   return dir === "asc"
-    ? <ArrowUp className="h-3 w-3 text-primary ml-1" />
-    : <ArrowDown className="h-3 w-3 text-primary ml-1" />;
+    ? <ArrowUp className="h-3 w-3 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1" />
+    : <ArrowDown className="h-3 w-3 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1" />;
 }
 
 export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
@@ -214,12 +214,12 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
         <CardHeader className="px-5 pb-3 pt-5">
           <CardTitle className="text-sm font-semibold">Category Breakdown</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent border-b border-border/50">
+        <CardContent className="p-0">
+          <Table variant="data">
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow className="hover:bg-transparent">
                 <TableHead
-                  className="pl-5 text-xs font-semibold text-muted-foreground cursor-pointer select-none"
+                  className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none"
                   onClick={() => handleSort("categoryName")}
                 >
                   <div className="flex items-center">
@@ -228,7 +228,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                   </div>
                 </TableHead>
                 <TableHead
-                  className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
+                  className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
                   onClick={() => handleSort("taxableSales")}
                 >
                   <div className="flex items-center justify-end">
@@ -237,7 +237,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                   </div>
                 </TableHead>
                 <TableHead
-                  className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
+                  className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
                   onClick={() => handleSort("taxCollected")}
                 >
                   <div className="flex items-center justify-end">
@@ -245,11 +245,11 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                     <SortIcon col="taxCollected" active={sortKey} dir={sortDir} />
                   </div>
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground text-right">
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground text-right">
                   Exempt Items
                 </TableHead>
                 <TableHead
-                  className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right pr-5"
+                  className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5"
                   onClick={() => handleSort("effectiveRate")}
                 >
                   <div className="flex items-center justify-end">
@@ -268,7 +268,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                 return (
                   <TableRow
                     key={row.categoryName}
-                    className="border-b border-border/30 hover:bg-muted/30 transition-colors"
+                    className="border-0 bg-card/70 transition-colors hover:bg-muted/40"
                   >
                     <TableCell className="pl-5 py-3.5">
                       <div className="flex items-center gap-2">

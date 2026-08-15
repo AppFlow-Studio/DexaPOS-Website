@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { PageShell, PageHeader, Panel, PanelSection, StatRow, StatTile, InsetTile } from "@/components/dashboard/shell";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useLocationStore } from "@/stores/location-store";
@@ -50,84 +51,149 @@ function fmtDate(dateStr: string) {
   });
 }
 
+/**
+ * The per-shift figure breakdown, shared by the wide table's expanded row and
+ * the phone/tablet card so the two layouts can never drift apart.
+ */
+function TipBreakdown({ entry }: { entry: MyTipEntry }) {
+  return (
+    <div className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none sm:grid-cols-3 lg:grid-cols-5">
+      <div className="min-w-0">
+        <p className="truncate text-[0.8125rem] text-muted-foreground">Own Tips</p>
+        <p className="mt-0.5 text-sm font-medium tabular-nums">
+          {fmt(entry.individual_tips_earned)}
+        </p>
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-[0.8125rem] text-muted-foreground">Pool Contributed</p>
+        <p className="mt-0.5 text-sm font-medium tabular-nums text-rose-700 dark:text-rose-400">
+          −{fmt(entry.tip_pool_contributed)}
+        </p>
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-[0.8125rem] text-muted-foreground">Pool Received</p>
+        <p className="mt-0.5 text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
+          +{fmt(entry.tip_pool_received)}
+        </p>
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-[0.8125rem] text-muted-foreground">Tip-Out Given</p>
+        <p className="mt-0.5 text-sm font-medium tabular-nums text-rose-700 dark:text-rose-400">
+          −{fmt(entry.tip_out_given)}
+        </p>
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-[0.8125rem] text-muted-foreground">Tip-Out Received</p>
+        <p className="mt-0.5 text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
+          +{fmt(entry.tip_out_received)}
+        </p>
+      </div>
+      {entry.manual_adjustment !== 0 && (
+        <div className="min-w-0">
+          <p className="truncate text-[0.8125rem] text-muted-foreground">Adjustment</p>
+          <p
+            className={`mt-0.5 text-sm font-medium tabular-nums ${
+              entry.manual_adjustment > 0
+                ? "text-emerald-700 dark:text-emerald-400"
+                : "text-rose-700 dark:text-rose-400"
+            }`}
+          >
+            {entry.manual_adjustment > 0 ? "+" : ""}
+            {fmt(entry.manual_adjustment)}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Phone/tablet card — the staff pattern's replacement for a scrolling table. */
+function TipEntryCard({ entry }: { entry: MyTipEntry }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <article className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">{fmtDate(entry.session_date)}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {SHIFT_LABELS[entry.shift_period] ?? entry.shift_period} · {entry.role_code}
+          </p>
+        </div>
+        <p className="shrink-0 text-[1.375rem] font-medium leading-tight tracking-[-0.02em] tabular-nums text-emerald-700 dark:text-emerald-400">
+          {fmt(entry.net_tips)}
+        </p>
+      </div>
+
+      <div className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-5">
+        <div className="min-w-0">
+          <p className="text-[0.8125rem] text-muted-foreground">Hours</p>
+          <p className="mt-0.5 text-sm font-medium tabular-nums">
+            {(entry.hours_worked || 0).toFixed(1)}h
+          </p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[0.8125rem] text-muted-foreground">Own tips</p>
+          <p className="mt-0.5 text-sm font-medium tabular-nums">
+            {fmt(entry.individual_tips_earned)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 pt-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 rounded-full px-3 text-[0.8125rem] font-medium"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
+          <ChevronRight
+            className={`mr-1.5 h-3.5 w-3.5 transition-transform ${open ? "rotate-90" : ""}`}
+          />
+          {open ? "Hide breakdown" : "Full breakdown"}
+        </Button>
+      </div>
+
+      {open && (
+        <div className="mt-3">
+          <TipBreakdown entry={entry} />
+        </div>
+      )}
+    </article>
+  );
+}
+
 function DetailRow({ entry }: { entry: MyTipEntry }) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
-      <TableRow
-        className="cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <TableCell className="py-3 text-sm font-medium">{fmtDate(entry.session_date)}</TableCell>
-        <TableCell className="py-3 text-sm text-muted-foreground">
-          {SHIFT_LABELS[entry.shift_period] ?? entry.shift_period}
+      <TableRow className="cursor-pointer" onClick={() => setOpen((v) => !v)}>
+        <TableCell className="text-sm font-medium">{fmtDate(entry.session_date)}</TableCell>
+        <TableCell className="text-sm">
+          <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+            {SHIFT_LABELS[entry.shift_period] ?? entry.shift_period}
+          </span>
         </TableCell>
-        <TableCell className="py-3 text-sm text-muted-foreground">{entry.role_code}</TableCell>
-        <TableCell className="py-3 text-right text-sm tabular-nums">{(entry.hours_worked || 0).toFixed(1)}h</TableCell>
-        <TableCell className="py-3 text-right text-sm font-semibold text-emerald-700 tabular-nums dark:text-emerald-400">
+        <TableCell className="text-sm text-muted-foreground">{entry.role_code}</TableCell>
+        <TableCell className="text-right text-sm tabular-nums">
+          {(entry.hours_worked || 0).toFixed(1)}h
+        </TableCell>
+        <TableCell className="text-right text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
           {fmt(entry.net_tips)}
         </TableCell>
-        <TableCell className="py-3">
+        <TableCell>
           <ChevronRight
-            className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+            className={`h-4 w-4 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
           />
         </TableCell>
       </TableRow>
 
       {open && (
-        <TableRow className="border-b border-border/60 last:border-0 hover:bg-transparent">
+        <TableRow className="hover:bg-transparent">
           <TableCell colSpan={6} className="px-0 pb-4 pt-0">
-            {/* An inset well rather than a tinted table row: the breakdown is
-                a detail of the row above, so it should read as nested inside
-                it rather than as another row of the same list. */}
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none sm:grid-cols-3 lg:grid-cols-5">
-              <div className="min-w-0">
-                <p className="truncate text-[0.8125rem] text-muted-foreground">Own Tips</p>
-                <p className="mt-0.5 text-sm font-medium tabular-nums">
-                  {fmt(entry.individual_tips_earned)}
-                </p>
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-[0.8125rem] text-muted-foreground">Pool Contributed</p>
-                <p className="mt-0.5 text-sm font-medium tabular-nums text-rose-700 dark:text-rose-400">
-                  −{fmt(entry.tip_pool_contributed)}
-                </p>
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-[0.8125rem] text-muted-foreground">Pool Received</p>
-                <p className="mt-0.5 text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
-                  +{fmt(entry.tip_pool_received)}
-                </p>
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-[0.8125rem] text-muted-foreground">Tip-Out Given</p>
-                <p className="mt-0.5 text-sm font-medium tabular-nums text-rose-700 dark:text-rose-400">
-                  −{fmt(entry.tip_out_given)}
-                </p>
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-[0.8125rem] text-muted-foreground">Tip-Out Received</p>
-                <p className="mt-0.5 text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
-                  +{fmt(entry.tip_out_received)}
-                </p>
-              </div>
-              {entry.manual_adjustment !== 0 && (
-                <div className="min-w-0">
-                  <p className="truncate text-[0.8125rem] text-muted-foreground">Adjustment</p>
-                  <p
-                    className={`mt-0.5 text-sm font-medium tabular-nums ${
-                      entry.manual_adjustment > 0
-                        ? "text-emerald-700 dark:text-emerald-400"
-                        : "text-rose-700 dark:text-rose-400"
-                    }`}
-                  >
-                    {entry.manual_adjustment > 0 ? "+" : ""}
-                    {fmt(entry.manual_adjustment)}
-                  </p>
-                </div>
-              )}
-            </div>
+            <TipBreakdown entry={entry} />
           </TableCell>
         </TableRow>
       )}
@@ -241,47 +307,58 @@ export default function MyTipsPage() {
       {/* Detail table */}
       {isLoading ? (
         <Panel>
-          <PanelSection label="Shift Breakdown" caption="Click a row to see the full breakdown">
+          <PanelSection label="Shift Breakdown" caption="Open a shift to see the full breakdown">
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex gap-4">
-                  <Skeleton className="h-4 w-28" />
-                  <Skeleton className="h-4 w-16" />
-                  <Skeleton className="h-4 w-20 ml-auto" />
-                </div>
+                <Skeleton key={i} className="h-14 w-full rounded-2xl" />
               ))}
             </div>
           </PanelSection>
         </Panel>
       ) : entries.length === 0 ? (
-        <Panel padded className="text-center py-12">
-          <DollarSign className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground font-medium">No approved tip records found</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Approved distributions will appear here once a manager calculates and approves tips.
-          </p>
+        <Panel>
+          <PanelSection label="Shift Breakdown">
+            <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center shadow-none">
+              <DollarSign className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+              <p className="font-medium text-foreground">No approved tip records found</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Approved distributions appear here once a manager calculates and approves tips.
+              </p>
+            </div>
+          </PanelSection>
         </Panel>
       ) : (
         <Panel>
-          <PanelSection label="Shift Breakdown" caption="Click a row to see the full breakdown">
-            <div className="-mx-2 overflow-x-auto px-2">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-b border-border/60 hover:bg-transparent">
-                    <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Date</TableHead>
-                    <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Shift</TableHead>
-                    <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Role</TableHead>
-                    <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Hours</TableHead>
-                    <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Net Tips</TableHead>
-                    <TableHead className="h-auto w-8 py-2.5" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {entries.map((entry) => (
-                    <DetailRow key={entry.session_id} entry={entry} />
-                  ))}
-                </TableBody>
-              </Table>
+          <PanelSection label="Shift Breakdown" caption="Open a shift to see the full breakdown">
+            {/* Wide screens get the table; phones and tablets get cards, so a
+                6-column row never becomes a horizontal scroller. Matches
+                StaffDataTable. */}
+            <Table
+              variant="data"
+              containerClassName="hidden xl:block"
+              className="min-w-[720px]"
+            >
+              <TableHeader className="[&_tr]:border-0">
+                <TableRow>
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Date</TableHead>
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Shift</TableHead>
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Role</TableHead>
+                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Hours</TableHead>
+                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Net Tips</TableHead>
+                  <TableHead className="w-8" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {entries.map((entry) => (
+                  <DetailRow key={entry.session_id} entry={entry} />
+                ))}
+              </TableBody>
+            </Table>
+
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+              {entries.map((entry) => (
+                <TipEntryCard key={entry.session_id} entry={entry} />
+              ))}
             </div>
           </PanelSection>
         </Panel>

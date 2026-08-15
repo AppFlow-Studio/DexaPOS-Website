@@ -120,51 +120,108 @@ export function ProjectedDistributionPanel({
               <StatTile label="Total Distributed" value={formatMoney(preview?.total_distributed ?? 0)} />
             </StatRow>
 
-            <div className="-mx-2 overflow-x-auto border-t border-border/60 px-2 pt-2">
-              <Table className="min-w-max">
-                <TableHeader>
-                  <TableRow className="border-b border-border/60 hover:bg-transparent">
-                    <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Employee</TableHead>
-                    <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Role</TableHead>
-                    <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Hours</TableHead>
-                    <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Own Tips</TableHead>
-                    <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Pool In</TableHead>
-                    <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Pool Out</TableHead>
-                    <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">T-Out In</TableHead>
-                    <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">T-Out Out</TableHead>
-                    <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-foreground">Net Tips</TableHead>
+            {/* Wide screens get the table; phones and tablets get cards below,
+                so a 9-column row never becomes a horizontal scroller. Matches
+                StaffDataTable. */}
+            <Table
+              variant="data"
+              containerClassName="hidden xl:block"
+              className="min-w-[1100px]"
+            >
+              <TableHeader className="[&_tr]:border-0">
+                <TableRow>
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Employee</TableHead>
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Role</TableHead>
+                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Hours</TableHead>
+                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Own Tips</TableHead>
+                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Pool In</TableHead>
+                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Pool Out</TableHead>
+                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">T-Out In</TableHead>
+                  <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">T-Out Out</TableHead>
+                  <TableHead className="text-right text-[0.8125rem] font-normal text-foreground">Net Tips</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {details.map((d, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="text-sm font-medium">{d.staff_name}</TableCell>
+                    <TableCell className="text-sm">
+                      <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                        {d.role_code}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right text-sm tabular-nums">{d.hours_worked.toFixed(1)}</TableCell>
+                    <TableCell className="text-right text-sm tabular-nums">{formatMoney(d.individual_tips_earned)}</TableCell>
+                    <TableCell className="text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
+                      {d.tip_pool_received > 0 ? `+${formatMoney(d.tip_pool_received)}` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
+                      {d.tip_pool_contributed > 0 ? `−${formatMoney(d.tip_pool_contributed)}` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
+                      {d.tip_out_received > 0 ? `+${formatMoney(d.tip_out_received)}` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
+                      {d.tip_out_given > 0 ? `−${formatMoney(d.tip_out_given)}` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-semibold tabular-nums">
+                      {formatMoney(d.net_tips)}
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {details.map((d, i) => (
-                    <TableRow key={i} className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50">
-                      <TableCell className="py-3 text-sm font-medium">{d.staff_name}</TableCell>
-                      <TableCell className="py-3 text-sm">
-                        <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                          {d.role_code}
+                ))}
+              </TableBody>
+            </Table>
+
+            {/* Phones and tablets: cards instead of a scrolling table. */}
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+              {details.map((d, i) => (
+                <article key={i} className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{d.staff_name}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {d.role_code} · {d.hours_worked.toFixed(1)}h
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-[1.375rem] font-medium leading-tight tracking-[-0.02em] tabular-nums">
+                      {formatMoney(d.net_tips)}
+                    </p>
+                  </div>
+
+                  <div className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-5">
+                    <div className="min-w-0">
+                      <p className="text-[0.8125rem] text-muted-foreground">Own tips</p>
+                      <p className="mt-0.5 text-sm font-medium tabular-nums">
+                        {formatMoney(d.individual_tips_earned)}
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[0.8125rem] text-muted-foreground">Pool in / out</p>
+                      <p className="mt-0.5 text-sm font-medium tabular-nums">
+                        <span className="text-emerald-700 dark:text-emerald-400">
+                          {d.tip_pool_received > 0 ? `+${formatMoney(d.tip_pool_received)}` : "—"}
                         </span>
-                      </TableCell>
-                      <TableCell className="py-3 text-right text-sm tabular-nums">{d.hours_worked.toFixed(1)}</TableCell>
-                      <TableCell className="py-3 text-right text-sm tabular-nums">{formatMoney(d.individual_tips_earned)}</TableCell>
-                      <TableCell className="py-3 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
-                        {d.tip_pool_received > 0 ? `+${formatMoney(d.tip_pool_received)}` : "—"}
-                      </TableCell>
-                      <TableCell className="py-3 text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
-                        {d.tip_pool_contributed > 0 ? `−${formatMoney(d.tip_pool_contributed)}` : "—"}
-                      </TableCell>
-                      <TableCell className="py-3 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
-                        {d.tip_out_received > 0 ? `+${formatMoney(d.tip_out_received)}` : "—"}
-                      </TableCell>
-                      <TableCell className="py-3 text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
-                        {d.tip_out_given > 0 ? `−${formatMoney(d.tip_out_given)}` : "—"}
-                      </TableCell>
-                      <TableCell className="py-3 text-right text-sm font-semibold tabular-nums">
-                        {formatMoney(d.net_tips)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        <span className="mx-1 text-muted-foreground">/</span>
+                        <span className="text-rose-700 dark:text-rose-400">
+                          {d.tip_pool_contributed > 0 ? `−${formatMoney(d.tip_pool_contributed)}` : "—"}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[0.8125rem] text-muted-foreground">Tip-out in / out</p>
+                      <p className="mt-0.5 text-sm font-medium tabular-nums">
+                        <span className="text-emerald-700 dark:text-emerald-400">
+                          {d.tip_out_received > 0 ? `+${formatMoney(d.tip_out_received)}` : "—"}
+                        </span>
+                        <span className="mx-1 text-muted-foreground">/</span>
+                        <span className="text-rose-700 dark:text-rose-400">
+                          {d.tip_out_given > 0 ? `−${formatMoney(d.tip_out_given)}` : "—"}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </article>
+              ))}
             </div>
           </div>
         )}

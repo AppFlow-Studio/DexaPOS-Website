@@ -45,6 +45,22 @@ import { SalesByItemReportItem } from "@/app/dashboard/actions/order-analytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import { ReportExportButtons } from "../components/ReportExportButtons";
 import type { ExportColumn } from "@/utils/export";
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+/** Item name always stays; rank and the secondary figures are optional on mobile. */
+const TABLE_COLUMNS: ReportColumn[] = [
+  { id: "rank", label: "#", defaultHidden: true },
+  { id: "item_name", label: "Item Name", locked: true },
+  { id: "category", label: "Category", defaultHidden: true },
+  { id: "quantity_sold", label: "Qty Sold" },
+  { id: "gross_sales", label: "Gross Sales", defaultHidden: true },
+  { id: "net_sales", label: "Net Sales", locked: true },
+];
 
 type SortKey = keyof Pick<
   SalesByItemReportItem,
@@ -72,9 +88,9 @@ function SortIcon({
   if (column !== active)
     return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1" />;
   return dir === "asc" ? (
-    <ArrowUp className="h-3.5 w-3.5 text-primary ml-1" />
+    <ArrowUp className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1" />
   ) : (
-    <ArrowDown className="h-3.5 w-3.5 text-primary ml-1" />
+    <ArrowDown className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1" />
   );
 }
 
@@ -88,6 +104,14 @@ export default function SalesByItemsPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("net_sales");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [hiddenCols, setHiddenCols] = useState(() =>
+    initialHiddenColumns(TABLE_COLUMNS),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
+  const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
   const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
@@ -291,6 +315,11 @@ export default function SalesByItemsPage() {
                 ? "Loading…"
                 : `${processed.length} item${processed.length !== 1 ? "s" : ""}`}
             </span>
+            <MobileColumnsButton
+              columns={TABLE_COLUMNS}
+              hidden={hiddenCols}
+              onChange={setHiddenCols}
+            />
             <ReportExportButtons
               data={processed}
               columns={exportColumns}
@@ -319,15 +348,17 @@ export default function SalesByItemsPage() {
           </div>
         </div>
 
-        <CardContent className="overflow-x-auto p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent border-b border-border/50">
-                <TableHead className="w-10 pl-5 text-center text-xs font-semibold text-muted-foreground">
-                  #
-                </TableHead>
+        <CardContent className="p-0">
+          <Table variant="data">
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow className="hover:bg-transparent">
+                {isColVisible("rank") && (
+                  <TableHead className="w-10 text-center text-[0.8125rem] font-normal text-muted-foreground">
+                    #
+                  </TableHead>
+                )}
                 <TableHead
-                  className="text-xs font-semibold text-muted-foreground cursor-pointer select-none"
+                  className="cursor-pointer select-none text-[0.8125rem] font-normal text-muted-foreground"
                   onClick={() => handleSort("item_name")}
                 >
                   <div className="flex items-center">
@@ -335,33 +366,39 @@ export default function SalesByItemsPage() {
                     <SortIcon column="item_name" active={sortKey} dir={sortDir} />
                   </div>
                 </TableHead>
-                <TableHead
-                  className="text-xs font-semibold text-muted-foreground cursor-pointer select-none"
-                  onClick={() => handleSort("category")}
-                >
-                  <div className="flex items-center">
-                    Category
-                    <SortIcon column="category" active={sortKey} dir={sortDir} />
-                  </div>
-                </TableHead>
-                <TableHead
-                  className="text-xs font-semibold text-muted-foreground cursor-pointer select-none"
-                  onClick={() => handleSort("quantity_sold")}
-                >
-                  <div className="flex items-center justify-end">
-                    Qty Sold
-                    <SortIcon column="quantity_sold" active={sortKey} dir={sortDir} />
-                  </div>
-                </TableHead>
-                <TableHead
-                  className="text-xs font-semibold text-muted-foreground cursor-pointer select-none"
-                  onClick={() => handleSort("gross_sales")}
-                >
-                  <div className="flex items-center justify-end">
-                    Gross Sales
-                    <SortIcon column="gross_sales" active={sortKey} dir={sortDir} />
-                  </div>
-                </TableHead>
+                {isColVisible("category") && (
+                  <TableHead
+                    className="cursor-pointer select-none text-[0.8125rem] font-normal text-muted-foreground"
+                    onClick={() => handleSort("category")}
+                  >
+                    <div className="flex items-center">
+                      Category
+                      <SortIcon column="category" active={sortKey} dir={sortDir} />
+                    </div>
+                  </TableHead>
+                )}
+                {isColVisible("quantity_sold") && (
+                  <TableHead
+                    className="cursor-pointer select-none text-[0.8125rem] font-normal text-muted-foreground"
+                    onClick={() => handleSort("quantity_sold")}
+                  >
+                    <div className="flex items-center justify-end">
+                      Qty Sold
+                      <SortIcon column="quantity_sold" active={sortKey} dir={sortDir} />
+                    </div>
+                  </TableHead>
+                )}
+                {isColVisible("gross_sales") && (
+                  <TableHead
+                    className="cursor-pointer select-none text-[0.8125rem] font-normal text-muted-foreground"
+                    onClick={() => handleSort("gross_sales")}
+                  >
+                    <div className="flex items-center justify-end">
+                      Gross Sales
+                      <SortIcon column="gross_sales" active={sortKey} dir={sortDir} />
+                    </div>
+                  </TableHead>
+                )}
                 <TableHead
                   className="text-xs font-semibold text-muted-foreground cursor-pointer select-none pr-5"
                   onClick={() => handleSort("net_sales")}
@@ -376,7 +413,7 @@ export default function SalesByItemsPage() {
             <TableBody>
               {isError ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-48 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-48 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Package className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">Failed to load sales data</p>
@@ -386,22 +423,30 @@ export default function SalesByItemsPage() {
                 </TableRow>
               ) : isLoading ? (
                 Array.from({ length: 10 }).map((_, i) => (
-                  <TableRow key={i} className="border-b border-border/30">
-                    <TableCell className="pl-5 py-3.5">
-                      <div className="h-4 w-5 bg-muted animate-pulse rounded mx-auto" />
-                    </TableCell>
+                  <TableRow key={i} className="border-0">
+                    {isColVisible("rank") && (
+                      <TableCell className="py-3.5">
+                        <div className="h-4 w-5 bg-muted animate-pulse rounded mx-auto" />
+                      </TableCell>
+                    )}
                     <TableCell className="py-3.5">
                       <div className="h-4 w-44 bg-muted animate-pulse rounded" />
                     </TableCell>
-                    <TableCell className="py-3.5">
-                      <div className="h-5 w-20 bg-muted animate-pulse rounded-full" />
-                    </TableCell>
-                    <TableCell className="py-3.5">
-                      <div className="h-4 w-16 bg-muted animate-pulse rounded ml-auto" />
-                    </TableCell>
-                    <TableCell className="py-3.5">
-                      <div className="h-4 w-20 bg-muted animate-pulse rounded ml-auto" />
-                    </TableCell>
+                    {isColVisible("category") && (
+                      <TableCell className="py-3.5">
+                        <div className="h-5 w-20 bg-muted animate-pulse rounded-full" />
+                      </TableCell>
+                    )}
+                    {isColVisible("quantity_sold") && (
+                      <TableCell className="py-3.5">
+                        <div className="h-4 w-16 bg-muted animate-pulse rounded ml-auto" />
+                      </TableCell>
+                    )}
+                    {isColVisible("gross_sales") && (
+                      <TableCell className="py-3.5">
+                        <div className="h-4 w-20 bg-muted animate-pulse rounded ml-auto" />
+                      </TableCell>
+                    )}
                     <TableCell className="py-3.5 pr-5">
                       <div className="h-4 w-20 bg-muted animate-pulse rounded ml-auto" />
                     </TableCell>
@@ -409,7 +454,7 @@ export default function SalesByItemsPage() {
                 ))
               ) : processed.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-48 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-48 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Package className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">
@@ -438,14 +483,16 @@ export default function SalesByItemsPage() {
                   return (
                     <TableRow
                       key={index}
-                      className="border-b border-border/30 hover:bg-muted/30 transition-colors group"
+                      className="group border-0 bg-card/70 transition-colors hover:bg-muted/40"
                     >
                       {/* Rank */}
-                      <TableCell className="pl-5 py-3.5 text-center">
-                        <span className="text-xs font-bold text-muted-foreground/50">
-                          {index + 1}
-                        </span>
-                      </TableCell>
+                      {isColVisible("rank") && (
+                        <TableCell className="py-3.5 text-center">
+                          <span className="text-xs font-bold text-muted-foreground/50">
+                            {index + 1}
+                          </span>
+                        </TableCell>
+                      )}
 
                       {/* Item name */}
                       <TableCell className="py-3.5 font-medium text-sm max-w-50">
@@ -453,42 +500,48 @@ export default function SalesByItemsPage() {
                       </TableCell>
 
                       {/* Category badge */}
-                      <TableCell className="py-3.5">
-                        {item.category ? (
-                          <span className="inline-flex items-center rounded-full bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                            {item.category}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground/40">
-                            —
-                          </span>
-                        )}
-                      </TableCell>
+                      {isColVisible("category") && (
+                        <TableCell className="py-3.5">
+                          {item.category ? (
+                            <span className="inline-flex items-center rounded-full bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              {item.category}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/40">
+                              —
+                            </span>
+                          )}
+                        </TableCell>
+                      )}
 
                       {/* Qty sold with bar */}
-                      <TableCell className="py-3.5 text-right">
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="text-sm font-semibold font-mono">
-                            {item.quantity_sold.toLocaleString()}
-                          </span>
-                          <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-foreground/35"
-                              style={{ width: `${qtyPct}%` }}
-                            />
+                      {isColVisible("quantity_sold") && (
+                        <TableCell className="py-3.5 text-right">
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-sm font-semibold font-mono">
+                              {item.quantity_sold.toLocaleString()}
+                            </span>
+                            <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-foreground/35"
+                                style={{ width: `${qtyPct}%` }}
+                              />
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
+                        </TableCell>
+                      )}
 
                       {/* Gross sales */}
-                      <TableCell className="py-3.5 text-right">
-                        <span className="text-sm font-mono text-muted-foreground">
-                          $
-                          {item.gross_sales.toLocaleString("en-US", {
-                            minimumFractionDigits: 2,
-                          })}
-                        </span>
-                      </TableCell>
+                      {isColVisible("gross_sales") && (
+                        <TableCell className="py-3.5 text-right">
+                          <span className="text-sm font-mono text-muted-foreground">
+                            $
+                            {item.gross_sales.toLocaleString("en-US", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </span>
+                        </TableCell>
+                      )}
 
                       {/* Net sales with bar */}
                       <TableCell className="py-3.5 pr-5 text-right">

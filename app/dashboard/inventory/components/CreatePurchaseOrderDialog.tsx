@@ -199,13 +199,13 @@ export function CreatePurchaseOrderDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[700px] sm:rounded-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/10">
+      <DialogContent className="flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden max-sm:overflow-hidden rounded-none bg-card p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-[700px] sm:rounded-3xl">
+        <DialogHeader className="shrink-0 bg-card px-5 pb-4 pt-5 pr-14 text-left sm:px-6 sm:pt-6 sm:pr-16">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="shrink-0 p-2.5 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/10">
               <ShoppingCart className="h-5 w-5 text-emerald-500" />
             </div>
-            <div>
+            <div className="min-w-0">
               <DialogTitle>Create Purchase Order</DialogTitle>
               <DialogDescription>
                 Order inventory for {selectedLocation?.name || "this location"}
@@ -214,7 +214,8 @@ export function CreatePurchaseOrderDialog({
           </div>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 mt-4">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+          <div className="thin-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto bg-card px-5 py-4 sm:px-6">
           {/* Vendor Selection */}
           <div className="space-y-2">
             <Label htmlFor="vendor_id">Vendor *</Label>
@@ -225,10 +226,10 @@ export function CreatePurchaseOrderDialog({
             >
               <PopoverTrigger asChild>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   role="combobox"
                   aria-expanded={openVendorCombobox}
-                  className="w-full justify-between"
+                  className="w-full justify-between border-0 bg-muted/60 shadow-none hover:bg-muted"
                 >
                   {form.watch("vendor_id")
                     ? vendors.find((v) => v.id === form.watch("vendor_id"))
@@ -237,10 +238,10 @@ export function CreatePurchaseOrderDialog({
                   <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-[400px] overflow-hidden rounded-2xl p-0 z-[100]">
+              <PopoverContent className="z-[100] w-[min(400px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0">
                 <Command>
                   <CommandInput placeholder="Search vendors..." />
-                  <CommandList>
+                  <CommandList className="max-h-[240px]">
                     <CommandEmpty>
                       <div className="py-6 text-center">
                         <Truck className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
@@ -299,10 +300,10 @@ export function CreatePurchaseOrderDialog({
               >
                 <PopoverTrigger asChild>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     role="combobox"
                     aria-expanded={openItemCombobox}
-                    className="flex-1 min-w-0 justify-between"
+                    className="flex-1 min-w-0 justify-between border-0 bg-muted/60 shadow-none hover:bg-muted"
                   >
                     <span className="truncate">
                       {selectedItemId
@@ -312,10 +313,10 @@ export function CreatePurchaseOrderDialog({
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[min(500px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0 z-[100]">
+                <PopoverContent className="z-[100] w-[min(320px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0">
                   <Command>
                     <CommandInput placeholder="Search items..." />
-                    <CommandList>
+                    <CommandList className="max-h-[240px]">
                       <CommandEmpty>
                         <div className="py-6 text-center">
                           <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
@@ -385,16 +386,16 @@ export function CreatePurchaseOrderDialog({
             <Label>Order Items</Label>
 
             {lineItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 rounded-lg border border-dashed text-center">
+              <div className="flex flex-col items-center justify-center rounded-2xl border-0 bg-muted/20 py-8 text-center">
                 <Package className="h-8 w-8 text-muted-foreground mb-2" />
                 <p className="text-sm text-muted-foreground">
                   No items added yet. Select items from the dropdown above.
                 </p>
               </div>
             ) : (
-              <div className="rounded-lg border divide-y">
+              <div className="overflow-hidden rounded-2xl border-0 bg-muted/20">
                 {/* Header (desktop only — mobile rows use inline labels) */}
-                <div className="hidden sm:grid grid-cols-12 gap-2 px-4 py-2 bg-muted/50 text-sm font-medium text-muted-foreground">
+                <div className="hidden sm:grid grid-cols-12 gap-2 bg-muted/50 px-3 py-3 text-sm font-medium text-muted-foreground">
                   <div className="col-span-4">Item</div>
                   <div className="col-span-2">Qty</div>
                   <div className="col-span-2">Cost</div>
@@ -406,7 +407,7 @@ export function CreatePurchaseOrderDialog({
                 {lineItems.map((item, index) => (
                   <div
                     key={item.inventory_item_id}
-                    className="flex flex-col gap-2 px-4 py-3 sm:grid sm:grid-cols-12 sm:gap-2 sm:items-center"
+                    className="flex flex-col gap-2 border-0 bg-card/70 px-3 py-3 transition-colors hover:bg-muted/40 sm:grid sm:grid-cols-12 sm:gap-2 sm:items-center"
                   >
                     <div className="sm:col-span-4 min-w-0">
                       <p className="font-medium text-sm break-words">
@@ -483,7 +484,7 @@ export function CreatePurchaseOrderDialog({
                 ))}
 
                 {/* Total */}
-                <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-muted/30 items-center">
+                <div className="grid grid-cols-12 items-center gap-2 bg-muted/50 px-3 py-3">
                   <div className="col-span-8 text-right font-medium">
                     Order Total:
                   </div>
@@ -498,7 +499,9 @@ export function CreatePurchaseOrderDialog({
             )}
           </div>
 
-          <DialogFooter className="pt-4">
+          </div>
+
+          <DialogFooter className="shrink-0 bg-card px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>

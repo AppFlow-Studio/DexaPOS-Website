@@ -31,13 +31,12 @@ import {
 } from "../hooks/useWasteAndCounts";
 import { CountStatus } from "../../actions/inventory-counts";
 
+/* Count statuses read as one neutral tone, matching the rest of inventory. */
 const STATUS_BADGE: Record<CountStatus, string> = {
-  draft: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  in_progress:
-    "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
-  completed: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
-  approved:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
+  draft: "border-0 bg-muted text-muted-foreground",
+  in_progress: "border-0 bg-muted text-muted-foreground",
+  completed: "border-0 bg-muted text-muted-foreground",
+  approved: "border-0 bg-muted text-muted-foreground",
 };
 
 interface CountDetailSheetProps {
@@ -98,7 +97,7 @@ export function CountDetailSheet({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden max-sm:overflow-hidden rounded-none bg-card p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:h-[min(760px,calc(100dvh-2rem))] sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-2xl sm:rounded-3xl">
+      <DialogContent className="inventory-neutral-badges-portal flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden max-sm:overflow-hidden rounded-none bg-card p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:h-[min(760px,calc(100dvh-2rem))] sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-2xl sm:rounded-3xl">
         <DialogHeader className="shrink-0 bg-card px-5 pb-4 pt-5 pr-14 text-left sm:px-6 sm:pt-6 sm:pr-16">
           <DialogTitle className="flex items-center gap-2">
             {detail?.count.count_name ?? "Inventory Count"}

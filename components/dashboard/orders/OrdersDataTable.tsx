@@ -642,20 +642,20 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                 </DropdownMenu>
             </div>
 
-            {/* Table. No box of its own — the page container is the only frame,
-                so rows are separated by hairlines alone.
+            {/* `variant="data"` is the shared staff-table treatment: a rounded
+                tinted container, a tinted header band, and borderless rows on
+                `bg-card/70`. See components/dashboard/staff/StaffDataTable.tsx.
 
-                The rounding goes on Table's own scroll container rather than an
-                extra wrapper: nesting overflow-hidden around its overflow-x-auto
-                created a second scroll context that reserved a scrollbar gutter
-                (dead space) below the rows. */}
-            <Table containerClassName="rounded-xl">
-                    <TableHeader>
+                The variant styles Table's own scroll container — do not wrap it
+                in another overflow-hidden element. Nesting a second scroll
+                context reserves a scrollbar gutter (dead space) below the rows. */}
+            <Table variant="data">
+                    <TableHeader className="[&_tr]:border-0">
                         {table.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id} className="border-border/60 hover:bg-transparent">
+                            <TableRow key={headerGroup.id} className="hover:bg-transparent">
                                 {headerGroup.headers.map((header) => {
                                     return (
-                                        <TableHead key={header.id} className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                                        <TableHead key={header.id} className="text-[0.8125rem] font-normal text-muted-foreground">
                                             {header.isPlaceholder
                                                 ? null
                                                 : flexRender(
@@ -682,7 +682,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                                 <TableRow
                                     key={row.id}
                                     data-state={row.getIsSelected() && 'selected'}
-                                    className="cursor-pointer border-border/30 transition-colors hover:bg-muted/40"
+                                    className="cursor-pointer border-0 bg-card/70 transition-colors hover:bg-muted/40"
                                     onClick={() => handleRowClick(row.original)}
                                 >
                                     {row.getVisibleCells().map((cell) => (

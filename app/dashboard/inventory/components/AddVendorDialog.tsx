@@ -87,9 +87,9 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
+      <DialogContent className="flex h-dvh max-h-dvh w-full max-w-none flex-col overflow-hidden max-sm:overflow-hidden rounded-none p-0 max-sm:top-auto max-sm:translate-y-0 sm:h-auto sm:max-h-[90dvh] sm:w-[calc(100%-1rem)] sm:max-w-[500px] sm:rounded-3xl sm:p-6">
+        <DialogHeader className="shrink-0 px-5 pb-4 pt-5 pr-14 sm:px-0 sm:pt-0 sm:pr-10">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
               <Truck className="h-4 w-4 text-muted-foreground" />
             </div>
@@ -104,7 +104,7 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
             {isSingleLocation ? null : isGlobalView ? (
               <Badge
                 variant="outline"
-                className="shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground"
+                className="hidden shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground sm:inline-flex"
               >
                 <Globe className="h-3 w-3" />
                 Global
@@ -112,7 +112,7 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
             ) : (
               <Badge
                 variant="outline"
-                className="min-w-0 shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground"
+                className="hidden min-w-0 shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground sm:inline-flex"
               >
                 <MapPin className="h-3 w-3 shrink-0" />
                 <span className="truncate">
@@ -123,7 +123,18 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
           </div>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          {/* Fields scroll; the footer below stays pinned so Add Vendor is
+              always reachable on a short viewport.
+              The negative margin pulls this box out to the dialog's edges so
+              the scrollbar rides the border rather than floating inside the
+              content; the matching padding puts the fields back where they
+              were and leaves room for focus rings, which `overflow-y-auto`
+              would otherwise clip against the left edge. */}
+          <div className="-mx-6 min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pt-4">
           {/* Info banner explaining scope — hidden for single-location accounts. */}
           {!isSingleLocation && (
             <div className="rounded-2xl border-0 bg-muted/60 p-3 text-sm text-muted-foreground">
@@ -255,8 +266,9 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
               />
             </div>
           </div>
+          </div>
 
-          <DialogFooter className="pt-4">
+          <DialogFooter className="shrink-0 pt-4">
             <Button
               type="button"
               variant="outline"

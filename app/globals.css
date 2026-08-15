@@ -695,3 +695,22 @@ html:has([data-template]) body[data-scroll-locked] {
   background-color: var(--muted-foreground) !important;
   opacity: 0.6;
 }
+
+/* Dialogs portal to <body>, escaping .inventory-neutral-badges on the page
+   shell. Inventory dialogs opt in with this class to get the same neutral
+   chips. */
+.inventory-neutral-badges-portal [data-slot="badge"] {
+  background-color: var(--muted) !important;
+  border-color: transparent !important;
+  color: var(--muted-foreground) !important;
+  box-shadow: none !important;
+}
+
+.inventory-neutral-badges-portal [data-slot="badge"] > svg {
+  color: currentColor !important;
+}
+
+.inventory-neutral-badges-portal [data-slot="badge"] > span.rounded-full {
+  background-color: var(--muted-foreground) !important;
+  opacity: 0.6;
+}

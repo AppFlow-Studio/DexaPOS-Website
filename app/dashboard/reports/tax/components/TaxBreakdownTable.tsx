@@ -107,9 +107,9 @@ function SortIcon({
       <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1 shrink-0" />
     );
   return dir === "asc" ? (
-    <ArrowUp className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
+    <ArrowUp className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />
   ) : (
-    <ArrowDown className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
+    <ArrowDown className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />
   );
 }
 
@@ -274,12 +274,12 @@ export function TaxBreakdownTable({
         </div>
       </div>
 
-      <CardContent className="p-0 overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent border-b border-border/50">
+      <CardContent className="p-0">
+        <Table variant="data">
+          <TableHeader className="[&_tr]:border-0">
+            <TableRow className="hover:bg-transparent">
               <TableHead
-                className="pl-5 text-xs font-semibold text-muted-foreground cursor-pointer select-none"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none"
                 onClick={() => onSort("createdAt")}
               >
                 <div className="flex items-center">
@@ -287,14 +287,14 @@ export function TaxBreakdownTable({
                   <SortIcon col="createdAt" active={sortKey} dir={sortDir} />
                 </div>
               </TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">
+              <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">
                 Order #
               </TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">
+              <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">
                 Type
               </TableHead>
               <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
                 onClick={() => onSort("subtotal")}
               >
                 <div className="flex items-center justify-end">
@@ -303,7 +303,7 @@ export function TaxBreakdownTable({
                 </div>
               </TableHead>
               <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
                 onClick={() => onSort("taxAmount")}
               >
                 <div className="flex items-center justify-end">
@@ -313,7 +313,7 @@ export function TaxBreakdownTable({
               </TableHead>
               {/* taxRate is a computed field — sort applies to current page only */}
               <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
                 onClick={() => onSort("taxRate")}
                 title="Sorting applies to the current page only"
               >
@@ -327,15 +327,15 @@ export function TaxBreakdownTable({
                   )}
                 </div>
               </TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">
+              <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">
                 Payment
               </TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">
+              <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">
                 Pricing
               </TableHead>
               {/* taxRefunded is a joined field — sort applies to current page only */}
               <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right pr-5"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5"
                 onClick={() => onSort("taxRefunded")}
                 title="Sorting applies to the current page only"
               >
@@ -354,7 +354,7 @@ export function TaxBreakdownTable({
           <TableBody>
             {isLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i} className="border-b border-border/30">
+                <TableRow key={i} className="border-0">
                   {Array.from({ length: 9 }).map((_, j) => (
                     <TableCell key={j} className="py-3.5">
                       <div className="h-4 bg-muted animate-pulse rounded" />
@@ -389,7 +389,7 @@ export function TaxBreakdownTable({
                 return (
                   <TableRow
                     key={row.orderId}
-                    className="border-b border-border/30 hover:bg-muted/30 transition-colors"
+                    className="border-0 bg-card/70 transition-colors hover:bg-muted/40"
                   >
                     <TableCell className="pl-5 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
                       {format(new Date(row.createdAt), "MM/dd/yy HH:mm")}
