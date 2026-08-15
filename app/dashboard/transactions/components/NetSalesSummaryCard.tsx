@@ -46,14 +46,14 @@ function MetricRow({
   return (
     <div
       className={cn(
-        "flex items-center justify-between py-3",
-        isHighlighted && "rounded-2xl border-0 bg-muted/60 shadow-none -mx-4 px-4"
+        "flex min-w-0 flex-wrap items-center justify-between gap-2 py-3",
+        isHighlighted && "rounded-2xl border-0 bg-muted/60 shadow-none px-4"
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 max-w-[70%] items-start gap-2">
         <span
           className={cn(
-            "text-sm",
+            "min-w-0 break-words text-sm leading-snug",
             isHighlighted ? "font-bold" : "text-muted-foreground"
           )}
         >
@@ -75,7 +75,7 @@ function MetricRow({
       {/* No sign tinting (D-12) — the minus carries it. */}
       <span
         className={cn(
-          "font-mono text-sm tabular-nums",
+          "ml-auto shrink-0 max-w-[30%] text-right font-mono text-sm tabular-nums",
           isHighlighted && "font-bold"
         )}
       >

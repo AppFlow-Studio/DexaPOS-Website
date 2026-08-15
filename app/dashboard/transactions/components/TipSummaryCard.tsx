@@ -43,15 +43,15 @@ function MetricRow({
   return (
     <div
       className={cn(
-        "flex items-center justify-between py-3",
+        "flex min-w-0 flex-wrap items-center justify-between gap-2 py-3",
         // Inset well instead of a rule (§5.5).
-        isTotal && "-mx-4 mt-2 rounded-2xl bg-muted/60 px-4"
+        isTotal && "mt-2 rounded-2xl bg-muted/60 px-4"
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 max-w-[70%] items-start gap-2">
         <span
           className={cn(
-            "text-sm",
+            "min-w-0 break-words text-sm leading-snug",
             isTotal ? "font-bold" : "text-muted-foreground"
           )}
         >
@@ -73,7 +73,7 @@ function MetricRow({
       {/* No sign tinting (D-12). */}
       <span
         className={cn(
-          "font-mono text-sm tabular-nums",
+          "ml-auto shrink-0 max-w-[30%] text-right font-mono text-sm tabular-nums",
           isTotal && "text-base font-bold"
         )}
       >

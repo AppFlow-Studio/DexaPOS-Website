@@ -23,9 +23,8 @@ function Table({
         data-slot="table-container"
         data-variant={variant}
         className={cn(
-          // `min-w-0` lets this box shrink inside a flex/grid parent. Without
-          // it the container adopts the table's intrinsic width and pushes the
-          // page wider than the viewport instead of scrolling within itself.
+          // Keep the table width constrained while allowing horizontal scroll when
+          // content or expanded rows are wider than the viewport.
           "relative w-full min-w-0 overflow-x-auto",
           variant === "data" && "overflow-x-auto overflow-y-hidden rounded-2xl bg-muted/20",
           containerClassName

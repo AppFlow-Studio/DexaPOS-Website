@@ -33,7 +33,9 @@ import {
   ChevronDown,
   CreditCard,
   Banknote,
-  ChevronLeft,
+  ChevronLeft,
+
+
   Wifi,
   Smartphone,
   X,
@@ -171,108 +173,110 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
       emvData.tvr);
 
   return (
-    <div className="grid gap-4 p-4 md:grid-cols-2 lg:grid-cols-4">
-      {/* Transaction Details */}
-      <div className="space-y-2 min-w-0">
-        <h4 className="text-sm font-semibold">Transaction Details</h4>
-        <dl className="space-y-1 text-xs">
-          {payment.authorization_code && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Auth Code</dt>
-              <dd className="font-mono">{payment.authorization_code}</dd>
-            </div>
-          )}
-          {payment.transaction_id && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Transaction ID</dt>
-              <dd className="font-mono truncate max-w-35">
-                {payment.transaction_id}
-              </dd>
-            </div>
-          )}
-          {payment.reference_number && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Reference #</dt>
-              <dd className="font-mono">{payment.reference_number}</dd>
-            </div>
-          )}
-          {payment.dejavoo_response_code && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Response Code</dt>
-              <dd className="font-mono">{payment.dejavoo_response_code}</dd>
-            </div>
-          )}
-          {(payment.batch_number || ct?.batchNumber) && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Batch #</dt>
-              <dd className="font-mono">{payment.batch_number || ct?.batchNumber}</dd>
-            </div>
-          )}
-          {payment.settled_at && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Settled At</dt>
-              <dd>{formatDate(payment.settled_at)}</dd>
-            </div>
-          )}
-          {(payment.invoice_number || raw?.txnInvoiceNumber) && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Invoice #</dt>
-              <dd className="font-mono">{payment.invoice_number || raw?.txnInvoiceNumber}</dd>
-            </div>
-          )}
-          {ct?.rrn && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">RRN</dt>
-              <dd className="font-mono">{ct.rrn}</dd>
-            </div>
-          )}
-        </dl>
-      </div>
+    <div className="grid w-full max-w-full gap-6 p-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="space-y-4 min-w-0 md:col-span-1">
+        {/* Transaction Details */}
+        <div className="space-y-2 min-w-0">
+          <h4 className="text-sm font-semibold">Transaction Details</h4>
+          <dl className="space-y-1 text-xs">
+            {payment.authorization_code && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Auth Code</dt>
+                <dd className="font-mono">{payment.authorization_code}</dd>
+              </div>
+            )}
+            {payment.transaction_id && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Transaction ID</dt>
+                <dd className="font-mono truncate max-w-35">
+                  {payment.transaction_id}
+                </dd>
+              </div>
+            )}
+            {payment.reference_number && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Reference #</dt>
+                <dd className="font-mono">{payment.reference_number}</dd>
+              </div>
+            )}
+            {payment.dejavoo_response_code && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Response Code</dt>
+                <dd className="font-mono">{payment.dejavoo_response_code}</dd>
+              </div>
+            )}
+            {(payment.batch_number || ct?.batchNumber) && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Batch #</dt>
+                <dd className="font-mono">{payment.batch_number || ct?.batchNumber}</dd>
+              </div>
+            )}
+            {payment.settled_at && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Settled At</dt>
+                <dd>{formatDate(payment.settled_at)}</dd>
+              </div>
+            )}
+            {(payment.invoice_number || raw?.txnInvoiceNumber) && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Invoice #</dt>
+                <dd className="font-mono">{payment.invoice_number || raw?.txnInvoiceNumber}</dd>
+              </div>
+            )}
+            {ct?.rrn && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">RRN</dt>
+                <dd className="font-mono">{ct.rrn}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
 
-      {/* Terminal Info */}
-      <div className="space-y-2 min-w-0">
-        <h4 className="text-sm font-semibold">Terminal Info</h4>
-        <dl className="space-y-1 text-xs">
-          {payment.terminal_type && (
-            <div className="flex gap-2 justify-between">
-              <dt className="text-muted-foreground shrink-0">Terminal</dt>
-              <dd className="text-right break-all">{payment.terminal_type}</dd>
-            </div>
-          )}
-          {(payment.terminal_id || ct?.terminalId) && (
-            <div className="flex gap-2 justify-between">
-              <dt className="text-muted-foreground shrink-0">Terminal ID</dt>
-              <dd
-                className="font-mono text-right truncate min-w-0 max-w-[160px]"
-                title={payment.terminal_id || ct?.terminalId || ''}
-              >
-                {payment.terminal_id || ct?.terminalId}
-              </dd>
-            </div>
-          )}
-          {payment.device_id && (
-            <div className="flex gap-2 justify-between">
-              <dt className="text-muted-foreground shrink-0">Device ID</dt>
-              <dd
-                className="font-mono text-right truncate min-w-0 max-w-[160px]"
-                title={payment.device_id}
-              >
-                {payment.device_id}
-              </dd>
-            </div>
-          )}
-          {payment.processor_response?.serial_number && (
-            <div className="flex gap-2 justify-between">
-              <dt className="text-muted-foreground shrink-0">Serial #</dt>
-              <dd
-                className="font-mono text-right truncate min-w-0 max-w-[160px]"
-                title={String(payment.processor_response.serial_number)}
-              >
-                {payment.processor_response.serial_number}
-              </dd>
-            </div>
-          )}
-        </dl>
+        {/* Terminal Info */}
+        <div className="space-y-2 min-w-0">
+          <h4 className="text-sm font-semibold">Terminal Info</h4>
+          <dl className="space-y-1 text-xs">
+            {payment.terminal_type && (
+              <div className="flex gap-2 justify-between">
+                <dt className="text-muted-foreground shrink-0">Terminal</dt>
+                <dd className="text-right break-all">{payment.terminal_type}</dd>
+              </div>
+            )}
+            {(payment.terminal_id || ct?.terminalId) && (
+              <div className="space-y-1">
+                <dt className="text-muted-foreground">Terminal ID</dt>
+                <dd
+                  className="font-mono break-all text-left"
+                  title={payment.terminal_id || ct?.terminalId || ''}
+                >
+                  {payment.terminal_id || ct?.terminalId}
+                </dd>
+              </div>
+            )}
+            {payment.device_id && (
+              <div className="space-y-1">
+                <dt className="text-muted-foreground">Device ID</dt>
+                <dd
+                  className="font-mono break-all text-left"
+                  title={payment.device_id}
+                >
+                  {payment.device_id}
+                </dd>
+              </div>
+            )}
+            {payment.processor_response?.serial_number && (
+              <div className="space-y-1">
+                <dt className="text-muted-foreground">Serial #</dt>
+                <dd
+                  className="font-mono break-all text-left"
+                  title={String(payment.processor_response.serial_number)}
+                >
+                  {payment.processor_response.serial_number}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
       </div>
 
       {/* Reversal Details (conditional) */}
@@ -331,10 +335,10 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
 
       {/* Items Paid For (conditional) */}
       {hasItems && (
-        <div className="space-y-2 min-w-0">
+        <div className="space-y-2 min-w-0 pt-2">
           <h4 className="text-sm font-semibold">Items Paid</h4>
-          <div className="overflow-x-auto rounded-2xl bg-muted/20">
-            <table className="w-full text-xs min-w-105">
+          <div className="overflow-hidden rounded-2xl bg-muted/20">
+            <table className="w-full max-w-full text-xs">
               <thead>
                 <tr className="bg-muted/50 text-muted-foreground">
                   <th className="px-2 py-1.5 text-left font-medium">Item</th>
@@ -346,16 +350,16 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
               <tbody>
                 {payment.order_payment_items!.map((item) => (
                   <tr key={item.id} className="bg-card/70">
-                    <td className="px-2 py-1.5 whitespace-nowrap">
+                    <td className="px-1.5 py-1.5 whitespace-nowrap">
                       {item.order_items?.item_name || "—"}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                    <td className="px-1.5 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
                       {item.quantity_paid}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                    <td className="px-1.5 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
                       {formatCurrency(item.subtotal_paid)}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                    <td className="px-1.5 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
                       {formatCurrency(item.tax_paid)}
                     </td>
                   </tr>
@@ -452,30 +456,60 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                   value: payTotal,
                   cls: "font-semibold",
                 });
+
+                const summaryColumns = rows.slice(0, 4);
+                const overflowColumns = rows.slice(4);
+
                 return (
-                  <tfoot className="bg-muted/50">
-                    {rows.map((r, i) => (
-                      <tr key={i}>
-                        <td
-                          colSpan={3}
-                          className={cn(
-                            "px-2 py-1 text-right text-muted-foreground",
-                            r.cls
-                          )}
-                        >
-                          {r.label}
-                        </td>
-                        <td
-                          className={cn(
-                            "px-2 py-1 text-right font-mono tabular-nums whitespace-nowrap",
-                            r.cls
-                          )}
-                        >
-                          {formatCurrency(r.value)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tfoot>
+                  <div className="mt-3 ml-auto w-full max-w-[500px] text-xs">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                      {summaryColumns.map((r, i) => (
+                        <div key={`${r.label}-${i}`} className="min-w-0">
+                          <div
+                            className={cn(
+                              "mb-1 text-right text-muted-foreground",
+                              r.cls
+                            )}
+                          >
+                            {r.label}
+                          </div>
+                          <div
+                            className={cn(
+                              "text-right font-mono tabular-nums whitespace-nowrap",
+                              r.cls
+                            )}
+                          >
+                            {formatCurrency(r.value)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {overflowColumns.length > 0 && (
+                      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                        {overflowColumns.map((r, i) => (
+                          <div key={`${r.label}-extra-${i}`} className="min-w-0">
+                            <div
+                              className={cn(
+                                "mb-1 text-right text-muted-foreground",
+                                r.cls
+                              )}
+                            >
+                              {r.label}
+                            </div>
+                            <div
+                              className={cn(
+                                "text-right font-mono tabular-nums whitespace-nowrap",
+                                r.cls
+                              )}
+                            >
+                              {formatCurrency(r.value)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 );
               })()}
             </table>
@@ -1073,7 +1107,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                     <TableRow className="border-0 hover:bg-transparent">
                       <TableCell
                         colSpan={columns.length}
-                        className="bg-muted/40 p-0"
+                        className="w-full max-w-full bg-muted/40 p-0"
                       >
                         <PaymentDetailPanel payment={row.original} />
                       </TableCell>

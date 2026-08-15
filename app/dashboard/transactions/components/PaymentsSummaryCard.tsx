@@ -109,18 +109,18 @@ export function PaymentsSummaryCard({
                 return (
                   <div
                     key={pm.method}
-                    className="group flex items-center justify-between py-2.5 hover:bg-muted/50 -mx-4 px-4 rounded-2xl transition-colors"
+                    className="group flex min-w-0 items-start justify-between gap-3 rounded-2xl px-4 py-2.5 transition-colors hover:bg-muted/50"
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                       {/* One neutral chip for every tender (D-12): per-brand
                           hues turned this list into a colour key nobody reads,
                           and the icon already distinguishes cash from card. */}
                       <div className="rounded-full bg-muted/60 p-2 text-muted-foreground">
                         {getPaymentIcon(pm.method)}
                       </div>
-                      <div>
-                        <p className="text-sm font-medium">
+                      <div className="min-w-0">
+                        <p className="break-words text-[13px] font-medium leading-snug">
                           {formatMethodName(pm.method)}
                         </p>
                         <p className="text-[10px] text-muted-foreground">
@@ -129,7 +129,7 @@ export function PaymentsSummaryCard({
                         </p>
                       </div>
                     </div>
-                    <span className="font-mono text-sm font-bold tabular-nums">
+                    <span className="ml-auto shrink-0 text-right font-mono text-sm font-bold tabular-nums">
                       {formatCurrency(pm.amount)}
                     </span>
                   </div>
@@ -139,7 +139,7 @@ export function PaymentsSummaryCard({
 
             {/* Total row */}
             {paymentMethods.length > 0 && (
-              <div className="-mx-4 mt-2 flex items-center justify-between rounded-2xl bg-muted/60 px-4 py-3">
+              <div className="mt-2 flex items-center justify-between rounded-2xl bg-muted/60 px-4 py-3">
                 <span className="text-sm font-bold">Total</span>
                 <span className="font-mono text-base font-bold tabular-nums">
                   {formatCurrency(totalAmount)}

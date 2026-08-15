@@ -44,7 +44,7 @@ export function PanelSection({
       className={cn(
         // 48px of horizontal padding is most of a 320px viewport — ease off
         // below `sm` so content keeps its width.
-        'min-w-0 px-4 py-8 sm:px-6',
+        'min-w-0 overflow-hidden px-4 py-8 sm:px-6',
         divider && 'border-t border-border/60',
         className
       )}

@@ -189,43 +189,44 @@ export default function InvoiceDetailPage({
         stackActionsBelowIndicatorOnMobile
       />
 
-      {/* Invoice Details */}
-      <Panel>
-        <PanelSection label="Invoice Details">
-          <div className="grid min-w-0 grid-cols-1 gap-4 text-sm sm:grid-cols-2">
-            <div className="min-w-0">
-              <p className="mb-0.5 text-muted-foreground">Customer</p>
-              {invoice.customer ? (
-                <div className="min-w-0">
-                  <p className="truncate font-medium">
-                    {invoice.customer.name || "—"}
-                  </p>
-                  {invoice.customer.email && (
-                    <p className="truncate text-xs text-muted-foreground">
-                      {invoice.customer.email}
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[1.05fr_1.55fr]">
+        {/* Invoice Details */}
+        <Panel>
+          <PanelSection label="Invoice Details">
+            <div className="grid min-w-0 grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-1">
+              <div className="min-w-0">
+                <p className="mb-0.5 text-muted-foreground">Customer</p>
+                {invoice.customer ? (
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">
+                      {invoice.customer.name || "—"}
                     </p>
-                  )}
-                  {invoice.customer.phone && (
-                    <p className="truncate text-xs text-muted-foreground">
-                      {formatPhoneForDisplay(invoice.customer.phone)}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="italic text-muted-foreground">No customer</p>
-              )}
+                    {invoice.customer.email && (
+                      <p className="truncate text-xs text-muted-foreground">
+                        {invoice.customer.email}
+                      </p>
+                    )}
+                    {invoice.customer.phone && (
+                      <p className="truncate text-xs text-muted-foreground">
+                        {formatPhoneForDisplay(invoice.customer.phone)}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="italic text-muted-foreground">No customer</p>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="mb-0.5 text-muted-foreground">Payment Due</p>
+                <p className="font-medium">{paymentDueLabel}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="mb-0.5 text-muted-foreground">Payment Due</p>
-              <p className="font-medium">{paymentDueLabel}</p>
-            </div>
-          </div>
-        </PanelSection>
-      </Panel>
+          </PanelSection>
+        </Panel>
 
-      {/* Line Items */}
-      <Panel>
-        <PanelSection label="Items">
+        {/* Line Items */}
+        <Panel>
+          <PanelSection label="Items">
           {invoice.items && invoice.items.length > 0 ? (
             <>
               {/* Column labels — no rule beneath (§5.5). Hidden on phones,
@@ -240,7 +241,7 @@ export default function InvoiceDetailPage({
                 {invoice.items.map((item) => (
                   <div
                     key={item.id}
-                    className="-mx-2 min-w-0 rounded-2xl px-2 py-2 text-sm transition-colors hover:bg-muted/40 sm:grid sm:grid-cols-[1fr_60px_90px_90px] sm:items-start sm:gap-2"
+                    className="-mx-2 min-w-0 rounded-2xl px-2 py-2 text-sm transition-colors hover:bg-muted/40 sm:grid sm:grid-cols-[minmax(0,1fr)_56px_80px_80px] sm:items-start sm:gap-1.5"
                   >
                     <div className="min-w-0">
                       <p className="font-medium">{item.name}</p>
@@ -278,7 +279,7 @@ export default function InvoiceDetailPage({
           )}
 
           {/* Totals — an inset well rather than a pair of rules (§5.5). */}
-          <div className="ml-auto mt-4 w-full max-w-xs space-y-1.5 rounded-2xl bg-muted/60 px-4 py-3 text-sm sm:max-w-sm">
+          <div className="mt-4 w-full space-y-1.5 rounded-2xl bg-muted/60 px-4 py-3 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
               <span className="tabular-nums">{formatCurrency(invoice.subtotal)}</span>
@@ -307,6 +308,7 @@ export default function InvoiceDetailPage({
           </div>
         </PanelSection>
       </Panel>
+      </div>
 
       {/* Note */}
       {invoice.note && (

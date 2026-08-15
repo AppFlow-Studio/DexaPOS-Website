@@ -123,32 +123,32 @@ export function BestSellersCard({
                 <div
                   key={item.item_name}
                   className={cn(
-                    "-mx-2 flex items-center justify-between rounded-2xl px-2 py-2.5 transition-colors",
+                    "flex min-w-0 items-center justify-between gap-2 rounded-2xl px-2 py-2.5 transition-colors",
                     // Top seller sits in a neutral well, not an amber wash (D-12).
                     index === 0 && "bg-muted/40",
                     "hover:bg-muted/60"
                   )}
                 >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                     {getRankBadge(index + 1)}
                     <span
                       className={cn(
-                        "text-sm truncate",
+                        "min-w-0 break-words text-sm",
                         index === 0 ? "font-semibold" : "font-medium"
                       )}
                     >
                       {item.item_name}
                     </span>
                   </div>
-                  <div className="flex items-center gap-6">
-                    <span className="text-sm text-muted-foreground w-12 text-right tabular-nums">
+                  <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-6">
+                    <span className="w-7 text-right text-sm text-muted-foreground tabular-nums sm:w-12">
                       {item.quantity}
                     </span>
                     {/* Brand blue is reserved for section headings (D-03) —
                         weight alone marks the top figure. */}
                     <span
                       className={cn(
-                        "w-16 text-right font-mono text-sm tabular-nums",
+                        "w-10 text-right font-mono text-xs tabular-nums sm:w-16 sm:text-sm",
                         index === 0 && "font-bold"
                       )}
                     >
@@ -160,7 +160,7 @@ export function BestSellersCard({
             </div>
 
             {/* Total row */}
-            <div className="-mx-4 mt-2 flex items-center justify-between rounded-2xl bg-muted/60 px-4 py-3">
+            <div className="mt-2 flex items-center justify-between rounded-2xl bg-muted/60 px-4 py-3">
               <span className="text-sm font-bold">
                 Total ({topItems.length} items)
               </span>

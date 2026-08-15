@@ -502,15 +502,15 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
               {mode === "itemized" ? (
                 <>
                   {/* Item search + Add custom */}
-                  <div className="flex gap-2">
-                    <div className="flex-1">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="flex-1 min-w-0">
                       <ItemSearch onSelect={handleMenuItemSelect} />
                     </div>
                     <Button
                       type="button"
                       variant="ghost"
                       onClick={() => setShowAddCustomItem(true)}
-                      className="h-9 shrink-0 rounded-full border-0 bg-muted/60 px-4 text-[0.8125rem] font-medium shadow-none hover:bg-muted"
+                      className="h-9 w-full shrink-0 rounded-full border-0 bg-muted/60 px-4 text-[0.8125rem] font-medium shadow-none hover:bg-muted sm:w-auto"
                     >
                       <Plus className="mr-1.5 h-4 w-4" />
                       Custom item

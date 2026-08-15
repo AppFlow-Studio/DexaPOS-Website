@@ -72,9 +72,9 @@ export function UnpaidOrdersCard({
             <Skeleton className="h-6 w-24" />
           </div>
         ) : (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Unpaid amount</span>
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 max-w-[70%] items-start gap-2">
+              <span className="min-w-0 break-words text-sm text-muted-foreground">Unpaid amount</span>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -88,7 +88,7 @@ export function UnpaidOrdersCard({
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <div className="text-right">
+            <div className="ml-auto shrink-0 text-right">
               <span className="font-mono text-lg font-bold tabular-nums">
                 {formatCurrency(unpaidAmount)}
               </span>
