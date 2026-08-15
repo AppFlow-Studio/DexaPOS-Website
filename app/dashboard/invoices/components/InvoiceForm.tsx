@@ -336,13 +336,16 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-5xl">
-      <div className="grid lg:grid-cols-[1fr_308px] gap-6 items-start">
+    <div className="min-w-0 max-w-5xl">
+      {/* `min-w-0` on the grid AND on each column: a grid track takes an
+          automatic minimum width from its content, so without it the panels
+          push past the viewport and clip on a phone. */}
+      <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_308px]">
 
         {/* ════════════════════════════════════════════════════════
             LEFT — main form
             ════════════════════════════════════════════════════════ */}
-        <div className="space-y-5">
+        <div className="min-w-0 space-y-5">
 
           {/* ── Invoice Details ──────────────────────────────────── */}
           <Panel>
@@ -467,7 +470,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
               action={
                 /* Segmented pill rail (DS-CTL-05) — was an outlined
                    rounded-lg/rounded-md pair, off the radius scale (§3.1). */
-                <div className="inline-flex h-auto w-max shrink-0 flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1 text-sm">
+                <div className="inline-flex h-auto w-max max-w-full flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1 text-sm">
                   <button
                     type="button"
                     onClick={() => setMode("itemized")}
@@ -612,7 +615,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
         {/* ════════════════════════════════════════════════════════
             RIGHT — summary sidebar
             ════════════════════════════════════════════════════════ */}
-        <div className="space-y-4 lg:sticky lg:top-6">
+        <div className="min-w-0 space-y-4 lg:sticky lg:top-6">
 
           {/* ── Order Summary ────────────────────────────────────── */}
           <Panel>

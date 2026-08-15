@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { Columns3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -90,7 +89,6 @@ export function MobileColumnsButton({
             className,
           )}
         >
-          <Columns3 className="h-3.5 w-3.5" />
           Columns
           <span className="tabular-nums text-muted-foreground">
             {visibleCount}/{toggleable.length}

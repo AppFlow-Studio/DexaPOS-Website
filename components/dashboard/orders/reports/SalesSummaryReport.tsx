@@ -41,6 +41,7 @@ export function SalesSummaryReport({
     orderSource
   )
   const [searchQuery, setSearchQuery] = useState('')
+  const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<string>>(() => new Set(['grossSales', 'discounts', 'tax', 'tips', 'refunds']))
   const rows = useMemo(() => data?.rows ?? [], [data?.rows])
   const channelRows = useMemo(
     () => data?.byChannel ?? [],
@@ -117,6 +118,17 @@ export function SalesSummaryReport({
       cell: ({ row }) => formatCurrency(row.getValue('refunds') as number),
     },
   ]
+
+  const columnConfig = [
+    { id: 'date', label: 'Date', locked: true },
+    { id: 'orderCount', label: 'Orders' },
+    { id: 'grossSales', label: 'Gross Sales' },
+    { id: 'discounts', label: 'Discounts' },
+    { id: 'netSales', label: 'Net Sales', locked: true },
+    { id: 'tax', label: 'Tax' },
+    { id: 'tips', label: 'Tips' },
+    { id: 'refunds', label: 'Refunds' },
+  ] as const
 
   const exportColumns = [
     { key: 'date' as const, header: 'Date' },
@@ -230,12 +242,15 @@ export function SalesSummaryReport({
         dateFrom={dateFrom}
         dateTo={dateTo}
         summaryCards={summaryCardsData}
+        columnConfig={columnConfig as any}
+        hiddenColumns={hiddenColumnIds}
+        onColumnVisibilityChange={setHiddenColumnIds}
       />
 
       {rows.length === 0 ? (
         <Empty description="No sales data for selected period" />
       ) : (
-        <ReportDataTable columns={columns} data={filteredData} />
+        <ReportDataTable columns={columns} data={filteredData} hiddenColumnIds={hiddenColumnIds} />
       )}
     </div>
   )

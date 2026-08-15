@@ -30,6 +30,8 @@ export function VoidsReport({
   const [activeTab, setActiveTab] = useState('voids')
   const [voidsSearchQuery, setVoidsSearchQuery] = useState('')
   const [refundsSearchQuery, setRefundsSearchQuery] = useState('')
+  const [voidHiddenColumns, setVoidHiddenColumns] = useState<Set<string>>(() => new Set(['quantity', 'reason', 'voided_by']))
+  const [refundHiddenColumns, setRefundHiddenColumns] = useState<Set<string>>(() => new Set(['amount', 'reason', 'refunded_by']))
 
   const filteredVoids = useMemo(() => {
     if (!data?.voids) return []
@@ -100,6 +102,16 @@ export function VoidsReport({
     },
   ]
 
+  const voidColumnConfig = [
+    { id: 'order_number', label: 'Order #', locked: true },
+    { id: 'item_name', label: 'Item', locked: true },
+    { id: 'quantity', label: 'Qty' },
+    { id: 'reason', label: 'Reason' },
+    { id: 'amount', label: 'Amount', locked: true },
+    { id: 'voided_by', label: 'Voided By' },
+    { id: 'voided_at', label: 'Date/Time', locked: true },
+  ]
+
   const voidExportColumns = [
     { key: 'order_number' as const, header: 'Order #' },
     { key: 'item_name' as const, header: 'Item' },
@@ -148,6 +160,14 @@ export function VoidsReport({
       header: 'Date/Time',
       cell: ({ row }) => formatDate(row.getValue('refunded_at') as string),
     },
+  ]
+
+  const refundColumnConfig = [
+    { id: 'order_number', label: 'Order #', locked: true },
+    { id: 'amount', label: 'Amount', locked: true },
+    { id: 'reason', label: 'Reason' },
+    { id: 'refunded_by', label: 'Refunded By' },
+    { id: 'refunded_at', label: 'Date/Time', locked: true },
   ]
 
   const refundExportColumns = [
@@ -254,8 +274,11 @@ export function VoidsReport({
               dateFrom={dateFrom}
               dateTo={dateTo}
               summaryCards={voidsSummaryCards}
+              columnConfig={voidColumnConfig}
+              hiddenColumns={voidHiddenColumns}
+              onColumnVisibilityChange={setVoidHiddenColumns}
             />
-            <ReportDataTable columns={voidColumns} data={filteredVoids} />
+            <ReportDataTable columns={voidColumns} data={filteredVoids} hiddenColumnIds={voidHiddenColumns} />
           </div>
         ) : (
           <Empty description="No voids for selected period" />
@@ -298,8 +321,11 @@ export function VoidsReport({
               dateFrom={dateFrom}
               dateTo={dateTo}
               summaryCards={refundsSummaryCards}
+              columnConfig={refundColumnConfig}
+              hiddenColumns={refundHiddenColumns}
+              onColumnVisibilityChange={setRefundHiddenColumns}
             />
-            <ReportDataTable columns={refundColumns} data={filteredRefunds} />
+            <ReportDataTable columns={refundColumns} data={filteredRefunds} hiddenColumnIds={refundHiddenColumns} />
           </div>
         ) : (
           <Empty description="No refunds for selected period" />

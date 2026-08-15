@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Card } from "@/components/ui/card";
+import { Panel } from "@/components/dashboard/shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
@@ -151,9 +151,11 @@ export default function SessionReviewPage() {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Tip Distribution
         </Button>
-        <Card className="p-8 text-center">
-          <p className="text-muted-foreground">Session not found</p>
-        </Card>
+        <Panel>
+          <div className="p-8 text-center">
+            <p className="text-muted-foreground">Session not found</p>
+          </div>
+        </Panel>
       </div>
     );
   }
@@ -223,7 +225,7 @@ export default function SessionReviewPage() {
             <Button
               onClick={handleApprove}
               disabled={approveMutation.isPending}
-              className="bg-teal-500 hover:bg-teal-600 text-white"
+              
             >
               {approveMutation.isPending ? "Approving..." : "Approve"}
             </Button>

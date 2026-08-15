@@ -42,7 +42,7 @@ export function NeedsApprovalTable({
   if (sessions.length === 0) {
     return (
       <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center">
-        <CheckCircle2 className="w-10 h-10 text-emerald-500/40 mx-auto mb-3" />
+        <CheckCircle2 className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
         <p className="font-medium text-foreground">All distributions have been reviewed</p>
         <p className="text-sm text-muted-foreground mt-1">
           Nice work — no pending approvals right now.
@@ -51,12 +51,10 @@ export function NeedsApprovalTable({
     );
   }
 
+  // D-12 — a variance is a state, and states are not colour-coded. The signed
+  // figure carries the direction; weight marks the rows that are off.
   const varianceClass = (variance: number) =>
-    Math.abs(variance) > 0.01
-      ? variance > 0
-        ? "text-amber-700 dark:text-amber-400"
-        : "text-red-700 dark:text-red-400"
-      : "text-muted-foreground";
+    Math.abs(variance) > 0.01 ? "font-medium text-foreground" : "text-muted-foreground";
 
   const calculatedAt = (session: TipDistributionSession) =>
     session.calculated_at

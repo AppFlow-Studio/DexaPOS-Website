@@ -58,12 +58,12 @@ export function AttentionBanner({
         </button>
 
         {expanded && (
-          <div className="min-w-0 space-y-5 border-t border-border/60 px-4 pb-4 pt-4">
+          <div className="min-w-0 space-y-5 px-4 pb-4 pt-4">
             {/* Orphaned Shifts */}
             {orphanedShifts.length > 0 && (
               <div className="space-y-2">
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-400" />
+                  <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 text-sm font-medium text-foreground">
                     {orphanedShifts.length} staff still clocked in from previous days
                   </span>
@@ -101,7 +101,7 @@ export function AttentionBanner({
             {unclosedDays.length > 0 && (
               <div className="space-y-2">
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <CalendarX className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <CalendarX className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 text-sm font-medium text-foreground">
                     {unclosedDays.length} day{unclosedDays.length !== 1 ? "s" : ""} need tip close-out
                   </span>
@@ -120,7 +120,7 @@ export function AttentionBanner({
                             — {day.orderCount} orders · {formatMoney(day.totalTips)} tips · {day.shiftCount} staff
                           </span>
                           {day.hasOrphanedShifts && (
-                            <span className="ml-1.5 inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-400/15 dark:text-red-300">
+                            <span className="ml-1.5 inline-flex items-center rounded-full border-0 bg-muted/60 px-2 py-0.5 text-[10px] font-medium">
                               has orphaned shifts
                             </span>
                           )}

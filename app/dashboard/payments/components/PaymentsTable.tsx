@@ -33,9 +33,7 @@ import {
   ChevronDown,
   CreditCard,
   Banknote,
-  ChevronLeft,
-  ChevronsLeft,
-  ChevronsRight,
+  ChevronLeft,
   Wifi,
   Smartphone,
   X,
@@ -285,13 +283,16 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
             {payment.reversals!.map((rev) => (
               <div
                 key={rev.id}
-                className="rounded border p-2 text-xs space-y-1"
+                className="space-y-1 rounded-2xl border-0 bg-muted/60 p-2 text-xs shadow-none"
               >
                 <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge
+                    variant="secondary"
+                    className="rounded-full border-0 text-[10px]"
+                  >
                     {rev.reversal_type}
                   </Badge>
-                  <span className="font-mono text-red-600">
+                  <span className="font-mono tabular-nums">
                     -{formatCurrency(rev.amount)}
                   </span>
                 </div>
@@ -306,7 +307,7 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                 </div>
                 {rev.order_refund_items &&
                   rev.order_refund_items.length > 0 && (
-                    <div className="mt-1 pt-1 border-t space-y-0.5">
+                    <div className="mt-1 space-y-0.5 pt-1">
                       {rev.order_refund_items.map((item) => (
                         <div
                           key={item.id}
@@ -332,10 +333,10 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
       {hasItems && (
         <div className="space-y-2 min-w-0">
           <h4 className="text-sm font-semibold">Items Paid</h4>
-          <div className="rounded border overflow-x-auto">
+          <div className="overflow-x-auto rounded-2xl bg-muted/20">
             <table className="w-full text-xs min-w-105">
               <thead>
-                <tr className="border-b text-muted-foreground">
+                <tr className="bg-muted/50 text-muted-foreground">
                   <th className="px-2 py-1.5 text-left font-medium">Item</th>
                   <th className="px-2 py-1.5 text-right font-medium">Qty</th>
                   <th className="px-2 py-1.5 text-right font-medium">Subtotal</th>
@@ -344,17 +345,17 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
               </thead>
               <tbody>
                 {payment.order_payment_items!.map((item) => (
-                  <tr key={item.id} className="border-b last:border-0">
+                  <tr key={item.id} className="bg-card/70">
                     <td className="px-2 py-1.5 whitespace-nowrap">
                       {item.order_items?.item_name || "—"}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">
+                    <td className="px-2 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
                       {item.quantity_paid}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">
+                    <td className="px-2 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
                       {formatCurrency(item.subtotal_paid)}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">
+                    <td className="px-2 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
                       {formatCurrency(item.tax_paid)}
                     </td>
                   </tr>
@@ -433,7 +434,6 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                   rows.push({
                     label: "Discount",
                     value: -discount,
-                    cls: "text-red-600",
                   });
                 if (Math.abs(other) >= 0.005)
                   rows.push({
@@ -453,7 +453,7 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                   cls: "font-semibold",
                 });
                 return (
-                  <tfoot className="border-t bg-muted/30">
+                  <tfoot className="bg-muted/50">
                     {rows.map((r, i) => (
                       <tr key={i}>
                         <td
@@ -467,7 +467,7 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                         </td>
                         <td
                           className={cn(
-                            "px-2 py-1 text-right font-mono whitespace-nowrap",
+                            "px-2 py-1 text-right font-mono tabular-nums whitespace-nowrap",
                             r.cls
                           )}
                         >
@@ -892,12 +892,12 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
         if (p.is_settled) {
           return (
             <div className="flex flex-col gap-0.5">
-              <span className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+              <span className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
                 Settled
               </span>
               {batchNum && (
-                <span className="text-[10px] text-muted-foreground font-mono">
+                <span className="text-[10px] text-muted-foreground font-mono tabular-nums">
                   Batch {batchNum}
                 </span>
               )}
@@ -953,12 +953,12 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
       {/* Search + filters */}
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
         <div className="relative w-full min-w-0 lg:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
           <Input
             placeholder="Search by order #, auth code, card, customer..."
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            className="pl-9"
+            className="h-10 pl-10"
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -989,7 +989,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-9 px-2"
+              className="h-9 rounded-full px-3 text-muted-foreground hover:text-foreground"
               onClick={clearAllFilters}
             >
               Clear all
@@ -1005,14 +1005,14 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
         </p>
       )}
 
-      {/* Table */}
-      <div className="-mx-2 overflow-x-auto px-2">
-        <Table className="min-w-max">
-          <TableHeader>
+      {/* Table — §5: variant="data" carries the well, header band and
+          borderless rows; do not restate them here. */}
+      <Table variant="data" className="min-w-max">
+          <TableHeader className="[&_tr]:border-0">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
-                className="border-b border-border/60 hover:bg-transparent"
+                className="border-0 hover:bg-transparent"
               >
                 {headerGroup.headers.map((header) => (
                   <TableHead
@@ -1038,7 +1038,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                   className="h-24 text-center text-sm text-muted-foreground"
                 >
                   <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
                   </div>
                 </TableCell>
               </TableRow>
@@ -1047,7 +1047,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                 <React.Fragment key={row.id}>
                   <TableRow
                     data-state={row.getIsExpanded() && "expanded"}
-                    className="cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
+                    className="cursor-pointer border-0 transition-colors"
                     onClick={() => row.toggleExpanded()}
                   >
                     {row.getVisibleCells().map((cell) => (
@@ -1070,10 +1070,10 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                     ))}
                   </TableRow>
                   {row.getIsExpanded() && (
-                    <TableRow className="border-b border-border/60 last:border-0 hover:bg-transparent">
+                    <TableRow className="border-0 hover:bg-transparent">
                       <TableCell
                         colSpan={columns.length}
-                        className="bg-muted/30 p-0"
+                        className="bg-muted/40 p-0"
                       >
                         <PaymentDetailPanel payment={row.original} />
                       </TableCell>
@@ -1095,56 +1095,37 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
               </TableRow>
             )}
           </TableBody>
-        </Table>
-      </div>
+      </Table>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between gap-3 pt-1">
-        <p className="text-[0.8125rem] text-muted-foreground tabular-nums">
-          Page {table.getState().pagination.pageIndex + 1} of{" "}
-          {table.getPageCount()}
-        </p>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            className="hidden lg:flex"
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <span className="sr-only">Go to first page</span>
-            <ChevronsLeft />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <span className="sr-only">Go to previous page</span>
-            <ChevronLeft />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            <span className="sr-only">Go to next page</span>
-            <ChevronRight />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="hidden lg:flex"
-            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-            disabled={!table.getCanNextPage()}
-          >
-            <span className="sr-only">Go to last page</span>
-            <ChevronsRight />
-          </Button>
+      {/* Pagination — D-08: labelled outline pills, hidden on a single page. */}
+      {table.getPageCount() > 1 && (
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <p className="text-[0.8125rem] text-muted-foreground tabular-nums">
+            Page {table.getState().pagination.pageIndex + 1} of{" "}
+            {table.getPageCount()}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <ChevronLeft className="mr-1.5 h-4 w-4" />
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              Next
+              <ChevronRight className="ml-1.5 h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

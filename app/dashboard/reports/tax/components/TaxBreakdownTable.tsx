@@ -289,9 +289,6 @@ export function TaxBreakdownTable({
             <Download className="h-3.5 w-3.5" />
             CSV
           </Button>
-          <span className="order-1 text-xs text-muted-foreground whitespace-nowrap">
-            {isLoading ? "Loading…" : `${count.toLocaleString()} orders`}
-          </span>
           <Button
             variant="outline"
             size="sm"

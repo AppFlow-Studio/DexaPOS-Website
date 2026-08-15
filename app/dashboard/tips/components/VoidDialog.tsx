@@ -65,7 +65,7 @@ export function VoidDialog({
             rows={3}
           />
           {reason.length > 0 && !isValid && (
-            <p className="text-xs text-red-500">
+            <p className="text-xs text-destructive">
               Reason must be at least 10 characters ({reason.trim().length}/10)
             </p>
           )}

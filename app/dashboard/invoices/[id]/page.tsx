@@ -70,7 +70,7 @@ export default function InvoiceDetailPage({
 
   if (isLoading) {
     return (
-      <PageShell>
+      <PageShell width="narrow">
         <Skeleton className="h-8 w-32 rounded-full" />
         <Skeleton className="h-64 w-full rounded-3xl" />
       </PageShell>
@@ -79,7 +79,7 @@ export default function InvoiceDetailPage({
 
   if (!invoice) {
     return (
-      <PageShell>
+      <PageShell width="narrow">
         <div className="rounded-2xl bg-muted/20 py-16 text-center">
           <p className="text-muted-foreground">Invoice not found.</p>
           <Button asChild variant="ghost" className="mt-2 rounded-full">
@@ -92,7 +92,7 @@ export default function InvoiceDetailPage({
 
   if (editMode) {
     return (
-      <PageShell>
+      <PageShell width="narrow">
         <Button
           variant="ghost"
           size="sm"
@@ -117,7 +117,7 @@ export default function InvoiceDetailPage({
   }[invoice.payment_due_type];
 
   return (
-    <PageShell>
+    <PageShell width="narrow">
       <PageHeader
         backHref="/dashboard/invoices"
         backLabel="Invoices"
@@ -278,7 +278,7 @@ export default function InvoiceDetailPage({
           )}
 
           {/* Totals — an inset well rather than a pair of rules (§5.5). */}
-          <div className="mt-4 ml-auto max-w-xs space-y-1.5 rounded-2xl bg-muted/60 px-4 py-3 text-sm">
+          <div className="ml-auto mt-4 w-full max-w-xs space-y-1.5 rounded-2xl bg-muted/60 px-4 py-3 text-sm sm:max-w-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
               <span className="tabular-nums">{formatCurrency(invoice.subtotal)}</span>

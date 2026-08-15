@@ -425,7 +425,7 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
                           className={cn(
                             "mt-0.5 text-sm font-medium tabular-nums",
                             Math.abs(variance) > 0.01
-                              ? "text-amber-700 dark:text-amber-400"
+                              ? "text-foreground"
                               : "text-muted-foreground"
                           )}
                         >

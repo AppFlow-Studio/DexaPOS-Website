@@ -67,7 +67,7 @@ export function ConfigSummaryPanel({
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="min-w-0 space-y-6 border-t border-border/60 px-4 pb-6 pt-5 sm:px-6">
+          <div className="min-w-0 space-y-6 px-4 pb-6 pt-5 sm:px-6">
             {/* Pools */}
             <div className="min-w-0">
               <p className="mb-3 text-sm text-muted-foreground">Tip Pools</p>

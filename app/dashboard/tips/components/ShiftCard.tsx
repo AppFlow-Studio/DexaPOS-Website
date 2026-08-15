@@ -42,11 +42,9 @@ export function ShiftCard({ shift }: ShiftCardProps) {
           <p className="truncate text-sm font-semibold">{shift.staffName}</p>
           <p className="truncate text-[0.8125rem] text-muted-foreground">{shift.roleCode}</p>
         </div>
-        {/* Soft tint + dot (DS-CTL-09) rather than a left border stripe — the
-            stripe broke the tier-2 radius on the leading corner. */}
+        {/* One neutral pill (DS-CTL-09 / D-12) — the word carries the state. */}
         {isStillWorking && (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-teal-500/10 px-2.5 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-400/10 dark:text-teal-300">
-            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-500 dark:bg-teal-400" />
+          <span className="inline-flex shrink-0 items-center rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
             Working
           </span>
         )}
@@ -61,9 +59,11 @@ export function ShiftCard({ shift }: ShiftCardProps) {
         <span className="font-medium tabular-nums text-foreground">{shift.hoursWorked}h</span>
       </div>
 
-      {/* Figures — hairline rows, not a 2-col grid of label/value pairs that
-          each collapse to two words per line on a phone. */}
-      <div className="mt-3 divide-y divide-border/60 border-t border-border/60">
+      {/* Figures — one inset well (§3.1 tier 3), not a 2-col grid of
+          label/value pairs that each collapse to two words per line on a
+          phone. §5.5: rows are separated by spacing on a changed surface,
+          never by hairlines. */}
+      <div className="mt-3 rounded-2xl border-0 bg-muted/60 px-3 py-1 shadow-none">
         <div className="flex min-w-0 items-center justify-between gap-3 py-2">
           <span className="text-[0.8125rem] text-muted-foreground">Card tips</span>
           <span className="shrink-0 text-sm font-medium tabular-nums">
@@ -87,8 +87,7 @@ export function ShiftCard({ shift }: ShiftCardProps) {
         <div className="flex min-w-0 items-center justify-between gap-3 py-2">
           <span className="text-[0.8125rem] text-muted-foreground">Cash declared</span>
           {clockedOutWithoutDeclaring ? (
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-400/10 dark:text-amber-300">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500 dark:bg-amber-400" />
+            <span className="inline-flex shrink-0 items-center rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
               Not declared
             </span>
           ) : (

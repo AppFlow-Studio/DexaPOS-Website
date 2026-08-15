@@ -27,6 +27,7 @@ export function TableTurnsReport({
 }: TableTurnsReportProps) {
   const { data, isLoading } = useTablePerformance(dateFrom, dateTo)
   const [searchQuery, setSearchQuery] = useState('')
+  const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<string>>(() => new Set(['total_sessions', 'total_revenue', 'total_covers']))
 
   const filteredData = useMemo(() => {
     if (!data?.table_utilization) return []
@@ -72,6 +73,15 @@ export function TableTurnsReport({
       header: 'Total Covers',
       cell: ({ row }) => row.getValue('total_covers'),
     },
+  ]
+
+  const columnConfig = [
+    { id: 'table_name', label: 'Table Name', locked: true },
+    { id: 'total_sessions', label: 'Total Sessions' },
+    { id: 'avg_turn_time_minutes', label: 'Avg Turn Time (min)', locked: true },
+    { id: 'total_revenue', label: 'Total Revenue' },
+    { id: 'revpash', label: 'RevPASH', locked: true },
+    { id: 'total_covers', label: 'Total Covers' },
   ]
 
   const exportColumns = [
@@ -148,8 +158,11 @@ export function TableTurnsReport({
         dateFrom={dateFrom}
         dateTo={dateTo}
         summaryCards={summaryCardsData}
+        columnConfig={columnConfig}
+        hiddenColumns={hiddenColumnIds}
+        onColumnVisibilityChange={setHiddenColumnIds}
       />
-      <ReportDataTable columns={columns} data={filteredData} />
+      <ReportDataTable columns={columns} data={filteredData} hiddenColumnIds={hiddenColumnIds} />
     </div>
   )
 }

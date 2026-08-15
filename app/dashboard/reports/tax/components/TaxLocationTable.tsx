@@ -132,7 +132,9 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
     <Card className="overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center justify-between px-5 pb-4 pt-5">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {/* Hidden on mobile — the toolbar is already tight against the
+            Columns and export buttons at that width. */}
+        <div className="hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
           <MapPin className="h-4 w-4" />
           <span className="text-xs font-medium">
             {isLoading ? "Loading…" : `${data?.length ?? 0} location${(data?.length ?? 0) !== 1 ? "s" : ""}`}
@@ -262,12 +264,7 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                       className="border-0 bg-card/70 transition-colors hover:bg-muted/40"
                     >
                       <TableCell className="pl-5 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted/60">
-                            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                          </div>
-                          <span className="text-sm font-medium">{row.locationName}</span>
-                        </div>
+                        <span className="text-sm font-medium">{row.locationName}</span>
                       </TableCell>
                       {isColVisible("salesTaxRate") && (
                         <TableCell className="py-3.5 text-right">

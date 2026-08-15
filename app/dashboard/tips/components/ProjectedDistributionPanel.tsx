@@ -41,13 +41,13 @@ function FlowPair({
       ) : (
         <p className="mt-0.5 text-sm font-medium tabular-nums">
           {hasIn && (
-            <span className="text-emerald-700 dark:text-emerald-400">
+            <span>
               +{formatMoney(inValue)}
             </span>
           )}
           {hasIn && hasOut && <span className="mx-1 text-muted-foreground">/</span>}
           {hasOut && (
-            <span className="text-rose-700 dark:text-rose-400">
+            <span>
               −{formatMoney(outValue)}
             </span>
           )}
@@ -214,16 +214,16 @@ export function ProjectedDistributionPanel({
                     </TableCell>
                     <TableCell className="text-right text-sm tabular-nums">{d.hours_worked.toFixed(1)}</TableCell>
                     <TableCell className="text-right text-sm tabular-nums">{formatMoney(d.individual_tips_earned)}</TableCell>
-                    <TableCell className="text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
+                    <TableCell className="text-right text-sm tabular-nums">
                       {d.tip_pool_received > 0 ? `+${formatMoney(d.tip_pool_received)}` : "—"}
                     </TableCell>
-                    <TableCell className="text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
+                    <TableCell className="text-right text-sm tabular-nums">
                       {d.tip_pool_contributed > 0 ? `−${formatMoney(d.tip_pool_contributed)}` : "—"}
                     </TableCell>
-                    <TableCell className="text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
+                    <TableCell className="text-right text-sm tabular-nums">
                       {d.tip_out_received > 0 ? `+${formatMoney(d.tip_out_received)}` : "—"}
                     </TableCell>
-                    <TableCell className="text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
+                    <TableCell className="text-right text-sm tabular-nums">
                       {d.tip_out_given > 0 ? `−${formatMoney(d.tip_out_given)}` : "—"}
                     </TableCell>
                     <TableCell className="text-right text-sm font-semibold tabular-nums">

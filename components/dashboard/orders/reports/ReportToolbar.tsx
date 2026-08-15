@@ -4,6 +4,7 @@ import { Search } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Download } from 'lucide-react'
+import { MobileColumnsButton, initialHiddenColumns, type ReportColumn } from '@/components/dashboard/reports/MobileColumnsButton'
 import { exportToCsv, exportToPdf, type ExportColumn, type SummaryCardData } from '@/utils/export'
 
 interface ReportToolbarProps<T extends Record<string, any>> {
@@ -20,6 +21,9 @@ interface ReportToolbarProps<T extends Record<string, any>> {
   dateFrom?: Date
   dateTo?: Date
   summaryCards?: SummaryCardData[]
+  columnConfig?: ReportColumn[]
+  hiddenColumns?: Set<string>
+  onColumnVisibilityChange?: (next: Set<string>) => void
 }
 
 export function ReportToolbar<T extends Record<string, any>>({
@@ -36,6 +40,9 @@ export function ReportToolbar<T extends Record<string, any>>({
   dateFrom,
   dateTo,
   summaryCards,
+  columnConfig,
+  hiddenColumns,
+  onColumnVisibilityChange,
 }: ReportToolbarProps<T>) {
   const isFiltered = filteredCount < totalCount
   const isExportDisabled = data.length === 0
@@ -69,6 +76,14 @@ export function ReportToolbar<T extends Record<string, any>>({
           <p className="mr-1 hidden text-[0.8125rem] text-muted-foreground tabular-nums sm:block">
             {filteredCount.toLocaleString()} of {totalCount.toLocaleString()}
           </p>
+        )}
+
+        {columnConfig && hiddenColumns && onColumnVisibilityChange && (
+          <MobileColumnsButton
+            columns={columnConfig}
+            hidden={hiddenColumns}
+            onChange={onColumnVisibilityChange}
+          />
         )}
 
         <Button

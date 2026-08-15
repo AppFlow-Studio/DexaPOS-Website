@@ -23,13 +23,6 @@ const DESTINATION_LABELS: Record<string, string> = {
   adp: "ADP",
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  pending:    "bg-amber-100 text-amber-700 border-amber-200",
-  sent:       "bg-green-100 text-green-700 border-green-200",
-  failed:     "bg-red-100 text-red-700 border-red-200",
-  downloaded: "bg-blue-100 text-blue-700 border-blue-200",
-};
-
 function downloadCSVFromPayload(payload: any) {
   const session = payload?.session || {};
   const rows = payload?.rows || [];
@@ -148,16 +141,19 @@ export function ExportHistoryPanel({
             : "No exports recorded for this session."}
         </p>
       ) : (
-        <div className="rounded-lg border divide-y">
+        /* §5.5 — rows sit on their own card fill inside a tinted well; no
+           frame and no divider lines between them. */
+        <div className="space-y-1.5 rounded-2xl bg-muted/20 p-2">
           {exports.map((exp: TipPayrollExport) => (
             <div
               key={exp.id}
-              className="flex items-center justify-between px-3 py-2 text-sm"
+              className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-2xl bg-card/70 px-3 py-2 text-sm"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                {/* D-12: one neutral pill for every export state. */}
                 <Badge
-                  variant="outline"
-                  className={`text-[10px] ${STATUS_STYLES[exp.status] || ""}`}
+                  variant="secondary"
+                  className="w-fit rounded-full border-0 px-2.5 text-[10px] font-medium"
                 >
                   {exp.status}
                 </Badge>
@@ -184,7 +180,7 @@ export function ExportHistoryPanel({
                 )}
 
                 {exp.status === "failed" && exp.error_message && (
-                  <span className="text-xs text-red-600 max-w-[200px] truncate mr-1">
+                  <span className="text-xs text-destructive max-w-[200px] truncate mr-1">
                     {exp.error_message}
                   </span>
                 )}

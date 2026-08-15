@@ -85,16 +85,19 @@ export function ManualAdjustmentDialog({
 
         <div className="space-y-4 py-4">
           {detail && (
-            <div className="grid grid-cols-2 gap-4 p-3 bg-muted/50 rounded">
+            {/* Tier-3 inset well (§3.1). The preview figure carries the brand
+                accent literally — `text-primary` is violet, not the brand blue
+                (C5), and the class must be spelled out in the .tsx (C7). */}
+            <div className="grid grid-cols-2 gap-4 rounded-2xl bg-muted/60 p-3">
               <div>
                 <p className="text-xs text-muted-foreground">Current Net Tips</p>
-                <p className="font-semibold text-base">
+                <p className="text-base font-semibold tabular-nums">
                   ${detail.net_tips.toFixed(2)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Preview Net Tips</p>
-                <p className="font-semibold text-base text-primary">
+                <p className="text-base font-semibold tabular-nums text-[#0C4FD1] dark:text-[#6CA0FF]">
                   ${previewNetTips}
                 </p>
               </div>

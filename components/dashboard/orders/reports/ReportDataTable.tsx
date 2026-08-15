@@ -46,21 +46,32 @@ function isNumericColumn(columnDef: ColumnDef<any, any>): boolean {
   return NUMERIC_HEADER.test(header)
 }
 
-function isMobileHidden(columnDef: ColumnDef<any, any>): boolean {
+function isMobileHidden(
+  columnDef: ColumnDef<any, any>,
+  hiddenColumnIds: Set<string> = new Set<string>()
+): boolean {
   const meta = columnDef.meta as { mobileHidden?: boolean } | undefined
-  return meta?.mobileHidden === true
+  if (meta?.mobileHidden === true) return true
+
+  if (typeof columnDef.accessorKey === 'string') {
+    return hiddenColumnIds.has(columnDef.accessorKey)
+  }
+
+  return false
 }
 
 interface ReportDataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   loading?: boolean
+  hiddenColumnIds?: Set<string>
 }
 
 export function ReportDataTable<TData, TValue>({
   columns,
   data,
   loading = false,
+  hiddenColumnIds = new Set<string>(),
 }: ReportDataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
 
@@ -102,7 +113,7 @@ export function ReportDataTable<TData, TValue>({
                     key={header.id}
                     className={cn(
                       'h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground',
-                      isMobileHidden(header.column.columnDef) &&
+                      isMobileHidden(header.column.columnDef, hiddenColumnIds) &&
                         'hidden sm:table-cell',
                       isNumericColumn(header.column.columnDef) && 'text-right'
                     )}
@@ -140,7 +151,7 @@ export function ReportDataTable<TData, TValue>({
                       key={cell.id}
                       className={cn(
                         'py-3 text-sm',
-                        isMobileHidden(cell.column.columnDef) &&
+                        isMobileHidden(cell.column.columnDef, hiddenColumnIds) &&
                           'hidden sm:table-cell',
                         isNumericColumn(cell.column.columnDef) &&
                           'text-right tabular-nums'

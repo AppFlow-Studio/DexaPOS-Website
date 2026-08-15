@@ -23,14 +23,8 @@ import { PageShell, PageHeader, Panel, PanelSection, StatRow, StatTile, InsetTil
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useLocationStore } from "@/stores/location-store";
 import { useMyTipHistory } from "../hooks/useTipDistribution";
+import { SHIFT_LABELS, formatMoney } from "../lib/constants";
 import type { MyTipEntry } from "@/app/dashboard/actions/tips";
-
-const SHIFT_LABELS: Record<string, string> = {
-  full_day: "Full Day",
-  lunch: "Lunch",
-  dinner: "Dinner",
-  custom: "Custom",
-};
 
 const RANGE_OPTIONS = [
   { label: "Last 7 days", value: 7 },
@@ -39,9 +33,8 @@ const RANGE_OPTIONS = [
   { label: "Last 90 days", value: 90 },
 ];
 
-function fmt(amount: number) {
-  return `$${amount.toFixed(2)}`;
-}
+/** `formatMoney` from the tips constants module — this page had its own copy. */
+const fmt = formatMoney;
 
 function fmtDate(dateStr: string) {
   return new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, {
@@ -51,58 +44,44 @@ function fmtDate(dateStr: string) {
   });
 }
 
+/** Blank shift/role values would otherwise render an empty pill. */
+const shiftLabel = (period: string) =>
+  SHIFT_LABELS[period] || period || "—";
+
 /**
  * The per-shift figure breakdown, shared by the wide table's expanded row and
  * the phone/tablet card so the two layouts can never drift apart.
  */
 function TipBreakdown({ entry }: { entry: MyTipEntry }) {
+  /**
+   * Direction is carried by the sign, not by colour (D-12). A grid of six
+   * figures half-green and half-red reads as a status display; these are all
+   * just components of one arithmetic, and the `+`/`−` already says which way
+   * each one moves.
+   */
+  const rows: { label: string; value: string }[] = [
+    { label: "Own Tips", value: fmt(entry.individual_tips_earned) },
+    { label: "Pool Contributed", value: `−${fmt(entry.tip_pool_contributed)}` },
+    { label: "Pool Received", value: `+${fmt(entry.tip_pool_received)}` },
+    { label: "Tip-Out Given", value: `−${fmt(entry.tip_out_given)}` },
+    { label: "Tip-Out Received", value: `+${fmt(entry.tip_out_received)}` },
+  ];
+
+  if (entry.manual_adjustment !== 0) {
+    rows.push({
+      label: "Adjustment",
+      value: `${entry.manual_adjustment > 0 ? "+" : ""}${fmt(entry.manual_adjustment)}`,
+    });
+  }
+
   return (
     <div className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none sm:grid-cols-3 lg:grid-cols-5">
-      <div className="min-w-0">
-        <p className="truncate text-[0.8125rem] text-muted-foreground">Own Tips</p>
-        <p className="mt-0.5 text-sm font-medium tabular-nums">
-          {fmt(entry.individual_tips_earned)}
-        </p>
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-[0.8125rem] text-muted-foreground">Pool Contributed</p>
-        <p className="mt-0.5 text-sm font-medium tabular-nums text-rose-700 dark:text-rose-400">
-          −{fmt(entry.tip_pool_contributed)}
-        </p>
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-[0.8125rem] text-muted-foreground">Pool Received</p>
-        <p className="mt-0.5 text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
-          +{fmt(entry.tip_pool_received)}
-        </p>
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-[0.8125rem] text-muted-foreground">Tip-Out Given</p>
-        <p className="mt-0.5 text-sm font-medium tabular-nums text-rose-700 dark:text-rose-400">
-          −{fmt(entry.tip_out_given)}
-        </p>
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-[0.8125rem] text-muted-foreground">Tip-Out Received</p>
-        <p className="mt-0.5 text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
-          +{fmt(entry.tip_out_received)}
-        </p>
-      </div>
-      {entry.manual_adjustment !== 0 && (
-        <div className="min-w-0">
-          <p className="truncate text-[0.8125rem] text-muted-foreground">Adjustment</p>
-          <p
-            className={`mt-0.5 text-sm font-medium tabular-nums ${
-              entry.manual_adjustment > 0
-                ? "text-emerald-700 dark:text-emerald-400"
-                : "text-rose-700 dark:text-rose-400"
-            }`}
-          >
-            {entry.manual_adjustment > 0 ? "+" : ""}
-            {fmt(entry.manual_adjustment)}
-          </p>
+      {rows.map(({ label, value }) => (
+        <div key={label} className="min-w-0">
+          <p className="truncate text-[0.8125rem] text-muted-foreground">{label}</p>
+          <p className="mt-0.5 text-sm font-medium tabular-nums">{value}</p>
         </div>
-      )}
+      ))}
     </div>
   );
 }
@@ -117,10 +96,12 @@ function TipEntryCard({ entry }: { entry: MyTipEntry }) {
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{fmtDate(entry.session_date)}</p>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {SHIFT_LABELS[entry.shift_period] ?? entry.shift_period} · {entry.role_code}
+            {shiftLabel(entry.shift_period)} · {entry.role_code || "—"}
           </p>
         </div>
-        <p className="shrink-0 text-[1.375rem] font-medium leading-tight tracking-[-0.02em] tabular-nums text-emerald-700 dark:text-emerald-400">
+        {/* The figure is the card's subject, so it takes the stat scale — but
+            no colour: it is a total, not a status (D-12). */}
+        <p className="shrink-0 text-[1.75rem] font-medium leading-tight tracking-[-0.02em] tabular-nums">
           {fmt(entry.net_tips)}
         </p>
       </div>
@@ -172,15 +153,17 @@ function DetailRow({ entry }: { entry: MyTipEntry }) {
       <TableRow className="cursor-pointer" onClick={() => setOpen((v) => !v)}>
         <TableCell className="text-sm font-medium">{fmtDate(entry.session_date)}</TableCell>
         <TableCell className="text-sm">
-          <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-            {SHIFT_LABELS[entry.shift_period] ?? entry.shift_period}
+          <span className="inline-flex shrink-0 items-center rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
+            {shiftLabel(entry.shift_period)}
           </span>
         </TableCell>
-        <TableCell className="text-sm text-muted-foreground">{entry.role_code}</TableCell>
+        <TableCell className="text-sm text-muted-foreground">
+          {entry.role_code || "—"}
+        </TableCell>
         <TableCell className="text-right text-sm tabular-nums">
           {(entry.hours_worked || 0).toFixed(1)}h
         </TableCell>
-        <TableCell className="text-right text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+        <TableCell className="text-right text-sm font-semibold tabular-nums">
           {fmt(entry.net_tips)}
         </TableCell>
         <TableCell>
@@ -254,9 +237,17 @@ export default function MyTipsPage() {
         }
       />
 
-      {/* Summary cards */}
+      {/* Summary */}
       <Panel>
-        <div className="px-6 py-6">
+        <PanelSection
+          icon={DollarSign}
+          label="Summary"
+          caption={
+            isLoading
+              ? undefined
+              : `${entries.length} shift${entries.length !== 1 ? "s" : ""} in the last ${limitDays} days`
+          }
+        >
           {/* Four full-size tiles stack to four screenfuls on a phone. Wide
               screens keep the StatRow; phones get a compact 2×2. */}
           <div className="hidden sm:block">
@@ -311,14 +302,18 @@ export default function MyTipsPage() {
               </div>
             ))}
           </div>
-        </div>
+        </PanelSection>
       </Panel>
 
       {/* Weekly rollup */}
       {!isLoading && weeks.length > 0 && (
         <Panel>
-          <PanelSection label="Weekly Rollup">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <PanelSection
+            icon={TrendingUp}
+            label="Weekly Rollup"
+            caption="Net tips by week, most recent first"
+          >
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {weeks.map(([weekStart, total]) => (
                 <InsetTile
                   key={weekStart}
@@ -335,9 +330,16 @@ export default function MyTipsPage() {
       {isLoading ? (
         <Panel>
           <PanelSection label="Shift Breakdown" caption="Open a shift to see the full breakdown">
-            <div className="space-y-3">
+            {/* Mirrors the loaded layout's breakpoint so the skeleton doesn't
+                reflow into a different shape once data arrives. */}
+            <div className="hidden space-y-2 xl:block">
               {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full rounded-2xl" />
+                <Skeleton key={i} className="h-12 w-full rounded-xl" />
+              ))}
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-44 w-full rounded-2xl" />
               ))}
             </div>
           </PanelSection>

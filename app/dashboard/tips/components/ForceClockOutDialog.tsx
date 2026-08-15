@@ -162,7 +162,7 @@ export function ForceClockOutDialog({
           <Button
             onClick={handleConfirm}
             disabled={!isValid || isLoading}
-            className="bg-teal-500 hover:bg-teal-600 text-white"
+            
           >
             {isLoading ? "Clocking out..." : "Clock Out & Declare"}
           </Button>

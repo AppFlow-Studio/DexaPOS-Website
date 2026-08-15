@@ -193,7 +193,7 @@ export default function TipsPage() {
                 >
                   Needs Approval
                   {needsApproval.length > 0 && (
-                    <span className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-amber-500/15 px-1.5 text-[10px] font-medium tabular-nums text-amber-700 dark:bg-amber-400/15 dark:text-amber-300">
+                    <span className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full border-0 bg-muted/60 px-1.5 text-[10px] font-medium tabular-nums">
                       {needsApproval.length}
                     </span>
                   )}

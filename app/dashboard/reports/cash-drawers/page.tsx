@@ -74,6 +74,12 @@ import {
   useVarianceTrend,
 } from "../../hooks/useCashDrawerAnalytics";
 import type { CashDrawerSession } from "../../actions/cash-drawer-analytics";
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -344,9 +350,32 @@ const SESSION_COLUMNS: [SortKey, string][] = [
   ["status", "Status"],
 ];
 
+/** Mirrors SESSION_COLUMNS; date, variance and status carry the story. */
+const SESSION_COLUMN_META: ReportColumn[] = [
+  { id: "business_date", label: "Date", locked: true },
+  { id: "drawer_name", label: "Drawer" },
+  { id: "opened_by_name", label: "Opened By", defaultHidden: true },
+  { id: "closed_by_name", label: "Closed By", defaultHidden: true },
+  { id: "opening_amount", label: "Opening $", defaultHidden: true },
+  { id: "closing_amount", label: "Closing $", defaultHidden: true },
+  { id: "expected_cash", label: "Expected $", defaultHidden: true },
+  { id: "variance", label: "Variance $", locked: true },
+  { id: "status", label: "Status" },
+];
+
 function SessionsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
   const { data: sessions = [], isLoading, refetch, dataUpdatedAt } = useCashDrawerSessions(dateFrom, dateTo);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [hiddenCols, setHiddenCols] = useState(() =>
+    initialHiddenColumns(SESSION_COLUMN_META),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
+  /** +1 for the expand-toggle column, which is never hidden. */
+  const sessionColSpan =
+    SESSION_COLUMN_META.filter((c) => isColVisible(c.id)).length + 1;
   const [sortKey, setSortKey] = useState<SortKey>("business_date");
   const [sortAsc, setSortAsc] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -421,20 +450,29 @@ function SessionsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
             </Button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
           <LastRefreshed
             updatedAt={dataUpdatedAt}
             onRefresh={refetch}
             isLoading={isLoading}
           />
-          <Button variant="outline" size="sm" onClick={printTable} className="gap-1.5">
-            <Printer className="h-3.5 w-3.5" />
-            Print
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
-            <Download className="h-3.5 w-3.5" />
-            Export CSV
-          </Button>
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2">
+              <MobileColumnsButton
+                columns={SESSION_COLUMN_META}
+                hidden={hiddenCols}
+                onChange={setHiddenCols}
+              />
+              <Button variant="outline" size="sm" onClick={printTable} className="gap-1.5">
+                <Printer className="h-3.5 w-3.5" />
+                Print
+              </Button>
+            </div>
+            <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -445,38 +483,45 @@ function SessionsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
             <TableRow className="bg-muted/50">
               {/* Expand toggle col */}
               <TableHead className="w-8" />
-              {SESSION_COLUMNS.map(([key, label]) => (
-                <TableHead
-                  key={key}
-                  className="cursor-pointer select-none whitespace-nowrap hover:text-foreground"
-                  onClick={() => handleSort(key)}
-                >
-                  {label}
-                  <SortIcon active={sortKey === key} asc={sortAsc} />
-                </TableHead>
-              ))}
+              {SESSION_COLUMNS.filter(([key]) => isColVisible(key)).map(
+                ([key, label]) => (
+                  <TableHead
+                    key={key}
+                    className="cursor-pointer select-none whitespace-nowrap hover:text-foreground"
+                    onClick={() => handleSort(key)}
+                  >
+                    {label}
+                    <SortIcon active={sortKey === key} asc={sortAsc} />
+                  </TableHead>
+                ),
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading
               ? skeletonRows.map((_, i) => (
                   <TableRow key={i}>
+                    {/* Expand-toggle column, then one cell per visible column. */}
                     <TableCell><Skeleton className="h-4 w-4" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-28" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-28" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-14" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+                    {SESSION_COLUMNS.filter(([key]) => isColVisible(key)).map(
+                      ([key]) => (
+                        <TableCell key={key}>
+                          <Skeleton
+                            className={
+                              key === "status"
+                                ? "h-5 w-20 rounded-full"
+                                : "h-4 w-20"
+                            }
+                          />
+                        </TableCell>
+                      ),
+                    )}
                   </TableRow>
                 ))
               : paginated.length === 0
               ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="p-0">
+                  <TableCell colSpan={sessionColSpan} className="p-0">
                     <EmptyState
                       title="No sessions found"
                       description="Try adjusting the date range or status filter"
@@ -500,29 +545,47 @@ function SessionsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
                           <ChevronRight className="h-4 w-4 text-muted-foreground" />
                         )}
                       </TableCell>
-                      <TableCell className="font-medium whitespace-nowrap">
-                        {format(new Date(session.business_date), "MMM d, yyyy")}
-                      </TableCell>
-                      <TableCell>{session.drawer_name}</TableCell>
-                      <TableCell>{session.opened_by_name}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {session.closed_by_name ?? <span className="text-muted-foreground/50 italic text-xs">Still open</span>}
-                      </TableCell>
-                      <TableCell className="tabular-nums">{fmt$(session.opening_amount)}</TableCell>
-                      <TableCell className="tabular-nums">{fmt$(session.closing_amount)}</TableCell>
-                      <TableCell className="tabular-nums">{fmt$(session.expected_cash)}</TableCell>
-                      <TableCell className="tabular-nums">
-                        <span className={varianceClass(session.variance)}>
-                          {fmtVariance(session.variance)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={session.status} />
-                      </TableCell>
+                      {isColVisible("business_date") && (
+                        <TableCell className="font-medium whitespace-nowrap">
+                          {format(new Date(session.business_date), "MMM d, yyyy")}
+                        </TableCell>
+                      )}
+                      {isColVisible("drawer_name") && (
+                        <TableCell>{session.drawer_name}</TableCell>
+                      )}
+                      {isColVisible("opened_by_name") && (
+                        <TableCell>{session.opened_by_name}</TableCell>
+                      )}
+                      {isColVisible("closed_by_name") && (
+                        <TableCell className="text-muted-foreground">
+                          {session.closed_by_name ?? <span className="text-muted-foreground/50 italic text-xs">Still open</span>}
+                        </TableCell>
+                      )}
+                      {isColVisible("opening_amount") && (
+                        <TableCell className="tabular-nums">{fmt$(session.opening_amount)}</TableCell>
+                      )}
+                      {isColVisible("closing_amount") && (
+                        <TableCell className="tabular-nums">{fmt$(session.closing_amount)}</TableCell>
+                      )}
+                      {isColVisible("expected_cash") && (
+                        <TableCell className="tabular-nums">{fmt$(session.expected_cash)}</TableCell>
+                      )}
+                      {isColVisible("variance") && (
+                        <TableCell className="tabular-nums">
+                          <span className={varianceClass(session.variance)}>
+                            {fmtVariance(session.variance)}
+                          </span>
+                        </TableCell>
+                      )}
+                      {isColVisible("status") && (
+                        <TableCell>
+                          <StatusBadge status={session.status} />
+                        </TableCell>
+                      )}
                     </TableRow>
                     {expandedId === session.id && (
                       <TableRow className="bg-muted/10 hover:bg-muted/10">
-                        <TableCell colSpan={10} className="p-0">
+                        <TableCell colSpan={sessionColSpan} className="p-0">
                           <ExpandedOperations sessionId={session.id} />
                         </TableCell>
                       </TableRow>
@@ -639,10 +702,29 @@ function ExpandedOperations({ sessionId }: { sessionId: string }) {
 
 // ─── No Sale Audit Tab ────────────────────────────────────────────────────────
 
+/** Who opened the drawer and when is the audit trail; the rest is context. */
+const NO_SALE_COLUMN_META: ReportColumn[] = [
+  { id: "performed_at", label: "Date / Time", locked: true },
+  { id: "performed_by_name", label: "Employee", locked: true },
+  { id: "drawer_name", label: "Drawer" },
+  { id: "reason", label: "Reason", defaultHidden: true },
+  { id: "approved_by_name", label: "Approved By", defaultHidden: true },
+];
+
 function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
   const { data: ops = [], isLoading, refetch, dataUpdatedAt } = useNoSaleOperations(dateFrom, dateTo);
   const [employeeFilter, setEmployeeFilter] = useState("all");
   const [drawerFilter, setDrawerFilter] = useState("all");
+  const [hiddenCols, setHiddenCols] = useState(() =>
+    initialHiddenColumns(NO_SALE_COLUMN_META),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
+  const noSaleColSpan = NO_SALE_COLUMN_META.filter((c) =>
+    isColVisible(c.id),
+  ).length;
 
   const employees = useMemo(() => {
     const set = new Set(ops.map((op) => op.performed_by_name));
@@ -815,10 +897,10 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
               <Badge variant="secondary" className="text-xs">{filteredOps.length} of {ops.length}</Badge>
             )}
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             {/* Employee filter */}
             <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
-              <SelectTrigger className="h-8 text-xs w-40">
+              <SelectTrigger className="h-8 text-xs w-full sm:w-40">
                 <SelectValue placeholder="All employees" />
               </SelectTrigger>
               <SelectContent>
@@ -830,7 +912,7 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
             </Select>
             {/* Drawer filter */}
             <Select value={drawerFilter} onValueChange={setDrawerFilter}>
-              <SelectTrigger className="h-8 text-xs w-36">
+              <SelectTrigger className="h-8 text-xs w-full sm:w-36">
                 <SelectValue placeholder="All drawers" />
               </SelectTrigger>
               <SelectContent>
@@ -840,11 +922,20 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
                 ))}
               </SelectContent>
             </Select>
-            <LastRefreshed updatedAt={dataUpdatedAt} onRefresh={refetch} isLoading={isLoading} />
-            <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
-              <Download className="h-3.5 w-3.5" />
-              Export CSV
-            </Button>
+            <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+              <LastRefreshed updatedAt={dataUpdatedAt} onRefresh={refetch} isLoading={isLoading} />
+              <div className="flex items-center gap-2">
+                <MobileColumnsButton
+                  columns={NO_SALE_COLUMN_META}
+                  hidden={hiddenCols}
+                  onChange={setHiddenCols}
+                />
+              </div>
+              <Button variant="outline" size="sm" onClick={exportCSV} className="gap-1.5">
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -854,9 +945,11 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
               <TableRow className="bg-muted/50">
                 <TableHead>Date / Time</TableHead>
                 <TableHead>Employee</TableHead>
-                <TableHead>Drawer</TableHead>
-                <TableHead>Reason</TableHead>
-                <TableHead>Approved By</TableHead>
+                {isColVisible("drawer_name") && <TableHead>Drawer</TableHead>}
+                {isColVisible("reason") && <TableHead>Reason</TableHead>}
+                {isColVisible("approved_by_name") && (
+                  <TableHead>Approved By</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -865,15 +958,21 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
                     <TableRow key={i}>
                       <TableCell><Skeleton className="h-4 w-28" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      {isColVisible("drawer_name") && (
+                        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      )}
+                      {isColVisible("reason") && (
+                        <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                      )}
+                      {isColVisible("approved_by_name") && (
+                        <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      )}
                     </TableRow>
                   ))
                 : filteredOps.length === 0
                 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="p-0">
+                    <TableCell colSpan={noSaleColSpan} className="p-0">
                       <EmptyState
                         title="No events found"
                         description={
@@ -904,9 +1003,15 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
                           )}
                         </span>
                       </TableCell>
-                      <TableCell>{op.drawer_name ?? "—"}</TableCell>
-                      <TableCell className="text-muted-foreground">{op.reason ?? "—"}</TableCell>
-                      <TableCell className="text-muted-foreground">{op.approved_by_name ?? "—"}</TableCell>
+                      {isColVisible("drawer_name") && (
+                        <TableCell>{op.drawer_name ?? "—"}</TableCell>
+                      )}
+                      {isColVisible("reason") && (
+                        <TableCell className="text-muted-foreground">{op.reason ?? "—"}</TableCell>
+                      )}
+                      {isColVisible("approved_by_name") && (
+                        <TableCell className="text-muted-foreground">{op.approved_by_name ?? "—"}</TableCell>
+                      )}
                     </TableRow>
                   ))}
             </TableBody>
@@ -924,8 +1029,24 @@ function NoSaleTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
 
 // ─── Variance Trends Tab ──────────────────────────────────────────────────────
 
+/** Drawer and its average variance are the summary; best/worst are detail. */
+const DRAWER_SUMMARY_COLUMN_META: ReportColumn[] = [
+  { id: "drawer", label: "Drawer", locked: true },
+  { id: "avg", label: "Avg Variance", locked: true },
+  { id: "best", label: "Best Day", defaultHidden: true },
+  { id: "worst", label: "Worst Day", defaultHidden: true },
+  { id: "total", label: "Period Total" },
+];
+
 function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date }) {
   const { data: trend = [], isLoading, refetch, dataUpdatedAt } = useVarianceTrend(dateFrom, dateTo);
+  const [hiddenCols, setHiddenCols] = useState(() =>
+    initialHiddenColumns(DRAWER_SUMMARY_COLUMN_META),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
 
   const drawerKeys = useMemo(() => {
     const set = new Set(trend.map((t) => t.drawer_name));
@@ -1050,8 +1171,13 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
 
       {!isLoading && drawerStats.length > 0 && (
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
             <CardTitle className="text-base font-semibold">Drawer Summary</CardTitle>
+            <MobileColumnsButton
+              columns={DRAWER_SUMMARY_COLUMN_META}
+              hidden={hiddenCols}
+              onChange={setHiddenCols}
+            />
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <Table variant="data">
@@ -1059,9 +1185,9 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
                 <TableRow className="bg-muted/50">
                   <TableHead>Drawer</TableHead>
                   <TableHead>Avg Variance</TableHead>
-                  <TableHead>Best Day</TableHead>
-                  <TableHead>Worst Day</TableHead>
-                  <TableHead>Period Total</TableHead>
+                  {isColVisible("best") && <TableHead>Best Day</TableHead>}
+                  {isColVisible("worst") && <TableHead>Worst Day</TableHead>}
+                  {isColVisible("total") && <TableHead>Period Total</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1071,29 +1197,35 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
                     <TableCell className="tabular-nums">
                       <span className={varianceClass(ds.avg)}>{fmtVariance(ds.avg)}</span>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {ds.best ? (
-                        <span>
-                          {format(new Date(ds.best.business_date), "MMM d")}{" "}
-                          <span className={varianceClass(ds.best.variance)}>
-                            {fmtVariance(ds.best.variance)}
+                    {isColVisible("best") && (
+                      <TableCell className="text-sm text-muted-foreground">
+                        {ds.best ? (
+                          <span>
+                            {format(new Date(ds.best.business_date), "MMM d")}{" "}
+                            <span className={varianceClass(ds.best.variance)}>
+                              {fmtVariance(ds.best.variance)}
+                            </span>
                           </span>
-                        </span>
-                      ) : "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {ds.worst ? (
-                        <span>
-                          {format(new Date(ds.worst.business_date), "MMM d")}{" "}
-                          <span className={varianceClass(ds.worst.variance)}>
-                            {fmtVariance(ds.worst.variance)}
+                        ) : "—"}
+                      </TableCell>
+                    )}
+                    {isColVisible("worst") && (
+                      <TableCell className="text-sm text-muted-foreground">
+                        {ds.worst ? (
+                          <span>
+                            {format(new Date(ds.worst.business_date), "MMM d")}{" "}
+                            <span className={varianceClass(ds.worst.variance)}>
+                              {fmtVariance(ds.worst.variance)}
+                            </span>
                           </span>
-                        </span>
-                      ) : "—"}
-                    </TableCell>
-                    <TableCell className="tabular-nums">
-                      <span className={varianceClass(ds.total)}>{fmtVariance(ds.total)}</span>
-                    </TableCell>
+                        ) : "—"}
+                      </TableCell>
+                    )}
+                    {isColVisible("total") && (
+                      <TableCell className="tabular-nums">
+                        <span className={varianceClass(ds.total)}>{fmtVariance(ds.total)}</span>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
