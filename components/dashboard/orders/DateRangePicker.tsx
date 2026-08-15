@@ -31,6 +31,10 @@ interface DateRangePickerProps {
     /** Restyles the popover panel. It renders in a portal, so a page that wants
      *  to reach it with its own CSS needs a hook class applied here. */
     contentClassName?: string
+    /** Which trigger edge the panel anchors to. Defaults to the trigger's left
+     *  edge; pass "end" when the trigger sits at the right of its row, so the
+     *  panel opens leftward instead of running toward the viewport edge. */
+    align?: "start" | "center" | "end"
 }
 
 const PRESETS: Array<{ value: DatePreset; label: string; getDates: () => { from: Date; to: Date } }> = [
@@ -139,6 +143,7 @@ export function DateRangePicker({
     className,
     triggerClassName,
     contentClassName,
+    align = "start",
 }: DateRangePickerProps) {
     const [open, setOpen] = React.useState(false)
     const [draftPreset, setDraftPreset] = React.useState<DatePreset>(preset)
@@ -225,7 +230,7 @@ export function DateRangePicker({
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent
-                    align="start"
+                    align={align}
                     // Always drop downward. Radix would otherwise flip the panel
                     // above the trigger whenever the calendar doesn't fit below,
                     // which makes the control jump around near the bottom of the
@@ -290,7 +295,7 @@ export function DateRangePicker({
                             whatever height is left; the summary line and the
                             Cancel/Apply row stay pinned to the bottom so they
                             are always reachable on a short viewport. */}
-                        <div className="relative flex min-h-0 min-w-0 flex-col p-3 gap-3">
+                        <div className="relative flex min-h-0 min-w-0 flex-col p-3 gap-3 sm:min-w-[300px]">
                             {/* `overflow-x-clip` (not `visible`, which CSS
                                 promotes to `auto` next to a scrolling axis)
                                 keeps the month grid at its natural width

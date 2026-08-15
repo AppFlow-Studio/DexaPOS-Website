@@ -243,28 +243,28 @@ function PlatformDetailCard({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div>
+        <div className="mb-6 grid min-w-0 grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground">Avg Order Value</p>
-            <p className="text-lg font-semibold">
+            <p className="truncate text-lg font-semibold tabular-nums">
               {formatCurrency(summary.avgOrderValue)}
             </p>
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground">Service Charges</p>
-            <p className="text-lg font-semibold">
+            <p className="truncate text-lg font-semibold tabular-nums">
               {formatCurrency(summary.totalServiceCharges)}
             </p>
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground">Tips Received</p>
-            <p className="text-lg font-semibold">
+            <p className="truncate text-lg font-semibold tabular-nums">
               {formatCurrency(summary.totalTips)}
             </p>
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground">Discounts</p>
-            <p className="text-lg font-semibold">
+            <p className="truncate text-lg font-semibold tabular-nums">
               {formatCurrency(summary.totalDiscounts)}
             </p>
           </div>

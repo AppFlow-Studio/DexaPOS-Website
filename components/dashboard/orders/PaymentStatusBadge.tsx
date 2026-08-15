@@ -23,6 +23,7 @@ const STATUS_LABELS: Record<PaymentStatus, string> = {
     captured: 'Paid',
     failed: 'Failed',
     declined: 'Declined',
+    partial: 'Partially Paid',
     refunded: 'Refunded',
     partially_refunded: 'Partially Refunded',
     void: 'Void',

@@ -2,13 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -158,37 +151,40 @@ export function PurchaseOrderDetailSheet({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="sm:max-w-[600px] overflow-y-auto px-4">
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          className="flex h-dvh max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden border-0 bg-background p-0 max-sm:top-auto max-sm:translate-y-0 rounded-none sm:h-[640px] sm:max-h-[85vh] sm:w-[calc(100%-1rem)] sm:max-w-[600px] sm:rounded-3xl"
+          overlayClassName="bg-black/35 backdrop-blur-md"
+        >
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : po ? (
             <>
-              <SheetHeader>
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/10">
-                    <Package className="h-5 w-5 text-emerald-500" />
+              <DialogHeader className="shrink-0 px-6 pt-6 pb-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="shrink-0 p-2.5 rounded-2xl border-0 bg-muted/60">
+                    <Package className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <div className="flex-1">
-                    <SheetTitle className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1 text-left">
+                    <DialogTitle className="flex flex-wrap items-center gap-2">
                       {po.po_number}
                       <POStatusBadge status={po.status} />
-                    </SheetTitle>
-                    <SheetDescription>
+                    </DialogTitle>
+                    <DialogDescription>
                       Created{" "}
                       {new Date(po.created_at).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                         year: "numeric",
                       })}
-                    </SheetDescription>
+                    </DialogDescription>
                   </div>
                 </div>
-              </SheetHeader>
+              </DialogHeader>
 
-              <div className="space-y-6 mt-6">
+              <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
                 {/* Summary Grid */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
@@ -486,8 +482,8 @@ export function PurchaseOrderDetailSheet({
               Purchase order not found
             </div>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       {/* Log Delivery Dialog */}
       {po && (
@@ -590,13 +586,17 @@ function LogDeliveryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+      <DialogContent
+        // Renders above the PO detail panel, which would otherwise cover it.
+        elevation="above-sheet"
+        className="sm:max-w-[600px] sm:rounded-3xl max-h-[80vh] overflow-y-auto"
+      >
         <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-blue-500/20 border border-blue-500/10">
-              <Truck className="h-5 w-5 text-blue-500" />
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="shrink-0 p-2.5 rounded-2xl border-0 bg-muted/60">
+              <Truck className="h-5 w-5 text-muted-foreground" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1 text-left">
               <DialogTitle>Log Delivery</DialogTitle>
               <DialogDescription>
                 Record received quantities for {purchaseOrder.po_number}

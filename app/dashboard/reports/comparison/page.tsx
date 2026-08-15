@@ -137,11 +137,12 @@ export default function ComparisonDashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Left: Location Selection */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
                 <Label className="text-sm font-medium text-muted-foreground">
                   Choose Locations
                 </Label>
-                <div className="flex items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                <div className="flex-1" />
+                <div className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                   <LayoutGrid className="h-3 w-3" />
                   LIMIT: 6
                 </div>
@@ -163,22 +164,15 @@ export default function ComparisonDashboardPage() {
                 value={selectedMetric}
                 onValueChange={(v) => setSelectedMetric(v as MetricType)}
               >
-                <SelectTrigger className="h-10 w-full">
+                {/* Matches the location selector beside it: borderless muted fill. */}
+                <SelectTrigger className="h-auto min-h-11 w-full border-0 bg-muted/60 py-2 shadow-none hover:bg-muted">
                   <SelectValue placeholder="Select metric" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl border-muted/30">
-                  <SelectItem value="gross_sales" className="rounded-lg">
-                    Gross Sales
-                  </SelectItem>
-                  <SelectItem value="net_sales" className="rounded-lg">
-                    Net Sales
-                  </SelectItem>
-                  <SelectItem value="order_count" className="rounded-lg">
-                    Order Count
-                  </SelectItem>
-                  <SelectItem value="avg_ticket" className="rounded-lg">
-                    Average Ticket
-                  </SelectItem>
+                <SelectContent>
+                  <SelectItem value="gross_sales">Gross Sales</SelectItem>
+                  <SelectItem value="net_sales">Net Sales</SelectItem>
+                  <SelectItem value="order_count">Order Count</SelectItem>
+                  <SelectItem value="avg_ticket">Average Ticket</SelectItem>
                 </SelectContent>
               </Select>
             </div>

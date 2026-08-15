@@ -11,12 +11,10 @@ import {
   X,
 } from "lucide-react";
 import { format } from "date-fns";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DatePopover } from "@/app/dashboard/settings/tips/components/DatePopover";
+import { TipStatusBadge } from "./TipStatusBadge";
 import {
   Tooltip,
   TooltipContent,
@@ -32,12 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useTipDistributionHistory } from "../hooks/useTipDistribution";
-import {
-  STATUS_CONFIG,
-  SHIFT_LABELS,
-  formatMoney,
-  formatDate,
-} from "../lib/constants";
+import { SHIFT_LABELS, formatMoney, formatDate } from "../lib/constants";
 import { cn } from "@/lib/utils";
 import type { TipDistributionSession } from "@/app/dashboard/actions/tips";
 
@@ -148,46 +141,64 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
 
   return (
     <div className="space-y-4">
-      {/* Filter bar */}
-      <div className="flex flex-wrap items-end gap-4">
-        <div>
-          <Label className="text-xs text-muted-foreground">From</Label>
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="mt-1 w-36 h-9"
-          />
+      {/* Filter bar. Native `type="date"` fields render browser chrome that
+          matches nothing else in the dashboard (§11.1) — DatePopover gives the
+          same value contract with the app's own calendar. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <DatePopover
+          value={dateFrom}
+          onChange={(v) => setDateFrom(v ?? "")}
+          placeholder="From"
+          max={dateTo || undefined}
+          className="h-9 w-auto min-w-[9rem] rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+        />
+        <DatePopover
+          value={dateTo}
+          onChange={(v) => setDateTo(v ?? "")}
+          placeholder="To"
+          min={dateFrom || undefined}
+          className="h-9 w-auto min-w-[9rem] rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+        />
+
+        {/* Toggle chips (DS-CTL-03) rather than a row of loose checkboxes —
+            the checkbox+label pairs read as a form inside what is a toolbar. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          {FILTERABLE_STATUSES.map((s) => {
+            const active = statusFilter.includes(s.value);
+            return (
+              <button
+                key={s.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => toggleStatus(s.value)}
+                className={cn(
+                  "inline-flex h-9 shrink-0 items-center rounded-full px-4 text-[0.8125rem] font-medium transition-colors",
+                  active
+                    ? "bg-muted text-foreground"
+                    : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                {s.label}
+              </button>
+            );
+          })}
         </div>
-        <div>
-          <Label className="text-xs text-muted-foreground">To</Label>
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="mt-1 w-36 h-9"
-          />
-        </div>
-        <div className="flex items-center gap-3">
-          {FILTERABLE_STATUSES.map((s) => (
-            <label key={s.value} className="flex items-center gap-1.5 cursor-pointer">
-              <Checkbox
-                checked={statusFilter.includes(s.value)}
-                onCheckedChange={() => toggleStatus(s.value)}
-              />
-              <span className="text-sm">{s.label}</span>
-            </label>
-          ))}
-        </div>
+
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-xs text-muted-foreground">
-            <X className="w-3 h-3 mr-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium text-muted-foreground"
+          >
+            <X className="mr-1.5 h-3.5 w-3.5" />
             Clear
           </Button>
         )}
-        <div className="ml-auto text-xs text-muted-foreground">
+
+        <span className="ml-auto shrink-0 text-[0.8125rem] tabular-nums text-muted-foreground">
           {sessions.length} session{sessions.length !== 1 ? "s" : ""}
-        </div>
+        </span>
       </div>
 
       {/* Table */}
@@ -242,7 +253,6 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
               </TableHeader>
               <TableBody>
                 {sorted.map((session) => {
-                  const cfg = STATUS_CONFIG[session.status] ?? STATUS_CONFIG.draft;
                   const poolSummary = getPoolSummary(session.config_snapshot);
                   const ruleSummary = getRuleSummary(session.config_snapshot);
 
@@ -257,13 +267,13 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
                         <div className="flex items-center gap-1.5">
                           <span>{formatDate(session.session_date)}</span>
                           {session.sequence_number > 1 && (
-                            <Badge variant="outline" className="text-[10px] font-mono">
+                            <span className="shrink-0 rounded-full bg-muted/60 px-2 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground">
                               #{session.sequence_number}
-                            </Badge>
+                            </span>
                           )}
                         </div>
                         {session.data_start_after && session.data_cutoff_at && (
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-[0.75rem] tabular-nums text-muted-foreground">
                             {format(new Date(session.data_start_after), "h:mm a")} —{" "}
                             {format(new Date(session.data_cutoff_at), "h:mm a")}
                           </span>
@@ -272,24 +282,22 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
 
                       {/* Shift */}
                       <TableCell className="py-3 text-sm">
-                        <Badge variant="secondary" className="text-xs">
+                        <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                           {SHIFT_LABELS[session.shift_period] || session.shift_period}
-                        </Badge>
+                        </span>
                       </TableCell>
 
                       {/* Status + timestamps */}
                       <TableCell className="py-3 text-sm">
-                        <div className="space-y-0.5">
-                          <Badge
-                            variant="outline"
-                            className={cn("text-xs font-medium border-0", cfg.className)}
-                          >
-                            {cfg.label}
-                          </Badge>
+                        {/* A fixed cap, not just `truncate`: without a width
+                            bound the reason string sets the column width and
+                            pushes the money columns off the scroller. */}
+                        <div className="w-[150px] max-w-[150px] space-y-1">
+                          <TipStatusBadge status={session.status} />
                           {session.status === "voided" && session.void_reason && (
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <p className="text-[10px] text-red-500 dark:text-red-400 truncate max-w-[120px]">
+                                <p className="truncate text-[0.75rem] text-muted-foreground">
                                   {session.void_reason}
                                 </p>
                               </TooltipTrigger>
@@ -299,7 +307,7 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
                             </Tooltip>
                           )}
                           {session.approved_at && (
-                            <p className="text-[10px] text-muted-foreground">
+                            <p className="truncate text-[0.75rem] tabular-nums text-muted-foreground">
                               {format(new Date(session.approved_at), "MMM d, h:mm a")}
                             </p>
                           )}

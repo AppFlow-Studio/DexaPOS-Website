@@ -140,6 +140,7 @@ export function InventoryReportsTab({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <h3 className="font-semibold">COGS &amp; Food Cost</h3>
         <DateRangePicker
+          align="end"
           dateFrom={dateFrom}
           dateTo={dateTo}
           preset={preset}
@@ -220,9 +221,8 @@ export function InventoryReportsTab({
               No category data for this period.
             </p>
           ) : (
-            <div className="-mx-2 overflow-x-auto px-2">
-              <Table>
-                <TableHeader>
+            <Table variant="data" className="min-w-[520px]">
+                <TableHeader className="[&_tr]:border-0">
                   <TableRow>
                     <TableHead>Category</TableHead>
                     <TableHead className="text-right">Theoretical</TableHead>
@@ -256,8 +256,7 @@ export function InventoryReportsTab({
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
-            </div>
+            </Table>
           )}
       </Panel>
 

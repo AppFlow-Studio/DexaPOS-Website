@@ -228,7 +228,7 @@ export function VendorDetailSheet({
                       ))}
                     </div>
                   ) : vendorItems.length === 0 ? (
-                    <div className="text-center py-12 border rounded-2xl border-dashed">
+                    <div className="text-center py-12 rounded-2xl border-0 bg-muted/45">
                       <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                       <p className="text-sm text-muted-foreground">
                         No items in catalog
@@ -289,7 +289,7 @@ export function VendorDetailSheet({
                       ))}
                     </div>
                   ) : linkedLocations.length === 0 ? (
-                    <div className="text-center py-12 border rounded-2xl border-dashed">
+                    <div className="text-center py-12 rounded-2xl border-0 bg-muted/45">
                       <MapPin className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                       <p className="text-sm text-muted-foreground">
                         Not linked to any locations
@@ -320,7 +320,7 @@ export function VendorDetailSheet({
 
                 {/* INFO TAB (Existing Contact Card) */}
                 <TabsContent value="info" className="mt-0 space-y-6">
-                  <Card className="rounded-2xl">
+                  <Card className="rounded-2xl border-0 bg-muted/45 shadow-none">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm font-medium">
                         Contact Information
@@ -352,7 +352,7 @@ export function VendorDetailSheet({
                   </Card>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <Card className="rounded-2xl">
+                    <Card className="rounded-2xl border-0 bg-muted/45 shadow-none">
                       <CardContent className="p-4 flex flex-col items-center justify-center">
                         <p className="text-2xl font-bold">
                           {vendorDetails?.data?.items_count || 0}
@@ -360,7 +360,7 @@ export function VendorDetailSheet({
                         <p className="text-xs text-muted-foreground">Items</p>
                       </CardContent>
                     </Card>
-                    <Card className="rounded-2xl">
+                    <Card className="rounded-2xl border-0 bg-muted/45 shadow-none">
                       <CardContent className="p-4 flex flex-col items-center justify-center">
                         <p className="text-2xl font-bold">
                           {vendorDetails?.data?.locations_count || 0}
@@ -440,7 +440,7 @@ function VendorItemRow({
   return (
     <div className="flex items-center justify-between p-3 rounded-2xl border-0 bg-muted/45 group hover:bg-muted/65 transition-colors">
       <div className="flex items-center gap-3">
-        <div className="p-2 rounded-xl border-0 bg-background">
+        <div className="p-2 rounded-xl border-0 bg-muted/70">
           <Package className="h-4 w-4 text-muted-foreground" />
         </div>
         <div>
@@ -505,7 +505,7 @@ function LocationLinkRow({
   return (
     <div className="flex items-center justify-between p-3 rounded-2xl border-0 bg-muted/45 group hover:bg-muted/65 transition-colors">
       <div className="flex items-center gap-3">
-        <div className="p-2 rounded-xl border-0 bg-background">
+        <div className="p-2 rounded-xl border-0 bg-muted/70">
           <Building2 className="h-4 w-4 text-muted-foreground" />
         </div>
         <div>

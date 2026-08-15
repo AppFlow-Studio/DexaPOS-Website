@@ -1052,7 +1052,7 @@ function VarianceTrendsTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold">Drawer Summary</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">

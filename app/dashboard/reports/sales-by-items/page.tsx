@@ -319,7 +319,7 @@ export default function SalesByItemsPage() {
           </div>
         </div>
 
-        <CardContent className="p-0">
+        <CardContent className="overflow-x-auto p-0">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent border-b border-border/50">

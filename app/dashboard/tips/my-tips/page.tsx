@@ -76,42 +76,47 @@ function DetailRow({ entry }: { entry: MyTipEntry }) {
       </TableRow>
 
       {open && (
-        <TableRow className="border-b border-border/60 bg-muted/20 last:border-0 hover:bg-muted/20">
-          <TableCell colSpan={6} className="py-3 px-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground">Own Tips</p>
-                <p className="font-medium tabular-nums">{fmt(entry.individual_tips_earned)}</p>
+        <TableRow className="border-b border-border/60 last:border-0 hover:bg-transparent">
+          <TableCell colSpan={6} className="px-0 pb-4 pt-0">
+            {/* An inset well rather than a tinted table row: the breakdown is
+                a detail of the row above, so it should read as nested inside
+                it rather than as another row of the same list. */}
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none sm:grid-cols-3 lg:grid-cols-5">
+              <div className="min-w-0">
+                <p className="truncate text-[0.8125rem] text-muted-foreground">Own Tips</p>
+                <p className="mt-0.5 text-sm font-medium tabular-nums">
+                  {fmt(entry.individual_tips_earned)}
+                </p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Pool Contributed</p>
-                <p className="font-medium text-rose-700 tabular-nums dark:text-rose-400">
+              <div className="min-w-0">
+                <p className="truncate text-[0.8125rem] text-muted-foreground">Pool Contributed</p>
+                <p className="mt-0.5 text-sm font-medium tabular-nums text-rose-700 dark:text-rose-400">
                   −{fmt(entry.tip_pool_contributed)}
                 </p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Pool Received</p>
-                <p className="font-medium text-emerald-700 tabular-nums dark:text-emerald-400">
+              <div className="min-w-0">
+                <p className="truncate text-[0.8125rem] text-muted-foreground">Pool Received</p>
+                <p className="mt-0.5 text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
                   +{fmt(entry.tip_pool_received)}
                 </p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Tip-Out Given</p>
-                <p className="font-medium text-rose-700 tabular-nums dark:text-rose-400">
+              <div className="min-w-0">
+                <p className="truncate text-[0.8125rem] text-muted-foreground">Tip-Out Given</p>
+                <p className="mt-0.5 text-sm font-medium tabular-nums text-rose-700 dark:text-rose-400">
                   −{fmt(entry.tip_out_given)}
                 </p>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Tip-Out Received</p>
-                <p className="font-medium text-emerald-700 tabular-nums dark:text-emerald-400">
+              <div className="min-w-0">
+                <p className="truncate text-[0.8125rem] text-muted-foreground">Tip-Out Received</p>
+                <p className="mt-0.5 text-sm font-medium tabular-nums text-emerald-700 dark:text-emerald-400">
                   +{fmt(entry.tip_out_received)}
                 </p>
               </div>
               {entry.manual_adjustment !== 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Adjustment</p>
+                <div className="min-w-0">
+                  <p className="truncate text-[0.8125rem] text-muted-foreground">Adjustment</p>
                   <p
-                    className={`font-medium tabular-nums ${
+                    className={`mt-0.5 text-sm font-medium tabular-nums ${
                       entry.manual_adjustment > 0
                         ? "text-emerald-700 dark:text-emerald-400"
                         : "text-rose-700 dark:text-rose-400"
@@ -169,7 +174,7 @@ export default function MyTipsPage() {
         backLabel="Back to Tips"
         actions={
           <Select value={String(limitDays)} onValueChange={(v) => setLimitDays(Number(v))}>
-            <SelectTrigger className="w-36 h-9 text-sm">
+            <SelectTrigger className="h-9 w-36 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

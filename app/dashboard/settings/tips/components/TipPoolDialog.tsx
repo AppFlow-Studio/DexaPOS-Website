@@ -294,7 +294,7 @@ export function TipPoolDialog({
           <div className="space-y-6 py-2">
             {/* ────── SECTION 1: BASICS ────── */}
             <section className="space-y-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                 Basics
               </h3>
 
@@ -394,7 +394,7 @@ export function TipPoolDialog({
 
             {/* ────── SECTION 2: POLICY INTERVAL ────── */}
             <section className="space-y-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                 Policy Interval
               </h3>
               <p className="text-sm text-muted-foreground">
@@ -408,41 +408,39 @@ export function TipPoolDialog({
                     type="button"
                     onClick={() => set("policy_interval", "full_workday")}
                     className={cn(
-                      "relative rounded-lg border-2 p-4 text-left transition-all",
+                      "relative min-w-0 rounded-2xl p-4 text-left transition-colors",
                       formData.policy_interval === "full_workday"
-                        ? "border-teal-500 bg-teal-500/5"
-                        : "border-border hover:border-muted-foreground/30"
+                        ? "bg-[#0C4FD1]/10 ring-1 ring-[#0C4FD1]/40 dark:bg-[#6CA0FF]/10 dark:ring-[#6CA0FF]/40"
+                        : "bg-muted/60 hover:bg-muted"
                     )}
                   >
-                    <div className="flex items-center gap-2 mb-2">
-                      <CalendarDays className="w-4 h-4 text-teal-500" />
-                      <span className="text-sm font-semibold">Full Workday</span>
+                    <div className="mb-2 flex min-w-0 items-center gap-2">
+                      <CalendarDays className="h-4 w-4 shrink-0 text-[#0C4FD1] dark:text-[#6CA0FF]" />
+                      <span className="min-w-0 text-sm font-semibold">Full Workday</span>
                     </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
+                    <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">
                       Tips are pooled between employees that work the same day.
                     </p>
-                    <Badge className="mt-2 bg-teal-500/10 text-teal-600 border-teal-500/30 text-[10px]">
+                    <span className="mt-2 inline-flex items-center rounded-full bg-[#0C4FD1]/10 px-2.5 py-0.5 text-[10px] font-medium text-[#0C4FD1] dark:bg-[#6CA0FF]/10 dark:text-[#6CA0FF]">
                       Most common setup
-                    </Badge>
+                    </span>
                   </button>
 
                   {/* By Shift — disabled */}
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div
-                        className="relative rounded-lg border-2 border-border p-4 text-left opacity-50 cursor-not-allowed"
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          <Clock className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm font-semibold text-muted-foreground">By Shift</span>
-                          <Lock className="w-3.5 h-3.5 text-muted-foreground ml-auto" />
+                      <div className="relative min-w-0 cursor-not-allowed rounded-2xl bg-muted/60 p-4 text-left opacity-60">
+                        <div className="mb-2 flex min-w-0 items-center gap-2">
+                          <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 text-sm font-semibold text-muted-foreground">By Shift</span>
+                          <Lock className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
+                        <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">
                           Tips are pooled by employees that work the same service (i.e. breakfast, lunch, dinner).
                         </p>
-                        <Badge variant="outline" className="mt-2 text-[10px]">
+                        <span className="mt-2 inline-flex items-center rounded-full bg-background px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                           Coming soon
-                        </Badge>
+                        </span>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -453,20 +451,18 @@ export function TipPoolDialog({
                   {/* Order — disabled */}
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div
-                        className="relative rounded-lg border-2 border-border p-4 text-left opacity-50 cursor-not-allowed"
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          <ShoppingCart className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm font-semibold text-muted-foreground">Order</span>
-                          <Lock className="w-3.5 h-3.5 text-muted-foreground ml-auto" />
+                      <div className="relative min-w-0 cursor-not-allowed rounded-2xl bg-muted/60 p-4 text-left opacity-60">
+                        <div className="mb-2 flex min-w-0 items-center gap-2">
+                          <ShoppingCart className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 text-sm font-semibold text-muted-foreground">Order</span>
+                          <Lock className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
+                        <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">
                           Uses the exact time a check is opened.
                         </p>
-                        <Badge variant="outline" className="mt-2 text-[10px]">
+                        <span className="mt-2 inline-flex items-center rounded-full bg-background px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                           Coming soon
-                        </Badge>
+                        </span>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -481,7 +477,7 @@ export function TipPoolDialog({
 
             {/* ────── SECTION 3: TIP SOURCE ────── */}
             <section className="space-y-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                 Tip Source
               </h3>
 
@@ -542,7 +538,7 @@ export function TipPoolDialog({
 
             {/* ────── SECTION 4: DISTRIBUTION & ROLE SHARES ────── */}
             <section className="space-y-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                 Distribution & Role Shares
               </h3>
 

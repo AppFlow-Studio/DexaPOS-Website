@@ -26,7 +26,8 @@ import { ManualAdjustmentDialog } from "../components/ManualAdjustmentDialog";
 import { ConfigSnapshotPanel } from "../components/ConfigSnapshotPanel";
 import { ExportHistoryPanel } from "../components/ExportHistoryPanel";
 import { VoidDialog } from "../components/VoidDialog";
-import { STATUS_CONFIG, SHIFT_LABELS, formatDate } from "../lib/constants";
+import { SHIFT_LABELS, formatDate } from "../lib/constants";
+import { TipStatusBadge } from "../components/TipStatusBadge";
 import type { TipDetailWithStaff } from "@/app/dashboard/actions/tips";
 
 export default function SessionReviewPage() {
@@ -122,10 +123,6 @@ export default function SessionReviewPage() {
     });
   };
 
-  const statusCfg = session
-    ? STATUS_CONFIG[session.status] ?? STATUS_CONFIG.draft
-    : null;
-
   const isEditable = session?.status === "calculated" || session?.status === "pending_approval";
   const canApprove = isEditable;
   const canVoid = session?.status !== "voided";
@@ -204,14 +201,7 @@ export default function SessionReviewPage() {
             <Badge variant="secondary" className="text-xs">
               {SHIFT_LABELS[session.shift_period] || session.shift_period}
             </Badge>
-            {statusCfg && (
-              <Badge
-                variant="outline"
-                className={`text-xs font-medium ${statusCfg.className}`}
-              >
-                {statusCfg.label}
-              </Badge>
-            )}
+            <TipStatusBadge status={session.status} />
             {session.data_start_after && session.data_cutoff_at && (
               <span className="text-xs text-muted-foreground">
                 {format(new Date(session.data_start_after), "h:mm a")} —{" "}

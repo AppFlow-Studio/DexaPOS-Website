@@ -117,7 +117,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
             <div className="h-4 w-40 bg-muted animate-pulse rounded" />
           </CardHeader>
           <CardContent className="px-5 pb-5">
-            <div className="h-64 bg-muted animate-pulse rounded-xl" />
+            <div className="h-64 bg-muted animate-pulse rounded-2xl" />
           </CardContent>
         </Card>
         <Card>
@@ -214,7 +214,7 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
         <CardHeader className="px-5 pb-3 pt-5">
           <CardTitle className="text-sm font-semibold">Category Breakdown</CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="overflow-x-auto p-0">
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent border-b border-border/50">

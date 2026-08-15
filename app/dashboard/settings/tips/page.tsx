@@ -2,10 +2,17 @@
 
 import { useState } from "react";
 import { Plus, MapPin, FlaskConical, ChevronDown, ChevronUp, Percent, Split } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,7 +48,11 @@ import type { TipPoolConfigWithShares, TipOutRule, Role } from "@/app/dashboard/
 import {
   LocationIndicator,
   PageHeader,
+  PageShell,
+  Panel,
+  PanelSection,
 } from "@/components/dashboard/shell";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getLocalDateKey } from "@/lib/dates/local-date-key";
 
 // ─── Preview Calculator (pure client-side) ─────────────────────────────────
@@ -214,138 +225,173 @@ function PreviewPanel({
   const hasClipping = Object.values(simulation).some((s) => s.tipOutClipped > 0);
   const fmt = (n: number) => `$${n.toFixed(2)}`;
 
+  const totalNet = Object.values(simulation).reduce((sum, s) => sum + s.net, 0);
+
   return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FlaskConical className="w-5 h-5 text-muted-foreground" />
-          <h2 className="text-xl font-semibold">Preview Calculator</h2>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => setOpen((v) => !v)}>
-          {open ? <ChevronUp className="w-4 h-4 mr-1" /> : <ChevronDown className="w-4 h-4 mr-1" />}
-          {open ? "Hide" : "Show"}
-        </Button>
-      </div>
-
-      {open && (
-        <Card className="p-5 space-y-5">
-          <p className="text-sm text-muted-foreground">
-            Enter hypothetical amounts per role to see how tips would be distributed with your
-            current configuration.
-          </p>
-
-          {roles.length === 0 ? (
+    <Panel>
+      <PanelSection
+        icon={FlaskConical}
+        label="Preview Calculator"
+        caption="Enter hypothetical amounts per role to see how tips would be distributed with your current configuration."
+        action={
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? <ChevronUp className="w-4 h-4 mr-1.5" /> : <ChevronDown className="w-4 h-4 mr-1.5" />}
+            {open ? "Hide" : "Show"}
+          </Button>
+        }
+      >
+        {open &&
+          (roles.length === 0 ? (
             <p className="text-sm text-muted-foreground">No roles available.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <div className="space-y-3 min-w-[560px]">
-              <div className="grid grid-cols-5 gap-2 text-xs font-medium text-muted-foreground pb-1 border-b">
-                <span>Role</span>
-                <span>Charged Tips ($)</span>
-                <span>Cash Tips ($)</span>
-                <span>Hours Worked</span>
-                <span>Gross Sales ($)</span>
+            <div className="space-y-6">
+              {/* Inputs — one inset card per role. A 5-column grid of number
+                  fields cannot survive 375px; stacking into labelled cards
+                  keeps every field tappable without a horizontal scroller. */}
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {roles.map((role) => (
+                  <div
+                    key={role.code}
+                    className="min-w-0 rounded-2xl border-0 bg-muted/60 p-4 shadow-none"
+                  >
+                    <p className="mb-3 truncate text-sm font-medium">{role.code}</p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="min-w-0">
+                        <Label className="text-[0.8125rem] text-muted-foreground">Charged tips ($)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={inputs[role.code]?.chargedTips || ""}
+                          onChange={(e) =>
+                            setInput(role.code, "chargedTips", parseFloat(e.target.value) || 0)
+                          }
+                          className="mt-1.5 h-9 bg-background text-[0.8125rem] tabular-nums"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <Label className="text-[0.8125rem] text-muted-foreground">Cash tips ($)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={inputs[role.code]?.cashTips || ""}
+                          onChange={(e) =>
+                            setInput(role.code, "cashTips", parseFloat(e.target.value) || 0)
+                          }
+                          className="mt-1.5 h-9 bg-background text-[0.8125rem] tabular-nums"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <Label className="text-[0.8125rem] text-muted-foreground">Hours worked</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          placeholder="0"
+                          value={inputs[role.code]?.hours || ""}
+                          onChange={(e) =>
+                            setInput(role.code, "hours", parseFloat(e.target.value) || 0)
+                          }
+                          className="mt-1.5 h-9 bg-background text-[0.8125rem] tabular-nums"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <Label className="text-[0.8125rem] text-muted-foreground">Gross sales ($)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={inputs[role.code]?.sales || ""}
+                          onChange={(e) =>
+                            setInput(role.code, "sales", parseFloat(e.target.value) || 0)
+                          }
+                          className="mt-1.5 h-9 bg-background text-[0.8125rem] tabular-nums"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              {roles.map((role) => (
-                <div key={role.code} className="grid grid-cols-5 gap-2 items-center">
-                  <Label className="text-sm font-medium truncate">{role.code}</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={inputs[role.code]?.chargedTips || ""}
-                    onChange={(e) =>
-                      setInput(role.code, "chargedTips", parseFloat(e.target.value) || 0)
-                    }
-                    className="h-8 text-sm"
-                  />
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={inputs[role.code]?.cashTips || ""}
-                    onChange={(e) =>
-                      setInput(role.code, "cashTips", parseFloat(e.target.value) || 0)
-                    }
-                    className="h-8 text-sm"
-                  />
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    placeholder="0"
-                    value={inputs[role.code]?.hours || ""}
-                    onChange={(e) =>
-                      setInput(role.code, "hours", parseFloat(e.target.value) || 0)
-                    }
-                    className="h-8 text-sm"
-                  />
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={inputs[role.code]?.sales || ""}
-                    onChange={(e) =>
-                      setInput(role.code, "sales", parseFloat(e.target.value) || 0)
-                    }
-                    className="h-8 text-sm"
-                  />
-                </div>
-              ))}
-              </div>
-            </div>
-          )}
 
-          {Object.keys(simulation).length > 0 && (
-            <div className="space-y-2 border-t pt-4">
-              <p className="text-sm font-semibold">Simulated Result</p>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-xs text-muted-foreground border-b">
-                      <th className="text-left pb-2">Role</th>
-                      <th className="text-right pb-2">Own</th>
-                      <th className="text-right pb-2">Pool Out</th>
-                      <th className="text-right pb-2">Pool In</th>
-                      <th className="text-right pb-2">T-Out Given</th>
-                      <th className="text-right pb-2">T-Out Recv</th>
-                      {hasClipping && <th className="text-right pb-2">Clipped</th>}
-                      <th className="text-right pb-2 font-bold text-foreground">Net</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(simulation).map(([code, s]) => (
-                      <tr key={code} className="border-b last:border-0">
-                        <td className="py-1.5 font-medium">{code}</td>
-                        <td className="text-right py-1.5">{fmt(s.own)}</td>
-                        <td className="text-right py-1.5 text-red-600">{s.poolContrib > 0 ? `−${fmt(s.poolContrib)}` : fmt(0)}</td>
-                        <td className="text-right py-1.5 text-green-600">{s.poolRecv > 0 ? `+${fmt(s.poolRecv)}` : fmt(0)}</td>
-                        <td className="text-right py-1.5 text-red-600">{s.tipOutGiven > 0 ? `−${fmt(s.tipOutGiven)}` : fmt(0)}</td>
-                        <td className="text-right py-1.5 text-green-600">{s.tipOutRecv > 0 ? `+${fmt(s.tipOutRecv)}` : fmt(0)}</td>
-                        {hasClipping && (
-                          <td className="text-right py-1.5 text-amber-600">
-                            {s.tipOutClipped > 0 ? fmt(s.tipOutClipped) : "—"}
-                          </td>
-                        )}
-                        <td className="text-right py-1.5 font-bold">{fmt(s.net)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {hasClipping && (
-                <p className="text-xs text-amber-600 mt-1">
-                  Clipped: tip-out amounts were reduced to prevent net tips going below zero.
-                </p>
+              {Object.keys(simulation).length > 0 && (
+                <div className="min-w-0 border-t border-border/60 pt-6">
+                  <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <p className="text-sm text-muted-foreground">Simulated result</p>
+                    <p className="text-[1.75rem] font-medium leading-tight tracking-[-0.02em] tabular-nums">
+                      {fmt(totalNet)}
+                    </p>
+                  </div>
+
+                  <div className="-mx-2 overflow-x-auto px-2">
+                    <Table className="min-w-max">
+                      <TableHeader>
+                        <TableRow className="border-b border-border/60 hover:bg-transparent">
+                          <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Role</TableHead>
+                          <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Own</TableHead>
+                          <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Pool Out</TableHead>
+                          <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Pool In</TableHead>
+                          <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">T-Out Given</TableHead>
+                          <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">T-Out Recv</TableHead>
+                          {hasClipping && (
+                            <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Clipped</TableHead>
+                          )}
+                          <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-foreground">Net</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {Object.entries(simulation).map(([code, s]) => (
+                          <TableRow
+                            key={code}
+                            className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
+                          >
+                            <TableCell className="py-3 text-sm font-medium">{code}</TableCell>
+                            <TableCell className="py-3 text-right text-sm tabular-nums">{fmt(s.own)}</TableCell>
+                            <TableCell className="py-3 text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
+                              {s.poolContrib > 0 ? `−${fmt(s.poolContrib)}` : "—"}
+                            </TableCell>
+                            <TableCell className="py-3 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
+                              {s.poolRecv > 0 ? `+${fmt(s.poolRecv)}` : "—"}
+                            </TableCell>
+                            <TableCell className="py-3 text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
+                              {s.tipOutGiven > 0 ? `−${fmt(s.tipOutGiven)}` : "—"}
+                            </TableCell>
+                            <TableCell className="py-3 text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
+                              {s.tipOutRecv > 0 ? `+${fmt(s.tipOutRecv)}` : "—"}
+                            </TableCell>
+                            {hasClipping && (
+                              <TableCell className="py-3 text-right text-sm tabular-nums text-amber-700 dark:text-amber-400">
+                                {s.tipOutClipped > 0 ? fmt(s.tipOutClipped) : "—"}
+                              </TableCell>
+                            )}
+                            <TableCell className="py-3 text-right text-sm font-semibold tabular-nums">
+                              {fmt(s.net)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {hasClipping && (
+                    <p className="mt-3 text-[0.8125rem] text-amber-700 dark:text-amber-400">
+                      Clipped: tip-out amounts were reduced to prevent net tips going below zero.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </Card>
-      )}
-    </section>
+          ))}
+      </PanelSection>
+    </Panel>
   );
 }
 
@@ -459,30 +505,48 @@ export default function TipsSettingsPage() {
 
   if (selectedLocationId === "all") {
     return (
-      <div className="space-y-6">
+      <PageShell>
         <PageHeader
           title="Tips"
           subtitle="Configure tip pools and tip-out rules."
           indicator={<LocationIndicator isAllLocations locationName={null} />}
         />
-        <Card className="p-6 border-yellow-200 bg-yellow-50">
-          <div className="flex items-start gap-3">
-            <MapPin className="w-5 h-5 text-yellow-600 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-yellow-900">Select a Location</h3>
-              <p className="text-sm text-yellow-800 mt-1">
-                Tip configuration is location-specific. Please select a specific location from the
-                top navigation to view and manage tip settings.
-              </p>
-            </div>
+        <div className="flex items-start gap-3 rounded-2xl border-0 bg-amber-500/10 p-6 dark:bg-amber-400/10">
+          <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="min-w-0">
+            <h2 className="font-semibold text-amber-800 dark:text-amber-300">Select a location</h2>
+            <p className="mt-1 text-sm text-amber-800/90 dark:text-amber-300/90">
+              Tip configuration is location-specific. Choose a specific location from the
+              top navigation to view and manage tip settings.
+            </p>
           </div>
-        </Card>
-      </div>
+        </div>
+      </PageShell>
     );
   }
 
+  const addPoolButton = (
+    <Button
+      className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+      onClick={() => { setEditingPool(null); setIsPoolDialogOpen(true); }}
+    >
+      <Plus className="mr-1.5 h-4 w-4" />
+      Add Tip Pool
+    </Button>
+  );
+
+  const addRuleButton = (
+    <Button
+      className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+      onClick={() => { setEditingRule(null); setIsRuleDialogOpen(true); }}
+    >
+      <Plus className="mr-1.5 h-4 w-4" />
+      Add Tip-Out Rule
+    </Button>
+  );
+
   return (
-    <div className="space-y-8">
+    <PageShell>
       <PageHeader
         title="Tips"
         subtitle="Configure tip pools, role distribution, and tip-out rules."
@@ -495,95 +559,85 @@ export default function TipsSettingsPage() {
       />
 
       {/* TIP POOLS */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Tip Pools</h2>
-          <Button
-            onClick={() => { setEditingPool(null); setIsPoolDialogOpen(true); }}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Tip Pool
-          </Button>
-        </div>
-
-        {poolsLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[...Array(2)].map((_, i) => (
-              <Card key={i} className="h-48 animate-pulse bg-muted" />
-            ))}
-          </div>
-        ) : pools.length === 0 ? (
-          <Card className="p-10 text-center">
-            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center mx-auto mb-3">
-              <Percent className="w-5 h-5 text-muted-foreground" />
+      <Panel>
+        <PanelSection
+          icon={Percent}
+          label="Tip Pools"
+          caption="How collected tips are gathered and shared across roles."
+          action={addPoolButton}
+        >
+          {poolsLoading ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {[...Array(2)].map((_, i) => (
+                <Skeleton key={i} className="h-56 w-full rounded-2xl" />
+              ))}
             </div>
-            <p className="font-medium text-foreground">No tip pools yet</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Create a pool to define how tips are shared across roles
-            </p>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pools.map((pool) => (
-              <PoolCard
-                key={pool.id}
-                pool={pool}
-                roles={roles}
-                poolCount={pools.length}
-                onEdit={(p) => { setEditingPool(p); setIsPoolDialogOpen(true); }}
-                onDelete={setPoolToDelete}
-                onToggle={(id, active) => togglePoolMutation.mutate({ clerkOrgId: clerkOrgId!, configId: id, isActive: active })}
-                isToggling={togglePoolMutation.isPending}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+          ) : pools.length === 0 ? (
+            <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center shadow-none">
+              <Percent className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+              <p className="font-medium text-foreground">No tip pools yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Create a pool to define how tips are shared across roles.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {pools.map((pool) => (
+                <PoolCard
+                  key={pool.id}
+                  pool={pool}
+                  roles={roles}
+                  poolCount={pools.length}
+                  onEdit={(p) => { setEditingPool(p); setIsPoolDialogOpen(true); }}
+                  onDelete={setPoolToDelete}
+                  onToggle={(id, active) => togglePoolMutation.mutate({ clerkOrgId: clerkOrgId!, configId: id, isActive: active })}
+                  isToggling={togglePoolMutation.isPending}
+                />
+              ))}
+            </div>
+          )}
+        </PanelSection>
+      </Panel>
 
       {/* TIP-OUT RULES */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Tip-Out Rules</h2>
-          <Button
-            onClick={() => { setEditingRule(null); setIsRuleDialogOpen(true); }}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Tip-Out Rule
-          </Button>
-        </div>
-
-        {rulesLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[...Array(2)].map((_, i) => (
-              <Card key={i} className="h-32 animate-pulse bg-muted" />
-            ))}
-          </div>
-        ) : rules.length === 0 ? (
-          <Card className="p-10 text-center">
-            <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center mx-auto mb-3">
-              <Split className="w-5 h-5 text-muted-foreground" />
+      <Panel>
+        <PanelSection
+          icon={Split}
+          label="Tip-Out Rules"
+          caption="Fixed transfers routing a portion of tips from one role to another."
+          action={addRuleButton}
+        >
+          {rulesLoading ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {[...Array(2)].map((_, i) => (
+                <Skeleton key={i} className="h-40 w-full rounded-2xl" />
+              ))}
             </div>
-            <p className="font-medium text-foreground">No tip-out rules yet</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Create rules to route a portion of tips from one role to another
-            </p>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {rules.map((rule) => (
-              <RuleCard
-                key={rule.id}
-                rule={rule}
-                roles={roles}
-                onEdit={(r) => { setEditingRule(r); setIsRuleDialogOpen(true); }}
-                onDelete={setRuleToDelete}
-                onToggle={handleToggleRule}
-                isToggling={toggleRuleMutation.isPending}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+          ) : rules.length === 0 ? (
+            <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center shadow-none">
+              <Split className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+              <p className="font-medium text-foreground">No tip-out rules yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Create rules to route a portion of tips from one role to another.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {rules.map((rule) => (
+                <RuleCard
+                  key={rule.id}
+                  rule={rule}
+                  roles={roles}
+                  onEdit={(r) => { setEditingRule(r); setIsRuleDialogOpen(true); }}
+                  onDelete={setRuleToDelete}
+                  onToggle={handleToggleRule}
+                  isToggling={toggleRuleMutation.isPending}
+                />
+              ))}
+            </div>
+          )}
+        </PanelSection>
+      </Panel>
 
       {/* PREVIEW CALCULATOR */}
       <PreviewPanel
@@ -659,6 +713,6 @@ export default function TipsSettingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

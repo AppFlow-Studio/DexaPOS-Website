@@ -164,24 +164,24 @@ export default function KitchenPerformancePage() {
           <CardContent className="px-5 pb-5 space-y-4">
             {isLoading ? (
               <div className="space-y-3">
-                {[1, 2, 3].map(i => <div key={i} className="h-12 bg-muted animate-pulse rounded-xl" />)}
+                {[1, 2, 3].map(i => <div key={i} className="h-12 bg-muted animate-pulse rounded-2xl" />)}
               </div>
             ) : isError ? (
               <p className="text-sm text-muted-foreground text-center py-4">Failed to load</p>
             ) : (
               <>
-                <div className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/35 p-3">
+                <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-muted/35 p-3">
                   <div>
                     <p className="text-xs font-semibold text-foreground">Rush Items</p>
-                    <p className="text-xl font-bold text-foreground">{kitchen?.rush_stats?.avg_rush_time_minutes?.toFixed(1) ?? "—"} min</p>
+                    <p className="text-xl font-bold tabular-nums text-foreground">{kitchen?.rush_stats?.avg_rush_time_minutes?.toFixed(1) ?? "—"} min</p>
                     <p className="text-xs text-muted-foreground">{kitchen?.rush_stats?.rush_items ?? 0} items avg prep</p>
                   </div>
                   <Zap className="h-8 w-8 text-muted-foreground/45" />
                 </div>
-                <div className="flex items-center justify-between p-3 rounded-xl bg-muted/40">
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/40">
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground">Normal Items</p>
-                    <p className="text-xl font-bold">{kitchen?.rush_stats?.avg_normal_time_minutes?.toFixed(1) ?? "—"} min</p>
+                    <p className="text-xl font-bold tabular-nums">{kitchen?.rush_stats?.avg_normal_time_minutes?.toFixed(1) ?? "—"} min</p>
                     <p className="text-xs text-muted-foreground">{(kitchen?.rush_stats?.total_items ?? 0) - (kitchen?.rush_stats?.rush_items ?? 0)} items avg prep</p>
                   </div>
                   <Timer className="h-8 w-8 text-muted-foreground/30" />
@@ -213,7 +213,7 @@ export default function KitchenPerformancePage() {
           </CardHeader>
           <CardContent className="px-3 pb-5">
             {isLoading ? (
-              <div className="h-44 bg-muted animate-pulse rounded-xl" />
+              <div className="h-44 bg-muted animate-pulse rounded-2xl" />
             ) : isError ? (
               <div className="h-44 flex items-center justify-center text-sm text-muted-foreground">
                 Failed to load trend data

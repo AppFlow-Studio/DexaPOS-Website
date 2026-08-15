@@ -3,7 +3,7 @@
 import { format } from "date-fns";
 import { DollarSign, CreditCard, Users, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Panel, PanelSection, StatRow, StatTile } from "@/components/dashboard/shell";
 import {
   Tooltip,
   TooltipContent,
@@ -65,62 +65,52 @@ export function TodayHeader({
   const closeOutDisabled = staffStillClockedIn > 0 || isClosingOut;
 
   return (
-    <div className="space-y-4">
-      {/* Date + Location + CTA */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold">{displayDate}</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">{locationName}</p>
-        </div>
-
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div>
-                <Button
-                  onClick={onCloseOut}
-                  disabled={closeOutDisabled}
-                  className="bg-teal-500 hover:bg-teal-600 text-white shrink-0"
-                >
-                  {isClosingOut ? "Calculating..." : "Close Out & Calculate"}
-                </Button>
-              </div>
-            </TooltipTrigger>
-            {staffStillClockedIn > 0 && (
-              <TooltipContent>
-                <p>
-                  {staffStillClockedIn} staff still clocked in — finish shifts
-                  before closing out.
-                </p>
-              </TooltipContent>
-            )}
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-
-      {/* 4 Stat Tiles */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {statTiles.map((tile) => (
-          <div
-            key={tile.key}
-            className="min-w-0 rounded-2xl border-0 bg-muted/60 p-4"
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <tile.icon className="w-4 h-4 text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                {tile.label}
-              </span>
-            </div>
-            {isLoading || !summary ? (
-              <Skeleton className="h-7 w-20 mt-1" />
-            ) : (
-              <p className="text-xl font-medium leading-tight tracking-[-0.02em] tabular-nums text-foreground">
-                {tile.getValue(summary)}
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
+    <Panel>
+      <PanelSection
+        label={displayDate}
+        caption={locationName}
+        action={
+          <TooltipProvider>
+            <Tooltip>
+              {/* The trigger wraps a span, not the Button: a disabled button
+                  swallows pointer events, so the tooltip explaining *why* it
+                  is disabled would never open — which is the only case that
+                  needs it. */}
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    onClick={onCloseOut}
+                    disabled={closeOutDisabled}
+                    className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                  >
+                    {isClosingOut ? "Calculating…" : "Close Out & Calculate"}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {staffStillClockedIn > 0 && (
+                <TooltipContent>
+                  <p className="max-w-[220px]">
+                    {staffStillClockedIn} staff still clocked in — finish shifts
+                    before closing out.
+                  </p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+        }
+      >
+        <StatRow columns={4}>
+          {statTiles.map((tile) => (
+            <StatTile
+              key={tile.key}
+              label={tile.label}
+              icon={<tile.icon />}
+              isLoading={isLoading || !summary}
+              value={summary ? tile.getValue(summary) : "—"}
+            />
+          ))}
+        </StatRow>
+      </PanelSection>
+    </Panel>
   );
 }

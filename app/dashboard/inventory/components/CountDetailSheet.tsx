@@ -119,7 +119,7 @@ export function CountDetailSheet({
         </DialogHeader>
 
         {isLoading || !detail ? (
-          <div className="space-y-2 px-4">
+          <div className="space-y-2 bg-card px-5 pb-6 sm:px-6">
             {[...Array(6)].map((_, i) => (
               <Skeleton key={i} className="h-10 w-full" />
             ))}
@@ -161,7 +161,7 @@ export function CountDetailSheet({
                     <TableHead className="text-right">Variance</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
+                <TableBody className="[&_tr]:border-0">
                   {detail.items.map((item) => {
                     const raw = counts[item.inventory_item_id] ?? "";
                     const counted =
@@ -171,7 +171,7 @@ export function CountDetailSheet({
                         ? counted - item.expected_quantity
                         : null;
                     return (
-                      <TableRow key={item.id}>
+                      <TableRow key={item.id} className="border-0">
                         <TableCell>
                           <div className="font-medium">
                             {item.inventory_item?.name ?? "—"}
@@ -234,7 +234,7 @@ export function CountDetailSheet({
             </div>
 
             {/* Footer actions */}
-            <div className="border-t px-4 py-3 space-y-3">
+            <div className="shrink-0 space-y-3 bg-card px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
               {isEditable && (
                 <>
                   <div className="flex items-center justify-between">

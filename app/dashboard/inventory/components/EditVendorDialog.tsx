@@ -113,24 +113,27 @@ export function EditVendorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]" elevation="above-sheet">
         <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
               <Truck className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1 text-left">
               <DialogTitle>Edit Vendor</DialogTitle>
               <DialogDescription>Update vendor details</DialogDescription>
             </div>
             {isSingleLocation ? null : isGlobal ? (
               <Badge
                 variant="outline"
-                className="gap-1 bg-muted/60 text-muted-foreground"
+                className="shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground"
               >
                 <Globe className="h-3 w-3" />
                 Global
               </Badge>
             ) : (
-              <Badge variant="outline" className="gap-1">
+              <Badge
+                variant="outline"
+                className="shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground"
+              >
                 <MapPin className="h-3 w-3" />
                 Local
               </Badge>
@@ -154,8 +157,9 @@ export function EditVendorDialog({
             )}
           </div>
 
-          {/* Contact Row */}
-          <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
+          {/* Contact Person and Phone each take a full row — the phone control
+              (country selector + number) is too wide to share one. */}
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="contact_name">Contact Person</Label>
               <Input

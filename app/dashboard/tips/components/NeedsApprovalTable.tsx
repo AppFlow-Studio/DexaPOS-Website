@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Eye, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -77,9 +76,9 @@ export function NeedsApprovalTable({
                   {formatDate(session.session_date)}
                 </TableCell>
                 <TableCell className="py-3 text-sm">
-                  <Badge variant="secondary" className="text-xs">
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                     {SHIFT_LABELS[session.shift_period] || session.shift_period}
-                  </Badge>
+                  </span>
                 </TableCell>
                 <TableCell className="py-3 text-right text-sm tabular-nums">
                   {formatMoney(session.total_tips_collected)}

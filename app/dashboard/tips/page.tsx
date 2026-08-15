@@ -156,12 +156,12 @@ export default function TipsPage() {
       />
 
       {isAllLocations ? (
-        <div className="flex items-start gap-3 rounded-2xl border-0 bg-amber-50 p-6 dark:bg-amber-900/20">
-          <MapPin className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-          <div>
-            <h3 className="font-semibold text-amber-800 dark:text-amber-400">Select a Location</h3>
-            <p className="text-sm text-amber-800 dark:text-amber-400 mt-1">
-              Tip distribution is location-specific. Please select a specific location
+        <div className="flex items-start gap-3 rounded-2xl border-0 bg-amber-500/10 p-6 dark:bg-amber-400/10">
+          <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="min-w-0">
+            <h2 className="font-semibold text-amber-800 dark:text-amber-300">Select a location</h2>
+            <p className="mt-1 text-sm text-amber-800/90 dark:text-amber-300/90">
+              Tip distribution is location-specific. Choose a specific location
               from the top navigation to manage tips for that location.
             </p>
           </div>
@@ -193,9 +193,9 @@ export default function TipsPage() {
                 >
                   Needs Approval
                   {needsApproval.length > 0 && (
-                    <Badge className="bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 text-[10px] px-1.5 py-0 min-w-[18px] h-[18px] rounded-full">
+                    <span className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-amber-500/15 px-1.5 text-[10px] font-medium tabular-nums text-amber-700 dark:bg-amber-400/15 dark:text-amber-300">
                       {needsApproval.length}
-                    </Badge>
+                    </span>
                   )}
                 </TabsTrigger>
                 <TabsTrigger
@@ -220,27 +220,29 @@ export default function TipsPage() {
                 isClosingOut={calculateMutation.isPending}
               />
 
-              {/* Previous session banner */}
+              {/* Previous session banner. `flex-wrap`, not `justify-between`
+                  on a rigid row: the action drops beneath the message at 320px
+                  instead of overflowing. */}
               {lastCutoff && (
-                <div className="flex items-center justify-between rounded-2xl border-0 bg-emerald-50 p-3 dark:bg-emerald-900/20">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <div className="text-sm">
-                      <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border-0 bg-emerald-500/10 px-4 py-3 dark:bg-emerald-400/10">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <p className="min-w-0 text-sm text-emerald-800 dark:text-emerald-300">
+                      <span className="font-medium">
                         Session {lastCutoff.sequenceNumber} closed
                       </span>
-                      <span className="text-emerald-700 dark:text-emerald-400 ml-1">
+                      <span className="ml-1 tabular-nums">
                         — {formatMoney(lastCutoff.totalDistributed)} distributed
                       </span>
-                    </div>
+                    </p>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 h-7 text-xs"
+                    className="h-8 shrink-0 rounded-full px-3 text-[0.8125rem] font-medium text-emerald-800 hover:bg-emerald-500/15 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-200"
                     onClick={() => router.push(`/dashboard/tips/${lastCutoff.sessionId}`)}
                   >
-                    View <ArrowRight className="w-3 h-3 ml-1" />
+                    View <ArrowRight className="ml-1 h-3.5 w-3.5" />
                   </Button>
                 </div>
               )}

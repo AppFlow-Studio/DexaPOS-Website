@@ -89,11 +89,11 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
               <Truck className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1 text-left">
               <DialogTitle>Add Vendor</DialogTitle>
               <DialogDescription>
                 Add a new supplier to your vendor list
@@ -104,15 +104,20 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
             {isSingleLocation ? null : isGlobalView ? (
               <Badge
                 variant="outline"
-                className="gap-1 bg-muted/60 text-muted-foreground"
+                className="shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground"
               >
                 <Globe className="h-3 w-3" />
                 Global
               </Badge>
             ) : (
-              <Badge variant="outline" className="gap-1">
-                <MapPin className="h-3 w-3" />
-                {selectedLocation?.name || "Location"}
+              <Badge
+                variant="outline"
+                className="min-w-0 shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground"
+              >
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate">
+                  {selectedLocation?.name || "Location"}
+                </span>
               </Badge>
             )}
           </div>
@@ -152,8 +157,9 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
             )}
           </div>
 
-          {/* Contact Row */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Contact Person and Phone each take a full row — the phone control
+              (country selector + number) is too wide to share one. */}
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="contact_name">Contact Person</Label>
               <Input
