@@ -76,11 +76,12 @@ export function CustomerSearch({ value, onSelect, onAddNew }: CustomerSearchProp
       <div className="flex-1 min-w-0">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
+          {/* Borderless filled control (§4.2). */}
           <Button
-            variant="outline"
+            variant="ghost"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between font-normal"
+            className="h-9 w-full justify-between rounded-full border-0 bg-muted/60 px-3 font-normal shadow-none hover:bg-muted"
           >
             <span className={cn("truncate", !displayName && "text-muted-foreground")}>
               {displayName ?? "Search by email, phone or name"}
@@ -88,7 +89,10 @@ export function CustomerSearch({ value, onSelect, onAddNew }: CustomerSearchProp
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[380px] p-0" align="start">
+        <PopoverContent
+          className="w-[min(380px,calc(100vw-2rem))] rounded-2xl p-0"
+          align="start"
+        >
           <Command shouldFilter={false}>
             <CommandInput
               placeholder="Search customers..."
@@ -153,7 +157,7 @@ export function CustomerSearch({ value, onSelect, onAddNew }: CustomerSearchProp
                         setOpen(false);
                         onAddNew();
                       }}
-                      className="cursor-pointer text-primary"
+                      className="cursor-pointer text-[#0C4FD1] dark:text-[#6CA0FF]"
                     >
                       <UserPlus className="mr-2 h-4 w-4" />
                       Add new customer
@@ -171,7 +175,7 @@ export function CustomerSearch({ value, onSelect, onAddNew }: CustomerSearchProp
           variant="ghost"
           size="sm"
           onClick={handleClear}
-          className="shrink-0 text-muted-foreground hover:text-foreground"
+          className="h-9 shrink-0 rounded-full px-3 text-muted-foreground hover:text-foreground"
         >
           Clear
         </Button>

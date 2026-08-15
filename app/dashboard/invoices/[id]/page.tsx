@@ -336,9 +336,11 @@ export default function InvoiceDetailPage({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="h-9 rounded-full bg-destructive px-4 text-[0.8125rem] font-medium text-destructive-foreground shadow-sm hover:bg-destructive/90"
               onClick={handleDelete}
             >
               Delete

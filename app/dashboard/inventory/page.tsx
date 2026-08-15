@@ -377,8 +377,17 @@ export default function InventoryPage() {
 
       // scrollIntoView on the element would also scroll the page vertically;
       // adjust the container's own scrollLeft instead.
+      //
+      // offsetLeft is measured from the nearest *positioned* ancestor, which
+      // is not this container, so it gives the wrong offset here. Derive the
+      // tab's position within the scroll content from the two rects instead.
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = active.getBoundingClientRect();
+      const activeLeftInContent =
+        activeRect.left - containerRect.left + container.scrollLeft;
+
       const target =
-        active.offsetLeft - (container.clientWidth - active.offsetWidth) / 2;
+        activeLeftInContent - (container.clientWidth - activeRect.width) / 2;
       const maxScroll = container.scrollWidth - container.clientWidth;
       container.scrollTo({
         left: Math.max(0, Math.min(target, maxScroll)),

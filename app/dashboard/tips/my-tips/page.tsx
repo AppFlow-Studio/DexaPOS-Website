@@ -257,33 +257,60 @@ export default function MyTipsPage() {
       {/* Summary cards */}
       <Panel>
         <div className="px-6 py-6">
-          <StatRow columns={4}>
-            <StatTile
-              label="Net Tips"
-              value={fmt(totalNet)}
-              meta={`${entries.length} shifts`}
-              icon={<DollarSign />}
-              isLoading={isLoading}
-            />
-            <StatTile
-              label="Own Tips Earned"
-              value={fmt(totalOwn)}
-              icon={<TrendingUp />}
-              isLoading={isLoading}
-            />
-            <StatTile
-              label="Total Hours"
-              value={`${totalHours.toFixed(1)}h`}
-              icon={<Clock />}
-              isLoading={isLoading}
-            />
-            <StatTile
-              label="Avg / Shift"
-              value={fmt(avgPerShift)}
-              icon={<ArrowUpDown />}
-              isLoading={isLoading}
-            />
-          </StatRow>
+          {/* Four full-size tiles stack to four screenfuls on a phone. Wide
+              screens keep the StatRow; phones get a compact 2×2. */}
+          <div className="hidden sm:block">
+            <StatRow columns={4}>
+              <StatTile
+                label="Net Tips"
+                value={fmt(totalNet)}
+                meta={`${entries.length} shifts`}
+                icon={<DollarSign />}
+                isLoading={isLoading}
+              />
+              <StatTile
+                label="Own Tips Earned"
+                value={fmt(totalOwn)}
+                icon={<TrendingUp />}
+                isLoading={isLoading}
+              />
+              <StatTile
+                label="Total Hours"
+                value={`${totalHours.toFixed(1)}h`}
+                icon={<Clock />}
+                isLoading={isLoading}
+              />
+              <StatTile
+                label="Avg / Shift"
+                value={fmt(avgPerShift)}
+                icon={<ArrowUpDown />}
+                isLoading={isLoading}
+              />
+            </StatRow>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:hidden">
+            {[
+              { label: "Net Tips", value: fmt(totalNet), Icon: DollarSign },
+              { label: "Own Tips Earned", value: fmt(totalOwn), Icon: TrendingUp },
+              { label: "Total Hours", value: `${totalHours.toFixed(1)}h`, Icon: Clock },
+              { label: "Avg / Shift", value: fmt(avgPerShift), Icon: ArrowUpDown },
+            ].map(({ label, value, Icon }) => (
+              <div key={label} className="min-w-0">
+                <p className="flex items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{label}</span>
+                </p>
+                {isLoading ? (
+                  <Skeleton className="mt-1 h-6 w-20" />
+                ) : (
+                  <p className="mt-0.5 text-lg font-medium leading-tight tracking-[-0.02em] tabular-nums">
+                    {value}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </Panel>
 

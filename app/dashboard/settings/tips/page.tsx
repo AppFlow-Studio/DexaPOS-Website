@@ -57,6 +57,48 @@ import { getLocalDateKey } from "@/lib/dates/local-date-key";
 
 // ─── Preview Calculator (pure client-side) ─────────────────────────────────
 
+/**
+ * An in/out figure pair on a card. When neither side has a value the whole
+ * pair collapses to one unstyled dash — a coloured "—" reads as a value that
+ * failed to render rather than as "nothing moved".
+ */
+function FlowPair({
+  label,
+  inValue,
+  outValue,
+}: {
+  label: string;
+  inValue: number;
+  outValue: number;
+}) {
+  const hasIn = inValue > 0;
+  const hasOut = outValue > 0;
+  const money = (n: number) => `$${n.toFixed(2)}`;
+
+  return (
+    <div className="min-w-0">
+      <p className="text-[0.8125rem] text-muted-foreground">{label}</p>
+      {!hasIn && !hasOut ? (
+        <p className="mt-0.5 text-sm font-medium text-muted-foreground">—</p>
+      ) : (
+        <p className="mt-0.5 text-sm font-medium tabular-nums">
+          {hasIn && (
+            <span className="text-emerald-700 dark:text-emerald-400">
+              +{money(inValue)}
+            </span>
+          )}
+          {hasIn && hasOut && <span className="mx-1 text-muted-foreground">/</span>}
+          {hasOut && (
+            <span className="text-rose-700 dark:text-rose-400">
+              −{money(outValue)}
+            </span>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PreviewPanel({
   pools,
   rules,
@@ -397,30 +439,8 @@ function PreviewPanel({
                             <p className="text-[0.8125rem] text-muted-foreground">Own</p>
                             <p className="mt-0.5 text-sm font-medium tabular-nums">{fmt(s.own)}</p>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-[0.8125rem] text-muted-foreground">Pool in / out</p>
-                            <p className="mt-0.5 text-sm font-medium tabular-nums">
-                              <span className="text-emerald-700 dark:text-emerald-400">
-                                {s.poolRecv > 0 ? `+${fmt(s.poolRecv)}` : "—"}
-                              </span>
-                              <span className="mx-1 text-muted-foreground">/</span>
-                              <span className="text-rose-700 dark:text-rose-400">
-                                {s.poolContrib > 0 ? `−${fmt(s.poolContrib)}` : "—"}
-                              </span>
-                            </p>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-[0.8125rem] text-muted-foreground">Tip-out in / out</p>
-                            <p className="mt-0.5 text-sm font-medium tabular-nums">
-                              <span className="text-emerald-700 dark:text-emerald-400">
-                                {s.tipOutRecv > 0 ? `+${fmt(s.tipOutRecv)}` : "—"}
-                              </span>
-                              <span className="mx-1 text-muted-foreground">/</span>
-                              <span className="text-rose-700 dark:text-rose-400">
-                                {s.tipOutGiven > 0 ? `−${fmt(s.tipOutGiven)}` : "—"}
-                              </span>
-                            </p>
-                          </div>
+                          <FlowPair label="Pool in / out" inValue={s.poolRecv} outValue={s.poolContrib} />
+                          <FlowPair label="Tip-out in / out" inValue={s.tipOutRecv} outValue={s.tipOutGiven} />
                           {s.tipOutClipped > 0 && (
                             <div className="min-w-0">
                               <p className="text-[0.8125rem] text-muted-foreground">Clipped</p>

@@ -135,7 +135,7 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
     <div className="grid gap-4 md:grid-cols-3">
       {/* Payment Method Donut */}
       <Panel nested className="min-w-0 px-4 py-4 sm:px-6">
-        <h3 className="text-sm font-medium">Payment Methods</h3>
+        <h3 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Payment Methods</h3>
         <div className="mt-2">
           {methodData.length === 0 ? (
             <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
@@ -210,7 +210,7 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
 
       {/* Card Type Bar Chart */}
       <Panel nested className="min-w-0 px-4 py-4 sm:px-6">
-        <h3 className="text-sm font-medium">Card Types</h3>
+        <h3 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Card Types</h3>
         <div className="mt-2">
           {cardTypeData.length === 0 ? (
             <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
@@ -246,7 +246,7 @@ export function PaymentCharts({ summary, isLoading }: PaymentChartsProps) {
 
       {/* Daily Volume Area Chart */}
       <Panel nested className="min-w-0 px-4 py-4 sm:px-6">
-        <h3 className="text-sm font-medium">Daily Volume</h3>
+        <h3 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Daily Volume</h3>
         <div className="mt-2">
           {dailyData.length === 0 ? (
             <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">

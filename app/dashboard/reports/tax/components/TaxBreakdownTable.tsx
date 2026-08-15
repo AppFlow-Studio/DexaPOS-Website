@@ -272,9 +272,8 @@ export function TaxBreakdownTable({
 
         {/* Wraps instead of overflowing the card on a phone. */}
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">
-            {isLoading ? "Loading…" : `${count.toLocaleString()} orders`}
-          </span>
+          {/* Row 1: Columns + CSV. Row 2: order count + PDF. The count is
+              ordered between CSV and PDF so it wraps down beside PDF. */}
           <MobileColumnsButton
             columns={TABLE_COLUMNS}
             hidden={hiddenCols}
@@ -290,10 +289,13 @@ export function TaxBreakdownTable({
             <Download className="h-3.5 w-3.5" />
             CSV
           </Button>
+          <span className="order-1 text-xs text-muted-foreground whitespace-nowrap">
+            {isLoading ? "Loading…" : `${count.toLocaleString()} orders`}
+          </span>
           <Button
             variant="outline"
             size="sm"
-            className="h-8 text-xs gap-1.5"
+            className="order-2 h-8 text-xs gap-1.5"
             onClick={handleExportPdf}
             disabled={!data?.length || isExporting}
           >

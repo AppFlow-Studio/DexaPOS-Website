@@ -16,6 +16,47 @@ import { formatMoney } from "../lib/constants";
 import { usePreviewTipDistribution } from "../hooks/useTipDistribution";
 import { useQueryClient } from "@tanstack/react-query";
 
+/**
+ * An in/out figure pair on a card. When neither side has a value the whole
+ * pair collapses to one unstyled dash — a coloured "—" reads as a value that
+ * failed to render rather than as "nothing moved".
+ */
+function FlowPair({
+  label,
+  inValue,
+  outValue,
+}: {
+  label: string;
+  inValue: number;
+  outValue: number;
+}) {
+  const hasIn = inValue > 0;
+  const hasOut = outValue > 0;
+
+  return (
+    <div className="min-w-0">
+      <p className="text-[0.8125rem] text-muted-foreground">{label}</p>
+      {!hasIn && !hasOut ? (
+        <p className="mt-0.5 text-sm font-medium text-muted-foreground">—</p>
+      ) : (
+        <p className="mt-0.5 text-sm font-medium tabular-nums">
+          {hasIn && (
+            <span className="text-emerald-700 dark:text-emerald-400">
+              +{formatMoney(inValue)}
+            </span>
+          )}
+          {hasIn && hasOut && <span className="mx-1 text-muted-foreground">/</span>}
+          {hasOut && (
+            <span className="text-rose-700 dark:text-rose-400">
+              −{formatMoney(outValue)}
+            </span>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
 interface ProjectedDistributionPanelProps {
   clerkOrgId: string | undefined;
   locationId: string | undefined;
@@ -113,12 +154,33 @@ export function ProjectedDistributionPanel({
           </div>
         ) : (
           <div className="min-w-0 space-y-6">
-            <StatRow columns={4}>
-              <StatTile label="Total Collected" value={formatMoney(preview?.total_collected ?? 0)} />
-              <StatTile label="Pooled" value={formatMoney(preview?.total_tips_pooled ?? 0)} />
-              <StatTile label="Tip-Outs" value={formatMoney(preview?.total_tip_outs ?? 0)} />
-              <StatTile label="Total Distributed" value={formatMoney(preview?.total_distributed ?? 0)} />
-            </StatRow>
+            {/* Four full-size stat tiles stack to four screenfuls on a phone,
+                pushing the per-employee data below the fold. Wide screens keep
+                the StatRow; phones get a compact 2×2 of the same figures. */}
+            <div className="hidden sm:block">
+              <StatRow columns={4}>
+                <StatTile label="Total Collected" value={formatMoney(preview?.total_collected ?? 0)} />
+                <StatTile label="Pooled" value={formatMoney(preview?.total_tips_pooled ?? 0)} />
+                <StatTile label="Tip-Outs" value={formatMoney(preview?.total_tip_outs ?? 0)} />
+                <StatTile label="Total Distributed" value={formatMoney(preview?.total_distributed ?? 0)} />
+              </StatRow>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:hidden">
+              {[
+                { label: "Total Collected", value: preview?.total_collected ?? 0 },
+                { label: "Pooled", value: preview?.total_tips_pooled ?? 0 },
+                { label: "Tip-Outs", value: preview?.total_tip_outs ?? 0 },
+                { label: "Total Distributed", value: preview?.total_distributed ?? 0 },
+              ].map((s) => (
+                <div key={s.label} className="min-w-0">
+                  <p className="truncate text-[0.8125rem] text-muted-foreground">{s.label}</p>
+                  <p className="mt-0.5 text-lg font-medium leading-tight tracking-[-0.02em] tabular-nums">
+                    {formatMoney(s.value)}
+                  </p>
+                </div>
+              ))}
+            </div>
 
             {/* Wide screens get the table; phones and tablets get cards below,
                 so a 9-column row never becomes a horizontal scroller. Matches
@@ -195,30 +257,16 @@ export function ProjectedDistributionPanel({
                         {formatMoney(d.individual_tips_earned)}
                       </p>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-[0.8125rem] text-muted-foreground">Pool in / out</p>
-                      <p className="mt-0.5 text-sm font-medium tabular-nums">
-                        <span className="text-emerald-700 dark:text-emerald-400">
-                          {d.tip_pool_received > 0 ? `+${formatMoney(d.tip_pool_received)}` : "—"}
-                        </span>
-                        <span className="mx-1 text-muted-foreground">/</span>
-                        <span className="text-rose-700 dark:text-rose-400">
-                          {d.tip_pool_contributed > 0 ? `−${formatMoney(d.tip_pool_contributed)}` : "—"}
-                        </span>
-                      </p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[0.8125rem] text-muted-foreground">Tip-out in / out</p>
-                      <p className="mt-0.5 text-sm font-medium tabular-nums">
-                        <span className="text-emerald-700 dark:text-emerald-400">
-                          {d.tip_out_received > 0 ? `+${formatMoney(d.tip_out_received)}` : "—"}
-                        </span>
-                        <span className="mx-1 text-muted-foreground">/</span>
-                        <span className="text-rose-700 dark:text-rose-400">
-                          {d.tip_out_given > 0 ? `−${formatMoney(d.tip_out_given)}` : "—"}
-                        </span>
-                      </p>
-                    </div>
+                    <FlowPair
+                      label="Pool in / out"
+                      inValue={d.tip_pool_received}
+                      outValue={d.tip_pool_contributed}
+                    />
+                    <FlowPair
+                      label="Tip-out in / out"
+                      inValue={d.tip_out_received}
+                      outValue={d.tip_out_given}
+                    />
                   </div>
                 </article>
               ))}

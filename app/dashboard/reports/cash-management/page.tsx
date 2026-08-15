@@ -210,9 +210,8 @@ export default function CashManagementPage() {
           </div>
           {/* Wraps instead of overflowing the card on a phone. */}
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {isLoading ? "Loading…" : `${processed.length} transaction${processed.length !== 1 ? "s" : ""}`}
-            </span>
+            {/* Row 1: Columns + CSV. Row 2: the transaction count on its own —
+                the full-width spacer before it forces the line break. */}
             <MobileColumnsButton
               columns={TABLE_COLUMNS}
               hidden={hiddenCols}
@@ -228,6 +227,10 @@ export default function CashManagementPage() {
               <Download className="h-3.5 w-3.5" />
               CSV
             </Button>
+            <span aria-hidden className="w-full sm:hidden" />
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {isLoading ? "Loading…" : `${processed.length} transaction${processed.length !== 1 ? "s" : ""}`}
+            </span>
           </div>
         </div>
 

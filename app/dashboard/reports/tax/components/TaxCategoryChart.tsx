@@ -24,6 +24,21 @@ import {
 import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TaxCategoryRow } from "@/app/dashboard/reports/tax/types";
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+/** Category and the tax it collected are the point; the rest is supporting detail. */
+const TABLE_COLUMNS: ReportColumn[] = [
+  { id: "categoryName", label: "Category", locked: true },
+  { id: "taxableSales", label: "Taxable Sales", defaultHidden: true },
+  { id: "taxCollected", label: "Tax Collected", locked: true },
+  { id: "taxExemptCount", label: "Exempt Items", defaultHidden: true },
+  { id: "effectiveRate", label: "Eff. Rate" },
+];
 
 interface TaxCategoryChartProps {
   data: TaxCategoryRow[] | undefined;
@@ -54,6 +69,13 @@ function SortIcon({ col, active, dir }: { col: SortKey; active: SortKey; dir: So
 export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
   const [sortKey, setSortKey] = useState<SortKey>("taxCollected");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [hiddenCols, setHiddenCols] = useState(() =>
+    initialHiddenColumns(TABLE_COLUMNS),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
 
   // Stable name→color map built once from the original data order (sorted by
   // taxCollected desc from the server). Used by both the chart and the table so
@@ -211,8 +233,13 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
 
       {/* Sortable detail table */}
       <Card className="overflow-hidden">
-        <CardHeader className="px-5 pb-3 pt-5">
+        <CardHeader className="flex flex-row items-center justify-between px-5 pb-3 pt-5">
           <CardTitle className="text-sm font-semibold">Category Breakdown</CardTitle>
+          <MobileColumnsButton
+            columns={TABLE_COLUMNS}
+            hidden={hiddenCols}
+            onChange={setHiddenCols}
+          />
         </CardHeader>
         <CardContent className="p-0">
           <Table variant="data">
@@ -227,15 +254,17 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                     <SortIcon col="categoryName" active={sortKey} dir={sortDir} />
                   </div>
                 </TableHead>
-                <TableHead
-                  className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
-                  onClick={() => handleSort("taxableSales")}
-                >
-                  <div className="flex items-center justify-end">
-                    Taxable Sales
-                    <SortIcon col="taxableSales" active={sortKey} dir={sortDir} />
-                  </div>
-                </TableHead>
+                {isColVisible("taxableSales") && (
+                  <TableHead
+                    className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
+                    onClick={() => handleSort("taxableSales")}
+                  >
+                    <div className="flex items-center justify-end">
+                      Taxable Sales
+                      <SortIcon col="taxableSales" active={sortKey} dir={sortDir} />
+                    </div>
+                  </TableHead>
+                )}
                 <TableHead
                   className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
                   onClick={() => handleSort("taxCollected")}
@@ -245,18 +274,22 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                     <SortIcon col="taxCollected" active={sortKey} dir={sortDir} />
                   </div>
                 </TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground text-right">
-                  Exempt Items
-                </TableHead>
-                <TableHead
-                  className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5"
-                  onClick={() => handleSort("effectiveRate")}
-                >
-                  <div className="flex items-center justify-end">
-                    Eff. Rate
-                    <SortIcon col="effectiveRate" active={sortKey} dir={sortDir} />
-                  </div>
-                </TableHead>
+                {isColVisible("taxExemptCount") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground text-right">
+                    Exempt Items
+                  </TableHead>
+                )}
+                {isColVisible("effectiveRate") && (
+                  <TableHead
+                    className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5"
+                    onClick={() => handleSort("effectiveRate")}
+                  >
+                    <div className="flex items-center justify-end">
+                      Eff. Rate
+                      <SortIcon col="effectiveRate" active={sortKey} dir={sortDir} />
+                    </div>
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -279,9 +312,11 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                         <span className="text-sm font-medium">{row.categoryName}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="py-3.5 text-right text-sm">
-                      ${row.taxableSales.toFixed(2)}
-                    </TableCell>
+                    {isColVisible("taxableSales") && (
+                      <TableCell className="py-3.5 text-right text-sm">
+                        ${row.taxableSales.toFixed(2)}
+                      </TableCell>
+                    )}
                     <TableCell className="py-3.5 text-right">
                       <div className="flex flex-col items-end gap-1">
                         <span className="text-sm font-semibold text-foreground">
@@ -295,14 +330,18 @@ export function TaxCategoryChart({ data, isLoading }: TaxCategoryChartProps) {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="py-3.5 text-right text-sm text-muted-foreground">
-                      {row.taxExemptCount > 0 ? row.taxExemptCount : "—"}
-                    </TableCell>
-                    <TableCell className="py-3.5 text-right pr-5">
-                      <span className="rounded-full bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                        {row.effectiveRate.toFixed(2)}%
-                      </span>
-                    </TableCell>
+                    {isColVisible("taxExemptCount") && (
+                      <TableCell className="py-3.5 text-right text-sm text-muted-foreground">
+                        {row.taxExemptCount > 0 ? row.taxExemptCount : "—"}
+                      </TableCell>
+                    )}
+                    {isColVisible("effectiveRate") && (
+                      <TableCell className="py-3.5 text-right pr-5">
+                        <span className="rounded-full bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                          {row.effectiveRate.toFixed(2)}%
+                        </span>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}

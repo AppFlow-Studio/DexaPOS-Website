@@ -13,9 +13,9 @@ interface InvoiceStatusBadgeProps {
  * Status is not colour-coded: the word carries the meaning. The old
  * soft-tint-plus-dot palette (D-11) put five hues in a single table column,
  * which made the amounts — the figures a merchant actually scans — the least
- * prominent thing on the row. `getInvoiceStatusStyle` is deliberately not
- * imported; it stays in `lib/constants/invoice-status.ts` only until its other
- * consumer (`subscription-status.ts`) is converted.
+ * prominent thing on the row. The colour triples still live in
+ * `lib/constants/invoice-status.ts` because `subscription-status.ts` imports
+ * them; retiring those is tracked in the design doc's §11 backlog.
  */
 export function InvoiceStatusBadge({ status }: InvoiceStatusBadgeProps) {
   return (

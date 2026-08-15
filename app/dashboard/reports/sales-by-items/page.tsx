@@ -313,17 +313,22 @@ export default function SalesByItemsPage() {
                 Clear filters
               </Button>
             )}
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
-              {isLoading
-                ? "Loading…"
-                : `${processed.length} item${processed.length !== 1 ? "s" : ""}`}
-            </span>
+            {/* Row 1: Columns + CSV. Row 2: item count + PDF.
+                `contents` dissolves the export group's own wrapper so CSV and
+                PDF become direct flex items and can wrap independently; the
+                count is then pulled between them with `order`. */}
             <MobileColumnsButton
               columns={TABLE_COLUMNS}
               hidden={hiddenCols}
               onChange={setHiddenCols}
             />
+            <span className="order-1 text-xs text-muted-foreground whitespace-nowrap">
+              {isLoading
+                ? "Loading…"
+                : `${processed.length} item${processed.length !== 1 ? "s" : ""}`}
+            </span>
             <ReportExportButtons
+              className="contents [&>button:last-child]:order-2"
               data={processed}
               columns={exportColumns}
               filenameBase="sales-by-items"
