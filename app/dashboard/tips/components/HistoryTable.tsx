@@ -289,7 +289,7 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
                       {/* Shift */}
                       <TableCell className="text-sm">
                         <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                          {SHIFT_LABELS[session.shift_period] || session.shift_period}
+                          {SHIFT_LABELS[session.shift_period] || session.shift_period || "—"}
                         </span>
                       </TableCell>
 
@@ -394,7 +394,7 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
                           )}
                         </p>
                         <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {SHIFT_LABELS[session.shift_period] || session.shift_period}
+                          {SHIFT_LABELS[session.shift_period] || session.shift_period || "—"}
                         </p>
                       </div>
                       <TipStatusBadge status={session.status} />

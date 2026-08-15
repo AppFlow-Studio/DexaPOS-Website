@@ -37,18 +37,17 @@ export function UnpaidOrdersCard({
   const hasUnpaid = unpaidAmount > 0;
 
   return (
-    <Panel
-      className={cn(
-        hasUnpaid && "bg-amber-50/50 dark:bg-amber-900/10"
-      )}
-    >
+    // No amber alarm tint on the panel (D-12): an outstanding balance is a
+    // normal state, and a whole panel changing colour made it the loudest
+    // thing on the tab. The count and the figure say it.
+    <Panel>
       <PanelSection
         label={
           <span className="flex items-center gap-2">
             Unpaid Orders
             {hasUnpaid && (
-              <span className="p-1 rounded-full bg-amber-500/20">
-                <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+              <span className="rounded-full bg-muted/60 p-1 text-muted-foreground">
+                <AlertCircle className="h-3.5 w-3.5" />
               </span>
             )}
           </span>
@@ -90,12 +89,7 @@ export function UnpaidOrdersCard({
               </TooltipProvider>
             </div>
             <div className="text-right">
-              <span
-                className={cn(
-                  "font-mono text-lg font-bold tabular-nums",
-                  hasUnpaid && "text-amber-600 dark:text-amber-400"
-                )}
-              >
+              <span className="font-mono text-lg font-bold tabular-nums">
                 {formatCurrency(unpaidAmount)}
               </span>
               {unpaidCount > 0 && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -79,9 +79,108 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
+const PAYMENT_DUE_LABELS: Record<string, string> = {
+  upon_receipt: "Upon Receipt",
+  net_15: "Net 15",
+  net_30: "Net 30",
+  net_60: "Net 60",
+};
+
+function formatDueLabel(invoice: Invoice) {
+  return (
+    PAYMENT_DUE_LABELS[invoice.payment_due_type] ??
+    (invoice.due_date ? formatDate(invoice.due_date) : "—")
+  );
+}
+
+/**
+ * The per-row action menu. Defined at module scope so the table and the mobile
+ * card grid share one definition — a component created inside the page body
+ * would be re-created on every render.
+ */
+function InvoiceRowMenu({
+  invoice,
+  router,
+  updateStatus,
+  onSend,
+  onDelete,
+}: {
+  invoice: Invoice;
+  router: ReturnType<typeof useRouter>;
+  updateStatus: ReturnType<typeof useUpdateInvoiceStatus>;
+  onSend: (invoice: Invoice) => void;
+  onDelete: (invoice: Invoice) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-full"
+          aria-label={`Actions for ${invoice.invoice_number}`}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="rounded-2xl">
+        <DropdownMenuItem
+          onClick={() => router.push(`/dashboard/invoices/${invoice.id}`)}
+        >
+          <Eye className="mr-2 h-4 w-4" />
+          View
+        </DropdownMenuItem>
+        {isSendable(invoice.status) && (
+          <DropdownMenuItem onClick={() => onSend(invoice)}>
+            <Send className="mr-2 h-4 w-4" />
+            {invoice.status === "draft" ? "Send" : "Resend"}
+          </DropdownMenuItem>
+        )}
+        {invoice.status !== "paid" && (
+          <DropdownMenuItem
+            onClick={() =>
+              updateStatus.mutate({ invoiceId: invoice.id, status: "paid" })
+            }
+          >
+            <CheckCheck className="mr-2 h-4 w-4" />
+            Mark as Paid
+          </DropdownMenuItem>
+        )}
+        {invoice.status !== "cancelled" && (
+          <DropdownMenuItem
+            onClick={() =>
+              updateStatus.mutate({ invoiceId: invoice.id, status: "cancelled" })
+            }
+          >
+            <Ban className="mr-2 h-4 w-4" />
+            Cancel
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-destructive"
+          onClick={() => onDelete(invoice)}
+        >
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export default function InvoicesPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<InvoiceStatus | "all">("all");
+
+  // Keep the active status pill visible in the rail on narrow screens (§13.2).
+  // `block: "nearest"` stops the browser scrolling the page vertically too.
+  const tabRailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    tabRailRef.current
+      ?.querySelector('[data-state="active"]')
+      ?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, [activeTab]);
+
   const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
   const [sendTarget, setSendTarget] = useState<Invoice | null>(null);
 
@@ -147,13 +246,17 @@ export default function InvoicesPage() {
         </div>
       </Panel>
 
-      {/* Table with tabs */}
-      <Panel padded>
+      {/* Tabs + table. Not wrapped in a Panel: the data table draws its own
+          tinted well, and nesting it in a panel gave two stacked boxes (§5). */}
+      <div className="min-w-0 space-y-4">
         <Tabs
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as InvoiceStatus | "all")}
         >
-          <div className="w-full min-w-0 overflow-x-auto pb-1">
+          <div
+            ref={tabRailRef}
+            className="thin-scrollbar w-full min-w-0 overflow-x-auto pb-1"
+          >
             <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
               {STATUS_TABS.map((tab) => (
                 <TabsTrigger
@@ -169,13 +272,15 @@ export default function InvoicesPage() {
 
           <div className="mt-4">
             {isLoading ? (
-              <div className="space-y-3 py-3">
-                {[...Array(5)].map((_, i) => (
-                  <Skeleton key={i} className="h-10 w-full" />
-                ))}
+              <div className="rounded-2xl bg-muted/20 p-3">
+                <div className="space-y-2">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full rounded-2xl" />
+                  ))}
+                </div>
               </div>
             ) : invoices.length === 0 ? (
-              <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+              <div className="flex flex-col items-center justify-center rounded-2xl bg-muted/20 px-4 py-16 text-center">
                 <FileText className="mb-4 h-12 w-12 text-muted-foreground/30" />
                 <h3 className="mb-1 text-lg font-semibold">No invoices yet</h3>
                 <p className="mb-4 text-sm text-muted-foreground">
@@ -189,129 +294,133 @@ export default function InvoicesPage() {
                 </Button>
               </div>
             ) : (
-              <div className="-mx-2 overflow-x-auto px-2">
-                <Table className="min-w-[600px]">
-                  <TableHeader>
-                    <TableRow className="border-b border-border/60 hover:bg-transparent">
-                      <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Invoice #</TableHead>
-                      <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Customer</TableHead>
-                      <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Date</TableHead>
-                      <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Due</TableHead>
-                      <TableHead className="h-auto py-2.5 text-right text-[0.8125rem] font-normal text-muted-foreground">Amount</TableHead>
-                      <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Status</TableHead>
-                      <TableHead className="h-auto w-10 py-2.5" />
+              <>
+                {/* Wide-screen table */}
+                <Table
+                  variant="data"
+                  containerClassName="hidden xl:block"
+                  className="min-w-[760px]"
+                >
+                  <TableHeader className="[&_tr]:border-0">
+                    <TableRow>
+                      <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Invoice #</TableHead>
+                      <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Customer</TableHead>
+                      <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Date</TableHead>
+                      <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Due</TableHead>
+                      <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Amount</TableHead>
+                      <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Status</TableHead>
+                      <TableHead className="w-10" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {invoices.map((invoice) => (
                       <TableRow
                         key={invoice.id}
-                        className="cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
+                        className="cursor-pointer border-0 bg-card/70 hover:bg-muted/40"
                         onClick={() => router.push(`/dashboard/invoices/${invoice.id}`)}
                       >
-                        <TableCell className="py-3 text-sm font-medium">
+                        <TableCell className="text-sm font-medium">
                           {invoice.invoice_number}
                         </TableCell>
-                        <TableCell className="py-3 text-sm">
+                        <TableCell className="text-sm">
                           {invoice.customer?.name ||
                             invoice.customer?.email ||
                             invoice.customer?.phone || (
-                              <span className="text-muted-foreground italic">
+                              <span className="italic text-muted-foreground">
                                 No customer
                               </span>
                             )}
                         </TableCell>
-                        <TableCell className="py-3 text-sm text-muted-foreground">
+                        <TableCell className="text-sm text-muted-foreground">
                           {formatDate(invoice.created_at)}
                         </TableCell>
-                        <TableCell className="py-3 text-sm text-muted-foreground">
-                          {invoice.payment_due_type === "upon_receipt"
-                            ? "Upon Receipt"
-                            : invoice.payment_due_type === "net_15"
-                            ? "Net 15"
-                            : invoice.payment_due_type === "net_30"
-                            ? "Net 30"
-                            : invoice.payment_due_type === "net_60"
-                            ? "Net 60"
-                            : invoice.due_date
-                            ? formatDate(invoice.due_date)
-                            : "—"}
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDueLabel(invoice)}
                         </TableCell>
-                        <TableCell className="py-3 text-right text-sm font-medium tabular-nums">
+                        <TableCell className="text-right text-sm font-medium tabular-nums">
                           {formatCurrency(invoice.total_amount)}
                         </TableCell>
-                        <TableCell className="py-3 text-sm">
+                        <TableCell className="text-sm">
                           <InvoiceStatusBadge status={invoice.status} />
                         </TableCell>
-                        <TableCell className="py-3 text-sm" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  router.push(`/dashboard/invoices/${invoice.id}`)
-                                }
-                              >
-                                <Eye className="mr-2 h-4 w-4" />
-                                View
-                              </DropdownMenuItem>
-                              {isSendable(invoice.status) && (
-                                <DropdownMenuItem
-                                  onClick={() => setSendTarget(invoice)}
-                                >
-                                  <Send className="mr-2 h-4 w-4" />
-                                  {invoice.status === "draft" ? "Send" : "Resend"}
-                                </DropdownMenuItem>
-                              )}
-                              {invoice.status !== "paid" && (
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    updateStatus.mutate({
-                                      invoiceId: invoice.id,
-                                      status: "paid",
-                                    })
-                                  }
-                                >
-                                  <CheckCheck className="mr-2 h-4 w-4" />
-                                  Mark as Paid
-                                </DropdownMenuItem>
-                              )}
-                              {invoice.status !== "cancelled" && (
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    updateStatus.mutate({
-                                      invoiceId: invoice.id,
-                                      status: "cancelled",
-                                    })
-                                  }
-                                >
-                                  <Ban className="mr-2 h-4 w-4" />
-                                  Cancel
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={() => setDeleteTarget(invoice)}
-                              >
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                        <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>
+                          <InvoiceRowMenu
+                            invoice={invoice}
+                            router={router}
+                            updateStatus={updateStatus}
+                            onSend={setSendTarget}
+                            onDelete={setDeleteTarget}
+                          />
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+
+                {/* Phones and tablets use cards instead of a horizontally
+                    scrolling table (§5.3). */}
+                <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+                  {invoices.map((invoice) => (
+                    <div
+                      key={invoice.id}
+                      className="min-w-0 rounded-2xl bg-muted/45 p-4 transition-colors hover:bg-muted"
+                    >
+                      <div className="flex min-w-0 items-start justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/dashboard/invoices/${invoice.id}`)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <span className="block truncate text-sm font-semibold">
+                            {invoice.invoice_number}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                            {invoice.customer?.name ||
+                              invoice.customer?.email ||
+                              invoice.customer?.phone ||
+                              "No customer"}
+                          </span>
+                        </button>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <InvoiceStatusBadge status={invoice.status} />
+                          <InvoiceRowMenu
+                            invoice={invoice}
+                            router={router}
+                            updateStatus={updateStatus}
+                            onSend={setSendTarget}
+                            onDelete={setDeleteTarget}
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/dashboard/invoices/${invoice.id}`)}
+                        className="mt-4 grid w-full min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-left text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs text-muted-foreground">Amount</p>
+                          <p className="mt-0.5 font-semibold tabular-nums">
+                            {formatCurrency(invoice.total_amount)}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs text-muted-foreground">Due</p>
+                          <p className="mt-0.5 truncate">{formatDueLabel(invoice)}</p>
+                        </div>
+                        <div className="col-span-2 min-w-0">
+                          <p className="text-xs text-muted-foreground">Created</p>
+                          <p className="mt-0.5">{formatDate(invoice.created_at)}</p>
+                        </div>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </Tabs>
-      </Panel>
+      </div>
 
       {/* Send dialog */}
       {sendTarget && (

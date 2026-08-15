@@ -42,19 +42,6 @@ function getPaymentIcon(method: string) {
   return <Wallet className="h-4 w-4" />;
 }
 
-function getPaymentColor(method: string): string {
-  const lowercaseMethod = method.toLowerCase();
-  if (lowercaseMethod.includes("cash"))
-    return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
-  if (lowercaseMethod.includes("amex")) return "bg-blue-500/10 text-blue-600 dark:text-blue-400";
-  if (lowercaseMethod.includes("discover"))
-    return "bg-orange-500/10 text-orange-600 dark:text-orange-400";
-  if (lowercaseMethod.includes("visa")) return "bg-blue-600/10 text-blue-700 dark:text-blue-400";
-  if (lowercaseMethod.includes("mastercard"))
-    return "bg-rose-500/10 text-rose-600 dark:text-rose-400";
-  return "bg-[#0C4FD1]/10 text-[#0C4FD1] dark:text-[#6CA0FF]";
-}
-
 function formatMethodName(method: string): string {
   return method.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
@@ -103,12 +90,12 @@ export function PaymentsSummaryCard({
           </div>
         ) : (
           <>
-            {/* Header row */}
-            <div className="flex items-center justify-between py-2 border-b border-border/60">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {/* Column labels — no rule beneath (§5.5); the gap does the work. */}
+            <div className="flex items-center justify-between pb-1">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Payment type
               </span>
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Amount
               </span>
             </div>
@@ -126,12 +113,10 @@ export function PaymentsSummaryCard({
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
                     <div className="flex items-center gap-3">
-                      <div
-                        className={cn(
-                          "p-2 rounded-full transition-colors",
-                          getPaymentColor(pm.method)
-                        )}
-                      >
+                      {/* One neutral chip for every tender (D-12): per-brand
+                          hues turned this list into a colour key nobody reads,
+                          and the icon already distinguishes cash from card. */}
+                      <div className="rounded-full bg-muted/60 p-2 text-muted-foreground">
                         {getPaymentIcon(pm.method)}
                       </div>
                       <div>
@@ -154,7 +139,7 @@ export function PaymentsSummaryCard({
 
             {/* Total row */}
             {paymentMethods.length > 0 && (
-              <div className="flex items-center justify-between py-3 mt-2 border-t border-border/60">
+              <div className="-mx-4 mt-2 flex items-center justify-between rounded-2xl bg-muted/60 px-4 py-3">
                 <span className="text-sm font-bold">Total</span>
                 <span className="font-mono text-base font-bold tabular-nums">
                   {formatCurrency(totalAmount)}

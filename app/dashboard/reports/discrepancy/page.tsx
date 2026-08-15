@@ -45,6 +45,23 @@ import { useSelectedLocation } from "@/stores/location-store";
 import { exportToCsv } from "@/utils/export";
 import { Download } from "lucide-react";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+/** Time, type and amount tell the story; the descriptive columns are optional. */
+const TABLE_COLUMNS: ReportColumn[] = [
+  { id: "timestamp", label: "Time", locked: true },
+  { id: "type", label: "Type" },
+  { id: "order_number", label: "Order #", defaultHidden: true },
+  { id: "description", label: "Description", defaultHidden: true },
+  { id: "reason", label: "Reason", defaultHidden: true },
+  { id: "staff", label: "Staff", defaultHidden: true },
+  { id: "amount", label: "Amount", locked: true },
+];
 
 // A "discrepancy" combines both void and refund events into one unified timeline
 type DiscrepancyType = "void" | "refund";
@@ -96,6 +113,14 @@ export default function DiscrepancyReportPage() {
   const [typeFilter, setTypeFilter] = useState<"all" | DiscrepancyType>("all");
   const [sortKey, setSortKey] = useState<SortKey>("timestamp");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [hiddenCols, setHiddenCols] = useState(() =>
+    initialHiddenColumns(TABLE_COLUMNS),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
+  const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
   const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
@@ -370,6 +395,11 @@ export default function DiscrepancyReportPage() {
             <span className="text-xs text-muted-foreground">
               {isLoading ? "Loading…" : `${processed.length} events`}
             </span>
+            <MobileColumnsButton
+              columns={TABLE_COLUMNS}
+              hidden={hiddenCols}
+              onChange={setHiddenCols}
+            />
             <Button
               variant="outline"
               size="sm"
@@ -392,12 +422,20 @@ export default function DiscrepancyReportPage() {
                 <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("type")}>
                   <div className="flex items-center">Type <SortIcon col="type" active={sortKey} dir={sortDir} /></div>
                 </TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Order #</TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Description</TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Reason</TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("staff")}>
-                  <div className="flex items-center">Staff <SortIcon col="staff" active={sortKey} dir={sortDir} /></div>
-                </TableHead>
+                {isColVisible("order_number") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Order #</TableHead>
+                )}
+                {isColVisible("description") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Description</TableHead>
+                )}
+                {isColVisible("reason") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Reason</TableHead>
+                )}
+                {isColVisible("staff") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("staff")}>
+                    <div className="flex items-center">Staff <SortIcon col="staff" active={sortKey} dir={sortDir} /></div>
+                  </TableHead>
+                )}
                 <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleSort("amount")}>
                   <div className="flex items-center justify-end">Amount <SortIcon col="amount" active={sortKey} dir={sortDir} /></div>
                 </TableHead>
@@ -407,14 +445,14 @@ export default function DiscrepancyReportPage() {
               {isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={i} className="border-0">
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: visibleColCount }).map((_, j) => (
                       <TableCell key={j} className="py-3.5"><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : isError ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-40 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <AlertTriangle className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">Failed to load discrepancy data</p>
@@ -424,7 +462,7 @@ export default function DiscrepancyReportPage() {
                 </TableRow>
               ) : processed.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-40 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <FileWarning className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">
@@ -454,18 +492,26 @@ export default function DiscrepancyReportPage() {
                           {cfg.label}
                         </span>
                       </TableCell>
-                      <TableCell className="py-3.5">
-                        <Link href={`/dashboard/orders/${row.order_id}`} className="font-mono text-xs text-primary hover:underline">
-                          #{row.order_number}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="py-3.5 text-sm font-medium max-w-40 truncate" title={row.description}>
-                        {row.description}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-sm text-muted-foreground max-w-40 truncate" title={row.reason}>
-                        {row.reason}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-sm">{row.staff}</TableCell>
+                      {isColVisible("order_number") && (
+                        <TableCell className="py-3.5">
+                          <Link href={`/dashboard/orders/${row.order_id}`} className="font-mono text-xs text-primary hover:underline">
+                            #{row.order_number}
+                          </Link>
+                        </TableCell>
+                      )}
+                      {isColVisible("description") && (
+                        <TableCell className="py-3.5 text-sm font-medium max-w-40 truncate" title={row.description}>
+                          {row.description}
+                        </TableCell>
+                      )}
+                      {isColVisible("reason") && (
+                        <TableCell className="py-3.5 text-sm text-muted-foreground max-w-40 truncate" title={row.reason}>
+                          {row.reason}
+                        </TableCell>
+                      )}
+                      {isColVisible("staff") && (
+                        <TableCell className="py-3.5 text-sm">{row.staff}</TableCell>
+                      )}
                       <TableCell className="py-3.5 text-right pr-5">
                         <span className="text-sm font-semibold text-foreground">
                           -${row.amount.toFixed(2)}

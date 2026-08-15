@@ -159,7 +159,7 @@ export default function ComparisonDashboardPage() {
             </div>
 
             {/* Right: Metric Selection */}
-            <div className="space-y-3">
+            <div className="min-w-0 space-y-3">
               <Label className="text-sm font-medium text-muted-foreground">
                 Comparison Metric
               </Label>

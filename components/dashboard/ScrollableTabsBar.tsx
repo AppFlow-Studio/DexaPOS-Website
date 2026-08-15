@@ -32,27 +32,46 @@ export function ScrollableTabsBar({
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    const container = scrollRef.current;
-    if (!container) return;
+    // Defer a frame: on the tick this effect fires, Radix (or a custom bar's
+    // own state) may not have moved the active marker to the newly selected
+    // trigger yet, so querying now would find the *previous* tab.
+    const frame = requestAnimationFrame(() => {
+      const container = scrollRef.current;
+      if (!container) return;
 
-    const active = container.querySelector<HTMLElement>(
-      '[data-state="active"], [data-active="true"], [aria-selected="true"]',
-    );
-    if (!active) return;
+      const active = container.querySelector<HTMLElement>(
+        '[data-state="active"], [data-active="true"], [aria-selected="true"]',
+      );
+      if (!active) return;
 
-    // Nothing to do when the bar isn't actually overflowing — calling
-    // scrollIntoView anyway can nudge the whole page on some browsers.
-    if (container.scrollWidth <= container.clientWidth) return;
+      // Nothing to do when the bar isn't actually overflowing — scrolling
+      // anyway can nudge the whole page on some browsers.
+      if (container.scrollWidth <= container.clientWidth) return;
 
-    // Center the tab in the visible strip so neighbours on both sides stay
-    // discoverable, instead of parking it hard against an edge.
-    const target =
-      active.offsetLeft - (container.clientWidth - active.offsetWidth) / 2;
+      // Measure via rects rather than `offsetLeft`: offsetLeft is relative to
+      // the nearest *positioned* ancestor, which is usually the intervening
+      // TabsList rather than this scroll box, so it yields the wrong offset.
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = active.getBoundingClientRect();
 
-    container.scrollTo({
-      left: Math.max(0, target),
-      behavior: "smooth",
+      // Current position of the tab within the scrolled content.
+      const activeStart =
+        activeRect.left - containerRect.left + container.scrollLeft;
+
+      // Center the tab in the visible strip so neighbours on both sides stay
+      // discoverable, instead of parking it hard against an edge.
+      const target =
+        activeStart - (container.clientWidth - activeRect.width) / 2;
+
+      const maxScroll = container.scrollWidth - container.clientWidth;
+
+      container.scrollTo({
+        left: Math.max(0, Math.min(target, maxScroll)),
+        behavior: "smooth",
+      });
     });
+
+    return () => cancelAnimationFrame(frame);
   }, [activeValue]);
 
   return (

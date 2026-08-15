@@ -36,20 +36,19 @@ function MetricRow({
   info,
   isTotal = false,
   isNegative = false,
-  isBlue = false,
 }: {
   label: string;
   value: number;
   info?: string;
   isTotal?: boolean;
   isNegative?: boolean;
-  isBlue?: boolean;
 }) {
   return (
     <div
       className={cn(
         "flex items-center justify-between py-3",
-        isTotal && "border-t-2 border-foreground/10 pt-4 mt-2"
+        // The total is set apart by an inset well, not a rule (§5.5).
+        isTotal && "-mx-4 mt-2 rounded-2xl bg-muted/60 px-4"
       )}
     >
       <div className="flex items-center gap-2">
@@ -74,15 +73,16 @@ function MetricRow({
           </TooltipProvider>
         )}
       </div>
+      {/* Figures are never tinted by sign or significance (D-12): weight and
+          the leading minus carry it, so the column reads as one scale. */}
       <span
         className={cn(
           "font-mono text-sm tabular-nums",
-          isTotal && "font-bold text-base",
-          isNegative && "text-rose-600 dark:text-rose-400",
-          isBlue && "text-[#0C4FD1] dark:text-[#6CA0FF]"
+          isTotal && "text-base font-bold"
         )}
       >
-        {formatCurrency(value)}
+        {isNegative && value !== 0 ? "−" : ""}
+        {formatCurrency(Math.abs(value))}
       </span>
     </div>
   );
@@ -126,7 +126,6 @@ export function RevenueSummaryCard({
             <MetricRow
               label="Paid in total"
               value={paidInTotal}
-              isBlue={paidInTotal > 0}
               info="Amount paid through pay-in"
             />
             <MetricRow label="Total amount" value={totalAmount} isTotal />

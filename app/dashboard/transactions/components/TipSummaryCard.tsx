@@ -44,7 +44,8 @@ function MetricRow({
     <div
       className={cn(
         "flex items-center justify-between py-3",
-        isTotal && "border-t border-border/60 pt-4 mt-2"
+        // Inset well instead of a rule (§5.5).
+        isTotal && "-mx-4 mt-2 rounded-2xl bg-muted/60 px-4"
       )}
     >
       <div className="flex items-center gap-2">
@@ -69,14 +70,15 @@ function MetricRow({
           </TooltipProvider>
         )}
       </div>
+      {/* No sign tinting (D-12). */}
       <span
         className={cn(
           "font-mono text-sm tabular-nums",
-          isTotal && "font-bold text-base",
-          isNegative && "text-rose-600 dark:text-rose-400"
+          isTotal && "text-base font-bold"
         )}
       >
-        {formatCurrency(value)}
+        {isNegative && value !== 0 ? "−" : ""}
+        {formatCurrency(Math.abs(value))}
       </span>
     </div>
   );

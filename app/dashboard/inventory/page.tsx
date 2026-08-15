@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -359,6 +359,34 @@ type SortDir = "asc" | "desc";
 
 export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState("catalog");
+
+  // The tab strip scrolls horizontally on narrow screens, so the selected tab
+  // can sit off-screen after switching (or on load from a persisted tab).
+  // Bring it into view whenever the selection changes.
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Radix moves data-state="active" during its own commit, so read it on the
+    // next frame — otherwise we'd centre the tab that was just deselected.
+    const frame = requestAnimationFrame(() => {
+      const container = tabsScrollRef.current;
+      if (!container) return;
+      const active = container.querySelector<HTMLElement>(
+        '[data-state="active"]',
+      );
+      if (!active) return;
+
+      // scrollIntoView on the element would also scroll the page vertically;
+      // adjust the container's own scrollLeft instead.
+      const target =
+        active.offsetLeft - (container.clientWidth - active.offsetWidth) / 2;
+      const maxScroll = container.scrollWidth - container.clientWidth;
+      container.scrollTo({
+        left: Math.max(0, Math.min(target, maxScroll)),
+        behavior: "smooth",
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeTab]);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -783,11 +811,16 @@ export default function InventoryPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="px-4 pt-5 sm:px-6">
             <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between min-w-0">
-              <div className="no-scrollbar w-full min-w-0 overflow-x-auto pb-1">
-              <TabsList className="h-auto w-max flex-nowrap justify-start rounded-full border-0 bg-muted/60 p-1">
+              <div
+                ref={tabsScrollRef}
+                className="no-scrollbar w-full min-w-0 overflow-x-auto pb-1"
+              >
+              {/* Mobile shows labels only: the leading icon and the count chip
+                  are hidden so eight tabs stay legible on a narrow strip. */}
+              <TabsList className="h-auto w-max flex-nowrap justify-start rounded-full border-0 bg-muted/60 p-1 max-sm:[&_[data-slot=badge]]:hidden max-sm:[&_svg]:hidden">
                 <TabsTrigger
                   value="catalog"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <Boxes className="h-4 w-4" />
                   Catalog
@@ -800,7 +833,7 @@ export default function InventoryPage() {
                 </TabsTrigger>
                 <TabsTrigger
                   value="vendors"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <Truck className="h-4 w-4" />
                   Vendors
@@ -813,7 +846,7 @@ export default function InventoryPage() {
                 </TabsTrigger>
                 <TabsTrigger
                   value="purchase-orders"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <ShoppingCart className="h-4 w-4" />
                   Purchase Orders
@@ -826,35 +859,35 @@ export default function InventoryPage() {
                 </TabsTrigger>
                 <TabsTrigger
                   value="waste"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <Trash2 className="h-4 w-4" />
                   Waste
                 </TabsTrigger>
                 <TabsTrigger
                   value="counts"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <ClipboardList className="h-4 w-4" />
                   Counts
                 </TabsTrigger>
                 <TabsTrigger
                   value="transfers"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <ArrowRightLeft className="h-4 w-4" />
                   Transfers
                 </TabsTrigger>
                 <TabsTrigger
                   value="dashboard"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <LayoutDashboard className="h-4 w-4" />
                   Dashboard
                 </TabsTrigger>
                 <TabsTrigger
                   value="reports"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <TrendingUp className="h-4 w-4" />
                   Reports
@@ -1571,21 +1604,8 @@ export default function InventoryPage() {
                           <span className="block truncate font-mono text-sm font-medium">
                             {po.po_number}
                           </span>
-                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                            {new Date(po.created_at).toLocaleDateString()}
-                          </span>
                         </button>
                         <POStatusBadge status={po.status} />
-                        <PurchaseOrderActions
-                          purchaseOrder={po}
-                          onStatusChange={(status, receivedQuantities) =>
-                            updatePOStatus.mutate({
-                              poId: po.id,
-                              status,
-                              receivedQuantities,
-                            })
-                          }
-                        />
                       </div>
 
                       <button
@@ -1597,20 +1617,12 @@ export default function InventoryPage() {
                         }}
                       >
                         <dl className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-4">
-                          <div className="min-w-0">
+                          <div className="col-span-2 min-w-0">
                             <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                               Vendor
                             </dt>
                             <dd className="mt-1 truncate text-sm font-medium">
                               {po.vendor?.name || "Unknown Vendor"}
-                            </dd>
-                          </div>
-                          <div className="min-w-0">
-                            <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                              Total
-                            </dt>
-                            <dd className="mt-1 truncate text-sm font-medium tabular-nums">
-                              ${po.total_amount.toFixed(2)}
                             </dd>
                           </div>
                           <div className="min-w-0">
@@ -1621,8 +1633,16 @@ export default function InventoryPage() {
                               {po.items?.length || 0}
                             </dd>
                           </div>
+                          <div className="min-w-0 text-right">
+                            <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                              Total
+                            </dt>
+                            <dd className="mt-1 truncate text-sm font-medium tabular-nums">
+                              ${po.total_amount.toFixed(2)}
+                            </dd>
+                          </div>
                           {isAllLocations && !isSingleLocation && (
-                            <div className="min-w-0">
+                            <div className="col-span-2 min-w-0">
                               <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                                 Location
                               </dt>
@@ -1633,6 +1653,19 @@ export default function InventoryPage() {
                           )}
                         </dl>
                       </button>
+
+                      <div className="mt-4 flex justify-center">
+                        <PurchaseOrderActions
+                          purchaseOrder={po}
+                          onStatusChange={(status, receivedQuantities) =>
+                            updatePOStatus.mutate({
+                              poId: po.id,
+                              status,
+                              receivedQuantities,
+                            })
+                          }
+                        />
+                      </div>
                     </article>
                   ))}
                 </div>

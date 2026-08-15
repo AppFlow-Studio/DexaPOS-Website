@@ -72,14 +72,14 @@ function MetricRow({
           </TooltipProvider>
         )}
       </div>
+      {/* No sign tinting (D-12) — the minus carries it. */}
       <span
         className={cn(
           "font-mono text-sm tabular-nums",
-          isHighlighted && "font-bold",
-          isNegative && "text-rose-600 dark:text-rose-400"
+          isHighlighted && "font-bold"
         )}
       >
-        {isNegative && value !== 0 ? "-" : ""}
+        {isNegative && value !== 0 ? "−" : ""}
         {formatCurrency(Math.abs(value))}
       </span>
     </div>
@@ -135,9 +135,11 @@ export function NetSalesSummaryCard({
           </>
         )}
 
-        {/* Instant Deposit Banner */}
+        {/* Instant Deposit Banner — an inset well, not an outlined box:
+            borderless tinted fill, the same material as every other inset
+            on the page (§3.1). */}
         {!isLoading && instantDepositAvailable > 0 && (
-          <div className="mt-4 p-3 rounded-2xl bg-gradient-to-r from-[#0C4FD1]/10 to-[#0C4FD1]/5 border border-[#0C4FD1]/20 relative group">
+          <div className="group relative mt-4 rounded-2xl border-0 bg-[#0C4FD1]/10 p-3 shadow-none dark:bg-[#6CA0FF]/10">
             {/* Close: filled, borderless, circular — the search-field
                 material. Visible at rest rather than fading in on hover, so
                 the dismiss affordance is discoverable without hunting. */}

@@ -44,6 +44,30 @@ import { cn } from "@/lib/utils";
 import { useSelectedLocation } from "@/stores/location-store";
 import type { VoidItem, RefundItem } from "@/app/dashboard/actions/order-analytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+/** The two logs are independent tables, so each carries its own column set. */
+const VOID_COLUMNS: ReportColumn[] = [
+  { id: "voided_at", label: "Time", locked: true },
+  { id: "item_name", label: "Item" },
+  { id: "order_number", label: "Order #", defaultHidden: true },
+  { id: "reason", label: "Reason", defaultHidden: true },
+  { id: "voided_by", label: "Staff", defaultHidden: true },
+  { id: "amount", label: "Amount", locked: true },
+];
+
+const REFUND_COLUMNS: ReportColumn[] = [
+  { id: "refunded_at", label: "Time", locked: true },
+  { id: "order_number", label: "Order #" },
+  { id: "reason", label: "Reason", defaultHidden: true },
+  { id: "refunded_by", label: "Processed By", defaultHidden: true },
+  { id: "amount", label: "Amount", locked: true },
+];
 
 type VoidSort = "voided_at" | "amount" | "item_name" | "voided_by";
 type RefundSort = "refunded_at" | "amount" | "refunded_by";
@@ -67,6 +91,24 @@ export default function VoidsReportPage() {
   const [voidDir, setVoidDir] = useState<SortDir>("desc");
   const [refundSort, setRefundSort] = useState<RefundSort>("refunded_at");
   const [refundDir, setRefundDir] = useState<SortDir>("desc");
+  const [hiddenVoidCols, setHiddenVoidCols] = useState(() =>
+    initialHiddenColumns(VOID_COLUMNS),
+  );
+  const [hiddenRefundCols, setHiddenRefundCols] = useState(() =>
+    initialHiddenColumns(REFUND_COLUMNS),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isVoidColVisible = (id: string) => !isMobile || !hiddenVoidCols.has(id);
+  const isRefundColVisible = (id: string) =>
+    !isMobile || !hiddenRefundCols.has(id);
+  const voidVisibleColCount = VOID_COLUMNS.filter((c) =>
+    isVoidColVisible(c.id),
+  ).length;
+  const refundVisibleColCount = REFUND_COLUMNS.filter((c) =>
+    isRefundColVisible(c.id),
+  ).length;
 
   const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
@@ -215,6 +257,11 @@ export default function VoidsReportPage() {
               {isLoading ? "Loading…" : `${filteredVoids.length} item${filteredVoids.length !== 1 ? "s" : ""}`}
             </p>
           </div>
+          <MobileColumnsButton
+            columns={VOID_COLUMNS}
+            hidden={hiddenVoidCols}
+            onChange={setHiddenVoidCols}
+          />
         </div>
         <CardContent className="p-0">
           <Table variant="data">
@@ -226,11 +273,17 @@ export default function VoidsReportPage() {
                 <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleVoidSort("item_name")}>
                   <div className="flex items-center">Item <SortIcon col="item_name" active={voidSort} dir={voidDir} /></div>
                 </TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Order #</TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Reason</TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleVoidSort("voided_by")}>
-                  <div className="flex items-center">Staff <SortIcon col="voided_by" active={voidSort} dir={voidDir} /></div>
-                </TableHead>
+                {isVoidColVisible("order_number") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Order #</TableHead>
+                )}
+                {isVoidColVisible("reason") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Reason</TableHead>
+                )}
+                {isVoidColVisible("voided_by") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleVoidSort("voided_by")}>
+                    <div className="flex items-center">Staff <SortIcon col="voided_by" active={voidSort} dir={voidDir} /></div>
+                  </TableHead>
+                )}
                 <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleVoidSort("amount")}>
                   <div className="flex items-center justify-end">Amount <SortIcon col="amount" active={voidSort} dir={voidDir} /></div>
                 </TableHead>
@@ -240,14 +293,14 @@ export default function VoidsReportPage() {
               {isLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={i} className="border-0">
-                    {Array.from({ length: 6 }).map((_, j) => (
+                    {Array.from({ length: voidVisibleColCount }).map((_, j) => (
                       <TableCell key={j} className="py-3.5"><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : isError ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center">
+                  <TableCell colSpan={voidVisibleColCount} className="h-32 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <AlertTriangle className="h-7 w-7 opacity-30" />
                       <p className="text-sm font-medium">Failed to load voids data</p>
@@ -257,7 +310,7 @@ export default function VoidsReportPage() {
                 </TableRow>
               ) : filteredVoids.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center">
+                  <TableCell colSpan={voidVisibleColCount} className="h-32 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <AlertTriangle className="h-7 w-7 opacity-30" />
                       <p className="text-sm font-medium">
@@ -280,22 +333,28 @@ export default function VoidsReportPage() {
                         <span className="text-sm font-medium">{item.item_name}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="py-3.5">
-                      <Link href={`/dashboard/orders/${item.order_id}`} className="font-mono text-xs text-primary hover:underline">
-                        #{item.order_number}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="py-3.5 max-w-48 truncate text-sm text-muted-foreground" title={item.reason}>
-                      {item.reason || "—"}
-                    </TableCell>
-                    <TableCell className="py-3.5">
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-                          <User className="h-3 w-3 text-muted-foreground" />
+                    {isVoidColVisible("order_number") && (
+                      <TableCell className="py-3.5">
+                        <Link href={`/dashboard/orders/${item.order_id}`} className="font-mono text-xs text-primary hover:underline">
+                          #{item.order_number}
+                        </Link>
+                      </TableCell>
+                    )}
+                    {isVoidColVisible("reason") && (
+                      <TableCell className="py-3.5 max-w-48 truncate text-sm text-muted-foreground" title={item.reason}>
+                        {item.reason || "—"}
+                      </TableCell>
+                    )}
+                    {isVoidColVisible("voided_by") && (
+                      <TableCell className="py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
+                            <User className="h-3 w-3 text-muted-foreground" />
+                          </div>
+                          <span className="text-sm">{item.voided_by || "Unknown"}</span>
                         </div>
-                        <span className="text-sm">{item.voided_by || "Unknown"}</span>
-                      </div>
-                    </TableCell>
+                      </TableCell>
+                    )}
                     <TableCell className="py-3.5 text-right pr-5">
                       <span className="text-sm font-semibold text-foreground">-${item.amount.toFixed(2)}</span>
                     </TableCell>
@@ -319,6 +378,11 @@ export default function VoidsReportPage() {
               {isLoading ? "Loading…" : `${filteredRefunds.length} refund${filteredRefunds.length !== 1 ? "s" : ""}`}
             </p>
           </div>
+          <MobileColumnsButton
+            columns={REFUND_COLUMNS}
+            hidden={hiddenRefundCols}
+            onChange={setHiddenRefundCols}
+          />
         </div>
         <CardContent className="p-0">
           <Table variant="data">
@@ -327,11 +391,17 @@ export default function VoidsReportPage() {
                 <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleRefundSort("refunded_at")}>
                   <div className="flex items-center">Time <SortIcon col="refunded_at" active={refundSort} dir={refundDir} /></div>
                 </TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Order #</TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Reason</TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleRefundSort("refunded_by")}>
-                  <div className="flex items-center">Processed By <SortIcon col="refunded_by" active={refundSort} dir={refundDir} /></div>
-                </TableHead>
+                {isRefundColVisible("order_number") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Order #</TableHead>
+                )}
+                {isRefundColVisible("reason") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Reason</TableHead>
+                )}
+                {isRefundColVisible("refunded_by") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleRefundSort("refunded_by")}>
+                    <div className="flex items-center">Processed By <SortIcon col="refunded_by" active={refundSort} dir={refundDir} /></div>
+                  </TableHead>
+                )}
                 <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleRefundSort("amount")}>
                   <div className="flex items-center justify-end">Amount <SortIcon col="amount" active={refundSort} dir={refundDir} /></div>
                 </TableHead>
@@ -341,14 +411,14 @@ export default function VoidsReportPage() {
               {isLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i} className="border-0">
-                    {Array.from({ length: 5 }).map((_, j) => (
+                    {Array.from({ length: refundVisibleColCount }).map((_, j) => (
                       <TableCell key={j} className="py-3.5"><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : isError ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center">
+                  <TableCell colSpan={refundVisibleColCount} className="h-32 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <RefreshCcw className="h-7 w-7 opacity-30" />
                       <p className="text-sm font-medium">Failed to load refunds data</p>
@@ -358,7 +428,7 @@ export default function VoidsReportPage() {
                 </TableRow>
               ) : filteredRefunds.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center">
+                  <TableCell colSpan={refundVisibleColCount} className="h-32 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <RefreshCcw className="h-7 w-7 opacity-30" />
                       <p className="text-sm font-medium">
@@ -373,22 +443,28 @@ export default function VoidsReportPage() {
                     <TableCell className="pl-5 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
                       {format(new Date(item.refunded_at), "MMM d, h:mm a")}
                     </TableCell>
-                    <TableCell className="py-3.5">
-                      <Link href={`/dashboard/orders/${item.order_id}`} className="font-mono text-xs text-primary hover:underline">
-                        #{item.order_number}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="py-3.5 max-w-48 truncate text-sm text-muted-foreground" title={item.reason}>
-                      {item.reason || "—"}
-                    </TableCell>
-                    <TableCell className="py-3.5">
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-                          <User className="h-3 w-3 text-muted-foreground" />
+                    {isRefundColVisible("order_number") && (
+                      <TableCell className="py-3.5">
+                        <Link href={`/dashboard/orders/${item.order_id}`} className="font-mono text-xs text-primary hover:underline">
+                          #{item.order_number}
+                        </Link>
+                      </TableCell>
+                    )}
+                    {isRefundColVisible("reason") && (
+                      <TableCell className="py-3.5 max-w-48 truncate text-sm text-muted-foreground" title={item.reason}>
+                        {item.reason || "—"}
+                      </TableCell>
+                    )}
+                    {isRefundColVisible("refunded_by") && (
+                      <TableCell className="py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
+                            <User className="h-3 w-3 text-muted-foreground" />
+                          </div>
+                          <span className="text-sm">{item.refunded_by || "Unknown"}</span>
                         </div>
-                        <span className="text-sm">{item.refunded_by || "Unknown"}</span>
-                      </div>
-                    </TableCell>
+                      </TableCell>
+                    )}
                     <TableCell className="py-3.5 text-right pr-5">
                       <span className="text-sm font-semibold text-foreground">-${item.amount.toFixed(2)}</span>
                     </TableCell>

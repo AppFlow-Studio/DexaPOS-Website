@@ -39,6 +39,21 @@ import { cn } from "@/lib/utils";
 import { useSelectedLocation } from "@/stores/location-store";
 import type { KitchenStationStats } from "@/types/analytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+/** Station name and auto-bumped anchor the row; the middle figures are optional. */
+const TABLE_COLUMNS: ReportColumn[] = [
+  { id: "display_name", label: "Station", locked: true },
+  { id: "total_items", label: "Items Processed" },
+  { id: "avg_prep_minutes", label: "Avg Prep Time" },
+  { id: "manual_completed", label: "Manual Done", defaultHidden: true },
+  { id: "auto_bumped", label: "Auto-Bumped", locked: true },
+];
 
 type StationSort = keyof Pick<KitchenStationStats, "display_name" | "total_items" | "avg_prep_minutes" | "auto_bumped">;
 type SortDir = "asc" | "desc";
@@ -65,6 +80,14 @@ export default function KitchenPerformancePage() {
   const [preset, setPreset] = useState<DatePreset>("last_30_days");
   const [stationSort, setStationSort] = useState<StationSort>("total_items");
   const [stationDir, setStationDir] = useState<SortDir>("desc");
+  const [hiddenCols, setHiddenCols] = useState(() =>
+    initialHiddenColumns(TABLE_COLUMNS),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
+  const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
   const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
@@ -278,6 +301,11 @@ export default function KitchenPerformancePage() {
               {isLoading ? "Loading…" : `${sortedStations.length} station${sortedStations.length !== 1 ? "s" : ""}`}
             </p>
           </div>
+          <MobileColumnsButton
+            columns={TABLE_COLUMNS}
+            hidden={hiddenCols}
+            onChange={setHiddenCols}
+          />
         </div>
         <CardContent className="p-0">
           <Table variant="data">
@@ -286,13 +314,19 @@ export default function KitchenPerformancePage() {
                 <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleStationSort("display_name")}>
                   <div className="flex items-center">Station <SortIcon col="display_name" active={stationSort} dir={stationDir} /></div>
                 </TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleStationSort("total_items")}>
-                  <div className="flex items-center justify-end">Items Processed <SortIcon col="total_items" active={stationSort} dir={stationDir} /></div>
-                </TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleStationSort("avg_prep_minutes")}>
-                  <div className="flex items-center justify-end">Avg Prep Time <SortIcon col="avg_prep_minutes" active={stationSort} dir={stationDir} /></div>
-                </TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground text-right">Manual Done</TableHead>
+                {isColVisible("total_items") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleStationSort("total_items")}>
+                    <div className="flex items-center justify-end">Items Processed <SortIcon col="total_items" active={stationSort} dir={stationDir} /></div>
+                  </TableHead>
+                )}
+                {isColVisible("avg_prep_minutes") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleStationSort("avg_prep_minutes")}>
+                    <div className="flex items-center justify-end">Avg Prep Time <SortIcon col="avg_prep_minutes" active={stationSort} dir={stationDir} /></div>
+                  </TableHead>
+                )}
+                {isColVisible("manual_completed") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground text-right">Manual Done</TableHead>
+                )}
                 <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleStationSort("auto_bumped")}>
                   <div className="flex items-center justify-end">Auto-Bumped <SortIcon col="auto_bumped" active={stationSort} dir={stationDir} /></div>
                 </TableHead>
@@ -302,14 +336,14 @@ export default function KitchenPerformancePage() {
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i} className="border-0">
-                    {Array.from({ length: 5 }).map((_, j) => (
+                    {Array.from({ length: visibleColCount }).map((_, j) => (
                       <TableCell key={j} className="py-3.5"><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : isError ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-40 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <ChefHat className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">Failed to load station data</p>
@@ -319,7 +353,7 @@ export default function KitchenPerformancePage() {
                 </TableRow>
               ) : sortedStations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-40 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <ChefHat className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">No station data available</p>
@@ -344,30 +378,36 @@ export default function KitchenPerformancePage() {
                           <span className="text-sm font-medium">{station.display_name}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="py-3.5 text-right">
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="text-sm font-semibold">{station.total_items.toLocaleString()}</span>
-                          <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full rounded-full bg-foreground/35" style={{ width: `${itemsPct}%` }} />
+                      {isColVisible("total_items") && (
+                        <TableCell className="py-3.5 text-right">
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-sm font-semibold">{station.total_items.toLocaleString()}</span>
+                            <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full rounded-full bg-foreground/35" style={{ width: `${itemsPct}%` }} />
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-3.5 text-right">
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="text-sm font-semibold text-foreground">
-                            {station.avg_prep_minutes.toFixed(1)} min
-                          </span>
-                          <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-foreground/35"
-                              style={{ width: `${prepPct}%` }}
-                            />
+                        </TableCell>
+                      )}
+                      {isColVisible("avg_prep_minutes") && (
+                        <TableCell className="py-3.5 text-right">
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-sm font-semibold text-foreground">
+                              {station.avg_prep_minutes.toFixed(1)} min
+                            </span>
+                            <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-foreground/35"
+                                style={{ width: `${prepPct}%` }}
+                              />
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-3.5 text-right text-sm">
-                        {station.manual_completed.toLocaleString()}
-                      </TableCell>
+                        </TableCell>
+                      )}
+                      {isColVisible("manual_completed") && (
+                        <TableCell className="py-3.5 text-right text-sm">
+                          {station.manual_completed.toLocaleString()}
+                        </TableCell>
+                      )}
                       <TableCell className="py-3.5 text-right pr-5">
                         <div className="flex flex-col items-end gap-1">
                           <span className="text-sm font-medium">{station.auto_bumped.toLocaleString()}</span>

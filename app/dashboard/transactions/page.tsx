@@ -61,6 +61,17 @@ export default function TransactionsPage() {
   const isAllLocations = useIsAllLocations();
   const queryDateRange = useReportingQueryRange(dateRange);
 
+  // Keep the active tab pill visible in the rail on narrow screens (§13.2):
+  // `inline: "center"` also reveals the tabs either side, which is what tells
+  // the user the rail scrolls at all. `block: "nearest"` stops the browser
+  // scrolling the page vertically to the rail as a side effect.
+  const tabRailRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    tabRailRef.current
+      ?.querySelector('[data-state="active"]')
+      ?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, [activeTab]);
+
   // 1. Fetch data for Left Column (Summary) based on Picker Date
   const { data: kpis, isLoading: isLoadingKPIs } = useFinancialKPIs(
     queryDateRange.from,
@@ -248,7 +259,7 @@ export default function TransactionsPage() {
         onValueChange={(v) => setActiveTab(v as TabType)}
         className="w-full"
       >
-        <div className="w-full min-w-0 overflow-x-auto pb-1">
+        <div ref={tabRailRef} className="thin-scrollbar w-full min-w-0 overflow-x-auto pb-1">
           <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
             <TabsTrigger
               value="overview"
@@ -277,7 +288,7 @@ export default function TransactionsPage() {
 
       {/* Tab Content */}
       {activeTab === "overview" && (
-        <div className="grid gap-4 md:grid-cols-2 animate-in fade-in-50 duration-300">
+        <div className="grid min-w-0 gap-4 md:grid-cols-2">
           <div className="space-y-4">
             <RevenueSummaryCard
               netSales={summary.net_sales}
@@ -327,7 +338,7 @@ export default function TransactionsPage() {
       )}
 
       {activeTab === "transactions" && (
-        <div className="space-y-4 animate-in fade-in-50 duration-300">
+        <div className="min-w-0 space-y-4">
           <TransactionsList
             transactions={orders || []}
             isLoading={isLoadingOrders}
@@ -342,7 +353,7 @@ export default function TransactionsPage() {
       )}
 
       {activeTab === "payments" && (
-        <div className="grid gap-4 md:grid-cols-2 animate-in fade-in-50 duration-300">
+        <div className="grid min-w-0 gap-4 md:grid-cols-2">
           <div className="space-y-4">
             <CashSummaryCard
               expectedCloseoutCash={0}

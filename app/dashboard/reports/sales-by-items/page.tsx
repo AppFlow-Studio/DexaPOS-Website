@@ -241,8 +241,8 @@ export default function SalesByItemsPage() {
       {/* ── Table Card ── */}
       <Card className="overflow-hidden">
         {/* Filters toolbar */}
-        <div className="flex flex-col justify-between gap-3 px-5 pb-4 pt-5 sm:flex-row sm:items-center">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-col justify-between gap-3 px-5 pb-4 pt-5 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -295,7 +295,10 @@ export default function SalesByItemsPage() {
             </Select>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Wraps rather than overflowing: the count is `whitespace-nowrap`
+              and the export buttons can't shrink, so on a phone this row is
+              wider than the card without somewhere to break. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             {hasFilters && (
               <Button
                 variant="ghost"

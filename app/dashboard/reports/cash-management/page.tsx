@@ -39,6 +39,22 @@ import { useSelectedLocation } from "@/stores/location-store";
 import { exportToCsv } from "@/utils/export";
 import { format as dateFnsFormat } from "date-fns";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+/** Time and the collected total identify the row; the rest are optional on mobile. */
+const TABLE_COLUMNS: ReportColumn[] = [
+  { id: "created_at", label: "Time", locked: true },
+  { id: "order_number", label: "Order #" },
+  { id: "staff_name", label: "Staff", defaultHidden: true },
+  { id: "sale_amount", label: "Sale Amount", defaultHidden: true },
+  { id: "tip_amount", label: "Tip", defaultHidden: true },
+  { id: "total_amount", label: "Total Collected", locked: true },
+];
 
 type SortKey = "created_at" | "total_amount" | "tip_amount" | "staff_name";
 type SortDir = "asc" | "desc";
@@ -68,6 +84,14 @@ export default function CashManagementPage() {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [hiddenCols, setHiddenCols] = useState(() =>
+    initialHiddenColumns(TABLE_COLUMNS),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
+  const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
   const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
@@ -167,9 +191,9 @@ export default function CashManagementPage() {
       {/* Transactions Table */}
       <Card className="overflow-hidden">
         {/* Toolbar */}
-        <div className="flex flex-col justify-between gap-3 px-5 pb-4 pt-5 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2">
-            <div className="relative">
+        <div className="flex min-w-0 flex-col justify-between gap-3 px-5 pb-4 pt-5 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="relative min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search staff or order #..."
@@ -184,10 +208,16 @@ export default function CashManagementPage() {
               </Button>
             )}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Wraps instead of overflowing the card on a phone. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground">
               {isLoading ? "Loading…" : `${processed.length} transaction${processed.length !== 1 ? "s" : ""}`}
             </span>
+            <MobileColumnsButton
+              columns={TABLE_COLUMNS}
+              hidden={hiddenCols}
+              onChange={setHiddenCols}
+            />
             <Button
               variant="outline"
               size="sm"
@@ -208,14 +238,22 @@ export default function CashManagementPage() {
                 <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("created_at")}>
                   <div className="flex items-center">Time <SortIcon col="created_at" active={sortKey} dir={sortDir} /></div>
                 </TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Order #</TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("staff_name")}>
-                  <div className="flex items-center">Staff <SortIcon col="staff_name" active={sortKey} dir={sortDir} /></div>
-                </TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground text-right">Sale Amount</TableHead>
-                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleSort("tip_amount")}>
-                  <div className="flex items-center justify-end">Tip <SortIcon col="tip_amount" active={sortKey} dir={sortDir} /></div>
-                </TableHead>
+                {isColVisible("order_number") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Order #</TableHead>
+                )}
+                {isColVisible("staff_name") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("staff_name")}>
+                    <div className="flex items-center">Staff <SortIcon col="staff_name" active={sortKey} dir={sortDir} /></div>
+                  </TableHead>
+                )}
+                {isColVisible("sale_amount") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground text-right">Sale Amount</TableHead>
+                )}
+                {isColVisible("tip_amount") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleSort("tip_amount")}>
+                    <div className="flex items-center justify-end">Tip <SortIcon col="tip_amount" active={sortKey} dir={sortDir} /></div>
+                  </TableHead>
+                )}
                 <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleSort("total_amount")}>
                   <div className="flex items-center justify-end">Total Collected <SortIcon col="total_amount" active={sortKey} dir={sortDir} /></div>
                 </TableHead>
@@ -225,14 +263,14 @@ export default function CashManagementPage() {
               {isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={i} className="border-0">
-                    {Array.from({ length: 6 }).map((_, j) => (
+                    {Array.from({ length: visibleColCount }).map((_, j) => (
                       <TableCell key={j} className="py-3.5"><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : isError ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-40 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Banknote className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">Failed to load cash transactions</p>
@@ -242,7 +280,7 @@ export default function CashManagementPage() {
                 </TableRow>
               ) : processed.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-40 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Banknote className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">
@@ -259,31 +297,39 @@ export default function CashManagementPage() {
                       <TableCell className="pl-5 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
                         {format(new Date(item.created_at), "MMM d, h:mm a")}
                       </TableCell>
-                      <TableCell className="py-3.5">
-                        <Link href={`/dashboard/orders/${item.order_id}`} className="font-mono text-xs text-primary hover:underline">
-                          #{item.order_number}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="py-3.5">
-                        <div className="flex items-center gap-1.5">
-                          <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
-                            <User className="h-3 w-3 text-muted-foreground" />
+                      {isColVisible("order_number") && (
+                        <TableCell className="py-3.5">
+                          <Link href={`/dashboard/orders/${item.order_id}`} className="font-mono text-xs text-primary hover:underline">
+                            #{item.order_number}
+                          </Link>
+                        </TableCell>
+                      )}
+                      {isColVisible("staff_name") && (
+                        <TableCell className="py-3.5">
+                          <div className="flex items-center gap-1.5">
+                            <div className="h-6 w-6 rounded-full bg-muted flex items-center justify-center">
+                              <User className="h-3 w-3 text-muted-foreground" />
+                            </div>
+                            <span className="text-sm">{item.staff_name || "Unknown"}</span>
                           </div>
-                          <span className="text-sm">{item.staff_name || "Unknown"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-3.5 text-right text-sm text-muted-foreground">
-                        ${(item.total_amount - item.tip_amount).toFixed(2)}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-right">
-                        {item.tip_amount > 0 ? (
-                          <span className="text-xs font-medium text-muted-foreground">
-                            +${item.tip_amount.toFixed(2)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
-                      </TableCell>
+                        </TableCell>
+                      )}
+                      {isColVisible("sale_amount") && (
+                        <TableCell className="py-3.5 text-right text-sm text-muted-foreground">
+                          ${(item.total_amount - item.tip_amount).toFixed(2)}
+                        </TableCell>
+                      )}
+                      {isColVisible("tip_amount") && (
+                        <TableCell className="py-3.5 text-right">
+                          {item.tip_amount > 0 ? (
+                            <span className="text-xs font-medium text-muted-foreground">
+                              +${item.tip_amount.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell className="py-3.5 pr-5 text-right">
                         <div className="flex flex-col items-end gap-1">
                           <span className="text-sm font-semibold text-foreground">

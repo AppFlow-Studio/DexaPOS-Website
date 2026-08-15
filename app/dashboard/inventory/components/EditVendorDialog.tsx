@@ -112,11 +112,11 @@ export function EditVendorDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex max-h-[90dvh] flex-col overflow-hidden sm:max-w-[500px] sm:rounded-3xl"
+        className="flex h-dvh max-h-dvh w-full max-w-none flex-col overflow-hidden max-sm:overflow-hidden rounded-none p-0 max-sm:top-auto max-sm:translate-y-0 sm:h-auto sm:max-h-[90dvh] sm:w-[calc(100%-1rem)] sm:max-w-[500px] sm:rounded-3xl sm:p-6"
         elevation="above-sheet"
       >
-        <DialogHeader>
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <DialogHeader className="shrink-0 px-5 pb-4 pt-5 pr-14 sm:px-0 sm:pt-0 sm:pr-10">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
               <Truck className="h-4 w-4 text-muted-foreground" />
             </div>
@@ -127,7 +127,7 @@ export function EditVendorDialog({
             {isSingleLocation ? null : isGlobal ? (
               <Badge
                 variant="outline"
-                className="shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground"
+                className="hidden shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground sm:inline-flex"
               >
                 <Globe className="h-3 w-3" />
                 Global
@@ -135,7 +135,7 @@ export function EditVendorDialog({
             ) : (
               <Badge
                 variant="outline"
-                className="shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground"
+                className="hidden shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground sm:inline-flex"
               >
                 <MapPin className="h-3 w-3" />
                 Local
@@ -151,7 +151,7 @@ export function EditVendorDialog({
           {/* See AddVendorDialog: the negative margin puts the scrollbar on the
               dialog edge, and the matching padding keeps focus rings from being
               clipped by the overflow box. */}
-          <div className="-mx-6 min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pt-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pt-4 sm:-mx-6 sm:px-6">
           {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name">Vendor Name *</Label>
@@ -267,7 +267,7 @@ export function EditVendorDialog({
           </div>
           </div>
 
-          <DialogFooter className="shrink-0 pt-4">
+          <DialogFooter className="shrink-0 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-0 sm:pb-0">
             <Button
               type="button"
               variant="outline"

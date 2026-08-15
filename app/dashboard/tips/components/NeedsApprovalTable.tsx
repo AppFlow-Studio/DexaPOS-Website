@@ -99,7 +99,7 @@ export function NeedsApprovalTable({
                 </TableCell>
                 <TableCell className="text-sm">
                   <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                    {SHIFT_LABELS[session.shift_period] || session.shift_period}
+                    {SHIFT_LABELS[session.shift_period] || session.shift_period || "—"}
                   </span>
                 </TableCell>
                 <TableCell className="text-right text-sm tabular-nums">
@@ -166,7 +166,7 @@ export function NeedsApprovalTable({
                   </p>
                 </div>
                 <span className="inline-flex shrink-0 items-center rounded-full bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                  {SHIFT_LABELS[session.shift_period] || session.shift_period}
+                  {SHIFT_LABELS[session.shift_period] || session.shift_period || "—"}
                 </span>
               </div>
 

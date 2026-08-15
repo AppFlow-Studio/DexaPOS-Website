@@ -27,33 +27,25 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
+/**
+ * Rank chip. One neutral shell for every position (D-12) — the gold/bronze
+ * medal palette was decorative colour doing no work the number wasn't already
+ * doing. Rank 1 keeps the award glyph and a slightly stronger fill, so the top
+ * seller is still distinguishable without a second hue.
+ */
 function getRankBadge(rank: number) {
-  switch (rank) {
-    case 1:
-      return (
-        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400">
-          <Award className="h-3.5 w-3.5" />
-        </div>
-      );
-    case 2:
-      return (
-        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-muted-foreground text-xs font-bold">
-          2
-        </div>
-      );
-    case 3:
-      return (
-        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-700/20 text-amber-700 dark:text-amber-500 text-xs font-bold">
-          3
-        </div>
-      );
-    default:
-      return (
-        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-muted text-muted-foreground text-xs font-medium">
-          {rank}
-        </div>
-      );
+  if (rank === 1) {
+    return (
+      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-foreground">
+        <Award className="h-3.5 w-3.5" />
+      </div>
+    );
   }
+  return (
+    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted/60 text-xs font-medium tabular-nums text-muted-foreground">
+      {rank}
+    </div>
+  );
 }
 
 export function BestSellersCard({
@@ -110,16 +102,16 @@ export function BestSellersCard({
           </div>
         ) : (
           <>
-            {/* Header row */}
-            <div className="flex items-center justify-between py-2 border-b border-border/60 mb-2">
-              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+            {/* Column labels — no rule beneath (§5.5). */}
+            <div className="mb-2 flex items-center justify-between pb-1">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                 Item
               </span>
               <div className="flex gap-6">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide w-12 text-right">
+                <span className="w-12 text-right text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                   Qty
                 </span>
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide w-16 text-right">
+                <span className="w-16 text-right text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                   Revenue
                 </span>
               </div>
@@ -131,9 +123,10 @@ export function BestSellersCard({
                 <div
                   key={item.item_name}
                   className={cn(
-                    "flex items-center justify-between py-2.5 px-2 -mx-2 rounded-2xl transition-colors",
-                    index === 0 && "bg-amber-500/5",
-                    "hover:bg-muted/50"
+                    "-mx-2 flex items-center justify-between rounded-2xl px-2 py-2.5 transition-colors",
+                    // Top seller sits in a neutral well, not an amber wash (D-12).
+                    index === 0 && "bg-muted/40",
+                    "hover:bg-muted/60"
                   )}
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -151,10 +144,12 @@ export function BestSellersCard({
                     <span className="text-sm text-muted-foreground w-12 text-right tabular-nums">
                       {item.quantity}
                     </span>
+                    {/* Brand blue is reserved for section headings (D-03) —
+                        weight alone marks the top figure. */}
                     <span
                       className={cn(
-                        "text-sm font-mono w-16 text-right tabular-nums",
-                        index === 0 && "font-bold text-[#0C4FD1] dark:text-[#6CA0FF]"
+                        "w-16 text-right font-mono text-sm tabular-nums",
+                        index === 0 && "font-bold"
                       )}
                     >
                       {formatCurrency(item.revenue)}
@@ -165,7 +160,7 @@ export function BestSellersCard({
             </div>
 
             {/* Total row */}
-            <div className="flex items-center justify-between py-3 mt-2 border-t border-border/60">
+            <div className="-mx-4 mt-2 flex items-center justify-between rounded-2xl bg-muted/60 px-4 py-3">
               <span className="text-sm font-bold">
                 Total ({topItems.length} items)
               </span>

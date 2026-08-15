@@ -134,7 +134,7 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
               content; the matching padding puts the fields back where they
               were and leaves room for focus rings, which `overflow-y-auto`
               would otherwise clip against the left edge. */}
-          <div className="-mx-6 min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pt-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pt-4 sm:-mx-6 sm:px-6">
           {/* Info banner explaining scope — hidden for single-location accounts. */}
           {!isSingleLocation && (
             <div className="rounded-2xl border-0 bg-muted/60 p-3 text-sm text-muted-foreground">
@@ -268,7 +268,7 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
           </div>
           </div>
 
-          <DialogFooter className="shrink-0 pt-4">
+          <DialogFooter className="shrink-0 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-0 sm:pb-0">
             <Button
               type="button"
               variant="outline"

@@ -47,7 +47,6 @@ function MetricRow({
   varianceValue?: number;
 }) {
   const isPositiveVariance = varianceValue > 0;
-  const isNegativeVariance = varianceValue < 0;
 
   return (
     <div className="flex items-center justify-between py-2">
@@ -70,16 +69,14 @@ function MetricRow({
         <span className="font-mono text-sm tabular-nums">
           {formatCurrency(value)}
         </span>
+        {/* Over/short is stated in words and sign, not colour (D-12) — the
+            merchant needs to know which it is, and green/red alone doesn't
+            survive a colour-blind reader or a greyscale print. */}
         {showVariance && varianceValue !== 0 && (
-          <span
-            className={cn(
-              "ml-2 text-xs font-medium",
-              isPositiveVariance && "text-emerald-600 dark:text-emerald-400",
-              isNegativeVariance && "text-rose-600 dark:text-rose-400"
-            )}
-          >
-            {isPositiveVariance ? "+" : ""}
-            {formatCurrency(varianceValue)}
+          <span className="ml-2 text-xs font-medium text-muted-foreground">
+            {isPositiveVariance ? "+" : "−"}
+            {formatCurrency(Math.abs(varianceValue))}{" "}
+            {isPositiveVariance ? "over" : "short"}
           </span>
         )}
       </div>
@@ -149,16 +146,12 @@ export function CashSummaryCard({
               varianceValue={cashOverageShortage}
             />
 
-            {/* Progress indicator */}
+            {/* Progress indicator — one brand-blue fill regardless of variance
+                (D-12); the over/short figure above already states direction. */}
             <div className="py-3">
               <Progress
                 value={completionPercentage}
-                className={cn(
-                  "h-1.5",
-                  cashOverageShortage > 0 && "[&>div]:bg-emerald-500",
-                  cashOverageShortage < 0 && "[&>div]:bg-rose-500",
-                  cashOverageShortage === 0 && "[&>div]:bg-[#0C4FD1] dark:[&>div]:bg-[#6CA0FF]"
-                )}
+                className="h-1.5 [&>div]:bg-[#0C4FD1] dark:[&>div]:bg-[#6CA0FF]"
               />
             </div>
 

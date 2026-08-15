@@ -235,15 +235,15 @@ export function FinancialHeroChart({
   // Loading state
   if (isLoading) {
     return (
-      <div className="h-full p-6 flex flex-col justify-between">
-        <div className="flex items-start justify-between mb-4">
+      <div className="flex h-full flex-col justify-between p-6">
+        <div className="mb-4 flex items-start justify-between">
           <div className="space-y-3">
-            <Skeleton className="h-10 w-48 rounded-lg" />
-            <Skeleton className="h-5 w-32 rounded" />
+            <Skeleton className="h-10 w-48 rounded-2xl" />
+            <Skeleton className="h-5 w-32 rounded-full" />
           </div>
-          <Skeleton className="h-9 w-36 rounded-lg" />
+          <Skeleton className="h-9 w-36 rounded-full" />
         </div>
-        <Skeleton className="flex-1 w-full rounded-xl" />
+        <Skeleton className="w-full flex-1 rounded-2xl" />
         <div className="flex justify-center gap-2 mt-4">
           {timeRanges.map((_, i) => (
             <Skeleton key={i} className="h-8 w-12 rounded-full" />
@@ -283,16 +283,11 @@ export function FinancialHeroChart({
               {formatValue(totalValue, config.format)}
             </h2>
 
-            {/* Trend Indicator */}
+            {/* Trend Indicator — one neutral pill (D-12). Direction is carried
+                by the arrow glyph and the signed figure, which survive
+                greyscale and colour-blindness; the green/red pair did not. */}
             <div className="flex items-center gap-2">
-              <div
-                className={cn(
-                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
-                  isPositiveTrend && "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400",
-                  isNegativeTrend && "bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400",
-                  isNeutralTrend && "bg-muted text-muted-foreground"
-                )}
-              >
+              <div className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                 {isPositiveTrend && (
                   <TrendingUp className="h-3 w-3" />
                 )}
@@ -316,7 +311,8 @@ export function FinancialHeroChart({
             value={activeMetric}
             onValueChange={(v) => setActiveMetric(v as MetricType)}
           >
-            <SelectTrigger className="w-full sm:w-[150px] h-9 bg-muted/50 border-border/60 rounded-full text-sm font-medium">
+            {/* Borderless filled control (§4.2) — no outlined fields. */}
+            <SelectTrigger className="h-9 w-full min-w-0 rounded-full border-0 bg-muted/60 px-3 text-sm font-medium shadow-none sm:w-[150px]">
               <SelectValue placeholder="Select metric" />
             </SelectTrigger>
             <SelectContent className="rounded-2xl">
@@ -402,7 +398,7 @@ export function FinancialHeroChart({
                 }}
                 content={
                   <ChartTooltipContent
-                    className="shadow-md rounded-lg min-w-[180px]"
+                    className="min-w-[180px] rounded-2xl shadow-md"
                     labelFormatter={(value) =>
                       format(parseISO(value), "MMM d, yyyy")
                     }
@@ -443,23 +439,26 @@ export function FinancialHeroChart({
           </ChartContainer>
         </div>
 
-        {/* Time Range Selector */}
-        <div className="flex justify-center mt-3 shrink-0">
-          <div className="flex bg-muted/50 p-1 rounded-lg gap-0.5">
-            {timeRanges.map((range) => (
-              <button
-                key={range.value}
-                onClick={() => handleTimeRangeChange(range.value)}
-                className={cn(
-                  "px-4 py-1.5 rounded-md text-xs font-medium transition-colors",
-                  activeTimeRange === range.value
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {range.label}
-              </button>
-            ))}
+        {/* Time Range Selector — the segmented pill rail (DS-CTL-05); the
+            rounded-lg/rounded-md pair was off the closed radius scale (§3.1). */}
+        <div className="mt-3 flex shrink-0 justify-center">
+          <div className="w-full min-w-0 overflow-x-auto pb-1 sm:w-auto">
+            <div className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+              {timeRanges.map((range) => (
+                <button
+                  key={range.value}
+                  onClick={() => handleTimeRangeChange(range.value)}
+                  className={cn(
+                    "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium transition-colors",
+                    activeTimeRange === range.value
+                      ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {range.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
     </div>

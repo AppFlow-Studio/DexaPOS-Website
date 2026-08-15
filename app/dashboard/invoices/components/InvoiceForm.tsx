@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { format } from "date-fns";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,8 +32,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CustomerSearch } from "./CustomerSearch";
 import { ItemSearch } from "./ItemSearch";
@@ -347,19 +345,9 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
         <div className="space-y-5">
 
           {/* ── Invoice Details ──────────────────────────────────── */}
-          <Card className="shadow-none">
-            <CardHeader className="pb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  <FileText className="h-4 w-4 text-primary" />
-                </div>
-                <CardTitle className="text-base font-semibold">
-                  Invoice Details
-                </CardTitle>
-              </div>
-            </CardHeader>
-
-            <CardContent className="space-y-5">
+          <Panel>
+            <PanelSection icon={FileText} label="Invoice Details">
+              <div className="space-y-5">
               {/* Customer */}
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between">
@@ -372,7 +360,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
                   <button
                     type="button"
                     onClick={() => setShowAddCustomer(true)}
-                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                    className="flex items-center gap-1 text-xs text-[#0C4FD1] transition-colors hover:opacity-80 dark:text-[#6CA0FF]"
                   >
                     <UserPlus className="h-3.5 w-3.5" />
                     New customer
@@ -385,30 +373,31 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
                   onAddNew={() => setShowAddCustomer(true)}
                 />
 
-                {/* Selected customer card */}
+                {/* Selected customer — a borderless inset well (§3.1). */}
                 {selectedCustomer && (
-                  <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/40 border">
-                    <div className="h-8 w-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                  <div className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/60 px-3 py-2.5 shadow-none">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-foreground">
                       {customerInitial}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate leading-tight">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium leading-tight">
                         {selectedCustomer.name ||
                           selectedCustomer.email ||
                           selectedCustomer.phone}
                       </p>
                       {(selectedCustomer.email || selectedCustomer.phone) && (
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
                           {[selectedCustomer.email, selectedCustomer.phone]
                             .filter(Boolean)
                             .join(" · ")}
                         </p>
                       )}
                     </div>
+                    {/* Close control: filled, borderless, circular (DS-CTL-08). */}
                     <button
                       type="button"
                       onClick={() => setSelectedCustomer(null)}
-                      className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                      className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border-0 bg-muted text-muted-foreground shadow-none transition-colors hover:bg-muted-foreground/20 hover:text-foreground"
                       aria-label="Remove customer"
                     >
                       <X className="h-4 w-4" />
@@ -417,8 +406,6 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
                 )}
               </div>
 
-              <Separator />
-
               {/* Payment due */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Payment due</Label>
@@ -426,10 +413,11 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
                   value={paymentDueType}
                   onValueChange={(v) => setPaymentDueType(v as PaymentDueType)}
                 >
-                  <SelectTrigger>
+                  {/* Borderless filled control (§4.2). */}
+                  <SelectTrigger className="h-9 w-full min-w-0 rounded-full border-0 bg-muted/60 px-3 shadow-none">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="rounded-2xl">
                     <SelectItem value="upon_receipt">Upon Receipt</SelectItem>
                     <SelectItem value="net_15">Net 15</SelectItem>
                     <SelectItem value="net_30">Net 30</SelectItem>
@@ -442,9 +430,9 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         className={cn(
-                          "w-full justify-start text-left font-normal",
+                          "h-9 w-full justify-start rounded-full border-0 bg-muted/60 px-3 text-left font-normal shadow-none hover:bg-muted",
                           !dueDate && "text-muted-foreground"
                         )}
                       >
@@ -452,7 +440,10 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
                         {dueDate ? format(dueDate, "PPP") : "Pick a due date"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto min-w-[280px] p-0" align="start">
+                    <PopoverContent
+                      className="w-auto min-w-[280px] rounded-2xl p-0"
+                      align="start"
+                    >
                       <Calendar
                         mode="single"
                         selected={dueDate}
@@ -464,31 +455,26 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
                   </Popover>
                 )}
               </div>
-            </CardContent>
-          </Card>
+              </div>
+            </PanelSection>
+          </Panel>
 
           {/* ── Sale Details ─────────────────────────────────────── */}
-          <Card className="shadow-none">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                    <ShoppingCart className="h-4 w-4 text-primary" />
-                  </div>
-                  <CardTitle className="text-base font-semibold">
-                    Sale Details
-                  </CardTitle>
-                </div>
-
-                {/* Mode toggle */}
-                <div className="inline-flex rounded-lg border bg-muted p-0.5 text-sm shrink-0">
+          <Panel>
+            <PanelSection
+              icon={ShoppingCart}
+              label="Sale Details"
+              action={
+                /* Segmented pill rail (DS-CTL-05) — was an outlined
+                   rounded-lg/rounded-md pair, off the radius scale (§3.1). */
+                <div className="inline-flex h-auto w-max shrink-0 flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1 text-sm">
                   <button
                     type="button"
                     onClick={() => setMode("itemized")}
                     className={cn(
-                      "px-3 py-1.5 rounded-md font-medium transition-all",
+                      "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium transition-colors",
                       mode === "itemized"
-                        ? "bg-background text-foreground shadow-sm"
+                        ? "bg-background text-foreground shadow-sm ring-1 ring-border"
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
@@ -498,19 +484,18 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
                     type="button"
                     onClick={() => setMode("quick")}
                     className={cn(
-                      "px-3 py-1.5 rounded-md font-medium transition-all",
+                      "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium transition-colors",
                       mode === "quick"
-                        ? "bg-background text-foreground shadow-sm"
+                        ? "bg-background text-foreground shadow-sm ring-1 ring-border"
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
                     Quick charge
                   </button>
                 </div>
-              </div>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
+              }
+            >
+              <div className="space-y-4">
               {mode === "itemized" ? (
                 <>
                   {/* Item search + Add custom */}
@@ -520,30 +505,33 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
                     </div>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="ghost"
                       onClick={() => setShowAddCustomItem(true)}
-                      className="shrink-0"
+                      className="h-9 shrink-0 rounded-full border-0 bg-muted/60 px-4 text-[0.8125rem] font-medium shadow-none hover:bg-muted"
                     >
-                      <Plus className="h-4 w-4 mr-1.5" />
+                      <Plus className="mr-1.5 h-4 w-4" />
                       Custom item
                     </Button>
                   </div>
 
                   {/* Line items list or empty state */}
                   {lineItems.length === 0 ? (
-                    <div className="rounded-xl border-2 border-dashed border-muted-foreground/20 py-12 text-center">
-                      <Package className="h-9 w-9 text-muted-foreground/30 mx-auto mb-3" />
+                    // A filled well, not a dashed outline — the dashed border
+                    // was a second box competing with the panel edge (§3.1).
+                    <div className="rounded-2xl bg-muted/20 py-12 text-center">
+                      <Package className="mx-auto mb-3 h-9 w-9 text-muted-foreground/30" />
                       <p className="text-sm font-medium text-muted-foreground">
                         No items added yet
                       </p>
-                      <p className="text-xs text-muted-foreground/60 mt-1">
+                      <p className="mt-1 text-xs text-muted-foreground/60">
                         Search above or add a custom item
                       </p>
                     </div>
                   ) : (
-                    <div className="rounded-lg border overflow-hidden">
-                      {/* Table header */}
-                      <div className="grid grid-cols-[1fr_80px_100px_90px_36px] gap-2 bg-muted/50 px-3 py-2.5 text-xs font-semibold text-muted-foreground border-b uppercase tracking-wide">
+                    <div className="overflow-hidden rounded-2xl bg-muted/20">
+                      {/* Column labels — no rule beneath (§5.5). Hidden below
+                          `sm`, where each row stacks into a card. */}
+                      <div className="hidden grid-cols-[1fr_80px_100px_90px_36px] gap-2 bg-muted/50 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
                         <span>Item</span>
                         <span className="text-center">Qty</span>
                         <span className="text-right">Price</span>
@@ -551,7 +539,7 @@ export function InvoiceForm({ existing }: InvoiceFormProps) {
                         <span />
                       </div>
                       {/* Rows */}
-                      <div className="px-3">
+                      <div className="space-y-1 p-2 sm:px-3">
                         {lineItems.map((item) => (
                           <LineItemRow
                             key={item.id}
