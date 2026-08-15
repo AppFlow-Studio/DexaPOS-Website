@@ -7,7 +7,7 @@ import {
   type MenuItemSource,
   type ResolverSources,
 } from "../bindings/resolve";
-import { flattenMenuItems } from "../bindings/supabase-sources";
+import { createSupabaseResolverSources, flattenMenuItems } from "../bindings/supabase-sources";
 import { lookupLocation, lookupMenuItem, type ResolvedLocation } from "../bindings/resolved";
 import { addSection, updateSectionProps } from "../mutations";
 import { createStarterPage, type PageDocument } from "../page-document";
@@ -456,6 +456,61 @@ describe("query cost", () => {
     // A menu outage must not blank the address and opening hours too.
     expect(lookupLocation(map, LOCATION_ID).status).toBe("ok");
     expect(lookupMenuItem(map, "a").status).toBe("unavailable");
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Instance sharing.
+  //
+  // The builder page seeds its starter document from the menu and then renders
+  // it, which is two consumers of the same data in one request. These two tests
+  // pin down where the memo lives: on the *instance*. That is the whole reason
+  // `request-scope.ts` hands out a `cache()`d singleton rather than letting each
+  // caller construct its own — a plain factory silently doubles a 320 KB fetch,
+  // and the page renders identically either way, so nothing else would notice.
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** A Supabase stand-in that counts RPC calls. */
+  function countingClient() {
+    let rpcCalls = 0;
+    const client = {
+      rpc: async () => {
+        rpcCalls += 1;
+        return { data: [], error: null };
+      },
+      from: () => ({
+        select: () => ({ in: async () => ({ data: [], error: null }) }),
+      }),
+    };
+    // The real signature wants a SupabaseClient; the sources only ever touch
+    // `.rpc` and `.from`, and `flattenMenuItems` is tested directly elsewhere.
+    return { client: client as never, calls: () => rpcCalls };
+  }
+
+  it("shares one menu fetch between the seed helper and the renderer", async () => {
+    const { client, calls } = countingClient();
+    const sources = createSupabaseResolverSources(client, {});
+
+    // 1. what `loadSampleMenuItemIds` does when seeding a starter page
+    await sources.fetchMenuItems(COST_CTX);
+    // 2. what the renderer does immediately afterwards
+    await resolveBindings(collectBindings(pageWithItems(["a"])), COST_CTX, sources);
+
+    expect(calls()).toBe(1);
+  });
+
+  it("does NOT share across two instances — why the singleton is cached", async () => {
+    const { client, calls } = countingClient();
+
+    const perCallerSources = createSupabaseResolverSources(client, {});
+    const anotherInstance = createSupabaseResolverSources(client, {});
+
+    await perCallerSources.fetchMenuItems(COST_CTX);
+    await anotherInstance.fetchMenuItems(COST_CTX);
+
+    // This is the regression that `getResolverSources` exists to prevent: the
+    // builder page and `renderCanvas` each built their own instance and paid
+    // for the menu twice on every page open.
+    expect(calls()).toBe(2);
   });
 });
 

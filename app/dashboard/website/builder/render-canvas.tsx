@@ -5,10 +5,9 @@ import { auth } from "@clerk/nextjs/server";
 import PageRenderer, { SiteChrome } from "@/components/site-builder/PageRenderer";
 import { collectBindings } from "@/lib/site-builder/bindings/collect";
 import { resolveBindings } from "@/lib/site-builder/bindings/resolve";
-import { createSupabaseResolverSources } from "@/lib/site-builder/bindings/supabase-sources";
 import { normalizePage } from "@/lib/site-builder/normalize";
+import { getResolverSources } from "@/lib/site-builder/request-scope";
 import { buildRenderContext, loadSiteContext } from "@/lib/site-builder/site-context";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
  * Re-renders the canvas for the builder.
@@ -33,16 +32,16 @@ export async function renderCanvas(doc: unknown, locationId: string) {
   const { orgId } = await auth();
   if (!orgId) return null;
 
-  const supabase = createServerSupabaseClient();
-  const site = await loadSiteContext(supabase, orgId, locationId);
+  // When the builder page awaits this action in process, these two are already
+  // memoised for the request and cost nothing. When the browser invokes it after
+  // an edit, it is a fresh request and they are paid for properly.
+  const site = await loadSiteContext(orgId, locationId);
   if (!site) return null;
 
   // Never trust the posted document.
   const page = normalizePage(doc);
 
-  const sources = createSupabaseResolverSources(supabase, {
-    deliveryPricingEnabled: site.deliveryPricingEnabled,
-  });
+  const sources = getResolverSources(site.deliveryPricingEnabled);
 
   const { map: resolved } = await resolveBindings(
     collectBindings(page, { includeHidden: true }),

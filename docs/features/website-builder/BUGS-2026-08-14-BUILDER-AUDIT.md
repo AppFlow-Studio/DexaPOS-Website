@@ -16,10 +16,11 @@ work this audit extends, §7 covers what is still unverified.
 
 | # | Title | Severity | Ships as a user-visible bug when… |
 |---|---|---|---|
-| [P1](#p1) | Every builder open loads its site context twice | **High** | Now |
-| [P2](#p2) | Every builder open fetches the 354 KB menu twice | **High** | Now |
+| [P1](#p1) | Every builder open loads its site context twice | ~~High~~ | ✅ **Fixed 2026-08-15** — `request-scope.ts` |
+| [P2](#p2) | Every builder open fetches the 354 KB menu twice | ~~High~~ | ✅ **Fixed 2026-08-15** — `request-scope.ts` |
 | [P3](#p3) | Every canvas re-render repeats P1 + P2 | **High** | Now — on every edit |
 | [P4](#p4) | Cold dev compile dominates first open | Info | Dev only, never in prod |
+| [P5](#p5) | StrictMode defeats the first-render guard, doubling every builder open | Info | Dev only, never in prod |
 | [C1](#c1) | Autosave silently discards edits made during an in-flight save | **High** | The moment `SaveDraft` replaces the no-op |
 | [C2](#c2) | Autosave can fire twice for one change | Medium | Same |
 | [C3](#c3) | `replaceDoc` marks the freshly-loaded server doc dirty | Medium | Same |
@@ -68,6 +69,21 @@ to fix in the builder; the honest answer to "why did it take 20 seconds" the *fi
 
 The steady-state number is the p50 of **816 ms**, and that one is ours.
 
+### <a id="p5"></a>P5 — StrictMode doubles every builder open in dev (Info, dev-only)
+
+`useServerRender` skips its first run with a `first.current` ref, because the page already rendered the initial
+canvas and passed it down. React StrictMode — on by default in dev, `reactStrictMode` is not set in
+`next.config.ts` — invokes effects twice. The first invocation flips `first.current` to `false`; the second
+sees `false`, schedules the timer, and calls `renderCanvas` for a document nobody has edited.
+
+**Measured** by counting real round trips in `.next/dev/logs/next-development.log`: an isolated request (no
+hydration) issues **1** of each query; a real navigation that hydrates and sits idle for 8 s issues **2** of
+each. That second set is this.
+
+Harmless in production, where effects run once. Worth knowing because it means a dev-mode builder open costs
+*double* the measured query budget — a large part of why the route feels slower while developing than the
+numbers suggest.
+
 ### <a id="p1"></a>P1 — Every builder open loads its site context twice (High)
 
 [`app/dashboard/website/builder/page.tsx:38`](../../../app/dashboard/website/builder/page.tsx#L38) calls
@@ -99,14 +115,28 @@ second, whose memo starts empty. So `get_menus_for_location` runs twice — meas
 Handoff §6b flags this as "~500 ms once per builder open." That is accurate for the menu RPC in isolation but
 understates the total, because it omits P1.
 
-**Full per-open server cost as it stands:**
+**Full per-open server cost:**
 
-| Query | Times issued | Approx. cost each |
-|---|---|---|
-| `merchants` | 2 | — |
-| `online_store_config` | 2 | 913 ms |
-| `get_menus_for_location` | 2 | 493 ms / 354 KB |
-| `locations` | 1 | 405 ms |
+| Query | Was | Now | Approx. cost each |
+|---|---|---|---|
+| `merchants` | 2 | **1** | ~190 ms |
+| `online_store_config` | 2 | **1** | ~250 ms |
+| `get_menus_for_location` | 2 | **1** | ~480 ms / 320 KB |
+| `locations` | 1 | 1 | ~190 ms |
+
+### ✅ Fixed 2026-08-15
+
+[`lib/site-builder/request-scope.ts`](../../../lib/site-builder/request-scope.ts) introduces request-scoped
+singletons via React `cache()`: one Supabase client, and one resolver-sources instance per request.
+`loadSiteContext` no longer takes a client — its two queries are memoised individually, keyed on primitives, so
+the builder page's `?location=`-derived call and `renderCanvas`'s resolved-uuid call share one fetch despite
+disagreeing about their arguments.
+
+**Verified empirically, not assumed.** React's `cache()` is a *passthrough* outside a React request scope — a
+vitest assertion on it would be a false guard — so the proof is a round-trip count taken from
+`.next/dev/logs/next-development.log` with temporary probes: one isolated builder request went from 2/2/2 to
+**1/1/1**. Two tests in `resolver.test.ts` guard the property that makes it work (the menu memo lives on the
+*instance*), including one that deliberately asserts two instances do **not** share.
 
 ### <a id="p3"></a>P3 — Every canvas re-render repeats all of it (High)
 

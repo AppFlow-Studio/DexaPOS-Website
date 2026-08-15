@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { cache } from "react";
 
 import type { ResolverContext, ResolverSources } from "./bindings/resolve";
 import {
@@ -7,6 +7,7 @@ import {
   type RenderContext,
   type RenderMode,
 } from "./render-context";
+import { getRequestSupabase } from "./request-scope";
 
 /**
  * Loads the site-level facts a render needs, and turns them into a
@@ -46,38 +47,68 @@ export interface SiteContext {
   };
 }
 
-export async function loadSiteContext(
-  supabase: SupabaseClient,
-  clerkOrgId: string,
-  locationId?: string,
-): Promise<SiteContext | null> {
-  const { data: merchant, error: merchantError } = await supabase
+type StoreConfigRow = Record<string, string | boolean | null>;
+
+/**
+ * The two round trips behind a site context, memoised **per request** and keyed
+ * only on primitives.
+ *
+ * Splitting them out is what makes the deduplication actually land. The builder
+ * page resolves its context from `?location=` (often `undefined`) and then hands
+ * the *resolved* uuid to `renderCanvas`, so the two `loadSiteContext` calls in
+ * one request genuinely disagree about their arguments — memoising the composed
+ * function would miss every time. Memoising the queries instead means both calls
+ * do the same JS `.find()` over one shared fetch, and neither issues a second
+ * round trip.
+ *
+ * A Supabase client is deliberately not a parameter: it is a fresh object per
+ * construction, and `cache()` keys on argument identity, so taking one would
+ * defeat the memo. See `request-scope.ts`.
+ */
+const fetchMerchantId = cache(async (clerkOrgId: string): Promise<string | null> => {
+  const { data, error } = await getRequestSupabase()
     .from("merchants")
     .select("id")
     .eq("clerk_org_id", clerkOrgId)
     .single();
 
-  if (!merchant?.id) {
+  if (!data?.id) {
     // "No merchant for this org" and "merchant has no storefront" are different
     // problems with different fixes, so they are logged and reported separately
     // rather than collapsed into one unhelpful message.
-    console.warn(
-      `[site-builder] no merchant for clerk org ${clerkOrgId}`,
-      merchantError?.message ?? "",
-    );
+    console.warn(`[site-builder] no merchant for clerk org ${clerkOrgId}`, error?.message ?? "");
     return null;
   }
-  const merchantId = merchant.id as string;
+  return data.id as string;
+});
 
-  // One flat query, then pick in JS. Conditionally chaining `.eq()` onto a
-  // reassigned builder grows the PostgrestFilterBuilder type until inference
-  // gives up (TS2589), and a merchant has a handful of storefronts at most.
-  const { data: rows, error: configError } = await supabase
+/**
+ * Every storefront the merchant owns.
+ *
+ * One flat query, then pick in JS. Conditionally chaining `.eq()` onto a
+ * reassigned builder grows the PostgrestFilterBuilder type until inference gives
+ * up (TS2589), and a merchant has a handful of storefronts at most.
+ */
+const fetchStoreConfigs = cache(async (merchantId: string): Promise<StoreConfigRow[]> => {
+  const { data, error } = await getRequestSupabase()
     .from("online_store_config")
     .select(STORE_COLUMNS)
     .eq("merchant_id", merchantId);
 
-  const configs = (rows ?? []) as Record<string, string | boolean | null>[];
+  if (error) {
+    console.warn(`[site-builder] storefront lookup failed for ${merchantId}`, error.message);
+  }
+  return (data ?? []) as StoreConfigRow[];
+});
+
+export async function loadSiteContext(
+  clerkOrgId: string,
+  locationId?: string,
+): Promise<SiteContext | null> {
+  const merchantId = await fetchMerchantId(clerkOrgId);
+  if (!merchantId) return null;
+
+  const configs = await fetchStoreConfigs(merchantId);
   const config = locationId
     ? configs.find((c) => c.location_id === locationId)
     : configs[0];
@@ -87,7 +118,6 @@ export async function loadSiteContext(
       `[site-builder] merchant ${merchantId} has no storefront` +
         (locationId ? ` for location ${locationId}` : "") +
         ` (${configs.length} found)`,
-      configError?.message ?? "",
     );
     return null;
   }

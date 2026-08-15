@@ -4,16 +4,15 @@ import { redirect } from "next/navigation";
 import PageRenderer, { SiteChrome } from "@/components/site-builder/PageRenderer";
 import { collectBindings } from "@/lib/site-builder/bindings/collect";
 import { resolveBindings } from "@/lib/site-builder/bindings/resolve";
-import { createSupabaseResolverSources } from "@/lib/site-builder/bindings/supabase-sources";
 import { createDemoPage } from "@/lib/site-builder/fixtures/demo-page";
 import { normalizePage } from "@/lib/site-builder/normalize";
 import type { RenderMode } from "@/lib/site-builder/render-context";
+import { getResolverSources } from "@/lib/site-builder/request-scope";
 import {
   buildRenderContext,
   loadSampleMenuItemIds,
   loadSiteContext,
 } from "@/lib/site-builder/site-context";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
  * Stage 4 acceptance surface — a real page, server-rendered, with live prices.
@@ -50,9 +49,8 @@ export default async function WebsitePreviewPage({
   if (!orgId) redirect("/sign-in");
 
   const params = await searchParams;
-  const supabase = createServerSupabaseClient();
 
-  const site = await loadSiteContext(supabase, orgId, params.location);
+  const site = await loadSiteContext(orgId, params.location);
   if (!site) {
     return (
       <PreviewNotice
@@ -64,9 +62,7 @@ export default async function WebsitePreviewPage({
 
   // Sources are built before the document, so seeding the fixture and resolving
   // it share one memoised menu fetch instead of issuing two.
-  const sources = createSupabaseResolverSources(supabase, {
-    deliveryPricingEnabled: site.deliveryPricingEnabled,
-  });
+  const sources = getResolverSources(site.deliveryPricingEnabled);
   const resolverCtx = { merchantId: site.merchantId, locationId: site.locationId };
 
   const menuItemIds = params.items

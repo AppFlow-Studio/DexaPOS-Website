@@ -3,11 +3,10 @@ import { redirect } from "next/navigation";
 
 import BuilderShell from "@/components/site-builder/builder/BuilderShell";
 import { renderCanvas } from "./render-canvas";
-import { createSupabaseResolverSources } from "@/lib/site-builder/bindings/supabase-sources";
 import { createDemoPage } from "@/lib/site-builder/fixtures/demo-page";
 import { normalizePage } from "@/lib/site-builder/normalize";
+import { getResolverSources } from "@/lib/site-builder/request-scope";
 import { loadSampleMenuItemIds, loadSiteContext } from "@/lib/site-builder/site-context";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
  * The builder canvas.
@@ -33,9 +32,8 @@ export default async function BuilderPage({
   if (!orgId) redirect("/sign-in");
 
   const params = await searchParams;
-  const supabase = createServerSupabaseClient();
 
-  const site = await loadSiteContext(supabase, orgId, params.location);
+  const site = await loadSiteContext(orgId, params.location);
   if (!site) {
     return (
       <div className="mx-auto max-w-xl p-12">
@@ -48,9 +46,9 @@ export default async function BuilderPage({
     );
   }
 
-  const sources = createSupabaseResolverSources(supabase, {
-    deliveryPricingEnabled: site.deliveryPricingEnabled,
-  });
+  // Request-scoped: `renderCanvas` below resolves its bindings from this same
+  // instance, so the 320 KB menu fetch happens once per page open, not twice.
+  const sources = getResolverSources(site.deliveryPricingEnabled);
   const menuItemIds = await loadSampleMenuItemIds(sources, {
     merchantId: site.merchantId,
     locationId: site.locationId,
