@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 
+import type { CatalogItem } from "@/app/dashboard/website/builder/menu-catalog";
 import {
   addSection,
   duplicateSection,
@@ -28,6 +29,15 @@ import type { SectionKind } from "@/lib/site-builder/sections/kinds";
 export type DeviceMode = "desktop" | "tablet" | "mobile";
 
 export type SaveState = "idle" | "dirty" | "saving" | "saved" | "conflict" | "error";
+
+/**
+ * Which column is showing below `lg`, where three do not fit.
+ *
+ * Narrow layouts drill in rather than hiding panels: the merchant can always
+ * reach every control, just not all at once. Ignored at `lg` and above, where
+ * the structure rail and canvas are both always present.
+ */
+export type Pane = "structure" | "canvas" | "inspector";
 
 /** Undo depth, matching the MockBuilder spec. */
 const HISTORY_LIMIT = 50;
@@ -58,13 +68,58 @@ export const noopSaveAdapter: SaveAdapter = {
 
 interface BuilderState {
   doc: PageDocument;
+  /**
+   * The document as it was last published — the baseline every "3 changes"
+   * count is measured against.
+   *
+   * Until Stage 5 exists there is nothing published to compare with, so this
+   * starts as the document the builder opened with. That makes the count read
+   * "changes this session", which is honest and useful; `markPublished` swaps in
+   * the real meaning the moment a publish pipeline can call it.
+   */
+  publishedDoc: PageDocument;
   /** Optimistic-concurrency token from the server. */
   revision: number;
   selectedId: string | null;
   device: DeviceMode;
   saveState: SaveState;
+  /** When the last successful save landed, for "Saved 2m ago". */
+  savedAt: number | null;
   /** Last refusal message, surfaced by the UI then cleared. */
   notice: string | null;
+
+  /**
+   * Whether canvas clicks select a section or pass through to the page.
+   *
+   * An editor that permanently swallows clicks makes it impossible to test your
+   * own links, accordions and menu tabs — so this turns the overlay off and
+   * lets the merchant use their page as a visitor would.
+   */
+  inspectorEnabled: boolean;
+
+  /**
+   * Page-level settings (search title, description, indexing) in the inspector.
+   *
+   * The inspector is otherwise a consequence of selection — it appears when a
+   * section is selected and gets out of the way when one is not, so that a
+   * merchant reviewing their page gets the widest canvas the screen allows.
+   * Page settings belong to no section, so they need their own way in; the
+   * toolbar's page menu opens this.
+   */
+  pageSettingsOpen: boolean;
+
+  /** Add Section modal, and where its choice should land. */
+  addOpen: boolean;
+  /** Document index to insert at; `null` appends to the end of the body zone. */
+  insertIndex: number | null;
+
+  /** Menu items this page may bind to. `null` until loaded. */
+  catalog: CatalogItem[] | null;
+  /** False on a brand page, where a single price would be a guess. */
+  catalogShowPrices: boolean;
+  catalogError: string | null;
+
+  pane: Pane;
 
   past: PageDocument[];
   future: PageDocument[];
@@ -99,6 +154,17 @@ interface BuilderState {
   setRendering: (isRendering: boolean) => void;
   setSaveState: (state: SaveState) => void;
   clearNotice: () => void;
+  toggleInspector: () => void;
+  setPane: (pane: Pane) => void;
+  openPageSettings: () => void;
+  closeInspector: () => void;
+  openAddSection: (atIndex?: number | null) => void;
+  closeAddSection: () => void;
+  setCatalog: (catalog: CatalogItem[], showPrices: boolean, error?: string) => void;
+  /** Records a successful save so the toolbar can say when. */
+  markSaved: (revision: number) => void;
+  /** Resets the change baseline. Called by the publish pipeline at Stage 5. */
+  markPublished: () => void;
 
   /** Replaces the document wholesale — starter templates, conflict resolution. */
   replaceDoc: (doc: PageDocument, revision?: number) => void;
@@ -134,11 +200,21 @@ export function createBuilderStore(init: BuilderInit) {
 
     return {
       doc: init.doc,
+      publishedDoc: init.doc,
       revision: init.revision ?? 0,
       selectedId: null,
       device: "desktop",
       saveState: "idle",
+      savedAt: null,
       notice: null,
+      inspectorEnabled: true,
+      pageSettingsOpen: false,
+      addOpen: false,
+      insertIndex: null,
+      catalog: null,
+      catalogShowPrices: false,
+      catalogError: null,
+      pane: "canvas",
       past: [],
       future: [],
       canvas: init.canvas,
@@ -146,10 +222,18 @@ export function createBuilderStore(init: BuilderInit) {
 
       addSection: (kind, atIndex) => {
         const before = get().doc.sections.map((s) => s.id);
-        apply(addSection(get().doc, kind, { atIndex }));
+        // An explicit argument wins; otherwise honour wherever the merchant
+        // opened the modal from — a zone's "+" or a gap in the canvas.
+        const index = atIndex ?? get().insertIndex ?? undefined;
+        apply(addSection(get().doc, kind, { atIndex: index ?? undefined }));
+
         // Select whatever was just inserted so the settings panel opens on it.
         const added = get().doc.sections.find((s) => !before.includes(s.id));
-        if (added) set({ selectedId: added.id });
+        set({
+          addOpen: false,
+          insertIndex: null,
+          ...(added ? { selectedId: added.id, pane: "inspector" as Pane } : {}),
+        });
       },
 
       removeSection: (id) => {
@@ -213,12 +297,41 @@ export function createBuilderStore(init: BuilderInit) {
       canUndo: () => get().past.length > 0,
       canRedo: () => get().future.length > 0,
 
-      select: (id) => set({ selectedId: id }),
+      // Selecting drills the narrow layout into the inspector; deselecting
+      // returns to the canvas. At `lg` and above `pane` is ignored entirely.
+      select: (id) =>
+        set({ selectedId: id, pageSettingsOpen: false, pane: id ? "inspector" : "canvas" }),
       setDevice: (device) => set({ device }),
       setCanvas: (canvas) => set({ canvas }),
       setRendering: (isRendering) => set({ isRendering }),
       setSaveState: (saveState) => set({ saveState }),
       clearNotice: () => set({ notice: null }),
+
+      toggleInspector: () =>
+        set((state) => ({
+          inspectorEnabled: !state.inspectorEnabled,
+          // Leaving a section selected while the overlay is off strands its
+          // controls on a page the merchant is now trying to click through.
+          selectedId: state.inspectorEnabled ? null : state.selectedId,
+        })),
+
+      setPane: (pane) => set({ pane }),
+
+      openPageSettings: () =>
+        set({ pageSettingsOpen: true, selectedId: null, pane: "inspector" }),
+
+      closeInspector: () =>
+        set({ selectedId: null, pageSettingsOpen: false, pane: "canvas" }),
+
+      openAddSection: (atIndex = null) => set({ addOpen: true, insertIndex: atIndex }),
+      closeAddSection: () => set({ addOpen: false, insertIndex: null }),
+
+      setCatalog: (catalog, showPrices, error) =>
+        set({ catalog, catalogShowPrices: showPrices, catalogError: error ?? null }),
+
+      markSaved: (revision) => set({ revision, saveState: "saved", savedAt: Date.now() }),
+
+      markPublished: () => set((state) => ({ publishedDoc: state.doc })),
 
       replaceDoc: (doc, revision) =>
         set((state) => ({

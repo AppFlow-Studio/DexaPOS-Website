@@ -74,6 +74,7 @@ import {
   DollarSign,
   CalendarClock,
   ShieldAlert,
+  PanelsTopLeft,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -197,6 +198,15 @@ const navMain = [
         title: "Online Ordering",
         url: "/dashboard/online-ordering",
         icon: Globe,
+      },
+      {
+        // Sits next to Online Ordering deliberately: a built site is layered on
+        // top of that storefront (decision D1) and reads its branding, location
+        // and menu. Points at the builder rather than a `/dashboard/website`
+        // index, which does not exist yet.
+        title: "Website",
+        url: "/dashboard/website/builder",
+        icon: PanelsTopLeft,
       },
       {
         title: "Kiosk",

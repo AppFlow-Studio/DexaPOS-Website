@@ -42,6 +42,27 @@ export const ZONE_ORDER: Record<Zone, number> = {
   colophon: 2,
 };
 
+/**
+ * Grouping for the Add Section modal, in the order the groups appear.
+ *
+ * Purely presentational — nothing validates against it and no document stores
+ * it. It exists because a flat grid of choices stops being scannable somewhere
+ * around a dozen entries, and v1's 9 kinds are on the way to the spec's 17.
+ *
+ * Named for what a restaurant owner is trying to do, not for what the section
+ * technically is: "Your story" rather than "Rich text blocks".
+ */
+export const SECTION_CATEGORIES = [
+  { id: "menu", label: "Menu" },
+  { id: "story", label: "Your story" },
+  { id: "media", label: "Photos" },
+  { id: "visit", label: "Visit us" },
+  /** Header, hero and footer. Never offered in the modal; present for completeness. */
+  { id: "frame", label: "Page frame" },
+] as const;
+
+export type SectionCategory = (typeof SECTION_CATEGORIES)[number]["id"];
+
 export function isSectionKind(value: unknown): value is SectionKind {
   return (
     typeof value === "string" &&

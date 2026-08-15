@@ -64,6 +64,11 @@ export default async function BuilderPage({
       initialDoc={doc}
       initialCanvas={await renderCanvas(doc, site.locationId)}
       locationId={site.locationId}
+      siteName={site.name}
+      // The ordering storefront, which is where a built site will eventually
+      // live too — Stage 6 owns that collision (PLAN-04 §2). Until then this is
+      // the only public URL there is to show the merchant.
+      viewUrl={site.slug ? `/sites/${site.slug}` : undefined}
     />
   );
 }

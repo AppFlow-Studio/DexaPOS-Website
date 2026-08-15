@@ -1,12 +1,24 @@
 "use client";
 
-import { Plus, Sparkles, Trash2, X } from "lucide-react";
+import { Copy, EyeOff, MoreHorizontal, Plus, RotateCcw, Trash2, X, Zap } from "lucide-react";
 import { useMemo } from "react";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { describeSchema, humanize, type FieldControl } from "@/lib/site-builder/schema-introspect";
-import { SECTION_REGISTRY } from "@/lib/site-builder/sections/registry";
+import type { Binding } from "@/lib/site-builder/bindings/types";
+import { SECTION_REGISTRY, sectionTitle } from "@/lib/site-builder/sections/registry";
 import type { Section } from "@/lib/site-builder/sections/types";
 import { cn } from "@/lib/utils";
+import MenuItemPicker from "./MenuItemPicker";
 import { SectionIcon } from "./section-icons";
 import type { BuilderStore } from "./store";
 
@@ -22,13 +34,36 @@ import type { BuilderStore } from "./store";
  * schema before accepting. An invalid value is refused and explained rather than
  * quietly repaired: an edit arriving from the editor with a bad value is a bug
  * worth surfacing, unlike a stored document from an older build.
+ *
+ * **Content and Style are separated** because they are answers to different
+ * questions — "what does this say?" and "how does it look?" — and mixing them
+ * makes a nine-field panel feel like thirty. The split is derived from field
+ * names below rather than from the schema, which is a deliberate stopgap: the
+ * real home for it is a `style` object on every section (`sectionStyleSchema`
+ * already exists and `section-shell.tsx` already knows how to render one), and
+ * that is a contract change rather than a UI one.
  */
+
+/** Fields that answer "how does it look?" rather than "what does it say?". */
+const STYLE_FIELDS = new Set([
+  "layout",
+  "columns",
+  "variant",
+  "imagePosition",
+  "overlayOpacity",
+  "mapStyle",
+  "logoAlign",
+  "sticky",
+  "transparentOverHero",
+  "defaultOpenFirst",
+]);
+
 export default function SettingsPanel({ store }: { store: BuilderStore }) {
   const doc = store((s) => s.doc);
   const selectedId = store((s) => s.selectedId);
   const section = doc.sections.find((s) => s.id === selectedId);
 
-  if (!section) return <SeoPanel store={store} />;
+  if (!section) return <PageSettings store={store} />;
 
   return <SectionSettings key={section.id} section={section} store={store} />;
 }
@@ -36,26 +71,85 @@ export default function SettingsPanel({ store }: { store: BuilderStore }) {
 function SectionSettings({ section, store }: { section: Section; store: BuilderStore }) {
   const def = SECTION_REGISTRY[section.kind];
   const updateProps = store((s) => s.updateProps);
-  const select = store((s) => s.select);
+  const closeInspector = store((s) => s.closeInspector);
+  const toggleHidden = store((s) => s.toggleHidden);
+  const duplicateSection = store((s) => s.duplicateSection);
+  const removeSection = store((s) => s.removeSection);
 
   const controls = useMemo(() => describeSchema(def.schema), [def.schema]);
+  const defaults = useMemo(() => def.defaults() as Record<string, unknown>, [def]);
   const props = section.props as Record<string, unknown>;
 
+  const contentControls = controls.filter((c) => !STYLE_FIELDS.has(c.name));
+  const styleControls = controls.filter((c) => STYLE_FIELDS.has(c.name));
+
+  const renderControls = (list: FieldControl[]) => (
+    <div className="space-y-5 p-4">
+      {list.map((control) => (
+        <ControlRow
+          key={control.name}
+          control={control}
+          value={props[control.name]}
+          defaultValue={defaults[control.name]}
+          store={store}
+          onChange={(value) => updateProps(section.id, { [control.name]: value })}
+        />
+      ))}
+      {list.length === 0 && (
+        <p className="py-6 text-center text-xs text-muted-foreground">
+          Nothing to adjust here.
+        </p>
+      )}
+    </div>
+  );
+
   return (
-    <div className="flex h-full flex-col bg-white">
-      <header className="flex items-start gap-3 border-b border-zinc-100 px-4 py-3.5">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-600">
+    <div className="flex h-full flex-col bg-background">
+      <header className="flex shrink-0 items-start gap-2.5 border-b px-3 py-3">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
           <SectionIcon name={def.icon} className="size-4" />
         </span>
+
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-zinc-900">{def.label}</h2>
-          <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">{def.description}</p>
+          <h2 className="truncate text-sm font-semibold">{sectionTitle(section)}</h2>
+          <p className="truncate text-xs text-muted-foreground">{def.label}</p>
         </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="Section options"
+            className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <MoreHorizontal className="size-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onSelect={() => toggleHidden(section.id)}>
+              <EyeOff />
+              {section.hidden ? "Show on the page" : "Hide from the page"}
+            </DropdownMenuItem>
+            {!def.singleton && (
+              <DropdownMenuItem onSelect={() => duplicateSection(section.id)}>
+                <Copy />
+                Duplicate
+              </DropdownMenuItem>
+            )}
+            {def.deletable && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={() => removeSection(section.id)}>
+                  <Trash2 />
+                  Delete
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <button
           type="button"
-          onClick={() => select(null)}
+          onClick={closeInspector}
           aria-label="Close section settings"
-          className="flex size-7 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <X className="size-4" />
         </button>
@@ -64,39 +158,111 @@ function SectionSettings({ section, store }: { section: Section; store: BuilderS
       {def.liveFields.length > 0 && (
         // Decision D6, said out loud. Merchants otherwise assume everything on
         // the page is something they typed and must maintain.
-        <div className="flex gap-2.5 border-b border-blue-100 bg-blue-50/70 px-4 py-3">
-          <Sparkles className="mt-px size-3.5 shrink-0 text-blue-600" />
-          <p className="text-xs leading-relaxed text-blue-900">
-            <strong className="font-semibold">Updates automatically.</strong>{" "}
+        <div className="flex shrink-0 gap-2 border-b bg-muted/50 px-3 py-2.5">
+          <Zap className="mt-px size-3.5 shrink-0 text-muted-foreground" />
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            <span className="font-medium text-foreground">Updates on its own.</span>{" "}
             {def.liveFields.map(humanize).join(", ").toLowerCase()} always show your current
             data — you never need to republish to keep them right.
           </p>
         </div>
       )}
 
-      <div className="flex-1 space-y-5 overflow-y-auto p-4">
-        {controls.map((control) => (
-          <Control
-            key={control.name}
-            control={control}
-            value={props[control.name]}
-            onChange={(value) => updateProps(section.id, { [control.name]: value })}
-          />
-        ))}
-      </div>
+      {styleControls.length === 0 ? (
+        <div className="min-h-0 flex-1 overflow-y-auto">{renderControls(contentControls)}</div>
+      ) : (
+        <Tabs defaultValue="content" className="flex min-h-0 flex-1 flex-col gap-0">
+          <TabsList className="mx-3 mt-3 grid w-auto shrink-0 grid-cols-2">
+            <TabsTrigger value="content">Content</TabsTrigger>
+            <TabsTrigger value="style">Style</TabsTrigger>
+          </TabsList>
+          <TabsContent value="content" className="min-h-0 flex-1 overflow-y-auto">
+            {renderControls(contentControls)}
+          </TabsContent>
+          <TabsContent value="style" className="min-h-0 flex-1 overflow-y-auto">
+            {renderControls(styleControls)}
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }
 
-function FieldLabel({ control, className }: { control: FieldControl; className?: string }) {
+/**
+ * One field, with a reset that appears only when there is something to reset.
+ *
+ * Generated forms let people paint themselves into corners — a merchant who has
+ * changed six things and made it worse needs a way back that does not involve
+ * guessing what the original value was. Every mature editor surveyed ships one.
+ */
+function ControlRow({
+  control,
+  value,
+  defaultValue,
+  store,
+  onChange,
+}: {
+  control: FieldControl;
+  value: unknown;
+  defaultValue: unknown;
+  store: BuilderStore;
+  onChange: (value: unknown) => void;
+}) {
+  // Bindings are excluded: their "default" is an empty list, so a reset would
+  // read as "clear everything I chose" — a destructive action wearing the label
+  // of a safe one.
+  const resettable =
+    control.kind !== "binding-list" &&
+    defaultValue !== undefined &&
+    JSON.stringify(value ?? null) !== JSON.stringify(defaultValue ?? null);
+
   return (
-    <span className={cn("flex items-center gap-1 text-xs font-medium text-zinc-700", className)}>
-      {control.label}
+    <div className="group/field">
+      <Control
+        control={control}
+        value={value}
+        store={store}
+        onChange={onChange}
+        action={
+          resettable && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Reset ${control.label.toLowerCase()}`}
+                  onClick={() => onChange(defaultValue)}
+                  className="flex size-5 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus:outline-none focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 group-hover/field:opacity-100"
+                >
+                  <RotateCcw className="size-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Reset to default</TooltipContent>
+            </Tooltip>
+          )
+        }
+      />
+    </div>
+  );
+}
+
+function FieldLabel({
+  control,
+  action,
+  className,
+}: {
+  control: FieldControl;
+  action?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span className={cn("flex min-h-5 items-center gap-1", className)}>
+      <span className="text-xs font-medium">{control.label}</span>
       {!control.optional && (
-        <span className="text-zinc-300" title="Required">
+        <span className="text-muted-foreground/60" title="Required">
           *
         </span>
       )}
+      <span className="ml-auto">{action}</span>
     </span>
   );
 }
@@ -104,13 +270,17 @@ function FieldLabel({ control, className }: { control: FieldControl; className?:
 function Control({
   control,
   value,
+  store,
   onChange,
+  action,
 }: {
   control: FieldControl;
   value: unknown;
+  store: BuilderStore;
   onChange: (value: unknown) => void;
+  action?: React.ReactNode;
 }) {
-  const label = <FieldLabel control={control} className="mb-1.5" />;
+  const label = <FieldLabel control={control} action={action} className="mb-1.5" />;
 
   switch (control.kind) {
     case "text":
@@ -139,7 +309,7 @@ function Control({
             />
           )}
           {control.kind === "richtext" && (
-            <span className="mt-1.5 block text-[11px] text-zinc-400">
+            <span className="mt-1.5 block text-[11px] text-muted-foreground">
               Basic HTML is allowed. Anything unsafe is removed automatically.
             </span>
           )}
@@ -149,36 +319,27 @@ function Control({
 
     case "boolean":
       return (
-        <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2.5 transition-colors hover:bg-zinc-50">
-          <span className="text-xs font-medium text-zinc-700">{control.label}</span>
-          {/* A native checkbox styled as a track-and-thumb switch: the peer
-              pattern keeps it keyboard- and screen-reader-native with no extra
-              component and no `role="switch"` to get wrong. */}
-          <span className="relative inline-flex shrink-0">
-            <input
-              type="checkbox"
-              checked={value === true}
-              onChange={(e) => onChange(e.target.checked)}
-              className="peer size-0 opacity-0"
-            />
-            <span
-              aria-hidden
-              className="block h-5 w-9 rounded-full bg-zinc-200 transition-colors peer-checked:bg-zinc-900 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500 peer-focus-visible:ring-offset-2"
-            />
-            <span
-              aria-hidden
-              className="pointer-events-none absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4"
-            />
-          </span>
-        </label>
+        <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2.5 transition-colors hover:bg-accent/40">
+          <FieldLabel control={control} action={action} className="flex-1" />
+          <Switch
+            checked={value === true}
+            onCheckedChange={(checked) => onChange(checked)}
+            aria-label={control.label}
+          />
+        </div>
       );
 
     case "number":
       return (
         <label className="block">
-          <span className="mb-1.5 flex items-center justify-between">
-            <FieldLabel control={control} />
-            <span className="text-[11px] tabular-nums text-zinc-500">{String(value ?? 0)}</span>
+          <span className="mb-1.5 flex items-center gap-1">
+            <span className="text-xs font-medium">{control.label}</span>
+            <span className="ml-auto flex items-center gap-1">
+              <span className="text-[11px] tabular-nums text-muted-foreground">
+                {String(value ?? 0)}
+              </span>
+              {action}
+            </span>
           </span>
           <input
             type="range"
@@ -186,27 +347,59 @@ function Control({
             max={control.max ?? 100}
             value={Number(value ?? 0)}
             onChange={(e) => onChange(Number(e.target.value))}
-            className="w-full accent-zinc-900"
+            className="w-full accent-foreground"
           />
         </label>
       );
 
-    case "select":
+    case "select": {
+      const options = control.options ?? [];
+      // Two or three choices read better as a segmented control than a dropdown:
+      // every option is visible, and choosing is one click rather than two.
+      if (options.length > 0 && options.length <= 3 && !control.optional) {
+        return (
+          <div>
+            {label}
+            <div
+              role="radiogroup"
+              aria-label={control.label}
+              className="flex gap-0.5 rounded-md bg-muted p-0.5"
+            >
+              {options.map((option) => {
+                const active = String(value ?? "") === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => onChange(coerce(option.value))}
+                    className={cn(
+                      "flex-1 rounded-sm px-2 py-1 text-[11px] font-medium capitalize transition-colors",
+                      active
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+
       return (
         <label className="block">
           {label}
           <select
             value={String(value ?? "")}
-            onChange={(e) => {
-              const raw = e.target.value;
-              // Column counts are literal numbers in the schema, not strings.
-              const numeric = Number(raw);
-              onChange(raw !== "" && !Number.isNaN(numeric) ? numeric : raw);
-            }}
+            onChange={(e) => onChange(coerce(e.target.value))}
             className={inputClass}
           >
             {control.optional && <option value="">—</option>}
-            {control.options?.map((option) => (
+            {options.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -214,13 +407,14 @@ function Control({
           </select>
         </label>
       );
+    }
 
     case "link": {
       const link = (value ?? {}) as { label?: string; target?: { kind?: string; value?: string } };
       return (
         <div>
           {label}
-          <div className="space-y-2 rounded-lg border border-zinc-200 p-3">
+          <div className="space-y-2 rounded-md border p-3">
             <input
               type="text"
               placeholder="Button text"
@@ -269,22 +463,8 @@ function Control({
       );
     }
 
-    case "binding-list": {
-      const items = Array.isArray(value) ? value : value ? [value] : [];
-      return (
-        <div>
-          {label}
-          <Placeholder
-            headline={
-              items.length === 0
-                ? "Nothing linked yet."
-                : `${items.length} linked${control.maxItems ? ` of ${control.maxItems} max` : ""}.`
-            }
-            detail="A menu picker lands with the item browser. Prices, photos and availability are always pulled live — they are never stored on the page."
-          />
-        </div>
-      );
-    }
+    case "binding-list":
+      return <BindingControl control={control} value={value} store={store} onChange={onChange} />;
 
     case "image":
       return (
@@ -303,15 +483,16 @@ function Control({
           {label}
           <div className="space-y-2">
             {rows.map((row, index) => (
-              <div key={index} className="rounded-lg border border-zinc-200 bg-zinc-50/50 p-3">
+              <div key={index} className="rounded-md border bg-muted/30 p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-zinc-400">#{index + 1}</span>
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    #{index + 1}
+                  </span>
                   <button
                     type="button"
                     aria-label={`Remove ${control.label} ${index + 1}`}
-                    title="Remove"
                     onClick={() => onChange(rows.filter((_, i) => i !== index))}
-                    className="flex size-6 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                    className="flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                   >
                     <Trash2 className="size-3.5" />
                   </button>
@@ -322,6 +503,7 @@ function Control({
                       key={sub.name}
                       control={sub}
                       value={row[sub.name]}
+                      store={store}
                       onChange={(next) =>
                         onChange(rows.map((r, i) => (i === index ? { ...r, [sub.name]: next } : r)))
                       }
@@ -335,7 +517,7 @@ function Control({
             type="button"
             disabled={atMax}
             onClick={() => onChange([...rows, blankRow(control)])}
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-zinc-300 py-2 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-900 disabled:pointer-events-none disabled:opacity-40"
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-input py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
           >
             {atMax ? (
               `Maximum ${control.maxItems}`
@@ -355,16 +537,84 @@ function Control({
   }
 }
 
+/**
+ * A binding field. Which picker appears is decided by the binding's declared
+ * record type, read off the schema — not by the field's name.
+ */
+function BindingControl({
+  control,
+  value,
+  store,
+  onChange,
+}: {
+  control: FieldControl;
+  value: unknown;
+  store: BuilderStore;
+  onChange: (value: unknown) => void;
+}) {
+  const catalog = store((s) => s.catalog);
+  const showPrices = store((s) => s.catalogShowPrices);
+  const catalogError = store((s) => s.catalogError);
+
+  if (control.bindingType === "menu_item") {
+    const bindings = (Array.isArray(value) ? value : value ? [value] : []) as Binding[];
+    return (
+      <div>
+        <FieldLabel control={control} className="mb-1.5" />
+        <MenuItemPicker
+          bindings={bindings}
+          onChange={(next) => onChange(next)}
+          maxItems={control.maxItems}
+          catalog={catalog}
+          showPrices={showPrices}
+          error={catalogError}
+        />
+      </div>
+    );
+  }
+
+  // A location binding points at the restaurant this page is about. There is
+  // exactly one candidate in v1, so a picker would be a dropdown with one
+  // option — worse than a sentence explaining that it is already correct.
+  if (control.bindingType === "location") {
+    return (
+      <div>
+        <FieldLabel control={control} className="mb-1.5" />
+        <p className="flex gap-1.5 rounded-md border bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
+          <Zap className="mt-px size-3 shrink-0" />
+          <span>
+            Address, phone and opening hours come from this restaurant&rsquo;s record. Change
+            them once in your location settings and every page updates — no republishing.
+          </span>
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <FieldLabel control={control} className="mb-1.5" />
+      <Placeholder detail="A picker for this reference type has not been built yet." />
+    </div>
+  );
+}
+
 /** Shared empty-state box for the controls whose backing feature is not built. */
 function Placeholder({ headline, detail }: { headline?: string; detail: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50/50 p-3">
-      {headline && <p className="text-xs font-medium text-zinc-600">{headline}</p>}
-      <p className={cn("text-[11px] leading-relaxed text-zinc-400", headline && "mt-1")}>
+    <div className="rounded-md border border-dashed border-input bg-muted/30 p-3">
+      {headline && <p className="text-xs font-medium">{headline}</p>}
+      <p className={cn("text-[11px] leading-relaxed text-muted-foreground", headline && "mt-1")}>
         {detail}
       </p>
     </div>
   );
+}
+
+/** Column counts are literal numbers in the schema, not strings. */
+function coerce(raw: string): string | number {
+  const numeric = Number(raw);
+  return raw !== "" && !Number.isNaN(numeric) ? numeric : raw;
 }
 
 /** A new repeater row with every required sub-field present but empty. */
@@ -381,22 +631,31 @@ function blankRow(control: FieldControl): Record<string, unknown> {
   return row;
 }
 
-function SeoPanel({ store }: { store: BuilderStore }) {
+function PageSettings({ store }: { store: BuilderStore }) {
   const doc = store((s) => s.doc);
   const updateSeo = store((s) => s.updateSeo);
+  const closeInspector = store((s) => s.closeInspector);
 
   return (
-    <div className="flex h-full flex-col bg-white">
-      <header className="border-b border-zinc-100 px-4 py-3.5">
-        <h2 className="text-sm font-semibold text-zinc-900">Page settings</h2>
-        <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">
-          Select a section to edit it, or set how this page appears in search.
-        </p>
+    <div className="flex h-full flex-col bg-background">
+      <header className="flex shrink-0 items-start gap-2 border-b px-3 py-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold">Page settings</h2>
+          <p className="text-xs text-muted-foreground">How this page appears in search.</p>
+        </div>
+        <button
+          type="button"
+          onClick={closeInspector}
+          aria-label="Close page settings"
+          className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <X className="size-4" />
+        </button>
       </header>
 
-      <div className="space-y-5 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
         <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-zinc-700">Search title</span>
+          <span className="mb-1.5 block text-xs font-medium">Search title</span>
           <input
             type="text"
             value={doc.seo.title ?? ""}
@@ -407,9 +666,7 @@ function SeoPanel({ store }: { store: BuilderStore }) {
         </label>
 
         <label className="block">
-          <span className="mb-1.5 block text-xs font-medium text-zinc-700">
-            Search description
-          </span>
+          <span className="mb-1.5 block text-xs font-medium">Search description</span>
           <textarea
             rows={3}
             value={doc.seo.description ?? ""}
@@ -419,15 +676,14 @@ function SeoPanel({ store }: { store: BuilderStore }) {
           <CharCount value={doc.seo.description} ideal={160} min={50} />
         </label>
 
-        <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2.5 transition-colors hover:bg-zinc-50">
-          <span className="text-xs font-medium text-zinc-700">Hide from search engines</span>
-          <input
-            type="checkbox"
+        <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
+          <span className="text-xs font-medium">Hide from search engines</span>
+          <Switch
             checked={doc.seo.noindex === true}
-            onChange={(e) => updateSeo({ noindex: e.target.checked || undefined })}
-            className="size-4 accent-zinc-900"
+            onCheckedChange={(checked) => updateSeo({ noindex: checked || undefined })}
+            aria-label="Hide from search engines"
           />
-        </label>
+        </div>
       </div>
     </div>
   );
@@ -437,13 +693,16 @@ function CharCount({ value, ideal, min = 0 }: { value?: string; ideal: number; m
   const length = value?.trim().length ?? 0;
   const bad = length > ideal || (length > 0 && length < min);
   return (
-    <span className="mt-1.5 flex items-center justify-between text-[11px]">
-      <span className={bad ? "text-amber-600" : "text-zinc-400"}>
-        {length} / {ideal}
-      </span>
+    <span
+      className={cn(
+        "mt-1.5 block text-[11px] tabular-nums",
+        bad ? "text-amber-600" : "text-muted-foreground",
+      )}
+    >
+      {length} / {ideal}
     </span>
   );
 }
 
 const inputClass =
-  "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/5";
+  "w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";

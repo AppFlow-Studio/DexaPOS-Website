@@ -13,6 +13,8 @@
 
 import type { z } from "zod";
 
+import { isBindingType, type BindingType } from "./bindings/types";
+
 export type ControlKind =
   | "text"
   | "richtext"
@@ -39,6 +41,16 @@ export interface FieldControl {
   maxItems?: number;
   /** Sub-controls for `repeater` entries. */
   fields?: FieldControl[];
+  /**
+   * Which record kind a `binding-list` points at, read from the `z.literal` in
+   * the binding schema.
+   *
+   * The editor needs it to choose a picker: menu items get a searchable browser
+   * of real dishes, a location gets a read-only card. Without it the panel would
+   * have to switch on field name, which is exactly the parallel list the
+   * registry design exists to avoid.
+   */
+  bindingType?: BindingType;
 }
 
 /** Fields long enough to want a textarea rather than a single-line input. */
@@ -137,7 +149,12 @@ export function describeField(name: string, field: unknown): FieldControl {
       // A binding array — `{ type: "menu_item", id }` — needs a record picker,
       // not a generic repeater.
       if (elementShape && "type" in elementShape && "id" in elementShape) {
-        return { ...base, kind: "binding-list", maxItems: maxOf(def) };
+        return {
+          ...base,
+          kind: "binding-list",
+          maxItems: maxOf(def),
+          bindingType: literalBindingType(elementShape.type),
+        };
       }
       // An asset array — the gallery.
       if (elementShape && "assetId" in elementShape) {
@@ -159,13 +176,35 @@ export function describeField(name: string, field: unknown): FieldControl {
       if ("assetId" in shape) return { ...base, kind: "image" };
       // A CTA — `{ label, target }` — or a bare binding.
       if ("label" in shape && "target" in shape) return { ...base, kind: "link" };
-      if ("type" in shape && "id" in shape) return { ...base, kind: "binding-list", maxItems: 1 };
+      if ("type" in shape && "id" in shape) {
+        return {
+          ...base,
+          kind: "binding-list",
+          maxItems: 1,
+          bindingType: literalBindingType(shape.type),
+        };
+      }
       return { ...base, kind: "unsupported" };
     }
 
     default:
       return { ...base, kind: "unsupported" };
   }
+}
+
+/**
+ * Reads `z.literal("menu_item")` back out of a binding schema's `type` field.
+ *
+ * Returns undefined rather than guessing when the shape is not a literal — a
+ * picker that opened on the wrong record kind would be worse than one that
+ * declines to open.
+ */
+function literalBindingType(schema: unknown): BindingType | undefined {
+  const def = defOf(schema) as (ZodDef & { values?: unknown[] }) | undefined;
+  if (def?.type !== "literal") return undefined;
+
+  const value = def.values?.[0];
+  return typeof value === "string" && isBindingType(value) ? value : undefined;
 }
 
 function maxOf(def: ZodDef): number | undefined {

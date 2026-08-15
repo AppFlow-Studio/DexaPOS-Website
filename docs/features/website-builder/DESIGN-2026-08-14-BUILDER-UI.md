@@ -2,9 +2,9 @@
 
 **Date:** 2026-08-14
 **Author:** Ali Awdi (with Claude)
-**Status:** 🔵 **Proposal. No code has been changed.** Nothing here is built; nothing here is agreed
+**Status:** 🟢 **Built 2026-08-15** — 17 of 21 decisions implemented, typecheck clean, 199 tests passing, verified in a browser at desktop, narrow and dark. See §8
 **Input:** [RESEARCH-2026-08-14-BUILDER-UI-PRIOR-ART.md](RESEARCH-2026-08-14-BUILDER-UI-PRIOR-ART.md) — 18 shipped products surveyed via Mobbin
-**Constraints honoured:** the architecture in [HANDOFF §3.3](HANDOFF-2026-08-13-BUILD-SESSION.md#33-architecture) (A1–A11). The *data model is fixed*; only the interface is redrawn
+**Constraints honoured:** the architecture in [HANDOFF §3.3](HANDOFF-2026-08-13-BUILD-SESSION.md#33-architecture) (A1–A11). The *data model is fixed*; only the interface is redrawn. **No migration, and no change to the section contract.**
 
 > **How this was written:** the existing builder UI was set aside deliberately and the interface designed from
 > scratch against the architecture and the prior art, so that the result is not an incremental defence of what
@@ -76,29 +76,31 @@ judgment. The `Publish` button is near-black, not brand-blue.
 
 ## 3. Decision register
 
-| # | Decision | Source | Rationale |
-|---|---|---|---|
-| **UI1** | Inspector appears on selection; structure rail persistent | — | Canvas width on a 1280px laptop. Yields review/edit modes |
-| **UI2** | Monochrome editor chrome, no accent colour | Shopify, Squarespace | Brand colour must be the only saturated thing on screen |
-| **UI3** | Structure rail grouped by **zone** with labelled dividers | Shopify | Makes the A1 zone constraint visible instead of enforcing it after the fact via toast |
-| **UI4** | `+ Add section` inside **each zone group**, not once globally | Shopify | Position becomes implicit; kills "I added it and it went to the wrong place" |
-| **UI5** | Rows labelled with the section's **own heading**, falling back to the registry label | Shopify, Framer | "Guest Favorites", not "Menu Highlights" — a scannable list vs. nine identical nouns |
-| **UI6** | Search field at the top of the rail | Retool, Framer | A nine-item eyeball scan stops working at 17 kinds |
-| **UI7** | **`⚡` live-binding and `⚠` broken-binding glyphs on rail rows** | **none — new** | The governing principle, made ambient. Surfaces the §6b silent-drop class before a customer sees it |
-| **UI8** | Drag handles in the rail only; never the canvas | A11 | Keyboard reordering free from dnd-kit; simultaneously simplest and most accessible |
-| **UI9** | Hover-between-sections reveals a **`+` insert rule** in the canvas | Dribbble, Flodesk | Best insert affordance in the survey — states position without a word of UI |
-| **UI10** | **Inspector on/off toggle** (`⌘⇧I`) | Shopify | An editor that permanently swallows clicks makes it impossible to test your own links or accordions |
-| **UI11** | Inspector split into `Content` / `Style` tabs | Salesforce | Two tabs, not Webflow's five. Style = the `section-shell` vocabulary; Content = text and bindings |
-| **UI12** | **Binding picker shows real dish, live price, live availability** | **none — new** | Not a text field, not an ID list. Draws from the *resolvable* set (§6b), never raw `menu_items` |
-| **UI13** | **Bound values are never editable in place** | A4 | The absence of a price field *is* the explanation of A4. The merchant learns "I change this in the menu" on first look |
-| **UI14** | `RESET TO DEFAULT` per generated form group | Squarespace, Gamma | Generated forms let people paint into corners; every mature editor ships an exit |
-| **UI15** | **Publish button carries the unpublished-change count** — `Publish · 3` | **none — new** (GitBook hints in prose) | Free from A2's immutable versions. Draft-vs-published is the #1 merchant misunderstanding; this makes it ambient |
-| **UI16** | Autosave stays; save state reads **`Saved 2m ago`**, not `Saved` | Shopify, Squarespace | A bare checkmark doesn't answer the question a nervous merchant is asking |
-| **UI17** | **No separate `Save` button** | contra Uvodo, Salesforce | Both have one because neither autosaves. Two save-shaped buttons where one is automatic is the worst of both |
-| **UI18** | Publish is a **popover**, not a modal; lists what changed; errors link to the offending section | GitBook + `validatePage` | Frequent, non-destructive action. A count with no path to the fix only creates anxiety |
-| **UI19** | Version rollback copy taken near-verbatim from **Resend** | Resend | It is a literal, plain-English description of A2 |
-| **UI20** | **Point-in-time preview before restore** | GitBook | *Look before you leap* is worth more than any amount of confirmation-dialog wording |
-| **UI21** | Below `lg`, the rail drills in; canvas becomes a `Preview` tab | Uvodo | Merchants do open a 1280px lid and a tablet more often than we would like |
+`✅` built · `🟡` built with a deviation (see §8.2) · `⬜` deferred, and why
+
+| # | Decision | Source | Rationale | Built |
+|---|---|---|---|---|
+| **UI1** | Inspector appears on selection; structure rail persistent | — | Canvas width on a 1280px laptop. Yields review/edit modes | ✅ |
+| **UI2** | Monochrome editor chrome, no accent colour | Shopify, Squarespace | Brand colour must be the only saturated thing on screen | 🟡 |
+| **UI3** | Structure rail grouped by **zone** with labelled dividers | Shopify | Makes the A1 zone constraint visible instead of enforcing it after the fact via toast | ✅ |
+| **UI4** | `+ Add section` inside **each zone group**, not once globally | Shopify | Position becomes implicit; kills "I added it and it went to the wrong place" | ✅ |
+| **UI5** | Rows labelled with the section's **own heading**, falling back to the registry label | Shopify, Framer | "Guest Favorites", not "Menu Highlights" — a scannable list vs. nine identical nouns | ✅ |
+| **UI6** | Search field at the top of the rail | Retool, Framer | A nine-item eyeball scan stops working at 17 kinds | ✅ |
+| **UI7** | **`⚡` live-binding and `⚠` broken-binding glyphs on rail rows** | **none — new** | The governing principle, made ambient. Surfaces the §6b silent-drop class before a customer sees it | 🟡 |
+| **UI8** | Drag handles in the rail only; never the canvas | A11 | Keyboard reordering free from dnd-kit; simultaneously simplest and most accessible | ✅ |
+| **UI9** | Hover-between-sections reveals a **`+` insert rule** in the canvas | Dribbble, Flodesk | Best insert affordance in the survey — states position without a word of UI | ✅ |
+| **UI10** | **Inspector on/off toggle** (`⌘⇧I`) | Shopify | An editor that permanently swallows clicks makes it impossible to test your own links or accordions | ✅ |
+| **UI11** | Inspector split into `Content` / `Style` tabs | Salesforce | Two tabs, not Webflow's five. Style = the `section-shell` vocabulary; Content = text and bindings | 🟡 |
+| **UI12** | **Binding picker shows real dish, live price, live availability** | **none — new** | Not a text field, not an ID list. Draws from the *resolvable* set (§6b), never raw `menu_items` | ✅ |
+| **UI13** | **Bound values are never editable in place** | A4 | The absence of a price field *is* the explanation of A4. The merchant learns "I change this in the menu" on first look | ✅ |
+| **UI14** | `RESET TO DEFAULT` per generated form group | Squarespace, Gamma | Generated forms let people paint into corners; every mature editor ships an exit | 🟡 |
+| **UI15** | **Publish button carries the unpublished-change count** — `Publish · 3` | **none — new** (GitBook hints in prose) | Free from A2's immutable versions. Draft-vs-published is the #1 merchant misunderstanding; this makes it ambient | ✅ |
+| **UI16** | Autosave stays; save state reads **`Saved 2m ago`**, not `Saved` | Shopify, Squarespace | A bare checkmark doesn't answer the question a nervous merchant is asking | ✅ |
+| **UI17** | **No separate `Save` button** | contra Uvodo, Salesforce | Both have one because neither autosaves. Two save-shaped buttons where one is automatic is the worst of both | ✅ |
+| **UI18** | Publish is a **popover**, not a modal; lists what changed; errors link to the offending section | GitBook + `validatePage` | Frequent, non-destructive action. A count with no path to the fix only creates anxiety | ✅ |
+| **UI19** | Version rollback copy taken near-verbatim from **Resend** | Resend | It is a literal, plain-English description of A2 | ⬜ |
+| **UI20** | **Point-in-time preview before restore** | GitBook | *Look before you leap* is worth more than any amount of confirmation-dialog wording | ⬜ |
+| **UI21** | Below `lg`, the rail drills in; canvas becomes a `Preview` tab | Uvodo | Merchants do open a 1280px lid and a tablet more often than we would like | ✅ |
 
 ---
 
@@ -296,31 +298,80 @@ preview-before-revert, and Resend's rollback sentence.
 
 ---
 
-## Appendix A — delta from what is built today
+## 8. Build report — 2026-08-15
 
-Recorded for estimation only; the design above was written without reference to it.
+### 8.1 What changed
 
-| Area | Today | Proposed | Rough cost |
-|---|---|---|---|
-| Shell | 3 fixed columns, both rails `hidden` below `md`/`lg` | Rail persistent, inspector on selection (UI1), drill-in below `lg` (UI21) | Moderate — `BuilderShell` layout + a mode in the store |
-| Rail | Flat list, kind labels | Zone groups, content labels, per-zone add, search, `⚡`/`⚠` (UI3–UI7) | Moderate. `⚡`/`⚠` needs resolver outcomes surfaced to the client — the only new data path in this document |
-| Canvas | Click-select | `+` insert rules (UI9), inspector toggle (UI10) | Small |
-| Inspector | Generated form, no tabs | Content/Style tabs, binding picker, reset-per-group (UI11–UI14) | **Largest item.** The binding picker is genuinely new UI |
-| Toolbar | Device switcher, undo/redo, validation pill, disabled Publish | Page dropdown, change count, `Saved 2m ago`, publish popover (UI15–UI18) | Moderate; the validation pill is absorbed into the popover |
-| Publish / versions | Not built (Stage 5) | §5.2, §5.3 | Stage 5 scope, unchanged in size |
-| First run | Empty canvas | Template picker (§5.4) | B11 — needs a designer and a budget |
+| File | Change |
+|---|---|
+| [sections/kinds.ts](../../../lib/site-builder/sections/kinds.ts) | `SECTION_CATEGORIES` — grouping for the Add Section modal |
+| [sections/registry.ts](../../../lib/site-builder/sections/registry.ts) | `category` + `titleField` per entry; `addableKindsByCategory`, `sectionTitle`, `isLiveBound` |
+| [schema-introspect.ts](../../../lib/site-builder/schema-introspect.ts) | `bindingType` on `FieldControl`, read from the `z.literal` in the binding schema — so the editor picks a picker from the schema rather than from a field name |
+| **[diff.ts](../../../lib/site-builder/diff.ts)** *(new)* | `diffDocuments` / `countChanges`. Powers UI15 and UI18. Key-order-insensitive; reports a reorder once rather than once per displaced section |
+| **[binding-health.ts](../../../lib/site-builder/binding-health.ts)** *(new)* | `sectionHealth` / `documentHealth` / `countBrokenBindings`. Reaches the resolver's own verdict client-side |
+| **[menu-catalog.ts](../../../app/dashboard/website/builder/menu-catalog.ts)** *(new)* | One server action serving both the picker and the `⚠` markers, via `get_menus_for_location` |
+| [builder/store.ts](../../../components/site-builder/builder/store.ts) | `publishedDoc`, `savedAt`, `inspectorEnabled`, `pageSettingsOpen`, `addOpen`/`insertIndex`, `catalog`, `pane` |
+| [builder/SectionList.tsx](../../../components/site-builder/builder/SectionList.tsx) | Rewritten — search, content labels, `⚡`/`⚠`, per-zone add, row overflow menu |
+| [builder/Canvas.tsx](../../../components/site-builder/builder/Canvas.tsx) | Monochrome overlay, `+` insert rules, preview mode |
+| [builder/SettingsPanel.tsx](../../../components/site-builder/builder/SettingsPanel.tsx) | Rewritten — tabs, per-field reset, segmented selects, shadcn `Switch` |
+| **[builder/MenuItemPicker.tsx](../../../components/site-builder/builder/MenuItemPicker.tsx)** *(new)* | The dish picker |
+| **[builder/AddSectionModal.tsx](../../../components/site-builder/builder/AddSectionModal.tsx)** *(new)* | Extracted from `Toolbar.tsx`, now `Command`-based |
+| [builder/Toolbar.tsx](../../../components/site-builder/builder/Toolbar.tsx) | Page dropdown, preview toggle, `Saved 2m ago`, `Publish · N` + popover |
+| [builder/BuilderShell.tsx](../../../components/site-builder/builder/BuilderShell.tsx) | Conditional inspector, responsive panes, catalog loading, `⌘K` / `⌘⇧I` |
 
-**Nothing in this document requires a migration or a change to the section contract.** UI7 is the only item needing
-data that does not currently reach the client, and that data is already computed by the resolver and discarded.
+**Harmony with the dashboard** was a stated requirement and drove one systematic change: the builder previously
+hardcoded `zinc-*` throughout. Every surface now uses the app's semantic tokens (`background`, `muted`, `accent`,
+`border`, `destructive`) and shadcn primitives (`Button`, `Tabs`, `Switch`, `Popover`, `DropdownMenu`, `Command`,
+`Tooltip`). Dark mode consequently works with no builder-specific rules — verified in a browser.
+
+### 8.2 Deviations from the design above
+
+| # | Deviation | Why |
+|---|---|---|
+| **UI2** | The `Publish` button uses the app's `primary` (violet), not a neutral | Harmony with every other primary action in the dashboard was the stronger requirement. The rule is kept where it actually matters — **the canvas overlay is fully monochrome**, so nothing coloured sits against the merchant's brand |
+| **UI7** | `⚠` covers `menu_item` bindings only | `location` and `hours` bindings point at the merchant's own restaurant record, which the client has no list to check against. Reporting them healthy states what the check knows; it does not assume they are fine |
+| **UI11** | Content/Style split is derived from **field names**, not a `style` object | `sectionStyleSchema` exists and `section-shell.tsx` can render one, but no schema carries it and no renderer reads it. Wiring it up is a contract change across nine schemas and nine renderers — out of scope for a UI pass, and the right next step |
+| **UI14** | Reset is **per field**, not per group | More granular and simpler to generate. Excluded for bindings, where "reset" would mean "discard every dish you chose" — a destructive action wearing a safe label |
+| **§5.1** | Add Section uses registry icons, not rendered thumbnails | Open question 3 below. Real previews need either a designer or a screenshot pipeline |
+
+### 8.3 Deferred, with the reason
+
+- **UI19 / UI20 — version history and rollback.** Stage 5 does not exist; there are no versions to list. The
+  publish popover is built and honest about it: it shows the real change list and validation state, and its Publish
+  action is disabled with the reason.
+- **§5.4 — first-run template picker.** Blocker **B11**; needs a designer and a budget.
+- **The location switcher and location pages** — superseded decision **D4** (2026-08-15) makes a site cover a whole
+  merchant with locations as pages beneath it. The toolbar's page control is a dropdown rather than a label
+  specifically so that adding those is a list of items, not a redesign. **This design has not otherwise been
+  reconciled with D4** — see open question 6.
+
+### 8.4 Verification
+
+- Strict typecheck of the whole builder graph: clean
+- **199 tests passing** (was 167), including 22 new ones across `diff.test.ts` and `binding-health.test.ts`
+- The "nothing under `components/site-builder/` outside `builder/` is a client component" test still passes — every
+  new client component lives in `builder/`
+- Driven in a browser against *Joes Coffee Shop / Downtown Hamra* with real menu data: selected a section, edited a
+  heading and watched the canvas re-render and the rail label follow, opened the dish picker showing six real
+  dishes with live prices, opened Add Section, and confirmed `Publish · 1` and its change list after one edit
+- Checked at 1920px, at 880px (pane drill-in), and in dark mode
+
+**Two bugs were found and fixed during that pass**, both introduced by this work:
+1. Pressing `Escape` to dismiss the publish popover also closed the inspector behind it — one keypress dismissing
+   two things. Guarded by checking for an open Radix layer before handling `Escape`.
+2. The shell's `h-[calc(100vh-4rem)]` ignored `#main-content`'s padding (`p-4 sm:p-6 pb-20 sm:pb-6`), so the new
+   bottom pane switcher was pushed off-screen. Fixed by cancelling that padding with negative margins, which also
+   makes the builder correctly full-bleed.
 
 ---
 
-## Appendix B — open questions
+## Appendix — open questions
 
-| # | Question |
-|---|---|
-| 1 | **UI1** — is the conditional inspector right, or should it be persistent with a collapse toggle? Most contestable call here |
-| 2 | **UI17** — dropping the separate `Save` button. Second most contestable |
-| 3 | Do rendered section thumbnails (§5.1) need a designer, or can they be screenshots of the real renderers against fixture data? |
-| 4 | Does `⚠` (UI7) need to survive into the *published* site as an HQ-visible signal, or is it editor-only? |
-| 5 | Does the change list in the publish popover (§5.2) require a real document diff, or is a per-mutation activity log sufficient? |
+| # | Question | Status |
+|---|---|---|
+| 1 | **UI1** — is the conditional inspector right, or should it be persistent with a collapse toggle? Most contestable call here | Built as designed; needs a merchant's opinion, not an engineer's |
+| 2 | **UI17** — dropping the separate `Save` button. Second most contestable | Built as designed |
+| 3 | Do rendered section thumbnails (§5.1) need a designer, or can they be screenshots of the real renderers against fixture data? | **Open.** Shipped with registry icons |
+| 4 | Does `⚠` (UI7) need to survive into the *published* site as an HQ-visible signal, or is it editor-only? | **Open.** Editor-only today |
+| 5 | Does the change list in the publish popover (§5.2) require a real document diff, or is a per-mutation activity log sufficient? | **Answered: a diff.** [diff.ts](../../../lib/site-builder/diff.ts) is pure, synchronous and needs no server, so the count stays live while the merchant types |
+| 6 | **How does this design meet the D4 supersession** (one site per merchant, locations as pages, no prices until a location is chosen)? | **Open, and now the largest gap.** The page dropdown is ready for location pages; `MenuItemPicker` already accepts `showPrices: false` and withholds money when a page is unscoped. Unresolved: the location-page list itself, `/locations/{slug}`, location-page auto-generation, and what `⚠` means on a brand page |
