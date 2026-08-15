@@ -21,9 +21,8 @@ export type PageStatus = "draft" | "published" | "archived";
 
 export interface MerchantSiteRow {
   id: string;
+  /** One site per merchant. The site is brand-level and has no location. */
   merchant_id: string;
-  location_id: string;
-  store_config_id: string;
   render_mode: RenderMode;
   nav: { items: unknown[] };
   theme: Record<string, unknown>;
@@ -44,6 +43,8 @@ export interface SitePageRow {
   id: string;
   site_id: string;
   merchant_id: string;
+  /** NULL = a brand page; set = a page about one location. See HANDOFF §11. */
+  location_id: string | null;
   path: string;
   title: string;
   is_home: boolean;

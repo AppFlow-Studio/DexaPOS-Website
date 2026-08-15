@@ -89,18 +89,19 @@ extend it — see [PLAN-00](PLAN-00-GENERAL.md) §4.2.
 
 ## 3. Tables
 
-### 3.1 `merchant_sites` — one per storefront, per **D4**
+### 3.1 `merchant_sites` — one **brand site per merchant**
 
-Hangs off `online_store_config`, inheriting slug, custom domain, `is_active`, brand colors, SEO, and GA for free.
+> **Changed 2026-08-15 — D4 superseded.** This section previously read "one per storefront" and hung the site off
+> `online_store_config`. It now hangs off the merchant, and locations are pages beneath it. The shipped DDL is
+> [20260813120000_website_builder_foundation.sql](../../../supabase/migrations/20260813120000_website_builder_foundation.sql);
+> where this document and that file disagree, the file is right.
 
 ```sql
 CREATE TABLE public.merchant_sites (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  merchant_id uuid NOT NULL REFERENCES public.merchants(id) ON DELETE CASCADE,
-  location_id uuid NOT NULL REFERENCES public.locations(id) ON DELETE CASCADE,
-  -- D4: one site per storefront. UNIQUE enforces it at the DB, not by convention.
-  store_config_id uuid NOT NULL UNIQUE
-    REFERENCES public.online_store_config(id) ON DELETE CASCADE,
+  -- One site per merchant. Brand-level: no location of its own, not tied to any
+  -- single storefront. (Was: merchant_id + location_id + store_config_id UNIQUE.)
+  merchant_id uuid NOT NULL UNIQUE REFERENCES public.merchants(id) ON DELETE CASCADE,
 
   -- B3/D5 routing fork. 'template' = existing 4 templates serve. 'builder' = built site serves.
   render_mode text NOT NULL DEFAULT 'template'

@@ -1,7 +1,64 @@
 # Plan 06 — The Builder Frontend
 
-**Stages 8–9** · Est. 5–7 weeks · Depends on **all** infrastructure stages
+**Stage 8** · 🟡 **CANVAS BUILT 2026-08-13 — NOT PERSISTED** · Stage 9 not started
 Parent: [PLAN-00-GENERAL.md](PLAN-00-GENERAL.md)
+
+> ### Status — working canvas, verified in a browser
+>
+> **167 tests, typecheck clean, lint clean, and driven end-to-end in Chrome** against merchant
+> *Joes Coffee Shop / Downtown Hamra*: sections selected, settings edited, canvas re-rendered with the change.
+>
+> | Artifact | |
+> |---|---|
+> | [builder/store.ts](../../../components/site-builder/builder/store.ts) | Zustand; document is the only state; 50-step undo/redo |
+> | [builder/Canvas.tsx](../../../components/site-builder/builder/Canvas.tsx) | Canvas + overlay (rings, floating controls, measurement) |
+> | [builder/SectionList.tsx](../../../components/site-builder/builder/SectionList.tsx) | dnd-kit reorder + keyboard + move buttons |
+> | [builder/SettingsPanel.tsx](../../../components/site-builder/builder/SettingsPanel.tsx) | **Generated from the Zod schemas** |
+> | [builder/Toolbar.tsx](../../../components/site-builder/builder/Toolbar.tsx) | Undo/redo, device, live validation, Add Section modal |
+> | [schema-introspect.ts](../../../lib/site-builder/schema-introspect.ts) | Zod → form controls, + 30 tests pinning the classification |
+> | [render-canvas.tsx](../../../app/dashboard/website/builder/render-canvas.tsx) | Server Action returning the rendered canvas |
+>
+> **Not persisted.** The save adapter is a no-op — autosave timing, save-state transitions and the conflict path
+> are all wired, but nothing is stored, so edits are lost on refresh. `SaveDraft` drops in behind `SaveAdapter`
+> once the Stage 2 migration is applied. Publish is deliberately disabled (Stage 5).
+>
+> #### The architectural correction that mattered
+>
+> §2.2 below proposes re-rendering the canvas by POSTing the document to a route that returns HTML from
+> `renderToStaticMarkup`. **That does not work.** Next refuses `react-dom/server` anywhere in the app-directory
+> module graph — it fails in a page *and* in a route handler, regardless of client components.
+>
+> The working answer is better: **a Server Action that returns JSX.** Its return value is serialized as an RSC
+> payload, so the client holds a server-rendered React tree in state and drops it into the canvas. No HTML
+> strings, no `dangerouslySetInnerHTML`, no serialization round-trip — and still exactly one `PageRenderer`.
+> The first paint is rendered by the page as a Server Component and passed down as a prop (a client component may
+> *receive* a server tree; it just may not import one).
+>
+> #### A constraint this creates
+>
+> The FAQ accordion was written as a `"use client"` island and turned out to need nothing from the client —
+> `<details>`/`<summary>` is natively interactive. It is now a server component, and a test enforces that
+> **nothing under `components/site-builder/` outside `builder/` is a client component**.
+>
+> That is load-bearing: the moment a section genuinely needs client JavaScript, prefer a CSS/native-HTML solution.
+> If one truly needs an island, the canvas must move to an iframe fed by a real route — a change confined to
+> `Canvas.tsx`.
+>
+> #### Deviations from the plan below
+>
+> | Planned | Built | Why |
+> |---|---|---|
+> | iframe canvas (§2.3) | **Same-document** | Sections style themselves through `--site-*` custom properties scoped to the shell and the only global CSS is class-scoped `.site-prose`, so isolation was not needed. Removes the whole postMessage geometry protocol |
+> | Drag-and-drop on the canvas | **Drag in the layers panel** | dnd-kit's sortable gives keyboard reordering for free, so this is simultaneously the simplest and the accessible implementation. Canvas dragging can follow |
+> | Fast-path text patching (§2.2) | **Not built** | 400 ms debounce on everything, shipped first to find out whether the optimisation is actually needed |
+> | TipTap for rich text | **Textarea** | TipTap is already in the repo and drops in; the markup passes the same sanitizer either way, so it is a UI upgrade, not a behavioural one |
+>
+> #### Found while verifying
+>
+> **`.env` has two `NEXT_PUBLIC_SUPABASE_URL` lines.** The second (prod, `hifouuofcaytijrkbvcy`) wins while every
+> key is staging (`dfwqakoyittmrwbqvxgw`), so every Clerk-authed Supabase read fails with `Invalid API key`
+> locally. Pre-existing, unrelated to the builder, and **not fixed** — it is your env file. Verification ran with
+> a shell override.
 
 > Deliberately later. By the time this starts, a real site is already live on a real domain with versioning,
 > rollback, and live prices — so this stage is *pure UI over a proven API*, which is the cheapest possible way to

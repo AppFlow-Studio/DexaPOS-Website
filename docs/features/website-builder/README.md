@@ -18,7 +18,7 @@ availability data drawn straight from the POS.
 | 5 — Publish pipeline | ⬜ |
 | 6 — Public routing & SEO | ⬜ |
 | 7 — Assets, domains, forms | ⬜ Deferred out of v1 |
-| 8 — Builder canvas | ⬜ |
+| 8 — Builder canvas | 🟡 **Built 2026-08-13, not persisted** — `/dashboard/website/builder`, verified in a browser; edits are lost on refresh until the migration lands |
 
 > **See it working now** — no migration needed:
 > `npm run dev`, then open **`/dashboard/website/preview`** as a merchant with an online store. A complete
@@ -30,6 +30,28 @@ availability data drawn straight from the POS.
 > [20260813120000_website_builder_foundation.sql](../../../supabase/migrations/20260813120000_website_builder_foundation.sql)
 > to staging, then run `npx tsx scripts/verify-site-tenancy.ts --list` and the `--a/--b` form. No SQL in Stage 2 has
 > been executed — the DDL, triggers, and RLS policies remain unverified until that passes.
+
+> ## ⚠️ Site granularity changed on 2026-08-15 — **D4 is superseded**
+>
+> **One site per merchant**, not one per location. A merchant gets a single brand website; each location is a
+> *page* beneath it (`site_pages.location_id`, nullable — NULL = brand page). Online ordering is untouched and
+> stays per location: a location page's "Order Now" links into that location's existing `/sites/{slug}`
+> storefront.
+>
+> *Why:* under D4 a five-location merchant maintained five separate websites, five copies of the same About
+> page, and — the part that costs money — SEO authority split five ways instead of accumulating on one domain.
+>
+> **Product rule agreed with the team: no prices until the visitor picks a location.** Branches can charge
+> different amounts for the same dish, so a price shown before a location is chosen is a guess. Names, photos and
+> descriptions still show (they are merchant-level on `menu_items`); only money and 86/snooze wait for a choice.
+> Single-location merchants auto-select and never see a picker. Enforced by `canShowPrices()` in
+> [render-context.ts](../../../lib/site-builder/render-context.ts) and `ResolverContext.scoped`.
+>
+> **Never redirect the brand home page based on geolocation.** Googlebot crawls from one place; an auto-redirect
+> means Google only ever indexes one location and the whole SEO rationale is lost. Location choice is in-page
+> state; `/locations/{slug}` must render fully with no geolocation involved.
+>
+> Still to build: the location picker, `/locations/{slug}` routing, and location-page auto-generation (Stage 6).
 
 **v1 scope was cut hard on 2026-08-13** — take the simplest option everywhere and revisit later. Builder surface
 only (no SEO panel, forms, promos, or analytics surface); 9 section kinds not 17; `reviews` and `reservations` cut
@@ -57,6 +79,10 @@ practice.
 
 | Document | Covers |
 |---|---|
+| [HANDOFF-2026-08-13-BUILD-SESSION.md](HANDOFF-2026-08-13-BUILD-SESSION.md) | **Start here to pick the work up.** Everything built, every decision taken, corrections to the plans, what is proven vs unverified, gotchas, and what to do next |
+| [BUGS-2026-08-14-BUILDER-AUDIT.md](BUGS-2026-08-14-BUILDER-AUDIT.md) | 16 open defects in the builder, with trace evidence for why the route is slow. **C1 (autosave drops edits) must be fixed before `SaveDraft` replaces the no-op adapter** |
+| [DESIGN-2026-08-14-BUILDER-UI.md](DESIGN-2026-08-14-BUILDER-UI.md) | 🔵 **Proposal, nothing built.** The builder interface redrawn from first principles, ignoring the current UI. Decision register **UI1–UI21**, region-by-region spec, publish/rollback/first-run flows, and what to reject. Requires no migration and no change to the section contract |
+| [RESEARCH-2026-08-14-BUILDER-UI-PRIOR-ART.md](RESEARCH-2026-08-14-BUILDER-UI-PRIOR-ART.md) | 18 shipped editors surveyed via Mobbin, with a link to every screen. Establishes that **Shopify's theme editor — not Webflow or Figma — is our reference class**, and that no surveyed product surfaces live data because none has a POS behind the page |
 | [ANALYSIS-2026-08-11-MOCKBUILDER-GAP.md](ANALYSIS-2026-08-11-MOCKBUILDER-GAP.md) | Gap analysis, decisions **D1–D6**, blocker register **B1–B12**, MockBuilder source review |
 | [FINDING-2026-08-12-EXISTING-CMS-PRIOR-ART.md](FINDING-2026-08-12-EXISTING-CMS-PRIOR-ART.md) | This repo already ships a section-tree CMS with a **server-side renderer**. Reduces the two hardest unknowns to porting problems |
 | [RESEARCH-OWNER-COM.md](RESEARCH-OWNER-COM.md) | The reference product — what to copy, what not to, and where they are structurally beatable |

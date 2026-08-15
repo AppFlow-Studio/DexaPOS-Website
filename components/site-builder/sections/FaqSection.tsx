@@ -1,7 +1,7 @@
 import { sanitizeHtml } from "@/lib/cms/sanitize";
 import type { SectionRenderProps } from "@/lib/site-builder/render-context";
 import { fieldAttrs } from "../edit-attrs";
-import FaqAccordion from "../islands/FaqAccordion";
+import FaqAccordion from "./shared/FaqAccordion";
 import {
   Container,
   SectionHeading,

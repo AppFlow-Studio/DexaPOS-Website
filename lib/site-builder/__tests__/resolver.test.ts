@@ -394,3 +394,109 @@ describe("flattenMenuItems", () => {
     }
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// query cost
+//
+// The resolver's cost is the thing most likely to regress silently: a page
+// renders identically whether it issued two queries or six, so only a test
+// notices. Measured against staging, one `get_menus_for_location` call is
+// ~500 ms / 354 KB, and a serial round trip is ~400 ms — worth guarding.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("query cost", () => {
+  const COST_CTX = { merchantId: "m_1", locationId: LOCATION_ID };
+
+  it("issues the menu and location fetches concurrently, not in series", async () => {
+    const order: string[] = [];
+    let releaseMenu: () => void = () => {};
+    const menuGate = new Promise<void>((r) => {
+      releaseMenu = r;
+    });
+
+    const slowSources: ResolverSources = {
+      async fetchMenuItems() {
+        order.push("menu:start");
+        await menuGate;
+        order.push("menu:end");
+        return [item("a"), item("b")];
+      },
+      async fetchLocations(ids) {
+        // If this only starts after the menu fetch resolves, the two are
+        // serial and the page pays both latencies back to back.
+        order.push("location:start");
+        releaseMenu();
+        return [location()].filter((l) => ids.includes(l.id));
+      },
+    };
+
+    await resolveBindings(collectBindings(pageWithItems(["a", "b"])), COST_CTX, slowSources);
+
+    expect(order.indexOf("location:start")).toBeLessThan(order.indexOf("menu:end"));
+  });
+
+  it("keeps location bindings resolved when the menu source throws", async () => {
+    const halfBroken: ResolverSources = {
+      async fetchMenuItems() {
+        throw new Error("get_menus_for_location failed: boom");
+      },
+      async fetchLocations() {
+        return [location()];
+      },
+    };
+
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { map } = await resolveBindings(
+      collectBindings(pageWithItems(["a"])),
+      COST_CTX,
+      halfBroken,
+    );
+    spy.mockRestore();
+
+    // A menu outage must not blank the address and opening hours too.
+    expect(lookupLocation(map, LOCATION_ID).status).toBe("ok");
+    expect(lookupMenuItem(map, "a").status).toBe("unavailable");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// brand pages (one site, many locations — 2026-08-15)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("unscoped (brand page) resolution", () => {
+  const BRAND_CTX = { merchantId: "m_1", locationId: LOCATION_ID, scoped: false };
+
+  it("does not hide 86'd items when no location has been chosen", async () => {
+    // The location was borrowed to read names and photos. Its 86 state says
+    // nothing about the restaurant the visitor will actually order from, so
+    // hiding a signature dish on its account would be arbitrary.
+    const { map } = await resolveBindings(
+      collectBindings(pageWithItems(["a"])),
+      BRAND_CTX,
+      sources([item("a", { available: false })]),
+    );
+
+    expect(lookupMenuItem(map, "a").status).toBe("ok");
+  });
+
+  it("still hides items that do not exist at all", async () => {
+    // A deleted item has no name or photo to show, unlike an 86'd one.
+    const { map } = await resolveBindings(
+      collectBindings(pageWithItems(["gone"])),
+      BRAND_CTX,
+      sources([]),
+    );
+
+    expect(lookupMenuItem(map, "gone").status).toBe("unavailable");
+  });
+
+  it("keeps hiding 86'd items once a location IS chosen", async () => {
+    const { map } = await resolveBindings(
+      collectBindings(pageWithItems(["a"])),
+      { merchantId: "m_1", locationId: LOCATION_ID },
+      sources([item("a", { available: false })]),
+    );
+
+    expect(lookupMenuItem(map, "a").status).toBe("unavailable");
+  });
+});

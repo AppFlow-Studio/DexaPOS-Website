@@ -46,7 +46,13 @@ export async function ListPages(
 export async function CreatePage(
   clerkOrgId: string,
   siteId: string,
-  input: { title: string; path?: string },
+  /**
+   * `locationId` makes this a **location page** — one restaurant's hours,
+   * address, menu and prices. Omit it for a brand page (home, About, contact),
+   * which speaks for the whole business and shows no prices until the visitor
+   * picks somewhere. See HANDOFF §11.
+   */
+  input: { title: string; path?: string; locationId?: string },
 ): Promise<ActionResult<SitePageSummary>> {
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
@@ -69,15 +75,12 @@ export async function CreatePage(
 
   const { data: site } = await supabase
     .from("merchant_sites")
-    .select("id, merchant_id, location_id, max_pages")
+    .select("id, merchant_id, max_pages")
     .eq("id", siteId)
     .maybeSingle();
 
   if (!site) return { error: "Site not found", code: "site_not_found" };
-  const siteRow = site as Pick<
-    MerchantSiteRow,
-    "id" | "merchant_id" | "location_id" | "max_pages"
-  >;
+  const siteRow = site as Pick<MerchantSiteRow, "id" | "merchant_id" | "max_pages">;
 
   // Quota (blocker B9). NULL means unlimited, which is every merchant in v1 —
   // the check exists so turning limits on later is a config change.
@@ -101,10 +104,13 @@ export async function CreatePage(
     .insert({
       site_id: siteId,
       merchant_id: siteRow.merchant_id,
+      location_id: input.locationId ?? null,
       path,
       title,
       is_home: false,
-      draft_content: createEmptyPage({ locationId: siteRow.location_id }),
+      draft_content: createEmptyPage(
+        input.locationId ? { locationId: input.locationId } : undefined,
+      ),
     })
     .select(PAGE_SUMMARY_COLUMNS)
     .single();
@@ -120,7 +126,7 @@ export async function CreatePage(
 
   await LogAuditEvent({
     clerkOrgId,
-    locationId: siteRow.location_id,
+    locationId: input.locationId ?? null,
     action: "created_website_page",
     actionCategory: "website",
     severity: "info",

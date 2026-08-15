@@ -4,11 +4,22 @@
 
 import * as Sentry from "@sentry/nextjs";
 
+/**
+ * Legacy client config — `instrumentation-client.ts` is the current entry point
+ * for this SDK version and carries the same settings. Both are guarded so the
+ * dev behaviour is identical whichever one the SDK actually loads. Worth
+ * collapsing to one file at some point; two `Sentry.init` calls is a latent
+ * double-initialisation.
+ *
+ * See `instrumentation-client.ts` for why development skips tracing and replay.
+ */
+const isDev = process.env.NODE_ENV === "development";
+
 Sentry.init({
   dsn: "https://82d5a5c61852d6bcd0d99c57ce185d0f@o4511212537380864.ingest.us.sentry.io/4511226223460352",
 
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
-  tracesSampleRate: 1,
+  tracesSampleRate: isDev ? 0 : 1,
 
   // Define how likely Replay events are sampled.
   // This sets the sample rate to be 10%. You may want this to be 100% while
@@ -21,7 +32,5 @@ Sentry.init({
   // Setting this option to true will print useful information to the console while you're setting up Sentry.
   debug: false,
 
-  integrations: [
-    Sentry.replayIntegration(),
-  ],
+  integrations: isDev ? [] : [Sentry.replayIntegration()],
 });

@@ -41,12 +41,12 @@ function menuItem(id: string, overrides: Partial<ResolvedMenuItem> = {}): Resolv
   };
 }
 
-function ctxFor(mode: RenderMode = "public") {
+function ctxFor(mode: RenderMode = "public", locationId: string | null = LOCATION_ID) {
   return createRenderContext({
     mode,
     site: {
       siteId: "site_1",
-      locationId: LOCATION_ID,
+      locationId,
       slug: "tonys",
       name: "Tony's Pizza",
       logoUrl: null,
@@ -90,8 +90,13 @@ function mapWith(
   return map;
 }
 
-function render(doc: PageDocument, map: ResolvedMap, mode: RenderMode = "public"): string {
-  const ctx = ctxFor(mode);
+function render(
+  doc: PageDocument,
+  map: ResolvedMap,
+  mode: RenderMode = "public",
+  locationId: string | null = LOCATION_ID,
+): string {
+  const ctx = ctxFor(mode, locationId);
   return renderToStaticMarkup(
     <SiteChrome ctx={ctx}>
       <PageRenderer doc={doc} resolved={map} ctx={ctx} />
@@ -115,19 +120,39 @@ describe("renderer architecture", () => {
    * The single most important invariant in the renderer (ANALYSIS blocker B7).
    * The mock trapped all 17 renderers inside one 5,051-line "use client" module,
    * which is why its Phase 4 was impossible without extracting them first.
+   *
+   * It is also load-bearing for the builder: the canvas re-renders through
+   * `renderToStaticMarkup` in a route handler, and Next refuses
+   * `react-dom/server` in any module graph that reaches a client component. One
+   * `"use client"` anywhere under the renderer breaks the canvas — so this test
+   * covers the whole render tree, not just `sections/`.
    */
-  it("has no client components among the section renderers", () => {
+  it("has no client components anywhere in the render graph", () => {
+    const renderRoot = join(process.cwd(), "components/site-builder");
     const offenders: string[] = [];
+
     const walk = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const path = join(dir, entry.name);
-        if (entry.isDirectory()) walk(path);
-        else if (entry.name.endsWith(".tsx") && readFileSync(path, "utf-8").includes('"use client"')) {
-          offenders.push(entry.name);
+        // `builder/` is the canvas UI and is legitimately client-side; it is
+        // never imported by PageRenderer.
+        if (entry.isDirectory()) {
+          if (entry.name !== "builder") walk(path);
+          continue;
+        }
+        if (entry.name.endsWith(".tsx") || entry.name.endsWith(".ts")) {
+          // Match the *directive* — a line that is exactly `"use client";` —
+          // not the string anywhere in the file, or a comment explaining why a
+          // component deliberately is not one would fail this test.
+          const isClient = readFileSync(path, "utf-8")
+            .split("\n")
+            .some((line) => /^\s*["']use client["'];?\s*$/.test(line));
+          if (isClient) offenders.push(entry.name);
         }
       }
     };
-    walk(sectionsDir);
+
+    walk(renderRoot);
     expect(offenders).toEqual([]);
   });
 
@@ -348,5 +373,66 @@ describe("hours and location", () => {
     const html = render(demoWith([]), map);
     expect(html).toContain("Find us");
     expect(html).not.toContain("123 Bedford Ave");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// one site, many locations
+//
+// A merchant has ONE website; a page under it is either about the brand or
+// about a single restaurant (`site_pages.location_id`). Branches may charge
+// different amounts for the same dish, so a price on a brand page — before the
+// visitor has chosen where they are ordering from — would be a guess.
+// Decided with the team 2026-08-15.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("prices are location-scoped", () => {
+  const BRAND_PAGE = null;
+
+  it("shows prices on a location page", () => {
+    const html = render(demoWith(["a", "b"]), mapWith({ a: menuItem("a", { price: 24.5 }), b: menuItem("b") }));
+    expect(html).toContain("$24.50");
+  });
+
+  it("shows no price on a brand page, however the merchant configured the section", () => {
+    // The demo fixture sets showPrices: true — the section wants prices. The
+    // render context is what withholds them.
+    const html = render(
+      demoWith(["a", "b"]),
+      mapWith({ a: menuItem("a", { price: 24.5 }), b: menuItem("b") }),
+      "public",
+      BRAND_PAGE,
+    );
+
+    expect(html).not.toContain("$24.50");
+    expect(html).not.toContain("$18.00");
+  });
+
+  it("still shows the dishes on a brand page — names and photos are merchant-level", () => {
+    const html = render(
+      demoWith(["a", "b"]),
+      mapWith({ a: menuItem("a"), b: menuItem("b") }),
+      "public",
+      BRAND_PAGE,
+    );
+
+    // Withholding prices must not empty the section; the food is the point.
+    expect(html).toContain("Dish a");
+    expect(html).toContain("Dish b");
+  });
+
+  it("drops the dual-pricing disclosure when no price is shown", () => {
+    // The disclosure explains a price the visitor cannot see — it would be noise
+    // at best and confusing at worst.
+    const withPrices = render(demoWith(["a", "b"]), mapWith({ a: menuItem("a"), b: menuItem("b") }));
+    const brandPage = render(
+      demoWith(["a", "b"]),
+      mapWith({ a: menuItem("a"), b: menuItem("b") }),
+      "public",
+      BRAND_PAGE,
+    );
+
+    expect(withPrices).toContain("Prices reflect online rates.");
+    expect(brandPage).not.toContain("Prices reflect online rates.");
   });
 });

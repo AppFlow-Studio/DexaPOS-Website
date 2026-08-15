@@ -59,7 +59,17 @@ export const DEFAULT_THEME: ThemeTokens = {
 /** Site-level facts a section may display without binding to them. */
 export interface RenderSite {
   siteId: string;
-  locationId: string;
+  /**
+   * The one restaurant this render is scoped to, or `null` on a brand page whose
+   * visitor has not chosen a location yet.
+   *
+   * A site covers a whole merchant; a *page* may be about one location
+   * (`site_pages.location_id`) or about the brand. Null means prices and
+   * availability are not yet answerable — five branches may charge five
+   * different amounts — so sections must not show either. Use `canShowPrices`
+   * rather than testing this field directly.
+   */
+  locationId: string | null;
   slug: string;
   name: string;
   logoUrl: string | null;
@@ -105,6 +115,24 @@ export interface RenderContext {
    * asset pipeline on later changes nothing in this layer.
    */
   resolveAssetUrl: (assetId: string) => string | null;
+}
+
+/**
+ * Whether money may appear in this render.
+ *
+ * The single source of truth for the product rule "no prices until the visitor
+ * picks a location" (decided 2026-08-15). One merchant's branches can charge
+ * different amounts for the same dish, so a price shown before a location is
+ * chosen is a guess — and a guess about money is a support ticket.
+ *
+ * A section still needs its own `showPrices` prop to be true; this only ever
+ * takes prices away, never adds them.
+ *
+ * The same condition governs 86/snooze: on an unscoped page there is no single
+ * kitchen to be out of something, so nothing is filtered for availability.
+ */
+export function canShowPrices(ctx: RenderContext): boolean {
+  return ctx.site.locationId !== null;
 }
 
 /** Uniform props every section component receives. */

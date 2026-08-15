@@ -24,7 +24,25 @@ import {
 
 export interface ResolverContext {
   merchantId: string;
+  /**
+   * The location to query. Always required — `get_menus_for_location` cannot
+   * answer without one, even for a brand page.
+   */
   locationId: string;
+  /**
+   * Whether `locationId` is the restaurant the visitor actually chose.
+   *
+   * Defaults to true. Pass `false` on a brand page, where a location was merely
+   * borrowed to read item names, descriptions and photos — those live on
+   * `menu_items` at the merchant level and are identical everywhere, while
+   * prices and 86/snooze are not.
+   *
+   * When false, availability is not applied: on an unscoped page there is no
+   * single kitchen to be out of something, and hiding a signature dish because
+   * one branch ran out would be arbitrary. Prices still resolve; the renderer
+   * declines to show them (`canShowPrices`).
+   */
+  scoped?: boolean;
 }
 
 /**
@@ -74,15 +92,37 @@ export async function resolveBindings(
   if (requests.length === 0) return { map, queryCount: 0 };
 
   const grouped = groupByType(requests);
+
+  const menuItemIds = grouped.get("menu_item") ?? [];
+  const locationIds = [
+    ...new Set([...(grouped.get("location") ?? []), ...(grouped.get("hours") ?? [])]),
+  ];
+
   let queryCount = 0;
+  if (menuItemIds.length > 0) queryCount += 1;
+  if (locationIds.length > 0) queryCount += 1;
+
+  // The two sources share no data, so they are issued together. In series this
+  // cost a full extra round trip — ~400 ms against a remote database, on every
+  // single render of every page.
+  //
+  // `allSettled` rather than `all`: one source failing must still leave the
+  // other's bindings resolved, so a menu outage degrades the Guest Favorites
+  // section without also blanking the address and opening hours.
+  const [itemsOutcome, locationsOutcome] = await Promise.allSettled([
+    menuItemIds.length > 0 ? sources.fetchMenuItems(ctx) : Promise.resolve([]),
+    locationIds.length > 0 ? sources.fetchLocations(locationIds) : Promise.resolve([]),
+  ]);
 
   // ── menu items ────────────────────────────────────────────────────────────
-  const menuItemIds = grouped.get("menu_item") ?? [];
   if (menuItemIds.length > 0) {
-    queryCount += 1;
-    try {
-      const items = await sources.fetchMenuItems(ctx);
-      const byId = new Map(items.map((i) => [i.id, i]));
+    if (itemsOutcome.status === "fulfilled") {
+      const byId = new Map(itemsOutcome.value.map((i) => [i.id, i]));
+
+      // See `ResolverContext.scoped`: a brand page borrowed this location purely
+      // for names and photos, so its 86/snooze state says nothing about what the
+      // visitor's eventual restaurant can make.
+      const applyAvailability = ctx.scoped !== false;
 
       for (const id of menuItemIds) {
         const item = byId.get(id);
@@ -90,35 +130,30 @@ export async function resolveBindings(
           // Deleted, or not on a menu serving this location. Same handling
           // either way: the section skips it and the publish gate warns.
           map.menuItems.set(id, unavailable("not_found"));
-        } else if (!item.available) {
+        } else if (!item.available && applyAvailability) {
           map.menuItems.set(id, unavailable("unavailable"));
         } else {
           const { available: _available, ...data } = item;
           map.menuItems.set(id, resolved(data));
         }
       }
-    } catch (error) {
-      console.error("[site-builder] menu item resolution failed:", error);
+    } else {
+      console.error("[site-builder] menu item resolution failed:", itemsOutcome.reason);
       for (const id of menuItemIds) map.menuItems.set(id, unavailable("not_found"));
     }
   }
 
   // ── locations (and hours, which live on the same row) ──────────────────────
-  const locationIds = [
-    ...new Set([...(grouped.get("location") ?? []), ...(grouped.get("hours") ?? [])]),
-  ];
   if (locationIds.length > 0) {
-    queryCount += 1;
-    try {
-      const locations = await sources.fetchLocations(locationIds);
-      const byId = new Map(locations.map((l) => [l.id, l]));
+    if (locationsOutcome.status === "fulfilled") {
+      const byId = new Map(locationsOutcome.value.map((l) => [l.id, l]));
 
       for (const id of locationIds) {
         const location = byId.get(id);
         map.locations.set(id, location ? resolved(location) : unavailable("not_found"));
       }
-    } catch (error) {
-      console.error("[site-builder] location resolution failed:", error);
+    } else {
+      console.error("[site-builder] location resolution failed:", locationsOutcome.reason);
       for (const id of locationIds) map.locations.set(id, unavailable("not_found"));
     }
   }

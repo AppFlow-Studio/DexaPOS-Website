@@ -57,6 +57,18 @@ renderers) and F1's note on discriminated unions.
 
 ### D4 — Site granularity follows online-ordering: **one site per location**
 
+> ## ❌ SUPERSEDED 2026-08-15 — it is now **one site per merchant**
+>
+> Decided with the team. A merchant gets one brand website; each location is a *page* beneath it
+> (`site_pages.location_id`, nullable). Online ordering is unchanged and stays per location.
+>
+> D4's reasoning below is still worth reading — it was a defensible inheritance of an existing rule, and it is
+> correct that location-dependent sections need no new resolution rule. What it missed is that a five-location
+> merchant then maintains five separate websites with five copies of the same About page, and that SEO authority
+> splits five ways instead of accumulating on one domain. The SEO consequence is what settled it.
+>
+> See [README](README.md) and [HANDOFF §11](HANDOFF-2026-08-13-BUILD-SESSION.md) for the replacement model.
+
 Resolves blocker **B1** by inheriting the existing rule rather than inventing one.
 [schema.sql:2270+](../../../schema.sql) — `online_store_config` is `merchant_id NOT NULL` +
 `location_id NOT NULL`, with `slug UNIQUE` and `custom_domain UNIQUE`. One store, one slug, one

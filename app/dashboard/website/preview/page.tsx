@@ -7,11 +7,12 @@ import { resolveBindings } from "@/lib/site-builder/bindings/resolve";
 import { createSupabaseResolverSources } from "@/lib/site-builder/bindings/supabase-sources";
 import { createDemoPage } from "@/lib/site-builder/fixtures/demo-page";
 import { normalizePage } from "@/lib/site-builder/normalize";
+import type { RenderMode } from "@/lib/site-builder/render-context";
 import {
-  DEFAULT_THEME,
-  createRenderContext,
-  type RenderMode,
-} from "@/lib/site-builder/render-context";
+  buildRenderContext,
+  loadSampleMenuItemIds,
+  loadSiteContext,
+} from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -51,31 +52,8 @@ export default async function WebsitePreviewPage({
   const params = await searchParams;
   const supabase = createServerSupabaseClient();
 
-  const { data: merchant } = await supabase
-    .from("merchants")
-    .select("id")
-    .eq("clerk_org_id", orgId)
-    .single();
-
-  if (!merchant) return <PreviewNotice title="Merchant not found" />;
-  const merchantId = merchant.id as string;
-
-  // One flat query, then pick in JS. Conditionally chaining `.eq()` onto a
-  // reassigned builder grows the PostgrestFilterBuilder type until inference
-  // gives up (TS2589), and a merchant has a handful of storefronts at most.
-  const { data: storeRows } = await supabase
-    .from("online_store_config")
-    .select(
-      "id, location_id, slug, store_name, logo_url, hero_image_url, phone, primary_color, background_color, text_color, border_color, card_color, font_family, pricing_disclosure_text, delivery_pricing_enabled",
-    )
-    .eq("merchant_id", merchantId);
-
-  const storeConfigs = (storeRows ?? []) as Record<string, string | boolean | null>[];
-  const storeConfig = params.location
-    ? storeConfigs.find((c) => c.location_id === params.location)
-    : storeConfigs[0];
-
-  if (!storeConfig) {
+  const site = await loadSiteContext(supabase, orgId, params.location);
+  if (!site) {
     return (
       <PreviewNotice
         title="No online store on this merchant"
@@ -84,65 +62,31 @@ export default async function WebsitePreviewPage({
     );
   }
 
-  const config = storeConfig;
-  const locationId = String(config.location_id);
-
-  // Real menu items, so the preview shows real prices rather than lorem ipsum.
-  const { data: sampleItems } = await supabase
-    .from("menu_items")
-    .select("id")
-    .eq("merchant_id", merchantId)
-    .limit(6);
+  // Sources are built before the document, so seeding the fixture and resolving
+  // it share one memoised menu fetch instead of issuing two.
+  const sources = createSupabaseResolverSources(supabase, {
+    deliveryPricingEnabled: site.deliveryPricingEnabled,
+  });
+  const resolverCtx = { merchantId: site.merchantId, locationId: site.locationId };
 
   const menuItemIds = params.items
     ? params.items.split(",").filter(Boolean)
-    : ((sampleItems ?? []) as { id: string }[]).map((i) => i.id);
+    : await loadSampleMenuItemIds(sources, resolverCtx);
 
   // ── the production pipeline, from here down ──────────────────────────────
-  const doc = normalizePage(createDemoPage({ locationId, menuItemIds }));
+  const doc = normalizePage(
+    createDemoPage({ locationId: site.locationId, menuItemIds }),
+  );
 
   const mode: RenderMode = params.mode === "builder" ? "builder" : "preview";
 
-  const sources = createSupabaseResolverSources(supabase, {
-    deliveryPricingEnabled: config.delivery_pricing_enabled !== false,
-  });
-
   const { map: resolved, queryCount } = await resolveBindings(
     collectBindings(doc, { includeHidden: mode === "builder" }),
-    { merchantId, locationId },
+    resolverCtx,
     sources,
   );
 
-  const ctx = createRenderContext({
-    mode,
-    site: {
-      siteId: String(config.id),
-      locationId,
-      slug: String(config.slug ?? ""),
-      name: String(config.store_name ?? "Your restaurant"),
-      logoUrl: (config.logo_url as string | null) ?? null,
-      heroImageUrl: (config.hero_image_url as string | null) ?? null,
-      phone: (config.phone as string | null) ?? null,
-      basePath: `/sites/${config.slug}`,
-      // Stage 6 owns the real answer (PLAN-04 §2); the storefront root is the
-      // ordering page today, which is exactly the collision Stage 6 resolves.
-      orderUrl: `/sites/${config.slug}`,
-      menuUrl: `/sites/${config.slug}`,
-      nav: [],
-      pricingDisclosureText: (config.pricing_disclosure_text as string | null) ?? null,
-    },
-    theme: {
-      ...DEFAULT_THEME,
-      brand: String(config.primary_color ?? DEFAULT_THEME.brand),
-      surface: String(config.background_color ?? DEFAULT_THEME.surface),
-      text: String(config.text_color ?? DEFAULT_THEME.text),
-      border: String(config.border_color ?? DEFAULT_THEME.border),
-      card: String(config.card_color ?? DEFAULT_THEME.card),
-      fontFamily: config.font_family
-        ? `"${config.font_family}", system-ui, sans-serif`
-        : DEFAULT_THEME.fontFamily,
-    },
-  });
+  const ctx = buildRenderContext(site, mode);
 
   return (
     <>

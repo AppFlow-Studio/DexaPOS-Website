@@ -33,8 +33,13 @@ async function resolveMerchantId(
 }
 
 /**
- * Returns the site for a location, creating it (plus a starter home page) on
- * first use.
+ * Returns the merchant's site, creating it (plus a starter home page) on first
+ * use.
+ *
+ * **One site per merchant** (2026-08-15, superseding D4). The site is
+ * brand-level: it covers every location, and locations become pages beneath it.
+ * `locationId` is therefore not what identifies the site — it is only used to
+ * seed the starter home page with that location's menu.
  *
  * Creating the site does **not** make it live — `render_mode` stays `'template'`
  * until the first successful publish, so a merchant who opens the builder and
@@ -52,37 +57,17 @@ export async function GetOrCreateSite(
   const { merchantId, error: merchantError } = await resolveMerchantId(supabase, clerkOrgId);
   if (!merchantId) return { error: merchantError, code: "merchant_not_found" };
 
-  // The site hangs off the storefront config (decision D4), inheriting its slug,
-  // custom domain, active flag, brand colours and SEO rather than duplicating them.
-  const { data: storeConfig } = await supabase
-    .from("online_store_config")
-    .select("id")
-    .eq("merchant_id", merchantId)
-    .eq("location_id", locationId)
-    .maybeSingle();
-
-  if (!storeConfig) {
-    return {
-      error: "This location does not have an online store yet. Set one up first.",
-      code: "no_online_store",
-    };
-  }
-
   const { data: existing } = await supabase
     .from("merchant_sites")
     .select("*")
-    .eq("store_config_id", storeConfig.id)
+    .eq("merchant_id", merchantId)
     .maybeSingle();
 
   if (existing) return { data: existing as MerchantSiteRow };
 
   const { data: created, error: createError } = await supabase
     .from("merchant_sites")
-    .insert({
-      merchant_id: merchantId,
-      location_id: locationId,
-      store_config_id: storeConfig.id,
-    })
+    .insert({ merchant_id: merchantId })
     .select("*")
     .single();
 
@@ -92,7 +77,7 @@ export async function GetOrCreateSite(
       const { data: raced } = await supabase
         .from("merchant_sites")
         .select("*")
-        .eq("store_config_id", storeConfig.id)
+        .eq("merchant_id", merchantId)
         .maybeSingle();
       if (raced) return { data: raced as MerchantSiteRow };
     }
@@ -159,7 +144,8 @@ export async function UpdateSiteSettings(
 
   await LogAuditEvent({
     clerkOrgId,
-    locationId: (before as MerchantSiteRow).location_id,
+    // A site is brand-level and has no location of its own.
+    locationId: null,
     action: "updated_website_settings",
     actionCategory: "website",
     severity: "info",

@@ -145,20 +145,19 @@ async function fixture(merchantId: string) {
 
   const cfg = config as { id: string; location_id: string };
 
+  // One site per merchant (2026-08-15). The storefront config above is still
+  // read, but only to prove the merchant has a location worth pointing at — it
+  // no longer identifies the site.
   let { data: site } = await service
     .from("merchant_sites")
     .select("id")
-    .eq("store_config_id", cfg.id)
+    .eq("merchant_id", merchantId)
     .maybeSingle();
 
   if (!site) {
     const { data: created, error } = await service
       .from("merchant_sites")
-      .insert({
-        merchant_id: merchantId,
-        location_id: cfg.location_id,
-        store_config_id: cfg.id,
-      })
+      .insert({ merchant_id: merchantId })
       .select("id")
       .single();
     if (error) throw new Error(`could not create site: ${error.message}`);
@@ -309,19 +308,52 @@ async function main() {
   }
   if (lied) await service.from("site_pages").delete().eq("id", (lied as { id: string }).id);
 
-  // revision must advance on a content change (autosave concurrency depends on it).
+  // Revision must advance on a content change (autosave concurrency depends on
+  // it) and must NOT advance otherwise.
+  //
+  // The content below must genuinely differ from what the page already holds.
+  // This check previously wrote `{schemaVersion:1, sections:[], seo:{}, settings:{}}`
+  // — byte-identical to the column DEFAULT the fixture page was created with — so
+  // `IS DISTINCT FROM` was correctly false and the trigger correctly did nothing.
+  // The test reported a schema failure that did not exist.
   const { data: bumped } = await service
     .from("site_pages")
-    .update({ draft_content: { schemaVersion: 1, sections: [], seo: {}, settings: {} } })
+    .update({
+      draft_content: {
+        schemaVersion: 1,
+        sections: [{ id: "sec_probe", kind: "hero", props: { heading: "revision probe" } }],
+        seo: {},
+        settings: {},
+      },
+    })
     .eq("id", a.page.id)
     .select("revision")
     .single();
 
-  if (bumped && (bumped as { revision: number }).revision > a.page.revision) {
-    console.log("  ✓ revision advances when draft_content changes");
+  const afterChange = (bumped as { revision: number } | null)?.revision;
+  if (afterChange !== undefined && afterChange > a.page.revision) {
+    console.log(`  ✓ revision advances when draft_content changes (${a.page.revision} → ${afterChange})`);
   } else {
     failures += 1;
-    console.log("  ✗ revision did NOT advance on a content change");
+    console.log(
+      `  ✗ revision did NOT advance on a content change (stayed ${afterChange ?? "?"})`,
+    );
+  }
+
+  // The inverse, which matters just as much: renaming a page must not invalidate
+  // an editor that is open on it.
+  const { data: unbumped } = await service
+    .from("site_pages")
+    .update({ title: `Home ${Date.now()}` })
+    .eq("id", a.page.id)
+    .select("revision")
+    .single();
+
+  if ((unbumped as { revision: number } | null)?.revision === afterChange) {
+    console.log("  ✓ revision holds steady when only the title changes");
+  } else {
+    failures += 1;
+    console.log("  ✗ a title-only edit bumped the revision — open editors would be kicked out");
   }
 
   // Versions are append-only.

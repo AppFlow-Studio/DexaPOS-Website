@@ -49,18 +49,46 @@ export function createSupabaseResolverSources(
 ): ResolverSources {
   const deliveryPricingEnabled = options.deliveryPricingEnabled ?? true;
 
+  /**
+   * Per-instance memo, keyed by merchant+location.
+   *
+   * `get_menus_for_location` returns the location's entire menu tree — measured
+   * at **354 KB / ~500 ms** for a 12-menu merchant — because it is the storefront's
+   * query, not ours. That is the price of never owning a second price cascade,
+   * and it is worth paying once per request but not twice.
+   *
+   * A sources object is built per request, so this cache lives and dies with
+   * that request: there is no cross-request staleness window for a price to hide
+   * in. Callers that need the item list before building a document (seeding a
+   * starter page, for instance) can therefore call `fetchMenuItems` freely and
+   * let the resolver's own call hit the memo.
+   */
+  const menuItemsByScope = new Map<string, Promise<MenuItemSource[]>>();
+
   return {
-    async fetchMenuItems(ctx: ResolverContext): Promise<MenuItemSource[]> {
-      const { data, error } = await supabase.rpc("get_menus_for_location", {
-        p_merchant_id: ctx.merchantId,
-        p_location_id: ctx.locationId,
-      });
+    fetchMenuItems(ctx: ResolverContext): Promise<MenuItemSource[]> {
+      const scope = `${ctx.merchantId}:${ctx.locationId}`;
+      let pending = menuItemsByScope.get(scope);
+      if (pending) return pending;
 
-      if (error) {
-        throw new Error(`get_menus_for_location failed: ${error.message}`);
-      }
+      pending = (async () => {
+        const { data, error } = await supabase.rpc("get_menus_for_location", {
+          p_merchant_id: ctx.merchantId,
+          p_location_id: ctx.locationId,
+        });
 
-      return flattenMenuItems(data, deliveryPricingEnabled);
+        if (error) {
+          throw new Error(`get_menus_for_location failed: ${error.message}`);
+        }
+
+        return flattenMenuItems(data, deliveryPricingEnabled);
+      })();
+
+      // A rejection is cached too, deliberately: both callers within one request
+      // should see the same failure rather than the second silently retrying a
+      // database that is already known to be unhappy.
+      menuItemsByScope.set(scope, pending);
+      return pending;
     },
 
     async fetchLocations(ids: string[]): Promise<ResolvedLocation[]> {

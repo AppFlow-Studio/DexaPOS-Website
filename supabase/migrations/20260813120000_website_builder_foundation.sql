@@ -1,8 +1,11 @@
 -- Merchant Website Builder — Stage 2: tenancy & persistence.
 --
--- Three tables under the existing storefront:
+-- Three tables alongside the existing storefront:
 --
---   online_store_config (1) ──< merchant_sites (1) ──< site_pages ──< site_page_versions
+--   merchants (1) ──< merchant_sites (1) ──< site_pages ──< site_page_versions
+--                                                │
+--                                                └─ location_id → locations (NULLABLE)
+--                                                   NULL = brand page, set = location page
 --
 -- Design notes, in full in docs/features/website-builder/PLAN-02-INFRA-DATA-MODEL.md:
 --
@@ -25,11 +28,11 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 0. Hygiene: "one storefront per location" is convention, not a constraint
 -- ─────────────────────────────────────────────────────────────────────────────
--- Decision D4 ("one site per location") inherits this rule, and only non-unique
--- indexes exist today (utils/migrations/041_online_store_config.sql:205-208).
--- Guarded because production data has not been checked for duplicates and a
--- hard failure here would block the whole migration. `merchant_sites`
--- .store_config_id UNIQUE protects the builder regardless; this is hygiene.
+-- Independent of the site model — this is about ORDERING, where one location
+-- having two storefronts is already ambiguous. Only non-unique indexes exist
+-- today (utils/migrations/041_online_store_config.sql:205-208). Guarded because
+-- production data has not been checked for duplicates and a hard failure here
+-- would block the whole migration.
 DO $$
 DECLARE
   v_duplicates integer;
@@ -61,16 +64,28 @@ BEGIN
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 1. merchant_sites — one built site per storefront
+-- 1. merchant_sites — ONE brand site per merchant
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Supersedes decision D4 ("one site per location"), 2026-08-15.
+--
+-- A merchant gets one website covering the whole brand, with a page per location
+-- underneath it:
+--
+--     yourcafe.com                      brand page  (site_pages.location_id NULL)
+--     yourcafe.com/locations/downtown   location page (location_id = downtown)
+--
+-- Online ordering is untouched and stays per location: a location page's
+-- "Order Now" links into that location's existing /sites/{slug} storefront.
+--
+-- Why the change: five locations under D4 meant five separate websites, five
+-- copies of the same About page, and — the part that actually costs money — SEO
+-- authority split five ways instead of accumulating on one domain.
 CREATE TABLE IF NOT EXISTS public.merchant_sites (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  merchant_id uuid NOT NULL REFERENCES public.merchants(id) ON DELETE CASCADE,
-  location_id uuid NOT NULL REFERENCES public.locations(id) ON DELETE CASCADE,
 
-  -- D4: one site per storefront, enforced by the DB rather than by convention.
-  store_config_id uuid NOT NULL UNIQUE
-    REFERENCES public.online_store_config(id) ON DELETE CASCADE,
+  -- One site per merchant. The site is brand-level, so it has no location of its
+  -- own and is not tied to any single storefront.
+  merchant_id uuid NOT NULL UNIQUE REFERENCES public.merchants(id) ON DELETE CASCADE,
 
   -- Blocker B3 / decision D5, the routing fork. 'template' = the existing four
   -- storefront templates serve this URL; 'builder' = the built site does.
@@ -103,11 +118,10 @@ CREATE TABLE IF NOT EXISTS public.merchant_sites (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_merchant_sites_merchant ON public.merchant_sites(merchant_id);
-CREATE INDEX IF NOT EXISTS idx_merchant_sites_location ON public.merchant_sites(location_id);
+-- merchant_id is already UNIQUE, which provides the lookup index.
 
 COMMENT ON TABLE public.merchant_sites IS
-  'One merchant-built website per online_store_config (decision D4). render_mode is the template-vs-builder routing fork (B3/D5).';
+  'One brand website per merchant (supersedes D4, 2026-08-15). Locations are pages beneath it, not separate sites. render_mode is the template-vs-builder routing fork (B3/D5).';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. site_pages — the working draft
@@ -116,6 +130,19 @@ CREATE TABLE IF NOT EXISTS public.site_pages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   site_id uuid NOT NULL REFERENCES public.merchant_sites(id) ON DELETE CASCADE,
   merchant_id uuid NOT NULL REFERENCES public.merchants(id) ON DELETE CASCADE,
+
+  -- Which location this page is ABOUT. NULL = a brand page (home, About,
+  -- contact) that speaks for the whole business; set = a location page whose
+  -- menu, prices, hours and address all resolve against that one restaurant.
+  --
+  -- This single nullable column is what makes one site cover many locations.
+  -- The binding resolver already takes a location per render, so a location page
+  -- needs no special renderer — only a different context.
+  --
+  -- CASCADE: closing a location removes its location page. The alternative
+  -- (SET NULL) would silently turn it into a brand page still titled "Downtown",
+  -- which is worse than it disappearing.
+  location_id uuid REFERENCES public.locations(id) ON DELETE CASCADE,
 
   -- '' is the home page. NOT NULL so the unique index actually constrains it.
   -- Reserved paths (/checkout, /cart, /t/*, …) are rejected in application code
@@ -157,6 +184,12 @@ CREATE TABLE IF NOT EXISTS public.site_pages (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_site_pages_site_path ON public.site_pages(site_id, path);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_site_pages_one_home  ON public.site_pages(site_id) WHERE is_home;
 CREATE INDEX IF NOT EXISTS idx_site_pages_merchant ON public.site_pages(merchant_id);
+
+-- One location page per location. Without this, "generate a page for every
+-- location" run twice quietly produces duplicates that both claim to be
+-- Downtown. Partial, so the many brand pages (location_id NULL) are unaffected.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_site_pages_one_per_location
+  ON public.site_pages(site_id, location_id) WHERE location_id IS NOT NULL;
 
 -- Recovers the one thing the document model gives up versus row-per-section:
 -- "which pages reference menu item X", needed by the builder's broken-binding

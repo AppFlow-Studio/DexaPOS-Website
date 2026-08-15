@@ -2,7 +2,7 @@ import {
   lookupMenuItem,
   type ResolvedMenuItem,
 } from "@/lib/site-builder/bindings/resolved";
-import type { SectionRenderProps } from "@/lib/site-builder/render-context";
+import { canShowPrices, type SectionRenderProps } from "@/lib/site-builder/render-context";
 import { fieldAttrsFor } from "../edit-attrs";
 import SiteImage from "../SiteImage";
 import {
@@ -49,6 +49,11 @@ export default function PopularItemsSection({
   const { heading, subheading, items, layout, showPrices, showDescriptions, cta } = section.props;
   const f = fieldAttrsFor(ctx.mode, section.id);
 
+  // The merchant asked for prices; whether they may appear is a separate
+  // question. On a brand page, before the visitor has picked a restaurant, five
+  // branches may charge five different amounts — so no number is the honest one.
+  const showMoney = showPrices && canShowPrices(ctx);
+
   const visible: { binding: (typeof items)[number]; item: ResolvedMenuItem }[] = [];
   for (const binding of items) {
     const result = lookupMenuItem(resolved, binding.id);
@@ -59,7 +64,7 @@ export default function PopularItemsSection({
   // even when every item is currently 86'd — otherwise it appears to vanish.
   if (visible.length < 2 && ctx.mode !== "builder") return null;
 
-  const showDisclosure = showPrices && ctx.site.pricingDisclosureText;
+  const showDisclosure = showMoney && ctx.site.pricingDisclosureText;
 
   return (
     <section
@@ -104,7 +109,7 @@ export default function PopularItemsSection({
                         {/* An override is the one legal way to shadow live data. */}
                         {binding.overrides?.label ?? item.name}
                       </h3>
-                      {showPrices && (
+                      {showMoney && (
                         <span className="shrink-0 text-base font-semibold tabular-nums">
                           {formatMoney(item.price, ctx.locale)}
                         </span>
