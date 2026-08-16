@@ -19,7 +19,7 @@ export default async function WebsitePage({ searchParams }: { searchParams: Prom
   }
 
   const overview = await loadOverview(storefront.merchantId);
-  return <WebsiteOverview locationId={storefront.locationId} storeName={storefront.name} storeUrl={storefront.slug ? `/sites/${storefront.slug}` : null} website={overview.website} pages={overview.pages} dataAvailable={overview.dataAvailable} />;
+  return <WebsiteOverview clerkOrgId={orgId} locationId={storefront.locationId} storeName={storefront.name} storeUrl={storefront.slug ? `/sites/${storefront.slug}` : null} website={overview.website} pages={overview.pages} dataAvailable={overview.dataAvailable} />;
 }
 
 async function loadOverview(merchantId: string): Promise<{ website: MerchantSiteRow | null; pages: SitePageSummary[]; dataAvailable: boolean }> {

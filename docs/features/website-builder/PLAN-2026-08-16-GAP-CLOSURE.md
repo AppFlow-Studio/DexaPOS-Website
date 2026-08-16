@@ -1,7 +1,9 @@
 # Website Builder — Gap Closure Plan
 
 **Date:** 2026-08-16 · **Owner:** Ali Awdi ·
-**Status:** W0 and W1 complete (2026-08-16) · §0 still needs sign-off before W2 starts
+**Status (2026-08-16):** W0, W1 complete · §0 ratified · **W2 complete except 2.8** (moot until
+caching is introduced) and the sitemap/robots/JSON-LD half of 2.9 · the publish → visitor path is
+now built end to end and has not yet been walked on a live site — see §3 · then W3
 **Source:** [GAPS-2026-08-16-WEBSITE-FEATURE-AUDIT.md](GAPS-2026-08-16-WEBSITE-FEATURE-AUDIT.md)
 **Companions:** [PLAN-00-GENERAL.md](PLAN-00-GENERAL.md) (stage map) ·
 [PLAN-04](PLAN-04-INFRA-PUBLISH-ROUTING.md) (routing/publish) ·
@@ -13,7 +15,7 @@ code, and it **adds two blockers the audit did not find**. Both sit in front of 
 
 ---
 
-## 0. Decide these before writing any Stage 6 code
+## 0. Decisions — **both ratified 2026-08-16**
 
 ### 0.1 Blocker — the brand site has no address (**new**)
 
@@ -35,7 +37,15 @@ route cannot be written until this is answered.
 | B — reuse one location's slug as canonical | Zero new addressing. | Rejected. The brand's URL becomes one branch's name, and changing the canonical branch later splits SEO authority — the exact failure the D4 supersession existed to fix. |
 | C — merchant-level slug on `online_store_config` | Fake row with no location. | Rejected. Breaks `UNIQUE (merchant_id, location_id)` intent and every storefront query's assumptions. |
 
-- [ ] **Ratify option A in writing** and record it in PLAN-04 §2, superseding the `(slug, path)` signature with `(host, path)`.
+- [x] **RATIFIED 2026-08-16 — option A.** `merchant_sites.subdomain`, nullable and unique.
+
+**One correction to this plan's own earlier reasoning.** It proposed superseding
+`resolveRenderMode(slug, path)` with `(host, path)`. That is not needed and would have been worse.
+Because the database now refuses to let a brand subdomain and an `online_store_config.slug`
+collide — enforced by trigger **in both directions**, since a merchant answering on another
+merchant's storefront address is a tenancy break rather than a clash — the two live in **one flat
+namespace**. `proxy.ts` reduces either kind of host to a single key, so the fork keeps its original
+`(slug, path)` shape and no host parsing leaks into routing. PLAN-04 §2's signature stands.
 
 ### 0.2 Blocker — publishing never flips the routing fork (**new**)
 
@@ -68,7 +78,18 @@ currently-live `site_page_versions` — spreads the same risk across a policy th
 through every future schema change, and this is the one place a loose policy exposes every
 merchant's unpublished drafts.
 
-- [ ] **Ratify the service-role read path**, or reject it in favour of an anon policy, in writing.
+- [x] **RATIFIED 2026-08-16 — the SECURITY DEFINER function**, which is a third option and a better
+      one than the service-role module this plan originally recommended.
+
+`public.get_public_site_page(p_slug, p_path)` is the only door. `anon` keeps **zero** table grants,
+so the foundation migration's `REVOKE ALL ... FROM anon` never has to be weakened — a line that is
+easy to erode later without anyone noticing. `draft_content` is not in the function's return type,
+so the column that must never be public is not reachable through it at all.
+
+The tension this resolves: PLAN-04 wanted the fork in one unit-testable TypeScript function, and
+burying that logic in SQL would have traded the tests away. So the two concerns are split — the
+function returns **facts**, and `decideRenderMode` in TypeScript renders the **verdict**, with one
+test per rule. Postgres guards; TypeScript decides.
 
 ---
 
@@ -81,10 +102,15 @@ Six waves. Each item is roughly one PR. Estimates assume one developer.
 Everything here is copy or a one-line gate. It was first because it was the only work that was
 *actively misleading*, and none of it depended on anything else.
 
-A single constant, [`lib/site-builder/public-site.ts`](../../../lib/site-builder/public-site.ts)
-`BUILT_SITE_IS_PUBLIC`, now carries the fact that publishing does not reach visitors. Every surface
-reads it, so W2.4 flips one boolean instead of hunting for copy. It is annotated `boolean` rather
-than inferred `false` so the not-yet-reachable branches do not read as dead code.
+At the time, a single constant `BUILT_SITE_IS_PUBLIC` carried the fact that publishing did not reach
+visitors, so every surface told one story and W2 could flip one boolean.
+
+**Superseded once W2 landed, and the file deleted.** Reachability stopped being a property of the
+build and became a property of *each site* — whether it has claimed a web address — so the editor
+now takes a `publicUrl` prop threaded from the site row. A global flag left at `false` would have
+made the editor lie in the opposite direction, insisting a site could not be reached at the moment
+it could. Same principle, better input: the copy, the external link and the status line all key off
+whether this merchant actually has an address.
 
 - [x] **0.1 — Review sheet success state.** Said "Your page is live" with an **Open the live page** link to the ordering storefront. Now titled "Version *N* published", linking to the preview, and saying once and plainly that websites are not served to guests yet. `PublicationTarget` no longer composes a public URL that resolves to something else, and the "never published" and footer copy match.
 - [x] **0.2 — Editor page switcher.** **Manage pages** linked to `/dashboard/website`, which counts pages and manages none. Now disabled and labelled "Coming soon" — visible so the capability still reads as planned. W3.1 re-enables it.
@@ -125,16 +151,47 @@ in the touched paths.
 
 ### W2 — Make publishing reach the public (≈ 8–10 days, the largest remaining piece)
 
-Gated on §0.1 and §0.3 being ratified.
+§0 ratified 2026-08-16. **2.1–2.3 written; the migration is not yet applied.**
 
-- [ ] **2.1 — Migration: `merchant_sites.subdomain`** — nullable, `UNIQUE`, format-checked, rejecting the reserved host list. Backfill nothing; a site without a subdomain simply has no brand address yet.
-- [ ] **2.2 — `lib/site-builder/resolve-render-mode.ts`** — the fork, all five PLAN-04 rules, signature updated to `(host, path)` per §0.1. Unit tests with a fixture per rule, including rule 5 (nothing published → template; never take a working site down).
-- [ ] **2.3 — `lib/site-builder/public-read.ts`** — the service-role read path from §0.3. Never projects `draft_content`. Tested for the "unpublished page is unreachable" case.
-- [ ] **2.4 — The route** — `app/sites/[slug]/(builder)/[[...path]]/page.tsx`, plus a branch in the existing storefront page kept under ~15 lines. Reserved paths already enforced by [reserved-paths.ts](../../../lib/site-builder/reserved-paths.ts); assert the catch-all cannot shadow `/checkout`, `/cart`, `/order`, `/t/[token]`, `/track`. Extend `proxy.ts` to resolve a brand subdomain before falling back to `online_store_config.slug`.
-- [ ] **2.5 — Flip `render_mode` on first publish** (§0.2). In `PublishPage`, alongside `stampSitePublishTimes`. Add `UnpublishPage`, which nulls `published_version_id` and flips `render_mode` back to `'template'` when it was the last published page — so a merchant can always get their working storefront back.
-- [ ] **2.6 — Render the nav.** [site-context.ts:206](../../../lib/site-builder/site-context.ts#L206) hardcodes `nav: []`, and `HeaderSection` renders its `<nav>` only when non-empty, so a multi-page site has no navigation. `merchant_sites.nav` exists and is never read — read it into `buildRenderContext`. The editing UI is W3.3.
-- [ ] **2.7 — Honour `site_pages.location_id`.** `renderCanvas(doc, locationId)` and `buildRenderContext(site, mode)` both take the *storefront's* location, never the page row's. Consequence: a brand page (`location_id = NULL`) renders as if scoped to one branch, so `canShowPrices()` ([render-context.ts:181](../../../lib/site-builder/render-context.ts#L181)) can never return `false` and the "no prices until the visitor picks a location" rule is silently defeated. Thread the page's own `location_id` through, and build the location picker a brand page needs.
-- [ ] **2.8 — Cache invalidation.** No `revalidatePath` or `revalidateTag` exists anywhere under `app/dashboard/website/`. Latent today, immediate once 2.4 lands. Tag per page and per site; verify with a publish → `curl` loop, not by inspection.
+- [x] **2.1 — Migration: `merchant_sites.subdomain`** — [20260816140000_website_public_addressing.sql](../../../supabase/migrations/20260816140000_website_public_addressing.sql). Nullable, uniquely indexed, DNS-label format CHECK, plus collision triggers in both directions against `online_store_config.slug`. Backfills nothing: a site without a subdomain has no brand address yet and is simply unreachable, which is the safe default. The reserved-name list lives in [reserved-subdomains.ts](../../../lib/site-builder/reserved-subdomains.ts) rather than the schema, matching `reserved-paths.ts` — the list will change more often than the schema should, and a test keeps the two regexes in step. **That test earned itself immediately, catching a redundant capture group in the SQL on its first run.**
+- [x] **2.2 — [`lib/site-builder/resolve-render-mode.ts`](../../../lib/site-builder/resolve-render-mode.ts)** — all five PLAN-04 rules as a pure `decideRenderMode(facts)`, keeping the `(slug, path)` signature per the §0.1 correction. 12 tests, one per rule, including rule 5 and the property that nothing may downgrade a genuinely published page to a template. Adds one rule the brand subdomain requires: a subdomain with nothing published **404s rather than falling back**, because templates are addressed by storefront slug and a fallback would serve one arbitrary branch's ordering page at the brand's address.
+- [x] **2.3 — The public read path** — `get_public_site_page()` in the same migration, not a service-role module (§0.3). Returns facts, never `draft_content`. `loadSiteRequestFacts` degrades to "no site" on any read error, which lands on rule 2 and serves the template: a built site that cannot be read must not take the storefront down with it.
+- [x] **2.1a — Applied to staging and verified 2026-08-16.** All five objects exist. `anon` has **zero** SELECT on all three website tables while `authenticated` keeps its grants, and `anon` may execute the function — the two halves of decision §0.3's security claim, now checked rather than asserted. The function is `SECURITY DEFINER` with `search_path=public`.
+- [x] **2.1b — `verify-site-tenancy.ts` gained Lane 4.** A boundary that is only checked by reading the migration is not checked at all, and this function bypasses RLS by construction, so it is the one place a mistake is unbounded. **26/26 assertions pass, zero skips.** Lane 4 proves anon can call the function, that it exposes no draft column, that anon still cannot read `site_pages` directly, and that an unpublished path resolves to no page rather than to a draft. Lane 4b proves the format CHECK and **both** directions of the collision trigger, restoring the subdomain in a `finally`. Verified afterwards that the run left no probe rows, no stray subdomains, and all five of merchant A's storefronts intact.
+- [x] **2.4 — The route.** [built-site.tsx](../../../app/sites/[slug]/built-site.tsx) resolves and renders; the storefront page gains a 4-line branch and is otherwise untouched. **Structure differs from PLAN-04 §2.1 for a concrete reason:** an *optional* catch-all `[[...path]]` also matches the zero-segment case and therefore collides with the sibling `page.tsx`, which Next refuses. A **required** catch-all `[slug]/[...path]` matches only sub-paths, so the home page stays with the storefront route and delegates through the same fork. Reserved paths then need no list at runtime — static segments beat a dynamic catch-all in Next, so `/checkout`, `/info`, `/order/…` and `/t/…` never reach it. `proxy.ts` resolves a brand subdomain when the storefront lookup misses, through `get_public_site_page` rather than a table read, because the website tables are REVOKED from anon by design.
+- [x] **2.5 — `render_mode` flips on publish** (§0.2), in `stampSitePublishTimes`. Written on **every** publish rather than only the first: a merchant who unpublishes their last page and later publishes again already has `first_published_at` set, so first-publish-only logic would strand them in `'template'` with live pages nobody can see. `UnpublishPage` is the inverse — it nulls the pointer, supersedes the live version, keeps the history, and returns the site to `'template'` when the last page goes down. 8 new tests.
+- [x] **2.6 — The nav renders.** `merchant_sites.nav` had existed and been read by nothing. `readNav` in [public-context.ts](../../../lib/site-builder/public-context.ts) turns it into links, prefixing paths at render time — the same site answers at a subdomain and at `/sites/{slug}`, so a stored absolute href would be right in one and broken in the other. The editing UI is still W3.3.
+- [x] **2.7 — `site_pages.location_id` is honoured.** The public context takes the **page's** location, not the storefront's, so a brand page carries NULL and `canShowPrices()` can finally return false. A brand page still has to resolve menu bindings against *some* location — `get_menus_for_location` cannot answer without one — so it borrows the merchant's first active storefront and passes `scoped: false`, which the resolver already anticipated: names, descriptions and photos are merchant-level and identical everywhere, while prices and 86/snooze are not. The visitor-facing location picker remains open.
+
+**Renders as a real anonymous visitor.** [`createAnonSupabaseClient`](../../../lib/supabase/anon.ts), not the service role the existing storefront uses. Every read is either an RLS-protected public policy (`locations`, `online_store_config`) or a SECURITY DEFINER function anon may execute (`get_public_site_page`, `get_menus_for_location` — both confirmed anon-executable on staging). A missing grant now breaks the page in development instead of leaking in production.
+
+- [x] **2.4a — [20260816150000_website_public_page_merchant.sql](../../../supabase/migrations/20260816150000_website_public_page_merchant.sql) applied.** Adds `merchant_id` to the function's return, which the renderer needs and cannot get elsewhere: anon cannot read `merchant_sites`, and a brand subdomain has no storefront slug to derive it from. Verified the function now returns the full fact set for a real slug — merchant id, version 2, 7 sections, nav, theme, and `page_location_id: null`.
+
+- [x] **2.4b — Storefront addresses can no longer be hijacked by a publish. Found while checking what a `render_mode` backfill would touch.**
+
+  The fork resolved a storefront slug to its merchant's site. `online_store_config.slug` is per
+  **location** and a site is per **merchant**, so the first `render_mode` flip would have replaced
+  *every* branch's ordering page with a single brand home page — five live ordering storefronts down
+  on the first publish for the merchant we happened to be testing with. That contradicted §0.1 as
+  ratified ("existing per-location slugs keep serving the ordering storefront untouched") and D1;
+  the storefront-slug branch was a leftover from the pre-2026-08-15 model where one slug meant one
+  site.
+
+  Corrected so a built site serves at its **brand subdomain and nowhere else**. Two things fall out
+  of it: rule 5's fail-safe stops being a rule that must hold and becomes a situation that cannot
+  arise, and a storefront request now short-circuits before the database round trip — so D1 holds
+  for latency as well as output. Tested as a property, across every state of the built site.
+
+  The `render_mode` backfill this started from was **dropped** — the affected rows were dev data,
+  and running it before this fix would have caused exactly the outage it exposes.
+
+- [x] **2.9 — Page metadata.** Both routes now emit the page's own `seo` block. Without it a built page inherited the *storefront's* `generateMetadata`, so a merchant's About page would be titled after their ordering storefront, and the sub-path route had no metadata at all. The routing decision is memoised per request with React `cache()`, so `generateMetadata` and the page component share one database round trip rather than asking the same question twice. Sitemap, robots and JSON-LD are still open.
+
+**Also fixed while verifying:** the content-hash no-op returned before touching `render_mode`, so republishing identical content could not rescue a site stuck on the template. The no-op is about not writing a redundant *version*, never about skipping visibility — `ensureSiteIsLive` now runs on that path too, and a test covers the migration case directly.
+- [x] **2.11 — The editor tells the truth again.** W0 made it say "websites are not served to guests yet", which stopped being true the moment W2 landed. `publicUrl` now flows from the site row into the toolbar and the review sheet, so a site **with** an address gets "Your page is live" and a working link, and one **without** gets told exactly what is missing and where to fix it — rather than either a false promise or a false denial. `BUILT_SITE_IS_PUBLIC` is deleted; an always-false global would have been the new lie.
+- [x] **2.10 — Claiming a web address.** [`ClaimSubdomain`](../../../app/dashboard/website/actions/site.ts) plus a card on the Website overview. **Availability is the database's answer, not a prior SELECT** — checking and then writing is a race, and the losing merchant would be told "available" a moment before being told otherwise. So the write goes ahead and `23505` is translated into "that web address is already taken", which covers a clash with another website *and* with somebody's ordering storefront, because the cross-namespace trigger raises the same code. Changing an existing address confirms first and names what breaks (shared links, printed QR codes, search results); claiming a first one does not interrupt. Readiness checklist now counts the address rather than the storefront URL, since a site without one cannot be reached however finished it is. 9 tests; validation verified live in the browser.
+
+- [ ] **2.8 — Cache invalidation.** Currently *moot rather than done*: the built routes are `force-dynamic`, so a publish is visible on the next request and there is no stale cache to invalidate. That is correct but pays a full render per visit. Wiring `revalidateTag` now would add calls that provably do nothing, so caching and its invalidation should land together — tag per page and per site, verified with a publish → `curl` loop rather than by inspection. **Do not introduce caching without the tags in the same change.**
 - [ ] **2.9 — SEO surface.** `generateMetadata` from `doc.seo`, `sitemap.ts`, `robots.ts`, JSON-LD `Restaurant`. Canonicals must account for a page being reachable at both the brand subdomain and a custom domain.
 
 *Acceptance (from PLAN-00 §6):* a published page returns fully-formed HTML to `curl` with JS
@@ -201,7 +258,22 @@ W5 ──► W5.3 undoes W0.3
 **The critical path is §0.1 → W2.1 → W2.2 → W2.4 → W2.5.** Nothing a visitor can see changes until
 all five land, which is why W2.5 must not be treated as a footnote to the route.
 
-## 3. Verification
+## 3. The one thing not yet proven end to end
+
+Every piece of `publish → visitor` exists and is unit-tested, and no part of it has been walked on a
+real site. The blocker is incidental rather than structural: the only merchant with a published page
+is the dev one, whose `render_mode` predates W2.5 and so still says `'template'`. The backfill that
+would have fixed it was dropped (dev data), and the review sheet correctly refuses to republish
+matching content — so that particular site cannot reach `'builder'` without an edit.
+
+**For any merchant starting from here the order does not matter and no such gap exists:** publishing
+flips `render_mode`, claiming an address makes it resolvable, and either can come first.
+
+To walk it once: edit a page, publish (flips the mode), claim an address, then load
+`{subdomain}.dexaposai.com` — or `/sites/{subdomain}` in development. Worth doing before W3, because
+it is the first time the whole chain runs against real data.
+
+## 4. Verification
 
 Per stage, not at the end:
 
@@ -210,7 +282,11 @@ Per stage, not at the end:
   ~2,550 pre-existing type errors (mostly `date-fns` resolution noise), and 22 tests were already
   failing in `lib/menu`, `components/dashboard/menu`, and `tests/a11y`. Compare against that
   baseline rather than expecting zero.
-- W1: `verify-site-tenancy.ts` all lanes PASS — ✅ 17/17, staging, 2026-08-16.
+- `verify-site-tenancy.ts` all lanes PASS — ✅ **26/26, staging, 2026-08-16**, including the Lane 4
+  public-read and namespace checks. Run it after **any** change to the website policies, the
+  `get_public_site_page` function, or the collision triggers. The authenticated lane needs a Clerk
+  token (see W1.1); the run is non-destructive but only because it snapshots and restores, so read
+  the `↩ restored` lines rather than assuming.
 - W2: `curl` a published page with JS disabled and get complete HTML; change a price in the POS and
   see it on the next request with no republish; confirm a template-only location's HTML is
   unchanged before and after.
@@ -218,7 +294,7 @@ Per stage, not at the end:
   template storefront returns.
 - W3/W4: exercised in the browser against a real draft, not a fixture.
 
-## 4. Outstanding — needs a decision
+## 5. Outstanding — needs a decision
 
 - [ ] **Repair the debris on Joes Coffee Shop's home page draft** (page `2594a8a0…`, staging). It
       carries a `sec_probe` hero titled "revision probe" as its **first** section — ahead of the
@@ -231,7 +307,7 @@ Per stage, not at the end:
       that it must stay `"preserve"` for Next.js and that a stray full-project `tsc` run is what
       changes it. Unrelated to this plan and not touched here, but worth confirming deliberately.
 
-## 5. Documentation to correct alongside the work
+## 6. Documentation to correct alongside the work
 
 - [ ] [README.md](README.md) — replace the progress table with §3 of the gap audit. The Stage 2 "migration NOT applied" banner and the "edits are lost on refresh" note are both false now.
 - [ ] [README.md](README.md) — the "See it working now" block recommends `/dashboard/website/preview` as a fixture demo; after W0.4 it is no longer fixture-driven.

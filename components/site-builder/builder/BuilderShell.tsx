@@ -46,6 +46,7 @@ export default function BuilderShell({
   publishedAt = null,
   saveAdapter,
   viewUrl,
+  publicUrl,
 }: {
   initialDoc: PageDocument;
   /**
@@ -68,6 +69,12 @@ export default function BuilderShell({
   saveAdapter?: SaveAdapter;
   siteName?: string;
   viewUrl?: string;
+  /**
+   * Where this site actually answers on the internet, or `null` until the
+   * merchant has claimed a web address. Distinct from `viewUrl`, which is the
+   * ordering storefront and is never where a built page is served.
+   */
+  publicUrl?: string | null;
 }) {
   /**
    * Created exactly once per mount — deliberately a lazy `useState` initialiser
@@ -148,7 +155,7 @@ export default function BuilderShell({
     // without them the shell overflowed by the padding, pushing the bottom pane
     // switcher off-screen at every breakpoint.
     <div className="-m-4 -mb-20 flex h-[calc(100dvh-4rem)] min-h-[36rem] flex-col overflow-hidden bg-background sm:-m-6 sm:-mb-6">
-      <Toolbar store={store} locationId={locationId} viewUrl={viewUrl} />
+      <Toolbar store={store} locationId={locationId} viewUrl={viewUrl} publicUrl={publicUrl} />
 
       <div className="flex min-h-0 flex-1">
         <aside
@@ -187,7 +194,7 @@ export default function BuilderShell({
         store={store}
         clerkOrgId={clerkOrgId}
         locationId={locationId}
-        viewUrl={viewUrl}
+        publicUrl={publicUrl}
       />
     </div>
   );

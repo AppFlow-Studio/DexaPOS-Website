@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
 import { createStarterPage } from "@/lib/site-builder/page-document";
+import { checkSubdomain } from "@/lib/site-builder/reserved-subdomains";
 import { fetchMerchantId, fetchMerchantSite } from "@/lib/site-builder/site-context";
 import type {
   ActionResult,
@@ -157,6 +158,91 @@ export async function UpdateSiteSettings(
       ),
       after: patch as Record<string, unknown>,
     },
+  });
+
+  return { data: data as MerchantSiteRow };
+}
+
+/**
+ * Claims the web address a built site is served at.
+ *
+ * The last step between publishing and a visitor: a built site serves only at
+ * `{subdomain}.dexaposai.com`, never at a storefront slug — that address keeps
+ * serving online ordering, whatever the website does. Until this is set, a
+ * merchant can publish all day and remain unreachable.
+ *
+ * **Collisions are the database's call, not this function's.** Checking
+ * availability with a SELECT and then writing is a race with a second merchant
+ * doing the same thing, and the losing side would be told "available" a moment
+ * before being told otherwise. So the write goes ahead and `23505` is
+ * translated — the unique index and the cross-namespace trigger both raise it,
+ * which is why one handler covers a clash with another website *and* a clash
+ * with somebody's ordering storefront.
+ */
+export async function ClaimSubdomain(
+  clerkOrgId: string,
+  siteId: string,
+  rawSubdomain: string,
+): Promise<ActionResult<MerchantSiteRow>> {
+  if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
+
+  const subdomain = rawSubdomain.trim().toLowerCase();
+  const check = checkSubdomain(subdomain);
+  if (!check.ok) {
+    return { error: check.message ?? "That web address cannot be used", code: "invalid_path" };
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data: before } = await supabase
+    .from("merchant_sites")
+    .select("subdomain")
+    .eq("id", siteId)
+    .maybeSingle();
+
+  const previous = (before as { subdomain: string | null } | null)?.subdomain ?? null;
+  if (previous === subdomain) {
+    const { data: unchanged } = await supabase
+      .from("merchant_sites")
+      .select("*")
+      .eq("id", siteId)
+      .maybeSingle();
+    return unchanged
+      ? { data: unchanged as MerchantSiteRow }
+      : { error: "Site not found", code: "site_not_found" };
+  }
+
+  const { data, error } = await supabase
+    .from("merchant_sites")
+    .update({ subdomain })
+    .eq("id", siteId)
+    .select("*")
+    .maybeSingle();
+
+  if (error || !data) {
+    if (error?.code === "23505") {
+      return { error: "That web address is already taken.", code: "path_taken" };
+    }
+    if (error?.code === "23514") {
+      return {
+        error: "Use lowercase letters, numbers and hyphens, 3 characters or more.",
+        code: "invalid_path",
+      };
+    }
+    return { error: error?.message ?? "Could not save the web address", code: "db_error" };
+  }
+
+  await LogAuditEvent({
+    clerkOrgId,
+    action: previous ? "changed_website_address" : "claimed_website_address",
+    actionCategory: "website",
+    // Changing an address a site is already reachable at breaks every existing
+    // link to it, which is a bigger deal than claiming a free one.
+    severity: previous ? "warning" : "info",
+    resourceType: "merchant_site",
+    resourceId: siteId,
+    resourceName: subdomain,
+    changes: { before: { subdomain: previous }, after: { subdomain } },
   });
 
   return { data: data as MerchantSiteRow };

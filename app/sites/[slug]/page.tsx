@@ -1,3 +1,4 @@
+import { builtSiteMetadata, renderBuiltSite } from "./built-site";
 import { getStorefrontData, getStorefrontMetaData } from "../actions";
 import { getStoreTaxRateByLocationId } from "../order-actions";
 import { notFound } from "next/navigation";
@@ -34,6 +35,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   // Metadata only needs site + location (title/description/OG) — skip the menu
   // tree so we don't fetch all menus twice per page load.
   const { site, location } = await getStorefrontMetaData(slug);
+
+  // A built home page carries its own SEO block; falling through would title it
+  // after the ordering storefront it replaced.
+  const built = await builtSiteMetadata(slug, "", { hasActiveStorefront: !!location });
+  if (built) return built;
+
   if (!location) return { title: "Store" };
   const title =
     site?.meta_title?.trim() ||
@@ -109,6 +116,12 @@ function buildOpeningHoursSpec(
 export default async function StorefrontPage({ params }: PageProps) {
   const { slug } = await params;
   const { site, location, menus } = await getStorefrontData(slug);
+
+  // The routing fork (B3/D5). Returns null unless this merchant has actually
+  // published a built site, in which case everything below is untouched —
+  // decision D1 requires a template storefront to be byte-for-byte unaffected.
+  const built = await renderBuiltSite(slug, "", { hasActiveStorefront: !!location });
+  if (built) return built;
 
   if (!location) {
     notFound();

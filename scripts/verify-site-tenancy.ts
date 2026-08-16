@@ -349,6 +349,8 @@ async function main() {
     }
   }
 
+  await publicReadPathChecks(a, merchantA);
+
   // ── result ────────────────────────────────────────────────────────────────
   console.log(
     failures === 0
@@ -361,6 +363,153 @@ async function main() {
     );
   }
   process.exit(failures === 0 ? 0 : 1);
+}
+
+/**
+ * Lane 4 — the public read path and the host namespace.
+ *
+ * Added 2026-08-16 with `get_public_site_page()`. The decision to give the
+ * public a SECURITY DEFINER function instead of an `anon` SELECT policy rests
+ * entirely on two claims — anon can call the function, and anon still cannot
+ * read the tables behind it — and a claim about a security boundary that is
+ * only checked by reading the migration is not checked at all.
+ *
+ * The function bypasses RLS by construction, so it is the one place in this
+ * feature where a mistake is unbounded. It is worth over-testing.
+ */
+async function publicReadPathChecks(
+  a: { siteId: string; page: { id: string } },
+  merchantA: string,
+) {
+  console.log("\nLane 4 — the public read path (anon)");
+
+  const { data: storefront } = await service
+    .from("online_store_config")
+    .select("slug")
+    .eq("merchant_id", merchantA)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+
+  const slug = (storefront as { slug: string } | null)?.slug;
+  if (!slug) {
+    skip("public read path", "merchant A has no active storefront to address");
+    return;
+  }
+
+  // 1. anon may call it at all. A permission error here means the GRANT is
+  //    missing and every published page would 404 for real visitors.
+  const { data: rows, error: rpcError } = await anon.rpc("get_public_site_page", {
+    p_slug: slug,
+    p_path: "",
+  });
+
+  if (rpcError) {
+    failures += 1;
+    console.log(`  ✗ BLOCKED anon cannot call get_public_site_page — ${rpcError.message}`);
+    return;
+  }
+  console.log("  ✓ ALLOWED anon calls get_public_site_page");
+
+  const row = (rows as Record<string, unknown>[] | null)?.[0];
+  if (!row) {
+    failures += 1;
+    console.log(`  ✗ the function returned nothing for the active slug "${slug}"`);
+    return;
+  }
+
+  // 2. The whole point of the function shape. `draft_content` is every
+  //    merchant's unpublished work and must not be reachable through the one
+  //    door anon has.
+  const leaked = Object.keys(row).filter((key) => /draft/i.test(key));
+  if (leaked.length === 0) {
+    console.log("  ✓ the function exposes no draft column");
+  } else {
+    failures += 1;
+    console.log(`  ✗ LEAKED the function returned draft column(s): ${leaked.join(", ")}`);
+  }
+
+  // 3. anon still has no way around it.
+  await expectDenied("anon still cannot read site_pages directly", () =>
+    anon.from("site_pages").select("id").limit(1),
+  );
+
+  // 4. A path nobody published resolves to "no page", not to a draft.
+  const { data: missing } = await anon.rpc("get_public_site_page", {
+    p_slug: slug,
+    p_path: "definitely-not-published",
+  });
+  const missingRow = (missing as Record<string, unknown>[] | null)?.[0];
+  if (missingRow && missingRow.page_id === null) {
+    console.log("  ✓ an unpublished path resolves to no page");
+  } else if (!missingRow) {
+    failures += 1;
+    console.log("  ✗ an unpublished path returned no row at all — the site became unaddressable");
+  } else {
+    failures += 1;
+    console.log("  ✗ an unpublished path returned a page");
+  }
+
+  // ── the host namespace ────────────────────────────────────────────────────
+  console.log("\nLane 4b — brand subdomain namespace (service role)");
+
+  const { data: siteBefore } = await service
+    .from("merchant_sites")
+    .select("subdomain")
+    .eq("id", a.siteId)
+    .single();
+  const originalSubdomain = (siteBefore as { subdomain: string | null } | null)?.subdomain ?? null;
+
+  const setSubdomain = (value: string | null) =>
+    service.from("merchant_sites").update({ subdomain: value }).eq("id", a.siteId).select("id");
+
+  try {
+    // The CHECK constraint, which keeps an unresolvable hostname out of the
+    // column rather than out of a form.
+    await expectDenied("a malformed subdomain is refused", () => setSubdomain("-not-a-label"));
+
+    // The tenancy boundary: claiming another storefront's slug as a brand
+    // address would let one merchant answer on another merchant's address.
+    await expectDenied("a subdomain colliding with a storefront slug is refused", () =>
+      setSubdomain(slug),
+    );
+
+    // The same collision, created from the other side. This one is checked
+    // last and restored immediately, because if the trigger were missing the
+    // update would succeed and rename a live storefront.
+    const probe = `tenancy-probe-${Date.now().toString(36)}`;
+    const { error: claimError } = await setSubdomain(probe);
+
+    if (claimError) {
+      failures += 1;
+      console.log(`  ✗ could not claim a valid subdomain — ${claimError.message}`);
+    } else {
+      console.log("  ✓ a valid, free subdomain is accepted");
+
+      const { data: renamed, error: renameError } = await service
+        .from("online_store_config")
+        .update({ slug: probe })
+        .eq("slug", slug)
+        .select("id, slug");
+
+      const renamedRows = (renamed as unknown[] | null)?.length ?? 0;
+      if (renameError || renamedRows === 0) {
+        console.log("  ✓ a storefront slug colliding with a subdomain is refused");
+      } else {
+        failures += 1;
+        console.log("  ✗ LEAKED a storefront was renamed onto an existing subdomain — restoring");
+        await service.from("online_store_config").update({ slug }).eq("slug", probe);
+      }
+    }
+  } finally {
+    const { error: restoreError } = await setSubdomain(originalSubdomain);
+    if (restoreError) {
+      failures += 1;
+      console.log(`  ✗ FAILED to restore merchant A's subdomain: ${restoreError.message}`);
+    } else {
+      console.log(`  ↩ restored merchant A's subdomain (${originalSubdomain ?? "none"})`);
+    }
+  }
 }
 
 /**

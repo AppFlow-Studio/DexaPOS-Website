@@ -110,6 +110,40 @@ async function getStoreBySlug(slug: string): Promise<StoreMatch | null> {
   }
 }
 
+/**
+ * A brand website address — `{subdomain}.dexaposai.com`.
+ *
+ * Checked only after the storefront lookup misses, because the two share one
+ * namespace and the database refuses to let them collide: a slug is either a
+ * storefront or a brand site, never both.
+ *
+ * Goes through `get_public_site_page` rather than reading `merchant_sites`
+ * directly, because the website tables are REVOKED from anon by design and this
+ * runs with the publishable key. That function is the only public door, and it
+ * is exactly the one the route itself will use a moment later.
+ */
+async function lookupBrandSite(slug: string): Promise<StoreMatch | null> {
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    );
+    const { data } = await supabase.rpc('get_public_site_page', {
+      p_slug: slug,
+      p_path: '',
+    });
+
+    const row = (data as { addressed_by_subdomain?: boolean }[] | null)?.[0];
+    // A storefront slug also returns a row here; only a subdomain match means
+    // this host belongs to the brand site.
+    if (!row?.addressed_by_subdomain) return null;
+
+    return { slug, isActive: true };
+  } catch {
+    return null;
+  }
+}
+
 async function lookupCustomDomain(hostname: string): Promise<StoreMatch | null> {
   const hostWithoutPort = hostname.split(':')[0];
 
@@ -150,7 +184,8 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
 
   // Custom domain fallback (production only)
   if (extractedSlug) {
-    storeMatch = await getStoreBySlug(extractedSlug);
+    storeMatch =
+      (await getStoreBySlug(extractedSlug)) ?? (await lookupBrandSite(extractedSlug));
   } else if (process.env.NODE_ENV !== 'development') {
     storeMatch = await lookupCustomDomain(hostname);
   }
@@ -171,7 +206,10 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
 
   const directStoreSlug = extractSitesRouteSlug(req.nextUrl.pathname);
   if (directStoreSlug) {
-    const directStoreMatch = await getStoreBySlug(directStoreSlug);
+    // A brand site is reachable at /sites/{subdomain} as well, which is the
+    // form used in development and by anything that links internally.
+    const directStoreMatch =
+      (await getStoreBySlug(directStoreSlug)) ?? (await lookupBrandSite(directStoreSlug));
     if (!directStoreMatch?.slug || !directStoreMatch.isActive) {
       return notFoundResponse();
     }

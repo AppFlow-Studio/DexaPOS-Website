@@ -108,6 +108,13 @@ export async function PublishPage(
     > | null;
 
     if (liveVersion?.content_hash === hash) {
+      // The no-op is about not writing a redundant *version*, not about
+      // skipping the routing state. A site can hold a published page and still
+      // be serving the template — every page published before the flip existed
+      // is in exactly that state — and such a merchant would otherwise press
+      // Publish forever without ever becoming visible.
+      await ensureSiteIsLive(supabase, page.site_id);
+
       return {
         data: {
           versionId: liveVersion.id,
@@ -257,10 +264,27 @@ export async function GetPublishedDocument(
 }
 
 /**
- * Records first/last publish on the site.
+ * Records first/last publish on the site, and switches it to the built site.
  *
  * `first_published_at` is written only once — it is the answer to "when did this
  * restaurant go live", which a later publish must not overwrite.
+ *
+ * **`render_mode` is the routing fork (B3/D5), and this is the only thing that
+ * ever flips it.** Until it says `'builder'`, `resolveRenderMode` sends every
+ * visitor to the ordering storefront, so a page could be published, versioned
+ * and correct and still be invisible to the public — which is exactly the state
+ * this feature was in until now.
+ *
+ * Flipped by *publishing*, never by opening the builder: a merchant who
+ * experiments for a week and never publishes keeps their existing storefront
+ * the entire time, and taking a live site down is not something the editor can
+ * do by accident.
+ *
+ * Written unconditionally rather than only on the first publish. A merchant who
+ * unpublishes their last page and later publishes again has a
+ * `first_published_at` already set, so first-publish-only logic would leave them
+ * stranded in `'template'` with live pages nobody can see. Setting it every time
+ * is idempotent and self-healing.
  */
 async function stampSitePublishTimes(
   supabase: ReturnType<typeof createServerSupabaseClient>,
@@ -279,7 +303,104 @@ async function stampSitePublishTimes(
     .from("merchant_sites")
     .update({
       last_published_at: publishedAt,
+      render_mode: "builder",
       ...(first ? {} : { first_published_at: publishedAt }),
     })
     .eq("id", siteId);
+}
+
+/**
+ * Makes sure a site with published content is actually being served.
+ *
+ * Separate from `stampSitePublishTimes` because it must run on the path that
+ * writes nothing else: republishing identical content is a no-op for history
+ * and must not be a no-op for visibility.
+ */
+async function ensureSiteIsLive(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  siteId: string,
+): Promise<void> {
+  await supabase
+    .from("merchant_sites")
+    .update({ render_mode: "builder" })
+    .eq("id", siteId);
+}
+
+/**
+ * Takes a page off the public site.
+ *
+ * Nulls the published pointer and supersedes the version that was live. The
+ * version rows stay — history is append-only, and a merchant who unpublishes by
+ * mistake must be able to get the layout back.
+ *
+ * If this was the site's last published page, `render_mode` goes back to
+ * `'template'`, so the ordering storefront returns rather than the site serving
+ * a built 404 at every address. That is the inverse of the flip above and the
+ * reason unpublishing is a supported operation rather than something a merchant
+ * improvises by deleting pages.
+ */
+export async function UnpublishPage(
+  clerkOrgId: string,
+  pageId: string,
+): Promise<ActionResult<{ id: string; siteReverted: boolean }>> {
+  if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
+
+  const supabase = createServerSupabaseClient();
+
+  const { data: pageData, error: pageError } = await supabase
+    .from("site_pages")
+    .select("*")
+    .eq("id", pageId)
+    .maybeSingle();
+
+  if (pageError) return { error: pageError.message, code: "db_error" };
+  if (!pageData) return { error: "Page not found", code: "page_not_found" };
+
+  const page = pageData as SitePageRow;
+  if (!page.published_version_id) {
+    return { error: "This page is not published", code: "invalid_document" };
+  }
+
+  const { error: clearError } = await supabase
+    .from("site_pages")
+    .update({ published_version_id: null, published_at: null, status: "draft" })
+    .eq("id", pageId);
+
+  if (clearError) return { error: clearError.message, code: "db_error" };
+
+  await supabase
+    .from("site_page_versions")
+    .update({ superseded_at: new Date().toISOString() })
+    .eq("id", page.published_version_id);
+
+  // Counted after the pointer is cleared, so this page is not counted as live.
+  const { data: remaining } = await supabase
+    .from("site_pages")
+    .select("id")
+    .eq("site_id", page.site_id)
+    .eq("status", "published");
+
+  const stillLive = ((remaining as unknown[] | null) ?? []).length;
+  const siteReverted = stillLive === 0;
+
+  if (siteReverted) {
+    await supabase
+      .from("merchant_sites")
+      .update({ render_mode: "template" })
+      .eq("id", page.site_id);
+  }
+
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId: page.location_id,
+    action: "unpublished_website_page",
+    actionCategory: "website",
+    severity: "warning",
+    resourceType: "site_page",
+    resourceId: pageId,
+    resourceName: page.title,
+    changes: { before: { publishedVersionId: page.published_version_id }, after: { siteReverted } },
+  });
+
+  return { data: { id: pageId, siteReverted } };
 }

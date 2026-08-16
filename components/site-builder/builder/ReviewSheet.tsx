@@ -22,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { countBrokenBindings } from "@/lib/site-builder/binding-health";
 import { diffDocuments } from "@/lib/site-builder/diff";
-import { BUILT_SITE_IS_PUBLIC } from "@/lib/site-builder/public-site";
 import { validatePage } from "@/lib/site-builder/validate";
 import { cn } from "@/lib/utils";
 import type { BuilderStore } from "./store";
@@ -42,12 +41,13 @@ export default function ReviewSheet({
   store,
   clerkOrgId,
   locationId,
-  viewUrl,
+  publicUrl,
 }: {
   store: BuilderStore;
   clerkOrgId: string;
   locationId: string;
-  viewUrl?: string;
+  /** Where this site answers on the internet, or null until an address exists. */
+  publicUrl?: string | null;
 }) {
   const open = store((s) => s.reviewOpen);
   const closeReview = store((s) => s.closeReview);
@@ -65,9 +65,8 @@ export default function ReviewSheet({
 
   const [pending, startTransition] = useTransition();
 
-  // Where a merchant can actually see this page today. Until the public route
-  // exists, the honest answer is the authenticated preview, not `viewUrl` —
-  // that address belongs to the ordering storefront (see `public-site.ts`).
+  // Where a merchant can see this page before it is reachable — and the honest
+  // answer whenever the site has no web address yet.
   const previewUrl = `/dashboard/website/preview?location=${encodeURIComponent(
     locationId,
   )}&page=${encodeURIComponent(page.id)}`;
@@ -116,7 +115,7 @@ export default function ReviewSheet({
           <PublishedState
             versionNumber={publishResult.versionNumber}
             unchanged={publishResult.unchanged}
-            viewUrl={viewUrl}
+            publicUrl={publicUrl}
             previewUrl={previewUrl}
             onContinue={() => {
               dismissPublishResult();
@@ -129,7 +128,7 @@ export default function ReviewSheet({
               <SheetTitle>Review &amp; publish</SheetTitle>
               <SheetDescription>
                 {neverPublished
-                  ? BUILT_SITE_IS_PUBLIC
+                  ? publicUrl
                     ? "This page has never been published. Publishing makes it visible to guests."
                     : "This page has never been published. Publishing saves a version of it you can return to."
                   : changes.length === 0
@@ -139,7 +138,7 @@ export default function ReviewSheet({
             </SheetHeader>
 
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-              <PublicationTarget page={page} publishedAt={publishedAt} viewUrl={viewUrl} />
+              <PublicationTarget page={page} publishedAt={publishedAt} publicUrl={publicUrl} />
 
               {hasBlockers && (
                 <IssueGroup
@@ -255,7 +254,7 @@ export default function ReviewSheet({
               <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
                 {hasBlockers
                   ? "Fix the issues above to publish."
-                  : BUILT_SITE_IS_PUBLIC
+                  : publicUrl
                     ? "Publishing replaces the live version of this page. Your draft stays editable."
                     : "Publishing records a new version of this page. Your draft stays editable."}
               </p>
@@ -271,18 +270,18 @@ export default function ReviewSheet({
 function PublicationTarget({
   page,
   publishedAt,
-  viewUrl,
+  publicUrl,
 }: {
   page: { title: string; path: string; isHome: boolean };
   publishedAt: string | null;
-  viewUrl?: string;
+  publicUrl?: string | null;
 }) {
   const publicPath = page.isHome || page.path === "" ? "" : `/${page.path}`;
 
-  // `viewUrl` is the ordering storefront. Composing this page's path onto it
-  // produces an address that looks canonical and serves something else, so it
-  // is only shown once the built site genuinely answers there.
-  const fullUrl = BUILT_SITE_IS_PUBLIC && viewUrl ? `${viewUrl}${publicPath}` : null;
+  // Only ever the site's own address. Composing this path onto the ordering
+  // storefront would produce something that looks canonical and serves
+  // something else entirely.
+  const fullUrl = publicUrl ? `${publicUrl}${publicPath}` : null;
 
   return (
     <div className="rounded-lg border bg-card p-3.5">
@@ -298,16 +297,16 @@ function PublicationTarget({
             )}
           </p>
           <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
-            {fullUrl ?? `${publicPath || "/"} — no public web address yet`}
+            {fullUrl ?? `${publicPath || "/"} — no web address yet`}
           </p>
         </div>
         {fullUrl && <CopyLinkButton url={fullUrl} />}
       </div>
       <p className="mt-2.5 border-t pt-2.5 text-[11px] text-muted-foreground">
-        {!BUILT_SITE_IS_PUBLIC
+        {!publicUrl
           ? publishedAt
-            ? "Published and versioned. Websites are not being served to guests yet, so this page is visible to your team in preview only."
-            : "Not published yet. Publishing saves a version you can go back to; guest-facing websites are not switched on yet."
+            ? "Published and versioned. Your website has no web address yet, so guests cannot reach it — choose one on the Website page and it goes live immediately."
+            : "Not published yet. Publishing saves a version you can go back to."
           : publishedAt
             ? `Live since ${new Date(publishedAt).toLocaleDateString(undefined, {
                 month: "short",
@@ -431,13 +430,13 @@ function IssueGroup({
 function PublishedState({
   versionNumber,
   unchanged,
-  viewUrl,
+  publicUrl,
   previewUrl,
   onContinue,
 }: {
   versionNumber: number;
   unchanged: boolean;
-  viewUrl?: string;
+  publicUrl?: string | null;
   previewUrl: string;
   onContinue: () => void;
 }) {
@@ -448,31 +447,29 @@ function PublishedState({
           <PartyPopper className="size-4 text-emerald-600" />
           {unchanged
             ? "Already published"
-            : BUILT_SITE_IS_PUBLIC
+            : publicUrl
               ? "Your page is live"
               : `Version ${versionNumber} published`}
         </SheetTitle>
         <SheetDescription>
           {unchanged
             ? "This draft already matched the published version, so nothing was republished."
-            : BUILT_SITE_IS_PUBLIC
+            : publicUrl
               ? `Version ${versionNumber} is now what guests see.`
               : "Saved as a version you can come back to."}
         </SheetDescription>
       </SheetHeader>
 
       <div className="flex-1 space-y-3 px-5 py-5">
-        {BUILT_SITE_IS_PUBLIC ? (
+        {publicUrl ? (
           <>
-            {viewUrl && (
-              <Button variant="outline" className="w-full justify-start" asChild>
-                <a href={viewUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="size-4" />
-                  Open the live page
-                </a>
-              </Button>
-            )}
-            {viewUrl && <CopyLinkRow url={viewUrl} />}
+            <Button variant="outline" className="w-full justify-start" asChild>
+              <a href={publicUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="size-4" />
+                Open the live page
+              </a>
+            </Button>
+            <CopyLinkRow url={publicUrl} />
             <p className="rounded-lg border border-dashed px-3.5 py-3 text-xs leading-5 text-muted-foreground">
               Menu prices, opening hours and 86&rsquo;d items keep updating on the live page on
               their own — you only republish when you change the page itself.
@@ -490,9 +487,9 @@ function PublishedState({
                 find their page on the internet will assume they did something
                 wrong, and the honest version of this costs one paragraph. */}
             <p className="rounded-lg border border-dashed px-3.5 py-3 text-xs leading-5 text-muted-foreground">
-              Websites are not being served to guests yet — that arrives with the public site
-              rollout. Everything you publish now is kept as a version, so the page goes out
-              exactly as you left it when it does.
+              Your website has no web address yet, so guests cannot reach this page. Choose one on
+              the Website page and everything you have published goes live immediately — there is
+              nothing more to publish.
             </p>
             <p className="rounded-lg border border-dashed px-3.5 py-3 text-xs leading-5 text-muted-foreground">
               Menu prices, opening hours and 86&rsquo;d items will keep updating on their own —

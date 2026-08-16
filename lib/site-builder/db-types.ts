@@ -23,6 +23,15 @@ export interface MerchantSiteRow {
   id: string;
   /** One site per merchant. The site is brand-level and has no location. */
   merchant_id: string;
+  /**
+   * The brand site's web address, as `{subdomain}.dexaposai.com`.
+   *
+   * NULL until the merchant claims one, and **nothing is publicly reachable
+   * until they do** — a built site serves only here, never at a storefront
+   * slug. Shares one namespace with `online_store_config.slug`; the database
+   * refuses collisions in both directions.
+   */
+  subdomain: string | null;
   render_mode: RenderMode;
   nav: { items: unknown[] };
   theme: Record<string, unknown>;

@@ -40,14 +40,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { diffDocuments } from "@/lib/site-builder/diff";
-import { BUILT_SITE_IS_PUBLIC } from "@/lib/site-builder/public-site";
 import { validatePage } from "@/lib/site-builder/validate";
 import { cn } from "@/lib/utils";
 import type { BuilderStore, DeviceMode, EditorPage, SaveState } from "./store";
-
-const externalLinkLabel = BUILT_SITE_IS_PUBLIC
-  ? "View the live site"
-  : "View your ordering site";
 
 /** Device labels carry their real width — "Tablet" alone is not a measurement. */
 const DEVICES: { mode: DeviceMode; label: string; width: string; Icon: typeof Monitor }[] = [
@@ -80,11 +75,18 @@ export default function Toolbar({
   store,
   locationId,
   viewUrl,
+  publicUrl,
 }: {
   store: BuilderStore;
   locationId: string;
   viewUrl?: string;
+  publicUrl?: string | null;
 }) {
+  // Two destinations that must never be confused: the built site's own address,
+  // and the ordering storefront. Offering the live site only once it exists is
+  // what keeps this link from lying.
+  const externalHref = publicUrl ?? viewUrl;
+  const externalLinkLabel = publicUrl ? "View the live site" : "View your ordering site";
   const device = store((s) => s.device);
   const inspectorEnabled = store((s) => s.inspectorEnabled);
   const setDevice = store((s) => s.setDevice);
@@ -114,7 +116,7 @@ export default function Toolbar({
 
       <PageSwitcher store={store} locationId={locationId} />
 
-      <StatusStack store={store} />
+      <StatusStack store={store} publicUrl={publicUrl} />
 
       <div className="mx-auto hidden items-center gap-0.5 rounded-lg border bg-muted/60 p-1 shadow-sm lg:flex">
         {DEVICES.map(({ mode, label, width, Icon }) => (
@@ -154,11 +156,11 @@ export default function Toolbar({
           </IconButton>
         </span>
 
-        {viewUrl && (
+        {externalHref && (
           <Tooltip>
             <TooltipTrigger asChild>
               <a
-                href={viewUrl}
+                href={externalHref}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={externalLinkLabel}
@@ -167,9 +169,6 @@ export default function Toolbar({
                 <ExternalLink className="size-4" />
               </a>
             </TooltipTrigger>
-            {/* `viewUrl` is the ordering storefront. Calling it "the live site"
-                while the built site is not served anywhere invites a merchant
-                to publish, click here, and see none of their changes. */}
             <TooltipContent>{externalLinkLabel}</TooltipContent>
           </Tooltip>
         )}
@@ -326,7 +325,7 @@ function PageSwitcher({ store, locationId }: { store: BuilderStore; locationId: 
  * a single status line has to answer with one of them, and always answers with
  * the wrong one.
  */
-function StatusStack({ store }: { store: BuilderStore }) {
+function StatusStack({ store, publicUrl }: { store: BuilderStore; publicUrl?: string | null }) {
   const saveState = store((s) => s.saveState);
   const savedAt = store((s) => s.savedAt);
   const saveError = store((s) => s.saveError);
@@ -351,7 +350,7 @@ function StatusStack({ store }: { store: BuilderStore }) {
         <span className="truncate">
           {!publishedAt
             ? "Not published yet"
-            : BUILT_SITE_IS_PUBLIC
+            : publicUrl
               ? `Live · published ${formatShortDate(publishedAt)}`
               : `Published ${formatShortDate(publishedAt)}`}
         </span>

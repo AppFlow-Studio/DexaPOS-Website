@@ -182,6 +182,30 @@ export function createFakeSupabase(tables: FakeTables, options: FakeSupabaseOpti
       }
 
       if (call.op === "update") {
+        // uq_merchant_sites_subdomain, plus the cross-namespace trigger against
+        // online_store_config.slug — which raises `unique_violation` too, so
+        // both surface here as 23505. This is an UPDATE-time constraint rather
+        // than an insert-time one, since a site claims its address long after
+        // the row exists.
+        const claimed = call.payload?.subdomain;
+        if (call.table === "merchant_sites" && typeof claimed === "string") {
+          const takenByOtherSite = rowsOf("merchant_sites").some(
+            (row) => row.subdomain === claimed && !matches(row, call),
+          );
+          const takenByStorefront = rowsOf("online_store_config").some(
+            (row) => row.slug === claimed,
+          );
+          if (takenByOtherSite || takenByStorefront) {
+            return {
+              data: null,
+              error: {
+                code: "23505",
+                message: 'duplicate key value violates unique constraint "uq_merchant_sites_subdomain"',
+              },
+            };
+          }
+        }
+
         const updated: FakeRow[] = [];
         for (const row of rowsOf(call.table)) {
           if (!matches(row, call)) continue;
@@ -237,7 +261,14 @@ export function createFakeSupabase(tables: FakeTables, options: FakeSupabaseOpti
       const { data, error } = run();
       if (error) return Promise.resolve({ data: null, error });
 
-      const rows = (data ?? []) as FakeRow[];
+      // Detached copies, because that is what a real client returns.
+      //
+      // Handing back live references let a caller mutate the store by writing
+      // to a query result, and — worse — made a row read *before* an update
+      // appear to change underneath the code holding it. `UnpublishPage` reads
+      // `page.published_version_id` after nulling that column, which works
+      // against Postgres and silently read `null` here.
+      const rows = ((data ?? []) as FakeRow[]).map((row) => structuredClone(row));
       // `select(cols, { count: "exact", head: true })` — the quota check reads
       // `count` and never looks at `data`.
       if (mode === "many" && counting) {

@@ -23,8 +23,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { MerchantSiteRow, SitePageSummary } from "@/lib/site-builder/db-types";
+import WebAddressCard from "./WebAddressCard";
 
 type WebsiteOverviewProps = {
+  clerkOrgId: string;
   locationId: string;
   storeName: string;
   storeUrl: string | null;
@@ -34,6 +36,7 @@ type WebsiteOverviewProps = {
 };
 
 export default function WebsiteOverview({
+  clerkOrgId,
   locationId,
   storeName,
   storeUrl,
@@ -47,7 +50,8 @@ export default function WebsiteOverview({
   const hasPublishedPage = pages.some((page) => page.status === "published");
   const isPublished = Boolean(website?.last_published_at || hasPublishedPage);
   const isStarted = Boolean(website || pages.length > 0);
-  const completed = [isStarted, pages.length > 0, Boolean(storeUrl), isPublished].filter(Boolean).length;
+  const hasAddress = Boolean(website?.subdomain);
+  const completed = [isStarted, pages.length > 0, hasAddress, isPublished].filter(Boolean).length;
   const status = isPublished ? "Published" : isStarted ? "Draft" : "Not started";
 
   const copyUrl = async () => {
@@ -111,7 +115,7 @@ export default function WebsiteOverview({
           <CardContent className="divide-y p-0">
             <ChecklistItem done={isStarted} title="Create your website" detail="Choose a starting layout and add your restaurant&rsquo;s essentials." href={builderHref} action={isStarted ? "Edit" : "Start"} />
             <ChecklistItem done={pages.length > 0} title="Add your home page content" detail="Make the restaurant&rsquo;s story, location, and primary action clear." href={builderHref} action="Edit page" />
-            <ChecklistItem done={Boolean(storeUrl)} title="Connect your Order Online action" detail="Order Online buttons automatically route guests to your active online store." href={builderHref} action="Review" />
+            <ChecklistItem done={hasAddress} title="Choose your web address" detail={hasAddress ? `Your website is served at ${website?.subdomain}.dexaposai.com.` : "Your website is only reachable once it has an address of its own. Your online-ordering links are separate and stay as they are."} href="#web-address" action={hasAddress ? "Change" : "Choose"} />
             <ChecklistItem done={isPublished} title="Review and publish" detail="Check desktop and mobile layouts before making the website live." href={builderHref} action="Review" />
           </CardContent>
         </Card>
@@ -131,6 +135,18 @@ export default function WebsiteOverview({
           </CardContent>
         </Card>
       </section>
+
+      {website && (
+        <WebAddressCard
+          // The readiness checklist links here.
+          id="web-address"
+          clerkOrgId={clerkOrgId}
+          siteId={website.id}
+          storeName={storeName}
+          subdomain={website.subdomain}
+          isPublished={isPublished}
+        />
+      )}
 
       <section className="grid gap-5 md:grid-cols-3">
         <OverviewAction icon={LayoutTemplate} title="Home page" description={`${pages.length || "No"} active page${pages.length === 1 ? "" : "s"}. Start with a focused home page.`} href={builderHref} action="Edit home page" />

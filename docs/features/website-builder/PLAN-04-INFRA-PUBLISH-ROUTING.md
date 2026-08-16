@@ -16,6 +16,38 @@ unaffected.
 
 ## 2. The routing fork — B3/D5, the thing that must exist before the first site goes live
 
+> **Updated 2026-08-16.** This section was written 2026-08-12, three days before D4 was superseded
+> and the site became one-per-merchant. It assumed a slug identifies a site; a slug identifies a
+> *location*, so a brand site had no address at all. Closed by
+> [PLAN-2026-08-16-GAP-CLOSURE.md](PLAN-2026-08-16-GAP-CLOSURE.md) §0.1: `merchant_sites.subdomain`,
+> with collision triggers against `online_store_config.slug` in both directions.
+>
+> **The `(slug, path)` signature below survives unchanged**, and deliberately so. Because the two
+> namespaces cannot collide, a brand subdomain and a storefront slug are interchangeable keys, and
+> `proxy.ts` reduces either host to one of them before routing sees it. An earlier draft proposed
+> `(host, path)`; that would have pulled host parsing into the fork for no gain.
+>
+> Three amendments to the rules as written:
+>
+> - **A built site is served at its brand subdomain and nowhere else.** Rules 2–5 below assume a
+>   storefront slug can resolve to a built site. It must not: `online_store_config.slug` is per
+>   *location*, so resolving one to its merchant's site means flipping a single `render_mode` would
+>   replace **every** branch's ordering page with one brand home page — a five-location merchant
+>   publishing once would take down five live ordering storefronts. A storefront address always
+>   serves ordering, whatever state the built site is in.
+> - **Rule 5's fail-safe becomes structural.** Once the builder never occupies a storefront's
+>   address, there is no longer any way for it to take a working storefront down, so the fallback is
+>   not a rule that has to hold — it is a situation that cannot arise.
+> - **A brand subdomain gets no template fallback**, for the mirror-image reason: the templates are
+>   addressed by storefront slug, so there is nothing behind that address to fall back *to*. It
+>   **404s** rather than answering the brand's URL with one arbitrary branch's ordering page.
+> - **Data access is a `SECURITY DEFINER` function**, `get_public_site_page()`, not direct table
+>   reads: `anon` holds no grant on the website tables and `draft_content` is not in the return
+>   type. The function returns facts; `decideRenderMode` in TypeScript still renders the verdict,
+>   so the "one function, unit-testable with a fixture per rule" property below is preserved.
+>
+> Implementation: [`lib/site-builder/resolve-render-mode.ts`](../../../lib/site-builder/resolve-render-mode.ts).
+
 Under **D1/D5** the builder and the four templates coexist. Both render into the same URL space —
 [proxy.ts:113-142](../../../proxy.ts) resolves a subdomain or custom domain to `online_store_config.slug` →
 `/sites/[slug]`. Once a location has **both**, something must choose.

@@ -145,6 +145,10 @@ export default async function BuilderPage({
       // live too — Stage 6 owns that collision (PLAN-04 §2). Until then this is
       // the only public URL there is to show the merchant.
       viewUrl={site.slug ? `/sites/${site.slug}` : undefined}
+      // Where the built site is genuinely served. Null until the merchant
+      // claims an address, which is the difference between "published" and
+      // "reachable" and the one the editor must not blur.
+      publicUrl={website.subdomain ? `https://${website.subdomain}.dexaposai.com` : null}
     />
   );
 }

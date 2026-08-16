@@ -41,7 +41,7 @@ vi.mock("@/app/dashboard/actions/audit-logs", () => ({
   LogAuditEvent: vi.fn(async () => undefined),
 }));
 
-const { PublishPage, GetPublishedDocument } = await import("../publish");
+const { PublishPage, UnpublishPage, GetPublishedDocument } = await import("../publish");
 
 /**
  * A publishable document, differing only in its hero heading.
@@ -68,7 +68,15 @@ function headingOf(doc: PageDocument): string | undefined {
 function seed(document: PageDocument = documentWith("Welcome")) {
   tables = {
     merchant_sites: [
-      { id: "site_1", merchant_id: MERCHANT, first_published_at: null, last_published_at: null },
+      {
+        id: "site_1",
+        merchant_id: MERCHANT,
+        // The column default, and the state that matters: a site is NOT served
+        // to visitors until a publish flips it.
+        render_mode: "template",
+        first_published_at: null,
+        last_published_at: null,
+      },
     ],
     site_pages: [
       {
@@ -296,16 +304,132 @@ describe("PublishPage", () => {
   });
 
   /**
-   * Guards the §0.2 blocker in the gap-closure plan. `render_mode` is what
-   * decides whether the public route serves the built site at all, and nothing
-   * writes it — so publishing is invisible to visitors no matter what else is
-   * built. This test asserts today's (wrong) behaviour deliberately, so that
-   * the fix in plan item W2.5 has to come here and say so.
+   * The routing fork (B3/D5). Until `render_mode` says 'builder', every visitor
+   * is sent to the ordering storefront — so a page can be published, versioned
+   * and correct and still be invisible. Publishing is the only thing that flips
+   * it, and this is the test that says so.
    */
-  it("does NOT yet flip render_mode — see plan §0.2 / W2.5", async () => {
+  describe("the routing fork", () => {
+    it("switches the site to the built site on publish", async () => {
+      expect(tables.merchant_sites[0].render_mode).toBe("template");
+
+      await PublishPage(ORG, "page_1");
+
+      expect(tables.merchant_sites[0].render_mode).toBe("builder");
+    });
+
+    it("is not flipped by anything short of a successful publish", async () => {
+      // A document that cannot pass validation must not take a merchant's
+      // storefront off the air on its way to failing.
+      page().draft_content = { schemaVersion: 1, sections: [], seo: {}, settings: {} };
+
+      await PublishPage(ORG, "page_1");
+
+      expect(tables.merchant_sites[0].render_mode).toBe("template");
+    });
+
+    /**
+     * Written on every publish rather than only the first. A merchant who
+     * unpublishes their last page and later publishes again already has
+     * `first_published_at` set, so first-publish-only logic would strand them
+     * in 'template' with live pages nobody can see.
+     */
+    /**
+     * The migration path, and a trap the no-op branch walked straight into.
+     * Pages published before the flip existed sit on sites still serving the
+     * template; their drafts already match, so the content hash short-circuits
+     * before anything else runs. Without this, pressing Publish on such a page
+     * succeeds, reports "already published", and changes nothing a visitor can
+     * see — the exact failure this whole wave exists to end.
+     */
+    it("switches a site that already has published content but was never flipped", async () => {
+      await PublishPage(ORG, "page_1");
+      tables.merchant_sites[0].render_mode = "template";
+
+      const again = await PublishPage(ORG, "page_1");
+
+      expect(again.data?.unchanged).toBe(true);
+      expect(tables.site_page_versions).toHaveLength(1);
+      expect(tables.merchant_sites[0].render_mode).toBe("builder");
+    });
+
+    it("recovers a site left in template mode by an earlier unpublish", async () => {
+      await PublishPage(ORG, "page_1");
+      await UnpublishPage(ORG, "page_1");
+      expect(tables.merchant_sites[0].render_mode).toBe("template");
+
+      page().draft_content = documentWith("Back again");
+      await PublishPage(ORG, "page_1");
+
+      expect(tables.merchant_sites[0].render_mode).toBe("builder");
+    });
+  });
+});
+
+describe("UnpublishPage", () => {
+  it("clears the pointer, supersedes the version, and keeps the history", async () => {
+    await PublishPage(ORG, "page_1");
+    const version = tables.site_page_versions[0];
+
+    const result = await UnpublishPage(ORG, "page_1");
+
+    expect(result.error).toBeUndefined();
+    expect(page().published_version_id).toBeNull();
+    expect(page().published_at).toBeNull();
+    expect(page().status).toBe("draft");
+    expect(version.superseded_at).not.toBeNull();
+    // History is append-only: unpublishing must not destroy the layout a
+    // merchant may want back.
+    expect(tables.site_page_versions).toHaveLength(1);
+    expect(version.content).toBeDefined();
+  });
+
+  it("leaves the draft untouched", async () => {
+    await PublishPage(ORG, "page_1");
+    const draft = page().draft_content;
+
+    await UnpublishPage(ORG, "page_1");
+
+    expect(page().draft_content).toEqual(draft);
+  });
+
+  it("returns the site to the storefront when the last page goes down", async () => {
     await PublishPage(ORG, "page_1");
 
-    expect(tables.merchant_sites[0].render_mode).toBeUndefined();
+    const result = await UnpublishPage(ORG, "page_1");
+
+    expect(result.data?.siteReverted).toBe(true);
+    expect(tables.merchant_sites[0].render_mode).toBe("template");
+  });
+
+  it("keeps the site live while another page is still published", async () => {
+    await PublishPage(ORG, "page_1");
+    tables.site_pages.push({
+      ...page(),
+      id: "page_2",
+      path: "our-story",
+      is_home: false,
+      status: "published",
+      published_version_id: "version_other",
+    });
+
+    const result = await UnpublishPage(ORG, "page_1");
+
+    expect(result.data?.siteReverted).toBe(false);
+    expect(tables.merchant_sites[0].render_mode).toBe("builder");
+  });
+
+  it("refuses a page that is not published", async () => {
+    const result = await UnpublishPage(ORG, "page_1");
+
+    expect(result.error).toMatch(/not published/i);
+    expect(tables.merchant_sites[0].render_mode).toBe("template");
+  });
+
+  it("reports a missing page", async () => {
+    const result = await UnpublishPage(ORG, "page_missing");
+
+    expect(result.code).toBe("page_not_found");
   });
 });
 
