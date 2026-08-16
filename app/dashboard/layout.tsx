@@ -329,7 +329,7 @@ const navFooter = [
     icon: Settings,
   },
   {
-    title: "Get Help",
+    title: "Support",
     url: "/dashboard/support",
     icon: MessageCircle,
   },
@@ -760,7 +760,7 @@ function MerchantSidebar() {
               </CollapsibleContent>
             </Collapsible>
           </SidebarMenuItem>
-          {/* Get Help */}
+          {/* Support */}
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
@@ -768,7 +768,7 @@ function MerchantSidebar() {
             >
               <Link href="/dashboard/support">
                 <MessageCircle className="h-4 w-4" />
-                <span>Get Help</span>
+                <span>Support</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -1346,7 +1346,7 @@ export default function MerchantDashboardLayout({
     { title: "Tips", url: "/dashboard/tips", icon: DollarSign },
     { title: "TSYS Disputes", url: "/dashboard/payments/disputes", icon: ShieldAlert },
     { title: "Settings", url: "/dashboard/settings", icon: Settings },
-    { title: "Get Help", url: "/dashboard/support", icon: MessageCircle },
+    { title: "Support", url: "/dashboard/support", icon: MessageCircle },
   ];
 
   // h-svh + max-h-svh + min-h-0 + overflow-hidden caps the shell at the
