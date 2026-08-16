@@ -39,21 +39,21 @@ export function AttentionBanner({
       {/* The amber marks the alert on the header strip only. Tinting the whole
           expanded body floods the panel — in dark mode it reads as a second
           page background rather than a notice. */}
-      <div className="min-w-0 overflow-hidden rounded-2xl border border-amber-500/25 bg-card dark:border-amber-400/20">
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-white text-black">
         <button
-          className="flex w-full min-w-0 items-center justify-between gap-3 bg-amber-500/10 px-4 py-3.5 text-left transition-colors hover:bg-amber-500/15 dark:bg-amber-400/10 dark:hover:bg-amber-400/15"
+          className="flex w-full min-w-0 items-center justify-between gap-3 bg-white px-4 py-3.5 text-left transition-colors hover:bg-muted/40"
           onClick={() => setExpanded(!expanded)}
         >
           <div className="flex min-w-0 items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-            <span className="min-w-0 text-sm font-semibold text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-black" />
+            <span className="min-w-0 text-sm font-semibold text-black">
               {totalIssues} issue{totalIssues !== 1 ? "s" : ""} need attention
             </span>
           </div>
           {expanded ? (
-            <ChevronUp className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <ChevronUp className="h-4 w-4 shrink-0 text-black" />
           ) : (
-            <ChevronDown className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <ChevronDown className="h-4 w-4 shrink-0 text-black" />
           )}
         </button>
 
@@ -79,7 +79,7 @@ export function AttentionBanner({
                       <p className="min-w-0 flex-1">
                         <span className="font-medium text-foreground">{shift.staffName}</span>
                         <span className="ml-1.5 tabular-nums text-muted-foreground">
-                          — clocked in {format(new Date(shift.clockInTime), "EEE h:mm a")}
+                           clocked in {format(new Date(shift.clockInTime), "EEE h:mm a")}
                           {" "}({Math.round(shift.hoursSinceClockIn)}h ago)
                         </span>
                       </p>
@@ -117,7 +117,7 @@ export function AttentionBanner({
                         <p className="min-w-0 flex-1">
                           <span className="font-medium text-foreground">{formatDate(day.date)}</span>
                           <span className="ml-1.5 tabular-nums text-muted-foreground">
-                            — {day.orderCount} orders · {formatMoney(day.totalTips)} tips · {day.shiftCount} staff
+                             {day.orderCount} orders · {formatMoney(day.totalTips)} tips · {day.shiftCount} staff
                           </span>
                           {day.hasOrphanedShifts && (
                             <span className="ml-1.5 inline-flex items-center rounded-full border-0 bg-muted/60 px-2 py-0.5 text-[10px] font-medium">

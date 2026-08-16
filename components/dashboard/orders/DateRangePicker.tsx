@@ -226,7 +226,7 @@ export function DateRangePicker({
                 <PopoverTrigger asChild>
                     <Button
                         variant="outline"
-                        className={cn('gap-2 max-w-full min-w-0', triggerClassName)}
+                        className={cn('gap-2 max-w-full min-w-0 bg-white dark:bg-white', triggerClassName)}
                     >
                         <CalendarIcon className="h-4 w-4 shrink-0" />
                         <span className="truncate">{displayText}</span>
@@ -264,7 +264,15 @@ export function DateRangePicker({
                         // the left edge, so a full-viewport cap still let the
                         // right side (Apply, last preset chips) run off-screen
                         // at 320px. The var accounts for that offset.
-                        'w-auto max-w-[var(--radix-popover-content-available-width)] p-0 z-[200] rounded-2xl',
+                        //
+                        // Below sm that "available width" var is unreliable —
+                        // it's measured from the trigger's edge, not the true
+                        // viewport, so on a phone the panel can still overflow
+                        // the opposite edge (see the mobile calendar overflow
+                        // fix). Clamp to an explicit viewport-relative cap there
+                        // instead, and let sm+ fall back to the Radix var.
+                        'w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[var(--radix-popover-content-available-width)]',
+                        'p-0 z-[200] rounded-2xl bg-popover',
                         'max-h-[var(--radix-popover-content-available-height)] overflow-hidden',
                         contentClassName
                     )}

@@ -194,7 +194,7 @@ export function NeedsApprovalTable({
                 </div>
               </div>
 
-              <div className="mt-5 flex items-center justify-end gap-2 pt-1">
+              <div className="mt-5 flex items-center justify-between gap-2 pt-1">
                 <Button
                   size="sm"
                   variant="ghost"

@@ -317,7 +317,7 @@ export default function MyTipsPage() {
               {weeks.map(([weekStart, total]) => (
                 <InsetTile
                   key={weekStart}
-                  label={`Week of ${new Date(weekStart + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}`}
+                  label={new Date(weekStart + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                   value={fmt(total)}
                 />
               ))}

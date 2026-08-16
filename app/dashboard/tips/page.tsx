@@ -179,7 +179,7 @@ export default function TipsPage() {
 
           {/* TABS */}
           <Tabs defaultValue="today">
-            <div className="w-full min-w-0 overflow-x-auto pb-1">
+            <div className="w-full min-w-0 overflow-x-auto scroll-smooth pb-1">
               <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
                 <TabsTrigger
                   value="today"

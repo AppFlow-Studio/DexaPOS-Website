@@ -179,17 +179,11 @@ export default function SessionReviewPage() {
           Back to Tip Distribution
         </Button>
 
-        <nav className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
-          <span>Reports</span>
-          <ChevronRight className="w-3.5 h-3.5" />
-          <span>Tip Distribution</span>
-          <ChevronRight className="w-3.5 h-3.5" />
-          <span className="text-foreground font-medium">Session Review</span>
-        </nav>
+    
       </div>
 
       {/* HEADER */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">{sessionDateFormatted}</h1>
@@ -212,7 +206,7 @@ export default function SessionReviewPage() {
             )}
             {session.calculated_at && (
               <span className="text-xs text-muted-foreground">
-                Calculated{" "}
+                at{" "}
                 {format(new Date(session.calculated_at), "MMM d 'at' h:mm a")}
               </span>
             )}
@@ -220,7 +214,7 @@ export default function SessionReviewPage() {
         </div>
 
         {/* ACTION BUTTONS */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2">
           {canApprove && (
             <Button
               onClick={handleApprove}

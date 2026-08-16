@@ -85,9 +85,6 @@ export function ManualAdjustmentDialog({
 
         <div className="space-y-4 py-4">
           {detail && (
-            {/* Tier-3 inset well (§3.1). The preview figure carries the brand
-                accent literally — `text-primary` is violet, not the brand blue
-                (C5), and the class must be spelled out in the .tsx (C7). */}
             <div className="grid grid-cols-2 gap-4 rounded-2xl bg-muted/60 p-3">
               <div>
                 <p className="text-xs text-muted-foreground">Current Net Tips</p>
@@ -127,7 +124,7 @@ export function ManualAdjustmentDialog({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g., Correcting duplicate tip entry, Refund"
-              className="mt-1"
+              className="mt-1 border-0 bg-muted/40 text-muted-foreground placeholder:text-muted-foreground/60"
             />
           </div>
         </div>

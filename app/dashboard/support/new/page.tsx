@@ -2,16 +2,10 @@
 
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import {
-  ArrowLeft,
-  MessageCircle,
-  Loader2,
-  CheckCircle2,
-} from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { PageShell, PageHeader, Panel } from "@/components/dashboard/shell";
 import { useCreateTicket, GetSupportUploadUrl } from "../../hooks/useSupport";
 import { useClerkOrgId } from "../../hooks/useLocationScoped";
 import { useSelectedLocation, useLocationStore } from "@/stores/location-store";
@@ -107,134 +102,128 @@ export default function NewTicketPage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/support">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <MessageCircle className="h-5 w-5" />
-            New Support Ticket
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Describe your issue and we&apos;ll get back to you shortly
-          </p>
-        </div>
-      </div>
+    <PageShell width="narrow">
+      <PageHeader
+        title="New Support Ticket"
+        subtitle="Describe your issue and we'll get back to you shortly"
+        backHref="/dashboard/support"
+        backLabel="Back to Support"
+      />
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Category */}
-        <div className="space-y-2">
-          <Label>What do you need help with?</Label>
-          <div className="grid grid-cols-3 gap-2">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.key}
-                type="button"
-                onClick={() => setValue("category", cat.key)}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm text-left transition-all hover:border-primary/50",
-                  selectedCategory === cat.key
-                    ? "border-primary bg-primary/5 text-primary font-medium"
-                    : "border-border text-muted-foreground"
-                )}
-              >
-                <span className="leading-tight">{cat.label}</span>
-                {selectedCategory === cat.key && (
-                  <CheckCircle2 className="h-3.5 w-3.5 ml-auto shrink-0" />
-                )}
-              </button>
-            ))}
-          </div>
-          {errors.category && (
-            <p className="text-xs text-destructive">{errors.category.message}</p>
-          )}
-        </div>
-
-        {/* Subject */}
-        <div className="space-y-2">
-          <Label htmlFor="subject">Subject</Label>
-          <Input
-            id="subject"
-            placeholder="e.g. POS app freezes when printing receipts"
-            {...register("subject")}
-          />
-          {errors.subject && (
-            <p className="text-xs text-destructive">{errors.subject.message}</p>
-          )}
-        </div>
-
-        {/* Description */}
-        <div className="space-y-2">
-          <Label htmlFor="description">Describe the issue</Label>
-          <Textarea
-            id="description"
-            placeholder="Provide as much detail as possible — what happened, when it occurs, what you've already tried..."
-            className="min-h-[140px] resize-none"
-            {...register("description")}
-          />
-          {errors.description && (
-            <p className="text-xs text-destructive">{errors.description.message}</p>
-          )}
-        </div>
-
-        {/* Attachments */}
-        <div className="space-y-2">
-          <Label>Screenshots / Files (optional)</Label>
-          <p className="text-xs text-muted-foreground">
-            Images (PNG, JPG, WebP) or PDFs. Max 3 files, 5MB each.
-          </p>
-          <FileUploadInput
-            onUploadsChange={setAttachments}
-            getUploadUrl={handleGetUploadUrl}
-            sessionId={uploadSessionId}
-            disabled={isPending}
-          />
-        </div>
-
-        {/* Location */}
-        {locations.length > 1 && (
+      <Panel padded>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* Category */}
           <div className="space-y-2">
-            <Label htmlFor="location">Location (optional)</Label>
-            <Select
-              defaultValue={selectedLocation?.id || ""}
-              onValueChange={(val) => setValue("locationId", val || undefined)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a location" />
-              </SelectTrigger>
-              <SelectContent>
-                {locations.map((loc) => (
-                  <SelectItem key={loc.id} value={loc.id}>
-                    {loc.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex gap-3 pt-2">
-          <Button type="button" variant="outline" asChild>
-            <Link href="/dashboard/support">Cancel</Link>
-          </Button>
-          <Button type="submit" disabled={isPending}>
-            {isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Submitting...
-              </>
-            ) : (
-              "Submit Ticket"
+            <Label>What do you need help with?</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.key}
+                  type="button"
+                  onClick={() => setValue("category", cat.key)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-2xl border-0 px-3 py-2.5 text-sm text-left transition-colors",
+                    selectedCategory === cat.key
+                      ? "bg-muted text-foreground font-medium"
+                      : "bg-muted/45 text-muted-foreground hover:bg-muted/60"
+                  )}
+                >
+                  <span className="leading-tight">{cat.label}</span>
+                  {selectedCategory === cat.key && (
+                    <CheckCircle2 className="h-3.5 w-3.5 ml-auto shrink-0 text-[#0C4FD1] dark:text-[#6CA0FF]" />
+                  )}
+                </button>
+              ))}
+            </div>
+            {errors.category && (
+              <p className="text-xs text-destructive">{errors.category.message}</p>
             )}
-          </Button>
-        </div>
-      </form>
-    </div>
+          </div>
+
+          {/* Subject */}
+          <div className="space-y-2">
+            <Label htmlFor="subject">Subject</Label>
+            <Input
+              id="subject"
+              placeholder="e.g. POS app freezes when printing receipts"
+              aria-invalid={!!errors.subject}
+              className="aria-invalid:border aria-invalid:border-destructive"
+              {...register("subject")}
+            />
+            {errors.subject && (
+              <p className="text-xs text-destructive">{errors.subject.message}</p>
+            )}
+          </div>
+
+          {/* Description */}
+          <div className="space-y-2">
+            <Label htmlFor="description">Describe the issue</Label>
+            <Textarea
+              id="description"
+              placeholder="Provide as much detail as possible — what happened, when it occurs, what you've already tried..."
+              className="min-h-[140px] resize-none aria-invalid:border aria-invalid:border-destructive"
+              aria-invalid={!!errors.description}
+              {...register("description")}
+            />
+            {errors.description && (
+              <p className="text-xs text-destructive">{errors.description.message}</p>
+            )}
+          </div>
+
+          {/* Attachments */}
+          <div className="space-y-2">
+            <Label>Screenshots / Files (optional)</Label>
+            <p className="text-xs text-muted-foreground">
+              Images (PNG, JPG, WebP) or PDFs. Max 3 files, 5MB each.
+            </p>
+            <FileUploadInput
+              onUploadsChange={setAttachments}
+              getUploadUrl={handleGetUploadUrl}
+              sessionId={uploadSessionId}
+              disabled={isPending}
+            />
+          </div>
+
+          {/* Location */}
+          {locations.length > 1 && (
+            <div className="space-y-2">
+              <Label htmlFor="location">Location (optional)</Label>
+              <Select
+                defaultValue={selectedLocation?.id || ""}
+                onValueChange={(val) => setValue("locationId", val || undefined)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((loc) => (
+                    <SelectItem key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="rounded-full" onClick={() => router.push("/dashboard/support")}>
+              Cancel
+            </Button>
+            <Button type="submit" className="rounded-full" disabled={isPending}>
+              {isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                "Submit Ticket"
+              )}
+            </Button>
+          </div>
+        </form>
+      </Panel>
+    </PageShell>
   );
 }

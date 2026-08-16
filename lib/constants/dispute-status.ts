@@ -31,44 +31,31 @@ export const DISPUTE_STATUS_LABELS: Record<DisputeStatus, string> = {
   expired: "Expired",
 };
 
-export const DISPUTE_STATUS_STYLES: Record<DisputeStatus, BadgeStyle> = {
-  notified: {
-    dot: "bg-amber-500",
-    text: "text-amber-700 dark:text-amber-400",
-    bg: "bg-amber-50 dark:bg-amber-900/20",
-  },
-  under_review: {
-    dot: "bg-blue-500",
-    text: "text-blue-700 dark:text-blue-400",
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-  },
-  defended: {
-    dot: "bg-violet-500",
-    text: "text-violet-700 dark:text-violet-400",
-    bg: "bg-violet-50 dark:bg-violet-900/20",
-  },
-  won: {
-    dot: "bg-emerald-500",
-    text: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-900/20",
-  },
-  lost: {
-    dot: "bg-rose-500",
-    text: "text-rose-700 dark:text-rose-400",
-    bg: "bg-rose-50 dark:bg-rose-900/20",
-  },
-  expired: {
-    dot: "bg-gray-400",
-    text: "text-gray-600 dark:text-gray-400",
-    bg: "bg-gray-50 dark:bg-gray-800/30",
-  },
+/**
+ * Status is never colour-coded (UI-DESIGN-SYSTEM §4.6b / D-12): every dispute
+ * status renders as the same neutral pill and the *word* carries the meaning.
+ *
+ * The `{dot,text,bg}` shape is kept so consumers keep compiling, but every
+ * status now resolves to the same neutral triple. These classes are generated
+ * only because they are also written literally in a `.tsx` — Tailwind does not
+ * scan `.ts` files (C7).
+ */
+const NEUTRAL_STYLE: BadgeStyle = {
+  dot: "bg-muted-foreground/60",
+  text: "text-muted-foreground",
+  bg: "bg-muted/60",
 };
 
-const FALLBACK_STYLE: BadgeStyle = {
-  dot: "bg-gray-400",
-  text: "text-gray-600 dark:text-gray-400",
-  bg: "bg-gray-50 dark:bg-gray-800/30",
+export const DISPUTE_STATUS_STYLES: Record<DisputeStatus, BadgeStyle> = {
+  notified: NEUTRAL_STYLE,
+  under_review: NEUTRAL_STYLE,
+  defended: NEUTRAL_STYLE,
+  won: NEUTRAL_STYLE,
+  lost: NEUTRAL_STYLE,
+  expired: NEUTRAL_STYLE,
 };
+
+const FALLBACK_STYLE: BadgeStyle = NEUTRAL_STYLE;
 
 /** Label for a dispute status, with a humanized fallback for unknown values. */
 export function getDisputeStatusLabel(status: string | null | undefined): string {
@@ -94,13 +81,9 @@ export function getDisputeStatusStyle(status: string | null | undefined): BadgeS
 export type DeadlineUrgency = "overdue" | "urgent" | "neutral";
 
 export const DEADLINE_URGENCY_STYLES: Record<DeadlineUrgency, BadgeStyle> = {
-  overdue: DISPUTE_STATUS_STYLES.lost,
-  urgent: {
-    dot: "bg-amber-500",
-    text: "text-amber-700 dark:text-amber-400",
-    bg: "bg-amber-50 dark:bg-amber-900/20",
-  },
-  neutral: FALLBACK_STYLE,
+  overdue: NEUTRAL_STYLE,
+  urgent: NEUTRAL_STYLE,
+  neutral: NEUTRAL_STYLE,
 };
 
 /** Neutral "source unknown" / no-linked-record badge style, shared across the page. */

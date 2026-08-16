@@ -248,10 +248,10 @@ function ChargebackDetail({
   const p = row.original_payment;
 
   return (
-    <div className="grid gap-4 p-4 lg:grid-cols-3">
+    <div className="grid min-w-0 gap-4 p-4 lg:grid-cols-3">
       {/* Source transaction */}
-      <Panel nested className="space-y-2 p-3">
-        <h4 className="text-sm font-semibold">Source Transaction</h4>
+      <Panel nested className="min-w-0 space-y-2 p-3">
+        <h4 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Source Transaction</h4>
         {p ? (
           <div className="space-y-1 text-sm">
             <div><span className="text-muted-foreground">Order #:</span>{" "}
@@ -264,9 +264,9 @@ function ChargebackDetail({
             <div><span className="text-muted-foreground">Customer:</span> {p.customer_name ?? "Walk-in"}</div>
             <div><span className="text-muted-foreground">Method:</span> {p.payment_method ?? "-"}</div>
             <div><span className="text-muted-foreground">Status:</span> {p.payment_status ?? "-"}</div>
-            <div><span className="text-muted-foreground">Amount:</span> {formatCurrency(p.total_amount)}</div>
-            <div><span className="text-muted-foreground">Card:</span> {p.card_last_four ? `****${p.card_last_four}` : "-"}</div>
-            <div><span className="text-muted-foreground">Auth Code:</span> <span className="font-mono text-xs">{p.authorization_code ?? "-"}</span></div>
+            <div><span className="text-muted-foreground">Amount:</span> <span className="tabular-nums">{formatCurrency(p.total_amount)}</span></div>
+            <div><span className="text-muted-foreground">Card:</span> <span className="font-mono tabular-nums">{p.card_last_four ? `****${p.card_last_four}` : "-"}</span></div>
+            <div><span className="text-muted-foreground">Auth Code:</span> <span className="font-mono text-xs tabular-nums">{p.authorization_code ?? "-"}</span></div>
             <div><span className="text-muted-foreground">Date:</span> {formatDateTime(p.captured_at ?? p.initiated_at)}</div>
           </div>
         ) : (
@@ -275,13 +275,18 @@ function ChargebackDetail({
       </Panel>
 
       {/* Reason */}
-      <Panel nested className="space-y-2 p-3">
-        <h4 className="text-sm font-semibold">Dispute Reason</h4>
+      <Panel nested className="min-w-0 space-y-2 p-3">
+        <h4 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Dispute Reason</h4>
         <div className="space-y-1 text-sm">
           <div><span className="text-muted-foreground">Code:</span> <span className="font-mono text-xs">{row.reason_code}</span></div>
-          <div><span className="text-muted-foreground">Description:</span> {row.reason_description ?? "-"}</div>
+          <div className="min-w-0">
+            <span className="text-muted-foreground">Description:</span>
+            <span className="ml-1 block whitespace-normal break-words">
+              {row.reason_description ?? "-"}
+            </span>
+          </div>
           <div><span className="text-muted-foreground">Network:</span> {row.card_network ? row.card_network.toUpperCase() : "-"}</div>
-          <div><span className="text-muted-foreground">PSP Reference:</span> <span className="font-mono text-xs">{row.dispute_psp_reference ?? "-"}</span></div>
+          <div className="min-w-0 break-words"><span className="text-muted-foreground">PSP Reference:</span> <span className="font-mono text-xs">{row.dispute_psp_reference ?? "-"}</span></div>
           <div><span className="text-muted-foreground">Received:</span> {formatDateTime(row.received_at)}</div>
           {row.resolved_at && (
             <div><span className="text-muted-foreground">Resolved:</span> {formatDateTime(row.resolved_at)}</div>
@@ -293,8 +298,8 @@ function ChargebackDetail({
       </Panel>
 
       {/* Defense */}
-      <Panel nested className="space-y-2 p-3">
-        <h4 className="text-sm font-semibold">Defense</h4>
+      <Panel nested className="min-w-0 space-y-2 p-3">
+        <h4 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Defense</h4>
 
         {row.defense_documents.length === 0 ? (
           <p className="text-sm text-muted-foreground">No documents uploaded yet.</p>
@@ -335,6 +340,7 @@ function ChargebackDetail({
               <Button
                 variant="outline"
                 size="sm"
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
                 disabled={isUploading}
                 onClick={() => fileRef.current?.click()}
               >
@@ -344,6 +350,7 @@ function ChargebackDetail({
 
               <Button
                 size="sm"
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
                 disabled={isSubmitting || row.defense_documents.length === 0}
                 onClick={handleSubmitDefense}
               >
@@ -354,8 +361,8 @@ function ChargebackDetail({
           )}
 
           {alreadyDefended && (
-            <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+            <div className="flex items-center gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
               Defense submitted {formatDateTime(row.defense_submitted_at)}
             </div>
           )}
@@ -448,7 +455,7 @@ export default function DisputesPage() {
               label="Urgent"
               value={isLoading ? undefined : urgentCount.toLocaleString()}
               meta="Deadline within 7 days"
-              icon={<AlertTriangle className="text-amber-500" />}
+              icon={<AlertTriangle className="text-muted-foreground" />}
               isLoading={isLoading}
             />
             <StatTile
@@ -476,7 +483,7 @@ export default function DisputesPage() {
           caption="Click any row to view details, upload defense documents, or submit a defense response."
         >
           {/* Filters */}
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="mb-6 flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-muted-foreground">Status</span>
               <Select
@@ -506,7 +513,12 @@ export default function DisputesPage() {
             />
 
             {(statusFilter !== "all" || dateFrom || dateTo) && (
-              <Button variant="ghost" size="sm" className="self-end" onClick={clearFilters}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 self-end rounded-full px-3 text-muted-foreground hover:text-foreground"
+                onClick={clearFilters}
+              >
                 <X className="mr-1 h-4 w-4" />
                 Clear
               </Button>
@@ -527,9 +539,16 @@ export default function DisputesPage() {
             />
           ) : (
             <>
-              <Table containerClassName="-mx-2 overflow-x-auto px-2">
-                <TableHeader>
-                  <TableRow className="border-b border-border/60 hover:bg-transparent">
+              {/* §5: variant="data" carries the tinted well, header band and
+                  borderless rows — do not restate them at the call site.
+                  §5.3: below xl this gives way to the card grid further down. */}
+              <Table
+                variant="data"
+                containerClassName="hidden xl:block"
+                className="min-w-[900px]"
+              >
+                <TableHeader className="[&_tr]:border-0">
+                  <TableRow className="border-0 hover:bg-transparent">
                     <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Status</TableHead>
                     <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Received</TableHead>
                     <TableHead className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground">Card</TableHead>
@@ -547,8 +566,8 @@ export default function DisputesPage() {
                       <Fragment key={row.id}>
                         <TableRow
                           className={cn(
-                            "cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50",
-                            isExpanded && "bg-muted/30"
+                            "cursor-pointer border-0 transition-colors",
+                            isExpanded && "bg-muted/40"
                           )}
                           onClick={() => setExpandedId((cur) => (cur === row.id ? null : row.id))}
                         >
@@ -556,7 +575,7 @@ export default function DisputesPage() {
                           <TableCell className="whitespace-nowrap py-3 text-sm text-muted-foreground">
                             {formatDate(row.received_at)}
                           </TableCell>
-                          <TableCell className="py-3 font-mono text-sm">
+                          <TableCell className="py-3 font-mono text-sm tabular-nums">
                             {row.original_payment?.card_last_four
                               ? `****${row.original_payment.card_last_four}`
                               : "-"}
@@ -567,7 +586,7 @@ export default function DisputesPage() {
                           <TableCell className="py-3 text-sm">
                             <div className="font-mono text-xs">{row.reason_code}</div>
                             {row.reason_description && (
-                              <div className="max-w-[200px] truncate text-xs text-muted-foreground">
+                              <div className="text-xs text-muted-foreground break-words whitespace-normal">
                                 {row.reason_description}
                               </div>
                             )}
@@ -607,8 +626,8 @@ export default function DisputesPage() {
                         </TableRow>
 
                         {isExpanded && (
-                          <TableRow className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50">
-                            <TableCell colSpan={8} className="p-0">
+                          <TableRow className="border-0 hover:bg-transparent">
+                            <TableCell colSpan={8} className="bg-muted/40 p-0">
                               <ChargebackDetail
                                 row={row}
                                 clerkOrgId={clerkOrgId}
@@ -623,6 +642,88 @@ export default function DisputesPage() {
                   })}
                 </TableBody>
               </Table>
+
+              {/* §5.3: card grid below xl — never a horizontally scrolling
+                  table on mobile. Same rows, same expand behaviour. */}
+              <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+                {rows.map((row) => {
+                  const isExpanded = expandedId === row.id;
+                  return (
+                    <article
+                      key={row.id}
+                      className={cn(
+                        "min-w-0 rounded-2xl border-0 p-4 transition-colors",
+                        isExpanded ? "bg-muted ring-1 ring-border" : "bg-muted/45"
+                      )}
+                    >
+                      <button
+                        type="button"
+                        className="w-full min-w-0 text-left"
+                        onClick={() =>
+                          setExpandedId((cur) => (cur === row.id ? null : row.id))
+                        }
+                      >
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div className="min-w-0 flex-1">
+                            {getStatusBadge(row.status)}
+                          </div>
+                          <span className="shrink-0 font-mono text-sm font-semibold tabular-nums">
+                            {formatCurrency(row.amount)}
+                          </span>
+                        </div>
+
+                        <dl className="mt-4 grid min-w-0 grid-cols-2 gap-x-4 gap-y-3">
+                          <div className="min-w-0">
+                            <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                              Received
+                            </dt>
+                            <dd className="mt-1 truncate text-sm">
+                              {formatDate(row.received_at)}
+                            </dd>
+                          </div>
+                          <div className="min-w-0 text-right">
+                            <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                              Card
+                            </dt>
+                            <dd className="mt-1 truncate font-mono text-sm tabular-nums">
+                              {row.original_payment?.card_last_four
+                                ? `****${row.original_payment.card_last_four}`
+                                : "-"}
+                            </dd>
+                          </div>
+                          <div className="min-w-0">
+                            <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                              Reason
+                            </dt>
+                            <dd className="mt-1 truncate font-mono text-xs">
+                              {row.reason_code}
+                            </dd>
+                          </div>
+                          <div className="min-w-0 text-right">
+                            <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                              Deadline
+                            </dt>
+                            <dd className="mt-1 flex justify-end">
+                              {getDeadlineDisplay(row.defense_deadline, row.status)}
+                            </dd>
+                          </div>
+                        </dl>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="-mx-4 -mb-4 mt-4">
+                          <ChargebackDetail
+                            row={row}
+                            clerkOrgId={clerkOrgId}
+                            merchantId={merchantId}
+                            onRefresh={() => { void refetch(); }}
+                          />
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
 
               {/* Pagination */}
               <div className="flex flex-col gap-2 pt-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
