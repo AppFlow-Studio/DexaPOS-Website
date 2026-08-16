@@ -37,6 +37,36 @@ describe("section registry", () => {
     expect(addableKinds()).toContain("content");
   });
 
+  /**
+   * `unavailable` is how a kind says its dependency does not exist yet, so the
+   * Add Section gallery can offer it truthfully instead of letting a merchant
+   * add a section that cannot do what its own description promises.
+   */
+  describe("unavailable kinds", () => {
+    it("only marks kinds a merchant could otherwise add", () => {
+      for (const kind of SECTION_KINDS) {
+        const def = SECTION_REGISTRY[kind];
+        if (!def.unavailable) continue;
+        expect(def.addable, `${kind} is unavailable but was never addable`).toBe(true);
+        expect(def.unavailable.trim().length, `${kind} needs a reason`).toBeGreaterThan(0);
+      }
+    });
+
+    /**
+     * Gallery depends entirely on the asset library: `resolveAssetUrl` returns
+     * null for every id, so a gallery added today can never hold a photo.
+     * Delete this expectation when Stage 7 lands — it is the reminder.
+     */
+    it("keeps gallery gated until the asset library exists", () => {
+      expect(SECTION_REGISTRY.gallery.unavailable).toBeTruthy();
+    });
+
+    it("leaves every other kind usable", () => {
+      const gated = SECTION_KINDS.filter((kind) => SECTION_REGISTRY[kind].unavailable);
+      expect(gated).toEqual(["gallery"]);
+    });
+  });
+
   it("declares bindings only where the schema can hold them", () => {
     expect(SECTION_REGISTRY["popular-items"].bindingTypes).toContain("menu_item");
     expect(SECTION_REGISTRY.location.bindingTypes).toContain("location");

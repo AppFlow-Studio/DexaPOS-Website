@@ -1,5 +1,6 @@
 import { cache } from "react";
 
+import type { MerchantSiteRow } from "./db-types";
 import type { ResolverContext, ResolverSources } from "./bindings/resolve";
 import {
   createRenderContext,
@@ -68,7 +69,7 @@ type StoreConfigRow = Record<string, string | boolean | null>;
  * construction, and `cache()` keys on argument identity, so taking one would
  * defeat the memo. See `request-scope.ts`.
  */
-const fetchMerchantId = cache(async (clerkOrgId: string): Promise<string | null> => {
+export const fetchMerchantId = cache(async (clerkOrgId: string): Promise<string | null> => {
   const { data, error } = await getRequestSupabase()
     .from("merchants")
     .select("id")
@@ -104,17 +105,37 @@ const fetchStoreConfigs = cache(async (merchantId: string): Promise<StoreConfigR
   return (data ?? []) as StoreConfigRow[];
 });
 
-/** Website-wide design is optional while the website migration rolls out. */
-const fetchWebsiteTheme = cache(async (merchantId: string): Promise<Partial<ThemeTokens>> => {
-  const { data, error } = await getRequestSupabase()
-    .from("merchant_sites")
-    .select("theme")
-    .eq("merchant_id", merchantId)
-    .maybeSingle();
+/**
+ * The merchant's website row, or `null` before the builder has ever been opened.
+ *
+ * Selects the whole row rather than just `theme` so that `GetOrCreateSite` can
+ * reuse it: the builder route needs both the design tokens and the site record,
+ * and reading the same row twice cost a full round trip on every page open.
+ * The row is a handful of small JSON columns, so the wider projection is free
+ * where the extra round trip was not.
+ */
+export const fetchMerchantSite = cache(
+  async (merchantId: string): Promise<MerchantSiteRow | null> => {
+    const { data, error } = await getRequestSupabase()
+      .from("merchant_sites")
+      .select("*")
+      .eq("merchant_id", merchantId)
+      .maybeSingle();
 
-  if (error || !data?.theme || typeof data.theme !== "object") return {};
-  return pickThemeTokens(data.theme as Record<string, unknown>);
-});
+    if (error) {
+      console.warn(`[site-builder] site lookup failed for ${merchantId}`, error.message);
+      return null;
+    }
+    return (data as MerchantSiteRow | null) ?? null;
+  },
+);
+
+/** Website-wide design is optional while the website migration rolls out. */
+async function fetchWebsiteTheme(merchantId: string): Promise<Partial<ThemeTokens>> {
+  const site = await fetchMerchantSite(merchantId);
+  if (!site?.theme || typeof site.theme !== "object") return {};
+  return pickThemeTokens(site.theme as Record<string, unknown>);
+}
 
 export async function loadSiteContext(
   clerkOrgId: string,

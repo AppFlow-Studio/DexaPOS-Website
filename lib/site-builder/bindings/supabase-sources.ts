@@ -2,10 +2,12 @@
  * The real `ResolverSources`, backed by the same data path the storefront uses.
  *
  * This file is the reason a built page and the ordering page can never quote
- * different prices: menu items come from `get_menus_for_location`, the identical
- * RPC behind `getStorefrontData()`. The 5-level price cascade (L1 global → L5
- * location+menu+category) and 86/snooze resolution both happen **inside
- * Postgres**, so there is no second implementation to drift.
+ * different prices: menu items come from `get_menus_for_location_lite`, which is
+ * a key projection over the very same `get_menu_with_categories` call that
+ * `getStorefrontData()` goes through — fewer keys, identical values. The 5-level
+ * price cascade (L1 global → L5 location+menu+category) and 86/snooze resolution
+ * both happen **inside Postgres**, so there is no second implementation to
+ * drift.
  *
  * If you are tempted to query `menu_items` directly here, don't — that is
  * exactly how the two surfaces diverge.
@@ -52,11 +54,6 @@ export function createSupabaseResolverSources(
   /**
    * Per-instance memo, keyed by merchant+location.
    *
-   * `get_menus_for_location` returns the location's entire menu tree — measured
-   * at **354 KB / ~500 ms** for a 12-menu merchant — because it is the storefront's
-   * query, not ours. That is the price of never owning a second price cascade,
-   * and it is worth paying once per request but not twice.
-   *
    * A sources object is built per request, so this cache lives and dies with
    * that request: there is no cross-request staleness window for a price to hide
    * in. Callers that need the item list before building a document (seeding a
@@ -72,15 +69,7 @@ export function createSupabaseResolverSources(
       if (pending) return pending;
 
       pending = (async () => {
-        const { data, error } = await supabase.rpc("get_menus_for_location", {
-          p_merchant_id: ctx.merchantId,
-          p_location_id: ctx.locationId,
-        });
-
-        if (error) {
-          throw new Error(`get_menus_for_location failed: ${error.message}`);
-        }
-
+        const data = await fetchMenuTree(supabase, ctx);
         return flattenMenuItems(data, deliveryPricingEnabled);
       })();
 
@@ -109,11 +98,75 @@ export function createSupabaseResolverSources(
 }
 
 /**
+ * PostgREST's code for "no function with this name and signature".
+ *
+ * Distinguished from every other failure on purpose: a missing function means
+ * the lite migration has not been applied to this environment, which is a
+ * deployment state we can recover from. A permission error, a timeout or a bad
+ * argument means something is genuinely wrong and must not be retried against a
+ * different function as though it were the same question.
+ */
+const FUNCTION_NOT_FOUND = "PGRST202";
+
+let warnedAboutLiteFallback = false;
+
+/**
+ * The menu tree, from the leanest source this database offers.
+ *
+ * `get_menus_for_location_lite` is a projection over the same
+ * `get_menu_with_categories` call the full RPC makes — same prices, same
+ * availability, same menu selection — with the keys no page renderer reads
+ * removed. Measured across 7 staging storefronts: 84% less payload and 509 ms
+ * down to 231 ms, with a byte-identical flattened item list. That matters
+ * because this runs on every canvas render, not just on page open.
+ *
+ * The fallback exists because the two are interchangeable: an environment
+ * without the migration still renders correct pages, just slower. Without it,
+ * deploying this code ahead of the migration would take the builder down.
+ */
+async function fetchMenuTree(
+  supabase: ResolverClient,
+  ctx: ResolverContext,
+): Promise<unknown> {
+  const args = { p_merchant_id: ctx.merchantId, p_location_id: ctx.locationId };
+
+  const lite = await supabase.rpc("get_menus_for_location_lite", args);
+  if (!lite.error) return lite.data;
+
+  if (lite.error.code !== FUNCTION_NOT_FOUND) {
+    throw new Error(`get_menus_for_location_lite failed: ${lite.error.message}`);
+  }
+
+  if (!warnedAboutLiteFallback) {
+    warnedAboutLiteFallback = true;
+    console.warn(
+      "[site-builder] get_menus_for_location_lite is missing — falling back to the full " +
+        "menu payload (~8x larger). Apply 20260816120000_get_menus_for_location_lite.sql.",
+    );
+  }
+
+  const full = await supabase.rpc("get_menus_for_location", args);
+  if (full.error) {
+    throw new Error(`get_menus_for_location failed: ${full.error.message}`);
+  }
+  return full.data;
+}
+
+/**
  * Flattens the RPC's menu → category → item tree into a flat item list.
  *
  * Field-for-field the same mapping `mapRpcMenuToStorefront` performs, including
  * the `effective_*` fallbacks: `effective_cash_price` is null when a merchant
  * does not run dual pricing, in which case cash equals card.
+ *
+ * Reads only keys that both the full and the lite RPC emit, which is what lets
+ * either one feed it unchanged.
+ *
+ * `is_popular` and `is_new` are read here but **no version of
+ * `get_menu_with_categories` emits them**, so both are permanently false and the
+ * "Popular" badge can never render. Left as-is rather than fixed inside a
+ * performance change: making the badge start appearing on live pages is a
+ * product change and deserves its own review.
  */
 export function flattenMenuItems(
   rpcData: unknown,

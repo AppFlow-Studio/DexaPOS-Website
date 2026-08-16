@@ -10,11 +10,13 @@ import type { PageDocument } from "@/lib/site-builder/page-document";
 import { cn } from "@/lib/utils";
 import AddSectionModal from "./AddSectionModal";
 import Canvas from "./Canvas";
+import ReviewSheet from "./ReviewSheet";
 import SectionList from "./SectionList";
 import SettingsPanel from "./SettingsPanel";
 import Toolbar from "./Toolbar";
 import { getTextPreviewPatches } from "./preview-sync";
-import { createBuilderStore, noopSaveAdapter, type Pane, type SaveAdapter } from "./store";
+import { createDraftSaveAdapter } from "./save-adapter";
+import { createBuilderStore, type EditorPage, type Pane, type SaveAdapter } from "./store";
 
 /**
  * The builder's only stateful client root.
@@ -37,8 +39,12 @@ export default function BuilderShell({
   locationId,
   initialRevision = 0,
   initialCatalog,
-  saveAdapter = noopSaveAdapter,
-  siteName,
+  clerkOrgId,
+  page,
+  pages,
+  publishedDoc = null,
+  publishedAt = null,
+  saveAdapter,
   viewUrl,
 }: {
   initialDoc: PageDocument;
@@ -52,6 +58,13 @@ export default function BuilderShell({
   initialRevision?: number;
   /** Loaded on the server with the opening page; avoids a second menu request after hydration. */
   initialCatalog?: MenuCatalog;
+  /** Needed by the save and publish actions, which are org-scoped. */
+  clerkOrgId: string;
+  page: EditorPage;
+  pages: EditorPage[];
+  publishedDoc?: PageDocument | null;
+  publishedAt?: string | null;
+  /** Overridable for tests; production always saves through `SaveDraft`. */
   saveAdapter?: SaveAdapter;
   siteName?: string;
   viewUrl?: string;
@@ -74,8 +87,22 @@ export default function BuilderShell({
    * After mount the store is the source of truth and later props are ignored;
    * `useState` guarantees that, where `useMemo` is only ever a hint.
    */
+  // Saves are addressed to one page; a page switch remounts this component
+  // (the route keys on page id), so the adapter never outlives its page.
+  const [resolvedAdapter] = useState(
+    () => saveAdapter ?? createDraftSaveAdapter(clerkOrgId, page.id),
+  );
+
   const [store] = useState(() => {
-    const next = createBuilderStore({ doc: initialDoc, canvas: initialCanvas, revision: initialRevision });
+    const next = createBuilderStore({
+      doc: initialDoc,
+      canvas: initialCanvas,
+      revision: initialRevision,
+      page,
+      pages,
+      publishedDoc,
+      publishedAt,
+    });
     if (initialCatalog) {
       next.getState().setCatalog(
         initialCatalog.items,
@@ -108,9 +135,10 @@ export default function BuilderShell({
   }, [notice, clearNotice]);
 
   useServerRender(doc, locationId, canvasRefreshRequest, setCanvas, setRendering);
-  useAutosave(store, saveAdapter);
+  useAutosave(store, resolvedAdapter);
   useKeyboardShortcuts(store);
   useMenuCatalog(store, locationId, !!initialCatalog);
+  useUnsavedChangesWarning(store);
 
   return (
     // The dashboard chrome is a fixed 4rem header, and `#main-content` pads its
@@ -120,7 +148,7 @@ export default function BuilderShell({
     // without them the shell overflowed by the padding, pushing the bottom pane
     // switcher off-screen at every breakpoint.
     <div className="-m-4 -mb-20 flex h-[calc(100dvh-4rem)] min-h-[36rem] flex-col overflow-hidden bg-background sm:-m-6 sm:-mb-6">
-      <Toolbar store={store} siteName={siteName} viewUrl={viewUrl} />
+      <Toolbar store={store} locationId={locationId} viewUrl={viewUrl} />
 
       <div className="flex min-h-0 flex-1">
         <aside
@@ -148,13 +176,19 @@ export default function BuilderShell({
             inspectorOpen ? (pane === "inspector" ? "block" : "hidden xl:block") : "hidden",
           )}
         >
-          {inspectorOpen && <SettingsPanel store={store} />}
+          {inspectorOpen && <SettingsPanel store={store} locationId={locationId} />}
         </aside>
       </div>
 
       <MobilePaneSwitcher pane={pane} setPane={setPane} inspectorOpen={inspectorOpen} />
 
       <AddSectionModal store={store} />
+      <ReviewSheet
+        store={store}
+        clerkOrgId={clerkOrgId}
+        locationId={locationId}
+        viewUrl={viewUrl}
+      />
     </div>
   );
 }
@@ -320,8 +354,15 @@ function useAutosave(store: ReturnType<typeof createBuilderStore>, adapter: Save
         return;
       }
 
-      const { doc: snapshot, revision, editGeneration, setSaveState, replaceDoc, markSaved } =
-        store.getState();
+      const {
+        doc: snapshot,
+        revision,
+        editGeneration,
+        setSaveState,
+        replaceDoc,
+        markSaved,
+        setSaveError,
+      } = store.getState();
       saving.current = true;
       setSaveState("saving");
 
@@ -334,6 +375,7 @@ function useAutosave(store: ReturnType<typeof createBuilderStore>, adapter: Save
         if (outcome.reason === "conflict") {
           // Never silently merge and never silently clobber — PLAN-02 §5.
           setSaveState("conflict");
+          setSaveError("This page was changed in another window.");
           toast.warning("This page was changed in another window.", {
             action: {
               label: "Load theirs",
@@ -342,8 +384,10 @@ function useAutosave(store: ReturnType<typeof createBuilderStore>, adapter: Save
           });
           return;
         }
+        // Persistent, not a toast: a save failure the merchant scrolls past is a
+        // merchant who keeps typing into a document nothing is storing.
         setSaveState("error");
-        toast.error(outcome.message);
+        setSaveError(outcome.message);
       } finally {
         saving.current = false;
         if (queued.current) {
@@ -366,11 +410,36 @@ function useAutosave(store: ReturnType<typeof createBuilderStore>, adapter: Save
   }, [doc, saveState, adapter, store]);
 }
 
+/**
+ * Warns before a reload or tab close that would discard unsaved work.
+ *
+ * Autosave usually gets there first — this covers the window between the last
+ * keystroke and the debounce, and the case that matters far more: a save that
+ * is failing. Registered only while there is something to lose, so the browser
+ * does not prompt on a clean exit.
+ */
+function useUnsavedChangesWarning(store: ReturnType<typeof createBuilderStore>) {
+  const saveState = store((s) => s.saveState);
+  const atRisk = saveState === "dirty" || saveState === "error" || saveState === "conflict";
+
+  useEffect(() => {
+    if (!atRisk) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [atRisk]);
+}
+
 function useKeyboardShortcuts(store: ReturnType<typeof createBuilderStore>) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const typing = !!target?.matches("input, textarea, select, [contenteditable]");
+      // A keydown can be targeted at `document` itself — nothing guarantees an
+      // Element here, and calling `.matches` on one that is not throws and takes
+      // every shortcut down with it, including Escape.
+      const target = event.target;
+      const typing =
+        target instanceof Element &&
+        target.matches("input, textarea, select, [contenteditable]");
 
       const mod = event.metaKey || event.ctrlKey;
 

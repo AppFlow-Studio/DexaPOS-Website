@@ -1,6 +1,18 @@
 "use client";
 
-import { Copy, EyeOff, MoreHorizontal, Plus, RotateCcw, Trash2, X, Zap } from "lucide-react";
+import {
+  ArrowUpRight,
+  Copy,
+  EyeOff,
+  MoreHorizontal,
+  Palette,
+  Plus,
+  RotateCcw,
+  Trash2,
+  X,
+  Zap,
+} from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import {
@@ -19,6 +31,7 @@ import { SECTION_REGISTRY, sectionTitle } from "@/lib/site-builder/sections/regi
 import type { Section } from "@/lib/site-builder/sections/types";
 import { cn } from "@/lib/utils";
 import MenuItemPicker from "./MenuItemPicker";
+import { deleteSectionWithUndo } from "./delete-section";
 import { SectionIcon } from "./section-icons";
 import type { BuilderStore } from "./store";
 
@@ -58,23 +71,38 @@ const STYLE_FIELDS = new Set([
   "defaultOpenFirst",
 ]);
 
-export default function SettingsPanel({ store }: { store: BuilderStore }) {
+export default function SettingsPanel({
+  store,
+  locationId,
+}: {
+  store: BuilderStore;
+  locationId: string;
+}) {
   const doc = store((s) => s.doc);
   const selectedId = store((s) => s.selectedId);
   const section = doc.sections.find((s) => s.id === selectedId);
 
   if (!section) return <PageSettings store={store} />;
 
-  return <SectionSettings key={section.id} section={section} store={store} />;
+  return (
+    <SectionSettings key={section.id} section={section} store={store} locationId={locationId} />
+  );
 }
 
-function SectionSettings({ section, store }: { section: Section; store: BuilderStore }) {
+function SectionSettings({
+  section,
+  store,
+  locationId,
+}: {
+  section: Section;
+  store: BuilderStore;
+  locationId: string;
+}) {
   const def = SECTION_REGISTRY[section.kind];
   const updateProps = store((s) => s.updateProps);
   const closeInspector = store((s) => s.closeInspector);
   const toggleHidden = store((s) => s.toggleHidden);
   const duplicateSection = store((s) => s.duplicateSection);
-  const removeSection = store((s) => s.removeSection);
 
   const controls = useMemo(() => describeSchema(def.schema), [def.schema]);
   const defaults = useMemo(() => def.defaults() as Record<string, unknown>, [def]);
@@ -136,7 +164,10 @@ function SectionSettings({ section, store }: { section: Section; store: BuilderS
             {def.deletable && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onSelect={() => removeSection(section.id)}>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => deleteSectionWithUndo(store, section.id)}
+                >
                   <Trash2 />
                   Delete
                 </DropdownMenuItem>
@@ -172,18 +203,52 @@ function SectionSettings({ section, store }: { section: Section; store: BuilderS
         <div className="min-h-0 flex-1 overflow-y-auto">{renderControls(contentControls)}</div>
       ) : (
         <Tabs defaultValue="content" className="flex min-h-0 flex-1 flex-col gap-0">
+          {/* "Appearance", not "Style": merchants read Style as "my brand
+              colours", which live in the site-wide Design workspace, not here.
+              Appearance is only ever this section's own layout choices. */}
           <TabsList className="mx-3 mt-3 grid w-auto shrink-0 grid-cols-2">
             <TabsTrigger value="content">Content</TabsTrigger>
-            <TabsTrigger value="style">Style</TabsTrigger>
+            <TabsTrigger value="style">Appearance</TabsTrigger>
           </TabsList>
           <TabsContent value="content" className="min-h-0 flex-1 overflow-y-auto">
             {renderControls(contentControls)}
           </TabsContent>
           <TabsContent value="style" className="min-h-0 flex-1 overflow-y-auto">
             {renderControls(styleControls)}
+            <InheritsSiteDesign locationId={locationId} />
           </TabsContent>
         </Tabs>
       )}
+    </div>
+  );
+}
+
+/**
+ * Says where the colours and type actually come from.
+ *
+ * Without it, a merchant looking for "make this heading bigger" reasonably
+ * concludes the editor cannot do it — the controls are one screen away in the
+ * site-wide Design workspace, and per-section brand overrides are deliberately
+ * not offered because nine sections each with their own palette is how a
+ * restaurant site stops looking like one site.
+ */
+function InheritsSiteDesign({ locationId }: { locationId: string }) {
+  return (
+    <div className="mx-4 mb-4 rounded-lg border border-dashed px-3 py-2.5">
+      <p className="flex items-center gap-1.5 text-[11px] font-medium">
+        <Palette className="size-3 text-muted-foreground" />
+        Uses your website design
+      </p>
+      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+        Colours, fonts, and corner style come from your site-wide design so every page matches.
+      </p>
+      <Link
+        href={`/dashboard/website/design?location=${encodeURIComponent(locationId)}`}
+        className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium underline underline-offset-2"
+      >
+        Change site-wide design
+        <ArrowUpRight className="size-3" />
+      </Link>
     </div>
   );
 }

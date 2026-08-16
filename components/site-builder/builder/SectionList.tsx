@@ -17,6 +17,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ArrowDown,
+  ArrowUp,
   Copy,
   Eye,
   EyeOff,
@@ -30,7 +32,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   DropdownMenu,
@@ -45,6 +47,8 @@ import { ZONES, type Zone } from "@/lib/site-builder/sections/kinds";
 import { SECTION_REGISTRY, sectionTitle } from "@/lib/site-builder/sections/registry";
 import type { Section } from "@/lib/site-builder/sections/types";
 import { cn } from "@/lib/utils";
+import { announce } from "./announce";
+import { deleteSectionWithUndo } from "./delete-section";
 import { SectionIcon } from "./section-icons";
 import type { BuilderStore } from "./store";
 
@@ -92,6 +96,26 @@ export default function SectionList({ store }: { store: BuilderStore }) {
 
   const health = useMemo(() => documentHealth(doc, catalog), [doc, catalog]);
 
+  // A filter that hides the section the merchant just added looks exactly like
+  // the add failing. Selection is the signal: if the newly selected section
+  // would not survive the current search, the search has outlived its purpose.
+  //
+  // Adjusted during render rather than in an effect — React's documented way to
+  // reset state in response to a changed value. An effect would paint the wrong
+  // list first and then correct it.
+  const selectedId = store((s) => s.selectedId);
+  const [lastSelectedId, setLastSelectedId] = useState(selectedId);
+  if (selectedId !== lastSelectedId) {
+    setLastSelectedId(selectedId);
+    const selected = selectedId ? doc.sections.find((s) => s.id === selectedId) : undefined;
+    if (term && selected) {
+      const visible =
+        sectionTitle(selected).toLowerCase().includes(term) ||
+        SECTION_REGISTRY[selected.kind].label.toLowerCase().includes(term);
+      if (!visible) setQuery("");
+    }
+  }
+
   const sensors = useSensors(
     // A small activation distance so a click to select is not read as a drag.
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -117,6 +141,16 @@ export default function SectionList({ store }: { store: BuilderStore }) {
     if (from === -1 || to === -1) return;
 
     reorderSections(from, to);
+
+    // "Gallery moved after Our story" — dnd-kit's own announcement only knows
+    // about list positions, which is not what the merchant reordered.
+    const moved = doc.sections[from];
+    const target = doc.sections[to];
+    if (moved && target) {
+      announce(
+        `${sectionTitle(moved)} moved ${to > from ? "after" : "before"} ${sectionTitle(target)}.`,
+      );
+    }
   }
 
   const bodyMatches = byZone("body");
@@ -264,15 +298,52 @@ function Row({
   store: BuilderStore;
 }) {
   const def = SECTION_REGISTRY[section.kind];
+  const doc = store((s) => s.doc);
   const selectedId = store((s) => s.selectedId);
   const select = store((s) => s.select);
   const toggleHidden = store((s) => s.toggleHidden);
   const duplicateSection = store((s) => s.duplicateSection);
-  const removeSection = store((s) => s.removeSection);
+  const moveSectionBy = store((s) => s.moveSectionBy);
+
+  // Mirror the zone rule `moveSectionBy` enforces, so a menu item is never
+  // enabled for a move that would come straight back as a refusal.
+  const index = doc.sections.findIndex((s) => s.id === section.id);
+  const previous = doc.sections[index - 1];
+  const following = doc.sections[index + 1];
+  const canMoveUp = !!previous && SECTION_REGISTRY[previous.kind].zone === def.zone;
+  const canMoveDown = !!following && SECTION_REGISTRY[following.kind].zone === def.zone;
+
+  const move = (delta: -1 | 1) => {
+    const neighbour = delta === -1 ? previous : following;
+    moveSectionBy(section.id, delta);
+    if (neighbour) {
+      announce(
+        `${sectionTitle(section)} moved ${delta === -1 ? "before" : "after"} ${sectionTitle(neighbour)}.`,
+      );
+    }
+  };
 
   const selected = section.id === selectedId;
   const title = sectionTitle(section);
   const broken = health?.broken ?? [];
+  const rowRef = useRef<HTMLLIElement>(null);
+
+  // Scroll this row into view when the canvas — not this list — moved the
+  // selection. Without it, clicking a section far down a long page leaves the
+  // list highlighting a row nobody can see.
+  const revealNonce = store((s) => s.revealNonce);
+  const handledReveal = useRef(revealNonce);
+  useEffect(() => {
+    if (revealNonce === handledReveal.current) return;
+    handledReveal.current = revealNonce;
+    if (!selected) return;
+    const { selectionSource } = store.getState();
+    if (selectionSource === "list") return;
+    rowRef.current?.scrollIntoView({
+      block: "nearest",
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  }, [revealNonce, selected, store]);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: section.id,
@@ -281,7 +352,10 @@ function Row({
 
   return (
     <li
-      ref={setNodeRef}
+      ref={(node) => {
+        setNodeRef(node);
+        rowRef.current = node;
+      }}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
         "group relative flex items-center gap-1 rounded-md pr-1 transition-colors",
@@ -315,7 +389,7 @@ function Row({
 
       <button
         type="button"
-        onClick={() => select(section.id)}
+        onClick={() => select(section.id, "list")}
         className="flex min-w-0 flex-1 items-center gap-2 py-1.5 text-left"
       >
         <SectionIcon
@@ -396,7 +470,25 @@ function Row({
           >
             <MoreHorizontal className="size-3.5" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuContent align="end" className="w-48">
+            {/* Dragging is not the only way to reorder. Merchants on a trackpad,
+                on a touch screen, or using a keyboard get the same operation as
+                an ordinary menu item — and it is offered only where the zone
+                rules would actually allow the move. */}
+            {(canMoveUp || canMoveDown) && (
+              <>
+                <DropdownMenuItem disabled={!canMoveUp} onSelect={() => move(-1)}>
+                  <ArrowUp />
+                  Move up
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={!canMoveDown} onSelect={() => move(1)}>
+                  <ArrowDown />
+                  Move down
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
+
             <DropdownMenuItem onSelect={() => toggleHidden(section.id)}>
               {section.hidden ? <Eye /> : <EyeOff />}
               {section.hidden ? "Show on the page" : "Hide from the page"}
@@ -414,7 +506,7 @@ function Row({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   variant="destructive"
-                  onSelect={() => removeSection(section.id)}
+                  onSelect={() => deleteSectionWithUndo(store, section.id)}
                 >
                   <Trash2 />
                   Delete

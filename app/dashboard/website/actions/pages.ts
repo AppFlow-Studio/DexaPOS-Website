@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
 import { createEmptyPage } from "@/lib/site-builder/page-document";
 import { checkPagePath, slugifyPagePath } from "@/lib/site-builder/reserved-paths";
+import { createStarterHomePage } from "@/lib/site-builder/starter-page";
 import type {
   ActionResult,
   MerchantSiteRow,
@@ -258,6 +259,96 @@ export async function DeletePage(
   });
 
   return { data: { id: pageId } };
+}
+
+/**
+ * Creates the site's home page, pre-filled with a usable restaurant layout.
+ *
+ * A merchant's first page must not be blank. A blank canvas asks someone with
+ * no design experience to invent a homepage structure; a starter page asks them
+ * to replace words and photos, which is a task they can actually finish. Every
+ * section is ordinary and editable — nothing here is a template the merchant is
+ * locked into.
+ *
+ * Idempotent: `uq_site_pages_one_home` allows one home page per site, so a
+ * double submit or a retried request returns the existing page rather than
+ * failing.
+ */
+export async function CreateHomePage(
+  clerkOrgId: string,
+  siteId: string,
+  input: { locationId: string; menuItemIds?: string[]; restaurantName?: string },
+): Promise<ActionResult<SitePageSummary>> {
+  if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
+
+  const supabase = createServerSupabaseClient();
+
+  const { data: existing } = await supabase
+    .from("site_pages")
+    .select(PAGE_SUMMARY_COLUMNS)
+    .eq("site_id", siteId)
+    .eq("is_home", true)
+    .maybeSingle();
+
+  if (existing) return { data: existing as SitePageSummary };
+
+  const { data: site } = await supabase
+    .from("merchant_sites")
+    .select("id, merchant_id")
+    .eq("id", siteId)
+    .maybeSingle();
+
+  if (!site) return { error: "Site not found", code: "site_not_found" };
+  const siteRow = site as Pick<MerchantSiteRow, "id" | "merchant_id">;
+
+  const { data, error } = await supabase
+    .from("site_pages")
+    .insert({
+      site_id: siteId,
+      merchant_id: siteRow.merchant_id,
+      location_id: input.locationId,
+      // The home page is the site root, so its path is the empty string.
+      path: "",
+      title: "Home",
+      is_home: true,
+      draft_content: createStarterHomePage({
+        locationId: input.locationId,
+        menuItemIds: input.menuItemIds,
+        restaurantName: input.restaurantName,
+      }),
+    })
+    .select(PAGE_SUMMARY_COLUMNS)
+    .single();
+
+  if (error || !data) {
+    // Lost a race with a concurrent create; the winner's row is the answer.
+    if (error?.code === "23505") {
+      const { data: raced } = await supabase
+        .from("site_pages")
+        .select(PAGE_SUMMARY_COLUMNS)
+        .eq("site_id", siteId)
+        .eq("is_home", true)
+        .maybeSingle();
+      if (raced) return { data: raced as SitePageSummary };
+    }
+    return { error: error?.message ?? "Could not create the home page", code: "db_error" };
+  }
+
+  const page = data as SitePageSummary;
+
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId: input.locationId,
+    action: "created_website_page",
+    actionCategory: "website",
+    severity: "info",
+    resourceType: "site_page",
+    resourceId: page.id,
+    resourceName: page.title,
+    changes: { after: { isHome: true, starter: true } },
+  });
+
+  return { data: page };
 }
 
 /** Returns the home page, which every site has from creation. */

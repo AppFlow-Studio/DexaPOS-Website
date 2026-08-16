@@ -18,6 +18,7 @@ import type { PageDocument } from "@/lib/site-builder/page-document";
 import { SECTION_REGISTRY, sectionTitle } from "@/lib/site-builder/sections/registry";
 import { cn } from "@/lib/utils";
 import type { BuilderStore, DeviceMode } from "./store";
+import { deleteSectionWithUndo } from "./delete-section";
 import { applyTextPreviewPatches, getTextPreviewPatches } from "./preview-sync";
 
 const DEVICE_WIDTHS: Record<DeviceMode, string> = {
@@ -64,10 +65,13 @@ export default function Canvas({ store }: { store: BuilderStore }) {
   const openAddSection = store((s) => s.openAddSection);
 
   const hostRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [rects, setRects] = useState<Record<string, DOMRect>>({});
   const canvasDoc = useRef(doc);
   const previousCanvas = useRef(canvas);
+
+  useRevealSelectedSection(store, hostRef, scrollerRef);
 
   // A new server tree is authoritative. From this point, later scalar edits can
   // be patched locally without asking the server to recreate the entire page.
@@ -165,7 +169,9 @@ export default function Canvas({ store }: { store: BuilderStore }) {
       if (target.closest("a, button")) event.preventDefault();
 
       const sectionEl = target.closest<HTMLElement>("[data-sb-section-id]");
-      select(sectionEl?.dataset.sbSectionId ?? null);
+      // Tagged as canvas-originated so the section list scrolls to match and
+      // this surface, which the merchant is already looking at, does not.
+      select(sectionEl?.dataset.sbSectionId ?? null, "canvas");
     },
     [inspectorEnabled, select],
   );
@@ -198,7 +204,7 @@ export default function Canvas({ store }: { store: BuilderStore }) {
         </button>
       </StatusPill>
 
-      <div className="flex-1 overflow-auto p-4 sm:p-8">
+      <div ref={scrollerRef} className="flex-1 overflow-auto p-4 sm:p-8">
         <div
           className={cn(
             "relative mx-auto bg-white transition-[width,box-shadow] duration-300",
@@ -234,6 +240,48 @@ export default function Canvas({ store }: { store: BuilderStore }) {
       </div>
     </div>
   );
+}
+
+/**
+ * Brings the selected section into view when the selection came from elsewhere.
+ *
+ * Only reacts to `revealNonce`, never to `selectedId`: re-selecting the same
+ * section from the list must scroll again, and a re-render that happens to
+ * carry the same id must not. Skips canvas-originated selections, which the
+ * merchant is already looking at, and respects reduced-motion.
+ */
+function useRevealSelectedSection(
+  store: BuilderStore,
+  hostRef: React.RefObject<HTMLDivElement | null>,
+  scrollerRef: React.RefObject<HTMLDivElement | null>,
+) {
+  const revealNonce = store((s) => s.revealNonce);
+  const handled = useRef(revealNonce);
+
+  useEffect(() => {
+    if (revealNonce === handled.current) return;
+    handled.current = revealNonce;
+
+    const { selectedId, selectionSource } = store.getState();
+    if (!selectedId || selectionSource === "canvas") return;
+
+    const scroller = scrollerRef.current;
+    const target = hostRef.current?.querySelector<HTMLElement>(
+      `[data-sb-section-id="${CSS.escape(selectedId)}"]`,
+    );
+    if (!scroller || !target) return;
+
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const offset =
+      target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+
+    scroller.scrollTo({
+      // A little headroom so the section's own label, which sits above it, is
+      // not clipped against the top of the viewport.
+      top: Math.max(0, offset - 48),
+      behavior: reduced ? "auto" : "smooth",
+    });
+  }, [revealNonce, store, hostRef, scrollerRef]);
 }
 
 /** The one floating message slot, so two states can never stack on each other. */
@@ -359,7 +407,6 @@ function Overlay({
   store: BuilderStore;
 }) {
   const moveSectionBy = store((s) => s.moveSectionBy);
-  const removeSection = store((s) => s.removeSection);
   const duplicateSection = store((s) => s.duplicateSection);
   const toggleHidden = store((s) => s.toggleHidden);
 
@@ -445,7 +492,7 @@ function Overlay({
                   <CanvasButton
                     label="Delete"
                     destructive
-                    onClick={() => removeSection(section.id)}
+                    onClick={() => deleteSectionWithUndo(store, section.id)}
                   >
                     <Trash2 className="size-3.5" />
                   </CanvasButton>

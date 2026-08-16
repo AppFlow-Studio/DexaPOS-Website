@@ -308,6 +308,71 @@ async function main() {
   }
   if (lied) await service.from("site_pages").delete().eq("id", (lied as { id: string }).id);
 
+  // What Lane 3 is about to overwrite on merchant A's real home page.
+  //
+  // The revision checks below have to write `draft_content` and `title` to mean
+  // anything, and this script is pointed at an environment where that page may
+  // be someone's actual work in progress. Snapshot first, restore in `finally`,
+  // so a verification run is not a way to lose a draft. Without this, running
+  // the acceptance test was itself destructive — which is a large part of why
+  // it had never been run.
+  const { data: before } = await service
+    .from("site_pages")
+    .select("draft_content, title")
+    .eq("id", a.page.id)
+    .single();
+
+  try {
+    await revisionAndImmutabilityChecks(a, merchantA);
+  } finally {
+    if (!before) {
+      failures += 1;
+      console.log("  ✗ could not snapshot merchant A's draft — it may now hold probe content");
+    } else {
+      const original = before as { draft_content: unknown; title: string };
+      const { error: restoreError } = await service
+        .from("site_pages")
+        .update({ draft_content: original.draft_content, title: original.title })
+        .eq("id", a.page.id);
+
+      // Reported, not assumed. An earlier version of this script had no restore
+      // at all and left `sec_probe` plus a `Home <timestamp>` title on a real
+      // merchant's draft, where it sat unnoticed for a day — precisely because
+      // nothing ever said whether the cleanup happened.
+      if (restoreError) {
+        failures += 1;
+        console.log(`  ✗ FAILED to restore merchant A's draft: ${restoreError.message}`);
+        console.log(`    page ${a.page.id} may still contain the probe section.`);
+      } else {
+        console.log("  ↩ restored merchant A's draft content and title");
+      }
+    }
+  }
+
+  // ── result ────────────────────────────────────────────────────────────────
+  console.log(
+    failures === 0
+      ? `\n✅ tenancy verification passed${skipped ? ` (${skipped} skipped)` : ""}\n`
+      : `\n❌ ${failures} isolation failure(s)${skipped ? `, ${skipped} skipped` : ""}\n`,
+  );
+  if (skipped > 0 && failures === 0) {
+    console.log(
+      "Skipped lanes are NOT passes. Supply SITE_TENANCY_TOKEN_A to complete the acceptance test.\n",
+    );
+  }
+  process.exit(failures === 0 ? 0 : 1);
+}
+
+/**
+ * The write-dependent half of Lane 3.
+ *
+ * Split out so the caller can wrap it in the snapshot/restore that keeps these
+ * writes from outliving the run.
+ */
+async function revisionAndImmutabilityChecks(
+  a: { siteId: string; page: { id: string; revision: number } },
+  merchantA: string,
+) {
   // Revision must advance on a content change (autosave concurrency depends on
   // it) and must NOT advance otherwise.
   //
@@ -385,19 +450,6 @@ async function main() {
     }
     await service.from("site_page_versions").delete().eq("id", versionId);
   }
-
-  // ── result ────────────────────────────────────────────────────────────────
-  console.log(
-    failures === 0
-      ? `\n✅ tenancy verification passed${skipped ? ` (${skipped} skipped)` : ""}\n`
-      : `\n❌ ${failures} isolation failure(s)${skipped ? `, ${skipped} skipped` : ""}\n`,
-  );
-  if (skipped > 0 && failures === 0) {
-    console.log(
-      "Skipped lanes are NOT passes. Supply SITE_TENANCY_TOKEN_A to complete the acceptance test.\n",
-    );
-  }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
 main().catch((e) => {

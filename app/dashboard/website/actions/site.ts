@@ -3,6 +3,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
 import { createStarterPage } from "@/lib/site-builder/page-document";
+import { fetchMerchantId, fetchMerchantSite } from "@/lib/site-builder/site-context";
 import type {
   ActionResult,
   MerchantSiteRow,
@@ -54,16 +55,14 @@ export async function GetOrCreateSite(
 
   const supabase = createServerSupabaseClient();
 
-  const { merchantId, error: merchantError } = await resolveMerchantId(supabase, clerkOrgId);
-  if (!merchantId) return { error: merchantError, code: "merchant_not_found" };
+  // Both reads are request-scoped memos shared with `loadSiteContext`, which the
+  // builder route has already awaited by the time it gets here. On that route
+  // this whole branch is free; called cold, it costs exactly what it used to.
+  const merchantId = await fetchMerchantId(clerkOrgId);
+  if (!merchantId) return { error: "Merchant not found", code: "merchant_not_found" };
 
-  const { data: existing } = await supabase
-    .from("merchant_sites")
-    .select("*")
-    .eq("merchant_id", merchantId)
-    .maybeSingle();
-
-  if (existing) return { data: existing as MerchantSiteRow };
+  const existing = await fetchMerchantSite(merchantId);
+  if (existing) return { data: existing };
 
   const { data: created, error: createError } = await supabase
     .from("merchant_sites")
@@ -163,10 +162,20 @@ export async function UpdateSiteSettings(
   return { data: data as MerchantSiteRow };
 }
 
-/** The site for a location, or `undefined` if the builder was never opened. */
+/**
+ * The merchant's site, or `null` if the builder has never been opened.
+ *
+ * Read-only counterpart to `GetOrCreateSite`, for surfaces that must not bring
+ * a site into existence as a side effect of being looked at — the preview route
+ * is the reason it exists.
+ *
+ * It used to take a `locationId` and filter on `merchant_sites.location_id`.
+ * That column has never existed: the table has been merchant-scoped since the
+ * 2026-08-15 supersession of D4, so the filter was a guaranteed error from any
+ * caller. It had none, which is the only reason it went unnoticed.
+ */
 export async function GetSite(
   clerkOrgId: string,
-  locationId: string,
 ): Promise<ActionResult<MerchantSiteRow | null>> {
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
@@ -179,7 +188,6 @@ export async function GetSite(
     .from("merchant_sites")
     .select("*")
     .eq("merchant_id", merchantId)
-    .eq("location_id", locationId)
     .maybeSingle();
 
   if (error) return { error: error.message, code: "db_error" };

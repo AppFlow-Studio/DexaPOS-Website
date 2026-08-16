@@ -6,10 +6,13 @@ import {
   moveSection,
   moveSectionBy,
   removeSection,
+  restoreRequiredSection,
   setSectionHidden,
   updateSectionProps,
 } from "../mutations";
 import { createStarterPage, type PageDocument } from "../page-document";
+import { SECTION_REGISTRY } from "../sections/registry";
+import { validatePage } from "../validate";
 
 let doc: PageDocument;
 
@@ -40,6 +43,89 @@ describe("addSection", () => {
     const before = JSON.stringify(doc);
     addSection(doc, "content");
     expect(JSON.stringify(doc)).toBe(before);
+  });
+});
+
+describe("restoreRequiredSection", () => {
+  /** A document that lost its footer — an older build, an import, a direct edit. */
+  const withoutFooter = (): PageDocument => ({
+    ...doc,
+    sections: doc.sections.filter((s) => s.kind !== "footer"),
+  });
+
+  it("puts a missing required section back, in its zone", () => {
+    const broken = withoutFooter();
+    const result = restoreRequiredSection(broken, "footer", { ctx: { locationId: "loc_1" } });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // The footer belongs last regardless of where it was appended.
+    expect(result.doc.sections.at(-1)!.kind).toBe("footer");
+    expect(validatePage(result.doc).errors.filter((e) => e.kind === "footer")).toHaveLength(0);
+  });
+
+  it("clears the blocking error the merchant could not otherwise fix", () => {
+    const broken = withoutFooter();
+    expect(validatePage(broken).ok).toBe(false);
+    // The gallery refuses it, which is exactly why the repair path exists.
+    expect(addSection(broken, "footer").ok).toBe(false);
+
+    const result = restoreRequiredSection(broken, "footer", { ctx: { locationId: "loc_1" } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(validatePage(result.doc).ok).toBe(true);
+  });
+
+  it("restores a header above the hero, not below it", () => {
+    // Both live in the masthead, so zone sorting alone would append the header
+    // after the hero and put the navigation in the middle of the page.
+    const broken: PageDocument = {
+      ...doc,
+      sections: doc.sections.filter((s) => s.kind !== "header"),
+    };
+
+    const result = restoreRequiredSection(broken, "header", { ctx: { locationId: "loc_1" } });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const kinds = result.doc.sections.map((s) => s.kind);
+    expect(kinds.indexOf("header")).toBeLessThan(kinds.indexOf("hero"));
+    expect(kinds[0]).toBe("header");
+  });
+
+  it("leaves the merchant's body ordering untouched", () => {
+    const withBody = addSection(doc, "gallery");
+    expect(withBody.ok).toBe(true);
+    if (!withBody.ok) return;
+
+    const broken: PageDocument = {
+      ...withBody.doc,
+      sections: withBody.doc.sections.filter((s) => s.kind !== "footer"),
+    };
+    const bodyBefore = broken.sections
+      .filter((s) => SECTION_REGISTRY[s.kind].zone === "body")
+      .map((s) => s.id);
+
+    const result = restoreRequiredSection(broken, "footer", { ctx: { locationId: "loc_1" } });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(
+      result.doc.sections
+        .filter((s) => SECTION_REGISTRY[s.kind].zone === "body")
+        .map((s) => s.id),
+    ).toEqual(bodyBefore);
+  });
+
+  it("refuses when the section is already present", () => {
+    const result = restoreRequiredSection(doc, "footer");
+    expect(result.ok).toBe(false);
+  });
+
+  it("refuses anything the merchant is allowed to delete", () => {
+    // Not a general-purpose "add anything" hatch around `addable`.
+    const result = restoreRequiredSection(doc, "gallery");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("not_addable");
   });
 });
 

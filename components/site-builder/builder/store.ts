@@ -8,6 +8,7 @@ import {
   duplicateSection,
   moveSectionBy,
   removeSection,
+  restoreRequiredSection,
   setSectionHidden,
   updateSectionProps,
   updateSeo,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/site-builder/mutations";
 import type { PageDocument } from "@/lib/site-builder/page-document";
 import type { SectionKind } from "@/lib/site-builder/sections/kinds";
+import { sectionTitle } from "@/lib/site-builder/sections/registry";
 
 /**
  * Builder state.
@@ -38,6 +40,36 @@ export type SaveState = "idle" | "dirty" | "saving" | "saved" | "conflict" | "er
  * the structure rail and canvas are both always present.
  */
 export type Pane = "structure" | "canvas" | "inspector";
+
+/** Page identity, as much of it as the editor needs. */
+export interface EditorPage {
+  id: string;
+  title: string;
+  /** Site-relative path. Empty string is the home page. */
+  path: string;
+  isHome: boolean;
+  status: "draft" | "published" | "archived";
+  publishedAt: string | null;
+}
+
+/**
+ * What moved the selection.
+ *
+ * Canvas, section list and inspector must always agree on the selected section,
+ * which means two of the three have to scroll to catch up. Recording the origin
+ * is what stops that from looping: the surface the merchant clicked never
+ * scrolls itself, only the others do.
+ */
+export type SelectionSource = "canvas" | "list" | "other";
+
+export type PublishState = "idle" | "publishing";
+
+export interface PublishSummary {
+  versionNumber: number;
+  publishedAt: string;
+  /** True when the draft already matched what was live. */
+  unchanged: boolean;
+}
 
 /** Undo depth, matching the MockBuilder spec. */
 const HISTORY_LIMIT = 50;
@@ -69,15 +101,37 @@ export const noopSaveAdapter: SaveAdapter = {
 interface BuilderState {
   doc: PageDocument;
   /**
-   * The document as it was last published — the baseline every "3 changes"
-   * count is measured against.
+   * The document that is currently live — the baseline every "3 changes" count
+   * is measured against.
    *
-   * Until Stage 5 exists there is nothing published to compare with, so this
-   * starts as the document the builder opened with. That makes the count read
-   * "changes this session", which is honest and useful; `markPublished` swaps in
-   * the real meaning the moment a publish pipeline can call it.
+   * `null` on a page that has never been published. That is a different state
+   * from "published and identical", and conflating them would make a brand-new
+   * page report every one of its sections as a pending change.
    */
-  publishedDoc: PageDocument;
+  publishedDoc: PageDocument | null;
+  /** When the live version went out. Null when never published. */
+  publishedAt: string | null;
+
+  /** Which page is open, and every page the merchant can switch to. */
+  page: EditorPage;
+  pages: EditorPage[];
+
+  publishState: PublishState;
+  /** The outcome of the last publish, shown until dismissed. */
+  publishResult: PublishSummary | null;
+  reviewOpen: boolean;
+
+  /**
+   * Why the last save failed, kept until it succeeds.
+   *
+   * A toast is the wrong home for this: it disappears, and the merchant keeps
+   * typing into a document that is no longer being persisted anywhere.
+   */
+  saveError: string | null;
+
+  selectionSource: SelectionSource;
+  /** Bumped on every selection so listeners can scroll exactly once. */
+  revealNonce: number;
   /** Optimistic-concurrency token from the server. */
   revision: number;
   /** Monotonic local edit token used to acknowledge the exact saved snapshot. */
@@ -137,8 +191,19 @@ interface BuilderState {
 
   // section mutations
   addSection: (kind: SectionKind, atIndex?: number) => void;
-  removeSection: (id: string) => void;
+  /**
+   * Deletes a section and returns what is needed to offer an Undo.
+   *
+   * Returns null when the mutation was refused. The `generation` lets the
+   * caller's Undo verify that nothing else has been edited since — undoing
+   * blindly would silently revert whatever the merchant did next.
+   */
+  removeSection: (id: string) => { title: string; generation: number } | null;
+  /** Undoes a specific deletion, or does nothing if the edit is no longer on top. */
+  undoDelete: (generation: number) => boolean;
   duplicateSection: (id: string) => void;
+  /** Repairs a document that is missing a required header/hero/footer. */
+  restoreRequiredSection: (kind: SectionKind, locationId?: string) => void;
   moveSectionBy: (id: string, delta: number) => void;
   reorderSections: (fromIndex: number, toIndex: number) => void;
   updateProps: (id: string, patch: Record<string, unknown>) => void;
@@ -152,7 +217,7 @@ interface BuilderState {
   canRedo: () => boolean;
 
   // ui
-  select: (id: string | null) => void;
+  select: (id: string | null, source?: SelectionSource) => void;
   setDevice: (device: DeviceMode) => void;
   setCanvas: (canvas: React.ReactNode) => void;
   setRendering: (isRendering: boolean) => void;
@@ -168,8 +233,13 @@ interface BuilderState {
   setCatalog: (catalog: CatalogItem[], showPrices: boolean, error?: string) => void;
   /** Records a successful save only when it matches the current document. */
   markSaved: (revision: number, savedGeneration: number) => void;
-  /** Resets the change baseline. Called by the publish pipeline at Stage 5. */
-  markPublished: () => void;
+  setSaveError: (message: string | null) => void;
+  /** Moves the change baseline to the document that just went live. */
+  markPublished: (doc: PageDocument, publishedAt: string, summary: PublishSummary) => void;
+  setPublishState: (state: PublishState) => void;
+  dismissPublishResult: () => void;
+  openReview: () => void;
+  closeReview: () => void;
 
   /** Replaces the document wholesale — starter templates, conflict resolution. */
   replaceDoc: (doc: PageDocument, revision?: number) => void;
@@ -179,6 +249,10 @@ export interface BuilderInit {
   doc: PageDocument;
   canvas: React.ReactNode;
   revision?: number;
+  page: EditorPage;
+  pages: EditorPage[];
+  publishedDoc?: PageDocument | null;
+  publishedAt?: string | null;
 }
 
 export function createBuilderStore(init: BuilderInit) {
@@ -206,7 +280,16 @@ export function createBuilderStore(init: BuilderInit) {
 
     return {
       doc: init.doc,
-      publishedDoc: init.doc,
+      publishedDoc: init.publishedDoc ?? null,
+      publishedAt: init.publishedAt ?? null,
+      page: init.page,
+      pages: init.pages,
+      publishState: "idle",
+      publishResult: null,
+      reviewOpen: false,
+      saveError: null,
+      selectionSource: "other",
+      revealNonce: 0,
       revision: init.revision ?? 0,
       editGeneration: 0,
       selectedId: null,
@@ -235,21 +318,61 @@ export function createBuilderStore(init: BuilderInit) {
         const index = atIndex ?? get().insertIndex ?? undefined;
         apply(addSection(get().doc, kind, { atIndex: index ?? undefined }));
 
-        // Select whatever was just inserted so the settings panel opens on it.
+        // Select whatever was just inserted so its controls open on it, and ask
+        // the canvas to scroll it into view — a section added into a gap the
+        // merchant cannot currently see is indistinguishable from nothing
+        // happening at all.
         const added = get().doc.sections.find((s) => !before.includes(s.id));
-        set({
+        set((state) => ({
           addOpen: false,
           insertIndex: null,
-          ...(added ? { selectedId: added.id, pane: "inspector" as Pane } : {}),
-        });
+          ...(added
+            ? {
+                selectedId: added.id,
+                pane: "inspector" as Pane,
+                selectionSource: "other" as SelectionSource,
+                revealNonce: state.revealNonce + 1,
+              }
+            : {}),
+        }));
       },
 
       removeSection: (id) => {
+        const section = get().doc.sections.find((s) => s.id === id);
+        const title = section ? sectionTitle(section) : "Section";
+        const before = get().editGeneration;
+
         apply(removeSection(get().doc, id));
-        if (get().selectedId === id) set({ selectedId: null });
+
+        // A refused deletion leaves the generation untouched; there is nothing
+        // to offer an undo for.
+        if (get().editGeneration === before) return null;
+
+        if (get().selectedId === id) set({ selectedId: null, pane: "canvas" });
+        return { title, generation: get().editGeneration };
+      },
+
+      undoDelete: (generation) => {
+        if (get().editGeneration !== generation) return false;
+        get().undo();
+        return true;
       },
 
       duplicateSection: (id) => apply(duplicateSection(get().doc, id)),
+
+      restoreRequiredSection: (kind, locationId) => {
+        const before = get().doc.sections.map((s) => s.id);
+        apply(restoreRequiredSection(get().doc, kind, { ctx: locationId ? { locationId } : undefined }));
+        const added = get().doc.sections.find((s) => !before.includes(s.id));
+        if (added) {
+          set((state) => ({
+            selectedId: added.id,
+            pane: "inspector" as Pane,
+            selectionSource: "other" as SelectionSource,
+            revealNonce: state.revealNonce + 1,
+          }));
+        }
+      },
 
       moveSectionBy: (id, delta) => apply(moveSectionBy(get().doc, id, delta)),
 
@@ -310,8 +433,14 @@ export function createBuilderStore(init: BuilderInit) {
 
       // Selecting drills the narrow layout into the inspector; deselecting
       // returns to the canvas. At `lg` and above `pane` is ignored entirely.
-      select: (id) =>
-        set({ selectedId: id, pageSettingsOpen: false, pane: id ? "inspector" : "canvas" }),
+      select: (id, source = "other") =>
+        set((state) => ({
+          selectedId: id,
+          pageSettingsOpen: false,
+          pane: id ? "inspector" : "canvas",
+          selectionSource: source,
+          revealNonce: id ? state.revealNonce + 1 : state.revealNonce,
+        })),
       setDevice: (device) => set({ device }),
       setCanvas: (canvas) => set({ canvas }),
       setRendering: (isRendering) => set({ isRendering }),
@@ -347,9 +476,30 @@ export function createBuilderStore(init: BuilderInit) {
           revision,
           saveState: state.editGeneration === savedGeneration ? "saved" : "dirty",
           savedAt: state.editGeneration === savedGeneration ? Date.now() : state.savedAt,
+          saveError: null,
         })),
 
-      markPublished: () => set((state) => ({ publishedDoc: state.doc })),
+      setSaveError: (saveError) => set({ saveError }),
+
+      // Publishing does not touch the draft. It moves the baseline the change
+      // count is measured against to the snapshot that just went live, which is
+      // what turns "3 changes" from "since I opened this" into "not yet live".
+      markPublished: (doc, publishedAt, summary) =>
+        set((state) => ({
+          publishedDoc: doc,
+          publishedAt,
+          publishResult: summary,
+          publishState: "idle",
+          page: { ...state.page, status: "published", publishedAt },
+          pages: state.pages.map((p) =>
+            p.id === state.page.id ? { ...p, status: "published" as const, publishedAt } : p,
+          ),
+        })),
+
+      setPublishState: (publishState) => set({ publishState }),
+      dismissPublishResult: () => set({ publishResult: null }),
+      openReview: () => set({ reviewOpen: true }),
+      closeReview: () => set({ reviewOpen: false }),
 
       replaceDoc: (doc, revision) =>
         set((state) => ({

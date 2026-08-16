@@ -393,6 +393,167 @@ describe("flattenMenuItems", () => {
       expect(flattenMenuItems(junk)).toEqual([]);
     }
   });
+
+  /**
+   * The property that makes `get_menus_for_location_lite` substitutable.
+   *
+   * The lite RPC is the full payload with unread keys deleted, so the two must
+   * flatten to byte-identical results. If someone later makes this function read
+   * a field the projection drops — `modifier_groups`, `price_levels`, anything
+   * under them — this fails, which is the point: that change also needs a line
+   * in 20260816120000_get_menus_for_location_lite.sql or it silently returns
+   * undefined in production.
+   */
+  it("flattens the lite payload identically to the full one", () => {
+    const full = [
+      {
+        id: "menu_1",
+        merchant_id: "m_1",
+        location_id: null,
+        description: "Evening service",
+        is_active: true,
+        created_at: "2026-01-01T00:00:00Z",
+        name: "Dinner",
+        categories: [
+          {
+            id: "mc_1",
+            category_id: "c_1",
+            display_order: 1,
+            is_active: true,
+            category: { id: "c_1", name: "Pizza", image: null },
+            items: [
+              {
+                id: "ci_1",
+                menu_item_id: "i1",
+                display_order: 1,
+                is_featured: false,
+                menu_item: {
+                  id: "i1",
+                  name: "Margherita",
+                  description: "San Marzano, basil",
+                  effective_price: 18,
+                  effective_cash_price: 17.1,
+                  effective_delivery_price: 21,
+                  image: "https://cdn/i1.jpg",
+                  effective_availability: true,
+                  dietary_flags: ["vegetarian"],
+                  allergens: ["gluten", "dairy"],
+                  // Everything below is what the lite projection drops.
+                  price_levels: { level_1_base: 20, level_3_category: 18 },
+                  modifier_groups: [{ id: "mg_1", modifiers: [{ id: "mo_1", price: 2 }] }],
+                  meal_types: ["dinner"],
+                  card_bg_color: "#fff",
+                  stock_tracking_mode: "none",
+                  current_stock: null,
+                  price_source: "category",
+                  has_location_item_override: false,
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const lite = [
+      {
+        id: "menu_1",
+        name: "Dinner",
+        categories: [
+          {
+            id: "mc_1",
+            is_active: true,
+            items: [
+              {
+                menu_item: {
+                  id: "i1",
+                  name: "Margherita",
+                  description: "San Marzano, basil",
+                  image: "https://cdn/i1.jpg",
+                  allergens: ["gluten", "dairy"],
+                  dietary_flags: ["vegetarian"],
+                  effective_availability: true,
+                  effective_price: 18,
+                  effective_cash_price: 17.1,
+                  effective_delivery_price: 21,
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    expect(flattenMenuItems(lite)).toEqual(flattenMenuItems(full));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// lite RPC fallback
+//
+// The builder must keep working in an environment where the lite migration has
+// not been applied — otherwise deploying the code ahead of the migration takes
+// the editor down. Equally, a real failure must not be retried against a
+// different function and reported as though it were the same question.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("get_menus_for_location_lite fallback", () => {
+  const CTX = { merchantId: "m_1", locationId: LOCATION_ID };
+
+  /** Records which RPCs were called, answering each from `replies`. */
+  function rpcClient(replies: Record<string, { data?: unknown; error?: unknown }>) {
+    const called: string[] = [];
+    const client = {
+      rpc: async (name: string) => {
+        called.push(name);
+        return replies[name] ?? { data: null, error: null };
+      },
+      from: () => ({ select: () => ({ in: async () => ({ data: [], error: null }) }) }),
+    };
+    return { client: client as never, called };
+  }
+
+  const oneItem = [
+    { categories: [{ is_active: true, items: [{ menu_item: { id: "i1", effective_price: 7 } }] }] },
+  ];
+
+  it("prefers the lite RPC and never calls the full one", async () => {
+    const { client, called } = rpcClient({
+      get_menus_for_location_lite: { data: oneItem, error: null },
+    });
+
+    const items = await createSupabaseResolverSources(client).fetchMenuItems(CTX);
+
+    expect(called).toEqual(["get_menus_for_location_lite"]);
+    expect(items.map((i) => i.id)).toEqual(["i1"]);
+  });
+
+  it("falls back to the full RPC when the function is not deployed", async () => {
+    const { client, called } = rpcClient({
+      get_menus_for_location_lite: { data: null, error: { code: "PGRST202", message: "not found" } },
+      get_menus_for_location: { data: oneItem, error: null },
+    });
+
+    const items = await createSupabaseResolverSources(client).fetchMenuItems(CTX);
+
+    expect(called).toEqual(["get_menus_for_location_lite", "get_menus_for_location"]);
+    expect(items.map((i) => i.id)).toEqual(["i1"]);
+  });
+
+  it("does NOT fall back on a real failure — it reports it", async () => {
+    const { client, called } = rpcClient({
+      get_menus_for_location_lite: {
+        data: null,
+        error: { code: "42501", message: "permission denied" },
+      },
+      get_menus_for_location: { data: oneItem, error: null },
+    });
+
+    await expect(createSupabaseResolverSources(client).fetchMenuItems(CTX)).rejects.toThrow(
+      /permission denied/,
+    );
+    expect(called).toEqual(["get_menus_for_location_lite"]);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

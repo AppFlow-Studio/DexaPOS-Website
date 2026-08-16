@@ -69,6 +69,22 @@ export interface SectionDefinition<K extends SectionKind> {
   singleton: boolean;
   /** Merchant may add it from the Add Section modal. */
   addable: boolean;
+  /**
+   * Why this kind cannot do its job yet, or `undefined` when it is ready.
+   *
+   * Distinct from `addable: false`, which means "this kind is placed by the
+   * system and merchants never insert it". This means "this kind is genuinely
+   * for merchants, and adding one today would produce a section that cannot do
+   * what its own description promises". The gallery is the case that prompted
+   * it: it is offered as "a grid or carousel of photos" while `resolveAssetUrl`
+   * returns `null` for every id, so a merchant could add one, find no way to put
+   * a photo in it, and reasonably conclude the product is broken.
+   *
+   * Lives on the registry rather than in the modal so the reason travels with
+   * the kind — the same invariant that keeps the add gallery derived rather
+   * than listed. Delete the field from an entry to turn the kind on.
+   */
+  unavailable?: string;
   /** Merchant may delete it. */
   deletable: boolean;
   /** Runtime validation. `.shape` is used by `normalize` for field-level repair. */
@@ -147,6 +163,9 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     singleton: false,
     addable: true,
     deletable: true,
+    // Stage 7 (`site_assets`) owns the fix. Existing gallery sections keep
+    // rendering and publishing; this only stops new empty ones being added.
+    unavailable: "Photos need the asset library, which is not built yet.",
     schema: gallerySchema,
     defaults: () => galleryDefaults(),
     bindingTypes: [],

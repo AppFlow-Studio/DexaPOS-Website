@@ -18,7 +18,7 @@ import {
   type PageDocument,
 } from "./page-document";
 import type { SectionKind } from "./sections/kinds";
-import { ZONE_ORDER } from "./sections/kinds";
+import { SECTION_KINDS, ZONE_ORDER } from "./sections/kinds";
 import { SECTION_REGISTRY, type SectionDefaultsContext } from "./sections/registry";
 import type { Section } from "./sections/types";
 
@@ -74,6 +74,51 @@ export function addSection(
       ? next.length
       : Math.max(0, Math.min(options.atIndex, next.length));
   next.splice(index, 0, section);
+
+  return { ok: true, doc: withSections(doc, sortSectionsByZone(next)) };
+}
+
+/**
+ * Puts back a structurally required section that is missing.
+ *
+ * The header, hero and footer are `addable: false` — the merchant never chooses
+ * to add one, because every page is created with them. But a document written by
+ * an older build, an import, or a direct database edit can arrive without one,
+ * and then `validatePage` reports a blocking error that the editor offers no way
+ * to resolve: the Add Section gallery deliberately does not list these kinds, and
+ * `addSection` refuses them. That is an unpublishable page with no path forward.
+ *
+ * This is the path forward, and it is narrow on purpose. It only ever restores a
+ * kind that *cannot be deleted* (so it is required by definition) and is *not
+ * currently present*, which makes it useless for anything except repair.
+ */
+export function restoreRequiredSection(
+  doc: PageDocument,
+  kind: SectionKind,
+  options: { ctx?: SectionDefaultsContext } = {},
+): MutationResult {
+  const def = SECTION_REGISTRY[kind];
+  if (!def) return refuse("unknown_section", `Unknown section type "${kind}".`);
+  if (def.deletable) {
+    return refuse("not_addable", `${def.label} sections are not required, so they cannot be restored.`);
+  }
+  if (doc.sections.some((s) => s.kind === kind)) {
+    return refuse("singleton_exists", `This page already has a ${def.label} section.`);
+  }
+
+  // Zone sorting is not enough on its own: header and hero share the masthead,
+  // so appending and re-sorting puts a restored header *below* the hero. Within
+  // the zone, fall back to the canonical kind order — which is the only ordering
+  // rule that exists for the sections the merchant cannot rearrange anyway.
+  const order = SECTION_KINDS.indexOf(kind);
+  const insertAt = doc.sections.findIndex((s) => {
+    const other = SECTION_REGISTRY[s.kind];
+    if (other.zone !== def.zone) return false;
+    return SECTION_KINDS.indexOf(s.kind) > order;
+  });
+
+  const next = [...doc.sections];
+  next.splice(insertAt === -1 ? next.length : insertAt, 0, createSection(kind, options.ctx));
 
   return { ok: true, doc: withSections(doc, sortSectionsByZone(next)) };
 }
