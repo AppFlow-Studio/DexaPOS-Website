@@ -17,8 +17,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
@@ -130,7 +128,6 @@ function CustomerActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuLabel>Actions</DropdownMenuLabel>
         <DropdownMenuItem
           onClick={(event) => {
             event.stopPropagation();
@@ -139,8 +136,6 @@ function CustomerActions({
         >
           View Profile
         </DropdownMenuItem>
-        <DropdownMenuItem>View Orders</DropdownMenuItem>
-        <DropdownMenuSeparator />
         <DropdownMenuItem className="text-destructive focus:text-destructive">
           Delete Customer
         </DropdownMenuItem>
@@ -174,8 +169,8 @@ export function CustomerList({
 
   return (
     <div className="min-w-0">
-      <div className="hidden overflow-hidden rounded-2xl bg-muted/20 xl:block">
-        <Table className="min-w-[860px] [&_td]:px-4 [&_td]:py-3.5 [&_th]:px-4">
+      <div className="hidden overflow-hidden rounded-2xl bg-muted/20 md:block">
+        <Table className="min-w-[560px] [&_td]:px-4 [&_td]:py-3.5 [&_th]:px-4">
           <TableHeader className="bg-muted/50">
             <TableRow>
               <TableHead className="w-[34%]">Customer</TableHead>
@@ -230,6 +225,7 @@ export function CustomerList({
                   <CustomerActions
                     customer={customer}
                     onViewProfile={onViewProfile}
+                    alwaysVisible
                   />
                 </TableCell>
               </TableRow>
@@ -238,7 +234,7 @@ export function CustomerList({
         </Table>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
         {customers.map((customer) => {
           const phone = formatPhoneForDisplay(customer.phone);
 
@@ -253,13 +249,10 @@ export function CustomerList({
                   className="flex min-w-0 flex-1 items-center gap-3 text-left"
                   onClick={() => onViewProfile?.(customer)}
                 >
-                  <CustomerAvatar customer={customer} className="h-10 w-10" />
+                  <CustomerAvatar customer={customer} className="hidden h-10 w-10 sm:flex" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">
                       {getCustomerDisplayName(customer)}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {phone || customer.email || "No contact info"}
                     </span>
                   </span>
                 </button>

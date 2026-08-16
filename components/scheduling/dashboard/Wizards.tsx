@@ -73,8 +73,8 @@ export function QuickScheduleModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="gap-0 overflow-y-auto sm:max-h-[calc(100vh-2rem)] sm:max-w-[470px]">
-        <DialogHeader className="pr-10">
+      <DialogContent className="flex flex-col gap-0 overflow-hidden sm:max-h-[calc(100vh-2rem)] sm:max-w-[470px]">
+        <DialogHeader className="shrink-0 pr-10">
           <div className="flex items-start gap-3 text-left">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
               <CalendarDays className="h-5 w-5" />
@@ -88,7 +88,7 @@ export function QuickScheduleModal({
           </div>
         </DialogHeader>
 
-        <div className="space-y-5 py-6">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain py-6 pr-2">
           <div className="space-y-2.5">
             <Label className="text-sm font-semibold">Select start date</Label>
             <div className={CALENDAR_FRAME_CLASS}>
@@ -136,7 +136,7 @@ export function QuickScheduleModal({
           )}
         </div>
 
-        <DialogFooter className="border-t border-border/60 pt-4">
+        <DialogFooter className="shrink-0 border-t border-border/60 pt-4">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -240,8 +240,8 @@ function PeriodWizardContent({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="gap-0 overflow-y-auto sm:max-h-[calc(100vh-2rem)] sm:max-w-[480px]">
-        <DialogHeader className="pr-10">
+      <DialogContent className="flex flex-col gap-0 overflow-hidden sm:max-h-[calc(100vh-2rem)] sm:max-w-[480px]">
+        <DialogHeader className="shrink-0 pr-10">
           <div className="flex items-start gap-3 text-left">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
               <CalendarIcon className="h-5 w-5" />
@@ -259,45 +259,46 @@ function PeriodWizardContent({
           </div>
         </DialogHeader>
 
-        <div className="flex items-center justify-center gap-1 py-6">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex items-center">
-              <div
-                className={`flex size-8 items-center justify-center rounded-full text-xs font-semibold transition-colors duration-300 ${
-                  step === s
-                    ? "bg-primary text-primary-foreground"
-                    : step > s
-                    ? "bg-emerald-500 text-white"
-                    : "bg-muted text-muted-foreground"
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2">
+          <div className="flex items-center justify-center gap-1 py-6">
+            {[1, 2, 3].map((s) => (
+              <div key={s} className="flex items-center">
+                <div
+                  className={`flex size-8 items-center justify-center rounded-full text-xs font-semibold transition-colors duration-300 ${
+                    step === s
+                      ? "bg-primary text-primary-foreground"
+                      : step > s
+                        ? "bg-emerald-500 text-white"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {step > s ? <Check className="h-5 w-5" /> : s}
+                </div>
+                {s < 3 && (
+                  <div
+                    className={`mx-1 h-px w-12 transition-colors duration-300 ${
+                      step > s ? "bg-emerald-500" : "bg-border"
+                    }`}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="-mt-4 mb-4 flex justify-between px-7 text-[0.7rem] text-muted-foreground">
+            {stepLabels.map((label, i) => (
+              <span
+                key={i}
+                className={`w-12 text-center ${
+                  step === i + 1 ? "font-medium text-primary" : ""
                 }`}
               >
-                {step > s ? <Check className="h-5 w-5" /> : s}
-              </div>
-              {s < 3 && (
-                <div
-                  className={`mx-1 h-px w-12 transition-colors duration-300 ${
-                    step > s ? "bg-emerald-500" : "bg-border"
-                  }`}
-                />
-              )}
-            </div>
-          ))}
-        </div>
+                {label}
+              </span>
+            ))}
+          </div>
 
-        <div className="-mt-4 mb-4 flex justify-between px-7 text-[0.7rem] text-muted-foreground">
-          {stepLabels.map((label, i) => (
-            <span
-              key={i}
-              className={`text-center w-12 ${
-                step === i + 1 ? "text-primary font-medium" : ""
-              }`}
-            >
-              {label}
-            </span>
-          ))}
-        </div>
-
-        <div className="min-h-[300px]">
+          <div className="min-h-[300px]">
           {/* Step 1: Name */}
           {step === 1 && (
             <div className="animate-in space-y-5 fade-in slide-in-from-right-4 duration-300">
@@ -385,10 +386,11 @@ function PeriodWizardContent({
               )}
             </div>
           )}
+          </div>
         </div>
 
         {/* Footer Navigation */}
-        <DialogFooter className="flex-row items-center justify-between gap-2 border-t border-border/60 pt-4 sm:justify-between">
+        <DialogFooter className="shrink-0 flex-row items-center justify-between gap-2 border-t border-border/60 pt-4 sm:justify-between">
           <Button
             variant="ghost"
             onClick={step === 1 ? handleClose : handleBack}

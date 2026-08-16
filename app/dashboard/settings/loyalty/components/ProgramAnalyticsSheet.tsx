@@ -45,8 +45,11 @@ export function ProgramAnalyticsSheet({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
-        <DialogHeader>
+      {/* The dialog owns the rounded corner, so it clips and never scrolls —
+          a scrollbar on a rounded element renders outside its own corner. The
+          body below is the only scroller. */}
+      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-hidden rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-4xl sm:rounded-3xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle>
             {analytics?.program_name || "Program Analytics"}
           </DialogTitle>
@@ -55,6 +58,7 @@ export function ProgramAnalyticsSheet({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -97,27 +101,28 @@ export function ProgramAnalyticsSheet({
               </StatRow>
             </Panel>
 
-            {/* Alerts */}
+            {/* Alerts — neutral wells, not amber (§4.6b): these report a
+                count, and the sentence already carries the urgency. */}
             {(analytics.alerts.rewards_expiring_week > 0 || analytics.alerts.inactive_customers > 0) && (
               <div className="space-y-2">
                 {analytics.alerts.rewards_expiring_week > 0 && (
-                  <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                    <AlertDescription className="text-amber-800 dark:text-amber-200">
-                      ⚠️ {analytics.alerts.rewards_expiring_week} reward
+                  <div className="flex min-w-0 items-start gap-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <p className="min-w-0 text-sm">
+                      <span className="tabular-nums">{analytics.alerts.rewards_expiring_week}</span> reward
                       {analytics.alerts.rewards_expiring_week !== 1 ? "s" : ""} expire this
                       week
-                    </AlertDescription>
-                  </Alert>
+                    </p>
+                  </div>
                 )}
                 {analytics.alerts.inactive_customers > 0 && (
-                  <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                    <AlertDescription className="text-amber-800 dark:text-amber-200">
-                      ⚠️ {analytics.alerts.inactive_customers} member
+                  <div className="flex min-w-0 items-start gap-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <p className="min-w-0 text-sm">
+                      <span className="tabular-nums">{analytics.alerts.inactive_customers}</span> member
                       {analytics.alerts.inactive_customers !== 1 ? "s" : ""} inactive 30+ days
-                    </AlertDescription>
-                  </Alert>
+                    </p>
+                  </div>
                 )}
               </div>
             )}
@@ -126,43 +131,45 @@ export function ProgramAnalyticsSheet({
             {analytics.top_customers && analytics.top_customers.length > 0 && (
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold">Top Customers</h4>
-                <div className="border rounded-lg overflow-hidden">
-                  <Table className="text-xs">
-                    <TableHeader className="bg-muted/30">
-                      <TableRow>
-                        <TableHead className="text-xs">Customer</TableHead>
-                        <TableHead className="text-right text-xs">
-                          Value
-                        </TableHead>
-                        <TableHead className="text-right text-xs">
-                          Rewards
-                        </TableHead>
+                {/* `variant="data"` is the surface — a tinted rounded well with
+                    borderless rows. Wrapping it in a bordered box would be a
+                    box inside a box (§5.2). */}
+                <Table variant="data" className="text-xs">
+                  <TableHeader className="[&_tr]:border-0">
+                    <TableRow>
+                      <TableHead className="text-xs font-normal text-muted-foreground">Customer</TableHead>
+                      <TableHead className="text-right text-xs font-normal text-muted-foreground">
+                        Value
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-normal text-muted-foreground">
+                        Rewards
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {analytics.top_customers.map((customer) => (
+                      <TableRow key={customer.customer_id}>
+                        <TableCell className="text-xs font-medium">
+                          <div>{customer.customer_name}</div>
+                          <div className="text-xs tabular-nums text-muted-foreground">
+                            {formatPhoneForDisplay(customer.phone)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right text-xs font-medium tabular-nums">
+                          ${customer.lifetime_value.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right text-xs tabular-nums">
+                          {customer.rewards_earned}
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {analytics.top_customers.map((customer) => (
-                        <TableRow key={customer.customer_id}>
-                          <TableCell className="text-xs font-medium">
-                            <div>{customer.customer_name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {formatPhoneForDisplay(customer.phone)}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right text-xs font-medium">
-                            ${customer.lifetime_value.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {customer.rewards_earned}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </div>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );

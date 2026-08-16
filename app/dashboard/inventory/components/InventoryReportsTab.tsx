@@ -1,8 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  CHART_GRID,
+  CHART_TICK,
+  Panel,
+  StatRow,
+  StatTile,
+} from "@/components/dashboard/shell";
 import {
   Table,
   TableBody,
@@ -72,24 +78,11 @@ function shortWeek(iso: string): string {
 function SummaryCard({
   label,
   value,
-  accent,
 }: {
   label: string;
   value: string;
-  accent?: string;
 }) {
-  return (
-    <Card>
-      <CardContent className="p-5">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {label}
-        </p>
-        <p className={cn("mt-2 text-2xl font-bold tracking-tight", accent)}>
-          {value}
-        </p>
-      </CardContent>
-    </Card>
-  );
+  return <StatTile label={label} value={value} />;
 }
 
 interface InventoryReportsTabProps {
@@ -147,6 +140,7 @@ export function InventoryReportsTab({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <h3 className="font-semibold">COGS &amp; Food Cost</h3>
         <DateRangePicker
+          align="end"
           dateFrom={dateFrom}
           dateTo={dateTo}
           preset={preset}
@@ -165,7 +159,7 @@ export function InventoryReportsTab({
       )}
 
       {/* Summary cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <StatRow columns={4}>
         {cogsLoading ? (
           [...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
         ) : (
@@ -179,19 +173,13 @@ export function InventoryReportsTab({
             <SummaryCard
               label="Gross Profit"
               value={fmtMoney(cogs?.gross_profit ?? 0)}
-              accent={
-                (cogs?.gross_profit ?? 0) >= 0
-                  ? "text-emerald-600"
-                  : "text-rose-600"
-              }
             />
           </>
         )}
-      </div>
+      </StatRow>
 
       {/* Actual vs Theoretical by week */}
-      <Card>
-        <CardContent className="p-6">
+      <Panel nested className="border-0 bg-muted/30 p-5 sm:p-6">
           <h3 className="font-semibold mb-1">Actual vs. Theoretical Food Cost</h3>
           <p className="text-xs text-muted-foreground mb-4">
             A positive variance signals shrinkage, over-portioning, or recipe
@@ -206,12 +194,12 @@ export function InventoryReportsTab({
           ) : (
             <ResponsiveContainer width="100%" height={256}>
               <BarChart data={weekData} margin={{ left: 8, right: 8, top: 8 }}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
-                <XAxis dataKey="week" tickLine={false} axisLine={false} fontSize={12} />
+                <CartesianGrid vertical={false} {...CHART_GRID} />
+                <XAxis dataKey="week" tickLine={false} axisLine={false} tick={CHART_TICK} />
                 <YAxis
                   tickLine={false}
                   axisLine={false}
-                  fontSize={12}
+                  tick={CHART_TICK}
                   tickFormatter={(v) => `$${v}`}
                 />
                 <Tooltip formatter={(v: number) => fmtMoney(v)} />
@@ -221,12 +209,10 @@ export function InventoryReportsTab({
               </BarChart>
             </ResponsiveContainer>
           )}
-        </CardContent>
-      </Card>
+      </Panel>
 
       {/* Category breakdown */}
-      <Card>
-        <CardContent className="p-6">
+      <Panel nested className="border-0 bg-muted/30 p-5 sm:p-6">
           <h3 className="font-semibold mb-4">Category Breakdown</h3>
           {foodLoading ? (
             <Skeleton className="h-40 w-full" />
@@ -235,9 +221,8 @@ export function InventoryReportsTab({
               No category data for this period.
             </p>
           ) : (
-            <div className="rounded-lg border">
-              <Table>
-                <TableHeader>
+            <Table variant="data" className="min-w-[520px]">
+                <TableHeader className="[&_tr]:border-0">
                   <TableRow>
                     <TableHead>Category</TableHead>
                     <TableHead className="text-right">Theoretical</TableHead>
@@ -271,15 +256,12 @@ export function InventoryReportsTab({
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
-            </div>
+            </Table>
           )}
-        </CardContent>
-      </Card>
+      </Panel>
 
       {/* Item-level COGS drill-down */}
-      <Card>
-        <CardContent className="p-6">
+      <Panel nested className="border-0 bg-muted/30 p-5 sm:p-6">
           <h3 className="font-semibold mb-4">Item COGS Detail</h3>
           {cogsLoading ? (
             <Skeleton className="h-40 w-full" />
@@ -288,7 +270,7 @@ export function InventoryReportsTab({
               No item COGS for this period.
             </p>
           ) : (
-            <div className="rounded-lg border max-h-96 overflow-y-auto">
+            <div className="-mx-2 max-h-96 overflow-auto px-2">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -317,8 +299,7 @@ export function InventoryReportsTab({
               </Table>
             </div>
           )}
-        </CardContent>
-      </Card>
+      </Panel>
 
       {/* Waste analytics (T2.6) */}
       <div>
@@ -331,8 +312,7 @@ export function InventoryReportsTab({
         </p>
         <div className="grid gap-6 lg:grid-cols-3">
           {/* By reason */}
-          <Card>
-            <CardContent className="p-6">
+          <Panel nested className="border-0 bg-muted/30 p-5 sm:p-6">
               <h4 className="text-sm font-semibold mb-4">By Reason</h4>
               {wasteLoading ? (
                 <Skeleton className="h-56 w-full" />
@@ -362,12 +342,10 @@ export function InventoryReportsTab({
                   </PieChart>
                 </ResponsiveContainer>
               )}
-            </CardContent>
-          </Card>
+          </Panel>
 
           {/* By item */}
-          <Card>
-            <CardContent className="p-6">
+          <Panel nested className="border-0 bg-muted/30 p-5 sm:p-6">
               <h4 className="text-sm font-semibold mb-4">By Item</h4>
               {wasteLoading ? (
                 <Skeleton className="h-56 w-full" />
@@ -402,12 +380,10 @@ export function InventoryReportsTab({
                   </BarChart>
                 </ResponsiveContainer>
               )}
-            </CardContent>
-          </Card>
+          </Panel>
 
           {/* By week */}
-          <Card>
-            <CardContent className="p-6">
+          <Panel nested className="border-0 bg-muted/30 p-5 sm:p-6">
               <h4 className="text-sm font-semibold mb-4">By Week</h4>
               {wasteLoading ? (
                 <Skeleton className="h-56 w-full" />
@@ -424,12 +400,12 @@ export function InventoryReportsTab({
                     }))}
                     margin={{ left: 8, right: 8 }}
                   >
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
-                    <XAxis dataKey="week" tickLine={false} axisLine={false} fontSize={11} />
+                    <CartesianGrid vertical={false} {...CHART_GRID} />
+                    <XAxis dataKey="week" tickLine={false} axisLine={false} tick={CHART_TICK} />
                     <YAxis
                       tickLine={false}
                       axisLine={false}
-                      fontSize={11}
+                      tick={CHART_TICK}
                       tickFormatter={(v) => `$${v}`}
                     />
                     <Tooltip formatter={(v: number) => fmtMoney(v)} />
@@ -437,8 +413,7 @@ export function InventoryReportsTab({
                   </BarChart>
                 </ResponsiveContainer>
               )}
-            </CardContent>
-          </Card>
+          </Panel>
         </div>
       </div>
     </div>

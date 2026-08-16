@@ -357,7 +357,7 @@ export function ReceiptModal({
           siblings of the single scroll area (see §"Overlay scroll structure" in
           docs/UI-DESIGN-SYSTEM.md). */}
       <DialogContent
-        className="sm:max-w-md p-0 gap-0 flex flex-col overflow-hidden max-h-[88vh] bg-[#faf9f6] dark:bg-zinc-900"
+        className="sm:max-w-md p-0 gap-0 flex flex-col overflow-hidden max-sm:overflow-hidden sm:max-h-[88vh] bg-[#faf9f6] dark:bg-zinc-900"
         showCloseButton={false}
         elevation="above-sheet"
       >
@@ -377,12 +377,12 @@ export function ReceiptModal({
           {/* Receipt Paper */}
           <div
             className={cn(
-              "receipt-paper relative mx-auto w-full max-w-[350px]",
+              "receipt-paper relative mx-auto w-full sm:max-w-[350px]",
               "bg-[#faf9f6] dark:bg-zinc-900",
               "font-mono text-xs leading-relaxed",
               "text-zinc-800 dark:text-zinc-200",
               "px-4 py-6",
-              "shadow-lg",
+              "sm:shadow-lg",
               // Paper texture effect
               "before:absolute before:inset-0 before:bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9IiNmYWY5ZjYiLz48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZ2JhKDAsMCwwLDAuMDIpIi8+PC9zdmc+')] before:opacity-50 before:pointer-events-none"
             )}

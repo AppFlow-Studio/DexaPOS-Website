@@ -4,8 +4,15 @@ import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_REPORTING_TIMEZONE } from "@/lib/reporting/date-range";
 import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ShoppingBag,
   Coffee,
@@ -28,10 +35,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { OrderResponse } from "@/types/order-management";
-import {
-  getPaymentStatusLabel,
-  getPaymentStatusStyle,
-} from "@/lib/constants/payment-status";
+import { getPaymentStatusLabel } from "@/lib/constants/payment-status";
 
 // ============================================================================
 // Types & Constants
@@ -48,14 +52,24 @@ interface TransactionsListProps {
 type SortField = "date" | "amount" | "status";
 type SortDirection = "asc" | "desc";
 
+/**
+ * One neutral badge shell for both status columns.
+ *
+ * Status is not colour-coded (D-12): the word carries the meaning. Colour-coding
+ * put five competing hues in every row, which made the amounts — the figures a
+ * merchant actually scans for — the least prominent thing on the line.
+ */
+const BADGE_SHELL =
+  "inline-flex items-center rounded-full bg-muted/60 px-2 py-0.5 text-xs font-medium text-foreground";
+
 const STATUS_OPTIONS = [
-  { value: "completed", label: "Completed", dot: "bg-emerald-500" },
-  { value: "pending", label: "Pending", dot: "bg-amber-500" },
-  { value: "preparing", label: "Preparing", dot: "bg-blue-500" },
-  { value: "ready", label: "Ready", dot: "bg-violet-500" },
-  { value: "refunded", label: "Refunded", dot: "bg-rose-500" },
-  { value: "void", label: "Void", dot: "bg-gray-400" },
-  { value: "cancelled", label: "Cancelled", dot: "bg-gray-400" },
+  { value: "completed", label: "Completed" },
+  { value: "pending", label: "Pending" },
+  { value: "preparing", label: "Preparing" },
+  { value: "ready", label: "Ready" },
+  { value: "refunded", label: "Refunded" },
+  { value: "void", label: "Void" },
+  { value: "cancelled", label: "Cancelled" },
 ] as const;
 
 const ORDER_TYPE_OPTIONS = [
@@ -142,26 +156,9 @@ function getOrderTypeConfig(orderType: string) {
   }
 }
 
-function getStatusStyle(status: string) {
-  switch (status) {
-    case "completed":
-      return { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/20" };
-    case "refunded":
-      return { dot: "bg-rose-500", text: "text-rose-700 dark:text-rose-400", bg: "bg-rose-50 dark:bg-rose-900/20" };
-    case "void":
-    case "cancelled":
-      return { dot: "bg-gray-400", text: "text-gray-600 dark:text-gray-400", bg: "bg-gray-50 dark:bg-gray-800/30" };
-    case "preparing":
-    case "sent_to_kitchen":
-      return { dot: "bg-blue-500", text: "text-blue-700 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-900/20" };
-    case "ready":
-      return { dot: "bg-violet-500", text: "text-violet-700 dark:text-violet-400", bg: "bg-violet-50 dark:bg-violet-900/20" };
-    case "pending":
-    case "draft":
-      return { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400", bg: "bg-amber-50 dark:bg-amber-900/20" };
-    default:
-      return { dot: "bg-gray-400", text: "text-muted-foreground", bg: "bg-muted" };
-  }
+function getStatusLabel(status: string): string {
+  if (status === "sent_to_kitchen") return "Preparing";
+  return status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, " ");
 }
 
 function getPaymentLabel(tx: OrderResponse): { label: string; icon: typeof CreditCard } {
@@ -195,6 +192,18 @@ function getPaymentLabel(tx: OrderResponse): { label: string; icon: typeof Credi
   }
 }
 
+function getStaffName(tx: OrderResponse): string | null {
+  return (
+    tx.created_by_staff?.display_name ||
+    (tx.created_by_staff?.first_name
+      ? `${tx.created_by_staff.first_name} ${tx.created_by_staff.last_name || ""}`.trim()
+      : tx.created_by_user
+      ? `${tx.created_by_user.first_name || ""} ${tx.created_by_user.last_name || ""}`.trim()
+      : null) ||
+    null
+  );
+}
+
 // ============================================================================
 // Filter Pill Component
 // ============================================================================
@@ -217,24 +226,27 @@ function FilterPill({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
+        {/* Filter chip: tinted and borderless (DS-CTL-03), never outlined —
+            an outlined chip adds a second competing box next to the panel. */}
         <button
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors border",
+            "inline-flex h-9 items-center gap-1.5 rounded-full border-0 px-3 text-xs font-medium shadow-none transition-colors",
+            "data-[state=open]:bg-muted data-[state=open]:text-foreground",
             isActive
-              ? "bg-primary/10 border-primary/30 text-primary dark:bg-primary/20 dark:border-primary/40"
-              : "bg-background border-border/60 text-muted-foreground hover:text-foreground hover:border-border"
+              ? "bg-muted text-foreground"
+              : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
         >
           {label}
           {isActive && (
-            <span className="bg-primary text-primary-foreground rounded-full px-1.5 py-px text-[10px] font-bold leading-tight">
+            <span className="rounded-full bg-foreground/10 px-1.5 py-px text-[10px] font-semibold leading-tight tabular-nums">
               {values.length}
             </span>
           )}
           <ChevronDown className="h-3 w-3 opacity-50" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52 p-2">
+      <DropdownMenuContent align="start" className="w-52 rounded-2xl p-2">
         <div className="space-y-0.5">
           {options.map((opt) => {
             const isSelected = values.includes(opt.value);
@@ -242,8 +254,10 @@ function FilterPill({
               <button
                 key={opt.value}
                 className={cn(
-                  "flex items-center gap-2 w-full rounded-md px-2.5 py-2 text-sm transition-colors text-left",
-                  isSelected ? "bg-primary/10 text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  "flex w-full items-center gap-2 rounded-full px-2.5 py-2 text-left text-sm transition-colors",
+                  isSelected
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                 )}
                 onClick={() => {
                   if (isSelected) {
@@ -253,10 +267,12 @@ function FilterPill({
                   }
                 }}
               >
-                <div className={cn(
-                  "h-4 w-4 rounded border flex items-center justify-center shrink-0",
-                  isSelected ? "bg-primary border-primary" : "border-border"
-                )}>
+                <div
+                  className={cn(
+                    "flex h-4 w-4 shrink-0 items-center justify-center rounded",
+                    isSelected ? "bg-primary" : "bg-muted-foreground/20"
+                  )}
+                >
                   {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                 </div>
                 {renderOption ? renderOption(opt) : <span>{opt.label}</span>}
@@ -266,6 +282,50 @@ function FilterPill({
         </div>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+// ============================================================================
+// Sortable column header
+// ============================================================================
+
+function SortIcon({
+  field,
+  sortField,
+  sortDir,
+}: {
+  field: SortField;
+  sortField: SortField;
+  sortDir: SortDirection;
+}) {
+  if (sortField !== field) return <ArrowUpDown className="h-3 w-3 opacity-30" />;
+  return sortDir === "desc" ? (
+    <ArrowDown className="h-3 w-3" />
+  ) : (
+    <ArrowUp className="h-3 w-3" />
+  );
+}
+
+function SortHeader({
+  field,
+  sortField,
+  sortDir,
+  onSort,
+  children,
+}: {
+  field: SortField;
+  sortField: SortField;
+  sortDir: SortDirection;
+  onSort: (field: SortField) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={() => onSort(field)}
+      className="flex items-center gap-1 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+    >
+      {children} <SortIcon field={field} sortField={sortField} sortDir={sortDir} />
+    </button>
   );
 }
 
@@ -327,220 +387,285 @@ export function TransactionsList({
     }
   }
 
-  function SortIcon({ field }: { field: SortField }) {
-    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 opacity-30" />;
-    return sortDir === "desc" ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />;
-  }
-
-  // Loading
+  // ---- Loading -------------------------------------------------------------
   if (isLoading) {
     return (
-      <Card className="border-border/60 shadow-none">
-        <CardContent className="p-0">
-          <div className="p-4 border-b border-border/40">
-            <div className="flex gap-2">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-7 w-20 bg-muted animate-pulse rounded-full" />
-              ))}
-            </div>
-          </div>
-          <div className="divide-y divide-border/40">
+      <div className="space-y-4">
+        <div className="flex gap-2">
+          {[1, 2].map((i) => (
+            <Skeleton key={i} className="h-9 w-24 rounded-full" />
+          ))}
+        </div>
+        <div className="rounded-2xl bg-muted/20 p-3">
+          <div className="space-y-2">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="flex items-center gap-4 px-4 py-3.5">
-                <div className="h-4 w-20 bg-muted animate-pulse rounded" />
-                <div className="h-4 w-28 bg-muted animate-pulse rounded" />
-                <div className="h-5 w-16 bg-muted animate-pulse rounded-full" />
-                <div className="flex-1" />
-                <div className="h-4 w-24 bg-muted animate-pulse rounded" />
-                <div className="h-4 w-16 bg-muted animate-pulse rounded" />
-              </div>
+              <Skeleton key={i} className="h-12 w-full rounded-2xl" />
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
+  // ---- Empty ---------------------------------------------------------------
   if (!transactions || transactions.length === 0) {
     return (
-      <Card className="border-border/60 shadow-none">
-        <CardContent className="py-16">
-          <div className="text-center">
-            <ShoppingBag className="h-10 w-10 mx-auto text-muted-foreground/30" />
-            <p className="mt-3 text-sm text-muted-foreground">
-              No transactions found for this period
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="rounded-2xl bg-muted/20 py-16">
+        <div className="text-center">
+          <ShoppingBag className="mx-auto h-10 w-10 text-muted-foreground/30" />
+          <p className="mt-3 text-sm text-muted-foreground">
+            No transactions found for this period
+          </p>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card className="border-border/60 shadow-none">
-      <CardContent className="p-0">
-        {/* Filter Bar */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border/40 flex-wrap">
-          <FilterPill
-            label="Status"
-            values={statusFilter}
-            options={STATUS_OPTIONS}
-            onChange={setStatusFilter}
-            renderOption={(opt) => {
-              const s = STATUS_OPTIONS.find((o) => o.value === opt.value);
-              return (
-                <span className="flex items-center gap-2">
-                  <span className={cn("h-2 w-2 rounded-full shrink-0", s?.dot)} />
-                  {opt.label}
-                </span>
-              );
+    <div className="space-y-4">
+      {/* Filter toolbar — outside the table well, so the table stays one clean
+          surface rather than a box with a ruled header strip. */}
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <FilterPill
+          label="Status"
+          values={statusFilter}
+          options={STATUS_OPTIONS}
+          onChange={setStatusFilter}
+        />
+        <FilterPill
+          label="Order type"
+          values={typeFilter}
+          options={ORDER_TYPE_OPTIONS}
+          onChange={setTypeFilter}
+          renderOption={(opt) => {
+            const t = ORDER_TYPE_OPTIONS.find((o) => o.value === opt.value);
+            const Icon = t?.icon || ShoppingBag;
+            return (
+              <span className="flex items-center gap-2">
+                <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                {opt.label}
+              </span>
+            );
+          }}
+        />
+        {hasFilters && (
+          <button
+            onClick={() => {
+              setStatusFilter([]);
+              setTypeFilter([]);
             }}
-          />
-          <FilterPill
-            label="Order type"
-            values={typeFilter}
-            options={ORDER_TYPE_OPTIONS}
-            onChange={setTypeFilter}
-            renderOption={(opt) => {
-              const t = ORDER_TYPE_OPTIONS.find((o) => o.value === opt.value);
-              const Icon = t?.icon || ShoppingBag;
-              return (
-                <span className="flex items-center gap-2">
-                  <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                  {opt.label}
-                </span>
-              );
-            }}
-          />
-          {hasFilters && (
-            <button
-              onClick={() => { setStatusFilter([]); setTypeFilter([]); }}
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
-            >
-              Clear filters
-              <X className="h-3 w-3" />
-            </button>
-          )}
-          <div className="flex-1" />
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {filteredTransactions.length} result{filteredTransactions.length !== 1 ? "s" : ""}
-          </span>
+            className="inline-flex h-9 items-center gap-1 rounded-full px-3 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Clear filters
+            <X className="h-3 w-3" />
+          </button>
+        )}
+        <div className="flex-1" />
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {filteredTransactions.length} result
+          {filteredTransactions.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {filteredTransactions.length === 0 ? (
+        <div className="rounded-2xl bg-muted/20 py-12 text-center text-sm text-muted-foreground">
+          No transactions match the selected filters
         </div>
+      ) : (
+        <>
+          {/* Wide-screen table */}
+          <Table
+            variant="data"
+            containerClassName="hidden xl:block"
+            className="min-w-[860px]"
+          >
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow>
+                <TableHead>
+                  <SortHeader
+                    field="amount"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Amount
+                  </SortHeader>
+                </TableHead>
+                <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Payment
+                </TableHead>
+                <TableHead>
+                  <SortHeader
+                    field="status"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Order Status
+                  </SortHeader>
+                </TableHead>
+                <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Payment Status
+                </TableHead>
+                <TableHead className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Type
+                </TableHead>
+                <TableHead>
+                  <SortHeader
+                    field="date"
+                    sortField={sortField}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  >
+                    Date
+                  </SortHeader>
+                </TableHead>
+                <TableHead className="text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Staff
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredTransactions.map((tx) => {
+                const type = getOrderTypeConfig(tx.order_type);
+                const payment = getPaymentLabel(tx);
+                const PayIcon = payment.icon;
+                const TypeIcon = type.icon;
+                const isRefund = tx.status === "refunded";
+                const isVoid = tx.status === "void";
+                const staffName = getStaffName(tx);
 
-        {/* Scrollable Table */}
-        <div className="overflow-x-auto">
-        <div className="min-w-[730px]">
+                return (
+                  <TableRow
+                    key={tx.id}
+                    onClick={() => onTransactionClick?.(tx)}
+                    className={cn(
+                      "cursor-pointer border-0 bg-card/70 hover:bg-muted/40",
+                      // Reversed orders are de-emphasised by opacity, not by a
+                      // red tint — colour is not carrying status here (D-12).
+                      (isRefund || isVoid) && "opacity-70"
+                    )}
+                  >
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold tabular-nums">
+                          {isRefund ? "−" : ""}
+                          {formatCurrency(getDisplayTotal(tx))}
+                        </span>
+                        <span className="font-mono text-[11px] text-muted-foreground/60">
+                          {tx.display_number || tx.order_number || tx.id.slice(0, 8)}
+                        </span>
+                      </div>
+                    </TableCell>
 
-        {/* Table Header */}
-        <div className="grid grid-cols-[minmax(100px,1.2fr)_1fr_1fr_minmax(110px,0.9fr)_minmax(80px,0.8fr)_minmax(120px,1fr)_minmax(100px,0.8fr)] gap-2 px-4 py-2.5 border-b border-border/40 bg-muted/30">
-          <button onClick={() => handleSort("amount")} className="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground text-left">
-            Amount <SortIcon field="amount" />
-          </button>
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Payment</span>
-          <button onClick={() => handleSort("status")} className="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground text-left">
-            Order Status <SortIcon field="status" />
-          </button>
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Payment Status</span>
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Type</span>
-          <button onClick={() => handleSort("date")} className="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground text-left">
-            Date <SortIcon field="date" />
-          </button>
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground text-right">Staff</span>
-        </div>
+                    <TableCell className="text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <PayIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                        <span className="truncate">{payment.label}</span>
+                      </span>
+                    </TableCell>
 
-        {/* Rows */}
-        <div className="divide-y divide-border/40">
-          {filteredTransactions.length === 0 ? (
-            <div className="py-12 text-center text-sm text-muted-foreground">
-              No transactions match the selected filters
-            </div>
-          ) : (
-            filteredTransactions.map((tx) => {
-              const status = getStatusStyle(tx.status);
+                    <TableCell>
+                      <span className={BADGE_SHELL}>{getStatusLabel(tx.status)}</span>
+                    </TableCell>
+
+                    {/* Payment status — independent of order status (payment_status enum) */}
+                    <TableCell>
+                      <span className={BADGE_SHELL}>
+                        {getPaymentStatusLabel(tx.payment_status)}
+                      </span>
+                    </TableCell>
+
+                    <TableCell className="text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <TypeIcon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{type.label}</span>
+                      </span>
+                    </TableCell>
+
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatTxDate(tx.created_at, timeZone)}
+                    </TableCell>
+
+                    <TableCell className="text-right text-sm text-muted-foreground">
+                      <span className="truncate">{staffName || "—"}</span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+
+          {/* Phones and tablets use cards instead of a horizontally scrolling
+              table (§5.3) — the old 730px min-width forced a sideways drag. */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+            {filteredTransactions.map((tx) => {
               const type = getOrderTypeConfig(tx.order_type);
               const payment = getPaymentLabel(tx);
               const PayIcon = payment.icon;
               const TypeIcon = type.icon;
               const isRefund = tx.status === "refunded";
               const isVoid = tx.status === "void";
-              const staffName =
-                tx.created_by_staff?.display_name ||
-                (tx.created_by_staff?.first_name
-                  ? `${tx.created_by_staff.first_name} ${tx.created_by_staff.last_name || ""}`.trim()
-                  : tx.created_by_user
-                  ? `${tx.created_by_user.first_name || ""} ${tx.created_by_user.last_name || ""}`.trim()
-                  : null);
+              const staffName = getStaffName(tx);
 
               return (
-                <div
+                <button
                   key={tx.id}
+                  type="button"
                   onClick={() => onTransactionClick?.(tx)}
                   className={cn(
-                    "grid grid-cols-[minmax(100px,1.2fr)_1fr_1fr_minmax(110px,0.9fr)_minmax(80px,0.8fr)_minmax(120px,1fr)_minmax(100px,0.8fr)] gap-2 px-4 py-3 items-center cursor-pointer transition-colors",
-                    "hover:bg-muted/40",
+                    "min-w-0 rounded-2xl bg-muted/45 p-4 text-left transition-colors hover:bg-muted",
                     (isRefund || isVoid) && "opacity-70"
                   )}
                 >
-                  {/* Amount */}
-                  <div className="flex flex-col">
-                    <span className={cn("text-sm font-semibold tabular-nums", isRefund && "text-rose-600 dark:text-rose-400")}>
-                      {isRefund ? "−" : ""}{formatCurrency(getDisplayTotal(tx))}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground/60 font-mono">
-                      {tx.display_number || tx.order_number || tx.id.slice(0, 8)}
-                    </span>
-                  </div>
-
-                  {/* Payment */}
-                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground truncate">
-                    <PayIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
-                    <span className="truncate">{payment.label}</span>
-                  </div>
-
-                  {/* Order Status */}
-                  <div>
-                    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium", status.bg, status.text)}>
-                      <span className={cn("h-1.5 w-1.5 rounded-full", status.dot)} />
-                      {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="block text-lg font-semibold tabular-nums">
+                        {isRefund ? "−" : ""}
+                        {formatCurrency(getDisplayTotal(tx))}
+                      </span>
+                      <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground/60">
+                        {tx.display_number || tx.order_number || tx.id.slice(0, 8)}
+                      </span>
+                    </div>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatTxDate(tx.created_at, timeZone)}
                     </span>
                   </div>
 
-                  {/* Payment Status — independent of order status (payment_status enum) */}
-                  <div>
-                    {(() => {
-                      const pay = getPaymentStatusStyle(tx.payment_status);
-                      return (
-                        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium", pay.bg, pay.text)}>
-                          <span className={cn("h-1.5 w-1.5 rounded-full", pay.dot)} />
-                          {getPaymentStatusLabel(tx.payment_status)}
-                        </span>
-                      );
-                    })()}
+                  <div className="mt-3 flex min-w-0 flex-wrap items-center gap-1.5">
+                    <span className={BADGE_SHELL}>{getStatusLabel(tx.status)}</span>
+                    <span className={BADGE_SHELL}>
+                      {getPaymentStatusLabel(tx.payment_status)}
+                    </span>
                   </div>
 
-                  {/* Type */}
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <TypeIcon className="h-3.5 w-3.5 shrink-0" />
-                    <span className="hidden sm:inline truncate">{type.label}</span>
+                  <div className="mt-4 grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Payment</p>
+                      <p className="mt-0.5 flex items-center gap-1.5">
+                        <PayIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                        <span className="truncate">{payment.label}</span>
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">Type</p>
+                      <p className="mt-0.5 flex items-center gap-1.5">
+                        <TypeIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                        <span className="truncate">{type.label}</span>
+                      </p>
+                    </div>
+                    <div className="col-span-2 min-w-0">
+                      <p className="text-xs text-muted-foreground">Staff</p>
+                      <p className="mt-0.5 truncate">{staffName || "—"}</p>
+                    </div>
                   </div>
-
-                  {/* Date */}
-                  <span className="text-sm text-muted-foreground">
-                    {formatTxDate(tx.created_at, timeZone)}
-                  </span>
-
-                  {/* Staff */}
-                  <span className="text-sm text-muted-foreground truncate text-right">
-                    {staffName || "—"}
-                  </span>
-                </div>
+                </button>
               );
-            })
-          )}
-        </div>
-        </div>
-        </div>
-      </CardContent>
-    </Card>
+            })}
+          </div>
+        </>
+      )}
+    </div>
   );
 }

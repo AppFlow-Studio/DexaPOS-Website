@@ -263,21 +263,23 @@ export function TestOrderCard({ locationId, hasRestaurant }: TestOrderCardProps)
         {lastResult &&
           (lastResult.ok ? (
             <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm dark:border-green-900 dark:bg-green-950/30">
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-green-800 dark:text-green-300">
-                    {lastResult.storedInDlq
-                      ? "Test payload stored in DLQ"
-                      : "Test order created"}
-                  </p>
-                  <p className="mt-0.5 text-xs text-green-700 dark:text-green-400">
-                    {lastResult.testOrderNumber}
-                    {lastResult.message ? ` — ${lastResult.message}` : ""}
-                  </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-2">
+                <div className="flex min-w-0 flex-1 items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-green-800 dark:text-green-300">
+                      {lastResult.storedInDlq
+                        ? "Test payload stored in DLQ"
+                        : "Test order created"}
+                    </p>
+                    <p className="mt-0.5 break-words text-xs text-green-700 dark:text-green-400">
+                      {lastResult.testOrderNumber}
+                      {lastResult.message ? ` — ${lastResult.message}` : ""}
+                    </p>
+                  </div>
                 </div>
                 {lastResult.orderId && !lastResult.storedInDlq && (
-                  <Button variant="outline" size="sm" asChild>
+                  <Button className="self-start whitespace-nowrap sm:shrink-0" variant="outline" size="sm" asChild>
                     <Link href={`/dashboard/orders/${lastResult.orderId}`}>
                       View order
                       <ExternalLink className="ml-1 h-3 w-3" />

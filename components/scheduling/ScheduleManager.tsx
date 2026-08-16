@@ -432,8 +432,8 @@ export function ScheduleManager({ scheduleId }: { scheduleId: string }) {
         onOverride={() => handleResolveConflict("override")}
       />
 
-      <div className="flex min-h-[620px] flex-1 overflow-hidden rounded-3xl border bg-card">
-        <div className="min-w-0 flex-1 overflow-auto">
+      <div className="flex min-h-0 flex-1 flex-col overflow-visible rounded-3xl border bg-card md:min-h-[620px] md:flex-row md:overflow-hidden">
+        <div className="min-h-[520px] min-w-0 flex-1 overflow-auto md:min-h-0">
           <WeeklyCalendar
             currentDate={currentDate}
             scheduleId={scheduleId}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   AlertTriangle,
   Check,
@@ -180,7 +180,7 @@ function formatRatio(value: number) {
 function contrastTone(value: number) {
   if (value < 3) return "border-destructive/30 bg-destructive/5 text-destructive";
   if (value < 4.5) return "border-amber-400/40 bg-amber-400/10 text-amber-700 dark:text-amber-400";
-  return "border-emerald-400/40 bg-emerald-400/10 text-emerald-700 dark:text-emerald-400";
+  return "border-border/60 bg-muted/40 text-foreground";
 }
 
 /** Section label used above each grouped field cluster inside a card. */
@@ -576,6 +576,25 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
   const [isPending, startTransition] = useTransition();
   const [uploadingAsset, setUploadingAsset] = useState<KioskAssetType | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [activeSection, setActiveSection] = useState("design");
+  const sectionRailRef = useRef<HTMLDivElement>(null);
+  const sectionTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  useEffect(() => {
+    const rail = sectionRailRef.current;
+    const trigger = sectionTriggerRefs.current[activeSection];
+    if (!rail || !trigger) return;
+
+    const railRect = rail.getBoundingClientRect();
+    const triggerRect = trigger.getBoundingClientRect();
+    const centeredOffset =
+      triggerRect.left - railRect.left - (railRect.width - triggerRect.width) / 2;
+
+    rail.scrollTo({
+      left: Math.max(0, rail.scrollLeft + centeredOffset),
+      behavior: "smooth",
+    });
+  }, [activeSection]);
 
   const textContrast = useMemo(
     () => contrastRatio(draft.text_color, draft.background_color),
@@ -810,12 +829,14 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
           <>
             <Select value={selectedProfileId} onValueChange={selectProfile}>
               <SelectTrigger className="h-9 w-full shadow-sm sm:w-56">
-                <SelectValue placeholder="Select profile" />
+                <SelectValue placeholder="Select profile">
+                  {draft.profile_name?.trim() || "Untitled profile"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {data.profiles.map((profile) => (
                   <SelectItem key={profile.id} value={profile.id}>
-                    {profile.profile_name}
+                    {profile.profile_name?.trim() || "Untitled profile"}
                   </SelectItem>
                 ))}
                 <SelectItem value="new">Create new profile</SelectItem>
@@ -864,7 +885,7 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
       />
 
       {isDirty ? (
-        <div className="flex items-center gap-2 rounded-2xl border-0 bg-amber-50 px-4 py-3 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+        <div className="flex items-center gap-2 rounded-2xl border-0 bg-muted/60 px-4 py-3 text-xs text-muted-foreground">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           Unsaved changes — save before publishing so the live kiosk gets the latest version.
         </div>
@@ -878,8 +899,8 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
         </Alert>
       ) : null}
 
-      <Tabs defaultValue="design" className="space-y-6">
-        <div className="w-full min-w-0 overflow-x-auto pb-1">
+      <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-6">
+        <div ref={sectionRailRef} className="no-scrollbar w-full min-w-0 overflow-x-auto pb-1">
           <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
             {[
               ["design", "Design"],
@@ -890,6 +911,9 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
             ].map(([value, label]) => (
               <TabsTrigger
                 key={value}
+                ref={(node) => {
+                  sectionTriggerRefs.current[value] = node;
+                }}
                 value={value}
                 className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
               >
@@ -1132,6 +1156,7 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label className="text-xs text-muted-foreground">Welcome message</Label>
                   <Textarea
+                    className="border-0 bg-muted/60 shadow-none focus-visible:ring-1"
                     value={draft.welcome_message || ""}
                     onChange={(event) => updateDraft({ welcome_message: event.target.value })}
                     rows={2}
@@ -1174,8 +1199,9 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                 <Label className="text-xs text-muted-foreground">Tip presets (%)</Label>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {draft.tip_presets.map((preset, index) => (
-                    <div key={index} className="flex items-center gap-1">
+                    <div key={index} className="relative">
                       <Input
+                        className="border-0 bg-muted/60 pr-20 shadow-none focus-visible:ring-1"
                         type="number"
                         min={0}
                         max={100}
@@ -1187,11 +1213,14 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                         }}
                         aria-label={`Tip preset ${index + 1}`}
                       />
+                      <span className="pointer-events-none absolute right-11 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        %
+                      </span>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                        className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:bg-background/70 hover:text-destructive"
                         onClick={() =>
                           updateDraft({ tip_presets: draft.tip_presets.filter((_, i) => i !== index) })
                         }
@@ -1201,17 +1230,17 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                       </Button>
                     </div>
                   ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 w-full border-dashed bg-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                    onClick={() => updateDraft({ tip_presets: [...draft.tip_presets, 0] })}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add preset
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => updateDraft({ tip_presets: [...draft.tip_presets, 0] })}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add preset
-                </Button>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">

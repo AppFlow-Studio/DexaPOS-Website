@@ -34,8 +34,8 @@ import {
   CreditCard,
   Banknote,
   ChevronLeft,
-  ChevronsLeft,
-  ChevronsRight,
+
+
   Wifi,
   Smartphone,
   X,
@@ -45,6 +45,11 @@ import { PaymentRecord, EmvData } from "@/types/payment";
 import { CardBrandIcon } from "./CardBrandIcon";
 import { PaymentFacetFilter, type FacetOption } from "./PaymentFacetFilter";
 import { PaymentAmountFilter, type AmountRange } from "./PaymentAmountFilter";
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
 import {
   getCardBrandLabel,
   getPaymentMethodLabel,
@@ -56,6 +61,11 @@ import {
 } from "@/lib/payments/method-display";
 import { filterPayments } from "@/lib/payments/filter-payments";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  getPaymentStatusLabel,
+  getPaymentStatusStyle,
+} from "@/lib/constants/payment-status";
 
 // ============================================================================
 // Helpers
@@ -117,52 +127,6 @@ function isCardMethod(method: string): boolean {
   return method === "card" || method.startsWith("card_");
 }
 
-function getStatusConfig(status: string) {
-  const configs: Record<string, { label: string; className: string }> = {
-    captured: {
-      label: "Captured",
-      className: "bg-green-100 text-green-800 border-green-300",
-    },
-    paid: {
-      label: "Paid",
-      className: "bg-green-100 text-green-800 border-green-300",
-    },
-    authorized: {
-      label: "Authorized",
-      className: "bg-blue-100 text-blue-800 border-blue-300",
-    },
-    pending: {
-      label: "Pending",
-      className: "bg-yellow-100 text-yellow-800 border-yellow-300",
-    },
-    processing: {
-      label: "Processing",
-      className: "bg-blue-100 text-blue-800 border-blue-300",
-    },
-    refunded: {
-      label: "Refunded",
-      className: "bg-red-100 text-red-800 border-red-300",
-    },
-    partially_refunded: {
-      label: "Partial Refund",
-      className: "bg-amber-100 text-amber-800 border-amber-300",
-    },
-    void: {
-      label: "Void",
-      className: "bg-gray-100 text-gray-800 border-gray-300",
-    },
-    failed: {
-      label: "Failed",
-      className: "bg-red-100 text-red-800 border-red-300",
-    },
-    declined: {
-      label: "Declined",
-      className: "bg-red-100 text-red-800 border-red-300",
-    },
-  };
-  return configs[status] || { label: status, className: "" };
-}
-
 function getEntryModeLabel(mode?: string): string {
   if (!mode) return "";
   return getCanonicalEntryModeLabel(mode);
@@ -215,108 +179,110 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
       emvData.tvr);
 
   return (
-    <div className="grid gap-4 p-4 md:grid-cols-2 lg:grid-cols-4">
-      {/* Transaction Details */}
-      <div className="space-y-2 min-w-0">
-        <h4 className="text-sm font-semibold">Transaction Details</h4>
-        <dl className="space-y-1 text-xs">
-          {payment.authorization_code && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Auth Code</dt>
-              <dd className="font-mono">{payment.authorization_code}</dd>
-            </div>
-          )}
-          {payment.transaction_id && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Transaction ID</dt>
-              <dd className="font-mono truncate max-w-35">
-                {payment.transaction_id}
-              </dd>
-            </div>
-          )}
-          {payment.reference_number && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Reference #</dt>
-              <dd className="font-mono">{payment.reference_number}</dd>
-            </div>
-          )}
-          {payment.dejavoo_response_code && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Response Code</dt>
-              <dd className="font-mono">{payment.dejavoo_response_code}</dd>
-            </div>
-          )}
-          {(payment.batch_number || ct?.batchNumber) && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Batch #</dt>
-              <dd className="font-mono">{payment.batch_number || ct?.batchNumber}</dd>
-            </div>
-          )}
-          {payment.settled_at && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Settled At</dt>
-              <dd>{formatDate(payment.settled_at)}</dd>
-            </div>
-          )}
-          {(payment.invoice_number || raw?.txnInvoiceNumber) && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">Invoice #</dt>
-              <dd className="font-mono">{payment.invoice_number || raw?.txnInvoiceNumber}</dd>
-            </div>
-          )}
-          {ct?.rrn && (
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">RRN</dt>
-              <dd className="font-mono">{ct.rrn}</dd>
-            </div>
-          )}
-        </dl>
-      </div>
+    <div className="grid w-full max-w-full gap-6 p-4 md:grid-cols-2">
+      <div className="space-y-4 min-w-0">
+        {/* Transaction Details */}
+        <div className="space-y-2 min-w-0">
+          <h4 className="text-sm font-semibold">Transaction Details</h4>
+          <dl className="space-y-1 text-xs">
+            {payment.authorization_code && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Auth Code</dt>
+                <dd className="font-mono">{payment.authorization_code}</dd>
+              </div>
+            )}
+            {payment.transaction_id && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Transaction ID</dt>
+                <dd className="font-mono truncate max-w-35">
+                  {payment.transaction_id}
+                </dd>
+              </div>
+            )}
+            {payment.reference_number && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Reference #</dt>
+                <dd className="font-mono">{payment.reference_number}</dd>
+              </div>
+            )}
+            {payment.dejavoo_response_code && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Response Code</dt>
+                <dd className="font-mono">{payment.dejavoo_response_code}</dd>
+              </div>
+            )}
+            {(payment.batch_number || ct?.batchNumber) && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Batch #</dt>
+                <dd className="font-mono">{payment.batch_number || ct?.batchNumber}</dd>
+              </div>
+            )}
+            {payment.settled_at && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Settled At</dt>
+                <dd>{formatDate(payment.settled_at)}</dd>
+              </div>
+            )}
+            {(payment.invoice_number || raw?.txnInvoiceNumber) && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">Invoice #</dt>
+                <dd className="font-mono">{payment.invoice_number || raw?.txnInvoiceNumber}</dd>
+              </div>
+            )}
+            {ct?.rrn && (
+              <div className="flex justify-between">
+                <dt className="text-muted-foreground">RRN</dt>
+                <dd className="font-mono">{ct.rrn}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
 
-      {/* Terminal Info */}
-      <div className="space-y-2 min-w-0">
-        <h4 className="text-sm font-semibold">Terminal Info</h4>
-        <dl className="space-y-1 text-xs">
-          {payment.terminal_type && (
-            <div className="flex gap-2 justify-between">
-              <dt className="text-muted-foreground shrink-0">Terminal</dt>
-              <dd className="text-right break-all">{payment.terminal_type}</dd>
-            </div>
-          )}
-          {(payment.terminal_id || ct?.terminalId) && (
-            <div className="flex gap-2 justify-between">
-              <dt className="text-muted-foreground shrink-0">Terminal ID</dt>
-              <dd
-                className="font-mono text-right truncate min-w-0 max-w-[160px]"
-                title={payment.terminal_id || ct?.terminalId || ''}
-              >
-                {payment.terminal_id || ct?.terminalId}
-              </dd>
-            </div>
-          )}
-          {payment.device_id && (
-            <div className="flex gap-2 justify-between">
-              <dt className="text-muted-foreground shrink-0">Device ID</dt>
-              <dd
-                className="font-mono text-right truncate min-w-0 max-w-[160px]"
-                title={payment.device_id}
-              >
-                {payment.device_id}
-              </dd>
-            </div>
-          )}
-          {payment.processor_response?.serial_number && (
-            <div className="flex gap-2 justify-between">
-              <dt className="text-muted-foreground shrink-0">Serial #</dt>
-              <dd
-                className="font-mono text-right truncate min-w-0 max-w-[160px]"
-                title={String(payment.processor_response.serial_number)}
-              >
-                {payment.processor_response.serial_number}
-              </dd>
-            </div>
-          )}
-        </dl>
+        {/* Terminal Info */}
+        <div className="space-y-2 min-w-0">
+          <h4 className="text-sm font-semibold">Terminal Info</h4>
+          <dl className="space-y-1 text-xs">
+            {payment.terminal_type && (
+              <div className="flex gap-2 justify-between">
+                <dt className="text-muted-foreground shrink-0">Terminal</dt>
+                <dd className="text-right break-all">{payment.terminal_type}</dd>
+              </div>
+            )}
+            {(payment.terminal_id || ct?.terminalId) && (
+              <div className="space-y-1">
+                <dt className="text-muted-foreground">Terminal ID</dt>
+                <dd
+                  className="font-mono break-all text-left"
+                  title={payment.terminal_id || ct?.terminalId || ''}
+                >
+                  {payment.terminal_id || ct?.terminalId}
+                </dd>
+              </div>
+            )}
+            {payment.device_id && (
+              <div className="space-y-1">
+                <dt className="text-muted-foreground">Device ID</dt>
+                <dd
+                  className="font-mono break-all text-left"
+                  title={payment.device_id}
+                >
+                  {payment.device_id}
+                </dd>
+              </div>
+            )}
+            {payment.processor_response?.serial_number && (
+              <div className="space-y-1">
+                <dt className="text-muted-foreground">Serial #</dt>
+                <dd
+                  className="font-mono break-all text-left"
+                  title={String(payment.processor_response.serial_number)}
+                >
+                  {payment.processor_response.serial_number}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
       </div>
 
       {/* Reversal Details (conditional) */}
@@ -327,13 +293,16 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
             {payment.reversals!.map((rev) => (
               <div
                 key={rev.id}
-                className="rounded border p-2 text-xs space-y-1"
+                className="space-y-1 rounded-2xl border-0 bg-muted/60 p-2 text-xs shadow-none"
               >
                 <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge
+                    variant="secondary"
+                    className="rounded-full border-0 text-[10px]"
+                  >
                     {rev.reversal_type}
                   </Badge>
-                  <span className="font-mono text-red-600">
+                  <span className="font-mono tabular-nums">
                     -{formatCurrency(rev.amount)}
                   </span>
                 </div>
@@ -348,7 +317,7 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                 </div>
                 {rev.order_refund_items &&
                   rev.order_refund_items.length > 0 && (
-                    <div className="mt-1 pt-1 border-t space-y-0.5">
+                    <div className="mt-1 space-y-0.5 pt-1">
                       {rev.order_refund_items.map((item) => (
                         <div
                           key={item.id}
@@ -372,12 +341,12 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
 
       {/* Items Paid For (conditional) */}
       {hasItems && (
-        <div className="space-y-2 min-w-0">
+        <div className="space-y-2 min-w-0 pt-2">
           <h4 className="text-sm font-semibold">Items Paid</h4>
-          <div className="rounded border overflow-x-auto">
-            <table className="w-full text-xs min-w-105">
+          <div className="overflow-hidden rounded-2xl bg-muted/20">
+            <table className="w-full max-w-full text-xs">
               <thead>
-                <tr className="border-b text-muted-foreground">
+                <tr className="bg-muted/50 text-muted-foreground">
                   <th className="px-2 py-1.5 text-left font-medium">Item</th>
                   <th className="px-2 py-1.5 text-right font-medium">Qty</th>
                   <th className="px-2 py-1.5 text-right font-medium">Subtotal</th>
@@ -386,17 +355,17 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
               </thead>
               <tbody>
                 {payment.order_payment_items!.map((item) => (
-                  <tr key={item.id} className="border-b last:border-0">
-                    <td className="px-2 py-1.5 whitespace-nowrap">
+                  <tr key={item.id} className="bg-card/70">
+                    <td className="px-1.5 py-1.5 whitespace-nowrap">
                       {item.order_items?.item_name || "—"}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">
+                    <td className="px-1.5 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
                       {item.quantity_paid}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">
+                    <td className="px-1.5 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
                       {formatCurrency(item.subtotal_paid)}
                     </td>
-                    <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap">
+                    <td className="px-1.5 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
                       {formatCurrency(item.tax_paid)}
                     </td>
                   </tr>
@@ -475,7 +444,6 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                   rows.push({
                     label: "Discount",
                     value: -discount,
-                    cls: "text-red-600",
                   });
                 if (Math.abs(other) >= 0.005)
                   rows.push({
@@ -494,30 +462,60 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                   value: payTotal,
                   cls: "font-semibold",
                 });
+
+                const summaryColumns = rows.slice(0, 4);
+                const overflowColumns = rows.slice(4);
+
                 return (
-                  <tfoot className="border-t bg-muted/30">
-                    {rows.map((r, i) => (
-                      <tr key={i}>
-                        <td
-                          colSpan={3}
-                          className={cn(
-                            "px-2 py-1 text-right text-muted-foreground",
-                            r.cls
-                          )}
-                        >
-                          {r.label}
-                        </td>
-                        <td
-                          className={cn(
-                            "px-2 py-1 text-right font-mono whitespace-nowrap",
-                            r.cls
-                          )}
-                        >
-                          {formatCurrency(r.value)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tfoot>
+                  <div className="mt-3 w-full text-xs">
+                    <div className="grid w-full grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4 sm:gap-x-10">
+                      {summaryColumns.map((r, i) => (
+                        <div key={`${r.label}-${i}`} className="min-w-0">
+                          <div
+                            className={cn(
+                              "mb-1 text-right text-muted-foreground",
+                              r.cls
+                            )}
+                          >
+                            {r.label}
+                          </div>
+                          <div
+                            className={cn(
+                              "text-right font-mono tabular-nums whitespace-nowrap",
+                              r.cls
+                            )}
+                          >
+                            {formatCurrency(r.value)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {overflowColumns.length > 0 && (
+                      <div className="mt-2 grid w-full grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4 sm:gap-x-10">
+                        {overflowColumns.map((r, i) => (
+                          <div key={`${r.label}-extra-${i}`} className="min-w-0">
+                            <div
+                              className={cn(
+                                "mb-1 text-right text-muted-foreground",
+                                r.cls
+                              )}
+                            >
+                              {r.label}
+                            </div>
+                            <div
+                              className={cn(
+                                "text-right font-mono tabular-nums whitespace-nowrap",
+                                r.cls
+                              )}
+                            >
+                              {formatCurrency(r.value)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 );
               })()}
             </table>
@@ -584,12 +582,28 @@ interface PaymentsTableProps {
   isLoading?: boolean;
 }
 
+const PAYMENT_MOBILE_COLUMN_META: ReportColumn[] = [
+  { id: "order_number", label: "Order #", locked: true },
+  { id: "initiated_at", label: "Date/Time", defaultHidden: true },
+  { id: "payment_method", label: "Method", defaultHidden: true },
+  { id: "card_info", label: "Card", defaultHidden: true },
+  { id: "entry_mode", label: "Entry", defaultHidden: true },
+  { id: "tip_amount", label: "Tip", defaultHidden: true },
+  { id: "service_charge", label: "Service Charge", defaultHidden: true },
+  { id: "status", label: "Status", defaultHidden: true },
+  { id: "settlement", label: "Settlement", defaultHidden: true },
+];
+
 export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
+  const isMobile = useIsMobile();
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "initiated_at", desc: true },
   ]);
   const [globalFilter, setGlobalFilter] = React.useState("");
   const [expanded, setExpanded] = React.useState<ExpandedState>({});
+  const [mobileHiddenColumns, setMobileHiddenColumns] = React.useState<Set<string>>(() =>
+    initialHiddenColumns(PAYMENT_MOBILE_COLUMN_META)
+  );
 
   const [methodFilter, setMethodFilter] = React.useState<string[]>([]);
   const [brandFilter, setBrandFilter] = React.useState<string[]>([]);
@@ -673,48 +687,40 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
     [data, methodFilter, brandFilter, entryFilter, amountFilter]
   );
 
+  const isColumnVisible = React.useCallback(
+    (columnId: string) => {
+      if (columnId === "order_number") return true;
+      return !isMobile || !mobileHiddenColumns.has(columnId);
+    },
+    [isMobile, mobileHiddenColumns]
+  );
+
   const columns: ColumnDef<PaymentRecord>[] = [
     // Expand toggle
     {
       id: "expand",
       header: () => null,
-      cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={(e) => {
-            e.stopPropagation();
-            row.toggleExpanded();
-          }}
-        >
-          {row.getIsExpanded() ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-        </Button>
-      ),
+      cell: ({ row }) => {
+        if (isMobile) return null;
+        return (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6"
+            onClick={(e) => {
+              e.stopPropagation();
+              row.toggleExpanded();
+            }}
+          >
+            {row.getIsExpanded() ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </Button>
+        );
+      },
       enableSorting: false,
-    },
-    // Date/Time
-    {
-      accessorKey: "initiated_at",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="h-8 px-2"
-        >
-          Date/Time
-          <ArrowUpDown className="ml-2 h-3 w-3" />
-        </Button>
-      ),
-      cell: ({ row }) => (
-        <div className="text-sm text-muted-foreground whitespace-nowrap">
-          {formatDate(row.original.initiated_at)}
-        </div>
-      ),
     },
     // Order #
     {
@@ -753,6 +759,25 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
           </Link>
         );
       },
+    },
+    // Date/Time
+    {
+      accessorKey: "initiated_at",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="h-8 px-2"
+        >
+          Date/Time
+          <ArrowUpDown className="ml-2 h-3 w-3" />
+        </Button>
+      ),
+      cell: ({ row }) => (
+        <div className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatDate(row.original.initiated_at)}
+        </div>
+      ),
     },
     // Method
     {
@@ -908,11 +933,18 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => {
-        const config = getStatusConfig(row.original.status);
+        const style = getPaymentStatusStyle(row.original.status);
         return (
-          <Badge variant="outline" className={`text-xs ${config.className}`}>
-            {config.label}
-          </Badge>
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+              style.bg,
+              style.text
+            )}
+          >
+            <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", style.dot)} />
+            {getPaymentStatusLabel(row.original.status)}
+          </span>
         );
       },
       enableSorting: false,
@@ -927,14 +959,12 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
         if (p.is_settled) {
           return (
             <div className="flex flex-col gap-0.5">
-              <Badge
-                variant="outline"
-                className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300"
-              >
+              <span className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
                 Settled
-              </Badge>
+              </span>
               {batchNum && (
-                <span className="text-[10px] text-muted-foreground font-mono">
+                <span className="text-[10px] text-muted-foreground font-mono tabular-nums">
                   Batch {batchNum}
                 </span>
               )}
@@ -965,7 +995,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onExpandedChange: setExpanded,
-    getRowCanExpand: () => true,
+    getRowCanExpand: () => !isMobile,
     initialState: {
       pagination: { pageSize: 50 },
     },
@@ -990,15 +1020,20 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
       {/* Search + filters */}
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
         <div className="relative w-full min-w-0 lg:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
           <Input
             placeholder="Search by order #, auth code, card, customer..."
             value={globalFilter}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            className="pl-9"
+            className="h-10 pl-10"
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <MobileColumnsButton
+            columns={PAYMENT_MOBILE_COLUMN_META}
+            hidden={mobileHiddenColumns}
+            onChange={setMobileHiddenColumns}
+          />
           <PaymentFacetFilter
             title="Method"
             options={methodOptions}
@@ -1026,7 +1061,7 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-9 px-2"
+              className="h-9 rounded-full px-3 text-muted-foreground hover:text-foreground"
               onClick={clearAllFilters}
             >
               Clear all
@@ -1042,34 +1077,44 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
         </p>
       )}
 
-      {/* Table */}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
+      {/* Table — §5: variant="data" carries the well, header band and
+          borderless rows; do not restate them here. */}
+      <Table variant="data" className="min-w-max">
+          <TableHeader className="[&_tr]:border-0">
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
-                ))}
+              <TableRow
+                key={headerGroup.id}
+                className="border-0 hover:bg-transparent"
+              >
+                {headerGroup.headers
+                  .filter(
+                    (header) => !isMobile || isColumnVisible(header.column.id)
+                  )
+                  .map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className="h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground"
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  ))}
               </TableRow>
             ))}
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center"
+                  className="h-24 text-center text-sm text-muted-foreground"
                 >
                   <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground" />
                   </div>
                 </TableCell>
               </TableRow>
@@ -1078,23 +1123,41 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                 <React.Fragment key={row.id}>
                   <TableRow
                     data-state={row.getIsExpanded() && "expanded"}
-                    className="cursor-pointer"
-                    onClick={() => row.toggleExpanded()}
+                    className={cn(
+                      "border-0 transition-colors",
+                      !isMobile && "cursor-pointer"
+                    )}
+                    onClick={() => !isMobile && row.toggleExpanded()}
                   >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className={cell.column.id === "amount" || cell.column.id === "tip_amount" || cell.column.id === "service_charge" || cell.column.id === "total_amount" ? "text-right" : undefined}>
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </TableCell>
-                    ))}
+                    {row
+                      .getVisibleCells()
+                      .filter(
+                        (cell) => !isMobile || isColumnVisible(cell.column.id)
+                      )
+                      .map((cell) => (
+                        <TableCell
+                          key={cell.id}
+                          className={cn(
+                            "py-3 text-sm",
+                            (cell.column.id === "amount" ||
+                              cell.column.id === "tip_amount" ||
+                              cell.column.id === "service_charge" ||
+                              cell.column.id === "total_amount") &&
+                              "text-right tabular-nums"
+                          )}
+                        >
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </TableCell>
+                      ))}
                   </TableRow>
-                  {row.getIsExpanded() && (
-                    <TableRow>
+                  {!isMobile && row.getIsExpanded() && (
+                    <TableRow className="border-0 hover:bg-transparent">
                       <TableCell
                         colSpan={columns.length}
-                        className="bg-muted/30 p-0"
+                        className="w-full max-w-full bg-muted/40 p-0"
                       >
                         <PaymentDetailPanel payment={row.original} />
                       </TableCell>
@@ -1103,12 +1166,12 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
                 </React.Fragment>
               ))
             ) : (
-              <TableRow>
+              <TableRow className="hover:bg-transparent">
                 <TableCell
                   colSpan={columns.length}
-                  className="h-24 text-center"
+                  className="h-24 text-center text-sm text-muted-foreground"
                 >
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <div className="flex flex-col items-center gap-2">
                     <CreditCard className="h-8 w-8" />
                     <p>No payments found</p>
                   </div>
@@ -1116,58 +1179,37 @@ export function PaymentsTable({ data, isLoading }: PaymentsTableProps) {
               </TableRow>
             )}
           </TableBody>
-        </Table>
-      </div>
+      </Table>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <div>
-          Page {table.getState().pagination.pageIndex + 1} of{" "}
-          {table.getPageCount()}
+      {/* Pagination — D-08: labelled outline pills, hidden on a single page. */}
+      {table.getPageCount() > 1 && (
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <p className="text-[0.8125rem] text-muted-foreground tabular-nums">
+            Page {table.getState().pagination.pageIndex + 1} of{" "}
+            {table.getPageCount()}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <ChevronLeft className="mr-1.5 h-4 w-4" />
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              Next
+              <ChevronRight className="ml-1.5 h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </div>
-      <div className="flex items-center space-x-2">
-        <Button
-          variant="outline"
-          size="icon"
-          className="hidden size-8 lg:flex"
-          onClick={() => table.setPageIndex(0)}
-          disabled={!table.getCanPreviousPage()}
-        >
-          <span className="sr-only">Go to first page</span>
-          <ChevronsLeft />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          className="size-8"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          <span className="sr-only">Go to previous page</span>
-          <ChevronLeft />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          className="size-8"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          <span className="sr-only">Go to next page</span>
-          <ChevronRight />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          className="hidden size-8 lg:flex"
-          onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-          disabled={!table.getCanNextPage()}
-        >
-          <span className="sr-only">Go to last page</span>
-          <ChevronsRight />
-        </Button>
-      </div>
+      )}
     </div>
   );
 }

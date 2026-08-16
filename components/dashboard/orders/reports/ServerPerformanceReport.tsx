@@ -27,6 +27,7 @@ export function ServerPerformanceReport({
 }: ServerPerformanceReportProps) {
   const { data, isLoading } = useStaffPerformance(dateFrom, dateTo)
   const [searchQuery, setSearchQuery] = useState('')
+  const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<string>>(() => new Set(['order_count', 'total_sales', 'total_tips', 'tables_turned']))
 
   const filteredData = useMemo(() => {
     if (!data?.leaderboard) return []
@@ -89,6 +90,17 @@ export function ServerPerformanceReport({
       header: 'Avg Turn Time (min)',
       cell: ({ row }) => Math.round(row.getValue('avg_table_turn_minutes') as number),
     },
+  ]
+
+  const columnConfig = [
+    { id: 'staff_name', label: 'Server Name', locked: true },
+    { id: 'order_count', label: 'Orders' },
+    { id: 'total_sales', label: 'Total Sales' },
+    { id: 'avg_check_size', label: 'Avg Check', locked: true },
+    { id: 'total_tips', label: 'Total Tips' },
+    { id: 'avg_tip_pct', label: 'Tip %', locked: true },
+    { id: 'tables_turned', label: 'Tables Turned' },
+    { id: 'avg_table_turn_minutes', label: 'Avg Turn Time (min)', locked: true },
   ]
 
   const exportColumns = [
@@ -171,9 +183,12 @@ export function ServerPerformanceReport({
         dateFrom={dateFrom}
         dateTo={dateTo}
         summaryCards={summaryCardsData}
+        columnConfig={columnConfig}
+        hiddenColumns={hiddenColumnIds}
+        onColumnVisibilityChange={setHiddenColumnIds}
       />
 
-      <ReportDataTable columns={columns} data={filteredData} />
+      <ReportDataTable columns={columns} data={filteredData} hiddenColumnIds={hiddenColumnIds} />
     </div>
   )
 }

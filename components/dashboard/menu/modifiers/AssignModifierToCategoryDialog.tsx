@@ -25,6 +25,7 @@ import {
 } from "@/app/dashboard/actions/modifier-assignments";
 import { CategoriesModel } from "@/types/db-modles";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 interface ModifierGroupForAssignment {
   id: string;
@@ -60,6 +61,7 @@ export function AssignModifierToCategoryDialog({
   onSuccess,
 }: AssignModifierToCategoryDialogProps) {
   const queryClient = useQueryClient();
+  const isSingleLocation = useIsSingleLocation();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -219,7 +221,12 @@ export function AssignModifierToCategoryDialog({
             scope, so it does not also need a colour. */}
         <div className="flex shrink-0 items-start gap-2 rounded-2xl border-0 bg-muted/60 p-3 text-xs text-muted-foreground">
           <span>
-            {!isAllLocations ? (
+            {isSingleLocation ? (
+              <>
+                Category assignments apply this modifier to current and future
+                items in the category.
+              </>
+            ) : !isAllLocations ? (
               <>
                 Assigning from this location view will apply modifiers{" "}
                 <strong className="font-medium text-foreground">
@@ -304,7 +311,7 @@ export function AssignModifierToCategoryDialog({
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {!category.menu_id && (
+                    {!isSingleLocation && !category.menu_id && (
                       <Badge
                         variant="secondary"
                         className="border-0 bg-muted/60 text-[10px] font-medium text-muted-foreground"
@@ -320,7 +327,11 @@ export function AssignModifierToCategoryDialog({
                           variant="secondary"
                           className="gap-1 border-0 bg-muted/60 text-[10px] font-medium text-muted-foreground"
                         >
-                          {isGlobalAssignment ? "Global" : "This Location"}
+                          {isSingleLocation
+                            ? "Assigned"
+                            : isGlobalAssignment
+                              ? "Global"
+                              : "This Location"}
                         </Badge>
                       );
                     })()}

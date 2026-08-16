@@ -177,6 +177,7 @@ export default function CustomersPage() {
       </Panel>
 
       <CustomerProfileSheet
+        key={selectedCustomer?.id ?? "none"}
         customer={selectedCustomer}
         open={isProfileOpen}
         onOpenChange={setIsProfileOpen}

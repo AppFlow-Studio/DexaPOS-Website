@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -46,15 +45,13 @@ function StatusBadge({ station }: { station: StationWithHeartbeat }) {
   const isOnline = station.latest_heartbeat?.is_online ?? station.is_online;
   const isActive = station.is_active;
 
+  // One neutral pill for every state (§4.6b / D-12) — matches StationsTable.
   if (!isActive) {
     return (
       <div className="flex flex-col gap-0.5" role="status" aria-label="Deactivated">
-        <Badge
-          variant="outline"
-          className="gap-1.5 w-fit border-red-500/50 bg-red-500/10 text-red-600 dark:text-red-400"
-        >
+        <Badge className="w-fit shrink-0 gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
           <PowerOff className="h-3 w-3" aria-hidden="true" />
-          <span aria-hidden="true">DEACTIVATED</span>
+          <span aria-hidden="true">Deactivated</span>
         </Badge>
       </div>
     );
@@ -77,25 +74,16 @@ function StatusBadge({ station }: { station: StationWithHeartbeat }) {
 
   return (
     <div className="flex flex-col gap-0.5" role="status" aria-label={ariaLabel}>
-      <Badge
-        variant="outline"
-        className={cn(
-          "gap-1.5 w-fit transition-all duration-200",
-          isOnline
-            ? "border-green-500/50 bg-green-500/10 text-green-600 dark:text-green-400"
-            : "border-gray-400/50 bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-        )}
-      >
+      <Badge className="w-fit shrink-0 gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
         <Circle
           className={cn(
             "h-2 w-2 transition-colors duration-200",
-            isOnline
-              ? "fill-green-500 text-green-500"
-              : "fill-gray-400 text-gray-400"
+            // Filled when online, hollow when offline — shape, not hue.
+            isOnline ? "fill-current" : "fill-transparent"
           )}
           aria-hidden="true"
         />
-        <span aria-hidden="true">{isOnline ? "ONLINE" : "OFFLINE"}</span>
+        <span aria-hidden="true">{isOnline ? "Online" : "Offline"}</span>
       </Badge>
       {!isOnline && offlineDuration && (
         <span className="text-xs text-muted-foreground" aria-hidden="true">
@@ -107,18 +95,8 @@ function StatusBadge({ station }: { station: StationWithHeartbeat }) {
 }
 
 function SyncRoleBadge({ role }: { role: StationWithHeartbeat["sync_role"] }) {
-  const isLeader = role === "leader";
-
   return (
-    <Badge
-      variant="outline"
-      className={cn(
-        "gap-1 w-fit text-xs",
-        isLeader
-          ? "border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400"
-          : "border-gray-300/50 bg-gray-100/50 text-gray-500 dark:bg-gray-800/50 dark:text-gray-400"
-      )}
-    >
+    <Badge className="w-fit shrink-0 gap-1 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
       {getSyncRoleLabel(role)}
     </Badge>
   );
@@ -137,7 +115,7 @@ function StationIcon({
   return (
     <div
       className={cn(
-        "flex items-center justify-center rounded-lg bg-muted text-2xl",
+        "flex shrink-0 items-center justify-center rounded-full bg-muted/60 text-2xl",
         className
       )}
       role="img"
@@ -172,43 +150,42 @@ export function StationCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
     >
-      <Card
+      {/* Card grid below `xl` (§5.3): `rounded-2xl border-0 bg-muted/45`, with
+          the selected state as a ring rather than a border. No shadow — panels
+          in this language have none. */}
+      <div
         onClick={handleCardClick}
         className={cn(
-          "group transition-all duration-200 ease-out cursor-pointer",
-          "hover:shadow-md hover:scale-[1.01]",
+          "group min-w-0 cursor-pointer rounded-2xl border-0 bg-muted/45 p-4 transition-colors duration-200",
           (isOffline || isInactive) && "opacity-60",
-          isSelected && "ring-2 ring-primary"
+          isSelected ? "bg-muted ring-1 ring-border" : "hover:bg-muted"
         )}
       >
-        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
-          <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-row items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <div onClick={(e) => e.stopPropagation()}>
               <Checkbox
                 checked={isSelected}
                 onCheckedChange={(checked) => onSelect(!!checked)}
                 aria-label={`Select ${station.station_name}`}
-                className="mt-1 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                className="mt-1"
               />
             </div>
             <StationIcon type={station.station_type} className="h-12 w-12" />
-            <div className="flex flex-col">
-              <span className="font-semibold text-foreground">
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate font-semibold text-foreground">
                 {station.station_name}
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="truncate text-xs text-muted-foreground">
                 {getStationTypeLabel(station.station_type)}
                 {station.station_code && ` (${station.station_code})`}
               </span>
             </div>
           </div>
-          <div onClick={(e) => e.stopPropagation()}>
+          <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="h-8 w-8 p-0 focus-visible:ring-2 focus-visible:ring-primary"
-                >
+                <Button variant="ghost" className="h-8 w-8 rounded-full p-0">
                   <span className="sr-only">Open menu for {station.station_name}</span>
                   <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                 </Button>
@@ -220,26 +197,22 @@ export function StationCard({
                   Edit
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                {/* Ordinary actions carry no hue; only Delete is destructive
+                    (§4.6b exception 1). */}
                 {station.is_active ? (
-                  <DropdownMenuItem
-                    onClick={() => onDeactivate(station.id)}
-                    className="text-amber-600 focus:text-amber-600"
-                  >
+                  <DropdownMenuItem onClick={() => onDeactivate(station.id)}>
                     <PowerOff className="mr-2 h-4 w-4" aria-hidden="true" />
                     Deactivate
                   </DropdownMenuItem>
                 ) : (
-                  <DropdownMenuItem
-                    onClick={() => onReactivate(station.id)}
-                    className="text-green-600 focus:text-green-600"
-                  >
+                  <DropdownMenuItem onClick={() => onReactivate(station.id)}>
                     <Power className="mr-2 h-4 w-4" aria-hidden="true" />
                     Reactivate
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
                   onClick={() => onRemove(station.id)}
-                  className="text-red-600 focus:text-red-600"
+                  className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
                   Delete
@@ -247,35 +220,37 @@ export function StationCard({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center justify-between">
+        </div>
+
+        {/* Separation by spacing, not `border-t` rules (§5.5). */}
+        <div className="mt-4 min-w-0 space-y-3">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
             <StatusBadge station={station} />
             <SyncRoleBadge role={station.sync_role} />
           </div>
 
-          <div className="space-y-2 pt-2 border-t">
+          <div className="mt-5 min-w-0 space-y-2">
             {station.station_number && (
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between gap-3 text-sm">
                 <span className="text-muted-foreground">Station #</span>
-                <span className="font-medium">{station.station_number}</span>
+                <span className="font-medium tabular-nums">{station.station_number}</span>
               </div>
             )}
             {station.device_name && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Device</span>
-                <span className="truncate max-w-[140px]">{station.device_name}</span>
+              <div className="flex min-w-0 justify-between gap-3 text-sm">
+                <span className="shrink-0 text-muted-foreground">Device</span>
+                <span className="min-w-0 truncate">{station.device_name}</span>
               </div>
             )}
             {station.hardware_model && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Model</span>
-                <span>{station.hardware_model}</span>
+              <div className="flex min-w-0 justify-between gap-3 text-sm">
+                <span className="shrink-0 text-muted-foreground">Model</span>
+                <span className="min-w-0 truncate">{station.hardware_model}</span>
               </div>
             )}
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Last Seen</span>
-              <span>
+            <div className="flex min-w-0 justify-between gap-3 text-sm">
+              <span className="shrink-0 text-muted-foreground">Last Seen</span>
+              <span className="min-w-0 truncate tabular-nums">
                 {formatLastSeen(
                   station.latest_heartbeat?.heartbeat_at,
                   station.last_heartbeat_at
@@ -285,24 +260,22 @@ export function StationCard({
           </div>
 
           {/* Capabilities Summary */}
-          <div className="pt-2 border-t">
-            <div className="flex flex-wrap gap-1">
-              {station.can_create_orders && (
-                <Badge variant="secondary" className="text-xs">Orders</Badge>
-              )}
-              {station.can_process_payments && (
-                <Badge variant="secondary" className="text-xs">Payments</Badge>
-              )}
-              {station.can_void_orders && (
-                <Badge variant="secondary" className="text-xs">Voids</Badge>
-              )}
-              {station.can_update_kitchen_status && (
-                <Badge variant="secondary" className="text-xs">Kitchen</Badge>
-              )}
-            </div>
+          <div className="mt-5 flex flex-wrap gap-1">
+            {station.can_create_orders && (
+              <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium">Orders</Badge>
+            )}
+            {station.can_process_payments && (
+              <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium">Payments</Badge>
+            )}
+            {station.can_void_orders && (
+              <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium">Voids</Badge>
+            )}
+            {station.can_update_kitchen_status && (
+              <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium">Kitchen</Badge>
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </motion.div>
   );
 }

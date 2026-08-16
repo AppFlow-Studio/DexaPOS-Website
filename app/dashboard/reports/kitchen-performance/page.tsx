@@ -39,6 +39,21 @@ import { cn } from "@/lib/utils";
 import { useSelectedLocation } from "@/stores/location-store";
 import type { KitchenStationStats } from "@/types/analytics";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+/** Station name and auto-bumped anchor the row; the middle figures are optional. */
+const TABLE_COLUMNS: ReportColumn[] = [
+  { id: "display_name", label: "Station", locked: true },
+  { id: "total_items", label: "Items Processed" },
+  { id: "avg_prep_minutes", label: "Avg Prep Time" },
+  { id: "manual_completed", label: "Manual Done", defaultHidden: true },
+  { id: "auto_bumped", label: "Auto-Bumped", locked: true },
+];
 
 type StationSort = keyof Pick<KitchenStationStats, "display_name" | "total_items" | "avg_prep_minutes" | "auto_bumped">;
 type SortDir = "asc" | "desc";
@@ -46,8 +61,8 @@ type SortDir = "asc" | "desc";
 function SortIcon({ col, active, dir }: { col: StationSort; active: StationSort; dir: SortDir }) {
   if (col !== active) return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1 shrink-0" />;
   return dir === "asc"
-    ? <ArrowUp className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
-    : <ArrowDown className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />;
+    ? <ArrowUp className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />
+    : <ArrowDown className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />;
 }
 
 const chartConfig = {
@@ -65,6 +80,14 @@ export default function KitchenPerformancePage() {
   const [preset, setPreset] = useState<DatePreset>("last_30_days");
   const [stationSort, setStationSort] = useState<StationSort>("total_items");
   const [stationDir, setStationDir] = useState<SortDir>("desc");
+  const [hiddenCols, setHiddenCols] = useState(() =>
+    initialHiddenColumns(TABLE_COLUMNS),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
+  const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
   const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
@@ -95,32 +118,24 @@ export default function KitchenPerformancePage() {
       value: isLoading ? null : isError ? "—" : `${(kitchen?.avg_ticket_time_minutes ?? 0).toFixed(1)} min`,
       sub: isError ? "Failed to load" : "Per kitchen ticket",
       icon: Clock,
-      iconColor: "text-indigo-500",
-      iconBg: "bg-indigo-50",
     },
     {
       label: "Items Processed",
       value: isLoading ? null : isError ? "—" : (kitchen?.total_items_processed ?? 0).toLocaleString(),
       sub: isError ? "Failed to load" : "Total items completed",
       icon: Utensils,
-      iconColor: "text-emerald-600",
-      iconBg: "bg-emerald-50",
     },
     {
       label: "Rush Item Rate",
       value: isLoading ? null : isError ? "—" : `${(kitchen?.rush_stats?.rush_percentage ?? 0).toFixed(1)}%`,
       sub: isError ? "Failed to load" : `${kitchen?.rush_stats?.rush_items ?? 0} rush items`,
       icon: Zap,
-      iconColor: "text-amber-500",
-      iconBg: "bg-amber-50",
     },
     {
       label: "Auto-Bump Rate",
       value: isLoading ? null : isError ? "—" : `${(kitchen?.auto_bump_stats?.auto_bump_rate ?? 0).toFixed(1)}%`,
       sub: isError ? "Failed to load" : `${kitchen?.auto_bump_stats?.auto_bumped ?? 0} auto-bumped`,
       icon: Activity,
-      iconColor: "text-purple-500",
-      iconBg: "bg-purple-50",
     },
   ];
 
@@ -152,7 +167,7 @@ export default function KitchenPerformancePage() {
             label={kpi.label}
             value={kpi.value ?? ""}
             meta={kpi.sub}
-            icon={<kpi.icon className={kpi.iconColor} />}
+            icon={<kpi.icon />}
             isLoading={kpi.value === null}
           />
         ))}
@@ -165,31 +180,31 @@ export default function KitchenPerformancePage() {
         <Card>
           <CardHeader className="px-5 pt-5 pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Zap className="h-4 w-4 text-amber-500" /> Rush vs Normal Orders
+              <Zap className="h-4 w-4 text-muted-foreground" /> Rush vs Normal Orders
             </CardTitle>
             <p className="text-xs text-muted-foreground">Prep time comparison</p>
           </CardHeader>
           <CardContent className="px-5 pb-5 space-y-4">
             {isLoading ? (
               <div className="space-y-3">
-                {[1, 2, 3].map(i => <div key={i} className="h-12 bg-muted animate-pulse rounded-xl" />)}
+                {[1, 2, 3].map(i => <div key={i} className="h-12 bg-muted animate-pulse rounded-2xl" />)}
               </div>
             ) : isError ? (
               <p className="text-sm text-muted-foreground text-center py-4">Failed to load</p>
             ) : (
               <>
-                <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50">
+                <div className="flex items-center justify-between rounded-2xl border-0 bg-muted/40 p-3">
                   <div>
-                    <p className="text-xs font-semibold text-amber-700">Rush Items</p>
-                    <p className="text-xl font-bold text-amber-700">{kitchen?.rush_stats?.avg_rush_time_minutes?.toFixed(1) ?? "—"} min</p>
-                    <p className="text-xs text-amber-600">{kitchen?.rush_stats?.rush_items ?? 0} items avg prep</p>
+                    <p className="text-xs font-semibold text-foreground">Rush Items</p>
+                    <p className="text-xl font-bold tabular-nums text-foreground">{kitchen?.rush_stats?.avg_rush_time_minutes?.toFixed(1) ?? "—"} min</p>
+                    <p className="text-xs text-muted-foreground">{kitchen?.rush_stats?.rush_items ?? 0} items avg prep</p>
                   </div>
-                  <Zap className="h-8 w-8 text-amber-300" />
+                  <Zap className="h-8 w-8 text-muted-foreground/45" />
                 </div>
-                <div className="flex items-center justify-between p-3 rounded-xl bg-muted/40">
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/40">
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground">Normal Items</p>
-                    <p className="text-xl font-bold">{kitchen?.rush_stats?.avg_normal_time_minutes?.toFixed(1) ?? "—"} min</p>
+                    <p className="text-[0.8125rem] font-normal text-muted-foreground">Normal Items</p>
+                    <p className="text-xl font-bold tabular-nums">{kitchen?.rush_stats?.avg_normal_time_minutes?.toFixed(1) ?? "—"} min</p>
                     <p className="text-xs text-muted-foreground">{(kitchen?.rush_stats?.total_items ?? 0) - (kitchen?.rush_stats?.rush_items ?? 0)} items avg prep</p>
                   </div>
                   <Timer className="h-8 w-8 text-muted-foreground/30" />
@@ -197,11 +212,11 @@ export default function KitchenPerformancePage() {
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Rush share</span>
-                    <span className="font-semibold text-amber-600">{(kitchen?.rush_stats?.rush_percentage ?? 0).toFixed(1)}%</span>
+                    <span className="font-semibold text-foreground">{(kitchen?.rush_stats?.rush_percentage ?? 0).toFixed(1)}%</span>
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-amber-400 transition-all"
+                      className="h-full rounded-full bg-foreground/35 transition-all"
                       style={{ width: `${Math.min(kitchen?.rush_stats?.rush_percentage ?? 0, 100)}%` }}
                     />
                   </div>
@@ -215,13 +230,13 @@ export default function KitchenPerformancePage() {
         <Card>
           <CardHeader className="px-5 pt-5 pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Activity className="h-4 w-4 text-indigo-500" /> Ticket Time Trend
+              <Activity className="h-4 w-4 text-muted-foreground" /> Ticket Time Trend
             </CardTitle>
             <p className="text-xs text-muted-foreground">Daily avg minutes per ticket</p>
           </CardHeader>
           <CardContent className="px-3 pb-5">
             {isLoading ? (
-              <div className="h-44 bg-muted animate-pulse rounded-xl" />
+              <div className="h-44 bg-muted animate-pulse rounded-2xl" />
             ) : isError ? (
               <div className="h-44 flex items-center justify-center text-sm text-muted-foreground">
                 Failed to load trend data
@@ -286,22 +301,33 @@ export default function KitchenPerformancePage() {
               {isLoading ? "Loading…" : `${sortedStations.length} station${sortedStations.length !== 1 ? "s" : ""}`}
             </p>
           </div>
+          <MobileColumnsButton
+            columns={TABLE_COLUMNS}
+            hidden={hiddenCols}
+            onChange={setHiddenCols}
+          />
         </div>
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent border-b border-border/50">
-                <TableHead className="pl-5 text-xs font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => handleStationSort("display_name")}>
+        <CardContent className="p-0">
+          <Table variant="data">
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleStationSort("display_name")}>
                   <div className="flex items-center">Station <SortIcon col="display_name" active={stationSort} dir={stationDir} /></div>
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleStationSort("total_items")}>
-                  <div className="flex items-center justify-end">Items Processed <SortIcon col="total_items" active={stationSort} dir={stationDir} /></div>
-                </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleStationSort("avg_prep_minutes")}>
-                  <div className="flex items-center justify-end">Avg Prep Time <SortIcon col="avg_prep_minutes" active={stationSort} dir={stationDir} /></div>
-                </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground text-right">Manual Done</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleStationSort("auto_bumped")}>
+                {isColVisible("total_items") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleStationSort("total_items")}>
+                    <div className="flex items-center justify-end">Items Processed <SortIcon col="total_items" active={stationSort} dir={stationDir} /></div>
+                  </TableHead>
+                )}
+                {isColVisible("avg_prep_minutes") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right" onClick={() => handleStationSort("avg_prep_minutes")}>
+                    <div className="flex items-center justify-end">Avg Prep Time <SortIcon col="avg_prep_minutes" active={stationSort} dir={stationDir} /></div>
+                  </TableHead>
+                )}
+                {isColVisible("manual_completed") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground text-right">Manual Done</TableHead>
+                )}
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleStationSort("auto_bumped")}>
                   <div className="flex items-center justify-end">Auto-Bumped <SortIcon col="auto_bumped" active={stationSort} dir={stationDir} /></div>
                 </TableHead>
               </TableRow>
@@ -309,15 +335,15 @@ export default function KitchenPerformancePage() {
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i} className="border-b border-border/30">
-                    {Array.from({ length: 5 }).map((_, j) => (
+                  <TableRow key={i} className="border-0">
+                    {Array.from({ length: visibleColCount }).map((_, j) => (
                       <TableCell key={j} className="py-3.5"><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : isError ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-40 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <ChefHat className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">Failed to load station data</p>
@@ -327,7 +353,7 @@ export default function KitchenPerformancePage() {
                 </TableRow>
               ) : sortedStations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-40 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <ChefHat className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">No station data available</p>
@@ -343,46 +369,49 @@ export default function KitchenPerformancePage() {
                     ? ((station.auto_bumped / station.total_items) * 100).toFixed(1)
                     : "0.0";
                   return (
-                    <TableRow key={station.station_id} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
+                    <TableRow key={station.station_id} className="border-0 bg-card/70 transition-colors hover:bg-muted/40">
                       <TableCell className="pl-5 py-3.5">
                         <div className="flex items-center gap-2">
-                          <div className="h-7 w-7 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                            <ChefHat className="h-3.5 w-3.5 text-indigo-500" />
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-muted/60">
+                            <ChefHat className="h-3.5 w-3.5 text-muted-foreground" />
                           </div>
                           <span className="text-sm font-medium">{station.display_name}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="py-3.5 text-right">
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="text-sm font-semibold">{station.total_items.toLocaleString()}</span>
-                          <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full rounded-full bg-indigo-400" style={{ width: `${itemsPct}%` }} />
+                      {isColVisible("total_items") && (
+                        <TableCell className="py-3.5 text-right">
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-sm font-semibold">{station.total_items.toLocaleString()}</span>
+                            <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full rounded-full bg-foreground/35" style={{ width: `${itemsPct}%` }} />
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-3.5 text-right">
-                        <div className="flex flex-col items-end gap-1">
-                          <span className={cn(
-                            "text-sm font-semibold",
-                            station.avg_prep_minutes > station.alert_threshold_minutes ? "text-rose-500" : "text-emerald-600"
-                          )}>
-                            {station.avg_prep_minutes.toFixed(1)} min
-                          </span>
-                          <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className={cn("h-full rounded-full", station.avg_prep_minutes > station.alert_threshold_minutes ? "bg-rose-400" : "bg-emerald-400")}
-                              style={{ width: `${prepPct}%` }}
-                            />
+                        </TableCell>
+                      )}
+                      {isColVisible("avg_prep_minutes") && (
+                        <TableCell className="py-3.5 text-right">
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-sm font-semibold text-foreground">
+                              {station.avg_prep_minutes.toFixed(1)} min
+                            </span>
+                            <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-foreground/35"
+                                style={{ width: `${prepPct}%` }}
+                              />
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-3.5 text-right text-sm">
-                        {station.manual_completed.toLocaleString()}
-                      </TableCell>
+                        </TableCell>
+                      )}
+                      {isColVisible("manual_completed") && (
+                        <TableCell className="py-3.5 text-right text-sm">
+                          {station.manual_completed.toLocaleString()}
+                        </TableCell>
+                      )}
                       <TableCell className="py-3.5 text-right pr-5">
                         <div className="flex flex-col items-end gap-1">
                           <span className="text-sm font-medium">{station.auto_bumped.toLocaleString()}</span>
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600">
+                          <span className="text-[10px] font-medium text-muted-foreground">
                             {autoBumpRate}%
                           </span>
                         </div>

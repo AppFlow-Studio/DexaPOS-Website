@@ -25,6 +25,7 @@ export function KitchenPerformanceReport({
 }: KitchenPerformanceReportProps) {
   const { data, isLoading } = useKitchenPerformance(dateFrom, dateTo)
   const [searchQuery, setSearchQuery] = useState('')
+  const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<string>>(() => new Set(['total_items', 'auto_bumped']))
 
   const filteredData = useMemo(() => {
     if (!data?.by_station) return []
@@ -58,6 +59,14 @@ export function KitchenPerformanceReport({
       header: 'Alert Threshold (min)',
       cell: ({ row }) => row.getValue('alert_threshold_minutes'),
     },
+  ]
+
+  const columnConfig = [
+    { id: 'display_name', label: 'Station Name', locked: true },
+    { id: 'total_items', label: 'Total Items' },
+    { id: 'avg_prep_minutes', label: 'Avg Prep Time (min)', locked: true },
+    { id: 'auto_bumped', label: 'Auto Bumped' },
+    { id: 'alert_threshold_minutes', label: 'Alert Threshold (min)' },
   ]
 
   const exportColumns = [
@@ -95,8 +104,11 @@ export function KitchenPerformanceReport({
         locationName={locationName}
         dateFrom={dateFrom}
         dateTo={dateTo}
+        columnConfig={columnConfig}
+        hiddenColumns={hiddenColumnIds}
+        onColumnVisibilityChange={setHiddenColumnIds}
       />
-      <ReportDataTable columns={columns} data={filteredData} />
+      <ReportDataTable columns={columns} data={filteredData} hiddenColumnIds={hiddenColumnIds} />
     </div>
   )
 }

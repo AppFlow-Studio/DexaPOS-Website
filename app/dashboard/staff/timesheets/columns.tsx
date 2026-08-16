@@ -92,15 +92,17 @@ export function createColumns({
           ? `${profile.first_name} ${profile.last_name}`
           : "Unknown";
         return (
-          <div className="flex min-w-44 items-center gap-2.5">
-            <Avatar className="h-8 w-8">
+          <div className="flex min-w-0 items-center gap-0 sm:min-w-44 sm:gap-2.5">
+            <Avatar className="hidden h-8 w-8 sm:flex">
               <AvatarImage src={profile?.avatar_url || undefined} alt={name} />
               <AvatarFallback>
                 {profile?.first_name?.[0]}
                 {profile?.last_name?.[0]}
               </AvatarFallback>
             </Avatar>
-            <span className="truncate text-sm font-medium">{name}</span>
+            <span className="max-w-28 truncate text-sm font-medium sm:max-w-none">
+              {name}
+            </span>
           </div>
         );
       },
@@ -109,7 +111,7 @@ export function createColumns({
       accessorKey: "location.name",
       header: "Location",
       cell: ({ row }) => (
-        <span className="whitespace-nowrap text-muted-foreground">
+        <span className="block max-w-24 truncate whitespace-nowrap text-muted-foreground sm:max-w-none">
           {row.original.location?.name || "N/A"}
         </span>
       ),
@@ -117,6 +119,7 @@ export function createColumns({
     {
       accessorKey: "clock_in_time",
       header: "Date",
+      meta: { mobileHidden: true },
       cell: ({ row }) => (
         <span className="whitespace-nowrap tabular-nums">
           {format(new Date(row.getValue("clock_in_time")), "MMM dd, yyyy")}
@@ -127,6 +130,7 @@ export function createColumns({
       accessorFn: (row) => row.clock_in_time,
       id: "clock_in",
       header: "In",
+      meta: { mobileHidden: true },
       cell: ({ row }) => (
         <span className="whitespace-nowrap tabular-nums">
           {format(new Date(row.original.clock_in_time), "h:mm a")}
@@ -137,6 +141,7 @@ export function createColumns({
       accessorFn: (row) => row.clock_out_time,
       id: "clock_out",
       header: "Out",
+      meta: { mobileHidden: true },
       cell: ({ row }) => {
         const out = row.original.clock_out_time;
         return out ? (
@@ -151,7 +156,7 @@ export function createColumns({
     {
       id: "breaks",
       header: "Break",
-      meta: { numeric: true },
+      meta: { numeric: true, mobileHidden: true },
       cell: ({ row }) => {
         const breaks = row.original.break_logs || [];
         const totalMinutes = breaks.reduce(
@@ -164,7 +169,7 @@ export function createColumns({
     {
       id: "total",
       header: "Total",
-      meta: { numeric: true },
+      meta: { numeric: true, mobileHidden: true },
       cell: ({ row }) => {
         const hours = calculateShiftDuration(row.original);
         const h = Math.floor(hours);
@@ -179,7 +184,7 @@ export function createColumns({
     {
       id: "pay",
       header: "Est. Pay",
-      meta: { numeric: true },
+      meta: { numeric: true, mobileHidden: true },
       cell: ({ row }) => {
         const hours = calculateShiftDuration(row.original);
         const rate = row.original.hourly_rate_snapshot;
@@ -194,6 +199,7 @@ export function createColumns({
     {
       accessorKey: "status",
       header: "Status",
+      meta: { mobileHidden: true },
       cell: ({ row }) => {
         const status = row.original.status as string;
         const isAdjusted = Boolean(
@@ -242,7 +248,7 @@ export function createColumns({
                 size="icon-sm"
                 className="rounded-full"
               >
-                <span className="sr-only">Open menu</span>
+                <span className="sr-only">More actions</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>

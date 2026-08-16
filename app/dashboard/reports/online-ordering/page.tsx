@@ -25,6 +25,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollableTabsBar } from "@/components/dashboard/ScrollableTabsBar";
 import { Badge } from "@/components/ui/badge";
 import {
   DateRangePicker,
@@ -235,7 +236,7 @@ function PlatformDetailCard({
           {summary.cancelledOrders > 0 && (
             <div className="flex gap-3 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
-                <Ban className="h-3.5 w-3.5 text-yellow-500" />
+                <Ban className="h-3.5 w-3.5 text-muted-foreground" />
                 {summary.cancelledOrders} cancelled
               </span>
             </div>
@@ -243,28 +244,28 @@ function PlatformDetailCard({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div>
+        <div className="mb-6 grid min-w-0 grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground">Avg Order Value</p>
-            <p className="text-lg font-semibold">
+            <p className="truncate text-lg font-semibold tabular-nums">
               {formatCurrency(summary.avgOrderValue)}
             </p>
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground">Service Charges</p>
-            <p className="text-lg font-semibold">
+            <p className="truncate text-lg font-semibold tabular-nums">
               {formatCurrency(summary.totalServiceCharges)}
             </p>
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground">Tips Received</p>
-            <p className="text-lg font-semibold">
+            <p className="truncate text-lg font-semibold tabular-nums">
               {formatCurrency(summary.totalTips)}
             </p>
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-xs text-muted-foreground">Discounts</p>
-            <p className="text-lg font-semibold">
+            <p className="truncate text-lg font-semibold tabular-nums">
               {formatCurrency(summary.totalDiscounts)}
             </p>
           </div>
@@ -470,16 +471,16 @@ function OnlineOrderingReportsContent() {
           onValueChange={setSelectedPlatform}
           className="w-full"
         >
-          <div className="w-full min-w-0 overflow-x-auto pb-1">
+          <ScrollableTabsBar activeValue={selectedPlatform}>
           <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
-            <TabsTrigger className="rounded-full px-4 py-2" value={ALL_PLATFORMS}>All</TabsTrigger>
+            <TabsTrigger className="shrink-0 whitespace-nowrap rounded-full px-4 py-2" value={ALL_PLATFORMS}>All</TabsTrigger>
             {PLATFORM_DISPLAY_ORDER.map((slug) => (
-              <TabsTrigger className="rounded-full px-4 py-2" key={slug} value={slug}>
+              <TabsTrigger className="shrink-0 whitespace-nowrap rounded-full px-4 py-2" key={slug} value={slug}>
                 {getPlatformLabel(slug)}
               </TabsTrigger>
             ))}
           </TabsList>
-          </div>
+          </ScrollableTabsBar>
         </Tabs>
       )}
 

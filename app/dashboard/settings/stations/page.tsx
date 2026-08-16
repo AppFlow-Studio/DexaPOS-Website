@@ -34,8 +34,6 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
-import { Card, CardContent } from "@/components/ui/card";
-import { Empty } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus,
@@ -57,6 +55,8 @@ import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
   LocationIndicator,
   PageHeader,
+  PageShell,
+  Panel,
 } from "@/components/dashboard/shell";
 
 type SortColumn = "name" | "station_number" | "status" | "lastSeen";
@@ -308,7 +308,7 @@ export default function StationsPage() {
   // Don't render until mounted to avoid hydration mismatch
   if (!mounted) {
     return (
-      <div className="space-y-6">
+      <PageShell>
         <PageHeader
           title="Stations"
           subtitle="Configure and manage your POS stations."
@@ -319,41 +319,43 @@ export default function StationsPage() {
             />
           }
         />
-        <div className="h-96 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-2xl" />
+          ))}
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   // Show location selection prompt when "All Locations" is selected
   if (isAllLocations) {
     return (
-      <div className="space-y-6">
+      <PageShell>
         <PageHeader
           title="Stations"
           subtitle="Configure and manage your POS stations."
           indicator={<LocationIndicator isAllLocations locationName={null} />}
         />
 
-        <Card>
-          <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-            <MapPin className="h-12 w-12 mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">Select a Location</h3>
-            <p className="text-muted-foreground max-w-md">
+        <Panel padded>
+          <div className="flex min-h-64 flex-col items-center justify-center text-center">
+            <MapPin className="mb-4 h-12 w-12 text-muted-foreground" />
+            <h3 className="mb-2 text-lg font-semibold">Select a Location</h3>
+            <p className="max-w-md text-muted-foreground">
               Stations are location-specific. Please select a location from the
               dropdown above to manage stations for that location.
             </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </Panel>
+      </PageShell>
     );
   }
 
   // Loading state
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <PageShell>
         <PageHeader
           title="Stations"
           subtitle="Configure registers, kiosks, and kitchen displays."
@@ -363,26 +365,26 @@ export default function StationsPage() {
               locationName={selectedLocation?.name}
             />
           }
-          actions={<Skeleton className="h-10 w-32" />}
+          actions={<Skeleton className="h-9 w-32 rounded-full" />}
         />
-        <div className="flex gap-4">
-          <Skeleton className="h-10 w-[300px]" />
-          <Skeleton className="h-10 w-[180px]" />
-          <Skeleton className="h-10 w-[140px]" />
+        <div className="flex min-w-0 flex-wrap gap-4">
+          <Skeleton className="h-10 w-[300px] max-w-full rounded-full" />
+          <Skeleton className="h-9 w-[180px] max-w-full rounded-full" />
+          <Skeleton className="h-9 w-[140px] max-w-full rounded-full" />
         </div>
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full" />
+            <Skeleton key={i} className="h-16 w-full rounded-2xl" />
           ))}
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   // Error state
   if (isError) {
     return (
-      <div className="space-y-6">
+      <PageShell>
         <PageHeader
           title="Stations"
           subtitle="Configure registers, kiosks, and kitchen displays."
@@ -393,27 +395,27 @@ export default function StationsPage() {
             />
           }
         />
-        <Card>
-          <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-            <AlertTriangle className="h-12 w-12 mb-4 text-destructive" />
-            <h3 className="text-lg font-semibold mb-2">Failed to load stations</h3>
-            <p className="text-muted-foreground max-w-md">
+        <Panel padded>
+          <div className="flex min-h-64 flex-col items-center justify-center text-center">
+            <AlertTriangle className="mb-4 h-12 w-12 text-destructive" />
+            <h3 className="mb-2 text-lg font-semibold">Failed to load stations</h3>
+            <p className="max-w-md text-muted-foreground">
               {error instanceof Error ? error.message : "An error occurred while loading stations."}
             </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </Panel>
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <PageShell>
       {/* Mobile notice — full editing requires a larger screen */}
-      <div className="sm:hidden flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-4">
-        <Monitor className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Use a larger screen to configure stations</p>
-          <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">Station setup, PIN config, and printer pairing require a tablet or desktop.</p>
+      <div className="flex min-w-0 items-start gap-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none sm:hidden">
+        <Monitor className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium">Use a larger screen to configure stations</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Station setup, PIN config, and printer pairing require a tablet or desktop.</p>
         </div>
       </div>
 
@@ -427,22 +429,26 @@ export default function StationsPage() {
           />
         }
         actions={
-          <Button onClick={() => setIsAddDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
+          <Button
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            onClick={() => setIsAddDialogOpen(true)}
+          >
+            <Plus className="mr-1.5 h-4 w-4" />
             Add Station
           </Button>
         }
       />
 
       {/* Filters & Bulk Actions */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          {/* Search */}
-          <div className="relative flex-1 sm:max-w-[300px]">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
+          {/* Search — the muted borderless fill comes from the base Input
+              (§4.2); only the icon padding is added here. */}
+          <div className="relative min-w-0 flex-1 sm:max-w-[300px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
             <Input
               placeholder="Search stations..."
-              className="pl-9"
+              className="h-10 w-full rounded-full pl-10"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               aria-label="Search stations"
@@ -451,7 +457,7 @@ export default function StationsPage() {
 
           {/* Type Filter */}
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectTrigger className="h-9 w-full rounded-full border-0 bg-muted/60 px-3 shadow-none sm:w-[180px]">
               <SelectValue placeholder="Station type" />
             </SelectTrigger>
             <SelectContent>
@@ -465,7 +471,7 @@ export default function StationsPage() {
 
           {/* Status Filter */}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-[140px]">
+            <SelectTrigger className="h-9 w-full rounded-full border-0 bg-muted/60 px-3 shadow-none sm:w-[140px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -479,16 +485,17 @@ export default function StationsPage() {
 
         {/* Bulk Actions */}
         {selectedStationIds.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-2xl border-0 bg-muted/60 px-3 py-3">
+            <span className="text-sm tabular-nums text-muted-foreground">
               {selectedStationIds.length} selected
             </span>
             <Button
-              variant="destructive"
+              variant="ghost"
               size="sm"
+              className="h-8 rounded-full px-3 text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={handleBulkRemoveClick}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="mr-1.5 h-4 w-4" />
               Delete Selected
             </Button>
           </div>
@@ -498,28 +505,34 @@ export default function StationsPage() {
       {/* Content */}
       {filteredStations.length === 0 ? (
         stations.length === 0 ? (
-          <Empty
-            icon={Monitor}
-            title="No stations configured"
-            description="Add your first station to start managing your POS setup."
-            action={
-              <Button onClick={() => setIsAddDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Station
-              </Button>
-            }
-          />
+          <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center shadow-none">
+            <Monitor className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+            <p className="font-medium text-foreground">No stations configured</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Add your first station to start managing your POS setup.
+            </p>
+            <Button
+              className="mt-4 h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => setIsAddDialogOpen(true)}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add Station
+            </Button>
+          </div>
         ) : (
-          <Empty
-            icon={Search}
-            title="No stations found"
-            description="Try adjusting your search or filter criteria."
-          />
+          <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center shadow-none">
+            <Search className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+            <p className="font-medium text-foreground">No stations found</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Try adjusting your search or filter criteria.
+            </p>
+          </div>
         )
       ) : (
         <>
-          {/* Desktop Table View */}
-          <div className="hidden lg:block">
+          {/* Desktop table / mobile cards split at `xl` (§5.3) — a nine-column
+              station table cannot survive a tablet width. */}
+          <div className="hidden min-w-0 xl:block">
             <StationsTable
               stations={paginatedStations}
               onEdit={handleEdit}
@@ -537,7 +550,7 @@ export default function StationsPage() {
           </div>
 
           {/* Mobile/Tablet Card View */}
-          <div className="lg:hidden grid gap-4 sm:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
             {paginatedStations.map((station) => (
               <StationCard
                 key={station.id}
@@ -554,28 +567,31 @@ export default function StationsPage() {
 
           {/* Pagination */}
           {showPagination && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+              <p className="text-xs tabular-nums text-muted-foreground sm:text-sm">
                 Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
                 {Math.min(currentPage * ITEMS_PER_PAGE, filteredStations.length)}{" "}
                 of {filteredStations.length} stations
               </p>
+              {/* Labelled outline pills (D-08), not ghost icon squares. */}
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
                 >
                   <ChevronLeft className="h-4 w-4" />
                   Previous
                 </Button>
-                <span className="text-sm">
+                <span className="text-sm tabular-nums">
                   Page {currentPage} of {totalPages}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
                   onClick={() =>
                     setCurrentPage((p) => Math.min(totalPages, p + 1))
                   }
@@ -628,7 +644,7 @@ export default function StationsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {stationToDelete && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
               <span className="text-2xl">
                 {getStationTypeLabel(stationToDelete.station_type) === "Register"
                   ? "💳"
@@ -696,9 +712,9 @@ export default function StationsPage() {
               undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="p-3 rounded-lg bg-muted/50 border">
+          <div className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
             <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">
+              <span className="font-medium tabular-nums text-foreground">
                 {selectedStationIds.length}
               </span>{" "}
               station{selectedStationIds.length !== 1 && "s"} will be deleted
@@ -728,6 +744,6 @@ export default function StationsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

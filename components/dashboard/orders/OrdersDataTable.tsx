@@ -38,7 +38,6 @@ import {
     MoreHorizontal,
     Search,
     ArrowUpDown,
-    Eye,
     X,
     Printer,
     RotateCcw,
@@ -570,11 +569,6 @@ export function OrdersDataTable({
                             className="rounded-2xl"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => handleRowClick(order)}>
-                                <Eye className="mr-2 h-4 w-4" />
-                                View Details
-                            </DropdownMenuItem>
                             {order.order_type === 'qr_dine_in' && order.table_number ? (
                                 <DropdownMenuItem onClick={() => handleViewOnFloorPlan(order)}>
                                     <MapPin className="mr-2 h-4 w-4" />
@@ -583,7 +577,6 @@ export function OrdersDataTable({
                             ) : null}
                             {!readOnly && (
                                 <>
-                                    <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={() => setReceiptOrder(order)}>
                                         <Printer className="mr-2 h-4 w-4" />
                                         Print Receipt
@@ -591,7 +584,6 @@ export function OrdersDataTable({
                                     {order.status !== 'void' && order.status !== 'cancelled' && (
                                         <>
                                             <DropdownMenuItem
-                                                className="text-orange-600"
                                                 onClick={() => openRefundVoid(order, 'refund')}
                                             >
                                                 <RotateCcw className="mr-2 h-4 w-4" />
@@ -694,20 +686,20 @@ export function OrdersDataTable({
                 </DropdownMenu>
             </div>
 
-            {/* Table. No box of its own — the page container is the only frame,
-                so rows are separated by hairlines alone.
+            {/* `variant="data"` is the shared staff-table treatment: a rounded
+                tinted container, a tinted header band, and borderless rows on
+                `bg-card/70`. See components/dashboard/staff/StaffDataTable.tsx.
 
-                The rounding goes on Table's own scroll container rather than an
-                extra wrapper: nesting overflow-hidden around its overflow-x-auto
-                created a second scroll context that reserved a scrollbar gutter
-                (dead space) below the rows. */}
-            <Table containerClassName="rounded-xl">
-                    <TableHeader>
+                The variant styles Table's own scroll container — do not wrap it
+                in another overflow-hidden element. Nesting a second scroll
+                context reserves a scrollbar gutter (dead space) below the rows. */}
+            <Table variant="data">
+                    <TableHeader className="[&_tr]:border-0">
                         {table.getHeaderGroups().map((headerGroup) => (
-                            <TableRow key={headerGroup.id} className="border-border/60 hover:bg-transparent">
+                            <TableRow key={headerGroup.id} className="hover:bg-transparent">
                                 {headerGroup.headers.map((header) => {
                                     return (
-                                        <TableHead key={header.id} className="text-xs font-medium text-muted-foreground/70 uppercase tracking-wider">
+                                        <TableHead key={header.id} className="text-[0.8125rem] font-normal text-muted-foreground">
                                             {header.isPlaceholder
                                                 ? null
                                                 : flexRender(
@@ -734,7 +726,7 @@ export function OrdersDataTable({
                                 <TableRow
                                     key={row.id}
                                     data-state={row.getIsSelected() && 'selected'}
-                                    className="cursor-pointer border-border/30 transition-colors hover:bg-muted/40"
+                                    className="cursor-pointer border-0 bg-card/70 transition-colors hover:bg-muted/40"
                                     onClick={() => handleRowClick(row.original)}
                                 >
                                     {row.getVisibleCells().map((cell) => (

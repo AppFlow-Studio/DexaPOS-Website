@@ -1,40 +1,26 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+import { getInvoiceStatusLabel } from "@/lib/constants/invoice-status";
 import type { InvoiceStatus } from "@/app/dashboard/actions/invoices";
-
-const CONFIG: Record<
-  InvoiceStatus,
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
-> = {
-  draft: { label: "Draft", variant: "secondary" },
-  sent: { label: "Sent", variant: "default" },
-  viewed: { label: "Viewed", variant: "outline" },
-  paid: { label: "Paid", variant: "default" },
-  overdue: { label: "Overdue", variant: "destructive" },
-  cancelled: { label: "Cancelled", variant: "outline" },
-  payment_failed: { label: "Payment Failed", variant: "destructive" },
-};
-
-const COLOR_CLASSES: Record<InvoiceStatus, string> = {
-  draft: "bg-muted text-muted-foreground",
-  sent: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200",
-  viewed: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200",
-  paid: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200",
-  overdue: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200",
-  cancelled: "bg-muted text-muted-foreground line-through",
-  payment_failed: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-200",
-};
 
 interface InvoiceStatusBadgeProps {
   status: InvoiceStatus;
 }
 
+/**
+ * One neutral pill for every invoice status (D-12).
+ *
+ * Status is not colour-coded: the word carries the meaning. The old
+ * soft-tint-plus-dot palette (D-11) put five hues in a single table column,
+ * which made the amounts — the figures a merchant actually scans — the least
+ * prominent thing on the row. The colour triples still live in
+ * `lib/constants/invoice-status.ts` because `subscription-status.ts` imports
+ * them; retiring those is tracked in the design doc's §11 backlog.
+ */
 export function InvoiceStatusBadge({ status }: InvoiceStatusBadgeProps) {
-  const config = CONFIG[status] ?? CONFIG.draft;
   return (
-    <Badge variant={config.variant} className={COLOR_CLASSES[status]}>
-      {config.label}
-    </Badge>
+    <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-foreground">
+      {getInvoiceStatusLabel(status)}
+    </span>
   );
 }

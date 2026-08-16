@@ -5,6 +5,7 @@ import { useAuth } from '@clerk/nextjs'
 import { useIsAllLocations, useSelectedLocation } from '@/stores/location-store'
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { ScrollableTabsBar } from '@/components/dashboard/ScrollableTabsBar'
 import {
   LocationIndicator,
   PageHeader,
@@ -114,8 +115,10 @@ export default function ReportsPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         {/* Segmented pill tab bar — same affordance as the Analytics tabs and
             the Overview range picker. Scrolls horizontally rather than
-            wrapping onto three ragged lines. */}
-        <div className="w-full min-w-0 overflow-x-auto pb-1">
+            wrapping onto three ragged lines, and `ScrollableTabsBar` keeps the
+            selected tab centred in the strip so it can't sit off-screen on a
+            phone. */}
+        <ScrollableTabsBar activeValue={activeTab}>
           <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
             {TABS.map(({ value, label }) => (
               <TabsTrigger
@@ -127,7 +130,7 @@ export default function ReportsPage() {
               </TabsTrigger>
             ))}
           </TabsList>
-        </div>
+        </ScrollableTabsBar>
 
         {/* One date range governing every tab below it, plus the channel
             filter for the two reports that can be split by order source. Both

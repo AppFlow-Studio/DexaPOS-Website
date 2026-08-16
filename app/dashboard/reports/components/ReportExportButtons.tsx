@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   exportToCsv,
   exportToPdf,
@@ -24,6 +25,9 @@ interface ReportExportButtonsProps<T extends Record<string, any>> {
   /** Optional PDF summary cards. Max 3 — the PDF card row fits 3 across. */
   summaryCards?: SummaryCardData[];
   disabled?: boolean;
+  /** Restyles the button group's wrapper. Lets a toolbar opt out of the default
+   *  `shrink-0` so the two buttons can wrap across rows on a narrow screen. */
+  className?: string;
 }
 
 /**
@@ -41,6 +45,7 @@ export function ReportExportButtons<T extends Record<string, any>>({
   locationName,
   summaryCards,
   disabled,
+  className,
 }: ReportExportButtonsProps<T>) {
   const [isExporting, setIsExporting] = useState(false);
   const range = formatReportDateRange(dateFrom, dateTo);
@@ -71,7 +76,7 @@ export function ReportExportButtons<T extends Record<string, any>>({
   }
 
   return (
-    <div className="flex items-center gap-2 shrink-0">
+    <div className={cn("flex items-center gap-2 shrink-0", className)}>
       <Button
         variant="outline"
         size="sm"

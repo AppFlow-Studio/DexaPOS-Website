@@ -178,15 +178,15 @@ export function ScheduleDashboard() {
         </div>
       </div>
 
-      <section className="border-t border-border/60 px-4 py-6 sm:px-6">
+      <section className="px-4 py-6 sm:px-6">
         <div className="mb-4 flex items-end justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <h3 className="font-semibold">Schedule periods</h3>
             <p className="mt-0.5 text-sm text-muted-foreground">
               Longer ranges for seasons, events, or rotating coverage.
             </p>
           </div>
-          <span className="text-sm tabular-nums text-muted-foreground">
+          <span className="shrink-0 whitespace-nowrap text-sm tabular-nums text-muted-foreground">
             {filteredSchedulePeriods.length} total
           </span>
         </div>
@@ -214,15 +214,15 @@ export function ScheduleDashboard() {
         </ScrollArea>
       </section>
 
-      <section className="border-t border-border/60 px-4 py-6 sm:px-6">
+      <section className="px-4 py-6 sm:px-6">
         <div className="mb-4 flex items-end justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <h3 className="font-semibold">Weekly schedules</h3>
             <p className="mt-0.5 text-sm text-muted-foreground">
               Open a week to assign staff, resolve coverage, and publish shifts.
             </p>
           </div>
-          <span className="text-sm tabular-nums text-muted-foreground">
+          <span className="shrink-0 whitespace-nowrap text-sm tabular-nums text-muted-foreground">
             {filteredWeeklySchedules.length} total
           </span>
         </div>

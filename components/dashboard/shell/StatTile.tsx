@@ -82,8 +82,12 @@ export function StatRow({
         // indent — which is what left a 3-up row's last tile hanging.
         columns === 2 &&
           'sm:grid-cols-2 [&>*:nth-child(2n+1)]:sm:pl-0 [&>*:nth-child(2n+1)]:sm:border-l-0 [&>*]:sm:border-l [&>*]:sm:border-border/60 [&>*]:sm:pl-10',
+        // At `lg` every tile except the one starting a row must regain the rule
+        // the `sm` two-up layout cleared. Restoring only `3n+2` left the last
+        // column with no divider — the missing line between a 3-up row's 2nd
+        // and 3rd tiles.
         columns === 3 &&
-          'sm:grid-cols-2 lg:grid-cols-3 [&>*]:sm:border-l [&>*]:sm:border-border/60 [&>*]:sm:pl-10 [&>*:nth-child(2n+1)]:sm:pl-0 [&>*:nth-child(2n+1)]:sm:border-l-0 [&>*:nth-child(3n+1)]:lg:pl-0 [&>*:nth-child(3n+1)]:lg:border-l-0 [&>*:nth-child(3n+2)]:lg:pl-10 [&>*:nth-child(3n+2)]:lg:border-l',
+          'sm:grid-cols-2 lg:grid-cols-3 [&>*]:sm:border-l [&>*]:sm:border-border/60 [&>*]:sm:pl-10 [&>*:nth-child(2n+1)]:sm:pl-0 [&>*:nth-child(2n+1)]:sm:border-l-0 [&>*:nth-child(3n+1)]:lg:pl-0 [&>*:nth-child(3n+1)]:lg:border-l-0 [&>*:nth-child(3n+2)]:lg:pl-10 [&>*:nth-child(3n+2)]:lg:border-l [&>*:nth-child(3n+3)]:lg:pl-10 [&>*:nth-child(3n+3)]:lg:border-l',
         columns === 4 &&
           'sm:grid-cols-2 lg:grid-cols-4 [&>*]:sm:border-l [&>*]:sm:border-border/60 [&>*]:sm:pl-10 [&>*:nth-child(2n+1)]:sm:pl-0 [&>*:nth-child(2n+1)]:sm:border-l-0 [&>*:nth-child(4n+1)]:lg:pl-0 [&>*:nth-child(4n+1)]:lg:border-l-0 [&>*:nth-child(4n+2)]:lg:pl-10 [&>*:nth-child(4n+2)]:lg:border-l [&>*:nth-child(4n+3)]:lg:pl-10 [&>*:nth-child(4n+3)]:lg:border-l',
         className

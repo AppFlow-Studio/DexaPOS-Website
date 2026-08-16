@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  StationPanel,
+  StationPanelContent,
+  StationPanelDescription,
+  StationPanelHeader,
+  StationPanelTitle,
+} from "./StationPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Station } from "@/app/dashboard/actions/stations";
@@ -95,20 +101,20 @@ function CapabilityCard({
   return (
     <div
       className={cn(
-        "flex items-center gap-3 p-3 rounded-lg border transition-colors",
+        "flex min-w-0 items-center gap-3 rounded-2xl border-0 p-3 shadow-none transition-colors",
         enabled
-          ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900"
-          : "bg-muted/50 border-muted"
+          ? "bg-muted ring-1 ring-border"
+          : "bg-muted/45"
       )}
     >
       <div
         className={cn(
-          "flex h-10 w-10 items-center justify-center rounded-lg",
-          enabled ? "bg-green-500/20" : "bg-muted"
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+          "bg-muted/60"
         )}
       >
         <Icon
-          className={cn("h-5 w-5", enabled ? "text-green-600" : "text-muted-foreground")}
+          className={cn("h-5 w-5", "text-muted-foreground")}
         />
       </div>
       <div className="flex-1">
@@ -117,7 +123,7 @@ function CapabilityCard({
         </p>
       </div>
       {enabled ? (
-        <CheckCircle className="h-5 w-5 text-green-500" />
+        <CheckCircle className="h-5 w-5 text-muted-foreground" />
       ) : (
         <XCircle className="h-5 w-5 text-muted-foreground" />
       )}
@@ -137,10 +143,10 @@ function StatCard({
   subtext?: string;
 }) {
   return (
-    <Card>
-      <CardContent className="pt-6">
+    <StationPanel>
+      <StationPanelContent className="pt-6">
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted/60">
             <Icon className="h-6 w-6 text-muted-foreground" />
           </div>
           <div>
@@ -151,8 +157,8 @@ function StatCard({
             )}
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </StationPanelContent>
+    </StationPanel>
   );
 }
 
@@ -168,28 +174,28 @@ function HardwareFeatureChip({
   return (
     <div
       className={cn(
-        "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm",
+        "flex min-w-0 items-center gap-2 rounded-full border-0 px-3 py-2 text-sm shadow-none",
         available
-          ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900"
-          : "bg-muted/50 border-muted"
+          ? "bg-muted ring-1 ring-border"
+          : "bg-muted/45"
       )}
     >
       <Icon
         className={cn(
           "h-4 w-4 shrink-0",
-          available ? "text-green-600" : "text-muted-foreground"
+          "text-muted-foreground"
         )}
       />
       <span
         className={cn(
           "font-medium",
-          available ? "text-green-700 dark:text-green-400" : "text-muted-foreground"
+          available ? "text-foreground" : "text-muted-foreground"
         )}
       >
         {label}
       </span>
       {available ? (
-        <CheckCircle className="h-3.5 w-3.5 text-green-500 ml-auto shrink-0" />
+        <CheckCircle className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       ) : (
         <XCircle className="h-3.5 w-3.5 text-muted-foreground ml-auto shrink-0" />
       )}
@@ -213,12 +219,10 @@ function ResourceBar({
   if (value === null) return null;
 
   const percentage = Math.min((value / max) * 100, 100);
-  const barColor =
-    percentage > 50
-      ? "bg-green-500"
-      : percentage > 20
-        ? "bg-yellow-500"
-        : "bg-red-500";
+  // The number beside the bar already states the level, so the fill stays
+  // neutral (§4.6b) — green/amber/red here was a third encoding of the same
+  // value. Only a genuinely critical level keeps a hue, as a real alert.
+  const barColor = percentage > 20 ? "bg-foreground/70" : "bg-destructive";
 
   return (
     <div className="space-y-1.5">
@@ -422,14 +426,14 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
       </div>
 
       {/* Logged-in Device & Hardware */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
+      <StationPanel>
+        <StationPanelHeader>
+          <StationPanelTitle className="text-lg flex items-center gap-2">
             <Smartphone className="h-5 w-5" />
             Logged-in Device & Hardware
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+          </StationPanelTitle>
+        </StationPanelHeader>
+        <StationPanelContent>
           {station.device_id ? (
             <div className="space-y-0">
               {/* Device Identity */}
@@ -469,7 +473,7 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
               </div>
 
               {/* Hardware Features */}
-              <div className="border-t pt-4 mt-4">
+              <div className="mt-6">
                 <p className="text-sm font-medium text-muted-foreground mb-3">
                   Hardware Features
                 </p>
@@ -501,7 +505,7 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
               {(station.battery_level != null ||
                 station.ram_free_mb != null ||
                 station.storage_free_mb != null) && (
-                <div className="border-t pt-4 mt-4">
+                <div className="mt-6">
                   <p className="text-sm font-medium text-muted-foreground mb-3">
                     System Resources
                   </p>
@@ -532,7 +536,7 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
               )}
 
               {/* Display & Network */}
-              <div className="border-t pt-4 mt-4">
+              <div className="mt-6">
                 <p className="text-sm font-medium text-muted-foreground mb-3">
                   Display & Network
                 </p>
@@ -586,17 +590,17 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
               <Badge variant="secondary">Awaiting device registration</Badge>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
 
       {/* Station Configuration & Capabilities */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Station Configuration */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Station Configuration</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <StationPanel>
+          <StationPanelHeader>
+            <StationPanelTitle className="text-lg">Station Configuration</StationPanelTitle>
+          </StationPanelHeader>
+          <StationPanelContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Station Number</p>
@@ -621,15 +625,15 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                 <p className="font-medium">{getViewScopeLabel(station.view_scope)}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </StationPanelContent>
+        </StationPanel>
 
         {/* Capabilities */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Capabilities</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <StationPanel>
+          <StationPanelHeader>
+            <StationPanelTitle className="text-lg">Capabilities</StationPanelTitle>
+          </StationPanelHeader>
+          <StationPanelContent className="space-y-3">
             <CapabilityCard
               icon={ShoppingCart}
               label="Create Orders"
@@ -655,19 +659,19 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
               label="Update Kitchen Status"
               enabled={station.can_update_kitchen_status}
             />
-          </CardContent>
-        </Card>
+          </StationPanelContent>
+        </StationPanel>
       </div>
 
       {/* KDS Routing - only for KDS stations */}
       {isKds && kdsDisplay && (
-        <Card>
-          <CardHeader>
+        <StationPanel>
+          <StationPanelHeader>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
+              <StationPanelTitle className="text-lg flex items-center gap-2">
                 <Router className="h-5 w-5" />
                 KDS Routing
-              </CardTitle>
+              </StationPanelTitle>
               <Select
                 value={kdsDisplay.routing_mode}
                 onValueChange={(v) => handleChangeRoutingMode(v as KdsRoutingMode)}
@@ -687,8 +691,8 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                 </SelectContent>
               </Select>
             </div>
-          </CardHeader>
-          <CardContent>
+          </StationPanelHeader>
+          <StationPanelContent>
             {kdsDisplay.routing_mode === "all" && (
               <p className="text-sm text-muted-foreground">
                 This display receives all items sent to the kitchen.
@@ -728,7 +732,7 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                         return (
                           <div
                             key={rule.id}
-                            className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                            className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/45 p-3 shadow-none"
                           >
                             <div
                               className="h-3 w-3 rounded-full shrink-0"
@@ -825,7 +829,7 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                       {categoryRules.map((rule) => (
                         <div
                           key={rule.id}
-                          className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                          className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/45 p-3 shadow-none"
                         >
                           <ChefHat className="h-4 w-4 text-muted-foreground shrink-0" />
                           <span className="text-sm font-medium flex-1">
@@ -914,7 +918,7 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                         return (
                           <div
                             key={rule.id}
-                            className="flex items-center gap-3 p-3 rounded-lg border bg-card"
+                            className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/45 p-3 shadow-none"
                           >
                             <ShoppingCart className="h-4 w-4 text-muted-foreground shrink-0" />
                             <span className="text-sm font-medium flex-1">
@@ -972,16 +976,16 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                 )}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </StationPanelContent>
+        </StationPanel>
       )}
 
       {/* Device Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Connected Devices</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <StationPanel>
+        <StationPanelHeader>
+          <StationPanelTitle className="text-lg">Connected Devices</StationPanelTitle>
+        </StationPanelHeader>
+        <StationPanelContent>
           {deviceCount === 0 && printerCount === 0 && !hasTerminal ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <Printer className="h-10 w-10 text-muted-foreground mb-3" />
@@ -993,9 +997,9 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {terminal && (
-                <div className="flex items-center gap-3 p-3 rounded-lg border bg-card">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/10">
-                    <CreditCard className="h-5 w-5 text-green-600" />
+                <div className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/45 p-3 shadow-none">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
+                    <CreditCard className="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div>
                     <p className="font-medium">{terminal.terminal_name}</p>
@@ -1008,8 +1012,8 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                     className={cn(
                       "ml-auto",
                       terminal.is_connected
-                        ? "border-green-500/50 text-green-600"
-                        : "border-gray-400/50 text-gray-500"
+                        ? ""
+                        : ""
                     )}
                   >
                     {terminal.is_connected ? "Online" : "Offline"}
@@ -1019,9 +1023,9 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
               {devices?.map((device) => (
                 <div
                   key={device.id}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-card group"
+                  className="group flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/45 p-3 shadow-none"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted shrink-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
                     {getDeviceTypeIcon(device.device_type)}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -1035,8 +1039,8 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                     className={cn(
                       "shrink-0",
                       device.is_connected
-                        ? "border-green-500/50 text-green-600"
-                        : "border-gray-400/50 text-gray-500"
+                        ? ""
+                        : ""
                     )}
                   >
                     {device.is_connected ? "Online" : "Offline"}
@@ -1055,9 +1059,9 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
               {printers?.map((printer) => (
                 <div
                   key={printer.id}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-card group"
+                  className="group flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/45 p-3 shadow-none"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted shrink-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
                     <Printer className="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -1071,8 +1075,8 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                     className={cn(
                       "shrink-0",
                       printer.is_connected
-                        ? "border-green-500/50 text-green-600"
-                        : "border-gray-400/50 text-gray-500"
+                        ? ""
+                        : ""
                     )}
                   >
                     {printer.is_connected ? "Online" : "Offline"}
@@ -1090,8 +1094,8 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
 
       {/* Remove Printer Confirmation */}
       <AlertDialog
@@ -1115,7 +1119,7 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
             </AlertDialogDescription>
           </AlertDialogHeader>
           {printerToDelete && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
               <Printer className="h-8 w-8 text-muted-foreground" />
               <div>
                 <p className="font-medium">{printerToDelete.printer_name}</p>
@@ -1167,7 +1171,7 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deviceToDelete && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
               <span className="text-2xl">
                 {getDeviceTypeIcon(deviceToDelete.device_type)}
               </span>

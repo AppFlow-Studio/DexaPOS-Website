@@ -1,5 +1,4 @@
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 import type { TipDistributionSession } from "@/app/dashboard/actions/tips";
 
 interface TipSummaryCardProps {
@@ -9,52 +8,42 @@ interface TipSummaryCardProps {
 
 const formatMoney = (amount: number) => `$${amount.toFixed(2)}`;
 
+/**
+ * Session totals — DS-CTL-07 / §4.8.
+ *
+ * One `Panel` holding a `StatRow`, not three `<Card>`s: three separate boxes
+ * for three figures of the same session read as unrelated records. `StatTile`
+ * carries the label/figure tokens and `tabular-nums`, so nothing is restated
+ * here.
+ *
+ * The rounding adjustment used to render red above $1 and yellow below it.
+ * That is status colour-coding (D-12) — the signed figure already says which
+ * way it went, and its size says how much.
+ */
 export function TipSummaryCard({ session, isLoading }: TipSummaryCardProps) {
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[...Array(3)].map((_, i) => (
-          <Card key={i} className="p-4">
-            <Skeleton className="h-4 w-24 mb-2" />
-            <Skeleton className="h-8 w-32" />
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
-  if (!session) return null;
-
-  const roundingAdj = session.rounding_adjustment;
-  const roundingAbsGt1Dollar = Math.abs(roundingAdj) > 1;
-  const roundingColor = roundingAdj === 0
-    ? "text-muted-foreground"
-    : roundingAbsGt1Dollar
-    ? "text-red-600"
-    : "text-yellow-600";
+  if (!session && !isLoading) return null;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <Card className="p-4">
-        <p className="text-sm text-muted-foreground">Total Collected</p>
-        <p className="text-2xl font-bold mt-2">
-          {formatMoney(session.total_tips_collected)}
-        </p>
-      </Card>
-
-      <Card className="p-4">
-        <p className="text-sm text-muted-foreground">Total Distributed</p>
-        <p className="text-2xl font-bold mt-2">
-          {formatMoney(session.total_distributed)}
-        </p>
-      </Card>
-
-      <Card className="p-4">
-        <p className="text-sm text-muted-foreground">Rounding Adjustment</p>
-        <p className={`text-2xl font-bold mt-2 ${roundingColor}`}>
-          {formatMoney(roundingAdj)}
-        </p>
-      </Card>
-    </div>
+    <Panel>
+      <div className="px-6 py-6">
+        <StatRow columns={3}>
+          <StatTile
+            label="Total Collected"
+            value={session ? formatMoney(session.total_tips_collected) : "—"}
+            isLoading={isLoading}
+          />
+          <StatTile
+            label="Total Distributed"
+            value={session ? formatMoney(session.total_distributed) : "—"}
+            isLoading={isLoading}
+          />
+          <StatTile
+            label="Rounding Adjustment"
+            value={session ? formatMoney(session.rounding_adjustment) : "—"}
+            isLoading={isLoading}
+          />
+        </StatRow>
+      </div>
+    </Panel>
   );
 }

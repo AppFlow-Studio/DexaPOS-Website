@@ -495,11 +495,7 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             {primaryLocation && (
               <Badge
                 variant="secondary"
-                className={cn(
-                  "gap-1 rounded-full border-0 px-2.5 text-xs",
-                  primaryLocation.is_active &&
-                    "bg-[#0C4FD1]/10 text-[#0C4FD1] dark:text-[#6CA0FF]",
-                )}
+                className="w-fit gap-1 rounded-full border-0 px-2.5 text-xs font-medium"
               >
                 <MapPin className="h-2.5 w-2.5" />
                 {primaryLocation.location_name}

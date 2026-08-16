@@ -111,26 +111,32 @@ export function EditVendorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]" elevation="above-sheet">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/10">
-              <Truck className="h-5 w-5 text-blue-500" />
+      <DialogContent
+        className="flex h-dvh max-h-dvh w-full max-w-none flex-col overflow-hidden max-sm:overflow-hidden rounded-none p-0 max-sm:top-auto max-sm:translate-y-0 sm:h-auto sm:max-h-[90dvh] sm:w-[calc(100%-1rem)] sm:max-w-[500px] sm:rounded-3xl sm:p-6"
+        elevation="above-sheet"
+      >
+        <DialogHeader className="shrink-0 px-5 pb-4 pt-5 pr-14 sm:px-0 sm:pt-0 sm:pr-10">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
+              <Truck className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1 text-left">
               <DialogTitle>Edit Vendor</DialogTitle>
               <DialogDescription>Update vendor details</DialogDescription>
             </div>
             {isSingleLocation ? null : isGlobal ? (
               <Badge
                 variant="outline"
-                className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
+                className="hidden shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground sm:inline-flex"
               >
                 <Globe className="h-3 w-3" />
                 Global
               </Badge>
             ) : (
-              <Badge variant="outline" className="gap-1">
+              <Badge
+                variant="outline"
+                className="hidden shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground sm:inline-flex"
+              >
                 <MapPin className="h-3 w-3" />
                 Local
               </Badge>
@@ -138,7 +144,14 @@ export function EditVendorDialog({
           </div>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          {/* See AddVendorDialog: the negative margin puts the scrollbar on the
+              dialog edge, and the matching padding keeps focus rings from being
+              clipped by the overflow box. */}
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pt-4 sm:-mx-6 sm:px-6">
           {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name">Vendor Name *</Label>
@@ -154,8 +167,9 @@ export function EditVendorDialog({
             )}
           </div>
 
-          {/* Contact Row */}
-          <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
+          {/* Contact Person and Phone each take a full row — the phone control
+              (country selector + number) is too wide to share one. */}
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="contact_name">Contact Person</Label>
               <Input
@@ -251,8 +265,9 @@ export function EditVendorDialog({
               />
             </div>
           </div>
+          </div>
 
-          <DialogFooter className="pt-4">
+          <DialogFooter className="shrink-0 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-0 sm:pb-0">
             <Button
               type="button"
               variant="outline"

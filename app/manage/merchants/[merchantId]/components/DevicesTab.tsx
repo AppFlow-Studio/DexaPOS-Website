@@ -23,6 +23,7 @@ import {
     Link2,
     Unlink,
     RefreshCw,
+    Settings2,
 } from 'lucide-react'
 import { MerchantDetails } from '@/types/merchant'
 import { useState } from 'react'
@@ -53,6 +54,8 @@ import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import { AddStationDialog } from './AddStationDialog'
 import { AddTerminalDialog } from './AddTerminalDialog'
+import { EditTerminalDialog } from './EditTerminalDialog'
+import { ConnectedTerminalsPanel } from './ConnectedTerminalsPanel'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 
 interface DevicesTabProps {
@@ -113,6 +116,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
     const [activeTab, setActiveTab] = useState<'stations' | 'terminals'>('stations')
     const [isAddStationOpen, setIsAddStationOpen] = useState(false)
     const [isAddTerminalOpen, setIsAddTerminalOpen] = useState(false)
+    const [editTerminal, setEditTerminal] = useState<(PaymentTerminal & { location_name: string; station_name: string | null }) | null>(null)
 
     // Use locations from merchantInfo directly
     const locationsList = merchantInfo.locations || []
@@ -565,6 +569,11 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                             {/* Terminals Tab Content */}
                             {activeTab === 'terminals' && (
                                 <>
+                                    {/* Unique terminals, deduplicated by serial number (Castles + Valor) */}
+                                    <ConnectedTerminalsPanel
+                                        merchantId={merchantId}
+                                        locationId={selectedLocationId === 'all' ? null : selectedLocationId}
+                                    />
                                     {filteredTerminals.length === 0 ? (
                                         <Empty>
                                             <EmptyHeader>
@@ -662,6 +671,10 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                                         </Button>
                                                                     </DropdownMenuTrigger>
                                                                     <DropdownMenuContent align="end">
+                                                                        <DropdownMenuItem onClick={() => setEditTerminal(terminal)}>
+                                                                            <Settings2 className="h-4 w-4 mr-2" />
+                                                                            Edit
+                                                                        </DropdownMenuItem>
                                                                         <DropdownMenuItem
                                                                             onClick={() => handleTestConnection(terminal)}
                                                                             disabled={testConnectionMutation.isPending}
@@ -717,6 +730,14 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                 merchantId={merchantId}
                 locations={locationsList}
                 stations={stations}
+            />
+
+            {/* Edit Terminal Dialog (serial + auto-settle config) */}
+            <EditTerminalDialog
+                open={!!editTerminal}
+                onOpenChange={(open) => { if (!open) setEditTerminal(null) }}
+                merchantId={merchantId}
+                terminal={editTerminal}
             />
         </div>
     )

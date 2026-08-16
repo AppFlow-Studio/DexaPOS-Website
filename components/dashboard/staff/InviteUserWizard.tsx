@@ -534,7 +534,7 @@ export function InviteUserWizard({
 
           {/* Main Content */}
           <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-            <DialogHeader className="shrink-0 border-b-0 px-6 pb-4 pt-5 pr-14 text-left">
+            <DialogHeader className="shrink-0 border-b-0 px-4 pb-4 pt-5 pr-14 text-left sm:px-6">
               <DialogTitle className="text-[1.0625rem] font-semibold">
                 {currentStep === "type" && "Choose staff type"}
                 {currentStep === "details" &&
@@ -562,7 +562,7 @@ export function InviteUserWizard({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-6 py-4">
+            <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center space-y-2">
@@ -693,14 +693,14 @@ export function InviteUserWizard({
                                     htmlFor="method-direct"
                                     className="flex-1 cursor-pointer"
                                   >
-                                    <div className="flex items-center gap-2">
-                                      <UserCheck className="h-4 w-4" />
+                                    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-2 sm:flex sm:flex-wrap">
+                                      <UserCheck className="h-4 w-4 shrink-0" />
                                       <span className="font-medium">
                                         Create Account Immediately
                                       </span>
                                       <Badge
                                         variant="secondary"
-                                        className="rounded-full border-transparent bg-muted text-muted-foreground text-xs font-medium px-2.5 py-0.5"
+                                        className="col-start-2 w-fit rounded-full border-transparent bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground sm:col-start-auto"
                                       >
                                         Recommended
                                       </Badge>
@@ -734,8 +734,8 @@ export function InviteUserWizard({
                                     htmlFor="method-invitation"
                                     className="flex-1 cursor-pointer"
                                   >
-                                    <div className="flex items-center gap-2">
-                                      <Mail className="h-4 w-4" />
+                                    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 sm:flex">
+                                      <Mail className="h-4 w-4 shrink-0" />
                                       <span className="font-medium">
                                         Send Email Invitation
                                       </span>
@@ -958,7 +958,7 @@ export function InviteUserWizard({
                               <div
                                 key={location.id}
                                 className={cn(
-                                  "flex items-center gap-4 p-4 rounded-xl border transition-all",
+                                  "grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-3 rounded-xl border p-4 transition-all sm:flex sm:items-center sm:gap-4",
                                   isAdminRole
                                     ? "cursor-default border-primary/40 bg-primary/5 opacity-80"
                                     : isSelected
@@ -976,7 +976,7 @@ export function InviteUserWizard({
                                     !isAdminRole && toggleLocation(location.id)
                                   }
                                 />
-                                <div className="flex-1">
+                                <div className="min-w-0 flex-1">
                                   <div className="font-medium">
                                     {location.name}
                                   </div>
@@ -991,7 +991,7 @@ export function InviteUserWizard({
                                   </div>
                                 </div>
                                 {isSelected && (
-                                  <div className="flex items-center gap-2">
+                                  <div className="col-start-2 flex items-center gap-2 sm:col-start-auto">
                                     {primaryLocationId === location.id ? (
                                       <Badge
                                         variant="secondary"
@@ -1003,7 +1003,7 @@ export function InviteUserWizard({
                                       <Button
                                         variant="outline"
                                         size="sm"
-                                        className="rounded-full px-4"
+                                        className="whitespace-nowrap rounded-full px-4"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setPrimary(location.id);

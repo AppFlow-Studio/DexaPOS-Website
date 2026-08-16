@@ -25,6 +25,7 @@ import {
 } from "@/app/dashboard/actions/bulk-price-adjustment";
 import { useMerchantPricingStrategies } from "@/app/dashboard/hooks/useMerchantPricingStrategies";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 type Direction = "increase" | "decrease" | "set_fixed";
 type Unit = "pct" | "amt";
@@ -104,6 +105,7 @@ export function BulkPriceAdjustDialog({
   onSuccess,
 }: BulkPriceAdjustDialogProps) {
   const queryClient = useQueryClient();
+  const isSingleLocation = useIsSingleLocation();
 
   const [direction, setDirection] = useState<Direction>("increase");
   const [unit, setUnit] = useState<Unit>("pct");
@@ -159,7 +161,9 @@ export function BulkPriceAdjustDialog({
     setIsSaving(true);
     try {
       const locationId =
-        scope === "override" && !isAllLocations ? currentLocationId : null;
+        !isSingleLocation && scope === "override" && !isAllLocations
+          ? currentLocationId
+          : null;
       const res = await BulkAdjustMenuItemPrices({
         clerkOrgId,
         locationId,
@@ -333,7 +337,7 @@ export function BulkPriceAdjustDialog({
           </div>
 
           {/* Apply to */}
-          <div className="space-y-2">
+          {!isSingleLocation && <div className="space-y-2">
             <Label>Apply to</Label>
             <RadioGroup
               value={scope}
@@ -384,7 +388,7 @@ export function BulkPriceAdjustDialog({
                 </div>
               </label>
             </RadioGroup>
-          </div>
+          </div>}
 
           {/* Cross-strategy warning */}
           {crossStrategy && (

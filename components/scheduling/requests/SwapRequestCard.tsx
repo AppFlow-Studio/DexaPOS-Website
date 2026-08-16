@@ -42,7 +42,7 @@ export function SwapRequestCard({
   );
 
   return (
-    <Card className="bg-card border">
+    <Card className="rounded-2xl border bg-card">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between">
           <div className="space-y-1">

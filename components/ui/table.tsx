@@ -23,7 +23,9 @@ function Table({
         data-slot="table-container"
         data-variant={variant}
         className={cn(
-          "relative w-full overflow-x-auto",
+          // Keep the table width constrained while allowing horizontal scroll when
+          // content or expanded rows are wider than the viewport.
+          "relative w-full min-w-0 overflow-x-auto",
           variant === "data" && "overflow-x-auto overflow-y-hidden rounded-2xl bg-muted/20",
           containerClassName
         )}

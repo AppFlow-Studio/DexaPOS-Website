@@ -1,7 +1,6 @@
 'use client'
 
 import * as React from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { MultiFileUpload } from '@/components/ui/multi-file-upload'
@@ -9,7 +8,6 @@ import { useGatedLocationId, useGatedLocation } from '@/stores/location-store'
 import { MapPin, Loader2, Trash2, Save, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
     AlertDialog,
     AlertDialogAction,
@@ -34,6 +32,9 @@ import {
 import {
     LocationIndicator,
     PageHeader,
+    PageShell,
+    Panel,
+    PanelSection,
 } from '@/components/dashboard/shell'
 
 // Types
@@ -369,24 +370,24 @@ export default function CustomerDisplaySettingsPage() {
 
     if (isAllLocations) {
         return (
-            <div className="space-y-6">
+            <PageShell>
                 <PageHeader
                     title="Customer display"
                     subtitle="Manage images shown on the customer-facing display."
                     indicator={<LocationIndicator isAllLocations locationName={null} />}
                 />
 
-                <Card>
-                    <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-                        <MapPin className="h-12 w-12 mb-4 text-muted-foreground" />
-                        <h3 className="text-lg font-semibold mb-2">Select a Location</h3>
-                        <p className="text-muted-foreground max-w-md">
+                <Panel padded>
+                    <div className="flex min-h-64 flex-col items-center justify-center text-center">
+                        <MapPin className="mb-4 h-12 w-12 text-muted-foreground" />
+                        <h3 className="mb-2 text-lg font-semibold">Select a Location</h3>
+                        <p className="max-w-md text-muted-foreground">
                             Customer Display settings are location-specific. Please select a location from the dropdown above to
                             manage images for that location.
                         </p>
-                    </CardContent>
-                </Card>
-            </div>
+                    </div>
+                </Panel>
+            </PageShell>
         )
     }
 
@@ -395,7 +396,7 @@ export default function CustomerDisplaySettingsPage() {
     // ========================================================================
 
     return (
-        <div className="space-y-6">
+        <PageShell>
             <PageHeader
                 title="Customer display"
                 subtitle="Upload and manage the carousel shown to customers."
@@ -408,15 +409,14 @@ export default function CustomerDisplaySettingsPage() {
             />
 
             {/* Upload Section */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Upload New Images</CardTitle>
-                    <CardDescription>
-                        Upload JPG, PNG, or WEBP images. Large images are resized and converted to WEBP before upload, targeting about 500 KB when possible.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <MultiFileUpload 
+            <Panel>
+                <PanelSection
+                    icon={Save}
+                    label="Upload New Images"
+                    caption="Upload JPG, PNG, or WEBP images. Large images are resized and converted to WEBP before upload, targeting about 500 KB when possible."
+                >
+                <div className="space-y-4">
+                    <MultiFileUpload
                         onChange={handleFileChange} 
                         value={selectedFiles}
                         accept={CFD_UPLOAD_ACCEPT}
@@ -430,8 +430,9 @@ export default function CustomerDisplaySettingsPage() {
                     
                     {selectedFiles.length > 0 && (
                         <div className="flex items-center justify-end gap-2">
-                             <Button 
-                                onClick={handleUpload} 
+                             <Button
+                                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                                onClick={handleUpload}
                                 disabled={uploading}
                             >
                                 {uploading ? (
@@ -448,36 +449,31 @@ export default function CustomerDisplaySettingsPage() {
                             </Button>
                         </div>
                     )}
-                </CardContent>
-            </Card>
+                </div>
+                </PanelSection>
+            </Panel>
 
             {/* Gallery Section */}
-            <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">Gallery ({images.length})</h3>
-                    <Alert className="max-w-xl py-2">
-                        <Info className="h-4 w-4" />
-                        <AlertTitle className="text-sm font-medium">Auto-Refresh</AlertTitle>
-                        <AlertDescription className="text-xs">
-                            Active images will automatically appear on the Customer Display app.
-                        </AlertDescription>
-                    </Alert>
-                </div>
-
+            <Panel>
+                <PanelSection
+                    icon={Info}
+                    label={<>Gallery (<span className="tabular-nums">{images.length}</span>)</>}
+                    caption="Active images automatically appear on the Customer Display app."
+                >
                 {loading ? (
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                     <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {[1, 2, 3].map((i) => (
-                            <div key={i} className="h-48 bg-muted rounded-lg animate-pulse" />
+                            <div key={i} className="h-48 animate-pulse rounded-2xl bg-muted" />
                         ))}
                     </div>
                 ) : images.length === 0 ? (
-                    <div className="text-center py-12 border-2 border-dashed rounded-lg">
+                    <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center shadow-none">
                         <p className="text-muted-foreground">No images uploaded yet.</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                         {images.map((image) => (
-                            <Card key={image.id} className="overflow-hidden group">
+                            <div key={image.id} className="group min-w-0 overflow-hidden rounded-2xl border-0 bg-muted/45">
                                 <div className="relative aspect-video bg-muted">
                                     <Image
                                         src={image.image_url}
@@ -490,39 +486,39 @@ export default function CustomerDisplaySettingsPage() {
                                             <Switch
                                                 checked={image.is_active}
                                                 onCheckedChange={() => handleToggleActive(image.id, image.is_active)}
-                                                className="data-[state=checked]:bg-green-600"
                                             />
                                         </div>
                                     </div>
-                                    {/* Status Badge */}
+                                    {/* Status badge — one neutral pill for both
+                                        states (§4.6b); the word carries the
+                                        meaning. It sits over a photo, so it
+                                        keeps an opaque fill rather than the
+                                        translucent `bg-muted/60`. */}
                                     <div className="absolute bottom-2 left-2">
-                                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                                            image.is_active 
-                                                ? 'bg-green-500/90 text-white' 
-                                                : 'bg-gray-500/90 text-white'
-                                        }`}>
+                                        <span className="rounded-full bg-background/90 px-2.5 py-1 text-xs font-medium backdrop-blur-sm">
                                             {image.is_active ? 'Active' : 'Inactive'}
                                         </span>
                                     </div>
                                 </div>
-                                <CardContent className="p-4 flex items-center justify-between">
-                                    <div className="text-sm text-muted-foreground">
+                                <div className="flex min-w-0 items-center justify-between gap-3 p-4">
+                                    <div className="min-w-0 truncate text-sm tabular-nums text-muted-foreground">
                                         Added: {new Date(image.created_at).toLocaleDateString()}
                                     </div>
-                                    <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 shrink-0 rounded-full p-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                                         onClick={() => setDeleteId(image.id)}
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </div>
                         ))}
                     </div>
                 )}
-            </div>
+                </PanelSection>
+            </Panel>
 
             {/* Global Delete Confirmation Handler - if needed, but per-item alert dialog is easier. 
                 Wait, the above AlertDialog is inside the map, so it works per item.
@@ -548,6 +544,6 @@ export default function CustomerDisplaySettingsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </div>
+        </PageShell>
     )
 }

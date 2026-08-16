@@ -86,19 +86,17 @@ const iconMap: { [key: string]: React.ReactNode } = {
 
 function StatBox({ label, value, subtitle }: StatBoxProps) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+    <div className="flex min-h-28 min-w-0 flex-col justify-between rounded-2xl border-0 bg-muted/60 p-4">
+      <p className="text-xs font-medium leading-snug text-muted-foreground">{label}</p>
+      <div className="mt-4 min-w-0">
+        <div className="break-words text-xl font-bold leading-tight text-foreground [overflow-wrap:anywhere] sm:text-2xl">
+          {value}
+        </div>
         {subtitle && (
-          <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -183,7 +181,7 @@ function ManualAdjustModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="rounded-[24px] border-0 bg-white dark:bg-background sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Manual Adjustment</DialogTitle>
           <DialogDescription>
@@ -215,6 +213,7 @@ function ManualAdjustModal({
               Amount
             </label>
             <Input
+              className="border-0 bg-muted/60 shadow-none focus-visible:ring-1"
               id="amount"
               type="number"
               placeholder="e.g., 50"
@@ -228,6 +227,7 @@ function ManualAdjustModal({
               Reason
             </label>
             <Input
+              className="border-0 bg-muted/60 shadow-none focus-visible:ring-1"
               id="reason"
               placeholder="e.g., Customer complaint resolution"
               value={reason}
@@ -237,7 +237,7 @@ function ManualAdjustModal({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={handleApply} disabled={isLoading || !amount}>
@@ -274,7 +274,7 @@ function TransactionHistorySheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <SheetContent className="h-dvh w-screen max-w-none overflow-y-auto border-0 bg-white dark:bg-background sm:max-w-2xl">
         <SheetHeader>
           <SheetTitle>Transaction History</SheetTitle>
         </SheetHeader>
@@ -375,29 +375,29 @@ function EnrollmentCard({
 
   return (
     <>
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden rounded-[24px] border-0 bg-muted/25 shadow-none">
         {/* Header */}
-        <CardHeader className="pb-3 bg-muted/30">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+        <CardHeader className="bg-transparent px-4 pb-3 pt-5 sm:px-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               <div className="flex-shrink-0">{icon}</div>
-              <div>
-                <CardTitle className="text-lg">{program.name}</CardTitle>
+              <div className="min-w-0">
+                <CardTitle className="break-words text-base sm:text-lg">{program.name}</CardTitle>
                 <p className="text-xs text-muted-foreground mt-1">
                   Enrolled{" "}
                   {new Date(enrollment.enrolled_at).toLocaleDateString()}
                 </p>
               </div>
             </div>
-            <Badge variant="outline" className="bg-green-50 text-green-700">
+            <Badge variant="secondary" className="shrink-0 border-0 bg-muted text-foreground">
               Active
             </Badge>
           </div>
         </CardHeader>
 
-        <CardContent className="pt-6 space-y-6">
+        <CardContent className="space-y-5 px-4 pb-5 pt-3 sm:px-6 sm:pb-6">
           {/* Stat Boxes */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatBox
               label={progress.unit === "pts" ? "Current Points" : "Current Progress"}
               value={progress.current}
@@ -425,7 +425,7 @@ function EnrollmentCard({
 
           {/* Progress Bar */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-medium">
                 Progress to Next Reward
               </p>
@@ -446,7 +446,7 @@ function EnrollmentCard({
               {rewards.map((reward: any) => (
                 <div
                   key={reward.id}
-                  className="flex items-center justify-between p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/20"
+                  className="flex flex-col gap-3 rounded-2xl border-0 bg-muted/60 p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex-1">
                     <p className="text-sm font-medium flex items-center gap-2">
@@ -509,12 +509,12 @@ function EnrollmentCard({
           )}
 
           {/* Action Buttons */}
-          <div className="flex gap-2 pt-2">
+          <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
             <Button
               variant="outline"
               size="sm"
               onClick={() => onManualAdjust(enrollment.id, program.name)}
-              className="flex-1"
+              className="w-full rounded-full border-0 bg-muted/60 shadow-none hover:bg-muted"
             >
               <Plus className="w-4 h-4 mr-2" />
               Manual Adjust
@@ -523,7 +523,7 @@ function EnrollmentCard({
               variant="outline"
               size="sm"
               onClick={() => setHistoryOpen(true)}
-              className="flex-1"
+              className="w-full rounded-full border-0 bg-muted/60 shadow-none hover:bg-muted"
             >
               <Eye className="w-4 h-4 mr-2" />
               View History

@@ -19,7 +19,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState, useEffect } from "react";
 import {
@@ -72,10 +71,10 @@ function StationTypeCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center w-full",
-        selected
-          ? "border-primary bg-primary/5 shadow-sm"
-          : "border-border hover:border-primary/50 hover:bg-muted/50"
+        // Selection is a ring on a muted tile, not a `--primary` border —
+        // `--primary` is violet, not the brand blue (C5).
+        "flex w-full min-w-0 flex-col items-center gap-2 rounded-2xl border-0 p-4 text-center shadow-none transition-colors",
+        selected ? "bg-muted ring-1 ring-border" : "bg-muted/45 hover:bg-muted"
       )}
     >
       <span className="text-3xl">{icon}</span>
@@ -420,13 +419,17 @@ export function AddStationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* Editor — full screen below `sm` (§13.1). The dialog clips; the body
+          below is the only scroller, so header and footer need no rules to
+          separate themselves from scrolling content (§5.5). */}
       <DialogContent className={cn(
-        "w-[calc(100%-1rem)] max-h-[94vh] overflow-hidden gap-0 p-0 sm:max-w-[760px]",
+        "flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0",
+        "sm:h-auto sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:rounded-3xl sm:max-w-[760px]",
         isKds && "sm:max-w-[920px]"
       )}>
-        <DialogHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-sky-50/60 px-6 pt-6 pb-4">
+        <DialogHeader className="shrink-0 px-6 pb-4 pt-6">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-sky-200 bg-sky-50 text-sky-700">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-0 bg-muted/60 text-foreground">
               <span className="text-2xl">{getStationTypeIcon(stationType)}</span>
             </div>
             <div className="min-w-0 flex-1">
@@ -442,24 +445,37 @@ export function AddStationDialog({
           </div>
         </DialogHeader>
 
-        <div className="overflow-y-auto px-6 py-5 max-h-[calc(94vh-176px)]">
+        {/* The scroller is bare and the padding lives on the inner wrapper, so
+            the scrollbar tracks the panel edge instead of floating 24px inside
+            it — same split as `ReceiptModal`. */}
+        <div className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="min-w-0 px-6 py-5">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={cn(
-            "grid w-full gap-1 rounded-2xl bg-slate-100/80 p-1",
-            isKds ? "grid-cols-5" : "grid-cols-3"
-          )}>
-            <TabsTrigger value="basic" className="px-1 text-xs sm:text-sm sm:px-3">
-              <span className="sm:hidden">Basic</span>
-              <span className="hidden sm:inline">Basic Info</span>
-            </TabsTrigger>
-            <TabsTrigger value="device" className="px-1 text-xs sm:text-sm sm:px-3">Device</TabsTrigger>
-            {isKds && <TabsTrigger value="kds-display" className="px-1 text-xs sm:text-sm sm:px-3">Display</TabsTrigger>}
-            {isKds && <TabsTrigger value="kds-behavior" className="px-1 text-xs sm:text-sm sm:px-3">Behavior</TabsTrigger>}
-            <TabsTrigger value="capabilities" className="px-1 text-xs sm:text-sm sm:px-3">
-              <span className="sm:hidden">Caps</span>
-              <span className="hidden sm:inline">Capabilities</span>
-            </TabsTrigger>
-          </TabsList>
+          {/* §4.5 pill rail — a scroller, not a fixed grid, so five tabs stay
+              reachable at 320px. Classes are literal (C7). */}
+          <div className="thin-scrollbar w-full min-w-0 overflow-x-auto pb-1">
+            <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+              <TabsTrigger value="basic" className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
+                Basic Info
+              </TabsTrigger>
+              <TabsTrigger value="device" className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
+                Device
+              </TabsTrigger>
+              {isKds && (
+                <TabsTrigger value="kds-display" className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
+                  Display
+                </TabsTrigger>
+              )}
+              {isKds && (
+                <TabsTrigger value="kds-behavior" className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
+                  Behavior
+                </TabsTrigger>
+              )}
+              <TabsTrigger value="capabilities" className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
+                Capabilities
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="basic" className="space-y-4 py-4">
             {/* Station Type Selection */}
@@ -568,7 +584,7 @@ export function AddStationDialog({
                 />
               </div>
 
-              <div className="rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-6 text-center">
+              <div className="min-w-0 rounded-2xl border-0 bg-muted/60 p-6 text-center shadow-none">
                 <p className="text-sm text-muted-foreground">
                   Device ID, IP address, and other network details will be
                   automatically populated when the POS app connects.
@@ -656,8 +672,6 @@ export function AddStationDialog({
                   </Select>
                 </div>
 
-                <Separator />
-
                 <div className="grid gap-2">
                   <Label htmlFor="kdsRoutingMode">Routing Mode</Label>
                   <Select
@@ -681,7 +695,7 @@ export function AddStationDialog({
                   <div className="grid gap-2">
                     <Label>Assigned Prep Stations</Label>
                     {activePrepStations.length === 0 ? (
-                      <div className="flex items-start gap-2 rounded-lg bg-muted/50 border p-3">
+                      <div className="flex min-w-0 items-start gap-2 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
                         <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                         <p className="text-xs text-muted-foreground">
                           No prep stations found for this location. Create prep stations in Settings &gt; Prep Stations first.
@@ -695,10 +709,10 @@ export function AddStationDialog({
                             <label
                               key={ps.id}
                               className={cn(
-                                "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                                "flex min-w-0 cursor-pointer items-center gap-3 rounded-2xl border-0 p-3 shadow-none transition-colors",
                                 isSelected
-                                  ? "border-primary bg-primary/5"
-                                  : "border-border hover:bg-muted/50"
+                                  ? "bg-muted ring-1 ring-border"
+                                  : "bg-muted/45 hover:bg-muted"
                               )}
                             >
                               <Checkbox
@@ -746,7 +760,7 @@ export function AddStationDialog({
                 </div>
 
                 {kdsRoutingMode !== "prep_station" && (
-                  <div className="flex items-start gap-2 rounded-lg bg-muted/50 border p-3">
+                  <div className="flex min-w-0 items-start gap-2 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
                     <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <p className="text-xs text-muted-foreground">
                       Routing rules for specific categories can be configured on the station detail page after creation.
@@ -809,8 +823,6 @@ export function AddStationDialog({
                   </div>
                 </div>
 
-                <Separator />
-
                 {/* Sounds */}
                 <div>
                   <p className="text-sm font-medium mb-3">Sounds</p>
@@ -837,8 +849,6 @@ export function AddStationDialog({
                     </div>
                   </div>
                 </div>
-
-                <Separator />
 
                 {/* Display Info */}
                 <div>
@@ -886,8 +896,6 @@ export function AddStationDialog({
                     </div>
                   </div>
                 </div>
-
-                <Separator />
 
                 {/* Online Orders */}
                 <div>
@@ -1011,7 +1019,8 @@ export function AddStationDialog({
                 />
               </div>
 
-              <div className="border-t pt-4">
+              {/* Separated by spacing, not a rule (§5.5). */}
+              <div className="mt-6">
                 <div className="grid gap-2">
                   <Label htmlFor="viewScope">View Scope</Label>
                   <Select
@@ -1035,8 +1044,9 @@ export function AddStationDialog({
           </TabsContent>
         </Tabs>
         </div>
+        </div>
 
-        <DialogFooter className="gap-2 border-t bg-slate-50/80 px-6 py-4">
+        <DialogFooter className="shrink-0 gap-2 px-6 py-4">
           <Button type="button" variant="ghost" onClick={handleClose} disabled={isLoading}>
             Cancel
           </Button>

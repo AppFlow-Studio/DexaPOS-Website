@@ -1,14 +1,15 @@
 # Merchant Backend Pagination
 
-**Status:** First implementation slice complete; authenticated manual QA pending  
-**Branch:** `feat/merchant-pagination`  
+**Status:** Implementation complete for four safe merchant lists; authenticated manual QA pending
+**Branch:** `feat/merchant-pagination`
 **Database migration:** None
 
 ## Purpose
 
 Large merchant lists must not fetch an entire tenant dataset and paginate it in
 the browser. This work introduces one pagination contract and applies it first
-to the highest-growth merchant surfaces: Orders, Customers, and Invoices.
+to high-growth merchant surfaces whose row queries can be separated safely
+from page-level metrics: Orders, Customers, Invoices, and Discounts.
 
 ## Implemented
 
@@ -57,6 +58,19 @@ to the highest-growth merchant surfaces: Orders, Customers, and Invoices.
 - Existing invoice KPI cards remain database-authoritative through their
   separate aggregate RPC and therefore are not reduced to the visible page.
 
+### Discounts
+
+- Discount rows use exact-count server pagination after location, active-state,
+  expiry, search, and sort filters are applied.
+- Sorting is deterministic, with discount ID as the final tie-breaker.
+- Search is debounced and page state is stored in `?page=`.
+- Filter, search, and sort changes reset to page 1; invalid pages self-correct
+  after mutations or filtering.
+- KPI tiles use a separate location-scoped narrow projection so they describe
+  all discounts rather than only the visible page.
+- React Query optimistic status updates are constrained to list caches and no
+  longer risk treating the stats payload as a list.
+
 ## Pagination Audit
 
 | Surface | Decision | Reason |
@@ -70,7 +84,9 @@ to the highest-growth merchant surfaces: Orders, Customers, and Invoices.
 | Payments / Transactions | Follow-up | Current summaries and filters depend on the full client dataset; paginate only with separate aggregate contracts |
 | Invoices | Implemented | KPIs already use a separate aggregate RPC, so visible rows can be paginated safely |
 | Timesheets | Follow-up | Requires date/employee aggregates independent of visible rows |
-| Inventory / Discounts / Devices | Candidate | Validate expected tenant volume and current filter contracts first |
+| Discounts | Implemented | Row query is isolated; KPI tiles now have a separate scoped stats query |
+| Inventory | Follow-up | Stock/category filters and location override resolution still depend on the full item set |
+| Devices | No current need | Device inventory is low-cardinality and activity is already independently bounded |
 | Menus / Categories / Modifiers | Do not paginate current reorder views | Drag-and-drop and contiguous display order require the complete ordered collection |
 | Locations / Stations / Cash Drawers | No current need | Low-cardinality operational lists |
 | Reservations | No current need | Naturally bounded by selected business day |
@@ -93,6 +109,9 @@ to the highest-growth merchant surfaces: Orders, Customers, and Invoices.
 - `app/dashboard/actions/invoices.ts`
 - `app/dashboard/invoices/hooks/useInvoices.ts`
 - `app/dashboard/invoices/page.tsx`
+- `app/dashboard/actions/discounts.ts`
+- `hooks/use-discounts.ts`
+- `app/dashboard/discounts/page.tsx`
 
 ## Automated Verification
 
@@ -150,12 +169,31 @@ to the highest-growth merchant surfaces: Orders, Customers, and Invoices.
    invalid empty page.
 8. Test desktop, tablet, and phone widths.
 
+### Discounts
+
+1. Open `/dashboard/discounts` for a merchant with more than 25 discounts.
+2. Confirm only 25 rows render and Next updates `?page=2` with a different row set.
+3. Reload page 2 and confirm the same page remains selected.
+4. Search for a discount outside page 1 and confirm search resets to page 1 and
+   finds it through the server query.
+5. Test Active/Inactive, Hide expired, sort field, and sort direction controls;
+   each must reset to page 1 and update the exact total.
+6. Confirm Total, Active, Scheduled, and Expired tiles do not change when moving
+   between pages or applying table-only filters.
+7. Toggle, edit, and delete a discount on the last page; confirm rows, totals,
+   and page bounds refresh without leaving an invalid empty page.
+8. Switch between All Locations and a location for a multi-location merchant;
+   confirm rows and KPI tiles use the same scope.
+9. Test desktop, tablet, and phone widths.
+
 ## Remaining Work
 
-- Perform authenticated manual QA above.
+- Perform authenticated manual QA above, including the newly added Discounts flow.
 - Design separate aggregate endpoints before paginating Payments, Transactions,
   and Timesheets. Paginating their current arrays without that work
   would make totals and client-side filters incorrect.
+- Redesign Inventory filters and effective-stock resolution as a paginated SQL
+  contract before paging its catalog; client slicing would be incorrect.
 - Consider an aggregate RPC for Orders KPI cards if all-time order volume makes
   the narrow overview projection too large.
 - Add Playwright only after a reusable authenticated merchant fixture is agreed;

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { startOfMonth } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollableTabsBar } from "@/components/dashboard/ScrollableTabsBar";
 import {
   DateRangePicker,
   DatePreset,
@@ -113,7 +114,7 @@ export default function TaxReportPage() {
 
       {/* ── Tabs ── */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="w-full min-w-0 overflow-x-auto pb-1">
+        <ScrollableTabsBar activeValue={activeTab}>
         <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
           <TabsTrigger
             value="breakdown"
@@ -134,7 +135,7 @@ export default function TaxReportPage() {
             By Location
           </TabsTrigger>
         </TabsList>
-        </div>
+        </ScrollableTabsBar>
 
         <TabsContent value="breakdown" className="mt-4">
           <TaxBreakdownTable

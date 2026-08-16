@@ -34,6 +34,7 @@ export function ItemSalesReport({
     orderSource
   )
   const [searchQuery, setSearchQuery] = useState('')
+  const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<string>>(() => new Set(['category', 'quantity_sold', 'gross_sales']))
 
   const filteredData = useMemo(() => {
     if (!data) return []
@@ -74,6 +75,14 @@ export function ItemSalesReport({
       header: 'Net Sales',
       cell: ({ row }) => formatCurrency(row.getValue('net_sales') as number),
     },
+  ]
+
+  const columnConfig = [
+    { id: 'item_name', label: 'Item Name', locked: true },
+    { id: 'category', label: 'Category' },
+    { id: 'quantity_sold', label: 'Quantity Sold' },
+    { id: 'gross_sales', label: 'Gross Sales' },
+    { id: 'net_sales', label: 'Net Sales', locked: true },
   ]
 
   const exportColumns = [
@@ -152,9 +161,12 @@ export function ItemSalesReport({
         dateFrom={dateFrom}
         dateTo={dateTo}
         summaryCards={summaryCardsData}
+        columnConfig={columnConfig}
+        hiddenColumns={hiddenColumnIds}
+        onColumnVisibilityChange={setHiddenColumnIds}
       />
 
-      <ReportDataTable columns={columns} data={filteredData} />
+      <ReportDataTable columns={columns} data={filteredData} hiddenColumnIds={hiddenColumnIds} />
     </div>
   )
 }

@@ -19,8 +19,6 @@ import { ProgramWizard } from './components/ProgramWizard';
 import { PromotionDialog } from './components/PromotionDialog';
 import { ProgramAnalyticsSheet } from './components/ProgramAnalyticsSheet';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Empty } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   AlertDialog,
@@ -41,6 +39,9 @@ import { useGatedLocation } from '@/stores/location-store';
 import {
   LocationIndicator,
   PageHeader,
+  PageShell,
+  Panel,
+  PanelSection,
 } from '@/components/dashboard/shell';
 
 export default function LoyaltySettingsPage() {
@@ -256,7 +257,7 @@ export default function LoyaltySettingsPage() {
 
   if (!mounted) {
     return (
-      <div className="space-y-6">
+      <PageShell>
         <PageHeader
           title="Loyalty & rewards"
           subtitle="Manage loyalty programs and promotions."
@@ -267,15 +268,17 @@ export default function LoyaltySettingsPage() {
             />
           }
         />
-        <div className="h-96 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full rounded-2xl" />
+          ))}
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <PageShell>
       <PageHeader
         title="Loyalty & rewards"
         subtitle="Create programs and promotions that reward returning customers."
@@ -288,137 +291,149 @@ export default function LoyaltySettingsPage() {
       />
 
       {/* LOYALTY PROGRAMS SECTION */}
-      <div className="space-y-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="text-xl font-semibold">Your Programs</h3>
-            <p className="text-sm text-muted-foreground">
-              Create and manage loyalty programs for your customers
-            </p>
-          </div>
-          <Button onClick={() => {
-            setEditingProgram(null);
-            setIsProgramWizardOpen(true);
-          }}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Program
-          </Button>
-        </div>
-
-        {/* Programs loading state */}
-        {programsLoading ? (
-          <div className="space-y-3">
-            {[...Array(2)].map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full" />
-            ))}
-          </div>
-        ) : programsError ? (
-          <Card>
-            <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-              <AlertTriangle className="h-12 w-12 mb-4 text-destructive" />
-              <h3 className="text-lg font-semibold mb-2">Failed to load programs</h3>
-              <p className="text-muted-foreground max-w-md">
-                {programsErrorObj instanceof Error ? programsErrorObj.message : 'An error occurred'}
-              </p>
-            </CardContent>
-          </Card>
-        ) : filteredPrograms.length === 0 ? (
-          <Empty
-            icon={Gift}
-            title={programs.length === 0 ? "No loyalty programs yet" : "No programs for this location"}
-            description={programs.length === 0 ? "Create your first loyalty program to start rewarding customers for their visits." : "This location has no active programs. Create a new one or adjust location settings."}
-            action={
-              <Button onClick={() => {
+      <Panel>
+        <PanelSection
+          icon={Gift}
+          label="Your Programs"
+          caption="Create and manage loyalty programs for your customers."
+          action={
+            <Button
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => {
                 setEditingProgram(null);
                 setIsProgramWizardOpen(true);
-              }}>
-                <Plus className="mr-2 h-4 w-4" />
+              }}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Program
+            </Button>
+          }
+        >
+          {programsLoading ? (
+            <div className="space-y-3">
+              {[...Array(2)].map((_, i) => (
+                <Skeleton key={i} className="h-24 w-full rounded-2xl" />
+              ))}
+            </div>
+          ) : programsError ? (
+            <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center shadow-none">
+              <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" />
+              <p className="font-medium text-foreground">Failed to load programs</p>
+              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                {programsErrorObj instanceof Error ? programsErrorObj.message : 'An error occurred'}
+              </p>
+            </div>
+          ) : filteredPrograms.length === 0 ? (
+            <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center shadow-none">
+              <Gift className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+              <p className="font-medium text-foreground">
+                {programs.length === 0 ? 'No loyalty programs yet' : 'No programs for this location'}
+              </p>
+              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                {programs.length === 0
+                  ? 'Create your first loyalty program to start rewarding customers for their visits.'
+                  : 'This location has no active programs. Create a new one or adjust location settings.'}
+              </p>
+              <Button
+                className="mt-4 h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                onClick={() => {
+                  setEditingProgram(null);
+                  setIsProgramWizardOpen(true);
+                }}
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
                 Create Program
               </Button>
-            }
-          />
-        ) : (
-          <div className="space-y-3">
-            {filteredPrograms.map((program) => (
-              <ProgramCard
-                key={program.id}
-                program={program}
-                onEdit={handleEditProgram}
-                onDelete={handleDeleteProgramClick}
-                onToggle={handleToggleProgram}
-                onAnalytics={handleAnalyticsProgram}
-                isToggling={toggleProgramMutation.isPending}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredPrograms.map((program) => (
+                <ProgramCard
+                  key={program.id}
+                  program={program}
+                  onEdit={handleEditProgram}
+                  onDelete={handleDeleteProgramClick}
+                  onToggle={handleToggleProgram}
+                  onAnalytics={handleAnalyticsProgram}
+                  isToggling={toggleProgramMutation.isPending}
+                />
+              ))}
+            </div>
+          )}
+        </PanelSection>
+      </Panel>
 
       {/* PROMOTIONS SECTION */}
-      <div className="space-y-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="text-xl font-semibold">Promotions</h3>
-            <p className="text-sm text-muted-foreground">
-              Run time-limited and automated promotions
-            </p>
-          </div>
-          <Button onClick={() => {
-            setEditingPromotion(null);
-            setIsPromotionDialogOpen(true);
-          }}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Promotion
-          </Button>
-        </div>
-
-        {/* Promotions loading state */}
-        {promotionsLoading ? (
-          <div className="space-y-3">
-            {[...Array(2)].map((_, i) => (
-              <Skeleton key={i} className="h-20 w-full" />
-            ))}
-          </div>
-        ) : promotionsError ? (
-          <Card>
-            <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-              <AlertTriangle className="h-12 w-12 mb-4 text-destructive" />
-              <h3 className="text-lg font-semibold mb-2">Failed to load promotions</h3>
-              <p className="text-muted-foreground max-w-md">
-                {promotionsErrorObj instanceof Error ? promotionsErrorObj.message : 'An error occurred'}
-              </p>
-            </CardContent>
-          </Card>
-        ) : filteredPromotions.length === 0 ? (
-          <Empty
-            icon={Gift}
-            title={promotions.length === 0 ? "No promotions yet" : "No promotions for this location"}
-            description={promotions.length === 0 ? "Create your first promotion to drive customer engagement with special offers." : "This location has no active promotions. Create a new one or adjust location settings."}
-            action={
-              <Button onClick={() => {
+      <Panel>
+        <PanelSection
+          icon={Sparkles}
+          label="Promotions"
+          caption="Run time-limited and automated promotions."
+          action={
+            <Button
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => {
                 setEditingPromotion(null);
                 setIsPromotionDialogOpen(true);
-              }}>
-                <Plus className="mr-2 h-4 w-4" />
+              }}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              New Promotion
+            </Button>
+          }
+        >
+          {promotionsLoading ? (
+            <div className="space-y-3">
+              {[...Array(2)].map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-2xl" />
+              ))}
+            </div>
+          ) : promotionsError ? (
+            <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center shadow-none">
+              <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-destructive" />
+              <p className="font-medium text-foreground">Failed to load promotions</p>
+              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                {promotionsErrorObj instanceof Error ? promotionsErrorObj.message : 'An error occurred'}
+              </p>
+            </div>
+          ) : filteredPromotions.length === 0 ? (
+            <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center shadow-none">
+              <Sparkles className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+              <p className="font-medium text-foreground">
+                {promotions.length === 0 ? 'No promotions yet' : 'No promotions for this location'}
+              </p>
+              <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+                {promotions.length === 0
+                  ? 'Create your first promotion to drive customer engagement with special offers.'
+                  : 'This location has no active promotions. Create a new one or adjust location settings.'}
+              </p>
+              <Button
+                className="mt-4 h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                onClick={() => {
+                  setEditingPromotion(null);
+                  setIsPromotionDialogOpen(true);
+                }}
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
                 Create Promotion
               </Button>
-            }
-          />
-        ) : (
-          <div className="space-y-3">
-            {filteredPromotions.map((promotion) => (
-              <PromotionCard
-                key={promotion.id}
-                promotion={promotion}
-                onEdit={handleEditPromotion}
-                onDelete={handleDeletePromotionClick}
-                onToggle={handleTogglePromotion}
-                isToggling={togglePromotionMutation.isPending}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredPromotions.map((promotion) => (
+                <PromotionCard
+                  key={promotion.id}
+                  promotion={promotion}
+                  onEdit={handleEditPromotion}
+                  onDelete={handleDeletePromotionClick}
+                  onToggle={handleTogglePromotion}
+                  isToggling={togglePromotionMutation.isPending}
+                />
+              ))}
+            </div>
+          )}
+        </PanelSection>
+      </Panel>
 
       {/* Program Analytics Sheet */}
       <ProgramAnalyticsSheet
@@ -476,9 +491,9 @@ export default function LoyaltySettingsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {programToDelete && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
               <div
-                className="h-8 w-8 rounded-full flex-shrink-0"
+                className="h-8 w-8 shrink-0 rounded-full"
                 style={{ backgroundColor: programToDelete.display_color ?? '#6366f1' }}
               />
               <div>
@@ -531,8 +546,8 @@ export default function LoyaltySettingsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {promotionToDelete && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
-              <Sparkles className="h-6 w-6 text-purple-500 fill-purple-100 drop-shadow-md flex-shrink-0" />
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
+              <Sparkles className="h-6 w-6 shrink-0 text-muted-foreground" />
               <div>
                 <p className="font-medium">{promotionToDelete.name}</p>
                 <p className="text-sm text-muted-foreground">{promotionToDelete.promo_type}</p>
@@ -560,6 +575,6 @@ export default function LoyaltySettingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

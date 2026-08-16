@@ -672,3 +672,45 @@ html:has([data-template]) body[data-scroll-locked] {
 [data-slot="dropdown-menu-content"] [data-slot="dropdown-menu-item"] {
   border-radius: 9999px;
 }
+/* Reports use spacing and muted surfaces instead of horizontal separators. */
+.reports-without-horizontal-lines tr,
+.reports-without-horizontal-lines .divide-y > :not(:last-child) {
+  border-top-width: 0 !important;
+  border-bottom-width: 0 !important;
+}
+
+/* Inventory status and scope chips intentionally use one neutral visual tone. */
+.inventory-neutral-badges [data-slot="badge"] {
+  background-color: var(--muted) !important;
+  border-color: transparent !important;
+  color: var(--muted-foreground) !important;
+  box-shadow: none !important;
+}
+
+.inventory-neutral-badges [data-slot="badge"] > svg {
+  color: currentColor !important;
+}
+
+.inventory-neutral-badges [data-slot="badge"] > span.rounded-full {
+  background-color: var(--muted-foreground) !important;
+  opacity: 0.6;
+}
+
+/* Dialogs portal to <body>, escaping .inventory-neutral-badges on the page
+   shell. Inventory dialogs opt in with this class to get the same neutral
+   chips. */
+.inventory-neutral-badges-portal [data-slot="badge"] {
+  background-color: var(--muted) !important;
+  border-color: transparent !important;
+  color: var(--muted-foreground) !important;
+  box-shadow: none !important;
+}
+
+.inventory-neutral-badges-portal [data-slot="badge"] > svg {
+  color: currentColor !important;
+}
+
+.inventory-neutral-badges-portal [data-slot="badge"] > span.rounded-full {
+  background-color: var(--muted-foreground) !important;
+  opacity: 0.6;
+}

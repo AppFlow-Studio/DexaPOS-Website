@@ -11,7 +11,6 @@ import {
   Monitor,
   Search,
   ShieldAlert,
-  Wrench,
 } from 'lucide-react'
 
 import { useMerchantDeviceActivity, useMerchantDeviceInventory } from '@/app/dashboard/hooks/useDeviceRegistry'
@@ -44,11 +43,15 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   formatDeviceCategory,
-  formatDeviceStatus,
   getDeviceCategoryIcon,
-  getDeviceStatusClasses,
   getTimelineIcon,
 } from '@/lib/device-registry/presentation'
+import {
+  deviceLifecycleStatusLabel,
+  deviceNeedsAttention,
+  deviceWarrantyIsOnWatch,
+  deviceWarrantyState,
+} from '@/lib/constants/device-status'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import { cn } from '@/lib/utils'
 import { useIsAllLocations, useLocationStore, useSelectedLocation } from '@/stores/location-store'
@@ -95,55 +98,21 @@ function formatDateTime(date: string | null) {
   }).format(new Date(date))
 }
 
-function needsAttention(status: DeviceLifecycleStatus) {
-  return status === 'in_repair' || status === 'lost' || status === 'rma'
-}
-
-function isWarrantyWatch(date: string | null) {
-  if (!date) return false
-
-  const target = new Date(date)
-  const now = new Date()
-  target.setHours(0, 0, 0, 0)
-  now.setHours(0, 0, 0, 0)
-
-  const diffDays = Math.floor((target.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
-  return diffDays <= 60
-}
-
-function getWarrantyState(date: string | null) {
-  if (!date) {
-    return {
-      label: 'Warranty unknown',
-      tone: 'border-zinc-200 bg-zinc-100 text-zinc-700',
-    }
-  }
-
-  const target = new Date(date)
-  const now = new Date()
-  target.setHours(0, 0, 0, 0)
-  now.setHours(0, 0, 0, 0)
-
-  const diffDays = Math.floor((target.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
-
-  if (diffDays < 0) {
-    return {
-      label: 'Warranty expired',
-      tone: 'border-red-200 bg-red-50 text-red-700',
-    }
-  }
-
-  if (diffDays <= 60) {
-    return {
-      label: `Warranty ends in ${diffDays}d`,
-      tone: 'border-amber-200 bg-amber-50 text-amber-700',
-    }
-  }
-
-  return {
-    label: 'Warranty active',
-    tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  }
+function DeviceLifecycleBadge({
+  status,
+  className,
+}: {
+  status: DeviceLifecycleStatus
+  className?: string
+}) {
+  return (
+    <Badge
+      variant="secondary"
+      className={cn('gap-1.5 border-0 bg-muted text-muted-foreground', className)}
+    >
+      {deviceLifecycleStatusLabel(status)}
+    </Badge>
+  )
 }
 
 function ActivityRow({ item }: { item: DeviceActivityItem }) {
@@ -171,9 +140,7 @@ function ActivityRow({ item }: { item: DeviceActivityItem }) {
           {item.actor ? <span>By {item.actor}</span> : null}
           {'tracking_number' in item && item.tracking_number ? <span>Tracking {item.tracking_number}</span> : null}
           {'status' in item && item.status ? (
-            <Badge variant="outline" className={cn(getDeviceStatusClasses(item.status))}>
-              {formatDeviceStatus(item.status)}
-            </Badge>
+            <DeviceLifecycleBadge status={item.status} />
           ) : null}
         </div>
       </div>
@@ -208,9 +175,7 @@ function DeviceHistoryDialog({
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <DialogTitle>{device.serial_number}</DialogTitle>
-                    <Badge variant="outline" className={cn(getDeviceStatusClasses(device.status))}>
-                      {formatDeviceStatus(device.status)}
-                    </Badge>
+                    <DeviceLifecycleBadge status={device.status} />
                     <Badge variant="secondary">Read only</Badge>
                   </div>
                   <DialogDescription>
@@ -310,7 +275,7 @@ function DeviceRow({
     getDeviceCategoryIcon(device.device_category),
     { className: 'h-5 w-5' }
   )
-  const warranty = getWarrantyState(device.warranty_expires_at)
+  const warranty = deviceWarrantyState(device.warranty_expires_at)
 
   return (
     <button
@@ -349,7 +314,10 @@ function DeviceRow({
         <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground lg:hidden">
           Warranty
         </p>
-        <Badge variant="secondary" className={cn('mt-1 border-0 lg:mt-0', warranty.tone)}>
+        <Badge
+          variant="secondary"
+          className="mt-1 gap-1.5 border-0 bg-muted text-muted-foreground lg:mt-0"
+        >
           {warranty.label}
         </Badge>
       </div>
@@ -358,12 +326,7 @@ function DeviceRow({
         <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground lg:hidden">
           Status
         </p>
-        <Badge
-          variant="outline"
-          className={cn('mt-1 lg:mt-0', getDeviceStatusClasses(device.status))}
-        >
-          {formatDeviceStatus(device.status)}
-        </Badge>
+        <DeviceLifecycleBadge status={device.status} className="mt-1 lg:mt-0" />
       </div>
 
       <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground lg:justify-end">
@@ -371,9 +334,6 @@ function DeviceRow({
           <LifeBuoy className="h-4 w-4" />
           View support history
         </span>
-        {needsAttention(device.status) ? (
-          <Wrench className="h-4 w-4 text-amber-700" />
-        ) : null}
         <ChevronRight className="h-4 w-4" />
       </div>
     </button>
@@ -400,8 +360,8 @@ export default function MerchantDevicesPage() {
         : devices.filter((device) => device.location_id === selectedLocationId)
 
     return locationScoped.filter((device) => {
-      if (status === 'attention' && !needsAttention(device.status)) return false
-      if (status === 'warranty' && !isWarrantyWatch(device.warranty_expires_at)) return false
+      if (status === 'attention' && !deviceNeedsAttention(device.status)) return false
+      if (status === 'warranty' && !deviceWarrantyIsOnWatch(device.warranty_expires_at)) return false
       if (status !== 'all' && status !== 'attention' && status !== 'warranty' && device.status !== status) {
         return false
       }
@@ -425,8 +385,8 @@ export default function MerchantDevicesPage() {
     () => ({
       total: filteredDevices.length,
       deployed: filteredDevices.filter((device) => device.status === 'deployed').length,
-      attention: filteredDevices.filter((device) => needsAttention(device.status)).length,
-      warranty: filteredDevices.filter((device) => isWarrantyWatch(device.warranty_expires_at)).length,
+      attention: filteredDevices.filter((device) => deviceNeedsAttention(device.status)).length,
+      warranty: filteredDevices.filter((device) => deviceWarrantyIsOnWatch(device.warranty_expires_at)).length,
     }),
     [filteredDevices]
   )
@@ -487,7 +447,7 @@ export default function MerchantDevicesPage() {
       <Panel className="overflow-hidden">
         <section className="flex flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="font-semibold text-primary">Assigned hardware</h2>
+            <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Assigned hardware</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {filteredDevices.length} device{filteredDevices.length === 1 ? '' : 's'} in the current view.
             </p>

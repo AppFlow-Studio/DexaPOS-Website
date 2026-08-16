@@ -19,6 +19,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { useIsSingleLocation } from '@/stores/location-store'
 
 export type MenuScheduleAssignment = SchedulesModel & {
     schedule_time_slots: ScheduleTimeSlotsModel[]
@@ -48,6 +49,7 @@ export function MenuSchedulesTab({
     onEditSchedule,
 }: MenuSchedulesTabProps) {
     const [pendingRemoval, setPendingRemoval] = useState<MenuScheduleAssignment | null>(null)
+    const isSingleLocation = useIsSingleLocation()
 
     return (
         <div className="space-y-4">
@@ -105,7 +107,9 @@ export function MenuSchedulesTab({
                     ) : (
                         <div className="space-y-4">
                             {menuSchedules.map((schedule, index) => {
-                                const scopeName = schedule.assignment_location_id
+                                const scopeName = isSingleLocation
+                                    ? null
+                                    : schedule.assignment_location_id
                                     ? (locationNameById?.[schedule.assignment_location_id] ?? 'Location')
                                     : 'Global'
                                 return (
@@ -113,11 +117,14 @@ export function MenuSchedulesTab({
                                         key={`${schedule.id}:${schedule.assignment_location_id ?? 'global'}`}
                                         className="space-y-2"
                                     >
-                                        <div className="flex items-center gap-2">
-                                            <span className="inline-flex items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-                                                {scopeName}
-                                            </span>
-                                        </div>
+                                        {/* Scope label is noise when there is only one location. */}
+                                        {!isSingleLocation && (
+                                            <div className="flex items-center gap-2">
+                                                <span className="inline-flex items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                                                    {scopeName}
+                                                </span>
+                                            </div>
+                                        )}
                                         <ScheduleCard
                                             schedule={schedule}
                                             index={index}

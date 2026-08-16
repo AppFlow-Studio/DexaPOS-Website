@@ -151,13 +151,7 @@ export function OrderTypeChart({ data, isLoading }: OrderTypeChartProps) {
                   <span className="text-xs font-semibold">
                     {entry.orders.toLocaleString()}
                   </span>
-                  <span
-                    className="text-[10px] font-medium px-1.5 py-0.5 rounded-full w-12 text-center"
-                    style={{
-                      backgroundColor: entry.color + "1a",
-                      color: entry.color,
-                    }}
-                  >
+                  <span className="w-12 rounded-full bg-muted/60 px-1.5 py-0.5 text-center text-[10px] font-medium text-muted-foreground">
                     {pct}%
                   </span>
                 </div>

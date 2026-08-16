@@ -4,7 +4,6 @@ import * as React from "react";
 import { Check, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Popover,
   PopoverContent,
@@ -17,7 +16,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 
@@ -64,27 +62,26 @@ export function PaymentFacetFilter({
     <Popover>
       <PopoverTrigger asChild>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="h-9 border-dashed"
+          className="h-9 rounded-full border-0 bg-muted/60 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
           disabled={options.length === 0}
         >
           <PlusCircle className="mr-2 h-4 w-4" />
           {title}
           {selectedSet.size > 0 && (
             <>
-              <Separator orientation="vertical" className="mx-2 h-4" />
               <Badge
                 variant="secondary"
-                className="rounded-sm px-1 font-normal lg:hidden"
+                className="ml-2 rounded-full border-0 px-2 font-normal lg:hidden"
               >
                 {selectedSet.size}
               </Badge>
-              <div className="hidden gap-1 lg:flex">
+              <div className="ml-2 hidden gap-1 lg:flex">
                 {selectedSet.size > 2 ? (
                   <Badge
                     variant="secondary"
-                    className="rounded-sm px-1 font-normal"
+                    className="rounded-full border-0 px-2 font-normal"
                   >
                     {selectedSet.size} selected
                   </Badge>
@@ -95,7 +92,7 @@ export function PaymentFacetFilter({
                       <Badge
                         key={o.value}
                         variant="secondary"
-                        className="rounded-sm px-1 font-normal"
+                        className="rounded-full border-0 px-2 font-normal"
                       >
                         {o.label}
                       </Badge>
@@ -106,7 +103,10 @@ export function PaymentFacetFilter({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-0" align="start">
+      <PopoverContent
+        className="w-56 overflow-hidden rounded-2xl p-0"
+        align="start"
+      >
         <Command>
           {searchable && <CommandInput placeholder={title} />}
           <CommandList>
@@ -139,17 +139,14 @@ export function PaymentFacetFilter({
               })}
             </CommandGroup>
             {selectedSet.size > 0 && (
-              <>
-                <CommandSeparator />
-                <CommandGroup>
-                  <CommandItem
-                    onSelect={() => onChange([])}
-                    className="justify-center text-center"
-                  >
-                    Clear filter
-                  </CommandItem>
-                </CommandGroup>
-              </>
+              <CommandGroup>
+                <CommandItem
+                  onSelect={() => onChange([])}
+                  className="justify-center text-center"
+                >
+                  Clear filter
+                </CommandItem>
+              </CommandGroup>
             )}
           </CommandList>
         </Command>

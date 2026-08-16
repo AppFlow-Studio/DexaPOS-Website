@@ -21,6 +21,8 @@ interface DatePopoverProps {
   placeholder?: string;
   /** Minimum selectable date as `yyyy-MM-dd`. */
   min?: string;
+  /** Maximum selectable date as `yyyy-MM-dd`. */
+  max?: string;
   className?: string;
 }
 
@@ -33,11 +35,17 @@ export function DatePopover({
   id,
   placeholder = "Pick a date",
   min,
+  max,
   className,
 }: DatePopoverProps) {
   const [open, setOpen] = useState(false);
   const selected = toDate(value);
   const minDate = min ? toDate(min) : undefined;
+  const maxDate = max ? toDate(max) : undefined;
+  const disabledDays = [
+    ...(minDate ? [{ before: minDate }] : []),
+    ...(maxDate ? [{ after: maxDate }] : []),
+  ];
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -75,7 +83,8 @@ export function DatePopover({
             onChange(date ? format(date, "yyyy-MM-dd") : null);
             setOpen(false);
           }}
-          disabled={minDate ? { before: minDate } : undefined}
+          defaultMonth={selected ?? maxDate ?? minDate}
+          disabled={disabledDays.length > 0 ? disabledDays : undefined}
           autoFocus
         />
       </PopoverContent>

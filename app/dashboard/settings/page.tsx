@@ -174,9 +174,8 @@ export default function TaxSettingsPage() {
                             ))}
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                        <Table className="min-w-[600px]">
-                            <TableHeader>
+                        <Table variant="data" className="min-w-[600px]">
+                            <TableHeader className="[&_tr]:border-0">
                                 <TableRow>
                                     <TableHead>Category</TableHead>
                                     <TableHead>Description</TableHead>
@@ -209,7 +208,7 @@ export default function TaxSettingsPage() {
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 {rate ? (
-                                                    <span className="font-mono font-medium">
+                                                    <span className="font-medium tabular-nums">
                                                         {rate.percentage}%
                                                     </span>
                                                 ) : (
@@ -217,13 +216,12 @@ export default function TaxSettingsPage() {
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-center">
-                                                {rate ? (
-                                                    <Badge variant="default" className="bg-green-600">
-                                                        Active
-                                                    </Badge>
-                                                ) : (
-                                                    <Badge variant="secondary">Not Set</Badge>
-                                                )}
+                                                {/* One neutral pill for both
+                                                    states (§4.6b) — the word
+                                                    carries the meaning. */}
+                                                <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium">
+                                                    {rate ? 'Active' : 'Not Set'}
+                                                </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex gap-2 justify-end">
@@ -232,6 +230,7 @@ export default function TaxSettingsPage() {
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
+                                                                className="h-8 w-8 rounded-full p-0"
                                                                 onClick={() =>
                                                                     handleEdit(
                                                                         category,
@@ -245,6 +244,7 @@ export default function TaxSettingsPage() {
                                                             <Button
                                                                 variant="ghost"
                                                                 size="icon"
+                                                                className="h-8 w-8 rounded-full p-0"
                                                                 onClick={() => handleDelete(rate.id)}
                                                             >
                                                                 <Trash2 className="h-4 w-4 text-destructive" />
@@ -254,9 +254,10 @@ export default function TaxSettingsPage() {
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
+                                                            className="h-8 rounded-full px-3 text-[0.8125rem] font-medium shadow-sm"
                                                             onClick={() => handleEdit(category)}
                                                         >
-                                                            <Plus className="h-4 w-4 mr-2" />
+                                                            <Plus className="mr-1.5 h-4 w-4" />
                                                             Add Rate
                                                         </Button>
                                                     )}
@@ -267,7 +268,6 @@ export default function TaxSettingsPage() {
                                 })}
                             </TableBody>
                         </Table>
-                        </div>
                     )}
                 </PanelSection>
             </Panel>

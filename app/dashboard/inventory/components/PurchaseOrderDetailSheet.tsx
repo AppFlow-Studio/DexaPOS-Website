@@ -2,19 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -69,14 +61,6 @@ interface PurchaseOrderDetailSheetProps {
 // Status Badge Component
 // ============================================================================
 function POStatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    draft: "bg-gray-500/20 text-gray-500 border-gray-500/20",
-    pending: "bg-amber-500/20 text-amber-600 border-amber-500/20",
-    received: "bg-blue-500/20 text-blue-600 border-blue-500/20",
-    paid: "bg-emerald-500/20 text-emerald-600 border-emerald-500/20",
-    cancelled: "bg-red-500/20 text-red-500 border-red-500/20",
-  };
-
   const labels: Record<string, string> = {
     draft: "Draft",
     pending: "Pending",
@@ -86,7 +70,10 @@ function POStatusBadge({ status }: { status: string }) {
   };
 
   return (
-    <Badge variant="outline" className={cn("font-medium", styles[status])}>
+    <Badge
+      variant="secondary"
+      className="border-0 font-medium text-muted-foreground"
+    >
       {labels[status] || status}
     </Badge>
   );
@@ -100,12 +87,6 @@ function DiscrepancyStatusBadge({
 }: {
   status: "missing" | "shorted" | "received";
 }) {
-  const styles = {
-    missing: "bg-red-500/20 text-red-500",
-    shorted: "bg-amber-500/20 text-amber-600",
-    received: "bg-emerald-500/20 text-emerald-600",
-  };
-
   const labels = {
     missing: "Missing",
     shorted: "Shorted",
@@ -113,7 +94,10 @@ function DiscrepancyStatusBadge({
   };
 
   return (
-    <Badge variant="outline" className={cn("text-xs", styles[status])}>
+    <Badge
+      variant="secondary"
+      className="border-0 text-xs text-muted-foreground"
+    >
       {labels[status]}
     </Badge>
   );
@@ -158,37 +142,40 @@ export function PurchaseOrderDetailSheet({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="sm:max-w-[600px] overflow-y-auto px-4">
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          className="inventory-neutral-badges-portal flex h-dvh max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden border-0 bg-background p-0 max-sm:top-auto max-sm:translate-y-0 rounded-none sm:h-[640px] sm:max-h-[85vh] sm:w-[calc(100%-1rem)] sm:max-w-[600px] sm:rounded-3xl"
+          overlayClassName="bg-black/35 backdrop-blur-md"
+        >
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : po ? (
             <>
-              <SheetHeader>
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/10">
-                    <Package className="h-5 w-5 text-emerald-500" />
+              <DialogHeader className="shrink-0 px-6 pt-6 pb-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="shrink-0 p-2.5 rounded-2xl border-0 bg-muted/60">
+                    <Package className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <div className="flex-1">
-                    <SheetTitle className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1 text-left">
+                    <DialogTitle className="flex flex-wrap items-center gap-2">
                       {po.po_number}
                       <POStatusBadge status={po.status} />
-                    </SheetTitle>
-                    <SheetDescription>
+                    </DialogTitle>
+                    <DialogDescription>
                       Created{" "}
                       {new Date(po.created_at).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                         year: "numeric",
                       })}
-                    </SheetDescription>
+                    </DialogDescription>
                   </div>
                 </div>
-              </SheetHeader>
+              </DialogHeader>
 
-              <div className="space-y-6 mt-6">
+              <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 pb-6">
                 {/* Summary Grid */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
@@ -227,7 +214,6 @@ export function PurchaseOrderDetailSheet({
                   </div>
                 </div>
 
-                <Separator />
 
                 {/* Action Buttons */}
                 {po.status === "draft" && (
@@ -296,7 +282,7 @@ export function PurchaseOrderDetailSheet({
                       <Clock className="h-4 w-4" />
                       Delivery History
                     </h4>
-                    <div className="rounded-lg border p-4 space-y-2">
+                    <div className="rounded-2xl border-0 bg-muted/45 p-4 space-y-2">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">
                           Delivered At
@@ -324,7 +310,7 @@ export function PurchaseOrderDetailSheet({
                         </div>
                       )}
                       {po.delivery_notes && (
-                        <div className="pt-2 border-t text-sm">
+                        <div className="pt-2 text-sm">
                           <span className="text-muted-foreground">Notes: </span>
                           {po.delivery_notes}
                         </div>
@@ -343,16 +329,12 @@ export function PurchaseOrderDetailSheet({
                     {po.payments.map((payment) => (
                       <div
                         key={payment.id}
-                        className="rounded-lg border p-4 space-y-2"
+                        className="rounded-2xl border-0 bg-muted/45 p-4 space-y-2"
                       >
                         <div className="flex justify-between items-center">
                           <Badge
-                            variant="outline"
-                            className={cn(
-                              payment.payment_method === "card"
-                                ? "bg-blue-500/20 text-blue-600"
-                                : "bg-emerald-500/20 text-emerald-600"
-                            )}
+                            variant="secondary"
+                            className="border-0 text-muted-foreground"
                           >
                             {payment.payment_method === "card" ? (
                               <>
@@ -400,12 +382,11 @@ export function PurchaseOrderDetailSheet({
                   </div>
                 )}
 
-                <Separator />
 
                 {/* Items List */}
                 <div className="space-y-3">
                   <h4 className="font-medium">Order Items</h4>
-                  <div className="rounded-lg border divide-y">
+                  <div className="overflow-hidden rounded-2xl border-0 bg-muted/45">
                     {po.items.map((item) => (
                       <div
                         key={item.id}
@@ -450,7 +431,7 @@ export function PurchaseOrderDetailSheet({
                         <AlertTriangle className="h-4 w-4" />
                         Discrepancy Report
                       </h4>
-                      <div className="rounded-lg border divide-y">
+                      <div className="overflow-hidden rounded-2xl border-0 bg-muted/45">
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-muted/50 text-xs font-medium text-muted-foreground">
                           <div className="col-span-5">Item</div>
                           <div className="col-span-2 text-center">Req</div>
@@ -486,8 +467,8 @@ export function PurchaseOrderDetailSheet({
               Purchase order not found
             </div>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       {/* Log Delivery Dialog */}
       {po && (
@@ -590,13 +571,17 @@ function LogDeliveryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-blue-500/20 border border-blue-500/10">
-              <Truck className="h-5 w-5 text-blue-500" />
+      <DialogContent
+        // Renders above the PO detail panel, which would otherwise cover it.
+        elevation="above-sheet"
+        className="inventory-neutral-badges-portal flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden max-sm:overflow-hidden rounded-none bg-card p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:max-h-[80vh] sm:w-[calc(100%-1rem)] sm:max-w-[600px] sm:rounded-3xl"
+      >
+        <DialogHeader className="shrink-0 bg-card px-5 pb-4 pt-5 pr-14 text-left sm:px-6 sm:pt-6 sm:pr-16">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="shrink-0 p-2.5 rounded-2xl border-0 bg-muted/60">
+              <Truck className="h-5 w-5 text-muted-foreground" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1 text-left">
               <DialogTitle>Log Delivery</DialogTitle>
               <DialogDescription>
                 Record received quantities for {purchaseOrder.po_number}
@@ -605,7 +590,7 @@ function LogDeliveryDialog({
           </div>
         </DialogHeader>
 
-        <div className="space-y-6 mt-4">
+        <div className="thin-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto bg-card px-5 py-4 sm:px-6">
           {/* Delivered By */}
           <div className="space-y-2">
             <Label htmlFor="deliveredBy">Delivered By</Label>
@@ -620,8 +605,8 @@ function LogDeliveryDialog({
           {/* Items */}
           <div className="space-y-3">
             <Label>Received Quantities</Label>
-            <div className="rounded-lg border divide-y">
-              <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-muted/50 text-sm font-medium text-muted-foreground">
+            <div className="overflow-hidden rounded-2xl border-0 bg-muted/45">
+              <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-muted/60 text-sm font-medium text-muted-foreground">
                 <div className="col-span-6">Item</div>
                 <div className="col-span-3 text-center">Ordered</div>
                 <div className="col-span-3 text-center">Received</div>
@@ -655,7 +640,7 @@ function LogDeliveryDialog({
                           [item.id]: parseFloat(e.target.value) || 0,
                         })
                       }
-                      className="text-center h-8"
+                      className="h-8 rounded-full border-0 bg-background/80 text-center shadow-none"
                     />
                   </div>
                 </div>
@@ -675,7 +660,7 @@ function LogDeliveryDialog({
           </div>
         </div>
 
-        <DialogFooter className="pt-4">
+        <DialogFooter className="shrink-0 bg-card px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -758,13 +743,17 @@ function LogPaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[450px]">
+      <DialogContent
+        // Renders above the PO detail panel, which would otherwise cover it.
+        elevation="above-sheet"
+        className="inventory-neutral-badges-portal sm:max-w-[450px] sm:rounded-3xl"
+      >
         <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/10">
-              <DollarSign className="h-5 w-5 text-emerald-500" />
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="shrink-0 p-2.5 rounded-2xl border-0 bg-muted/60">
+              <DollarSign className="h-5 w-5 text-muted-foreground" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1 text-left">
               <DialogTitle>Log Payment</DialogTitle>
               <DialogDescription>
                 Record payment for {purchaseOrder.po_number}
@@ -847,7 +836,7 @@ function LogPaymentDialog({
           {/* Vendor (read-only) */}
           <div className="space-y-2">
             <Label>Vendor</Label>
-            <div className="px-3 py-2 bg-muted/50 rounded-md text-sm">
+            <div className="rounded-full bg-muted/60 px-4 py-2 text-sm">
               {purchaseOrder.vendor?.name || "Unknown Vendor"}
             </div>
           </div>

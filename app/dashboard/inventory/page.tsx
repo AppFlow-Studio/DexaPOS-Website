@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +40,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useLocationStore, useSelectedLocation, useIsSingleLocation } from "@/stores/location-store";
 import {
@@ -77,10 +75,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { InventoryItemWithVendor } from "@/types/inventory";
+import {
+  inventoryStockState,
+  purchaseOrderStatusLabel,
+} from "@/lib/constants/inventory-status";
 import {
   PurchaseOrderWithDetails,
   VendorWithStats,
@@ -103,6 +104,7 @@ function StockStatusBadge({
   inStockLocations,
   lowStockLocations,
   outOfStockLocations,
+  compact = false,
 }: {
   stockMode: string;
   currentStock: number;
@@ -112,6 +114,8 @@ function StockStatusBadge({
   inStockLocations?: number;
   lowStockLocations?: number;
   outOfStockLocations?: number;
+  /** Hides the leading dot/icon — used on mobile cards where the label speaks for itself. */
+  compact?: boolean;
 }) {
   // ========================================================================
   // GLOBAL VIEW: Show location breakdown
@@ -125,8 +129,8 @@ function StockStatusBadge({
     // Priority: Show worst status first
     if (outCount > 0) {
       return (
-        <Badge variant="destructive" className="gap-1 text-xs">
-          <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+        <Badge variant="secondary" className="gap-1 border-0 text-xs text-muted-foreground">
+          {!compact && <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />}
           {outCount}/{total} Out
         </Badge>
       );
@@ -134,11 +138,8 @@ function StockStatusBadge({
 
     if (lowCount > 0) {
       return (
-        <Badge
-          variant="outline"
-          className="border-amber-500/50 text-amber-600 bg-amber-50 dark:bg-amber-950/30 gap-1 text-xs"
-        >
-          <AlertTriangle className="h-3 w-3" />
+        <Badge variant="secondary" className="gap-1 border-0 text-xs text-muted-foreground">
+          {!compact && <AlertTriangle className="h-3 w-3" />}
           {lowCount}/{total} Low
         </Badge>
       );
@@ -146,10 +147,7 @@ function StockStatusBadge({
 
     // All locations in stock
     return (
-      <Badge
-        variant="outline"
-        className="border-emerald-500/50 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 text-xs"
-      >
+      <Badge variant="secondary" className="border-0 text-xs text-muted-foreground">
         {inCount}/{total} In Stock
       </Badge>
     );
@@ -158,96 +156,62 @@ function StockStatusBadge({
   // ========================================================================
   // LOCATION VIEW / FALLBACK: Show simple status
   // ========================================================================
-  if (stockMode === "out_of_stock") {
+  const stockState = inventoryStockState(stockMode, currentStock, reorderPoint);
+
+  if (stockState === "out_of_stock") {
     return (
-      <Badge variant="destructive" className="gap-1">
-        <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+      <Badge variant="secondary" className="gap-1 border-0 text-muted-foreground">
+        {!compact && <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />}
         Out of Stock
       </Badge>
     );
   }
 
-  if (stockMode === "in_stock") {
+  if (stockState === "low_stock") {
     return (
-      <Badge
-        variant="outline"
-        className="border-emerald-500/50 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
-      >
-        In Stock
-      </Badge>
-    );
-  }
-
-  // stock_tracking mode
-  if (currentStock === 0) {
-    return (
-      <Badge variant="destructive" className="gap-1">
-        <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-        Out of Stock
-      </Badge>
-    );
-  }
-
-  if (currentStock <= reorderPoint) {
-    return (
-      <Badge
-        variant="outline"
-        className="border-amber-500/50 text-amber-600 bg-amber-50 dark:bg-amber-950/30 gap-1"
-      >
-        <AlertTriangle className="h-3 w-3" />
+      <Badge variant="secondary" className="gap-1 border-0 text-muted-foreground">
+        {!compact && <AlertTriangle className="h-3 w-3" />}
         Low Stock
       </Badge>
     );
   }
 
   return (
-    <Badge
-      variant="outline"
-      className="border-emerald-500/50 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
-    >
+    <Badge variant="secondary" className="border-0 text-muted-foreground">
       In Stock
     </Badge>
   );
 }
 
-function ScopeBadge({ locationId }: { locationId: string | null }) {
+function ScopeBadge({
+  locationId,
+  compact = false,
+}: {
+  locationId: string | null;
+  /** Hides the leading Globe/MapPin icon — used on mobile cards. */
+  compact?: boolean;
+}) {
   if (!locationId) {
     return (
-      <Badge
-        variant="outline"
-        className="gap-1 text-xs text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
-      >
-        <Globe className="h-3 w-3" />
+      <Badge variant="secondary" className="gap-1 border-0 text-xs text-muted-foreground">
+        {!compact && <Globe className="h-3 w-3" />}
         Global
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="gap-1 text-xs">
-      <MapPin className="h-3 w-3" />
+    <Badge variant="secondary" className="gap-1 border-0 text-xs text-muted-foreground">
+      {!compact && <MapPin className="h-3 w-3" />}
       Local
     </Badge>
   );
 }
 
 function POStatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    draft: "bg-secondary text-secondary-foreground",
-    pending:
-      "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400 border-amber-200 dark:border-amber-800",
-    received:
-      "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
-    paid: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400 border-blue-200 dark:border-blue-800",
-    cancelled:
-      "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400 border-rose-200 dark:border-rose-800",
-  };
-
   return (
-    <Badge
-      variant="outline"
-      className={cn("capitalize", styles[status] || styles.draft)}
-    >
-      {status}
+    <Badge variant="secondary" className="gap-1.5 border-0 text-muted-foreground">
+      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+      {purchaseOrderStatusLabel(status)}
     </Badge>
   );
 }
@@ -305,12 +269,14 @@ function InventoryItemActions({
   isAllLocations,
   onEdit,
   onDelete,
-  alwaysVisible = false,
+  onEditStock,
+  alwaysVisible = true,
 }: {
   item: InventoryItemWithVendor;
   isAllLocations: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onEditStock?: () => void;
   alwaysVisible?: boolean;
 }) {
   return (
@@ -332,7 +298,9 @@ function InventoryItemActions({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={onEdit}>Edit Item</DropdownMenuItem>
-        <DropdownMenuSeparator />
+        {onEditStock && (
+          <DropdownMenuItem onClick={onEditStock}>Edit Stock</DropdownMenuItem>
+        )}
         {isAllLocations || item.location_id !== null ? (
           <DropdownMenuItem className="text-destructive" onClick={onDelete}>
             Delete Item
@@ -350,69 +318,35 @@ function InventoryItemActions({
 function PurchaseOrderActions({
   purchaseOrder,
   onStatusChange,
-  alwaysVisible = false,
 }: {
   purchaseOrder: PurchaseOrderWithDetails;
   onStatusChange: (
     status: "pending" | "received" | "paid" | "cancelled",
     receivedQuantities?: Record<string, number>,
   ) => void;
-  alwaysVisible?: boolean;
 }) {
+  // Receiving only applies to a submitted (pending) order. Everything else —
+  // draft, already received, paid, cancelled — leaves the button inert.
+  const canReceive = purchaseOrder.status === "pending";
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "h-8 w-8 rounded-full transition-opacity",
-            !alwaysVisible &&
-              "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-          )}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <span className="sr-only">Open purchase order actions</span>
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {purchaseOrder.status === "draft" && (
-          <DropdownMenuItem onClick={() => onStatusChange("pending")}>
-            Submit Order
-          </DropdownMenuItem>
-        )}
-        {purchaseOrder.status === "pending" && (
-          <DropdownMenuItem
-            onClick={() => {
-              const quantities: Record<string, number> = {};
-              purchaseOrder.items?.forEach((item) => {
-                quantities[item.id] = item.quantity_ordered;
-              });
-              onStatusChange("received", quantities);
-            }}
-          >
-            Mark as Received
-          </DropdownMenuItem>
-        )}
-        {purchaseOrder.status === "received" && (
-          <DropdownMenuItem onClick={() => onStatusChange("paid")}>
-            Mark as Paid
-          </DropdownMenuItem>
-        )}
-        {purchaseOrder.status === "draft" && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={() => onStatusChange("cancelled")}
-            >
-              Cancel Order
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={!canReceive}
+      className="h-7 shrink-0 rounded-full px-2.5 text-xs font-medium"
+      onClick={(event) => {
+        event.stopPropagation();
+        if (!canReceive) return;
+        const quantities: Record<string, number> = {};
+        purchaseOrder.items?.forEach((item) => {
+          quantities[item.id] = item.quantity_ordered;
+        });
+        onStatusChange("received", quantities);
+      }}
+    >
+      Mark as Received
+    </Button>
   );
 }
 
@@ -425,6 +359,43 @@ type SortDir = "asc" | "desc";
 
 export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState("catalog");
+
+  // The tab strip scrolls horizontally on narrow screens, so the selected tab
+  // can sit off-screen after switching (or on load from a persisted tab).
+  // Bring it into view whenever the selection changes.
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Radix moves data-state="active" during its own commit, so read it on the
+    // next frame — otherwise we'd centre the tab that was just deselected.
+    const frame = requestAnimationFrame(() => {
+      const container = tabsScrollRef.current;
+      if (!container) return;
+      const active = container.querySelector<HTMLElement>(
+        '[data-state="active"]',
+      );
+      if (!active) return;
+
+      // scrollIntoView on the element would also scroll the page vertically;
+      // adjust the container's own scrollLeft instead.
+      //
+      // offsetLeft is measured from the nearest *positioned* ancestor, which
+      // is not this container, so it gives the wrong offset here. Derive the
+      // tab's position within the scroll content from the two rects instead.
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = active.getBoundingClientRect();
+      const activeLeftInContent =
+        activeRect.left - containerRect.left + container.scrollLeft;
+
+      const target =
+        activeLeftInContent - (container.clientWidth - activeRect.width) / 2;
+      const maxScroll = container.scrollWidth - container.clientWidth;
+      container.scrollTo({
+        left: Math.max(0, Math.min(target, maxScroll)),
+        behavior: "smooth",
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeTab]);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -688,7 +659,7 @@ export default function InventoryPage() {
 
     return (
       <div className="space-y-3 text-sm">
-        <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 rounded-md border border-amber-200 dark:border-amber-900">
+        <div className="flex items-center gap-2 rounded-xl bg-muted/50 p-3 text-foreground">
           <AlertTriangle className="h-5 w-5 shrink-0" />
           <p className="font-medium">
             This item is used in {totalCount} recipe
@@ -716,7 +687,7 @@ export default function InventoryPage() {
   }, [isLoadingUsage, usageData]);
 
   return (
-    <PageShell>
+    <PageShell className="inventory-neutral-badges">
       <PageHeader
         title="Inventory Management"
         subtitle={
@@ -734,46 +705,53 @@ export default function InventoryPage() {
             />
           ) : undefined
         }
+        stackActionsBelowIndicatorOnMobile
         actions={
           <>
-            <Button
-              variant="outline"
-              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-              onClick={() => setIsActivityLogOpen(true)}
-            >
-              <Clock className="mr-1.5 h-4 w-4" />
-              Activity Log
-            </Button>
-            {!isAllLocations && (
+            {/* Row 1 on mobile: Activity Log + Log Expense */}
+            <div className="flex min-w-0 items-center gap-2 max-sm:w-full">
               <Button
                 variant="outline"
-                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-                onClick={() => setIsExpenseDialogOpen(true)}
+                className="h-9 flex-1 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:flex-none"
+                onClick={() => setIsActivityLogOpen(true)}
               >
-                <Receipt className="mr-1.5 h-4 w-4" />
-                Log Expense
+                <Clock className="mr-1.5 h-4 w-4" />
+                Activity Log
               </Button>
-            )}
-            <Button
-              variant="outline"
-              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-            >
-              <Download className="mr-1.5 h-4 w-4" />
-              Export
-            </Button>
-            {activeTab !== "waste" &&
-              activeTab !== "counts" &&
-              activeTab !== "transfers" &&
-              activeTab !== "dashboard" &&
-              activeTab !== "reports" && (
+              {!isAllLocations && (
                 <Button
-                  className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-                  onClick={getAddButtonAction()}
+                  variant="outline"
+                  className="h-9 flex-1 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:flex-none"
+                  onClick={() => setIsExpenseDialogOpen(true)}
                 >
-                  <Plus className="mr-1.5 h-4 w-4" />
-                  {getAddButtonLabel()}
+                  <Receipt className="mr-1.5 h-4 w-4" />
+                  Log Expense
                 </Button>
               )}
+            </div>
+            {/* Row 2 on mobile: Export + Add Item */}
+            <div className="flex min-w-0 items-center gap-2 max-sm:w-full">
+              <Button
+                variant="outline"
+                className="h-9 flex-1 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:flex-none"
+              >
+                <Download className="mr-1.5 h-4 w-4" />
+                Export
+              </Button>
+              {activeTab !== "waste" &&
+                activeTab !== "counts" &&
+                activeTab !== "transfers" &&
+                activeTab !== "dashboard" &&
+                activeTab !== "reports" && (
+                  <Button
+                    className="h-9 flex-1 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:flex-none"
+                    onClick={getAddButtonAction()}
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    {getAddButtonLabel()}
+                  </Button>
+                )}
+            </div>
           </>
         }
       />
@@ -842,11 +820,16 @@ export default function InventoryPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="px-4 pt-5 sm:px-6">
             <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between min-w-0">
-              <div className="overflow-x-auto w-full min-w-0">
-              <TabsList className="h-auto w-max flex-nowrap justify-start rounded-full border-0 bg-muted/60 p-1">
+              <div
+                ref={tabsScrollRef}
+                className="no-scrollbar w-full min-w-0 overflow-x-auto pb-1"
+              >
+              {/* Mobile shows labels only: the leading icon and the count chip
+                  are hidden so eight tabs stay legible on a narrow strip. */}
+              <TabsList className="h-auto w-max flex-nowrap justify-start rounded-full border-0 bg-muted/60 p-1 max-sm:[&_[data-slot=badge]]:hidden max-sm:[&_svg]:hidden">
                 <TabsTrigger
                   value="catalog"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <Boxes className="h-4 w-4" />
                   Catalog
@@ -859,7 +842,7 @@ export default function InventoryPage() {
                 </TabsTrigger>
                 <TabsTrigger
                   value="vendors"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <Truck className="h-4 w-4" />
                   Vendors
@@ -872,7 +855,7 @@ export default function InventoryPage() {
                 </TabsTrigger>
                 <TabsTrigger
                   value="purchase-orders"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <ShoppingCart className="h-4 w-4" />
                   Purchase Orders
@@ -885,35 +868,35 @@ export default function InventoryPage() {
                 </TabsTrigger>
                 <TabsTrigger
                   value="waste"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <Trash2 className="h-4 w-4" />
                   Waste
                 </TabsTrigger>
                 <TabsTrigger
                   value="counts"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <ClipboardList className="h-4 w-4" />
                   Counts
                 </TabsTrigger>
                 <TabsTrigger
                   value="transfers"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <ArrowRightLeft className="h-4 w-4" />
                   Transfers
                 </TabsTrigger>
                 <TabsTrigger
                   value="dashboard"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <LayoutDashboard className="h-4 w-4" />
                   Dashboard
                 </TabsTrigger>
                 <TabsTrigger
                   value="reports"
-                  className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                  className="gap-2 rounded-full px-4 py-2 max-sm:gap-0 data-[state=active]:bg-background data-[state=active]:shadow-sm"
                 >
                   <TrendingUp className="h-4 w-4" />
                   Reports
@@ -950,8 +933,16 @@ export default function InventoryPage() {
                       )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent align="end" className="w-72 p-0">
-                    <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <PopoverContent
+                    align="end"
+                    collisionPadding={8}
+                    className="flex w-[min(18rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-3xl bg-popover p-0"
+                    style={{
+                      maxHeight:
+                        "min(36rem, var(--radix-popover-content-available-height))",
+                    }}
+                  >
+                    <div className="flex shrink-0 items-center justify-between px-4 py-3">
                       <span className="text-sm font-semibold">Filters</span>
                       {(pendingCategories.length > 0 || pendingStockModes.length > 0 || pendingScope !== "all") && (
                         <button
@@ -968,12 +959,12 @@ export default function InventoryPage() {
                       )}
                     </div>
 
-                    <div className="p-4 space-y-5">
+                    <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-3">
                       {/* Category */}
                       {availableCategories.length > 0 && (
                         <div className="space-y-2">
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Category</p>
-                          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                          <div className="space-y-1.5">
                             {availableCategories.map((cat) => (
                               <label key={cat} className="flex items-center gap-2 cursor-pointer group">
                                 <Checkbox
@@ -986,8 +977,6 @@ export default function InventoryPage() {
                           </div>
                         </div>
                       )}
-
-                      <Separator />
 
                       {/* Stock Mode */}
                       <div className="space-y-2">
@@ -1013,7 +1002,6 @@ export default function InventoryPage() {
                           item is global, so global-vs-local filtering is noise. */}
                       {!isSingleLocation && (
                         <>
-                          <Separator />
                           <div className="space-y-2">
                             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Scope</p>
                             <div className="flex gap-2">
@@ -1022,10 +1010,10 @@ export default function InventoryPage() {
                                   key={s}
                                   onClick={() => setPendingScope(s)}
                                   className={cn(
-                                    "flex-1 py-1.5 text-xs rounded-md border transition-colors capitalize",
+                                    "flex-1 rounded-full border-0 py-1.5 text-xs capitalize transition-colors",
                                     pendingScope === s
-                                      ? "bg-primary text-primary-foreground border-primary"
-                                      : "border-border hover:bg-muted"
+                                      ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                                      : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
                                   )}
                                 >
                                   {s}
@@ -1038,18 +1026,18 @@ export default function InventoryPage() {
                     </div>
 
                     {/* Apply / Cancel */}
-                    <div className="flex gap-2 px-4 py-3 border-t">
+                    <div className="flex shrink-0 gap-2 bg-popover px-4 pb-4 pt-3">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex-1"
+                        className="flex-1 rounded-full"
                         onClick={cancelFilters}
                       >
                         Cancel
                       </Button>
                       <Button
                         size="sm"
-                        className="flex-1"
+                        className="flex-1 rounded-full"
                         onClick={applyFilters}
                       >
                         Apply Filters
@@ -1239,16 +1227,9 @@ export default function InventoryPage() {
                       className="group min-w-0 rounded-2xl border-0 bg-muted/45 p-4 transition-colors hover:bg-muted/65"
                     >
                       <div className="flex min-w-0 items-start gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                          <Package className="h-4 w-4" />
-                        </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium">
                             {item.name}
-                          </p>
-                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {item.sku || "No SKU"}
-                            {item.category ? ` / ${item.category}` : ""}
                           </p>
                         </div>
                         <InventoryItemActions
@@ -1256,6 +1237,11 @@ export default function InventoryPage() {
                           isAllLocations={isAllLocations}
                           onEdit={() => setEditingItem(item)}
                           onDelete={() => setDeleteItemTarget(item)}
+                          onEditStock={
+                            item.stock_mode === "stock_tracking"
+                              ? () => setStockUpdateItem(item)
+                              : undefined
+                          }
                           alwaysVisible
                         />
                       </div>
@@ -1287,11 +1273,11 @@ export default function InventoryPage() {
                             )}
                           </dd>
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 text-right">
                           <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                             Status
                           </dt>
-                          <dd className="mt-1">
+                          <dd className="mt-1 flex justify-end">
                             {showMultiLocationContext ? (
                               <span className="text-sm text-muted-foreground">
                                 Aggregate view
@@ -1303,6 +1289,7 @@ export default function InventoryPage() {
                                 reorderPoint={
                                   item.reorder_threshold ?? item.reorder_point
                                 }
+                                compact
                               />
                             )}
                           </dd>
@@ -1319,12 +1306,12 @@ export default function InventoryPage() {
                           </dd>
                         </div>
                         {!isSingleLocation && (
-                          <div className="min-w-0">
+                          <div className="min-w-0 text-right">
                             <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                               Scope
                             </dt>
-                            <dd className="mt-1">
-                              <ScopeBadge locationId={item.location_id} />
+                            <dd className="mt-1 flex justify-end">
+                              <ScopeBadge locationId={item.location_id} compact />
                             </dd>
                           </div>
                         )}
@@ -1341,13 +1328,11 @@ export default function InventoryPage() {
               {isLoadingVendors ? (
                 <div className="grid gap-4 p-6 md:grid-cols-2 lg:grid-cols-3">
                   {[1, 2, 3].map((i) => (
-                    <Card key={i} className="border-0 bg-muted/40 shadow-none">
-                      <CardContent className="p-5">
+                    <div key={i} className="rounded-2xl border-0 bg-muted/40 p-5">
                         <Skeleton className="h-10 w-10 rounded-xl mb-4" />
                         <Skeleton className="h-5 w-32 mb-2" />
                         <Skeleton className="h-4 w-24" />
-                      </CardContent>
-                    </Card>
+                    </div>
                   ))}
                 </div>
               ) : filteredVendors.length === 0 ? (
@@ -1372,7 +1357,7 @@ export default function InventoryPage() {
               ) : (
                 <div className="grid gap-4 p-6 md:grid-cols-2 lg:grid-cols-3">
                   {filteredVendors.map((vendor) => (
-                    <Card
+                    <article
                       key={vendor.id}
                       className="group cursor-pointer rounded-2xl border-0 bg-muted/45 shadow-none transition-colors hover:bg-muted/65"
                       onClick={() => {
@@ -1380,7 +1365,7 @@ export default function InventoryPage() {
                         setIsDetailSheetOpen(true);
                       }}
                     >
-                      <CardContent className="p-5">
+                      <div className="p-5">
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
                             <Truck className="h-4 w-4" />
@@ -1400,22 +1385,25 @@ export default function InventoryPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
-                                  onClick={() => {
+                                  onClick={(event) => {
+                                    // Without this the click bubbles to the card,
+                                    // which re-opens the detail panel behind the dialog.
+                                    event.stopPropagation();
                                     setIsDetailSheetOpen(false);
                                     setEditingVendor(vendor);
                                   }}
                                 >
                                   Edit Vendor
                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator />
                                 {/* Only allow delete if not a global vendor when in location view */}
                                 {isAllLocations ||
                                 vendor.location_id !== null ? (
                                   <DropdownMenuItem
                                     className="text-destructive"
-                                    onClick={() =>
-                                      setDeleteVendorTarget(vendor)
-                                    }
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setDeleteVendorTarget(vendor);
+                                    }}
                                   >
                                     Delete Vendor
                                   </DropdownMenuItem>
@@ -1441,7 +1429,7 @@ export default function InventoryPage() {
 
                         <div className="flex items-center justify-between pt-4">
                           <div>
-                            <p className="text-2xl font-bold">
+                            <p className="text-2xl font-medium tracking-[-0.02em] tabular-nums">
                               {vendor.total_orders}
                             </p>
                             <p className="text-xs text-muted-foreground">
@@ -1449,7 +1437,7 @@ export default function InventoryPage() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="text-2xl font-bold text-emerald-600">
+                            <p className="text-2xl font-medium tracking-[-0.02em] text-foreground tabular-nums">
                               ${vendor.total_spend.toLocaleString()}
                             </p>
                             <p className="text-xs text-muted-foreground">
@@ -1457,16 +1445,16 @@ export default function InventoryPage() {
                             </p>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </article>
                   ))}
 
                   {/* Add Vendor Card */}
-                  <Card
-                    className="cursor-pointer rounded-2xl border border-dashed bg-transparent shadow-none transition-colors hover:border-primary/40 hover:bg-muted/30"
+                  <button
+                    type="button"
+                    className="flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-2xl border-0 bg-muted/30 p-5 text-center transition-colors hover:bg-muted/60"
                     onClick={() => setIsAddVendorOpen(true)}
                   >
-                    <CardContent className="p-5 flex flex-col items-center justify-center h-full min-h-[200px] text-center">
                       <div className="p-3 rounded-full bg-muted mb-3">
                         <Plus className="h-5 w-5 text-muted-foreground" />
                       </div>
@@ -1474,8 +1462,7 @@ export default function InventoryPage() {
                       <p className="text-sm text-muted-foreground">
                         Track your suppliers
                       </p>
-                    </CardContent>
-                  </Card>
+                  </button>
                 </div>
               )}
             </TabsContent>
@@ -1522,7 +1509,7 @@ export default function InventoryPage() {
                     {showMultiLocationContext && (
                       <div className="col-span-2">Location</div>
                     )}
-                    <div className="col-span-3">Vendor</div>
+                    <div className="col-span-2">Vendor</div>
                     <div className="col-span-2">Status</div>
                     <div
                       className={
@@ -1531,7 +1518,7 @@ export default function InventoryPage() {
                     >
                       Items
                     </div>
-                    <div className="col-span-2">Total</div>
+                    <div className="col-span-3 text-right">Total</div>
                   </div>
 
                   {/* Table Rows */}
@@ -1565,8 +1552,8 @@ export default function InventoryPage() {
                         </div>
                       )}
 
-                      <div className="col-span-3">
-                        <p className="font-medium">
+                      <div className="col-span-2 min-w-0">
+                        <p className="truncate font-medium">
                           {po.vendor?.name || "Unknown Vendor"}
                         </p>
                       </div>
@@ -1575,7 +1562,11 @@ export default function InventoryPage() {
                         <POStatusBadge status={po.status} />
                       </div>
 
-                      <div className="col-span-2">
+                      <div
+                        className={
+                          showMultiLocationContext ? "col-span-1" : "col-span-2"
+                        }
+                      >
                         <span className="font-medium">
                           {po.items?.length || 0}
                         </span>
@@ -1585,8 +1576,8 @@ export default function InventoryPage() {
                         </span>
                       </div>
 
-                      <div className="col-span-2 flex items-center justify-between">
-                        <span className="font-semibold">
+                      <div className="col-span-3 flex items-center justify-end gap-3">
+                        <span className="shrink-0 font-semibold tabular-nums">
                           ${po.total_amount.toFixed(2)}
                         </span>
                         <PurchaseOrderActions
@@ -1622,22 +1613,8 @@ export default function InventoryPage() {
                           <span className="block truncate font-mono text-sm font-medium">
                             {po.po_number}
                           </span>
-                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                            {new Date(po.created_at).toLocaleDateString()}
-                          </span>
                         </button>
                         <POStatusBadge status={po.status} />
-                        <PurchaseOrderActions
-                          purchaseOrder={po}
-                          alwaysVisible
-                          onStatusChange={(status, receivedQuantities) =>
-                            updatePOStatus.mutate({
-                              poId: po.id,
-                              status,
-                              receivedQuantities,
-                            })
-                          }
-                        />
                       </div>
 
                       <button
@@ -1649,20 +1626,12 @@ export default function InventoryPage() {
                         }}
                       >
                         <dl className="grid min-w-0 grid-cols-2 gap-x-4 gap-y-4">
-                          <div className="min-w-0">
+                          <div className="col-span-2 min-w-0">
                             <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                               Vendor
                             </dt>
                             <dd className="mt-1 truncate text-sm font-medium">
                               {po.vendor?.name || "Unknown Vendor"}
-                            </dd>
-                          </div>
-                          <div className="min-w-0">
-                            <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                              Total
-                            </dt>
-                            <dd className="mt-1 truncate text-sm font-medium tabular-nums">
-                              ${po.total_amount.toFixed(2)}
                             </dd>
                           </div>
                           <div className="min-w-0">
@@ -1673,8 +1642,16 @@ export default function InventoryPage() {
                               {po.items?.length || 0}
                             </dd>
                           </div>
+                          <div className="min-w-0 text-right">
+                            <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                              Total
+                            </dt>
+                            <dd className="mt-1 truncate text-sm font-medium tabular-nums">
+                              ${po.total_amount.toFixed(2)}
+                            </dd>
+                          </div>
                           {isAllLocations && !isSingleLocation && (
-                            <div className="min-w-0">
+                            <div className="col-span-2 min-w-0">
                               <dt className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                                 Location
                               </dt>
@@ -1685,6 +1662,19 @@ export default function InventoryPage() {
                           )}
                         </dl>
                       </button>
+
+                      <div className="mt-4 flex justify-center">
+                        <PurchaseOrderActions
+                          purchaseOrder={po}
+                          onStatusChange={(status, receivedQuantities) =>
+                            updatePOStatus.mutate({
+                              poId: po.id,
+                              status,
+                              receivedQuantities,
+                            })
+                          }
+                        />
+                      </div>
                     </article>
                   ))}
                 </div>

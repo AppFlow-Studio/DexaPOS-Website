@@ -2,12 +2,12 @@
 
 import { useMemo } from "react";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+  StationPanel,
+  StationPanelContent,
+  StationPanelDescription,
+  StationPanelHeader,
+  StationPanelTitle,
+} from "./StationPanel";
 import { Badge } from "@/components/ui/badge";
 import { Station } from "@/app/dashboard/actions/stations";
 import { useAuditLogs } from "@/app/dashboard/hooks/useAuditLogs";
@@ -43,7 +43,7 @@ function ActivityIcon({ category }: { category: AuditCategory }) {
       return <ShoppingCart className="h-4 w-4 text-blue-500" />;
     case "expense":
     case "purchase_order":
-      return <CreditCard className="h-4 w-4 text-green-500" />;
+      return <CreditCard className="h-4 w-4 text-muted-foreground" />;
     case "inventory":
     case "menu":
       return <RefreshCw className="h-4 w-4 text-cyan-500" />;
@@ -51,7 +51,7 @@ function ActivityIcon({ category }: { category: AuditCategory }) {
     case "authentication":
       return <UserCheck className="h-4 w-4 text-indigo-500" />;
     case "settings":
-      return <Settings className="h-4 w-4 text-orange-500" />;
+      return <Settings className="h-4 w-4 text-muted-foreground" />;
     default:
       return <Clock className="h-4 w-4 text-muted-foreground" />;
   }
@@ -65,8 +65,7 @@ function SeverityBadge({ severity }: { severity: AuditSeverity }) {
       variant="outline"
       className={cn(
         "text-xs capitalize",
-        severity === "warning" && "border-yellow-500/50 text-yellow-600",
-        severity === "critical" && "border-red-500/50 text-red-600",
+        
       )}
     >
       {severity}
@@ -107,23 +106,23 @@ export function StationActivityTab({
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="flex justify-center items-center py-12">
+      <StationPanel>
+        <StationPanelContent className="flex justify-center items-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Activity Logs</CardTitle>
-        <CardDescription>
+    <StationPanel>
+      <StationPanelHeader>
+        <StationPanelTitle className="text-lg">Activity Logs</StationPanelTitle>
+        <StationPanelDescription>
           Recent activity and events for this station
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+        </StationPanelDescription>
+      </StationPanelHeader>
+      <StationPanelContent>
         {logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <Clock className="h-12 w-12 text-muted-foreground mb-4" />
@@ -135,14 +134,13 @@ export function StationActivityTab({
             </p>
           </div>
         ) : (
-          <div className="space-y-1">
-            {logs.map((log: AuditLogWithLocation, index: number) => (
+          <div className="min-w-0 space-y-2">
+            {logs.map((log: AuditLogWithLocation) => (
               <div
                 key={log.id}
-                className={cn(
-                  "flex items-start gap-4 p-4 rounded-lg transition-colors hover:bg-muted/50",
-                  index !== logs.length - 1 && "border-b",
-                )}
+                // Rows separate by their own fill and the gap between them,
+                // never by a rule drawn across the panel (§5.5).
+                className="flex min-w-0 items-start gap-4 rounded-2xl bg-muted/45 p-4 transition-colors hover:bg-muted"
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted flex-shrink-0">
                   <ActivityIcon category={log.action_category} />
@@ -177,14 +175,14 @@ export function StationActivityTab({
         )}
 
         {logs.length > 0 && (
-          <div className="mt-6 pt-4 border-t text-center">
+          <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">
               Showing {logs.length} recently logged event
               {logs.length !== 1 ? "s" : ""}
             </p>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </StationPanelContent>
+    </StationPanel>
   );
 }

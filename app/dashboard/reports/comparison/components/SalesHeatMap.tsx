@@ -82,7 +82,7 @@ export function SalesHeatMap({
           <Skeleton className="h-6 w-48" />
         </CardHeader>
         <CardContent>
-          <Skeleton className="h-[280px] w-full rounded-xl" />
+          <Skeleton className="h-[280px] w-full rounded-2xl" />
         </CardContent>
       </Card>
     );

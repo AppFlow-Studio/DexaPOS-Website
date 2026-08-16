@@ -86,12 +86,19 @@ export function ItemSearch({ onSelect }: ItemSearchProps) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="w-full justify-start text-muted-foreground font-normal">
+        {/* Borderless filled control (§4.2). */}
+        <Button
+          variant="ghost"
+          className="h-9 w-full justify-start rounded-full border-0 bg-muted/60 px-3 font-normal text-muted-foreground shadow-none hover:bg-muted"
+        >
           <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0" />
           Search for an item or service
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[420px] p-0" align="start">
+      <PopoverContent
+        className="w-[min(420px,calc(100vw-2rem))] rounded-2xl p-0"
+        align="start"
+      >
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search items..."

@@ -29,7 +29,12 @@ export default function MerchantStaffPage() {
   const selectedLocation = useSelectedLocation();
   const isAllLocations = useIsAllLocations();
   const { data: staffMembers, isLoading, refetch } = useUnifiedStaff();
-  const { data: orders } = useOrders();
+  const recentOrdersFilters = useMemo(() => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    return { dateRange: { from: sevenDaysAgo, to: null } };
+  }, []);
+  const { data: orders } = useOrders(recentOrdersFilters);
   const { data: pendingInvites } = usePendingInvites();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
 
@@ -39,24 +44,21 @@ export default function MerchantStaffPage() {
     [orders],
   );
 
-  const stats = useMemo(() => {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    return {
+  const stats = useMemo(
+    () => ({
       active: staff.filter((member) => member.overall_is_active).length,
       clerk: staff.filter((member) => member.is_clerk_user).length,
-      recentOrders: ordersList.filter(
-        (order) => new Date(order.created_at) >= sevenDaysAgo,
-      ).length,
-    };
-  }, [staff, ordersList]);
+      recentOrders: ordersList.length,
+    }),
+    [staff, ordersList],
+  );
 
   return (
     <PageShell>
       <PageHeader
         title="Staff & Access"
         subtitle="Manage dashboard users and POS staff with location-specific access."
+        stackActionsBelowIndicatorOnMobile
         indicator={
           <LocationIndicator
             isAllLocations={isAllLocations}

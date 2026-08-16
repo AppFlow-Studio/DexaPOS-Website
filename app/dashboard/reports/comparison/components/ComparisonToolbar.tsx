@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { ScrollableTabsBar } from "@/components/dashboard/ScrollableTabsBar";
 
 type RangePreset = "today" | "yesterday" | "7d" | "30d";
 
@@ -33,16 +34,17 @@ export function ComparisonToolbar({
   onShowComparisonChange,
 }: ComparisonToolbarProps) {
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border-0 bg-muted/60 p-4">
+    <div className="flex min-w-0 flex-col gap-4 rounded-2xl border-0 bg-muted/60 p-4">
       {/* Range Selectors */}
-      <div className="overflow-x-auto">
+      <ScrollableTabsBar activeValue={activeRange} className="pb-0">
         <div className="flex w-fit min-w-full items-center gap-0.5 rounded-full bg-background/70 p-1 sm:min-w-0">
           {presets.map((preset) => (
             <button
               key={preset.id}
               onClick={() => onRangeChange(preset.id)}
+              data-active={activeRange === preset.id}
               className={cn(
-                "whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
+                "shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors",
                 activeRange === preset.id
                   ? "bg-background text-foreground shadow-sm ring-1 ring-border"
                   : "text-muted-foreground hover:bg-muted"
@@ -52,7 +54,7 @@ export function ComparisonToolbar({
             </button>
           ))}
         </div>
-      </div>
+      </ScrollableTabsBar>
 
       {/* Comparison Controls */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -74,11 +76,14 @@ export function ComparisonToolbar({
         {/* Comparison Mode Selection */}
         <div
           className={cn(
-            "flex items-center gap-2 transition-opacity duration-300",
+            "flex min-w-0 items-center gap-2 transition-opacity duration-300",
             !showComparison ? "opacity-30 pointer-events-none" : "opacity-100"
           )}
         >
-          <div className="flex items-center gap-0.5 rounded-full bg-background/70 p-1">
+          {/* The two labels are `whitespace-nowrap`, so this group cannot shrink
+              to fit — without wrapping, "Same Period LY" ran past the panel edge
+              on a narrow viewport. Wrapping keeps both pills inside the card. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-0.5 rounded-full bg-background/70 p-1">
             <button
               onClick={() => onCompareModeChange("previous")}
               className={cn(

@@ -26,6 +26,13 @@ import { Button } from '@/components/ui/button'
 import { Empty } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
+  Table,
+  TableBody,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
   LocationIndicator,
   PageHeader,
   PageShell,
@@ -206,10 +213,15 @@ export default function CashDrawersPage() {
           </StatRow>
         </div>
 
-        <div className="border-t border-border/60 px-4 pb-6 pt-5 sm:px-6">
+        {/* No `border-t`: sections inside a panel are separated by vertical
+            rhythm, not rules — the table below draws the only lines here. */}
+        <div className="px-4 pb-6 pt-2 sm:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-[#0C4FD1] dark:text-[#9DBDF5]">
+              {/* §3.2 section heading: `text-[1.0625rem]`, and the dark half of
+                  the accent pair is `#6CA0FF` (C5) — this had drifted to
+                  `text-sm` with a one-off `#9DBDF5`. */}
+              <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                 Drawer registry
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -238,23 +250,34 @@ export default function CashDrawersPage() {
             </div>
           ) : (
             <div className="mt-5 min-w-0">
-              <div className="hidden overflow-x-auto rounded-2xl bg-muted/20 xl:block">
-                <div className="grid min-w-[900px] grid-cols-[minmax(170px,1.2fr)_minmax(130px,1fr)_minmax(170px,1.2fr)_105px_180px] gap-4 bg-muted/50 px-5 py-3 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                  <div>Drawer</div>
-                  <div>Assignment</div>
-                  <div>Current session</div>
-                  <div>Status</div>
-                  <div className="text-right">Actions</div>
-                </div>
-                {drawers.map((drawer) => (
-                  <CashDrawerCard
-                    key={`drawer-row-${drawer.id}`}
-                    drawer={drawer}
-                    layout="row"
-                    {...drawerActions}
-                  />
-                ))}
-              </div>
+              {/* Matches the Staff table: `Table variant="data"` with
+                  borderless header rows and `bg-card/70` body rows, so the
+                  only rules on the page are the ones this table draws. */}
+              <Table
+                variant="data"
+                containerClassName="hidden xl:block"
+                className="min-w-[900px]"
+              >
+                <TableHeader className="[&_tr]:border-0">
+                  <TableRow>
+                    <TableHead className="w-[220px]">Drawer</TableHead>
+                    <TableHead className="w-[170px]">Assignment</TableHead>
+                    <TableHead className="w-[230px]">Current session</TableHead>
+                    <TableHead className="w-[120px]">Status</TableHead>
+                    <TableHead className="w-[200px] text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {drawers.map((drawer) => (
+                    <CashDrawerCard
+                      key={`drawer-row-${drawer.id}`}
+                      drawer={drawer}
+                      layout="row"
+                      {...drawerActions}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
 
               <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
                 {drawers.map((drawer) => (
@@ -349,7 +372,7 @@ function PageSkeleton({ title }: { title?: string } = {}) {
             ))}
           </StatRow>
         </div>
-        <div className="grid gap-3 border-t border-border/60 px-4 py-6 sm:grid-cols-2 sm:px-6">
+        <div className="grid gap-3 px-4 pb-6 pt-2 sm:grid-cols-2 sm:px-6">
           {[0, 1].map((index) => (
             <Skeleton key={index} className="h-56 rounded-2xl" />
           ))}

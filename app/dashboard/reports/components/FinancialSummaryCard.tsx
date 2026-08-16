@@ -67,12 +67,7 @@ export function FinancialSummaryCard({
 
           {trend && (
             <div
-              className={cn(
-                "flex items-center text-xs font-medium px-1.5 py-0.5 rounded-full",
-                trend.isPositive
-                  ? "bg-emerald-500/10 text-emerald-500"
-                  : "bg-red-500/10 text-red-500"
-              )}
+              className="flex items-center text-xs font-medium text-muted-foreground"
             >
               {trend.isPositive ? (
                 <ArrowUpRight className="h-3 w-3 mr-0.5" />

@@ -19,6 +19,7 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities'
 import { CategoryItemsSheet } from './CategoryItemsSheet'
 import { cn } from '@/lib/utils'
+import { useIsSingleLocation } from '@/stores/location-store'
 
 function SortableCategoryRow({
     id,
@@ -91,6 +92,7 @@ export function CategoryTable({
     isReorderMode = false,
     onCategoryOrderChange,
 }: CategoryTableProps) {
+    const isSingleLocation = useIsSingleLocation()
     const isAllLocations = !selectedLocationId || selectedLocationId === 'all'
     const canModifyCategories = isAllLocations || isMenuLocationOwned
     // Which category's item list is open, if any.
@@ -117,7 +119,8 @@ export function CategoryTable({
                             {isReorderMode && <TableHead className="w-10" />}
                             <TableHead className="w-[300px]">Category</TableHead>
                             <TableHead className="w-[150px]">Status</TableHead>
-                            <TableHead className="w-[180px]">Location</TableHead>
+                            {/* Location has no meaning when there is only one. */}
+                            {!isSingleLocation && <TableHead className="w-[180px]">Location</TableHead>}
                             <TableHead className="w-[80px] text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -167,25 +170,27 @@ export function CategoryTable({
                                             </span>
                                         </div>
                                     </TableCell>
-                                    <TableCell>
-                                        {isGlobal ? (
-                                            <Badge
-                                                variant="outline"
-                                                className="gap-1 rounded-full border-0 bg-emerald-50 text-emerald-700"
-                                            >
-                                                <Globe className="h-3 w-3" />
-                                                Global
-                                            </Badge>
-                                        ) : (
-                                            <Badge
-                                                variant="outline"
-                                                className="gap-1 rounded-full border-0 bg-blue-50 text-blue-700"
-                                            >
-                                                <MapPin className="h-3 w-3" />
-                                                {category.category?.location_name || 'Location'}
-                                            </Badge>
-                                        )}
-                                    </TableCell>
+                                    {!isSingleLocation && (
+                                        <TableCell>
+                                            {isGlobal ? (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="gap-1 rounded-full border-0 bg-emerald-50 text-emerald-700"
+                                                >
+                                                    <Globe className="h-3 w-3" />
+                                                    Global
+                                                </Badge>
+                                            ) : (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="gap-1 rounded-full border-0 bg-blue-50 text-blue-700"
+                                                >
+                                                    <MapPin className="h-3 w-3" />
+                                                    {category.category?.location_name || 'Location'}
+                                                </Badge>
+                                            )}
+                                        </TableCell>
+                                    )}
                                     <TableCell
                                         className="text-right"
                                         onClick={(e) => e.stopPropagation()}

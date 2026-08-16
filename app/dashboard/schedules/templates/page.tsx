@@ -109,7 +109,7 @@ export default function TemplateLibraryPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)] p-4 sm:p-8 space-y-6 sm:space-y-8 bg-background overflow-y-auto w-full">
+    <div className="flex min-h-[calc(100vh-6rem)] w-full flex-col space-y-6 bg-white p-4 sm:space-y-8 sm:p-8">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
@@ -191,7 +191,7 @@ export default function TemplateLibraryPage() {
           placeholder="Search templates..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9 bg-background"
+          className="bg-white pl-9"
         />
       </div>
 

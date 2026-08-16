@@ -132,7 +132,6 @@ export function NotificationsTab({
       </PanelSection>
 
       <PanelSection
-        divider
         icon={ListChecks}
         label="Status updates"
         caption="Choose which order status changes notify the customer by email or SMS."
@@ -155,7 +154,6 @@ export function NotificationsTab({
       </PanelSection>
 
       <PanelSection
-        divider
         icon={Send}
         label="Test notifications"
         caption="Send a sample receipt using the customer-facing template for this store."
@@ -209,7 +207,6 @@ export function NotificationsTab({
       </PanelSection>
 
       <PanelSection
-        divider
         icon={History}
         label="Recent notifications"
         caption="The last 50 transactional notification attempts for this merchant."
@@ -219,7 +216,7 @@ export function NotificationsTab({
           ) : audit.length === 0 ? (
             <p className="py-4 text-sm text-muted-foreground">No notifications yet.</p>
           ) : (
-            <div className="divide-y divide-border/60">
+            <div>
               {audit.map((row) => (
                 <div
                   key={row.id}
@@ -267,7 +264,7 @@ function NotificationToggleRow({
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-t border-border/60 py-4 first:border-t-0 first:pt-0 last:pb-0">
+    <div className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
       <Label className="font-medium text-foreground">{label}</Label>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>

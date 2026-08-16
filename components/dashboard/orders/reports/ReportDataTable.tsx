@@ -46,16 +46,32 @@ function isNumericColumn(columnDef: ColumnDef<any, any>): boolean {
   return NUMERIC_HEADER.test(header)
 }
 
+function isMobileHidden(
+  columnDef: ColumnDef<any, any>,
+  hiddenColumnIds: Set<string> = new Set<string>()
+): boolean {
+  const meta = columnDef.meta as { mobileHidden?: boolean } | undefined
+  if (meta?.mobileHidden === true) return true
+
+  if (typeof columnDef.accessorKey === 'string') {
+    return hiddenColumnIds.has(columnDef.accessorKey)
+  }
+
+  return false
+}
+
 interface ReportDataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   loading?: boolean
+  hiddenColumnIds?: Set<string>
 }
 
 export function ReportDataTable<TData, TValue>({
   columns,
   data,
   loading = false,
+  hiddenColumnIds = new Set<string>(),
 }: ReportDataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
 
@@ -81,22 +97,24 @@ export function ReportDataTable<TData, TValue>({
 
   return (
     <div>
-      {/* No outer border: the table sits inside a report panel that already
-          provides the one visual boundary. Columns are separated by hairlines
-          under each row, the way the Overview lists read. */}
-      <div className="-mx-2 overflow-x-auto px-2">
-        <Table className="min-w-max">
-          <TableHeader>
+      {/* `variant="data"` is the shared staff-table treatment: a rounded tinted
+          container, a tinted header band, and borderless rows on `bg-card/70`.
+          Keeping it in the primitive means the reports and the staff directory
+          cannot drift apart. */}
+      <Table variant="data" containerClassName="-mx-2 px-2" className="min-w-max">
+          <TableHeader className="[&_tr]:border-0">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
-                className="border-b border-border/60 hover:bg-transparent"
+                className="hover:bg-transparent"
               >
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
                     className={cn(
                       'h-auto py-2.5 text-[0.8125rem] font-normal text-muted-foreground',
+                      isMobileHidden(header.column.columnDef, hiddenColumnIds) &&
+                        'hidden sm:table-cell',
                       isNumericColumn(header.column.columnDef) && 'text-right'
                     )}
                   >
@@ -126,13 +144,15 @@ export function ReportDataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && 'selected'}
-                  className="border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
+                  className="border-0 bg-card/70 transition-colors hover:bg-muted/40"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       key={cell.id}
                       className={cn(
                         'py-3 text-sm',
+                        isMobileHidden(cell.column.columnDef, hiddenColumnIds) &&
+                          'hidden sm:table-cell',
                         isNumericColumn(cell.column.columnDef) &&
                           'text-right tabular-nums'
                       )}
@@ -156,8 +176,7 @@ export function ReportDataTable<TData, TValue>({
               </TableRow>
             )}
           </TableBody>
-        </Table>
-      </div>
+      </Table>
 
       {/* Pagination hides itself on a single page rather than showing two
           permanently-disabled buttons. */}
