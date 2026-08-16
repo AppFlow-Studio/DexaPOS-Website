@@ -716,3 +716,92 @@ describe("unscoped (brand page) resolution", () => {
     expect(lookupMenuItem(map, "a").status).toBe("unavailable");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// which door the location read goes through
+
+describe("public location reads", () => {
+  const ROW = {
+    id: "loc_1",
+    name: "Downtown Hamra",
+    address_line1: "Hamra main street",
+    city: "hamra",
+    phone: "(192) 391-0320",
+    business_hours: { monday: "9-9" },
+  };
+
+  /** Records whether the table or the function was used. */
+  function spyClient() {
+    const calls: string[] = [];
+    const client = {
+      rpc: async (name: string, args: Record<string, unknown>) => {
+        calls.push(`rpc:${name}:${JSON.stringify(args)}`);
+        return { data: [ROW], error: null };
+      },
+      from: (table: string) => ({
+        select: () => ({
+          in: async () => {
+            calls.push(`table:${table}`);
+            // Anon genuinely gets this: zero rows and no error, because every
+            // SELECT policy on `locations` is authenticated-only.
+            return { data: [], error: null };
+          },
+        }),
+      }),
+    };
+    return { client: client as never, calls };
+  }
+
+  it("reads through get_public_locations when rendering publicly", async () => {
+    const { client, calls } = spyClient();
+
+    const locations = await createSupabaseResolverSources(client, {
+      publicMerchantId: "m_1",
+    }).fetchLocations(["loc_1"]);
+
+    expect(calls).toEqual([
+      'rpc:get_public_locations:{"p_merchant_id":"m_1","p_ids":["loc_1"]}',
+    ]);
+    expect(locations[0].addressLine1).toBe("Hamra main street");
+    expect(locations[0].phone).toBe("(192) 391-0320");
+  });
+
+  /**
+   * The editor reads as a signed-in merchant, where the table is both readable
+   * and richer. Sending it through the public projection would quietly narrow
+   * what the merchant can see about their own restaurant.
+   */
+  it("still reads the table directly for a signed-in merchant", async () => {
+    const { client, calls } = spyClient();
+
+    await createSupabaseResolverSources(client).fetchLocations(["loc_1"]);
+
+    expect(calls).toEqual(["table:locations"]);
+  });
+
+  /**
+   * The public projection deliberately omits `email`: nothing renders it, and a
+   * merchant's contact address should not be readable by anyone who can call
+   * the function. A missing column must therefore degrade to null rather than
+   * `undefined` leaking into a resolved location.
+   */
+  it("resolves a public location with no email rather than an undefined one", async () => {
+    const { client } = spyClient();
+
+    const [location] = await createSupabaseResolverSources(client, {
+      publicMerchantId: "m_1",
+    }).fetchLocations(["loc_1"]);
+
+    expect(location.email).toBeNull();
+    expect(location.name).toBe("Downtown Hamra");
+  });
+
+  it("asks for nothing when there are no location bindings", async () => {
+    const { client, calls } = spyClient();
+
+    expect(
+      await createSupabaseResolverSources(client, { publicMerchantId: "m_1" }).fetchLocations([]),
+    ).toEqual([]);
+    expect(calls).toEqual([]);
+  });
+});

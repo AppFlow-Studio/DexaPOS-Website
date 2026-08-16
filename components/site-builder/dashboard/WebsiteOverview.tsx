@@ -7,7 +7,6 @@ import {
   ExternalLink,
   FileText,
   Globe2,
-  LayoutTemplate,
   MonitorSmartphone,
   Palette,
   PencilLine,
@@ -23,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { MerchantSiteRow, SitePageSummary } from "@/lib/site-builder/db-types";
+import PageListCard from "./PageListCard";
 import WebAddressCard from "./WebAddressCard";
 
 type WebsiteOverviewProps = {
@@ -148,8 +148,18 @@ export default function WebsiteOverview({
         />
       )}
 
-      <section className="grid gap-5 md:grid-cols-3">
-        <OverviewAction icon={LayoutTemplate} title="Home page" description={`${pages.length || "No"} active page${pages.length === 1 ? "" : "s"}. Start with a focused home page.`} href={builderHref} action="Edit home page" />
+      {website && (
+        <PageListCard
+          // The editor's "Manage pages" links here.
+          id="pages"
+          clerkOrgId={clerkOrgId}
+          siteId={website.id}
+          locationId={locationId}
+          pages={pages}
+        />
+      )}
+
+      <section className="grid gap-5 md:grid-cols-2">
         <OverviewAction icon={Palette} title="Design" description="Set your site-wide color, type, and shape language without changing page content." href={designHref} action="Open design" />
         <OverviewAction icon={Settings2} title="SEO & settings" description="Set page titles, social sharing details, and other site-wide preferences." href={builderHref} action="Open settings" />
       </section>

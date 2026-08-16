@@ -43,6 +43,19 @@ export interface SupabaseSourceOptions {
    * built page shows the same figure.
    */
   deliveryPricingEnabled?: boolean;
+
+  /**
+   * Set on the public site to read locations through `get_public_locations`.
+   *
+   * The built site renders as a real anonymous visitor, and anon has no SELECT
+   * on `locations` — every SELECT policy there is `authenticated`-only. Reading
+   * the table directly therefore returned zero rows without an error, so a
+   * published page lost its address, phone and hours while the editor, reading
+   * as a signed-in merchant, showed them. The function returns an explicit
+   * projection instead, because `locations` also holds `ein`, `tax_id` and
+   * processor fees that must never reach a web page.
+   */
+  publicMerchantId?: string;
 }
 
 export function createSupabaseResolverSources(
@@ -50,6 +63,7 @@ export function createSupabaseResolverSources(
   options: SupabaseSourceOptions = {},
 ): ResolverSources {
   const deliveryPricingEnabled = options.deliveryPricingEnabled ?? true;
+  const publicMerchantId = options.publicMerchantId;
 
   /**
    * Per-instance memo, keyed by merchant+location.
@@ -83,10 +97,12 @@ export function createSupabaseResolverSources(
     async fetchLocations(ids: string[]): Promise<ResolvedLocation[]> {
       if (ids.length === 0) return [];
 
-      const { data, error } = await supabase
-        .from("locations")
-        .select(LOCATION_COLUMNS)
-        .in("id", ids);
+      const { data, error } = publicMerchantId
+        ? await supabase.rpc("get_public_locations", {
+            p_merchant_id: publicMerchantId,
+            p_ids: ids,
+          })
+        : await supabase.from("locations").select(LOCATION_COLUMNS).in("id", ids);
 
       if (error) {
         throw new Error(`location fetch failed: ${error.message}`);

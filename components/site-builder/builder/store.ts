@@ -130,6 +130,14 @@ interface BuilderState {
   saveError: string | null;
 
   selectionSource: SelectionSource;
+  /**
+   * The location this editor session is scoped to.
+   *
+   * Read by both the section defaults and the binding inspector, so a section
+   * added to the page and a binding repaired by hand can never disagree about
+   * which restaurant the page is about.
+   */
+  locationId: string | null;
   /** Bumped on every selection so listeners can scroll exactly once. */
   revealNonce: number;
   /** Optimistic-concurrency token from the server. */
@@ -243,6 +251,15 @@ interface BuilderState {
 
   /** Replaces the document wholesale — starter templates, conflict resolution. */
   replaceDoc: (doc: PageDocument, revision?: number) => void;
+
+  /**
+   * Records a rename that the server has already accepted.
+   *
+   * The page's name and address live on the row, not in the document, so they
+   * are saved immediately rather than through the draft's autosave. This keeps
+   * the toolbar and the page switcher showing what was actually stored.
+   */
+  patchPage: (patch: Partial<EditorPage>) => void;
 }
 
 export interface BuilderInit {
@@ -253,6 +270,12 @@ export interface BuilderInit {
   pages: EditorPage[];
   publishedDoc?: PageDocument | null;
   publishedAt?: string | null;
+  /**
+   * The location new sections should bind to. Sections that resolve live data
+   * are born invalid without it — a Location & Hours section with an empty
+   * binding blocks publishing, and the inspector offers no way to fill one in.
+   */
+  locationId?: string | null;
 }
 
 export function createBuilderStore(init: BuilderInit) {
@@ -289,6 +312,7 @@ export function createBuilderStore(init: BuilderInit) {
       reviewOpen: false,
       saveError: null,
       selectionSource: "other",
+      locationId: init.locationId ?? null,
       revealNonce: 0,
       revision: init.revision ?? 0,
       editGeneration: 0,
@@ -316,7 +340,12 @@ export function createBuilderStore(init: BuilderInit) {
         // An explicit argument wins; otherwise honour wherever the merchant
         // opened the modal from — a zone's "+" or a gap in the canvas.
         const index = atIndex ?? get().insertIndex ?? undefined;
-        apply(addSection(get().doc, kind, { atIndex: index ?? undefined }));
+        apply(
+          addSection(get().doc, kind, {
+            atIndex: index ?? undefined,
+            ctx: init.locationId ? { locationId: init.locationId } : undefined,
+          }),
+        );
 
         // Select whatever was just inserted so its controls open on it, and ask
         // the canvas to scroll it into view — a section added into a gap the
@@ -510,6 +539,15 @@ export function createBuilderStore(init: BuilderInit) {
           selectedId: null,
           saveState: "dirty",
           editGeneration: state.editGeneration + 1,
+        })),
+
+      // Deliberately does not touch `saveState`: the rename is already stored,
+      // so marking the document dirty would ask the merchant to save something
+      // that has been saved.
+      patchPage: (patch) =>
+        set((state) => ({
+          page: { ...state.page, ...patch },
+          pages: state.pages.map((p) => (p.id === state.page.id ? { ...p, ...patch } : p)),
         })),
     };
   });

@@ -138,7 +138,11 @@ export async function renderBuiltSite(
             locationId: resolver.locationId,
             scoped: resolver.scoped,
           },
-          createSupabaseResolverSources(supabase, { deliveryPricingEnabled }),
+          createSupabaseResolverSources(supabase, {
+            deliveryPricingEnabled,
+            // Anon cannot read `locations`; go through the public projection.
+            publicMerchantId: merchantId,
+          }),
         )
       ).map
     : emptyResolvedMap();

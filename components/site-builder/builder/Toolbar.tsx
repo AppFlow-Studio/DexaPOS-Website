@@ -300,18 +300,15 @@ function PageSwitcher({ store, locationId }: { store: BuilderStore; locationId: 
           <Settings2 />
           Page settings
         </DropdownMenuItem>
-        {/* Disabled rather than removed. `CreatePage` / `RenamePage` /
-            `DeletePage` all exist and work, but nothing calls them and
-            /dashboard/website counts pages without managing any — so this used
-            to send a merchant looking for "add a page" to a screen that cannot
-            add one. Kept visible so the capability still reads as planned.
-            Re-enabled by plan item W3.1, which builds the page list. */}
-        <DropdownMenuItem disabled className="gap-2">
-          <Plus />
-          <span className="flex min-w-0 flex-col leading-tight">
-            <span>Manage pages</span>
-            <span className="text-[10px] text-muted-foreground">Coming soon</span>
-          </span>
+        {/* Re-enabled by W3.1. It was disabled while /dashboard/website counted
+            pages without managing any, which sent a merchant looking for "add a
+            page" to a screen that could not add one. That screen now has the
+            list, so the link tells the truth again. */}
+        <DropdownMenuItem asChild>
+          <Link href={`/dashboard/website#pages`}>
+            <Plus />
+            Manage pages
+          </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

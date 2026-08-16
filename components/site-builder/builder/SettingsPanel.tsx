@@ -22,9 +22,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DeletePage, RenamePage } from "@/app/dashboard/website/actions/pages";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { checkPagePath } from "@/lib/site-builder/reserved-paths";
 import { describeSchema, humanize, type FieldControl } from "@/lib/site-builder/schema-introspect";
 import type { Binding } from "@/lib/site-builder/bindings/types";
 import { SECTION_REGISTRY, sectionTitle } from "@/lib/site-builder/sections/registry";
@@ -74,15 +87,17 @@ const STYLE_FIELDS = new Set([
 export default function SettingsPanel({
   store,
   locationId,
+  clerkOrgId,
 }: {
   store: BuilderStore;
   locationId: string;
+  clerkOrgId: string;
 }) {
   const doc = store((s) => s.doc);
   const selectedId = store((s) => s.selectedId);
   const section = doc.sections.find((s) => s.id === selectedId);
 
-  if (!section) return <PageSettings store={store} />;
+  if (!section) return <PageSettings store={store} clerkOrgId={clerkOrgId} />;
 
   return (
     <SectionSettings key={section.id} section={section} store={store} locationId={locationId} />
@@ -671,6 +686,7 @@ function BindingControl({
   const catalog = store((s) => s.catalog);
   const showPrices = store((s) => s.catalogShowPrices);
   const catalogError = store((s) => s.catalogError);
+  const editorLocationId = store((s) => s.locationId);
 
   if (control.bindingType === "menu_item") {
     const bindings = (Array.isArray(value) ? value : value ? [value] : []) as Binding[];
@@ -692,17 +708,41 @@ function BindingControl({
   // A location binding points at the restaurant this page is about. There is
   // exactly one candidate in v1, so a picker would be a dropdown with one
   // option — worse than a sentence explaining that it is already correct.
+  //
+  // That explanation is only honest while the binding *is* set. An unset one is
+  // a blocking validation error, and describing it as already correct left the
+  // review sheet's "Fix" button pointing at a field with nothing to fix.
   if (control.bindingType === "location") {
+    const bound = (value as Binding | undefined)?.id;
     return (
       <div>
         <FieldLabel control={control} className="mb-1.5" />
-        <p className="flex gap-1.5 rounded-md border bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
-          <Zap className="mt-px size-3 shrink-0" />
-          <span>
-            Address, phone and opening hours come from this restaurant&rsquo;s record. Change
-            them once in your location settings and every page updates — no republishing.
-          </span>
-        </p>
+        {bound ? (
+          <p className="flex gap-1.5 rounded-md border bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
+            <Zap className="mt-px size-3 shrink-0" />
+            <span>
+              Address, phone and opening hours come from this restaurant&rsquo;s record. Change
+              them once in your location settings and every page updates — no republishing.
+            </span>
+          </p>
+        ) : (
+          <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3">
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              This section is not linked to a restaurant yet, so it has nothing to show and the
+              page cannot be published.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="mt-2 h-7 text-[11px]"
+              disabled={!editorLocationId}
+              onClick={() => onChange({ type: "location", id: editorLocationId })}
+            >
+              Link to the restaurant you are editing
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
@@ -747,7 +787,7 @@ function blankRow(control: FieldControl): Record<string, unknown> {
   return row;
 }
 
-function PageSettings({ store }: { store: BuilderStore }) {
+function PageSettings({ store, clerkOrgId }: { store: BuilderStore; clerkOrgId: string }) {
   const doc = store((s) => s.doc);
   const updateSeo = store((s) => s.updateSeo);
   const closeInspector = store((s) => s.closeInspector);
@@ -757,7 +797,7 @@ function PageSettings({ store }: { store: BuilderStore }) {
       <header className="flex shrink-0 items-start gap-2 border-b px-3 py-3">
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">Page settings</h2>
-          <p className="text-xs text-muted-foreground">How this page appears in search.</p>
+          <p className="text-xs text-muted-foreground">This page&rsquo;s name, address and search listing.</p>
         </div>
         <button
           type="button"
@@ -770,6 +810,15 @@ function PageSettings({ store }: { store: BuilderStore }) {
       </header>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+        <PageIdentity store={store} clerkOrgId={clerkOrgId} />
+
+        <div className="border-t pt-5">
+          <p className="mb-1 text-xs font-semibold">Search listing</p>
+          <p className="mb-4 text-[11px] leading-relaxed text-muted-foreground">
+            How this page appears in Google. Left empty, the page name is used.
+          </p>
+        </div>
+
         <label className="block">
           <span className="mb-1.5 block text-xs font-medium">Search title</span>
           <input
@@ -801,6 +850,167 @@ function PageSettings({ store }: { store: BuilderStore }) {
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The page's name and address — the two facts that live on the row rather than
+ * in the document.
+ *
+ * Saved on blur, not on keystroke, and not through the draft autosave. The
+ * document and the row are two different stores with two different failure
+ * modes: an address that is already taken has to be reported to the merchant,
+ * which the silent autosave has no way to do. Blur is also when a half-typed
+ * address stops being half-typed.
+ */
+function PageIdentity({ store, clerkOrgId }: { store: BuilderStore; clerkOrgId: string }) {
+  const page = store((s) => s.page);
+  const patchPage = store((s) => s.patchPage);
+
+  const [title, setTitle] = useState(page.title);
+  const [path, setPath] = useState(page.path);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const commit = async (patch: { title?: string; path?: string }) => {
+    setError(null);
+    setSaving(true);
+    try {
+      const result = await RenamePage(clerkOrgId, page.id, patch);
+      if (result.error) {
+        setError(result.error);
+        // Put the stored values back: leaving a rejected address in the field
+        // shows the merchant a page address that does not exist.
+        setTitle(page.title);
+        setPath(page.path);
+        return;
+      }
+      if (result.data) patchPage({ title: result.data.title, path: result.data.path });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const pathCheck = checkPagePath(path);
+
+  return (
+    <div className="space-y-4">
+      <label className="block">
+        <span className="mb-1.5 block text-xs font-medium">Page name</span>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={() => {
+            const next = title.trim();
+            if (!next) {
+              setTitle(page.title);
+              return;
+            }
+            if (next !== page.title) void commit({ title: next });
+          }}
+          className={inputClass}
+        />
+        <span className="mt-1.5 block text-[11px] text-muted-foreground">
+          Shown in your page list and used as the search title if you leave one blank.
+        </span>
+      </label>
+
+      {page.isHome ? (
+        <div className="rounded-md border bg-muted/40 p-3">
+          <p className="text-[11px] font-medium">Web address</p>
+          <p className="mt-1 font-mono text-[11px] text-muted-foreground">/</p>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+            This is your home page, so it sits at the root of your website. Its address cannot be
+            changed — every link and search result you have points here.
+          </p>
+        </div>
+      ) : (
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-medium">Web address</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm text-muted-foreground">/</span>
+            <input
+              type="text"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              onBlur={() => {
+                const next = path.trim();
+                if (next === page.path) return;
+                if (next === "" || !checkPagePath(next).ok) {
+                  setPath(page.path);
+                  return;
+                }
+                void commit({ path: next });
+              }}
+              className={cn(inputClass, "font-mono")}
+            />
+          </div>
+          {path !== "" && !pathCheck.ok ? (
+            <span className="mt-1.5 block text-[11px] text-destructive">{pathCheck.message}</span>
+          ) : (
+            <span className="mt-1.5 block text-[11px] text-muted-foreground">
+              Changing this breaks links that already point at this page.
+            </span>
+          )}
+        </label>
+      )}
+
+      {error && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/5 p-2.5 text-[11px] text-destructive">
+          {error}
+        </p>
+      )}
+      {saving && <p className="text-[11px] text-muted-foreground">Saving…</p>}
+
+      {!page.isHome && (
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 w-full text-[11px] text-destructive hover:text-destructive"
+            onClick={() => setConfirmingDelete(true)}
+          >
+            <Trash2 className="size-3" />
+            Remove this page
+          </Button>
+
+          <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remove &ldquo;{page.title}&rdquo;?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {page.publishedAt
+                    ? "This page is live. Removing it takes it off your website, and anyone following a link to it will find nothing there. Its version history is kept."
+                    : "This page has never been published, so no guest has seen it. Its version history is kept."}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Keep it</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    const result = await DeletePage(clerkOrgId, page.id);
+                    if (result.error) {
+                      setError(result.error);
+                      setConfirmingDelete(false);
+                      return;
+                    }
+                    // A full navigation rather than a router push: the editor is
+                    // now holding a document whose page no longer exists.
+                    window.location.href = "/dashboard/website#pages";
+                  }}
+                >
+                  Remove the page
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
     </div>
   );
 }

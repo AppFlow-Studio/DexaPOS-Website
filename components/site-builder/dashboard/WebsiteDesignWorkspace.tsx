@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Eye,
   Loader2,
+  Menu as MenuIcon,
   Palette,
   PencilLine,
   RotateCcw,
@@ -24,6 +25,7 @@ import { toast } from "sonner";
 import { UpdateSiteSettings } from "@/app/dashboard/website/actions/site";
 import ColorField from "@/components/site-builder/dashboard/design/ColorField";
 import FontPicker from "@/components/site-builder/dashboard/design/FontPicker";
+import NavEditor, { type NavPageOption } from "@/components/site-builder/dashboard/design/NavEditor";
 import ReadabilityCheck, { readabilityProblems } from "@/components/site-builder/dashboard/design/ReadabilityCheck";
 import ThemePreview, { DeviceToggle, type PreviewDevice } from "@/components/site-builder/dashboard/design/ThemePreview";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +41,7 @@ import {
   type ThemeColors,
 } from "@/lib/site-builder/color";
 import type { MerchantSiteRow } from "@/lib/site-builder/db-types";
+import { parseNavItems, serializeNav, type NavItem } from "@/lib/site-builder/nav";
 import {
   FONT_PAIRINGS,
   catalogFontsHref,
@@ -96,6 +99,8 @@ type Props = {
   website: MerchantSiteRow;
   fallbackTheme: Partial<ThemeTokens>;
   siteName?: string;
+  /** Link targets for the navigation editor — this site's live pages. */
+  pages?: NavPageOption[];
 };
 
 export default function WebsiteDesignWorkspace({
@@ -104,6 +109,7 @@ export default function WebsiteDesignWorkspace({
   website,
   fallbackTheme,
   siteName = "Your Restaurant",
+  pages = [],
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -124,6 +130,13 @@ export default function WebsiteDesignWorkspace({
   const [mood, setMood] = useState<PaletteMood | "all">("all");
   const [device, setDevice] = useState<PreviewDevice>("desktop");
 
+  // Nav lives beside the theme because both are site-wide columns saved by one
+  // action — but it is kept in its own state, not folded into `DesignDraft`,
+  // since nothing about a link derives from a colour.
+  const initialNav = useMemo(() => parseNavItems(website.nav), [website.nav]);
+  const [savedNav, setSavedNav] = useState<NavItem[]>(initialNav);
+  const [nav, setNav] = useState<NavItem[]>(initialNav);
+
   const builderHref = `/dashboard/website/builder?location=${encodeURIComponent(locationId)}`;
   const previewHref = `/dashboard/website/preview?location=${encodeURIComponent(locationId)}`;
 
@@ -140,7 +153,11 @@ export default function WebsiteDesignWorkspace({
   const visiblePalettes = mood === "all" ? SITE_PALETTES : SITE_PALETTES.filter((p) => p.mood === mood);
   const invalidColors = THEME_COLOR_KEYS.filter((key) => !isHexColor(drafts[key]));
   const hasDraftDrift = THEME_COLOR_KEYS.some((key) => drafts[key] !== theme[key].toUpperCase());
-  const isDirty = !sameTheme(theme, savedTheme) || hasDraftDrift;
+  // Compared raw rather than serialized, so a half-finished row still counts as
+  // an unsaved change: the merchant sees "Unsaved changes" while a row warns it
+  // will be dropped, and saving reconciles the two.
+  const navChanged = JSON.stringify(nav) !== JSON.stringify(savedNav);
+  const isDirty = !sameTheme(theme, savedTheme) || hasDraftDrift || navChanged;
   const canSave = isDirty && invalidColors.length === 0 && !pending;
   const problems = readabilityProblems(theme);
 
@@ -198,6 +215,7 @@ export default function WebsiteDesignWorkspace({
 
   const discardChanges = () => {
     setDraft({ theme: savedTheme, drafts: colorDrafts(savedTheme) });
+    setNav(savedNav);
     toast.message("Unsaved design changes discarded");
   };
 
@@ -210,12 +228,18 @@ export default function WebsiteDesignWorkspace({
     if (!canSave) return;
     startTransition(async () => {
       try {
-        const result = await UpdateSiteSettings(clerkOrgId, website.id, { theme });
+        // Serialized once and reused: what gets stored is what the fields are
+        // reset to, so a row the writer drops disappears instead of lingering
+        // as something the merchant believes they saved.
+        const storedNav = serializeNav(nav);
+        const result = await UpdateSiteSettings(clerkOrgId, website.id, { theme, nav: storedNav });
         if (result.error) {
           toast.error(result.error);
           return;
         }
         setSavedTheme(theme);
+        setSavedNav(storedNav.items);
+        setNav(storedNav.items);
         toast.success("Site-wide design saved");
         router.refresh();
       } catch {
@@ -250,8 +274,8 @@ export default function WebsiteDesignWorkspace({
               </Badge>
             </div>
             <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
-              Colours, typography, and corner style for every page of your website. Page copy, photos,
-              and sections are edited separately in the page editor.
+              Colours, typography, corner style, and header navigation for every page of your
+              website. Page copy, photos, and sections are edited separately in the page editor.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -327,7 +351,27 @@ export default function WebsiteDesignWorkspace({
                 <Shapes className="h-4 w-4" />
                 Shape
               </TabsTrigger>
+              <TabsTrigger value="navigation" className="flex-1 gap-2 py-2">
+                <MenuIcon className="h-4 w-4" />
+                Navigation
+              </TabsTrigger>
             </TabsList>
+
+            {/* ── Navigation ────────────────────────────────────────── */}
+            <TabsContent value="navigation" className="space-y-5">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Header links</CardTitle>
+                  <CardDescription>
+                    The menu at the top of every page. These are site-wide on purpose — a link
+                    changed here takes effect everywhere without republishing each page.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <NavEditor items={nav} pages={pages} onChange={setNav} disabled={pending} />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
             {/* ── Colours ───────────────────────────────────────────── */}
             <TabsContent value="palette" className="space-y-5">
@@ -548,7 +592,7 @@ export default function WebsiteDesignWorkspace({
             </Button>
             <Button onClick={save} disabled={!canSave} className="min-w-40">
               {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {pending ? "Saving design…" : "Save design"}
+              {pending ? "Saving changes…" : "Save changes"}
             </Button>
           </div>
         </div>

@@ -1,9 +1,18 @@
 # Website Builder — Gap Closure Plan
 
 **Date:** 2026-08-16 · **Owner:** Ali Awdi ·
-**Status (2026-08-16):** W0, W1 complete · §0 ratified · **W2 complete except 2.8** (moot until
-caching is introduced) and the sitemap/robots/JSON-LD half of 2.9 · the publish → visitor path is
-now built end to end and has not yet been walked on a live site — see §3 · then W3
+**Status (2026-08-17):** W0, W1 complete · §0 ratified · **W2 complete except 2.8** (moot until
+caching is introduced) and the sitemap/robots/JSON-LD half of 2.9 · **the chain has now been walked
+end to end on the real staging site — see §3.** It found three defects, all fixed; one needs a
+migration applied before the live page is correct · **W3.1 and W3.2 done** — multi-page is now a
+product feature rather than schema · next: 3.3 nav editor, 3.4 location pages, and the two carve-outs
+3.1a / 3.1b
+
+**[20260817120000_get_public_locations.sql](../../../supabase/migrations/20260817120000_get_public_locations.sql)
+is applied and verified** — the live page now serves its address, phone and hours. **Staging is one
+statement behind this file:** the `email` removal was folded back into it on 2026-08-17 (see 2.12a),
+so the deployed function still returns a column the file no longer names. Re-run the file against
+staging to close that gap. 3.1a still needs a migration of its own.
 **Source:** [GAPS-2026-08-16-WEBSITE-FEATURE-AUDIT.md](GAPS-2026-08-16-WEBSITE-FEATURE-AUDIT.md)
 **Companions:** [PLAN-00-GENERAL.md](PLAN-00-GENERAL.md) (stage map) ·
 [PLAN-04](PLAN-04-INFRA-PUBLISH-ROUTING.md) (routing/publish) ·
@@ -191,6 +200,12 @@ in the touched paths.
 - [x] **2.11 — The editor tells the truth again.** W0 made it say "websites are not served to guests yet", which stopped being true the moment W2 landed. `publicUrl` now flows from the site row into the toolbar and the review sheet, so a site **with** an address gets "Your page is live" and a working link, and one **without** gets told exactly what is missing and where to fix it — rather than either a false promise or a false denial. `BUILT_SITE_IS_PUBLIC` is deleted; an always-false global would have been the new lie.
 - [x] **2.10 — Claiming a web address.** [`ClaimSubdomain`](../../../app/dashboard/website/actions/site.ts) plus a card on the Website overview. **Availability is the database's answer, not a prior SELECT** — checking and then writing is a race, and the losing merchant would be told "available" a moment before being told otherwise. So the write goes ahead and `23505` is translated into "that web address is already taken", which covers a clash with another website *and* with somebody's ordering storefront, because the cross-namespace trigger raises the same code. Changing an existing address confirms first and names what breaks (shared links, printed QR codes, search results); claiming a first one does not interrupt. Readiness checklist now counts the address rather than the storefront URL, since a site without one cannot be reached however finished it is. 9 tests; validation verified live in the browser.
 
+- [x] **2.12 — A published page can read its own address.** [20260817120000_get_public_locations.sql](../../../supabase/migrations/20260817120000_get_public_locations.sql) — **written, NOT yet applied.** A SECURITY DEFINER projection rather than an anon SELECT policy on `locations`, for a reason the column list settles on sight: that table carries `ein`, `tax_id`, `luqra_mid`, `sales_tax_rate` and `processor_fee_percentage` beside the address, and RLS is row-level, so a public policy would have published every merchant's tax id. The function names its columns explicitly, which also means **a column added to `locations` later is private by default** — it has to be named here to become public, and that is the safe direction for that mistake to fall. It answers only for a merchant who has already chosen to be public (a built site with an address, or an active storefront), so it is not an enumeration surface over the platform. Same shape as `get_public_site_page`, so §0.3 now covers every public read rather than most of them. The signed-in editor keeps reading the table directly — routing it through the public projection would quietly narrow what a merchant can see about their own restaurant — and a test pins which door each caller uses.
+- [x] **2.12a — Applied and verified 2026-08-17.** `anon` calls the function and gets the address, phone and hours; `anon` still gets **zero rows** selecting `id, ein, tax_id` from the table, so the projection is the only door and it stayed shut behind it. The live page went from 40 KB to 50 KB and now carries the street, postal code, phone and every day's opening hours — the PLAN-00 §6 acceptance criterion ("fully-formed HTML to `curl` with JS disabled") is met for the first time. **One thing the verification caught:** the projection also returned `email`, which no section renders — an unused public column, which is exactly what an explicit column list exists to prevent. A test pins that a public location resolves with a null email rather than an undefined one.
+
+  **Folded back into 20260817120000 on 2026-08-17, and the follow-up migration deleted.** It had been a second file (`20260817130000_get_public_locations_drop_email.sql`) that dropped and re-created the function purely to remove one column. Two things made squashing the right call rather than a rewrite of history: neither file was committed to git, and **none of the website-builder migrations are recorded in `supabase_migrations.schema_migrations`** — they were all applied by hand through the SQL editor, so there is no checksum to conflict with. Shipping a migration that publishes a merchant's mailbox to `anon` and a second one that takes it back would have left the exposure permanently in the history for anyone replaying it. The reasoning survived into a comment in the surviving file, since that is the part worth keeping. **Consequence to watch:** staging still runs the earlier definition until the file is re-run there — the only place in this feature where the database is ahead of the repo rather than behind it.
+- [x] **2.13 — A section that needs a location can be given one.** Two halves of one dead end. The cause: [store.ts](../../../components/site-builder/builder/store.ts) called `addSection` without the defaults context, so a Location & Hours section added from the gallery was born with an empty binding and made the page unpublishable the moment it landed — `restoreRequiredSection`, two functions below, had been threading that context all along. The store now carries the editing location and both paths read it, so they cannot drift. The symptom: the inspector explained that the binding "is already correct", which is true only while it *is* set; an unset one now says what is wrong and offers one button that fixes it. 3 tests.
+
 - [ ] **2.8 — Cache invalidation.** Currently *moot rather than done*: the built routes are `force-dynamic`, so a publish is visible on the next request and there is no stale cache to invalidate. That is correct but pays a full render per visit. Wiring `revalidateTag` now would add calls that provably do nothing, so caching and its invalidation should land together — tag per page and per site, verified with a publish → `curl` loop rather than by inspection. **Do not introduce caching without the tags in the same change.**
 - [ ] **2.9 — SEO surface.** `generateMetadata` from `doc.seo`, `sitemap.ts`, `robots.ts`, JSON-LD `Restaurant`. Canonicals must account for a page being reachable at both the brand subdomain and a custom domain.
 
@@ -198,16 +213,24 @@ in the touched paths.
 disabled; changing a price in the POS changes the live page with no republish; a location with a
 template storefront and no built site is byte-for-byte unaffected.
 
-### W3 — Page management (≈ 4–5 days)
+### W3 — Page management (≈ 4–5 days) — **3.1 and 3.2 done 2026-08-17**
 
 Multi-page is modelled end-to-end in the schema and invisible in the product: `CreatePage`,
 `RenamePage`, `DeletePage`, and `GetHomePage` all exist in
 [pages.ts](../../../app/dashboard/website/actions/pages.ts) and nothing calls them except
 `CreateHomePage`.
 
-- [ ] **3.1 — Page list on `/dashboard/website`** — title, `/path`, home indicator, draft dot, row actions (rename, duplicate, set home, delete). Repoint Toolbar's **Manage pages** here and re-enable it (undoes W0.2).
-- [ ] **3.2 — Page settings in the editor.** `PageSettings` in [SettingsPanel.tsx](../../../components/site-builder/builder/SettingsPanel.tsx) writes `doc.seo.title` and `.description` and nothing else — a merchant cannot rename a page, change its address, make it the home page, or delete it. Wire the existing actions; `checkPagePath` and `slugifyPagePath` already handle validation.
-- [ ] **3.3 — Nav editor** — site-wide, on the design workspace rather than the page, since `merchant_sites.nav` is deliberately not per-page (changing a nav link must not version every page). Consumes W2.6.
+- [x] **3.1 — Page list on `/dashboard/website`** — [PageListCard.tsx](../../../components/site-builder/dashboard/PageListCard.tsx). Title, `/path`, home badge, published-or-draft badge, and row actions. A list rather than a grid of cards, because a page's identity is its **address**: two pages called "Menu" at `/menu` and `/menus` is a mistake the merchant needs to see at a glance, and cards hide the one column that shows it. The new-page dialog derives the address from the title until the merchant touches it, then leaves it alone. **Manage pages** in the toolbar is re-enabled and points here (undoes W0.2). *Browser-verified on staging: created a second page, renamed it, removed it.*
+- [x] **3.2 — Page settings in the editor.** Name, address and removal now sit above the search-listing fields that used to be the whole panel. Saved **on blur and immediately**, not through the draft autosave, because the row and the document are different stores with different failure modes — "that address is already taken" has to reach the merchant, and a silent autosave has nowhere to put it. A rejected value is put back rather than left in the field, so the box never shows an address that does not exist. The home page shows its address as fixed and explains why instead of offering a control the action would refuse.
+- [ ] **3.1a — "Make this the home page"** was scoped into 3.1 and is **not built.** It is not a flag flip: `uq_site_pages_one_home` allows one home per site and the home page owns the empty path, so promoting a page is a two-row, four-column swap that must be atomic — demote-then-promote through PostgREST can strand a site with no home page if the second write fails. That makes it a database function, and the migration could not be applied in this session. Everything else in 3.1 works without it. **Do not implement it as two client-side updates.**
+- [ ] **3.1b — Duplicate a page.** Also scoped into 3.1 and not built; `DuplicatePage` does not exist server-side. Smaller than 3.1a and genuinely additive — it needs a new action that copies `draft_content` under a fresh path.
+- [x] **3.3 — Nav editor** — a **Navigation** tab on the design workspace, not the page editor, because `merchant_sites.nav` is deliberately not per-page. Consumes W2.6, and needed no migration or server action: the column already existed and `UpdateSiteSettings` already accepted `nav` in its patch type — only the writer was missing. [nav.ts](../../../lib/site-builder/nav.ts) now owns the contract that previously lived only inside `readNav`, and the tests that matter are **round trips** (editor writes → `readNav` reads), because the two halves run in different processes and drift silently: the failure is a link the merchant saved and the header never draws. 15 tests.
+
+  **Targets are picked from the page list, never typed.** A hand-entered path is a 404 the merchant cannot see from the editor — they would have to publish, visit the live site and click it to find out. The page list is loaded server-side in [design/page.tsx](../../../app/dashboard/website/design/page.tsx), so the valid set is known exactly and the mistake becomes unavailable rather than merely discouraged. A link whose page was later renamed is the one case that escapes this, so it is flagged in place instead of being silently repointed.
+
+  *Browser-verified on staging as Joes Coffee Shop:* added an internal and an external link, saved, and confirmed the **public page** rendered `<nav aria-label="Primary">` with the internal href prefixed to `/sites/joes-coffee-shop` and the external one passed through untouched — 51,647 bytes of server-rendered HTML, up from 50,705 without nav. Then removed both and confirmed the column, the theme and the public page all returned to their original state, leaving no debris (the W1.1 lesson).
+
+  **One thing the browser found that the tests could not:** a merchant with a single page got a silently duplicated "Home" row on a second **Add link**, because the suggestion fell back to `pages[0]` once every page was linked. It now offers an external row instead — the only kind of link left to add.
 - [ ] **3.4 — Location pages** — "create a page for this location", honouring the `uq_site_pages_one_per_location` partial index so running it twice cannot produce two pages both claiming to be Downtown.
 
 ### W4 — Publish lifecycle (≈ 3–4 days)
@@ -251,27 +274,51 @@ W1  ─────────────────────────�
                           W2.5 ──────────┘   (route is inert without the flip)
                           W2.6 ──► W3.3
                           W2.7 (parallel with W2.4)
-W3 ──► W3.1 undoes W0.2
+W3.1 ✅ undoes W0.2 · W3.2 ✅ · W3.3 ✅ consumes W2.6 · W3.1a blocked on a migration (atomic home swap)
 W5 ──► W5.3 undoes W0.3
 ```
 
 **The critical path is §0.1 → W2.1 → W2.2 → W2.4 → W2.5.** Nothing a visitor can see changes until
 all five land, which is why W2.5 must not be treated as a footnote to the route.
 
-## 3. The one thing not yet proven end to end
+## 3. Walked end to end — 2026-08-17
 
-Every piece of `publish → visitor` exists and is unit-tested, and no part of it has been walked on a
-real site. The blocker is incidental rather than structural: the only merchant with a published page
-is the dev one, whose `render_mode` predates W2.5 and so still says `'template'`. The backfill that
-would have fixed it was dropped (dev data), and the review sheet correctly refuses to republish
-matching content — so that particular site cannot reach `'builder'` without an edit.
+Done on staging as Joes Coffee Shop: edit a page → publish → `render_mode` flips → load
+`/sites/joes-coffee-shop` as an anonymous visitor. **The chain works**: `render_mode` went to
+`'builder'` on publish, the route returned **HTTP 200 and 40 KB of server-rendered HTML** with the
+hero text edited moments earlier, and the editor's own copy ("Your page is live", version 3) matched
+what the visitor actually got.
 
-**For any merchant starting from here the order does not matter and no such gap exists:** publishing
-flips `render_mode`, claiming an address makes it resolvable, and either can come first.
+It was worth doing before W3. Three things were only findable this way, because each needs *real*
+data and *real* privileges — unit tests had passed on all three.
 
-To walk it once: edit a page, publish (flips the mode), claim an address, then load
-`{subdomain}.dexaposai.com` — or `/sites/{subdomain}` in development. Worth doing before W3, because
-it is the first time the whole chain runs against real data.
+**1. A published page had no address, phone, hours or map.** The most serious of the three, and
+invisible to every test: the built site renders with the anon key (2.7), every SELECT policy on
+`locations` is `authenticated`-only, and PostgREST answers an unauthorised read with **zero rows and
+no error**. So the resolver silently resolved every location binding to nothing. The restaurant's
+name still appeared — it comes from the site context, not the binding — which is exactly what made
+it look fine at a glance. Fixed in **2.12**. This is the failure 2.7's anon client was chosen to
+catch, and it caught it: the page broke in development instead of leaking in production.
+
+**2. Adding a Location & Hours section made the page unpublishable, with no way out.** Found by
+hitting it: the review sheet blocked publishing on "not linked to a location", its **Fix** button
+navigated to the field, and the field rendered explanatory prose and no control. Fixed in **2.13**.
+
+**3. `sec_probe` is not debris that can be deleted** — see the correction in §5.
+
+**Confirmed since:** the fix for (1) was applied and verified the same day (2.12a), and the live page
+now carries the street, postal code, phone and every day's opening hours. The whole chain is verified
+against staging.
+
+**Two smaller things seen while walking, deliberately not fixed here:**
+
+- The public `<title>` came out `Home 1786796238939 — DEXA POS`. Two separate problems: the page
+  title debris (§5), and a built site inheriting the dashboard's `— DEXA POS` title template, which
+  is the wrong brand on a restaurant's own website. The latter belongs with the rest of the SEO
+  surface in 2.9.
+- The toolbar says "Live" whenever the site has an address, without consulting `render_mode`. Only
+  wrong for pre-W2.5 rows that were published before the flip existed; any publish from here on
+  makes it true. Not worth a database read on every editor load.
 
 ## 4. Verification
 
@@ -296,13 +343,18 @@ Per stage, not at the end:
 
 ## 5. Outstanding — needs a decision
 
-- [ ] **Repair the debris on Joes Coffee Shop's home page draft** (page `2594a8a0…`, staging). It
-      carries a `sec_probe` hero titled "revision probe" as its **first** section — ahead of the
-      header, which is not a position the zone rules allow — and the title `Home 1786796238939`.
-      Both are leftovers from the 2026-08-15 tenancy run described in W1. The fix is to drop the one
-      section and reset the title to `Home`; it is a two-column update on one row, but it is a
-      write to a real draft, so it is left for explicit approval rather than done quietly. Nothing
-      else depends on it — it only makes the preview surface show clean content.
+- [x] **The `sec_probe` section is repaired — and this entry's premise was wrong.** It described
+      dropping the section. That is impossible and would have been wrong: `sec_probe` is `kind:
+      "hero"`, and hero is a non-deletable required singleton, so it *is* the page's hero and the
+      tenancy script had overwritten its heading rather than adding a section. Its position ahead
+      of the header is legal too — both share the masthead zone. Repaired the way a merchant would:
+      the heading was retyped in the editor and published (version 3). Worth keeping as a lesson —
+      the entry was written from a section id and a title, without checking the kind against the
+      registry.
+- [x] **The page title `Home 1786796238939` is fixed**, through the page list W3.1 built rather than
+      by hand — which is the better outcome, since it means the repair was a merchant-reachable
+      action rather than a database write. Staging's home page is titled `Home` again, and no
+      untracked debris remains on that site.
 - [ ] **`tsconfig.json` has `"jsx": "react-jsx"`** and is committed that way. A prior note records
       that it must stay `"preserve"` for Next.js and that a stray full-project `tsc` run is what
       changes it. Unrelated to this plan and not touched here, but worth confirming deliberately.

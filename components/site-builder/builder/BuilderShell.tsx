@@ -109,6 +109,7 @@ export default function BuilderShell({
       pages,
       publishedDoc,
       publishedAt,
+      locationId,
     });
     if (initialCatalog) {
       next.getState().setCatalog(
@@ -183,7 +184,9 @@ export default function BuilderShell({
             inspectorOpen ? (pane === "inspector" ? "block" : "hidden xl:block") : "hidden",
           )}
         >
-          {inspectorOpen && <SettingsPanel store={store} locationId={locationId} />}
+          {inspectorOpen && (
+            <SettingsPanel store={store} locationId={locationId} clerkOrgId={clerkOrgId} />
+          )}
         </aside>
       </div>
 

@@ -141,3 +141,38 @@ describe("selection sync", () => {
     expect(store.getState().selectedId).toBeNull();
   });
 });
+
+describe("sections added from the gallery", () => {
+  const LOCATION = "03a80a14-2176-41b4-8ef2-29d55ab6f053";
+
+  /**
+   * A Location & Hours section born with an empty binding is a blocking
+   * validation error the moment it lands, and the merchant did nothing wrong.
+   * The store is the only place that knows which restaurant is being edited,
+   * so it is the only place that can prevent it.
+   */
+  it("binds a new location section to the location being edited", () => {
+    const store = makeStore({ locationId: LOCATION });
+    const before = store.getState().doc.sections.map((s) => s.id);
+
+    store.getState().addSection("location");
+
+    const added = store.getState().doc.sections.find((s) => !before.includes(s.id));
+    expect(added?.kind).toBe("location");
+    expect((added!.props as { location: { id: string } }).location.id).toBe(LOCATION);
+  });
+
+  it("makes the editing location readable, so the inspector cannot disagree with it", () => {
+    expect(makeStore({ locationId: LOCATION }).getState().locationId).toBe(LOCATION);
+    expect(makeStore().getState().locationId).toBeNull();
+  });
+
+  it("still adds sections that need no location when none is known", () => {
+    const store = makeStore();
+    const before = store.getState().doc.sections.length;
+
+    store.getState().addSection("content");
+
+    expect(store.getState().doc.sections.length).toBe(before + 1);
+  });
+});
