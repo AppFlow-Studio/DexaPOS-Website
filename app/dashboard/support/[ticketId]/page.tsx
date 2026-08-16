@@ -86,7 +86,7 @@ function MessageBubble({
         {isOwn ? initials : "D"}
       </div>
 
-      <div className={cn("max-w-[75%] space-y-1", isOwn && "items-end flex flex-col")}>
+      <div className={cn("min-w-0 max-w-[75%] space-y-1", isOwn && "items-end flex flex-col")}>
         {!isOwn && (
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
             DEXA Team
@@ -102,13 +102,13 @@ function MessageBubble({
         </div>
         <div
           className={cn(
-            "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+            "min-w-0 rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
             isOwn
               ? "bg-[#0C4FD1] dark:bg-[#6CA0FF] text-white dark:text-[#0f1115] rounded-tr-sm"
               : "bg-muted/60 text-foreground rounded-tl-sm"
           )}
         >
-          <p className="whitespace-pre-wrap">{message.message}</p>
+          <p className="whitespace-pre-wrap break-words">{message.message}</p>
           {message.attachments && message.attachments.length > 0 && (
             <AttachmentList attachments={message.attachments} />
           )}
@@ -128,6 +128,9 @@ export default function TicketDetailPage() {
   const [attachments, setAttachments] = useState<AttachmentInput[]>([]);
   const [uploadSessionId] = useState(() => crypto.randomUUID());
   const [uploadKey, setUploadKey] = useState(0);
+  // Callback ref, not useRef: the portal target must trigger a re-render once
+  // it mounts, or the first render passes `null` and the chips never appear.
+  const [chipsNode, setChipsNode] = useState<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -209,7 +212,12 @@ export default function TicketDetailPage() {
 
   return (
     <PageShell width="narrow" className="flex flex-col">
-      <div style={{ height: "calc(100dvh - 220px)" }} className="flex flex-col min-h-0">
+      {/* Mobile takes no fixed height: the layout's `MobileBottomNav` is fixed and
+          overlays the page, so pinning to the viewport clipped the composer with
+          no way to reach it. Letting the content flow lets `#main-content` scroll
+          to it instead. From `sm` up the nav is gone and the chat pins to the
+          viewport so the thread — not the page — is what scrolls. */}
+      <div className="flex flex-col sm:min-h-0 sm:h-[calc(100dvh-140px)]">
         <PageHeader
           title={ticket.subject}
           backHref="/dashboard/support"
@@ -230,8 +238,10 @@ export default function TicketDetailPage() {
         </div>
 
         {/* Messages */}
-        <Panel className="flex-1 min-h-0 flex flex-col" padded>
-          <div className="flex-1 overflow-y-auto min-h-0 space-y-4 thin-scrollbar">
+        {/* Mobile gets an explicit height (the parent no longer constrains it);
+            desktop flexes to fill whatever the pinned wrapper leaves over. */}
+        <Panel className="flex h-[55dvh] flex-col sm:h-auto sm:flex-1 sm:min-h-[420px]" padded>
+          <div className="flex-1 overflow-y-auto min-h-0 space-y-4 thin-scrollbar overscroll-contain">
             {messages.length === 0 && !isLoading && (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <div className="h-12 w-12 rounded-full bg-muted/60 flex items-center justify-center mb-3">
@@ -259,7 +269,7 @@ export default function TicketDetailPage() {
         </Panel>
 
         {/* Reply Box or Reopen */}
-        <div className="shrink-0 pt-4">
+        <div className="shrink-0 pt-4 pb-4 sm:pb-0">
           {isResolved ? (
             <div className="flex flex-col items-center gap-3 py-3">
               <p className="text-sm text-muted-foreground text-center">
@@ -282,40 +292,48 @@ export default function TicketDetailPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              <FileUploadInput
-                key={uploadKey}
-                onUploadsChange={setAttachments}
-                getUploadUrl={handleGetUploadUrl}
-                sessionId={uploadSessionId}
-                disabled={isSending}
-              />
-              <div className="flex gap-2 items-end">
+              {/* Selected files sit above the composer, filled by the picker's portal */}
+              <div ref={setChipsNode} className="empty:hidden" />
+
+              <div className="flex items-end gap-2">
                 <Textarea
                   ref={textareaRef}
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Type your reply…"
-                  className="resize-none min-h-[80px] max-h-[160px]"
+                  className="min-w-0 flex-1 resize-none min-h-[72px] sm:min-h-[100px] max-h-[200px]"
                   disabled={isSending}
                 />
-                <Button
-                  onClick={handleSend}
-                  disabled={!canSend}
-                  size="icon"
-                  className={cn(
-                    "shrink-0 h-9 w-9 rounded-full transition-opacity",
-                    !canSend && "opacity-40 cursor-not-allowed"
-                  )}
-                >
-                  {isSending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="h-4 w-4" />
-                  )}
-                </Button>
+                {/* Send above attach, stacked beside the textarea at every width. */}
+                <div className="flex shrink-0 flex-col gap-2">
+                  <Button
+                    onClick={handleSend}
+                    disabled={!canSend}
+                    size="icon"
+                    className={cn(
+                      "shrink-0 h-9 w-9 rounded-full transition-opacity",
+                      !canSend && "opacity-40 cursor-not-allowed"
+                    )}
+                  >
+                    {isSending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <FileUploadInput
+                    key={uploadKey}
+                    variant="compact"
+                    chipsContainer={chipsNode}
+                    onUploadsChange={setAttachments}
+                    getUploadUrl={handleGetUploadUrl}
+                    sessionId={uploadSessionId}
+                    disabled={isSending}
+                  />
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground text-center">
+              <p className="hidden sm:block text-xs text-muted-foreground text-center">
                 Press Enter to send · Shift+Enter for new line
               </p>
             </div>

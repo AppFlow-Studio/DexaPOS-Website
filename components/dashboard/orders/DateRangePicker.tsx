@@ -235,22 +235,22 @@ export function DateRangePicker({
                 </PopoverTrigger>
                 <PopoverContent
                     align={align}
-                    // Always drop downward. Radix would otherwise flip the panel
-                    // above the trigger whenever the calendar doesn't fit below,
-                    // which makes the control jump around near the bottom of the
-                    // viewport. `avoidCollisions={false}` keeps it anchored under
-                    // the trigger and lets the page scroll to reveal the rest.
+                    // Prefer dropping downward, but flip above the trigger when
+                    // the viewport doesn't have room below (e.g. the trigger is
+                    // near the bottom of the page after scrolling) — Radix's
+                    // built-in collision avoidance measures this per-open, so
+                    // the panel lands wherever actually fits rather than always
+                    // opening downward and running off-screen.
                     side="bottom"
-                    avoidCollisions={false}
                     // Keeping focus on the trigger means wheel/touch scrolling
                     // still reaches the page while the panel is open.
                     onOpenAutoFocus={(event) => event.preventDefault()}
                     // The panel is portalled and `position: fixed`, so it is not
-                    // part of the page's scrollable content — if it runs past the
-                    // bottom of the viewport, no amount of page scrolling can
-                    // reveal the footer. Cap it to the space actually available
-                    // below the trigger (Radix measures this into the CSS var);
-                    // the columns below scroll within that budget.
+                    // part of the page's scrollable content — if it ran past the
+                    // viewport edge, no amount of page scrolling could reveal the
+                    // footer. Cap it to the space Radix actually measured on
+                    // whichever side it placed the panel; the columns below
+                    // scroll within that budget.
                     // Also cap the width to the viewport: the preset rail and
                     // calendar side by side are wider than a phone, so without
                     // this the panel ran off-screen and the right-hand days and
@@ -258,19 +258,14 @@ export function DateRangePicker({
                     // columns stack instead (see the flex direction below).
                     collisionPadding={8}
                     className={cn(
-                        // Width is capped by Radix's measured available width,
-                        // not 100vw: with avoidCollisions off the panel stays
-                        // anchored to the trigger, which is already inset from
-                        // the left edge, so a full-viewport cap still let the
-                        // right side (Apply, last preset chips) run off-screen
-                        // at 320px. The var accounts for that offset.
-                        //
-                        // Below sm that "available width" var is unreliable —
-                        // it's measured from the trigger's edge, not the true
-                        // viewport, so on a phone the panel can still overflow
-                        // the opposite edge (see the mobile calendar overflow
-                        // fix). Clamp to an explicit viewport-relative cap there
-                        // instead, and let sm+ fall back to the Radix var.
+                        // Width is capped to the viewport (minus a small margin)
+                        // below `sm`, where the preset rail and calendar are
+                        // wider than a phone. avoidCollisions is on, so Radix
+                        // shifts/flips the panel to stay on-screen — this cap
+                        // just stops it from ever wanting to render wider than
+                        // the viewport in the first place. At `sm`+ the panel
+                        // is narrow enough that Radix's own measured available
+                        // width is enough on its own.
                         'w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] sm:w-auto sm:max-w-[var(--radix-popover-content-available-width)]',
                         'p-0 z-[200] rounded-2xl bg-popover',
                         'max-h-[var(--radix-popover-content-available-height)] overflow-hidden',

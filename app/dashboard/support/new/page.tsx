@@ -115,20 +115,20 @@ export default function NewTicketPage() {
           {/* Category */}
           <div className="space-y-2">
             <Label>What do you need help with?</Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {CATEGORIES.map((cat) => (
                 <button
                   key={cat.key}
                   type="button"
                   onClick={() => setValue("category", cat.key)}
                   className={cn(
-                    "flex items-center gap-2 rounded-2xl border-0 px-3 py-2.5 text-sm text-left transition-colors",
+                    "flex items-center gap-1.5 rounded-2xl border-0 px-3 py-2.5 text-sm text-left transition-colors min-w-0",
                     selectedCategory === cat.key
                       ? "bg-muted text-foreground font-medium"
                       : "bg-muted/45 text-muted-foreground hover:bg-muted/60"
                   )}
                 >
-                  <span className="leading-tight">{cat.label}</span>
+                  <span className="leading-tight truncate min-w-0">{cat.label}</span>
                   {selectedCategory === cat.key && (
                     <CheckCircle2 className="h-3.5 w-3.5 ml-auto shrink-0 text-[#0C4FD1] dark:text-[#6CA0FF]" />
                   )}
@@ -157,11 +157,13 @@ export default function NewTicketPage() {
 
           {/* Description */}
           <div className="space-y-2">
-            <Label htmlFor="description">Describe the issue</Label>
+            <Label htmlFor="description" className="text-muted-foreground font-normal">
+              Describe the issue
+            </Label>
             <Textarea
               id="description"
               placeholder="Provide as much detail as possible — what happened, when it occurs, what you've already tried..."
-              className="min-h-[140px] resize-none aria-invalid:border aria-invalid:border-destructive"
+              className="min-h-[140px] resize-none border-none shadow-none focus-visible:ring-0 aria-invalid:border aria-invalid:border-destructive"
               aria-invalid={!!errors.description}
               {...register("description")}
             />
@@ -192,8 +194,8 @@ export default function NewTicketPage() {
                 defaultValue={selectedLocation?.id || ""}
                 onValueChange={(val) => setValue("locationId", val || undefined)}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a location" />
+                <SelectTrigger size="sm" className="w-auto max-w-[200px] text-sm">
+                  <SelectValue placeholder="Select a location" className="truncate" />
                 </SelectTrigger>
                 <SelectContent>
                   {locations.map((loc) => (

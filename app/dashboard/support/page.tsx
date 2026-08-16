@@ -3,14 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  Plus,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  ChevronRight,
-  Inbox,
-} from "lucide-react";
+import { Plus, ChevronRight, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,14 +27,6 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-function getStatusIcon(status: TicketStatus) {
-  if (status === "resolved" || status === "closed")
-    return <CheckCircle2 className="h-4 w-4 text-muted-foreground" />;
-  if (status === "waiting_on_merchant")
-    return <AlertCircle className="h-4 w-4 text-muted-foreground" />;
-  return <Clock className="h-4 w-4 text-muted-foreground" />;
-}
-
 function TicketCard({ ticket }: { ticket: SupportTicket }) {
   const router = useRouter();
 
@@ -51,24 +36,21 @@ function TicketCard({ ticket }: { ticket: SupportTicket }) {
       className="group flex flex-col gap-2 rounded-2xl border-0 bg-muted/45 px-4 py-3.5 cursor-pointer transition-colors hover:bg-muted"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2.5 min-w-0">
-          {getStatusIcon(ticket.status)}
-          <div className="min-w-0">
-            <p className="font-medium text-sm leading-snug truncate">{ticket.subject}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {ticket.ticket_number} · {TICKET_CATEGORY_LABELS[ticket.category]}
-            </p>
-          </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-sm leading-snug truncate">{ticket.subject}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {ticket.ticket_number} · {TICKET_CATEGORY_LABELS[ticket.category]}
+          </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
             {TICKET_STATUS_LABELS[ticket.status]}
           </span>
-          <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ChevronRight className="hidden h-4 w-4 text-muted-foreground opacity-0 transition-opacity sm:block group-hover:opacity-100" />
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-xs text-muted-foreground pl-6">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>{getViewerStatusLabel(ticket.status, { role: "merchant" })}</span>
         <span>{formatDistanceToNow(new Date(ticket.last_message_at), { addSuffix: true })}</span>
       </div>
@@ -80,16 +62,13 @@ function TicketCardSkeleton() {
   return (
     <div className="flex flex-col gap-2 rounded-2xl border-0 bg-muted/45 px-4 py-3.5">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2.5">
-          <Skeleton className="h-4 w-4 rounded-full" />
-          <div className="space-y-1.5">
-            <Skeleton className="h-4 w-48" />
-            <Skeleton className="h-3 w-32" />
-          </div>
+        <div className="space-y-1.5">
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-3 w-32" />
         </div>
         <Skeleton className="h-5 w-20 rounded-full" />
       </div>
-      <div className="flex justify-between pl-6">
+      <div className="flex justify-between">
         <Skeleton className="h-3 w-36" />
         <Skeleton className="h-3 w-20" />
       </div>
