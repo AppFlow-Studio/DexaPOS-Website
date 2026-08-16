@@ -67,7 +67,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useLocationStore, useIsAllLocations } from "@/stores/location-store";
+import {
+  useGatedLocationId,
+  useIsAllLocations,
+  useIsSingleLocation,
+  useLocationStore,
+  useSingleLocationName,
+} from "@/stores/location-store";
 import { LocationLibraryItem } from "@/types/menu";
 import { Switch } from "@/components/ui/switch";
 import { GetItemIsPopular, SetItemPopular, GetItemIsNew, SetItemNew } from "../../../actions/location-menu-overrides";
@@ -289,12 +295,14 @@ function EditingContextIndicator({
 interface PriceBreakdownProps {
   item: LocationLibraryItem;
   isAllLocations: boolean;
+  isSingleLocation: boolean;
   currentLocationName: string;
 }
 
 function PriceBreakdown({
   item,
   isAllLocations,
+  isSingleLocation,
   currentLocationName,
 }: PriceBreakdownProps) {
   const basePrice = item.base_price;
@@ -308,6 +316,33 @@ function PriceBreakdown({
   const effectivePrice = locationOverride?.custom_price ?? basePrice;
   const effectiveCashPrice =
     locationOverride?.custom_cash_price ?? baseCashPrice;
+
+  if (isSingleLocation) {
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <DollarSign className="h-4 w-4 text-green-500" />
+            Pricing
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border bg-muted/20 p-3">
+            <div className="text-xs text-muted-foreground">Card price</div>
+            <div className="font-semibold">${effectivePrice?.toFixed(2)}</div>
+          </div>
+          <div className="rounded-lg border bg-muted/20 p-3">
+            <div className="text-xs text-muted-foreground">Cash price</div>
+            <div className="font-semibold">
+              {effectiveCashPrice == null
+                ? "Not set"
+                : `$${effectiveCashPrice.toFixed(2)}`}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -470,6 +505,9 @@ export default function MenuItemDetailPage() {
   // Location context
   const { selectedLocationId, locations } = useLocationStore();
   const isAllLocations = useIsAllLocations();
+  const isSingleLocation = useIsSingleLocation();
+  const gatedLocationId = useGatedLocationId();
+  const singleLocationName = useSingleLocationName();
 
   const currentLocation = React.useMemo(
     () => locations.find((l) => l.id === selectedLocationId) ?? null,
@@ -477,9 +515,10 @@ export default function MenuItemDetailPage() {
   );
 
   const currentLocationName = React.useMemo(() => {
+    if (isSingleLocation) return singleLocationName || "Your location";
     if (isAllLocations) return "All Locations";
     return currentLocation?.name || "Unknown Location";
-  }, [isAllLocations, currentLocation]);
+  }, [isAllLocations, isSingleLocation, singleLocationName, currentLocation]);
 
   const editingContext = React.useMemo(
     () => getEditingContext(isAllLocations),
@@ -488,9 +527,9 @@ export default function MenuItemDetailPage() {
 
   // Stock quantity — only meaningful when mode is 'quantity' and a location is selected
   const { data: stockRecords } = useQuery({
-    queryKey: ["item-stock", itemId, selectedLocationId],
-    queryFn: () => GetItemStock(selectedLocationId, itemId),
-    enabled: !!itemId && !isAllLocations && !!selectedLocationId,
+    queryKey: ["item-stock", itemId, gatedLocationId],
+    queryFn: () => GetItemStock(gatedLocationId, itemId),
+    enabled: !!itemId && !!gatedLocationId,
   });
   const stockRecord = stockRecords?.[0] ?? null;
 
@@ -503,17 +542,17 @@ export default function MenuItemDetailPage() {
 
   // Popular flag — per-location, only fetched when a specific location is selected
   const { data: isPopular = false } = useQuery({
-    queryKey: ["item-popular", itemId, selectedLocationId],
-    queryFn: () => GetItemIsPopular(itemId, selectedLocationId!),
-    enabled: !!itemId && !isAllLocations && !!selectedLocationId,
+    queryKey: ["item-popular", itemId, gatedLocationId],
+    queryFn: () => GetItemIsPopular(itemId, gatedLocationId!),
+    enabled: !!itemId && !!gatedLocationId,
   });
 
   const popularMutation = useMutation({
     mutationFn: (value: boolean) =>
-      SetItemPopular(itemId, selectedLocationId!, value),
+      SetItemPopular(itemId, gatedLocationId!, value),
     onSuccess: (_, value) => {
       queryClient.setQueryData(
-        ["item-popular", itemId, selectedLocationId],
+        ["item-popular", itemId, gatedLocationId],
         value
       );
       toast.success(value ? "Marked as Popular" : "Removed Popular badge");
@@ -523,17 +562,17 @@ export default function MenuItemDetailPage() {
 
   // New flag — per-location, only fetched when a specific location is selected
   const { data: isNew = false } = useQuery({
-    queryKey: ["item-new", itemId, selectedLocationId],
-    queryFn: () => GetItemIsNew(itemId, selectedLocationId!),
-    enabled: !!itemId && !isAllLocations && !!selectedLocationId,
+    queryKey: ["item-new", itemId, gatedLocationId],
+    queryFn: () => GetItemIsNew(itemId, gatedLocationId!),
+    enabled: !!itemId && !!gatedLocationId,
   });
 
   const newMutation = useMutation({
     mutationFn: (value: boolean) =>
-      SetItemNew(itemId, selectedLocationId!, value),
+      SetItemNew(itemId, gatedLocationId!, value),
     onSuccess: (_, value) => {
       queryClient.setQueryData(
-        ["item-new", itemId, selectedLocationId],
+        ["item-new", itemId, gatedLocationId],
         value
       );
       toast.success(value ? "Marked as New" : "Removed New badge");
@@ -673,10 +712,10 @@ export default function MenuItemDetailPage() {
                 <><XCircle className="h-3 w-3 mr-1" />Unavailable</>
               )}
             </Badge>
-            <EditingContextIndicator
+            {!isSingleLocation && <EditingContextIndicator
               context={editingContext}
               locationName={currentLocationName}
-            />
+            />}
           </div>
         </div>
       </div>
@@ -826,7 +865,8 @@ export default function MenuItemDetailPage() {
               </CardTitle>
               <CardDescription>
                 Customization options available for this item.
-                {!isAllLocations && " Showing both global and location-specific modifiers."}
+                {!isSingleLocation && !isAllLocations &&
+                  " Showing both global and location-specific modifiers."}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -876,7 +916,7 @@ export default function MenuItemDetailPage() {
                                           Required
                                         </Badge>
                                       )}
-                                      {(group as any).source === "location" ? (
+                                      {!isSingleLocation && ((group as any).source === "location" ? (
                                         <Badge
                                           variant="outline"
                                           className="text-[10px] gap-1 bg-blue-50 text-blue-700 border-blue-200 max-w-full"
@@ -892,7 +932,7 @@ export default function MenuItemDetailPage() {
                                           <Globe className="h-2.5 w-2.5 shrink-0" />
                                           All Locations
                                         </Badge>
-                                      )}
+                                      ))}
                                     </div>
                                     {group.description && (
                                       <div className="text-sm text-muted-foreground line-clamp-1">
@@ -1097,6 +1137,7 @@ export default function MenuItemDetailPage() {
           <PriceBreakdown
             item={menuItem}
             isAllLocations={isAllLocations}
+            isSingleLocation={isSingleLocation}
             currentLocationName={currentLocationName}
           />
 
@@ -1121,19 +1162,19 @@ export default function MenuItemDetailPage() {
                           🔥 Popular
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {isAllLocations
-                            ? "Select a location to manage"
-                            : "Auto-detected or manually set"}
+                           {!gatedLocationId
+                             ? "Select a location to manage"
+                             : "Auto-detected or manually set"}
                         </p>
                       </div>
                       <Switch
                         checked={isPopular}
                         onCheckedChange={(v) => popularMutation.mutate(v)}
-                        disabled={isAllLocations || popularMutation.isPending}
+                        disabled={!gatedLocationId || popularMutation.isPending}
                       />
                     </div>
                   </TooltipTrigger>
-                  {isAllLocations && (
+                  {!gatedLocationId && (
                     <TooltipContent>
                       Select a specific location to manage this badge
                     </TooltipContent>
@@ -1150,19 +1191,19 @@ export default function MenuItemDetailPage() {
                           ✨ New
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {isAllLocations
-                            ? "Select a location to manage"
-                            : "Mark as new at this branch"}
+                           {!gatedLocationId
+                             ? "Select a location to manage"
+                             : "Mark as new at this branch"}
                         </p>
                       </div>
                       <Switch
                         checked={isNew}
                         onCheckedChange={(v) => newMutation.mutate(v)}
-                        disabled={isAllLocations || newMutation.isPending}
+                        disabled={!gatedLocationId || newMutation.isPending}
                       />
                     </div>
                   </TooltipTrigger>
-                  {isAllLocations && (
+                  {!gatedLocationId && (
                     <TooltipContent>
                       Select a specific location to manage this badge
                     </TooltipContent>

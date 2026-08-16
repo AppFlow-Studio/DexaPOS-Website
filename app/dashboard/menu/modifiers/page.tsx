@@ -55,7 +55,15 @@ import { cn } from "@/lib/utils";
 import { useModifierGroups } from "@/app/dashboard/hooks/useModifierGroups";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
-import { useSelectedLocation, useLocationStore } from "@/stores/location-store";
+import {
+  useIsSingleLocation,
+  useSelectedLocation,
+  useLocationStore,
+} from "@/stores/location-store";
+import {
+  canReorderModifierLibrary,
+  type ModifierScopeFilter,
+} from "@/lib/menu/modifier-library-scope";
 import { ModifierGroupFormSheet } from "@/components/dashboard/menu/ModifierGroupFormSheet";
 import { AssignModifierToItemsDialog } from "@/components/dashboard/menu/modifiers/AssignModifierToItemsDialog";
 import { AssignModifierToCategoryDialog } from "@/components/dashboard/menu/modifiers/AssignModifierToCategoryDialog";
@@ -173,6 +181,7 @@ export default function ModifiersPage() {
   const rawLocationId = useLocationStore((s) => s.selectedLocationId);
   const selectedLocationId = rawLocationId === "all" ? null : (rawLocationId || null);
   const isAllLocations = !selectedLocationId;
+  const isSingleLocation = useIsSingleLocation();
 
   const { data: modifierGroups, isLoading } = useModifierGroups(
     clerkOrgId,
@@ -204,9 +213,7 @@ export default function ModifiersPage() {
   const [deletingGroup, setDeletingGroup] = useState<string | null>(null);
   const [assignItemsGroup, setAssignItemsGroup] = useState<ModifierGroupWithItems | null>(null);
   const [assignCategoryGroup, setAssignCategoryGroup] = useState<ModifierGroupWithItems | null>(null);
-  const [scopeFilter, setScopeFilter] = useState<"all" | "global" | "location">(
-    "all",
-  );
+  const [scopeFilter, setScopeFilter] = useState<ModifierScopeFilter>("all");
   const [isDraggingGroupId, setIsDraggingGroupId] = useState<string | null>(null);
   const [groupOrderSaving, setGroupOrderSaving] = useState(false);
   // Optimistic local order — set on drag, cleared after save/error
@@ -225,14 +232,15 @@ export default function ModifiersPage() {
         group.name.toLowerCase().includes(term) ||
         group.description?.toLowerCase().includes(term);
 
+      const effectiveScopeFilter = isSingleLocation ? "all" : scopeFilter;
       const matchesScope =
-        scopeFilter === "all" ||
-        (scopeFilter === "global" && !group.location_id) ||
-        (scopeFilter === "location" && !!group.location_id);
+        effectiveScopeFilter === "all" ||
+        (effectiveScopeFilter === "global" && !group.location_id) ||
+        (effectiveScopeFilter === "location" && !!group.location_id);
 
       return matchesSearch && matchesScope;
     }) as ModifierGroupWithItems[];
-  }, [localGroupOrder, modifierGroups, searchTerm, scopeFilter]);
+  }, [isSingleLocation, localGroupOrder, modifierGroups, searchTerm, scopeFilter]);
 
   // Counts for filters
   const counts = useMemo(() => {
@@ -261,10 +269,16 @@ export default function ModifiersPage() {
   const canOverrideOnly = (group: ModifierGroupWithItems) =>
     !isAllLocations && !group.location_id;
 
-  const canReorderLibraryGroups =
-    !searchTerm.trim() && (!isAllLocations || scopeFilter === "global");
+  const canReorderLibraryGroups = canReorderModifierLibrary({
+    hasSearch: !!searchTerm.trim(),
+    isAllLocations,
+    isSingleLocation,
+    scopeFilter,
+  });
 
-  const reorderHelpText = isAllLocations
+  const reorderHelpText = isSingleLocation
+    ? "Clear the current search before reordering groups."
+    : isAllLocations
     ? "Switch to the Global filter to reorder library groups."
     : "Clear the current search before reordering groups.";
 
@@ -872,8 +886,9 @@ const sensors = useSensors(
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Modifiers</h1>
             <p className="text-muted-foreground mt-1">
-              Global management in All Locations. In a location view, override
-              visibility and prices, or fully manage location-owned groups.
+              {isSingleLocation
+                ? "Manage modifier groups, options, assignments, and display order for your menu."
+                : "Global management in All Locations. In a location view, override visibility and prices, or fully manage location-owned groups."}
             </p>
           </div>
           <Button onClick={handleCreateGroup} className="gap-2 self-start flex-shrink-0">
@@ -881,7 +896,7 @@ const sensors = useSensors(
             Create Group
           </Button>
         </div>
-        {!isAllLocations && (
+        {!isSingleLocation && !isAllLocations && (
           <div className="flex items-start gap-2 p-2 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-100">
             <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <span>Viewing <strong>{selectedLocation?.name}</strong>. Global groups are
@@ -917,7 +932,8 @@ const sensors = useSensors(
             <div className="text-xs text-muted-foreground">{reorderHelpText}</div>
           )}
 
-          {/* Filter Buttons */}
+          {/* Multi-location scope filters */}
+          {!isSingleLocation && (
           <div className="flex flex-wrap gap-2 border-t pt-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Filter className="h-4 w-4" />
@@ -970,6 +986,7 @@ const sensors = useSensors(
               </Badge>
             </Button>
           </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-3">
           {isLoading ? (
@@ -1034,6 +1051,7 @@ const sensors = useSensors(
                             {group.description || "No description"}
                           </CardDescription>
                           <div className="flex flex-wrap gap-2 mt-2">
+                            {!isSingleLocation && (
                             <Badge
                               variant="outline"
                               className={cn(
@@ -1050,6 +1068,7 @@ const sensors = useSensors(
                               )}
                               {scopeBadge}
                             </Badge>
+                            )}
                             {locationOverride && canOverrideOnly(group) && (
                               <Badge
                                 variant="outline"
@@ -1061,13 +1080,18 @@ const sensors = useSensors(
                             <Badge variant="outline" className="text-[10px]">
                               {itemCount} option{itemCount !== 1 ? "s" : ""}
                             </Badge>
-                            {globalLinkedCount > 0 && (
+                            {isSingleLocation && globalLinkedCount + locationLinkedCount > 0 && (
+                              <Badge variant="outline" className="text-[10px]">
+                                {globalLinkedCount + locationLinkedCount} item{globalLinkedCount + locationLinkedCount !== 1 ? "s" : ""} linked
+                              </Badge>
+                            )}
+                            {!isSingleLocation && globalLinkedCount > 0 && (
                               <Badge variant="outline" className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200">
                                 <Globe className="h-2.5 w-2.5" />
                                 {globalLinkedCount} item{globalLinkedCount !== 1 ? "s" : ""}
                               </Badge>
                             )}
-                            {locationLinkedCount > 0 && (
+                            {!isSingleLocation && locationLinkedCount > 0 && (
                               <Badge variant="outline" className="text-[10px] gap-1 bg-blue-50 text-blue-700 border-blue-200">
                                 <MapPin className="h-2.5 w-2.5" />
                                 {locationLinkedCount} item{locationLinkedCount !== 1 ? "s" : ""} (location)
@@ -1193,8 +1217,21 @@ const sensors = useSensors(
                               Linked Items ({globalLinkedCount + locationLinkedCount})
                             </div>
 
+                            {isSingleLocation && (
+                              <div className="flex flex-wrap gap-1">
+                                {[
+                                  ...(group.menu_item_modifier_groups ?? []),
+                                  ...(group.location_item_modifier_groups ?? []),
+                                ].map((link) => (
+                                  <Badge key={link.id} variant="outline" className="text-[10px]">
+                                    {link.menu_item?.name || "Unknown"}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+
                             {/* Global assignments */}
-                            {globalLinkedCount > 0 && (
+                            {!isSingleLocation && globalLinkedCount > 0 && (
                               <div className="space-y-1">
                                 <div className="text-xs font-medium text-emerald-700 flex items-center gap-1">
                                   <Globe className="h-3 w-3" /> Global ({globalLinkedCount})
@@ -1210,7 +1247,7 @@ const sensors = useSensors(
                             )}
 
                             {/* Location-scoped assignments */}
-                            {locationLinkedCount > 0 && !isAllLocations && (
+                            {!isSingleLocation && locationLinkedCount > 0 && !isAllLocations && (
                               <div className="space-y-1">
                                 <div className="text-xs font-medium text-blue-700 flex items-center gap-1">
                                   <MapPin className="h-3 w-3" /> This Location ({locationLinkedCount})
@@ -1226,7 +1263,7 @@ const sensors = useSensors(
                             )}
 
                             {/* All Locations view — show per-location breakdown */}
-                            {locationLinkedCount > 0 && isAllLocations && locationBreakdown && (
+                            {!isSingleLocation && locationLinkedCount > 0 && isAllLocations && locationBreakdown && (
                               <div className="space-y-2">
                                 {Object.entries(locationBreakdown).map(([locId, info]) => (
                                   <div key={locId} className="space-y-1">

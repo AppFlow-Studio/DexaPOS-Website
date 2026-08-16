@@ -8,14 +8,14 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { logAdminAction } from '@/lib/admin/log-admin-action'
-import { maskAuthKey } from '@/app/dashboard/settings/stations/utils/terminal-helpers'
+import { maskAuthKey, normalizeSerial, isDuplicateSerialError } from '@/app/dashboard/settings/stations/utils/terminal-helpers'
 import bcrypt from 'bcryptjs'
 
 // ============================================================================
 // Types (duplicated from dashboard/actions/payment-terminals.ts for server action compatibility)
 // ============================================================================
 
-export type TerminalType = 'dejavoo' | 'pax'
+export type TerminalType = 'dejavoo' | 'castles' | 'valor' | 'pax'
 export type ApiEnvironment = 'sandbox' | 'production'
 export type ConnectionType = 'cloud' | 'local'
 
@@ -49,6 +49,7 @@ export interface PaymentTerminal {
   supports_tip_adjust: boolean
   auto_settle: boolean
   settle_time: string | null
+  valor_epi: string | null
   print_merchant_receipt: boolean
   print_customer_receipt: boolean
   signature_threshold: number
@@ -64,8 +65,11 @@ export interface CreatePaymentTerminalInput {
   terminal_type: TerminalType
   terminal_model?: string | null
   serial_number?: string | null
-  auth_key: string
-  register_id: string
+  // Dejavoo/SPIN cloud fields — not used by Castles/Valor (semi-integrated, LAN-local).
+  auth_key?: string | null
+  register_id?: string | null
+  // Valor terminal identity (EPI) — anchor for the auto-batch settlement webhook.
+  valor_epi?: string | null
   api_environment?: ApiEnvironment
   connection_type?: ConnectionType
   local_ip_address?: string | null
@@ -89,6 +93,7 @@ export interface UpdatePaymentTerminalInput {
   local_port?: number | null
   auto_settle?: boolean
   settle_time?: string | null
+  valor_epi?: string | null
   print_merchant_receipt?: boolean
   print_customer_receipt?: boolean
   signature_threshold?: number
@@ -99,6 +104,14 @@ export interface UpdatePaymentTerminalInput {
   supports_debit?: boolean
   supports_tip_adjust?: boolean
   is_active?: boolean
+  /**
+   * Explicit override to change a terminal's serial_number from one non-null
+   * value to a DIFFERENT non-null value. Without it, such a change is blocked:
+   * the serial is the physical-device identity and settlement batches are keyed
+   * to it, so a different serial means a different device that must be
+   * registered as its own terminal row (see adminUpdateTerminal guard).
+   */
+  confirmSerialChange?: boolean
 }
 
 // ============================================================================
@@ -316,6 +329,73 @@ export async function getAdminMerchantTerminalStats(
   }
 }
 
+/**
+ * A single physical terminal, deduplicated by serial number, with live
+ * connection state and the auto-settle config. One row per unique serial.
+ */
+export interface ConnectedTerminalRow {
+  terminal_uuid: string
+  serial_number: string | null
+  terminal_name: string
+  terminal_type: string
+  terminal_model: string | null
+  station_id: string | null
+  station_name: string | null
+  location_id: string
+  location_name: string | null
+  is_active: boolean
+  is_connected: boolean
+  last_connection_test_at: string | null
+  last_connection_status: string | null
+  connection_state: 'online' | 'offline' | 'stale' | 'unknown'
+  last_transaction_at: string | null
+  last_batch_at: string | null
+  open_batch_count: number | null
+  consecutive_failures: number | null
+  auto_settle: boolean
+  settle_time: string | null
+  valor_epi: string | null
+  duplicate_serial: boolean
+}
+
+/**
+ * Get the UNIQUE payment terminals (by serial number) for a merchant, with
+ * connection state and auto-settle config. Castles + Valor only. Backed by the
+ * get_connected_terminals_by_serial RPC (deduplicates by serial).
+ */
+export async function getAdminConnectedTerminals(
+  merchantId: string,
+  locationId?: string | null
+) {
+  try {
+    await assertHQPermission('hq.merchant.view')
+
+    const supabase = createServerSupabaseClient()
+
+    const { data, error } = await (supabase as any).rpc(
+      'get_connected_terminals_by_serial',
+      {
+        p_merchant_id: merchantId,
+        p_location_id: locationId && locationId !== 'all' ? locationId : null,
+      }
+    )
+
+    if (error) {
+      console.error('[getAdminConnectedTerminals] Error:', error)
+      return { success: false, error: error.message, data: null }
+    }
+
+    return { success: true, data: (data || []) as ConnectedTerminalRow[], error: null }
+  } catch (error) {
+    console.error('[getAdminConnectedTerminals] Exception:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      data: null,
+    }
+  }
+}
+
 // ============================================================================
 // CREATE Operations
 // ============================================================================
@@ -332,19 +412,22 @@ export async function adminCreateTerminal(
 
     const supabase = createServerSupabaseClient()
 
-    // Validate RegisterId uniqueness per merchant
-    const { data: existingRegisterId } = await supabase
-      .from('payment_terminals')
-      .select('id')
-      .eq('merchant_id', merchantId)
-      .eq('register_id', input.register_id)
-      .single()
+    // Validate RegisterId uniqueness per merchant (Dejavoo only — Castles/Valor
+    // don't have a register id, so skip the check when it's absent).
+    if (input.register_id) {
+      const { data: existingRegisterId } = await supabase
+        .from('payment_terminals')
+        .select('id')
+        .eq('merchant_id', merchantId)
+        .eq('register_id', input.register_id)
+        .single()
 
-    if (existingRegisterId) {
-      return {
-        success: false,
-        error: `Terminal with Register ID "${input.register_id}" already exists`,
-        data: null,
+      if (existingRegisterId) {
+        return {
+          success: false,
+          error: `Terminal with Register ID "${input.register_id}" already exists`,
+          data: null,
+        }
       }
     }
 
@@ -359,12 +442,15 @@ export async function adminCreateTerminal(
         terminal_name: input.terminal_name,
         terminal_type: input.terminal_type,
         terminal_model: input.terminal_model || null,
-        serial_number: input.serial_number || null,
-        auth_key: input.auth_key,
-        register_id: input.register_id,
-        auth_key_encrypted: bcrypt.hashSync(input.auth_key) || null,
+        serial_number: normalizeSerial(input.serial_number),
+        valor_epi: input.valor_epi?.trim() || null,
+        auth_key: input.auth_key || null,
+        register_id: input.register_id || null,
+        auth_key_encrypted: input.auth_key ? bcrypt.hashSync(input.auth_key) : null,
         api_environment: input.api_environment || 'sandbox',
-        connection_type: input.connection_type || 'cloud',
+        connection_type:
+          input.connection_type ||
+          (input.terminal_type === 'castles' || input.terminal_type === 'valor' ? 'local' : 'cloud'),
         local_ip_address: input.local_ip_address || null,
         local_port: input.local_port || null,
         signature_threshold: input.signature_threshold ?? 25.0,
@@ -383,22 +469,32 @@ export async function adminCreateTerminal(
         metadata: {},
         created_at: now,
         updated_at: now,
-      })
+        // valor_epi is a real column but not yet in the generated types; cast below.
+      } as any)
       .select()
       .single()
 
     if (error) {
       console.error('[adminCreateTerminal] Error:', error)
+      if (isDuplicateSerialError(error)) {
+        return {
+          success: false,
+          error: `A terminal with serial "${normalizeSerial(input.serial_number)}" already exists at this location.`,
+          data: null,
+        }
+      }
       return { success: false, error: error.message, data: null }
     }
 
-    // Vault the auth_key and store the secret UUID pointer
-    const { error: vaultErr } = await supabase.rpc('upsert_terminal_vault_secret', {
-      p_terminal_id: data.id,
-      p_auth_key: input.auth_key,
-    })
-    if (vaultErr) {
-      console.error('[adminCreateTerminal] Vault error:', vaultErr)
+    // Vault the auth_key and store the secret UUID pointer (Dejavoo only).
+    if (input.auth_key) {
+      const { error: vaultErr } = await supabase.rpc('upsert_terminal_vault_secret', {
+        p_terminal_id: data.id,
+        p_auth_key: input.auth_key,
+      })
+      if (vaultErr) {
+        console.error('[adminCreateTerminal] Vault error:', vaultErr)
+      }
     }
 
     // Mask auth_key in response
@@ -417,12 +513,14 @@ export async function adminCreateTerminal(
         after: {
           terminal_name: input.terminal_name,
           terminal_type: input.terminal_type,
+          serial_number: normalizeSerial(input.serial_number),
           station_id: input.station_id || null,
           location_id: input.location_id,
         },
       },
       metadata: {
         register_id: input.register_id,
+        serial_number: normalizeSerial(input.serial_number),
         created_by_admin: userId,
         source: 'adminCreateTerminal',
       },
@@ -460,13 +558,35 @@ export async function adminUpdateTerminal(
       .eq('id', terminalId)
       .single()
 
+    // Identity guard: never silently overwrite a terminal's serial_number with a
+    // DIFFERENT non-null serial. The serial is the physical-device identity and
+    // settlement_batches are keyed to it — a different serial means a different
+    // device, which must be registered as its own row. Filling a null serial or
+    // clearing it is still allowed; only a non-null → different-non-null change
+    // is blocked unless the caller passes confirmSerialChange.
+    if (input.serial_number !== undefined) {
+      const incoming = normalizeSerial(input.serial_number)
+      const existing = normalizeSerial(beforeTerminal?.serial_number)
+      if (existing && incoming && existing !== incoming && !input.confirmSerialChange) {
+        return {
+          success: false,
+          error:
+            `This looks like a different device (registered S/N ${existing} ≠ ${incoming}). ` +
+            `A terminal's serial is its physical identity and its settlement batches are keyed to it. ` +
+            `Register the replacement as a NEW terminal instead of editing this one.`,
+          code: 'SERIAL_IDENTITY_MISMATCH',
+          data: null,
+        }
+      }
+    }
+
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     }
 
     if (input.terminal_name !== undefined) updateData.terminal_name = input.terminal_name
     if (input.terminal_model !== undefined) updateData.terminal_model = input.terminal_model
-    if (input.serial_number !== undefined) updateData.serial_number = input.serial_number
+    if (input.serial_number !== undefined) updateData.serial_number = normalizeSerial(input.serial_number)
     if (input.auth_key !== undefined) updateData.auth_key = input.auth_key
     if (input.register_id !== undefined) updateData.register_id = input.register_id
     if (input.api_environment !== undefined) updateData.api_environment = input.api_environment
@@ -477,6 +597,7 @@ export async function adminUpdateTerminal(
     if (input.local_port !== undefined) updateData.local_port = input.local_port
     if (input.auto_settle !== undefined) updateData.auto_settle = input.auto_settle
     if (input.settle_time !== undefined) updateData.settle_time = input.settle_time
+    if (input.valor_epi !== undefined) updateData.valor_epi = input.valor_epi?.trim() || null
     if (input.print_merchant_receipt !== undefined) updateData.print_merchant_receipt = input.print_merchant_receipt
     if (input.print_customer_receipt !== undefined) updateData.print_customer_receipt = input.print_customer_receipt
     if (input.signature_threshold !== undefined) updateData.signature_threshold = input.signature_threshold
@@ -497,6 +618,13 @@ export async function adminUpdateTerminal(
 
     if (error) {
       console.error('[adminUpdateTerminal] Error:', error)
+      if (isDuplicateSerialError(error)) {
+        return {
+          success: false,
+          error: `A terminal with serial "${normalizeSerial(input.serial_number)}" already exists at this location.`,
+          data: null,
+        }
+      }
       return { success: false, error: error.message, data: null }
     }
 
