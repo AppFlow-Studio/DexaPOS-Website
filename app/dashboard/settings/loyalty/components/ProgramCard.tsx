@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -96,29 +95,34 @@ export function ProgramCard({
   };
 
   return (
-    <Card className="overflow-hidden border-l-4" style={{ borderLeftColor: displayColor }}>
-      <div className="flex items-center justify-between gap-3 p-4">
-        <div className="flex items-start gap-4 flex-1 min-w-0">
+    // The merchant picks `display_color` as the program's own identity, so it
+    // stays on the icon (§4.6b exception 2) — but the left border stripe goes:
+    // a panel edge is the only border the flat language has.
+    <div className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-start gap-4">
           {/* Icon */}
           <div className="mt-1 shrink-0">{getIcon()}</div>
 
           {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-base truncate">{program.name}</h3>
-              <Badge variant="outline" className="shrink-0">
+          <div className="min-w-0 flex-1">
+            {/* A `flex-1` spacer + `flex-wrap` rather than `truncate`: at 320px
+                the badge would otherwise squeeze the name to one word. */}
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <h3 className="min-w-0 text-base font-semibold">{program.name}</h3>
+              <Badge className="w-fit shrink-0 rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium">
                 {getProgramTypeLabel()}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground truncate">{getStatsText()}</p>
+            <p className="truncate text-sm text-muted-foreground">{getStatsText()}</p>
             {program.description && (
-              <p className="text-xs text-muted-foreground mt-1 truncate">{program.description}</p>
+              <p className="mt-1 truncate text-xs text-muted-foreground">{program.description}</p>
             )}
           </div>
         </div>
 
         {/* Right side: Toggle + Menu */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex shrink-0 items-center gap-3">
           <div className="flex items-center gap-2">
             <Switch
               checked={Boolean(program.is_active)}
@@ -134,7 +138,7 @@ export function ProgramCard({
           {/* Dropdown Menu */}
           <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full p-0">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -169,6 +173,6 @@ export function ProgramCard({
           </DropdownMenu>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

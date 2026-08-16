@@ -15,39 +15,38 @@ interface PoolCardProps {
 }
 
 /**
- * Attribute chips use the soft-tint recipe (DS-CTL-09): a translucent fill of
- * the same hue as the text, so the chip reads in both themes. The previous
- * `bg-blue-500/10 border-blue-500/40` pairs added a second competing border
- * beside the panel edge, and `bg-gray-100` had no dark variant at all.
+ * Attribute chips carry no per-value hue. The soft-tint recipe these used
+ * (D-11) is superseded by D-12: one neutral `bg-muted/60` pill for every value,
+ * with the word carrying the meaning. Ten hues across method, source, and
+ * interval turned a pool card into a colour key the reader had to learn.
+ *
+ * ⚠️ This is a `.ts`-shaped constant block inside a `.tsx`, so its classes are
+ * still scanned — but they are also spelled out literally in `AttributeChip`
+ * below, which is what actually generates the rule (C7).
  */
-const methodConfig: Record<string, { label: string; className: string }> = {
-  percentage:     { label: "Percentage",     className: "bg-blue-500/10 text-blue-700 dark:bg-blue-400/10 dark:text-blue-300" },
-  hours_weighted: { label: "Hours Weighted", className: "bg-violet-500/10 text-violet-700 dark:bg-violet-400/10 dark:text-violet-300" },
-  equal_split:    { label: "Equal Split",    className: "bg-teal-500/10 text-teal-700 dark:bg-teal-400/10 dark:text-teal-300" },
-  points:         { label: "Points-Based",   className: "bg-amber-500/10 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300" },
+const methodConfig: Record<string, { label: string }> = {
+  percentage:     { label: "Percentage" },
+  hours_weighted: { label: "Hours Weighted" },
+  equal_split:    { label: "Equal Split" },
+  points:         { label: "Points-Based" },
 };
 
-const sourceConfig: Record<string, { label: string; className: string }> = {
-  charged_tips: { label: "Charged Tips", className: "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300" },
-  all_tips:     { label: "All Tips",     className: "bg-blue-500/10 text-blue-700 dark:bg-blue-400/10 dark:text-blue-300" },
-  cash_only:    { label: "Cash Only",    className: "bg-slate-500/10 text-slate-700 dark:bg-slate-400/10 dark:text-slate-300" },
+const sourceConfig: Record<string, { label: string }> = {
+  charged_tips: { label: "Charged Tips" },
+  all_tips:     { label: "All Tips" },
+  cash_only:    { label: "Cash Only" },
 };
 
-const intervalConfig: Record<string, { label: string; className: string }> = {
-  full_workday: { label: "Full Workday", className: "bg-indigo-500/10 text-indigo-700 dark:bg-indigo-400/10 dark:text-indigo-300" },
-  by_shift:     { label: "By Shift",     className: "bg-purple-500/10 text-purple-700 dark:bg-purple-400/10 dark:text-purple-300" },
-  order:        { label: "Per Order",    className: "bg-pink-500/10 text-pink-700 dark:bg-pink-400/10 dark:text-pink-300" },
+const intervalConfig: Record<string, { label: string }> = {
+  full_workday: { label: "Full Workday" },
+  by_shift:     { label: "By Shift" },
+  order:        { label: "Per Order" },
 };
 
-/** A quiet attribute chip. Borderless tint, never a bordered outline badge. */
-function AttributeChip({ label, className }: { label: string; className?: string }) {
+/** A quiet attribute chip. One neutral borderless pill for every value. */
+function AttributeChip({ label }: { label: string }) {
   return (
-    <span
-      className={cn(
-        "inline-flex max-w-full items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-        className
-      )}
-    >
+    <span className="inline-flex max-w-full items-center rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
       <span className="truncate">{label}</span>
     </span>
   );
@@ -56,8 +55,8 @@ function AttributeChip({ label, className }: { label: string; className?: string
 export function PoolCard({ pool, roles, poolCount, onEdit, onDelete, onToggle, isToggling }: PoolCardProps) {
   const getRoleName = (code: string) => roles.find((r) => r.code === code)?.name || code;
 
-  const method = methodConfig[pool.distribution_method] ?? { label: pool.distribution_method, className: "bg-muted text-muted-foreground" };
-  const source = sourceConfig[pool.tip_source] ?? { label: pool.tip_source, className: "bg-muted text-muted-foreground" };
+  const method = methodConfig[pool.distribution_method] ?? { label: pool.distribution_method };
+  const source = sourceConfig[pool.tip_source] ?? { label: pool.tip_source };
   const interval = intervalConfig[(pool as any).policy_interval] ?? intervalConfig.full_workday;
   const priority = (pool as any).priority ?? 100;
   const showPriority = poolCount >= 2 || priority !== 100;
@@ -116,7 +115,7 @@ export function PoolCard({ pool, roles, poolCount, onEdit, onDelete, onToggle, i
         <div className="min-w-0">
           <p className="text-[0.8125rem] text-muted-foreground">Method</p>
           <div className="mt-1.5">
-            <AttributeChip label={method.label} className={method.className} />
+            <AttributeChip label={method.label} />
           </div>
         </div>
         <div className="min-w-0">
@@ -128,14 +127,13 @@ export function PoolCard({ pool, roles, poolCount, onEdit, onDelete, onToggle, i
                   ? `${source.label} (${pool.source_percentage}%)`
                   : source.label
               }
-              className={source.className}
             />
           </div>
         </div>
         <div className="min-w-0">
           <p className="text-[0.8125rem] text-muted-foreground">Interval</p>
           <div className="mt-1.5">
-            <AttributeChip label={interval.label} className={interval.className} />
+            <AttributeChip label={interval.label} />
           </div>
         </div>
       </div>
@@ -163,11 +161,11 @@ export function PoolCard({ pool, roles, poolCount, onEdit, onDelete, onToggle, i
         </div>
       )}
 
-      {/* Role Shares — an inset well, hairline-separated rows */}
+      {/* Role Shares — an inset well; rows separate by spacing, not rules (§5.5) */}
       {pool.tip_pool_role_shares.length > 0 && (
         <div className="mt-5 min-w-0">
           <p className="text-[0.8125rem] text-muted-foreground">Distribution</p>
-          <div className="mt-2 divide-y divide-border/60 rounded-2xl border-0 bg-muted/60 shadow-none">
+          <div className="mt-2 min-w-0 space-y-1 rounded-2xl border-0 bg-muted/60 p-1 shadow-none">
             {pool.tip_pool_role_shares.map((share) => (
               <div
                 key={share.role_code}
@@ -199,7 +197,7 @@ export function PoolCard({ pool, roles, poolCount, onEdit, onDelete, onToggle, i
       </p>
 
       {/* Actions */}
-      <div className="mt-4 flex gap-2 border-t border-border/60 pt-4">
+      <div className="mt-6 flex gap-2">
         <Button
           size="sm"
           variant="outline"

@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  StationPanel,
+  StationPanelContent,
+  StationPanelDescription,
+  StationPanelHeader,
+  StationPanelTitle,
+} from "./StationPanel";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -207,13 +213,13 @@ export function StationDevicesTab({ station }: StationDevicesTabProps) {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="py-12">
+      <StationPanel>
+        <StationPanelContent className="py-12">
           <div className="flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
     );
   }
 
@@ -221,16 +227,16 @@ export function StationDevicesTab({ station }: StationDevicesTabProps) {
 
   return (
     <>
-      <Card>
-        <CardHeader>
+      <StationPanel>
+        <StationPanelHeader>
           <div>
-            <CardTitle className="text-lg">Peripheral Devices</CardTitle>
-            <CardDescription>
+            <StationPanelTitle className="text-lg">Peripheral Devices</StationPanelTitle>
+            <StationPanelDescription>
               Printers, cash drawers, and other devices connected to this station
-            </CardDescription>
+            </StationPanelDescription>
           </div>
-        </CardHeader>
-        <CardContent>
+        </StationPanelHeader>
+        <StationPanelContent>
           {!hasDevices ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
@@ -259,7 +265,7 @@ export function StationDevicesTab({ station }: StationDevicesTabProps) {
                   <TableRow key={device.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-xl">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60 text-xl">
                           {getDeviceTypeIcon(device.device_type)}
                         </div>
                         <div>
@@ -290,16 +296,16 @@ export function StationDevicesTab({ station }: StationDevicesTabProps) {
                         variant="outline"
                         className={cn(
                           device.is_connected
-                            ? "border-green-500/50 bg-green-500/10 text-green-600"
-                            : "border-gray-400/50 bg-gray-100 text-gray-600"
+                            ? ""
+                            : "",
                         )}
                       >
                         <Circle
                           className={cn(
                             "mr-1 h-2 w-2",
                             device.is_connected
-                              ? "fill-green-500 text-green-500"
-                              : "fill-gray-400 text-gray-400"
+                              ? "fill-current"
+                              : "fill-transparent",
                           )}
                         />
                         {device.is_connected ? "Connected" : "Disconnected"}
@@ -329,8 +335,8 @@ export function StationDevicesTab({ station }: StationDevicesTabProps) {
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog
@@ -354,7 +360,7 @@ export function StationDevicesTab({ station }: StationDevicesTabProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deviceToDelete && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
               <span className="text-2xl">
                 {getDeviceTypeIcon(deviceToDelete.device_type)}
               </span>

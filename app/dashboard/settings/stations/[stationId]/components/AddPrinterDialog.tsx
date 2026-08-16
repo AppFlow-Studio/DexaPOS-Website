@@ -21,7 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { Loader2, Printer as PrinterIcon } from "lucide-react";
 import {
   useCreatePrinter,
@@ -243,10 +242,10 @@ export function AddPrinterDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100%-1rem)] sm:max-w-[720px] max-h-[92vh] overflow-hidden gap-0 p-0">
-        <DialogHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-orange-50/60 px-6 pt-6 pb-4">
+      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-auto sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-[720px] sm:rounded-3xl">
+        <DialogHeader className="shrink-0 px-6 pb-4 pt-6">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-200 bg-orange-50 text-orange-700">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-0 bg-muted/60 text-foreground">
               <PrinterIcon className="h-6 w-6" />
             </div>
             <div className="min-w-0 flex-1">
@@ -262,7 +261,8 @@ export function AddPrinterDialog({
           </div>
         </DialogHeader>
 
-        <div className="space-y-6 overflow-y-auto px-6 py-5 max-h-[calc(92vh-176px)]">
+        <div className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="min-w-0 space-y-6 px-6 py-5">
           {/* Identity */}
           <div className="space-y-4">
             <h4 className="text-sm font-medium text-muted-foreground">
@@ -313,8 +313,6 @@ export function AddPrinterDialog({
               </div>
             </div>
           </div>
-
-          <Separator />
 
           {/* Connection */}
           <div className="space-y-4">
@@ -395,8 +393,6 @@ export function AddPrinterDialog({
             </div>
           </div>
 
-          <Separator />
-
           {/* Role */}
           <div className="space-y-4">
             <h4 className="text-sm font-medium text-muted-foreground">Role</h4>
@@ -468,8 +464,6 @@ export function AddPrinterDialog({
               </div>
             </div>
           </div>
-
-          <Separator />
 
           {/* Configuration */}
           <div className="space-y-4">
@@ -581,8 +575,6 @@ export function AddPrinterDialog({
             </div>
           </div>
 
-          <Separator />
-
           {/* Receipt Settings */}
           <div className="space-y-4">
             <h4 className="text-sm font-medium text-muted-foreground">
@@ -662,8 +654,9 @@ export function AddPrinterDialog({
             </div>
           </div>
         </div>
+        </div>
 
-        <DialogFooter className="border-t bg-slate-50/80 px-6 py-4">
+        <DialogFooter className="shrink-0 px-6 py-4">
           <Button variant="outline" onClick={handleClose} disabled={isPending}>
             Cancel
           </Button>

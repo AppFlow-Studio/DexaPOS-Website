@@ -35,7 +35,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -283,15 +282,15 @@ export function TipPoolDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-hidden rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-2xl sm:rounded-3xl">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{pool ? "Edit Tip Pool" : "Create Tip Pool"}</DialogTitle>
             <DialogDescription>
               Configure how tips are collected and distributed among staff roles
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-2">
+          <div className="thin-scrollbar min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto py-2">
             {/* ────── SECTION 1: BASICS ────── */}
             <section className="space-y-4">
               <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
@@ -308,7 +307,7 @@ export function TipPoolDialog({
                   className={cn("mt-1", validationErrors.name && "border-red-500")}
                 />
                 {validationErrors.name && (
-                  <p className="text-xs text-red-500 mt-1">{validationErrors.name}</p>
+                  <p className="mt-1 text-xs text-destructive">{validationErrors.name}</p>
                 )}
               </div>
 
@@ -389,8 +388,6 @@ export function TipPoolDialog({
                 </div>
               )}
             </section>
-
-            <Separator />
 
             {/* ────── SECTION 2: POLICY INTERVAL ────── */}
             <section className="space-y-4">
@@ -473,8 +470,6 @@ export function TipPoolDialog({
               </TooltipProvider>
             </section>
 
-            <Separator />
-
             {/* ────── SECTION 3: TIP SOURCE ────── */}
             <section className="space-y-4">
               <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
@@ -529,12 +524,10 @@ export function TipPoolDialog({
                   % of this source going into the pool. 100 = all tips from the selected source.
                 </p>
                 {validationErrors.source_percentage && (
-                  <p className="text-xs text-red-500">{validationErrors.source_percentage}</p>
+                  <p className="text-xs text-destructive">{validationErrors.source_percentage}</p>
                 )}
               </div>
             </section>
-
-            <Separator />
 
             {/* ────── SECTION 4: DISTRIBUTION & ROLE SHARES ────── */}
             <section className="space-y-4">
@@ -615,7 +608,7 @@ export function TipPoolDialog({
                 )}
 
                 {validationErrors.contributing && (
-                  <p className="text-xs text-red-500 mt-1">{validationErrors.contributing}</p>
+                  <p className="mt-1 text-xs text-destructive">{validationErrors.contributing}</p>
                 )}
               </div>
 
@@ -634,7 +627,7 @@ export function TipPoolDialog({
                 )}
 
                 {formData.role_shares.length > 0 && (
-                  <div className="rounded-lg border divide-y">
+                  <div className="min-w-0 space-y-1 rounded-2xl border-0 bg-muted/60 p-1 shadow-none">
                     {formData.role_shares.map((share) => (
                       <div
                         key={share.role_code}
@@ -718,16 +711,16 @@ export function TipPoolDialog({
 
                     {/* Percentage total footer */}
                     {formData.distribution_method === "percentage" && (
-                      <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
+                      <div className="flex min-w-0 items-center justify-between gap-3 rounded-full px-3 py-2">
                         <span className="text-sm font-medium">Total</span>
+                        {/* Over 100% is a genuine validation error and keeps
+                            `text-destructive` (§4.2). Under and exact are both
+                            valid states, so neither carries a hue — the
+                            "unallocated" sentence beside the figure says it. */}
                         <span
                           className={cn(
                             "text-sm font-bold tabular-nums",
-                            totalPercentage > 100.01
-                              ? "text-red-500"
-                              : totalPercentage < 99.99
-                              ? "text-amber-500"
-                              : "text-green-600"
+                            totalPercentage > 100.01 && "text-destructive"
                           )}
                         >
                           {totalPercentage.toFixed(1)}%
@@ -748,11 +741,11 @@ export function TipPoolDialog({
                 )}
 
                 {validationErrors.share_total && (
-                  <p className="text-xs text-red-500 mt-1">{validationErrors.share_total}</p>
+                  <p className="mt-1 text-xs text-destructive">{validationErrors.share_total}</p>
                 )}
 
                 {validationErrors.points && (
-                  <p className="text-xs text-red-500 mt-1">{validationErrors.points}</p>
+                  <p className="mt-1 text-xs text-destructive">{validationErrors.points}</p>
                 )}
 
                 {/* Add receiving role */}
@@ -779,7 +772,7 @@ export function TipPoolDialog({
             </section>
           </div>
 
-          <DialogFooter className="pt-4 border-t">
+          <DialogFooter className="shrink-0 pt-4">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
               Cancel
             </Button>

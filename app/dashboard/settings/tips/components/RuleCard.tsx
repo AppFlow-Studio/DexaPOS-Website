@@ -13,20 +13,18 @@ interface RuleCardProps {
   isToggling?: boolean;
 }
 
-const typeConfig: Record<string, { label: string; className: string }> = {
-  percentage_of_tips:  { label: "% of Tips",   className: "bg-blue-500/10 text-blue-700 dark:bg-blue-400/10 dark:text-blue-300" },
-  percentage_of_sales: { label: "% of Sales",  className: "bg-violet-500/10 text-violet-700 dark:bg-violet-400/10 dark:text-violet-300" },
-  flat_amount:         { label: "Flat Amount", className: "bg-amber-500/10 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300" },
+// One neutral pill per value (D-12) — the label carries the meaning.
+const typeConfig: Record<string, { label: string }> = {
+  percentage_of_tips:  { label: "% of Tips" },
+  percentage_of_sales: { label: "% of Sales" },
+  flat_amount:         { label: "Flat Amount" },
 };
 
 export function RuleCard({ rule, roles, onEdit, onDelete, onToggle, isToggling }: RuleCardProps) {
   const fromRole = roles.find((r) => r.code === rule.from_role_code)?.name || rule.from_role_code;
   const toRole = roles.find((r) => r.code === rule.to_role_code)?.name || rule.to_role_code;
 
-  const type = typeConfig[rule.tip_out_type] ?? {
-    label: rule.tip_out_type,
-    className: "bg-muted text-muted-foreground",
-  };
+  const type = typeConfig[rule.tip_out_type] ?? { label: rule.tip_out_type };
 
   const formatValue = () =>
     rule.tip_out_type === "flat_amount"
@@ -85,12 +83,7 @@ export function RuleCard({ rule, roles, onEdit, onDelete, onToggle, isToggling }
         <div className="min-w-0">
           <p className="text-[0.8125rem] text-muted-foreground">Type</p>
           <div className="mt-1.5">
-            <span
-              className={cn(
-                "inline-flex max-w-full items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-                type.className
-              )}
-            >
+            <span className="inline-flex max-w-full items-center rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
               <span className="truncate">{type.label}</span>
             </span>
           </div>
@@ -113,7 +106,7 @@ export function RuleCard({ rule, roles, onEdit, onDelete, onToggle, isToggling }
       </p>
 
       {/* Actions */}
-      <div className="mt-4 flex gap-2 border-t border-border/60 pt-4">
+      <div className="mt-6 flex gap-2">
         <Button
           size="sm"
           variant="outline"

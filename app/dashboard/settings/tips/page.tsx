@@ -59,8 +59,10 @@ import { getLocalDateKey } from "@/lib/dates/local-date-key";
 
 /**
  * An in/out figure pair on a card. When neither side has a value the whole
- * pair collapses to one unstyled dash — a coloured "—" reads as a value that
- * failed to render rather than as "nothing moved".
+ * pair collapses to one muted dash, which reads as "nothing moved".
+ *
+ * Direction is carried by the `+`/`−` signs, not by green/red (§4.6b): these
+ * are cells in a settings preview, not a chart series.
  */
 function FlowPair({
   label,
@@ -83,13 +85,13 @@ function FlowPair({
       ) : (
         <p className="mt-0.5 text-sm font-medium tabular-nums">
           {hasIn && (
-            <span className="text-emerald-700 dark:text-emerald-400">
+            <span className="text-foreground">
               +{money(inValue)}
             </span>
           )}
           {hasIn && hasOut && <span className="mx-1 text-muted-foreground">/</span>}
           {hasOut && (
-            <span className="text-rose-700 dark:text-rose-400">
+            <span className="text-foreground">
               −{money(outValue)}
             </span>
           )}
@@ -365,7 +367,7 @@ function PreviewPanel({
               </div>
 
               {Object.keys(simulation).length > 0 && (
-                <div className="min-w-0 border-t border-border/60 pt-6">
+                <div className="mt-8 min-w-0">
                   <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <p className="text-sm text-muted-foreground">Simulated result</p>
                     <p className="text-[1.75rem] font-medium leading-tight tracking-[-0.02em] tabular-nums">
@@ -399,20 +401,20 @@ function PreviewPanel({
                         <TableRow key={code}>
                           <TableCell className="text-sm font-medium">{code}</TableCell>
                           <TableCell className="text-right text-sm tabular-nums">{fmt(s.own)}</TableCell>
-                          <TableCell className="text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
+                          <TableCell className="text-right text-sm tabular-nums text-foreground">
                             {s.poolContrib > 0 ? `−${fmt(s.poolContrib)}` : "—"}
                           </TableCell>
-                          <TableCell className="text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
+                          <TableCell className="text-right text-sm tabular-nums text-foreground">
                             {s.poolRecv > 0 ? `+${fmt(s.poolRecv)}` : "—"}
                           </TableCell>
-                          <TableCell className="text-right text-sm tabular-nums text-rose-700 dark:text-rose-400">
+                          <TableCell className="text-right text-sm tabular-nums text-foreground">
                             {s.tipOutGiven > 0 ? `−${fmt(s.tipOutGiven)}` : "—"}
                           </TableCell>
-                          <TableCell className="text-right text-sm tabular-nums text-emerald-700 dark:text-emerald-400">
+                          <TableCell className="text-right text-sm tabular-nums text-foreground">
                             {s.tipOutRecv > 0 ? `+${fmt(s.tipOutRecv)}` : "—"}
                           </TableCell>
                           {hasClipping && (
-                            <TableCell className="text-right text-sm tabular-nums text-amber-700 dark:text-amber-400">
+                            <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
                               {s.tipOutClipped > 0 ? fmt(s.tipOutClipped) : "—"}
                             </TableCell>
                           )}
@@ -444,7 +446,7 @@ function PreviewPanel({
                           {s.tipOutClipped > 0 && (
                             <div className="min-w-0">
                               <p className="text-[0.8125rem] text-muted-foreground">Clipped</p>
-                              <p className="mt-0.5 text-sm font-medium tabular-nums text-amber-700 dark:text-amber-400">
+                              <p className="mt-0.5 text-sm font-medium tabular-nums text-muted-foreground">
                                 {fmt(s.tipOutClipped)}
                               </p>
                             </div>
@@ -455,7 +457,7 @@ function PreviewPanel({
                   </div>
 
                   {hasClipping && (
-                    <p className="mt-3 text-[0.8125rem] text-amber-700 dark:text-amber-400">
+                    <p className="mt-3 text-[0.8125rem] text-muted-foreground">
                       Clipped: tip-out amounts were reduced to prevent net tips going below zero.
                     </p>
                   )}
@@ -584,11 +586,11 @@ export default function TipsSettingsPage() {
           subtitle="Configure tip pools and tip-out rules."
           indicator={<LocationIndicator isAllLocations locationName={null} />}
         />
-        <div className="flex items-start gap-3 rounded-2xl border-0 bg-amber-500/10 p-6 dark:bg-amber-400/10">
-          <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="flex min-w-0 items-start gap-3 rounded-2xl border-0 bg-muted/60 p-6 shadow-none">
+          <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
           <div className="min-w-0">
-            <h2 className="font-semibold text-amber-800 dark:text-amber-300">Select a location</h2>
-            <p className="mt-1 text-sm text-amber-800/90 dark:text-amber-300/90">
+            <h2 className="font-semibold">Select a location</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
               Tip configuration is location-specific. Choose a specific location from the
               top navigation to view and manage tip settings.
             </p>

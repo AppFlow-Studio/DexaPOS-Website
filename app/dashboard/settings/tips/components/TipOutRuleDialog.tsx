@@ -155,8 +155,8 @@ export function TipOutRuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-hidden rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-md sm:rounded-3xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle>
             {rule ? "Edit Tip-Out Rule" : "Create Tip-Out Rule"}
           </DialogTitle>
@@ -165,7 +165,7 @@ export function TipOutRuleDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="thin-scrollbar min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto py-4">
           <div>
             <Label htmlFor="from-role">From Role *</Label>
             <Select
@@ -230,9 +230,9 @@ export function TipOutRuleDialog({
 
           {/* ─── Reciprocity warning ─── */}
           {conflictingRule && (
-            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-amber-800 dark:text-amber-200">
+            <Alert className="rounded-2xl border-0 bg-muted/60 shadow-none">
+              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              <AlertDescription>
                 <p className="text-sm">
                   A rule already exists sending tips the other direction:{" "}
                   <strong>
@@ -247,7 +247,7 @@ export function TipOutRuleDialog({
                     variant="link"
                     size="sm"
                     onClick={handleDeactivateConflicting}
-                    className="text-amber-700 dark:text-amber-300 underline p-0 h-auto mt-1"
+                    className="mt-1 h-auto p-0 underline"
                   >
                     Deactivate existing rule
                   </Button>
@@ -368,7 +368,7 @@ export function TipOutRuleDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
