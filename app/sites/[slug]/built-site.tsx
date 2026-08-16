@@ -8,8 +8,10 @@ import { collectBindings } from "@/lib/site-builder/bindings/collect";
 import { resolveBindings } from "@/lib/site-builder/bindings/resolve";
 import { emptyResolvedMap } from "@/lib/site-builder/bindings/resolved";
 import { createSupabaseResolverSources } from "@/lib/site-builder/bindings/supabase-sources";
+import { buildRestaurantJsonLd, soleLocation } from "@/lib/site-builder/json-ld";
 import { normalizePage } from "@/lib/site-builder/normalize";
 import { buildPublicRenderContext } from "@/lib/site-builder/public-context";
+import { sitePublicUrl } from "@/lib/site-builder/public-url";
 import { resolveRenderMode } from "@/lib/site-builder/resolve-render-mode";
 import { createAnonSupabaseClient } from "@/lib/supabase/anon";
 
@@ -68,18 +70,32 @@ export async function builtSiteMetadata(
   // The page's own title wins; the page *name* is the fallback, because a
   // merchant who never opened the SEO panel still deserves a real tab title
   // rather than the site's name repeated on every page.
-  const title = seo.title?.trim() || decision.pageTitle?.trim() || undefined;
+  const pageTitle = seo.title?.trim() || decision.pageTitle?.trim() || undefined;
   const description = seo.description?.trim() || siteSeo.description?.trim() || undefined;
-  const canonicalPath = path ? `/${path}` : "";
+
+  // The merchant's own suffix, not ours. The root layout sets a title template
+  // of "%s — DEXA POS", which is correct for the dashboard and wrong on a
+  // restaurant's own website — it put our brand in their browser tab and in
+  // every link they shared. `absolute` is what opts out of an inherited
+  // template, so it has to be used even when there is no suffix to add.
+  const suffix = siteSeo.titleSuffix?.trim();
+  const title = pageTitle
+    ? { absolute: suffix ? `${pageTitle} — ${suffix}` : pageTitle }
+    : undefined;
+
+  // Canonical is the brand subdomain, never `/sites/{slug}` — see
+  // `sitePublicUrl`. `slug` is the subdomain here: the fork only reaches
+  // `mode: "builder"` for a brand address.
+  const canonical = sitePublicUrl(slug, path);
 
   return {
     title,
     description,
-    alternates: { canonical: `/sites/${slug}${canonicalPath}` },
+    alternates: { canonical },
     openGraph: {
-      title,
+      title: title?.absolute,
       description,
-      url: `/sites/${slug}${canonicalPath}`,
+      url: canonical,
       type: "website",
     },
   };
@@ -147,8 +163,23 @@ export async function renderBuiltSite(
       ).map
     : emptyResolvedMap();
 
+  // Structured data, from what the page actually resolved rather than a second
+  // query: the address and hours in the markup and the ones in the JSON-LD are
+  // then the same facts by construction, and cannot drift into contradicting
+  // each other.
+  const jsonLd = JSON.stringify(
+    buildRestaurantJsonLd({
+      name: ctx.site.name,
+      url: sitePublicUrl(slug, decision.pagePath),
+      description: (decision.siteSeo as { description?: string } | null)?.description,
+      image: ctx.site.logoUrl ?? ctx.site.heroImageUrl,
+      location: soleLocation(resolved.locations),
+    }),
+  );
+
   return (
     <SiteChrome ctx={ctx}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
       <PageRenderer doc={doc} resolved={resolved} ctx={ctx} />
     </SiteChrome>
   );
