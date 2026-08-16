@@ -58,7 +58,11 @@ import {
 } from "@/components/ui/dialog";
 import { ScheduleFormSheet } from "@/components/dashboard/menu/ScheduleFormSheet";
 import { SchedulesModel, ScheduleTimeSlotsModel } from "@/types/db-modles";
-import { useLocationStore, useGatedLocationId } from "@/stores/location-store";
+import {
+  useGatedLocationId,
+  useIsSingleLocation,
+  useLocationStore,
+} from "@/stores/location-store";
 import { MenuCategory, MenuCategoryItem } from "@/types/menu";
 import { useCategoriesWithItems } from "../../hooks/useCategories";
 import { useLocations } from "../../hooks/useLocations";
@@ -124,6 +128,7 @@ export default function MenuDetailPage() {
   } = useMenuWithCategories(menuId);
   console.log("menu", menu);
   const { selectedLocationId } = useLocationStore();
+  const isSingleLocation = useIsSingleLocation();
   // OrderOut is genuinely per-location. Resolve a concrete location via the
   // gated resolver so single-active-location accounts (locked to 'all' for
   // menu/item core scope) still get a real location id for OrderOut sync —
@@ -744,7 +749,9 @@ export default function MenuDetailPage() {
     return map;
   }, [locations]);
 
-  const scheduleScopeLabel = isAllLocations
+  const scheduleScopeLabel = isSingleLocation
+    ? "Showing schedule assignments for your menu."
+    : isAllLocations
     ? "Viewing all assignments. Add while a specific location is selected to scope the assignment."
     : "Showing global assignments (inherited) plus assignments for this location.";
 
@@ -1044,7 +1051,9 @@ export default function MenuDetailPage() {
         description:
           selectedLocationId && selectedLocationId !== "all"
             ? "Category display order has been updated for this location."
-            : "Category display order has been updated globally.",
+            : isSingleLocation
+              ? "Category display order has been updated."
+              : "Category display order has been updated globally.",
       });
 
       await queryClient.invalidateQueries({
@@ -1135,7 +1144,9 @@ export default function MenuDetailPage() {
         description:
           selectedLocationId && selectedLocationId !== "all"
             ? "Item display order has been updated for this location."
-            : "Item display order has been updated globally.",
+            : isSingleLocation
+              ? "Item display order has been updated."
+              : "Item display order has been updated globally.",
       });
 
       await queryClient.invalidateQueries({

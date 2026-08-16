@@ -24,6 +24,7 @@ import {
 } from "@/app/dashboard/actions/modifier-assignments";
 import { MenuItemsModel } from "@/types/db-modles";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 interface ModifierGroupForAssignment {
   id: string;
@@ -55,6 +56,7 @@ export function AssignModifierToItemsDialog({
   onSuccess,
 }: AssignModifierToItemsDialogProps) {
   const queryClient = useQueryClient();
+  const isSingleLocation = useIsSingleLocation();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -141,11 +143,15 @@ export function AssignModifierToItemsDialog({
         return;
       }
 
-      const scope = isAllLocations ? "globally" : "at this location";
+      const scope = isSingleLocation
+        ? ""
+        : isAllLocations
+          ? " globally"
+          : " at this location";
       const msg =
         result.skippedCount && result.skippedCount > 0
-          ? `Assigned ${scope} to ${result.assignedCount} item(s) (${result.skippedCount} already had it)`
-          : `Assigned ${scope} to ${result.assignedCount} item(s)`;
+          ? `Assigned${scope} to ${result.assignedCount} item(s) (${result.skippedCount} already had it)`
+          : `Assigned${scope} to ${result.assignedCount} item(s)`;
       toast.success(msg);
 
       queryClient.invalidateQueries({ queryKey: ["modifier-groups"] });
@@ -173,12 +179,14 @@ export function AssignModifierToItemsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Scope context banner. One neutral panel for both scopes — the
+        {/* Scope context banner. One neutral panel for every scope — the
             sentence already says which one applies, so a blue/emerald split
             only colour-coded text that reads fine on its own. */}
         <div className="flex shrink-0 items-start gap-2 rounded-2xl border-0 bg-muted/60 p-3 text-xs text-muted-foreground">
           <span>
-            {!isAllLocations ? (
+            {isSingleLocation ? (
+              <>Assignments update the items in your menu.</>
+            ) : !isAllLocations ? (
               <>
                 Assignments from this view apply{" "}
                 <strong className="font-medium text-foreground">
@@ -259,7 +267,12 @@ export function AssignModifierToItemsDialog({
                         ${Number(item.price).toFixed(2)}
                       </span>
                     )}
-                    {isGlobalAssigned && (
+                    {isSingleLocation && isAssigned && (
+                      <Badge variant="outline" className="text-[10px]">
+                        Assigned
+                      </Badge>
+                    )}
+                    {!isSingleLocation && isGlobalAssigned && (
                       <Badge
                         variant="secondary"
                         className="gap-1 border-0 bg-muted/60 text-[10px] font-medium text-muted-foreground"
@@ -267,7 +280,7 @@ export function AssignModifierToItemsDialog({
                         Global
                       </Badge>
                     )}
-                    {isLocationAssigned && !isGlobalAssigned && (
+                    {!isSingleLocation && isLocationAssigned && !isGlobalAssigned && (
                       <Badge
                         variant="secondary"
                         className="gap-1 border-0 bg-muted/60 text-[10px] font-medium text-muted-foreground"

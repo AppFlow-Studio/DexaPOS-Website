@@ -15,6 +15,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
+import { useIsSingleLocation } from '@/stores/location-store'
 
 interface MenuSettingsTabProps {
     menu: MenuWithCategories
@@ -57,6 +58,7 @@ export function MenuSettingsTab({
     onCancelSettings,
     onDeleteMenu,
 }: MenuSettingsTabProps) {
+    const isSingleLocation = useIsSingleLocation()
     const currentLocation = editedLocationId
         ? locations.find(l => l.id === editedLocationId)
         : null
@@ -103,7 +105,8 @@ export function MenuSettingsTab({
                 </Button>
             </PanelSection>
 
-            {/* Menu Scope */}
+            {/* Menu scope only has meaning when the merchant can choose among locations. */}
+            {!isSingleLocation && (
             <PanelSection
                 icon={isGlobal ? Globe : MapPin}
                 label="Menu Scope"
@@ -176,6 +179,7 @@ export function MenuSettingsTab({
                     </div>
                 </div>
             </PanelSection>
+            )}
 
             {/* General Settings */}
             <PanelSection

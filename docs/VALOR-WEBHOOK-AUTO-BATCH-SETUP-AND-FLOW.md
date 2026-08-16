@@ -1,8 +1,10 @@
 # Valor Webhook — Auto-Batch Setup & Flow (Staging)
 
-**Status:** Reference / setup guide. **Scope:** staging only, device **S/N NCC804380219** (auto-batch 7:00 PM).
-**Deliverable type:** documentation — no receiver is built yet; §3 describes the intended flow so it can be
-wired up and validated. **Docs source:** <https://valorapi.readme.io/reference/webhook-user-guide>
+**Status:** Receiver BUILT (staging-verified). **Scope:** staging only, device **S/N NCC804380219** (auto-batch 7:00 PM).
+**Deliverable type:** the `valor-webhook` edge function + `record_valor_batch_webhook()` RPC now implement §3/§5
+(migration `20260813220059_valor_batch_webhook.sql`, RPC verified end-to-end on staging). Remaining manual steps:
+set `VALOR_WEBHOOK_SECRET`, complete §2 in the Valor dashboard, and populate `valor_epi` on the terminal (§7).
+**Docs source:** <https://valorapi.readme.io/reference/webhook-user-guide>
 
 ---
 
@@ -317,14 +319,25 @@ where serial_number = 'NCC804380219';
    ```
 6. Confirm `trigger_source` reads **"Auto Batch"** for the 7:00 PM run.
 
-**Follow-up (out of scope for this doc):**
+**Follow-up:**
 
-- Build the `valor-webhook` edge function + a `record_valor_batch_webhook(p_payload jsonb)` `SECURITY
-  DEFINER` RPC + migration that implements §3/§5 (find-or-create batch → link payments → `status='settled'`
-  → cascade → reconcile), with idempotent replay and a dead-letter path (`webhook_dead_letter_queue`,
-  `source='valor'`) for an unknown EPI.
-- Add `config.toml` entry (`verify_jwt = false`) and set `VALOR_WEBHOOK_SECRET`.
+- ~~Build the `valor-webhook` edge function + `record_valor_batch_webhook(p_payload jsonb)` RPC~~ **DONE.**
+  Idempotent (unique `(payment_terminal_id, batch_number) WHERE origin='valor_webhook'`), self-auditing
+  (service_role bypasses the settlement audit trigger, so the RPC logs its own row), dead-letters unknown
+  EPIs to `webhook_dead_letter_queue (source='valor')`, and sets `settlement_batches.origin='valor_webhook'`.
+  Count/amount mismatch → `needs_review` (mirrors `finalize_valor_settlement`).
+- ~~Add `config.toml` entry (`verify_jwt = false`)~~ **DONE** (`[functions.valor-webhook]`). Still to do:
+  set the `VALOR_WEBHOOK_SECRET` env var (from the Valor dashboard's auto-generated key) and deploy the fn.
 - Promote to prod after staging validation.
+
+### Known reconciliation gap — `funded_date`
+
+`settlement_batches.funded_date` is populated by **no** settle path (POS, Valor webhook, or manual). Tsys
+funding lands T+1/T+2, so to reconcile actual **deposits** (not just batch close) a funded-date/deposit-amount
+source is still needed — an acquirer/Tsys funding feed, or an HQ backfill. The webhook records the batch
+*close* (settlement_date, host `batch_number`, totals) which is what the portal's batch view shows; deposit
+funding reconciliation is a separate follow-up. `settlement_batches.origin` now distinguishes an automatic
+settle (`valor_webhook` / `pos_auto`) from a manual one for triage.
 
 ---
 

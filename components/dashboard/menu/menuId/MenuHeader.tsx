@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/dashboard/shell";
 import { Globe, MapPin } from "lucide-react";
 import { MenuWithCategories } from "@/types/menu";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 interface MenuHeaderProps {
   menu: MenuWithCategories;
@@ -20,6 +21,9 @@ export function MenuHeader({
   onNavigateToMenus,
   onPreview,
 }: MenuHeaderProps) {
+  const isSingleLocation = useIsSingleLocation();
+
+  // Menu scope only has meaning when the merchant can choose among locations.
   return (
     <PageHeader
       title={menu.name}
@@ -27,19 +31,21 @@ export function MenuHeader({
       backHref="/dashboard/menu"
       backLabel="Menus"
       indicator={
-        <Badge variant={menu.is_location_owned ? "secondary" : "default"}>
-          {menu.is_location_owned ? (
-            <span className="flex items-center gap-1.5">
-              <MapPin className="h-3.5 w-3.5" />
-              {locationName || "Location Menu"}
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5">
-              <Globe className="h-3.5 w-3.5" />
-              Global Menu
-            </span>
-          )}
-        </Badge>
+        isSingleLocation ? undefined : (
+          <Badge variant={menu.is_location_owned ? "secondary" : "default"}>
+            {menu.is_location_owned ? (
+              <span className="flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5" />
+                {locationName || "Location Menu"}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <Globe className="h-3.5 w-3.5" />
+                Global Menu
+              </span>
+            )}
+          </Badge>
+        )
       }
       actions={
         <>

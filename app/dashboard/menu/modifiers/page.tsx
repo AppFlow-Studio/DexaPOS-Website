@@ -81,7 +81,15 @@ import {
 import { useModifierGroups } from "@/app/dashboard/hooks/useModifierGroups";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
-import { useSelectedLocation, useLocationStore } from "@/stores/location-store";
+import {
+  useIsSingleLocation,
+  useSelectedLocation,
+  useLocationStore,
+} from "@/stores/location-store";
+import {
+  canReorderModifierLibrary,
+  type ModifierScopeFilter,
+} from "@/lib/menu/modifier-library-scope";
 import { ModifierGroupFormSheet } from "@/components/dashboard/menu/ModifierGroupFormSheet";
 import { AssignModifierToItemsDialog } from "@/components/dashboard/menu/modifiers/AssignModifierToItemsDialog";
 import { AssignModifierToCategoryDialog } from "@/components/dashboard/menu/modifiers/AssignModifierToCategoryDialog";
@@ -276,6 +284,7 @@ export default function ModifiersPage() {
   const rawLocationId = useLocationStore((s) => s.selectedLocationId);
   const selectedLocationId = rawLocationId === "all" ? null : (rawLocationId || null);
   const isAllLocations = !selectedLocationId;
+  const isSingleLocation = useIsSingleLocation();
 
   const { data: modifierGroups, isLoading } = useModifierGroups(
     clerkOrgId,
@@ -340,9 +349,7 @@ export default function ModifiersPage() {
   const [deletingGroup, setDeletingGroup] = useState<string | null>(null);
   const [assignItemsGroup, setAssignItemsGroup] = useState<ModifierGroupWithItems | null>(null);
   const [assignCategoryGroup, setAssignCategoryGroup] = useState<ModifierGroupWithItems | null>(null);
-  const [scopeFilter, setScopeFilter] = useState<"all" | "global" | "location">(
-    "all",
-  );
+  const [scopeFilter, setScopeFilter] = useState<ModifierScopeFilter>("all");
   const [isDraggingGroupId, setIsDraggingGroupId] = useState<string | null>(null);
   const [groupOrderSaving, setGroupOrderSaving] = useState(false);
   /** Phone-only reorder mode — reveals the drag grips. Desktop ignores it. */
@@ -363,14 +370,15 @@ export default function ModifiersPage() {
         group.name.toLowerCase().includes(term) ||
         group.description?.toLowerCase().includes(term);
 
+      const effectiveScopeFilter = isSingleLocation ? "all" : scopeFilter;
       const matchesScope =
-        scopeFilter === "all" ||
-        (scopeFilter === "global" && !group.location_id) ||
-        (scopeFilter === "location" && !!group.location_id);
+        effectiveScopeFilter === "all" ||
+        (effectiveScopeFilter === "global" && !group.location_id) ||
+        (effectiveScopeFilter === "location" && !!group.location_id);
 
       return matchesSearch && matchesScope;
     }) as ModifierGroupWithItems[];
-  }, [localGroupOrder, modifierGroups, searchTerm, scopeFilter]);
+  }, [isSingleLocation, localGroupOrder, modifierGroups, searchTerm, scopeFilter]);
 
   // Counts for filters
   const counts = useMemo(() => {
@@ -427,10 +435,16 @@ export default function ModifiersPage() {
   const canOverrideOnly = (group: ModifierGroupWithItems) =>
     !isAllLocations && !group.location_id;
 
-  const canReorderLibraryGroups =
-    !searchTerm.trim() && (!isAllLocations || scopeFilter === "global");
+  const canReorderLibraryGroups = canReorderModifierLibrary({
+    hasSearch: !!searchTerm.trim(),
+    isAllLocations,
+    isSingleLocation,
+    scopeFilter,
+  });
 
-  const reorderHelpText = isAllLocations
+  const reorderHelpText = isSingleLocation
+    ? "Clear the current search before reordering groups."
+    : isAllLocations
     ? "Switch to the Global filter to reorder library groups."
     : "Clear the current search before reordering groups.";
 
@@ -1168,7 +1182,9 @@ const sensors = useSensors(
       <PageHeader
         title="Modifiers"
         subtitle={
-          isAllLocations
+          isSingleLocation
+            ? "Manage modifier groups, options, assignments, and display order for your menu."
+            : isAllLocations
             ? "Option groups shared across your organization. Manage structure, options and pricing here."
             : selectedLocation?.name
               ? // The location store rehydrates from localStorage after the
@@ -1179,10 +1195,12 @@ const sensors = useSensors(
               : "Global groups are structural read-only in a location view — you can override price and availability."
         }
         indicator={
-          <LocationIndicator
-            isAllLocations={isAllLocations}
-            locationName={selectedLocation?.name}
-          />
+          isSingleLocation ? undefined : (
+            <LocationIndicator
+              isAllLocations={isAllLocations}
+              locationName={selectedLocation?.name}
+            />
+          )
         }
         actions={
           <Button
@@ -1267,7 +1285,8 @@ const sensors = useSensors(
             </div>
           </div>
 
-          {/* Filter Buttons */}
+          {/* Scope filters are meaningless with only one location. */}
+          {!isSingleLocation && (
           <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-5">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Filter className="h-4 w-4" />
@@ -1311,6 +1330,7 @@ const sensors = useSensors(
               );
             })}
           </div>
+          )}
 
           {/* Reorder affordance — sits directly above the list it describes.
               On phones the compact button is enough without helper text. */}
@@ -1614,7 +1634,25 @@ const sensors = useSensors(
                               </span>
                             </div>
 
-                            {globalLinkedCount > 0 && (
+                            {/* One location: scope labels add nothing, so just
+                                list the items this group is assigned to. */}
+                            {isSingleLocation && (
+                              <div className="flex flex-wrap gap-1">
+                                {[
+                                  ...(group.menu_item_modifier_groups ?? []),
+                                  ...(group.location_item_modifier_groups ?? []),
+                                ].map((link) => (
+                                  <span
+                                    key={link.id}
+                                    className="inline-flex items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                                  >
+                                    {link.menu_item?.name || "Unknown"}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            {!isSingleLocation && globalLinkedCount > 0 && (
                               <div className="hidden min-w-0 flex-col gap-1.5 sm:flex sm:flex-row sm:items-baseline sm:gap-2">
                                 <div className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground">
                                   Global (
@@ -1633,7 +1671,7 @@ const sensors = useSensors(
                               </div>
                             )}
 
-                            {locationLinkedCount > 0 && !isAllLocations && (
+                            {!isSingleLocation && locationLinkedCount > 0 && !isAllLocations && (
                               <div className="hidden min-w-0 flex-col gap-1.5 sm:flex sm:flex-row sm:items-baseline sm:gap-2">
                                 <div className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground">
                                   This Location (
@@ -1655,7 +1693,7 @@ const sensors = useSensors(
                               </div>
                             )}
 
-                            {locationLinkedCount > 0 && isAllLocations && locationBreakdown && (
+                            {!isSingleLocation && locationLinkedCount > 0 && isAllLocations && locationBreakdown && (
                               <div className="hidden min-w-0 space-y-2 sm:block">
                                 {Object.entries(locationBreakdown).map(([locId, info]) => (
                                   <div

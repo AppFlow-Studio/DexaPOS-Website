@@ -33,6 +33,7 @@ import {
   type BulkDeliveryRounding,
 } from "@/app/dashboard/actions/bulk-delivery-price-adjustment";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 type Operation = "markup_pct" | "markup_amt" | "set_fixed" | "reset";
 
@@ -110,6 +111,7 @@ export function BulkDeliveryPriceAdjustDialog({
   onSuccess,
 }: BulkDeliveryPriceAdjustDialogProps) {
   const queryClient = useQueryClient();
+  const isSingleLocation = useIsSingleLocation();
 
   const [operation, setOperation] = useState<Operation>("markup_pct");
   const [value, setValue] = useState<string>("");
@@ -151,7 +153,9 @@ export function BulkDeliveryPriceAdjustDialog({
     setIsSaving(true);
     try {
       const locationId =
-        scope === "override" && !isAllLocations ? currentLocationId : null;
+        !isSingleLocation && scope === "override" && !isAllLocations
+          ? currentLocationId
+          : null;
       const res = await BulkAdjustMenuItemDeliveryPrices({
         clerkOrgId,
         locationId,
@@ -385,7 +389,7 @@ export function BulkDeliveryPriceAdjustDialog({
           )}
 
           {/* Apply to — base vs override */}
-          <div className="space-y-2">
+          {!isSingleLocation && <div className="space-y-2">
             <Label>Apply to</Label>
             <RadioGroup
               value={scope}
@@ -443,7 +447,7 @@ export function BulkDeliveryPriceAdjustDialog({
                 </span>
               </label>
             </RadioGroup>
-          </div>
+          </div>}
 
           {/* Reset warning */}
           {isReset && (

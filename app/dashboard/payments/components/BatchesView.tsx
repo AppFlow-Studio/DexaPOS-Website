@@ -153,6 +153,38 @@ function getStatusBadge(status: string) {
   );
 }
 
+// How the batch was settled — distinguishes an automatic settle from a manual one.
+function getOriginBadge(origin?: string | null) {
+  switch (origin) {
+    case "valor_webhook":
+      return (
+        <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700">
+          Auto · Webhook
+        </Badge>
+      );
+    case "pos_auto":
+      return (
+        <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700">
+          Auto
+        </Badge>
+      );
+    case "hq_manual":
+      return (
+        <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-600">
+          Manual · HQ
+        </Badge>
+      );
+    case "pos_manual":
+      return (
+        <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-600">
+          Manual
+        </Badge>
+      );
+    default:
+      return null;
+  }
+}
+
 // ============================================================================
 // Computed batches from payment data
 // ============================================================================
@@ -321,6 +353,7 @@ function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
                         Batch {formatBatchLabel(batch)}
                       </span>
                       {getStatusBadge(batch.status)}
+                      {getOriginBadge(batch.origin)}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
                       <span>{formatDate(batch.business_date)}</span>

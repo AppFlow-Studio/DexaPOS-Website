@@ -21,6 +21,7 @@ import {
   getAdminTerminalById,
   getAdminAvailableTerminals,
   getAdminMerchantTerminalStats,
+  getAdminConnectedTerminals,
   adminCreateTerminal,
   adminUpdateTerminal,
   adminLinkTerminalToStation,
@@ -263,6 +264,20 @@ export function useAdminMerchantTerminalStats(merchantId: string, locationId?: s
   })
 }
 
+/**
+ * Get the UNIQUE connected terminals (by serial number) for a merchant (admin).
+ * One row per physical terminal with live connection state + auto-settle config.
+ */
+export function useAdminConnectedTerminals(merchantId: string, locationId?: string | null) {
+  return useQuery({
+    queryKey: adminKeys.merchantConnectedTerminals(merchantId, locationId),
+    queryFn: () => getAdminConnectedTerminals(merchantId, locationId),
+    enabled: !!merchantId,
+    staleTime: 30 * 1000,
+    refetchInterval: 3 * 60 * 1000, // reflect online/offline changes (~connection-test cadence)
+  })
+}
+
 // ============================================================================
 // PAYMENT TERMINAL MUTATION HOOKS
 // ============================================================================
@@ -311,6 +326,12 @@ export function useAdminUpdateTerminal() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: [...adminKeys.merchants(), variables.merchantId, 'payment-terminals'],
+      })
+      queryClient.invalidateQueries({
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'connected-terminals'],
+      })
+      queryClient.invalidateQueries({
+        queryKey: [...adminKeys.merchants(), variables.merchantId, 'terminal-stats'],
       })
     },
   })

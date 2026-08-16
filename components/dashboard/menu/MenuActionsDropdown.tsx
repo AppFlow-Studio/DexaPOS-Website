@@ -61,7 +61,11 @@ export function MenuActionsDropdown({
     // - Global menus: Can only be edited/deleted when viewing "All Locations"
     // - Location-specific menus: Can only be edited/deleted by that location's scope
     const canEditOrDelete = isViewingAllLocations || isMenuOwnedByCurrentLocation
-    const canDuplicateToLocation = selectedLocationId && isGlobalMenu && onDuplicate
+    const canDuplicateToLocation =
+        !isSingleLocation &&
+        selectedLocationId !== 'all' &&
+        isGlobalMenu &&
+        onDuplicate
 
     const handleViewDetails = (e: React.MouseEvent) => {
         e.stopPropagation()

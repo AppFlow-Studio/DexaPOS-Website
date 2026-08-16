@@ -1,0 +1,540 @@
+-- =============================================================================
+-- Wave 5A — Index cleanup on the order write path
+-- =============================================================================
+-- Source: POS DB Performance Waves (Dexa-POS docs/engineering/performance/
+--         db-perf-waves-2026-08-13.md). Catalog re-verified against PROD
+--         (hifouuofcaytijrkbvcy) read-only on 2026-08-14 00:05 UTC, and
+--         INDEPENDENTLY re-verified end-to-end at 00:35 UTC the same day:
+--         all 8 drop targets re-asserted safe, both duplicate pairs re-proved
+--         via pg_index column comparison, the rejected pair re-tested with
+--         EXPLAIN (ANALYZE), and every table-level figure below re-read from
+--         pg_stat_user_tables. Live counters drift by a few hundred between
+--         captures because prod is serving traffic; the figures here are the
+--         00:05 snapshot and none of the conclusions move.
+--
+-- PROBLEM (measured on prod)
+--   The order tables are index-bound on writes, not on reads:
+--
+--     table                 live rows   indexes   heap      index bytes
+--     orders                    3,526        32   1976 kB       3712 kB
+--     order_items              11,405        18   4208 kB       3560 kB
+--     order_item_modifiers     10,013         4   1640 kB        920 kB
+--
+--   orders carries 1.9x more index than heap. Every INSERT and every non-HOT
+--   UPDATE must insert into all 32 index trees, WAL-log each insertion, and
+--   dirty each leaf page. Write volume on these tables is not small:
+--
+--     orders        5,952 ins / 112,248 upd / 592 del   (27,827 upd were HOT)
+--     order_items  16,743 ins / 105,983 upd / 1,082 del (51,028 upd were HOT)
+--
+--   112,248 order updates x 32 index trees is the tax being paid, and it is
+--   paid on the latency path the server is standing at the terminal watching:
+--   add item, fire course, take payment.
+--
+-- WHAT THIS MIGRATION DOES
+--   Drops 8 indexes across orders and order_items:
+--     - 2 provable exact duplicates (identical in every pg_index column)
+--     - 6 indexes with a lifetime idx_scan of exactly 0
+--   Result: orders 32 -> 28 index trees (-12.5%), order_items 18 -> 14
+--   (-22.2%), and 1,200 kB of index storage reclaimed.
+--
+--   SECONDARY BENEFIT — HOT eligibility. Postgres refuses a HOT update if the
+--   statement changes ANY column referenced by ANY index on the table,
+--   including columns that appear only in a partial-index predicate. After
+--   this migration these columns are referenced by NO surviving index and
+--   therefore stop blocking HOT:
+--     orders.customer_phone, orders.inventory_deducted,
+--     orders.online_session_id, order_items.selected_size_id,
+--     order_items.location_exclusive_item_id, order_items.prep_station
+--   Verified column-by-column against all 32 + 18 surviving index definitions.
+--   orders.inventory_deducted is the notable one: it is flipped false->true
+--   exactly once per order during checkout, and today that flip forces a
+--   non-HOT update touching all 32 trees. After this it can go HOT.
+--   order_items.prep_station is the other: KDS routing writes it.
+--
+-- METHODOLOGY — every candidate was re-verified, none were taken on trust
+--   For each candidate this migration checked, on prod:
+--     pg_stat_user_indexes.idx_scan          (recorded inline next to each DROP)
+--     pg_get_indexdef                        (recorded in the rollback block)
+--     pg_stat_user_indexes.last_idx_scan     (PG 17: timestamp of last use)
+--     pg_index.indisunique / indisprimary / indisexclusion / indisvalid
+--     pg_index.indisreplident                (REPLICA IDENTITY? -- Realtime)
+--     pg_constraint.conindid                 (does anything depend on it?)
+--     pg_depend                              (internal/auto dependencies)
+--     pg_index.indkey / indclass / indoption / indcollation / indpred
+--                                            (for the duplicate proofs)
+--   All 8 drop targets returned: indisunique=false, indisprimary=false,
+--   indisexclusion=false, indisreplident=false, indisvalid=true,
+--   constraints_using=0, internal_deps=0.
+--
+--   REPLICA IDENTITY was checked explicitly because orders and order_items are
+--   both members of the `supabase_realtime` publication, and dropping an index
+--   that backed REPLICA IDENTITY USING INDEX would break logical decoding for
+--   every subscriber -- i.e. every POS station's live sync. All three tables
+--   report relreplident = 'd' (default / primary key) and no index in the
+--   database has indisreplident = true, so no drop here touches replication.
+--
+--   idx_scan counters are cumulative since stats inception -- pg_stat_database
+--   reports stats_reset = NULL for this database, i.e. the counters have NEVER
+--   been reset. A 0 here means "never used, ever", not "not used lately". This
+--   is the strongest form of the evidence and is why the zero-scan drops are
+--   safe. It is corroborated by the 254-day pg_stat_statements window.
+--
+-- SAFETY RULES OBSERVED
+--   * No UNIQUE index, no PRIMARY KEY index, and no index backing a constraint
+--     is dropped. orders_pkey, order_items_pkey, order_item_modifiers_pkey,
+--     orders_order_number_merchant_key and idx_orders_receipt_token (UNIQUE)
+--     are all untouched.
+--   * Only two non-zero-scan indexes are dropped, and only because a
+--     byte-identical alternative index survives to absorb the scans. Each is
+--     argued individually below.
+--   * Scope is orders / order_items / order_item_modifiers ONLY.
+--
+-- OUT OF SCOPE — the platform-wide backlog
+--   public currently holds 261 indexes with idx_scan = 0, of which 173 are
+--   non-unique and therefore droppable, totalling ~3,840 kB. This wave
+--   deliberately does not touch them: they sit on tables that are not on the
+--   POS latency path, so the reward is storage rather than write latency, and
+--   the review cost per index is the same. Track as a separate housekeeping
+--   ticket once this wave has soaked.
+--
+-- NOTE ON THE AUDIT'S COUNTS
+--   The audit doc records "orders has 33 indexes, order_items 22". The live
+--   catalog on 2026-08-14 says 32 and 18. The audit snapshot has drifted; the
+--   conclusion is unaffected. All figures in this file are the live ones.
+--
+-- =============================================================================
+-- !! OPERATIONAL REQUIREMENT — READ BEFORE APPLYING !!
+-- =============================================================================
+--   DROP INDEX CONCURRENTLY CANNOT RUN INSIDE A TRANSACTION BLOCK.
+--
+--   There is deliberately NO BEGIN/COMMIT in this file. Each statement below
+--   must reach the server on its own. Any tool that wraps a migration file in
+--   an implicit transaction -- which includes `supabase db push` and
+--   `supabase migration up` -- WILL fail this file with:
+--       ERROR: DROP INDEX CONCURRENTLY cannot run inside a transaction block
+--
+--   Apply it statement-by-statement instead (psql without -1, or the SQL
+--   editor, or `supabase db query --linked --file` which does not wrap).
+--
+--   If a DROP INDEX CONCURRENTLY is interrupted it can leave the index behind
+--   in an INVALID state (pg_index.indisvalid = false). That is not harmful --
+--   an invalid index is ignored by the planner but still maintained on write --
+--   and the recovery is simply to re-run the same statement. Check with:
+--       SELECT indexrelid::regclass, indisvalid FROM pg_index
+--        WHERE indisvalid = false;
+--
+--   CONCURRENTLY is used rather than a plain DROP even though these indexes are
+--   small (16-272 kB) and a plain DROP would complete in milliseconds. A plain
+--   DROP takes ACCESS EXCLUSIVE on the table, and on orders / order_items that
+--   is a hard stall for every terminal on the floor. Sub-second is still a
+--   stall in the middle of a dinner rush. Not worth it to save a round trip.
+-- =============================================================================
+
+
+-- -----------------------------------------------------------------------------
+-- SECTION 1 — Exact duplicates
+-- -----------------------------------------------------------------------------
+-- These are the only two drops in this file with a non-zero idx_scan. Each is
+-- justified by a byte-identical surviving index: the planner has an alternative
+-- that is indistinguishable at the catalog level, so the scans simply migrate
+-- to the twin. No plan can regress, because no plan loses an access path.
+--
+-- "Identical" here is not an eyeball comparison of pg_get_indexdef text. Each
+-- pair was compared across every pg_index column that can make two btrees
+-- behave differently: indkey (key columns), indclass (operator classes),
+-- indoption (ASC/DESC + NULLS ordering), indcollation, indpred (partial
+-- predicate), indexprs (expressions), indisunique, indnatts / indnkeyatts
+-- (INCLUDE columns). All matched exactly on both pairs.
+-- -----------------------------------------------------------------------------
+
+-- 1.1  orders: idx_orders_location_created_at_desc
+--
+--      DROP  idx_orders_location_created_at_desc   idx_scan =     17,131
+--      KEEP  idx_orders_location_created_at        idx_scan =     62,860
+--
+--      Both are:  btree (location_id, created_at DESC)
+--        indkey        6 17    ==  6 17
+--        indclass  10065 3127  ==  10065 3127
+--        indoption     0 3     ==  0 3          (col 2 DESC on both)
+--        indcollation  0 0     ==  0 0
+--        indpred       NULL    ==  NULL         (neither is partial)
+--        indexprs      NULL    ==  NULL
+--
+--      The "_desc" suffix in the name is misleading -- BOTH are DESC. They are
+--      the same index created twice under two names (20260518000000_order_
+--      prefetch_indexes.sql created one; 20260413215901_remote_schema.sql
+--      carried the other). The lower-traffic name is the one dropped, purely
+--      so the pg_stat counters on the survivor stay continuous.
+--
+--      Not unique, not primary, backs no constraint. Verified.
+DROP INDEX CONCURRENTLY IF EXISTS public.idx_orders_location_created_at_desc;
+
+
+-- 1.2  order_items: idx_order_items_order
+--
+--      DROP  idx_order_items_order      idx_scan =      1,972,531
+--      KEEP  idx_order_items_order_id   idx_scan =    110,630,948
+--
+--      Both are:  btree (order_id)
+--        indkey            2  ==  2
+--        indclass      10065  ==  10065
+--        indoption         0  ==  0
+--        indcollation      0  ==  0
+--        indpred        NULL  ==  NULL
+--        indexprs       NULL  ==  NULL
+--
+--      *** NOT IN THE ORIGINAL CANDIDATE LIST. Found during re-verification. ***
+--      This is the highest-value drop in the file and it was not on the audit's
+--      list. order_items is the hottest insert path in the system (one row per
+--      line item, 16,743 inserts) and it was maintaining the same btree twice.
+--
+--      Note the survivor is the one with 110M scans -- 56x the traffic of the
+--      one being dropped -- so the planner already overwhelmingly prefers it.
+--
+--      The FK order_items_order_id_fkey does NOT depend on this index: a
+--      foreign key is backed by the index on the REFERENCED side, which is
+--      orders_pkey. Confirmed via pg_constraint.conindid. And even if the
+--      referencing-side index mattered, idx_order_items_order_id is an
+--      identical one on the same column.
+--
+--      Not unique, not primary, backs no constraint. Verified.
+DROP INDEX CONCURRENTLY IF EXISTS public.idx_order_items_order;
+
+
+-- -----------------------------------------------------------------------------
+-- SECTION 2 — Never-scanned indexes
+-- -----------------------------------------------------------------------------
+-- Every index below has idx_scan = 0, idx_tup_read = 0 and idx_tup_fetch = 0,
+-- against counters that have never been reset since the database was created.
+-- Not one of them has served a single tuple in the lifetime of this cluster.
+--
+-- CORROBORATED INDEPENDENTLY by PostgreSQL 17's pg_stat_user_indexes.
+-- last_idx_scan, which records the WALL-CLOCK TIME an index was last used.
+-- All six read exactly NULL -- never scanned, not once, ever. This is a
+-- different column populated by a different mechanism than the idx_scan
+-- counter, so it is genuine corroboration rather than a restatement, and it
+-- closes the "maybe it is used by a rare monthly report" objection that a
+-- cumulative counter alone cannot close.
+--
+-- For contrast, the same column on the two Section 1 duplicates shows they ARE
+-- live objects: idx_order_items_order last scanned 2026-08-12, and
+-- idx_orders_location_created_at_desc 2026-05-31 -- the latter already 2.5
+-- months cold while its byte-identical twin was scanned seconds before this
+-- capture, which is exactly the signature of a duplicate the planner has
+-- already abandoned.
+--
+-- Four of them sit on the referencing side of a foreign key. Postgres does not
+-- require an index there -- the constraint is enforced through the referenced
+-- side's primary key (see pg_constraint.conindid) -- but such an index can be
+-- used by the RI trigger when a PARENT row is deleted or its key updated, to
+-- find children without a sequential scan. Each of those is annotated with the
+-- exact exposure. In every case the exposure is a sequential scan of a table
+-- with ~3.5k or ~11.4k rows (2-4 MB heap), on a rare parent-delete path.
+--
+-- The 0 scan count is itself evidence about that path: at these table sizes the
+-- planner routinely chooses a sequential scan over an index scan anyway, so
+-- several of these indexes were likely never going to be used regardless of
+-- what happens upstream. They cost writes and return nothing.
+-- -----------------------------------------------------------------------------
+
+-- 2.1  order_items: idx_order_items_kitchen                idx_scan = 0
+--      btree (prep_station, item_status)
+--        WHERE item_status = ANY (ARRAY['pending','preparing'])
+--
+--      A legacy KDS index. The KDS reads through get_kds_tickets_v2/v3, which
+--      filter on order_items.kitchen_status (a different column, indexed by
+--      idx_order_items_kitchen_status, 107,897 scans) and never touch
+--      item_status = 'pending'/'preparing'. Dead since the kitchen_status
+--      column superseded item_status for KDS purposes.
+--
+--      Bonus: prep_station appears in NO other index on order_items, so this
+--      drop removes prep_station from the HOT-blocking column set. KDS routing
+--      updates prep_station.
+--
+--      Not unique, not primary, backs no constraint. Verified.
+DROP INDEX CONCURRENTLY IF EXISTS public.idx_order_items_kitchen;
+
+
+-- 2.2  order_items: idx_order_items_selected_size_id       idx_scan = 0
+--      btree (selected_size_id)
+--
+--      FK exposure: order_items_selected_size_id_fkey REFERENCES item_sizes(id)
+--                   ON DELETE SET NULL.
+--      Constraint is backed by item_sizes_pkey, not by this index -- dropping
+--      it cannot break the constraint. After the drop, deleting an item_size
+--      makes the RI trigger scan order_items (11,405 rows / 4.2 MB) to null out
+--      references. Deleting a size from a live menu is a rare admin action and
+--      that scan is single-digit milliseconds.
+--
+--      Removes selected_size_id from the HOT-blocking column set.
+--
+--      Not unique, not primary, backs no constraint. Verified.
+DROP INDEX CONCURRENTLY IF EXISTS public.idx_order_items_selected_size_id;
+
+
+-- 2.3  order_items: idx_order_items_location_exclusive_item_id   idx_scan = 0
+--      btree (location_exclusive_item_id)
+--
+--      FK exposure: order_items_location_exclusive_item_id_fkey
+--                   REFERENCES location_exclusive_items(id), NO ACTION.
+--      Because the FK is NO ACTION rather than CASCADE/SET NULL, the RI check
+--      on parent delete is an EXISTS probe that stops at the first match, and
+--      a delete that would violate the constraint is rejected. Same 11,405-row
+--      scan ceiling as 2.2, on an even rarer path.
+--
+--      Removes location_exclusive_item_id from the HOT-blocking column set.
+--
+--      Not unique, not primary, backs no constraint. Verified.
+DROP INDEX CONCURRENTLY IF EXISTS public.idx_order_items_location_exclusive_item_id;
+
+
+-- 2.4  orders: idx_orders_customer_phone                   idx_scan = 0
+--      btree (customer_phone) WHERE customer_phone IS NOT NULL
+--
+--      Customer lookup goes through customers.id (idx_orders_customer_id,
+--      1,774 scans) and through the customers table's own phone index, never
+--      through the denormalised orders.customer_phone. 16 kB, zero value.
+--
+--      Removes customer_phone from the HOT-blocking column set.
+--
+--      Not unique, not primary, backs no constraint. Verified.
+DROP INDEX CONCURRENTLY IF EXISTS public.idx_orders_customer_phone;
+
+
+-- 2.5  orders: idx_orders_inventory_deducted               idx_scan = 0
+--      btree (id) WHERE inventory_deducted = false
+--
+--      A worklist index for an inventory-deduction sweeper. Whatever sweeps
+--      this flag does not use the index -- more likely it deducts inline at
+--      checkout, keyed by order id, which orders_pkey already serves.
+--
+--      This is the single best HOT win in the file. inventory_deducted appears
+--      in no other index. It is flipped false -> true once per order during
+--      checkout, and while this index exists that flip is disqualified from
+--      being a HOT update and must therefore write a new entry into all 32
+--      index trees. After the drop the same flip can stay on the same heap
+--      page. Only 24.8% of orders updates are currently HOT (27,827/112,248),
+--      so there is headroom here.
+--
+--      Not unique, not primary, backs no constraint. Verified.
+DROP INDEX CONCURRENTLY IF EXISTS public.idx_orders_inventory_deducted;
+
+
+-- 2.6  orders: idx_orders_online_session_id                idx_scan = 0
+--      btree (online_session_id) WHERE online_session_id IS NOT NULL
+--
+--      FK exposure: orders_online_session_id_fkey
+--                   REFERENCES online_order_sessions(id) ON DELETE SET NULL.
+--      Constraint is backed by online_order_sessions_pkey. After the drop,
+--      deleting an online_order_session scans orders (3,526 rows / 2.0 MB).
+--
+--      Note the reverse-direction FK online_order_sessions_order_id_fkey is
+--      unaffected -- that one reads orders_pkey.
+--
+--      Removes online_session_id from the HOT-blocking column set.
+--
+--      Not unique, not primary, backs no constraint. Verified.
+DROP INDEX CONCURRENTLY IF EXISTS public.idx_orders_online_session_id;
+
+
+-- =============================================================================
+-- SECTION 3 — Candidates examined and DELIBERATELY REJECTED
+-- =============================================================================
+-- Recording the rejections matters as much as recording the drops: without
+-- this section the next person to run an unused-index report will re-propose
+-- them and someone will eventually say yes.
+--
+-- 3.1  idx_orders_location_status  vs  idx_orders_location_id_status
+--      *** THE AUDIT LISTED THIS PAIR AS EXACT DUPLICATES. IT IS NOT. ***
+--
+--        idx_orders_location_status      idx_scan = 162,851   PARTIAL
+--          btree (location_id, status)
+--          WHERE status <> ALL (ARRAY['completed','cancelled','void','void',
+--                                     'refunded'])
+--        idx_orders_location_id_status   idx_scan =  76,523   FULL
+--          btree (location_id, status)
+--
+--      Same indkey (6 8), same indclass (10065 10069), same indoption (0 0) --
+--      which is presumably why they looked identical in a text diff -- but
+--      pg_index.indpred is NOT NULL on the first and NULL on the second. The
+--      partial index physically contains only open orders. It cannot answer
+--      any query about a completed, cancelled, voided or refunded order.
+--
+--      So the two are NOT interchangeable in either direction:
+--        - Dropping the FULL index would strand every (location_id, status)
+--          lookup for a terminal status -- history screens, refunds, reporting
+--          -- with no equivalent path. 76,523 scans would have to find a new
+--          plan, and the only candidates are wider (idx_orders_merchant_
+--          location) or differently keyed (idx_orders_history_bootstrap).
+--        - Dropping the PARTIAL index would push the single hottest orders
+--          predicate on the system (162,851 scans, "open orders at this
+--          location") onto a physically larger index.
+--
+--      MEASURED, not merely reasoned. Two EXPLAIN (ANALYZE, BUFFERS) runs on
+--      prod 2026-08-14 show each index serving a query the other cannot:
+--
+--        (a) terminal-status lookup -- only the FULL index can answer:
+--              WHERE location_id = <busiest> AND status = 'completed'
+--            -> Index Scan using idx_orders_location_id_status
+--               Index Cond: (location_id = ... AND status = 'completed')
+--               rows=366, Execution Time 2.786 ms
+--
+--        (b) open-orders lookup -- the PARTIAL index absorbs the whole
+--            predicate, which is the classic partial-index win:
+--              WHERE location_id = <id> AND status <> ALL (ARRAY[...])
+--            -> Index Scan using idx_orders_location_status
+--               Index Cond: (location_id = ...)      <-- status NOT in the
+--               Buffers: shared hit=2                    cond and NO Filter
+--               Execution Time 0.060 ms                  line at all
+--
+--            The planner proved the status predicate is implied by the index
+--            predicate and dropped it entirely. On the full index the same
+--            query degrades to Index Cond (location_id) + Filter (status),
+--            scanning every entry for that location -- up to ~3,016 for the
+--            busiest one -- instead of touching 2 buffers. At 162,851 scans
+--            that is a real regression, not a rounding error.
+--
+--      Distribution confirms the partial is not merely decorative but also
+--      explains why it is not a cheap win either: of 3,603 orders, 3,013 match
+--      the partial predicate and 590 do not. It excludes only 16% of the table,
+--      so it saves little write work -- but it is the shape of the predicate,
+--      not the size of the index, that makes it valuable here.
+--
+--      Both are non-zero, both are load-bearing, neither is redundant.
+--      NO ACTION. If write amplification on orders needs another point later,
+--      the honest question is whether the FULL index can be replaced by a
+--      complementary partial one covering only the terminal statuses -- but
+--      that is a plan-analysis exercise with EXPLAIN evidence, not an
+--      index-cleanup exercise, and it does not belong in this wave.
+--
+-- 3.2  idx_order_items_order_active           idx_scan = 1,997,465
+--      btree (order_id) WHERE is_voided = false
+--
+--      Superficially redundant with idx_order_items_order_id (same column).
+--      Rejected for two independent reasons:
+--        (a) It is partial, so it is smaller and denser than the full index
+--            for the "live items on this order" query, which is the hottest
+--            read in order processing.
+--        (b) The POS client explicitly depends on it. services/orderService.ts
+--            line 1276 carries the comment:
+--              "`order_items.is_voided=false` engages idx_order_items_order_active."
+--            That query was deliberately shaped to hit this index. Dropping it
+--            silently invalidates a documented client-side assumption.
+--      NO ACTION.
+--
+-- 3.3  order_item_modifiers -- all 4 indexes
+--      order_item_modifiers_pkey                        82 (PK, untouchable)
+--      idx_order_item_modifiers_order_item     341,238,167
+--      idx_order_item_modifiers_modifier_group_id       47
+--      idx_order_item_modifiers_modifier_item_id       109
+--
+--      In scope for this wave and examined. Nothing to drop. The two low-count
+--      indexes are FK referencing-side indexes at 47 and 109 scans -- low, but
+--      non-zero, so the blanket rule applies and they stay. At 4 indexes on
+--      10,013 rows this table is not an index-amplification problem; its cost
+--      is the 341M-scan read path, which Wave 1 addresses.
+--
+-- 3.4  Everything else on orders / order_items with a low but non-zero count
+--      (idx_orders_voided_by 8, idx_orders_payment_status 10,
+--       idx_orders_created_by_user_id 11, idx_order_items_assigned_to_staff_id 1,
+--       idx_order_items_discount_* 1 each, idx_order_items_voided_by 4, ...)
+--      Non-zero means some plan, somewhere, chose it. The rule for this wave is
+--      zero-or-duplicate. These are candidates for a later pass that pairs each
+--      one with the actual query that used it. NO ACTION.
+-- =============================================================================
+
+
+-- =============================================================================
+-- VERIFICATION
+-- =============================================================================
+-- BEFORE applying, capture the baseline:
+--   SELECT relname, indexrelname, idx_scan
+--     FROM pg_stat_user_indexes
+--    WHERE schemaname = 'public'
+--      AND relname IN ('orders','order_items','order_item_modifiers')
+--    ORDER BY relname, indexrelname;
+--
+-- AFTER applying:
+--
+--   1. All 8 gone, none left invalid:
+--        SELECT indexrelid::regclass AS ix, indisvalid
+--          FROM pg_index
+--         WHERE indexrelid::regclass::text IN (
+--                 'idx_orders_location_created_at_desc',
+--                 'idx_order_items_order',
+--                 'idx_order_items_kitchen',
+--                 'idx_order_items_selected_size_id',
+--                 'idx_order_items_location_exclusive_item_id',
+--                 'idx_orders_customer_phone',
+--                 'idx_orders_inventory_deducted',
+--                 'idx_orders_online_session_id');
+--      Expected: zero rows.
+--
+--   2. Counts dropped as predicted:
+--        SELECT c.relname,
+--               (SELECT count(*) FROM pg_index i WHERE i.indrelid = c.oid) AS ix
+--          FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+--         WHERE n.nspname = 'public'
+--           AND c.relname IN ('orders','order_items');
+--      Expected: orders 28, order_items 14.
+--
+--   3. The survivors absorbed the traffic. After a few hours of normal use,
+--      idx_orders_location_created_at and idx_order_items_order_id should show
+--      idx_scan climbing at roughly the COMBINED former rate of each pair. If
+--      either flatlines, a plan changed and something is now seq-scanning --
+--      roll that one back.
+--
+--   4. HOT ratio improved. Compare before/after:
+--        SELECT relname,
+--               round(100.0 * n_tup_hot_upd / NULLIF(n_tup_upd,0), 1) AS hot_pct
+--          FROM pg_stat_user_tables
+--         WHERE schemaname='public' AND relname IN ('orders','order_items');
+--      Baseline 2026-08-14: orders 24.8%, order_items 48.1%. Expect orders to
+--      rise; this is the checkout-path win. Note these are lifetime cumulative
+--      ratios, so movement will be slow -- compute the DELTA between two
+--      readings rather than reading the absolute number.
+--
+--   5. No plan regressions on the POS hot paths. Spot-check with EXPLAIN:
+--        - open orders for a location   (should still use idx_orders_location_status)
+--        - order history for a location (should now use idx_orders_location_created_at)
+--        - items for an order           (should now use idx_order_items_order_id
+--                                        or idx_order_items_order_active)
+--
+-- STAGING FIRST. This is prod-derived evidence applied to staging first per
+-- house policy; the human operator promotes to prod after observation.
+-- Staging's idx_scan counters will differ (lower traffic) -- do NOT re-derive
+-- the drop list from staging counters, the evidence here is the prod one.
+-- =============================================================================
+
+
+-- =============================================================================
+-- ROLLBACK
+-- =============================================================================
+-- Each statement below is the EXACT pg_get_indexdef output captured from prod
+-- on 2026-08-14, unmodified. Paste the ones you need.
+--
+-- To recreate on a LIVE system, insert CONCURRENTLY after CREATE INDEX; each
+-- statement must then run outside a transaction block, exactly like the drops
+-- above. Without CONCURRENTLY each takes ACCESS EXCLUSIVE on the table for the
+-- duration of the build (milliseconds at these sizes, but a hard stall).
+--
+-- Rollback is per-index. If one drop causes a regression, recreate only that
+-- one; the others are independent.
+--
+-- CREATE INDEX idx_orders_location_created_at_desc ON public.orders USING btree (location_id, created_at DESC);
+--
+-- CREATE INDEX idx_order_items_order ON public.order_items USING btree (order_id);
+--
+-- CREATE INDEX idx_order_items_kitchen ON public.order_items USING btree (prep_station, item_status) WHERE (item_status = ANY (ARRAY['pending'::text, 'preparing'::text]));
+--
+-- CREATE INDEX idx_order_items_selected_size_id ON public.order_items USING btree (selected_size_id);
+--
+-- CREATE INDEX idx_order_items_location_exclusive_item_id ON public.order_items USING btree (location_exclusive_item_id);
+--
+-- CREATE INDEX idx_orders_customer_phone ON public.orders USING btree (customer_phone) WHERE (customer_phone IS NOT NULL);
+--
+-- CREATE INDEX idx_orders_inventory_deducted ON public.orders USING btree (id) WHERE (inventory_deducted = false);
+--
+-- CREATE INDEX idx_orders_online_session_id ON public.orders USING btree (online_session_id) WHERE (online_session_id IS NOT NULL);
+-- =============================================================================

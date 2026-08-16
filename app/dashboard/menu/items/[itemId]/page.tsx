@@ -69,8 +69,10 @@ import {
 import {
   useLocationStore,
   useIsAllLocations,
+  useIsSingleLocation,
   useGatedLocationId,
   useGatedLocation,
+  useSingleLocationName,
 } from "@/stores/location-store";
 import { LocationLibraryItem } from "@/types/menu";
 import { Switch } from "@/components/ui/switch";
@@ -311,12 +313,14 @@ function EditingContextIndicator({
 interface PriceBreakdownProps {
   item: LocationLibraryItem;
   isAllLocations: boolean;
+  isSingleLocation: boolean;
   currentLocationName: string;
 }
 
 function PriceBreakdown({
   item,
   isAllLocations,
+  isSingleLocation,
   currentLocationName,
 }: PriceBreakdownProps) {
   const basePrice = item.base_price;
@@ -330,6 +334,35 @@ function PriceBreakdown({
   const effectivePrice = locationOverride?.custom_price ?? basePrice;
   const effectiveCashPrice =
     locationOverride?.custom_cash_price ?? baseCashPrice;
+
+  // Single location: the cascade has nothing to explain, so show the two
+  // effective prices plainly instead of the level-by-level breakdown below.
+  if (isSingleLocation) {
+    return (
+      <Panel padded>
+        <h2 className="flex items-center gap-2 text-[1.0625rem] font-semibold">
+          <DollarSign className="h-[1.125rem] w-[1.125rem] shrink-0" />
+          Pricing
+        </h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
+            <div className="text-xs text-muted-foreground">Card price</div>
+            <div className="font-semibold tabular-nums">
+              ${effectivePrice?.toFixed(2)}
+            </div>
+          </div>
+          <div className="rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
+            <div className="text-xs text-muted-foreground">Cash price</div>
+            <div className="font-semibold tabular-nums">
+              {effectiveCashPrice == null
+                ? "Not set"
+                : `$${effectiveCashPrice.toFixed(2)}`}
+            </div>
+          </div>
+        </div>
+      </Panel>
+    );
+  }
 
   return (
     <Panel padded>
@@ -489,8 +522,10 @@ export default function MenuItemDetailPage() {
   // can live. Without this, single-location merchants could never set a badge.
   const { locations } = useLocationStore();
   const isAllLocations = useIsAllLocations();
+  const isSingleLocation = useIsSingleLocation();
   const gatedLocationId = useGatedLocationId();
   const gatedLocation = useGatedLocation();
+  const singleLocationName = useSingleLocationName();
   const selectedLocationId = gatedLocationId;
   const badgesDisabled = !gatedLocationId;
 
@@ -500,9 +535,10 @@ export default function MenuItemDetailPage() {
   );
 
   const currentLocationName = React.useMemo(() => {
+    if (isSingleLocation) return singleLocationName || "Your location";
     if (isAllLocations) return "All Locations";
     return currentLocation?.name || "Unknown Location";
-  }, [isAllLocations, currentLocation]);
+  }, [isAllLocations, isSingleLocation, singleLocationName, currentLocation]);
 
   // Effective tax rate for this item's category at the active location.
   // The item stores only a *category*; the percentage lives in `tax_rates`
@@ -544,10 +580,10 @@ export default function MenuItemDetailPage() {
 
   const popularMutation = useMutation({
     mutationFn: (value: boolean) =>
-      SetItemPopular(itemId, selectedLocationId!, value),
+      SetItemPopular(itemId, gatedLocationId!, value),
     onSuccess: (_, value) => {
       queryClient.setQueryData(
-        ["item-popular", itemId, selectedLocationId],
+        ["item-popular", itemId, gatedLocationId],
         value
       );
       toast.success(value ? "Marked as Popular" : "Removed Popular badge");
@@ -564,10 +600,10 @@ export default function MenuItemDetailPage() {
 
   const newMutation = useMutation({
     mutationFn: (value: boolean) =>
-      SetItemNew(itemId, selectedLocationId!, value),
+      SetItemNew(itemId, gatedLocationId!, value),
     onSuccess: (_, value) => {
       queryClient.setQueryData(
-        ["item-new", itemId, selectedLocationId],
+        ["item-new", itemId, gatedLocationId],
         value
       );
       toast.success(value ? "Marked as New" : "Removed New badge");
@@ -712,10 +748,11 @@ export default function MenuItemDetailPage() {
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
               {menuItem.effective_availability ? "Available" : "Unavailable"}
             </span>
-            <EditingContextIndicator
+            {/* Cascade level is meaningless with only one location. */}
+            {!isSingleLocation && <EditingContextIndicator
               context={editingContext}
               locationName={currentLocationName}
-            />
+            />}
           </div>
         </div>
       </div>
@@ -904,7 +941,8 @@ export default function MenuItemDetailPage() {
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Customization options available for this item.
-                {!isAllLocations && " Showing both global and location-specific modifiers."}
+                {!isSingleLocation && !isAllLocations &&
+                  " Showing both global and location-specific modifiers."}
               </p>
             </div>
             <div className="mt-4">
@@ -1159,6 +1197,7 @@ export default function MenuItemDetailPage() {
           <PriceBreakdown
             item={menuItem}
             isAllLocations={isAllLocations}
+            isSingleLocation={isSingleLocation}
             currentLocationName={currentLocationName}
           />
 

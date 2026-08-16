@@ -41,6 +41,7 @@ import { MenuCategory, MenuCategoryItem } from "@/types/menu";
 import { DraggableItemsList } from "./DraggableItemsList";
 import { RemoveCategoryFromMenu } from "@/app/dashboard/actions/categories";
 import { toast } from "sonner";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 interface CategorySectionProps {
   category: MenuCategory;
@@ -101,6 +102,7 @@ export function CategorySection({
   onToggleItem,
   onToggleCategoryItems,
 }: CategorySectionProps) {
+  const isSingleLocation = useIsSingleLocation();
   const itemCount = category.items?.length || 0;
   const [isToggling, setIsToggling] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -249,7 +251,7 @@ export function CategorySection({
                         </TooltipProvider>
                       )}
                     {/* Global category indicator */}
-                    {!category.category?.location_id && (
+                    {!isSingleLocation && !category.category?.location_id && (
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger>
@@ -338,7 +340,11 @@ export function CategorySection({
                   <TooltipContent>
                     <p>
                       {category.is_active ? "Hide" : "Show"} this category{" "}
-                      {showLocationPricing ? "at this location" : "globally"}
+                      {isSingleLocation
+                        ? "in this menu"
+                        : showLocationPricing
+                          ? "at this location"
+                          : "globally"}
                     </p>
                   </TooltipContent>
                 </Tooltip>

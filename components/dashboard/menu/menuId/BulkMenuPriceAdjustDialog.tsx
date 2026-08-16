@@ -24,6 +24,7 @@ import {
 } from "@/app/dashboard/actions/bulk-menu-price-adjustment";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import type { MenuWithCategories } from "@/types/menu";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 function applyOp(price: number, op: BulkMenuPriceOp, value: number): number {
   switch (op) {
@@ -90,6 +91,7 @@ export function BulkMenuPriceAdjustDialog({
   onSuccess,
 }: BulkMenuPriceAdjustDialogProps) {
   const queryClient = useQueryClient();
+  const isSingleLocation = useIsSingleLocation();
 
   const [direction, setDirection] = useState<Direction>("increase");
   const [unit, setUnit] = useState<Unit>("pct");
@@ -316,6 +318,7 @@ export function BulkMenuPriceAdjustDialog({
           </div>
 
           {/* Scope */}
+          {!isSingleLocation && (
           <div className="space-y-2">
             <Label>Apply to</Label>
             <RadioGroup
@@ -356,6 +359,7 @@ export function BulkMenuPriceAdjustDialog({
               </label>
             </RadioGroup>
           </div>
+          )}
 
           {/* Preview */}
           {previewRows.length > 0 && (

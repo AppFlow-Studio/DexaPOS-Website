@@ -1224,6 +1224,7 @@ function CategoryGroup({
     if (saved) setDraftItemOrder(null);
   };
 
+  const isSingleLocation = useIsSingleLocation();
   const selectedCount = isSelectionMode && selectedItemIds
     ? items.reduce((acc, it) => acc + (selectedItemIds.has(it.id) ? 1 : 0), 0)
     : 0;
@@ -1266,20 +1267,22 @@ function CategoryGroup({
                 <span className="truncate text-base font-semibold sm:text-lg">
                   {category.name}
                 </span>
-                {(() => {
-                  const scope = categoryScopeStyle(category.is_global);
-                  return (
-                    <span className={cn(BADGE_SHELL, scope.bg, scope.text)}>
-                      {category.is_global ? (
-                        "Global"
-                      ) : (
-                        <span className="max-w-28 truncate sm:max-w-44">
-                          {category.location_name || "Location"}
-                        </span>
-                      )}
-                    </span>
-                  );
-                })()}
+                {/* Category scope is meaningless with only one location. */}
+                {!isSingleLocation &&
+                  (() => {
+                    const scope = categoryScopeStyle(category.is_global);
+                    return (
+                      <span className={cn(BADGE_SHELL, scope.bg, scope.text)}>
+                        {category.is_global ? (
+                          "Global"
+                        ) : (
+                          <span className="max-w-28 truncate sm:max-w-44">
+                            {category.location_name || "Location"}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })()}
               </span>
             </button>
           </CollapsibleTrigger>
@@ -1993,7 +1996,9 @@ export default function MenuItemsPage() {
       }
 
       toast.success("Item Deleted", {
-        description: isAllLocations
+        description: isSingleLocation
+          ? `"${deletingItem.name}" has been permanently deleted.`
+          : isAllLocations
           ? `"${deletingItem.name}" has been permanently deleted from all locations.`
           : `"${deletingItem.name}" has been permanently deleted.`,
       });
