@@ -596,7 +596,6 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                     <TableHead>Terminal</TableHead>
                                                     <TableHead>Type</TableHead>
                                                     <TableHead>Register ID</TableHead>
-                                                    <TableHead>Environment</TableHead>
                                                     <TableHead>Assigned Station</TableHead>
                                                     <TableHead>Status</TableHead>
                                                     <TableHead className="w-[50px]"></TableHead>
@@ -631,11 +630,6 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                             <code className="text-sm bg-muted px-2 py-1 rounded">
                                                                 {terminal.register_id}
                                                             </code>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Badge variant={terminal.api_environment === 'production' ? 'default' : 'secondary'}>
-                                                                {terminal.api_environment === 'production' ? 'Production' : 'Sandbox'}
-                                                            </Badge>
                                                         </TableCell>
                                                         <TableCell>
                                                             {terminal.station_name ? (

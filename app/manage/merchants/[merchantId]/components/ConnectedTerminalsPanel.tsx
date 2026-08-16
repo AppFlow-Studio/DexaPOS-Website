@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import {
     Table,
@@ -17,9 +18,11 @@ import {
 } from '@/components/ui/tooltip'
 import {
     AlertTriangle,
+    ChevronRight,
     Clock,
     CreditCard,
     Loader2,
+    PowerOff,
     Wifi,
     WifiOff,
 } from 'lucide-react'
@@ -94,8 +97,14 @@ function ConnectionBadge({ state }: { state: ConnectedTerminalRow['connection_st
 }
 
 export function ConnectedTerminalsPanel({ merchantId, locationId }: ConnectedTerminalsPanelProps) {
+    const router = useRouter()
     const { data: result, isLoading } = useAdminConnectedTerminals(merchantId, locationId)
     const rows = result?.data || []
+
+    const detailHref = (serial: string | null): string | null =>
+        serial
+            ? `/manage/merchants/${merchantId}/devices/terminal/${encodeURIComponent(serial)}`
+            : null
 
     if (isLoading) {
         return (
@@ -110,7 +119,9 @@ export function ConnectedTerminalsPanel({ merchantId, locationId }: ConnectedTer
         return null
     }
 
-    const onlineCount = rows.filter((r) => r.connection_state === 'online').length
+    const activeRows = rows.filter((r) => r.is_active)
+    const retiredCount = rows.length - activeRows.length
+    const onlineCount = activeRows.filter((r) => r.connection_state === 'online').length
 
     return (
         <TooltipProvider>
@@ -120,11 +131,20 @@ export function ConnectedTerminalsPanel({ merchantId, locationId }: ConnectedTer
                     <h3 className="text-sm font-semibold text-slate-900">Unique Terminals (by serial)</h3>
                     <p className="text-xs text-muted-foreground">
                         One row per physical Castles / Valor terminal. Used to track connected devices and reconcile settlements.
+                        Retired devices with settlement history stay listed so their batches remain reconcilable.
                     </p>
                 </div>
-                <Badge variant="outline" className="shrink-0">
-                    {onlineCount}/{rows.length} online
-                </Badge>
+                <div className="flex shrink-0 items-center gap-2">
+                    {retiredCount > 0 && (
+                        <Badge variant="outline" className="border-slate-300 text-slate-500">
+                            <PowerOff className="h-3 w-3 mr-1" />
+                            {retiredCount} retired
+                        </Badge>
+                    )}
+                    <Badge variant="outline">
+                        {onlineCount}/{activeRows.length} online
+                    </Badge>
+                </div>
             </div>
 
             <div className="overflow-x-auto rounded-lg border bg-white">
@@ -139,17 +159,44 @@ export function ConnectedTerminalsPanel({ merchantId, locationId }: ConnectedTer
                             <TableHead>Last Txn</TableHead>
                             <TableHead>Last Batch</TableHead>
                             <TableHead>Auto-Settle</TableHead>
+                            <TableHead className="w-[40px]"></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {rows.map((row) => (
-                            <TableRow key={row.terminal_uuid}>
+                        {rows.map((row) => {
+                            const href = detailHref(row.serial_number)
+                            const retired = !row.is_active
+                            return (
+                            <TableRow
+                                key={row.terminal_uuid}
+                                onClick={href ? () => router.push(href) : undefined}
+                                onKeyDown={
+                                    href
+                                        ? (e) => {
+                                              if (e.key === 'Enter' || e.key === ' ') {
+                                                  e.preventDefault()
+                                                  router.push(href)
+                                              }
+                                          }
+                                        : undefined
+                                }
+                                role={href ? 'link' : undefined}
+                                tabIndex={href ? 0 : undefined}
+                                className={[
+                                    href
+                                        ? 'cursor-pointer transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none'
+                                        : '',
+                                    retired ? 'bg-slate-50 text-muted-foreground' : '',
+                                ]
+                                    .filter(Boolean)
+                                    .join(' ') || undefined}
+                            >
                                 <TableCell>
                                     {row.serial_number ? (
                                         <div className="flex items-center gap-2">
-                                            <code className="font-mono text-xs bg-muted px-2 py-1 rounded">
+                                            <span className="font-mono text-xs bg-muted px-2 py-1 rounded">
                                                 {row.serial_number}
-                                            </code>
+                                            </span>
                                             {row.duplicate_serial && (
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
@@ -181,7 +228,14 @@ export function ConnectedTerminalsPanel({ merchantId, locationId }: ConnectedTer
                                     <div className="flex items-center gap-2">
                                         <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
                                         <div>
-                                            <div className="font-medium">{row.terminal_name}</div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-medium">{row.terminal_name}</span>
+                                                {retired && (
+                                                    <Badge variant="outline" className="border-slate-300 text-slate-500 text-[10px] px-1.5 py-0">
+                                                        Retired
+                                                    </Badge>
+                                                )}
+                                            </div>
                                             <div className="text-xs text-muted-foreground">{row.location_name || '—'}</div>
                                         </div>
                                     </div>
@@ -193,14 +247,28 @@ export function ConnectedTerminalsPanel({ merchantId, locationId }: ConnectedTer
                                     <span className="text-sm">{row.station_name || <span className="text-muted-foreground">Unassigned</span>}</span>
                                 </TableCell>
                                 <TableCell>
-                                    <div className="flex flex-col gap-1">
-                                        <ConnectionBadge state={row.connection_state} />
-                                        {row.last_connection_test_at && (
-                                            <span className="text-[11px] text-muted-foreground">
-                                                {timeAgo(row.last_connection_test_at)}
-                                            </span>
-                                        )}
-                                    </div>
+                                    {retired ? (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Badge variant="outline" className="border-slate-300 text-slate-500">
+                                                    <PowerOff className="h-3 w-3 mr-1" />
+                                                    Inactive
+                                                </Badge>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                This device is deactivated but still has settlement history. Open it to reconcile its batches and any unsettled funds.
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    ) : (
+                                        <div className="flex flex-col gap-1">
+                                            <ConnectionBadge state={row.connection_state} />
+                                            {row.last_connection_test_at && (
+                                                <span className="text-[11px] text-muted-foreground">
+                                                    {timeAgo(row.last_connection_test_at)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </TableCell>
                                 <TableCell>
                                     <span className="text-sm text-muted-foreground">{timeAgo(row.last_transaction_at)}</span>
@@ -218,8 +286,14 @@ export function ConnectedTerminalsPanel({ merchantId, locationId }: ConnectedTer
                                         <span className="text-sm text-muted-foreground">Off</span>
                                     )}
                                 </TableCell>
+                                <TableCell>
+                                    {href && (
+                                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                    )}
+                                </TableCell>
                             </TableRow>
-                        ))}
+                            )
+                        })}
                     </TableBody>
                 </Table>
             </div>
