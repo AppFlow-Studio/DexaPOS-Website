@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { auth } from '@clerk/nextjs/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getEffectiveClerkOrgId } from '@/lib/admin/merchant-context'
 import { LocationTaxComplianceCard } from '@/components/dashboard/locations/LocationTaxComplianceCard'
 import { LocationBankingProfileCard } from '@/components/dashboard/locations/LocationBankingProfileCard'
 import { LocationBatchEmailCard } from '@/components/dashboard/locations/LocationBatchEmailCard'
@@ -20,6 +21,18 @@ interface LocationSettingsPageProps {
 export default async function LocationSettingsPage({ params }: LocationSettingsPageProps) {
   const { locationId } = await params
   const { orgId } = await auth()
+
+  // Resolve the impersonation-aware org so the merchant-scoped card actions
+  // (banking, batch-out email) target the merchant being viewed. During HQ
+  // impersonation auth().orgId is the HQ org, which would fail merchant lookups.
+  let effectiveOrgId = orgId ?? ''
+  try {
+    effectiveOrgId = await getEffectiveClerkOrgId(orgId ?? null)
+  } catch {
+    // Not impersonating / unresolved — fall back to the session org and let the
+    // card actions surface any access error.
+  }
+
   const supabase = createServerSupabaseClient()
 
   const { data: location, error: locationError } = await supabase
@@ -100,13 +113,13 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
       <LocationTaxComplianceCard location={location as Location} />
 
       <LocationBankingProfileCard
-        clerkOrgId={orgId ?? ''}
+        clerkOrgId={effectiveOrgId}
         locationId={locationId}
         initialProfile={initialProfile}
       />
 
       <LocationBatchEmailCard
-        clerkOrgId={orgId ?? ''}
+        clerkOrgId={effectiveOrgId}
         locationId={locationId}
         initialEnabled={Boolean(
           (location as { batch_summary_email_enabled?: boolean | null })
