@@ -75,23 +75,54 @@ async function verifyValorSignature(
 }
 
 Deno.serve(async (req) => {
-  // Reachability / URL-validation ping (the Valor dashboard "validate URL" step)
-  // and CORS preflight — always ack 200, no secret or signature required. These
-  // carry no batch data, so there is nothing to protect.
+  const t0 = Date.now()
+  // Lazily-created service-role client, reused for logging + the record RPC.
+  const supabase =
+    SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+      ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      : null
+
+  // Durable per-request log (valor_webhook_events). Best-effort — never blocks
+  // or fails the response.
+  async function logEvent(
+    outcome: string,
+    verified: boolean,
+    httpStatus: number,
+    opts: { epi?: string | null; batchNo?: string | null; batchUuid?: string | null; detail?: string | null; raw?: unknown } = {},
+  ): Promise<void> {
+    if (!supabase) return
+    try {
+      await supabase.rpc('log_valor_webhook_event', {
+        p_epi: opts.epi ?? null,
+        p_batch_no: opts.batchNo ?? null,
+        p_verified: verified,
+        p_outcome: outcome,
+        p_http_status: httpStatus,
+        p_latency_ms: Date.now() - t0,
+        p_detail: opts.detail ?? null,
+        p_settlement_batch_id: opts.batchUuid ?? null,
+        p_raw: (opts.raw ?? null) as Record<string, unknown> | null,
+      })
+    } catch (err) {
+      console.error('[valor-webhook] logEvent failed', err)
+    }
+  }
+
+  // Reachability / URL-validation ping (the Valor dashboard validate-URL step)
+  // and CORS preflight — always ack 200, no secret or signature required.
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+    await logEvent('validation', false, 200, { detail: req.method })
     return json({ ok: true, service: 'valor-webhook' }, 200)
   }
 
   if (req.method !== 'POST') {
+    await logEvent('error', false, 405, { detail: `method_not_allowed:${req.method}` })
     return json({ error: 'method_not_allowed' }, 405)
   }
 
   // Read the raw body BEFORE parsing — the signature covers the exact bytes.
   const rawBody = await req.text()
 
-  // Classify: only a real `batch_summary` writes data. Anything else (a validation
-  // POST, an empty body, an out-of-scope event) is ack'd 200 WITHOUT requiring a
-  // signature — so URL validation passes even before VALOR_WEBHOOK_SECRET is set.
   let payload: unknown = null
   try {
     payload = rawBody ? JSON.parse(rawBody) : null
@@ -101,17 +132,27 @@ Deno.serve(async (req) => {
   const data =
     (payload as { data?: Record<string, unknown> } | null)?.data ??
     (payload as Record<string, unknown> | null)
+  const epi = (data && typeof data === 'object' ? (data['epi_id'] as string | undefined) : undefined) ?? null
+  const batchNo =
+    data && typeof data === 'object'
+      ? ((data['batch_no'] as string | number | undefined)?.toString() ?? null)
+      : null
   const looksLikeBatchSummary =
     !!data &&
     typeof data === 'object' &&
     (('batch_no' in data && 'epi_id' in data) || 'batches_id' in data)
 
+  // Anything that isn't a batch_summary (validation POST, empty body, other
+  // event) is ack'd 200 without a signature — so URL validation passes even
+  // before the secret is set.
   if (!looksLikeBatchSummary) {
+    await logEvent('ignored', false, 200, { epi, batchNo, raw: payload })
     return json({ ok: true, ignored: true }, 200)
   }
 
-  // From here on we are processing a real event: require config + valid HMAC.
+  // From here we are processing a real event: require config + valid HMAC.
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !VALOR_WEBHOOK_SECRET) {
+    await logEvent('error', false, 500, { epi, batchNo, detail: 'server_not_configured', raw: payload })
     return json({ error: 'server_not_configured' }, 500)
   }
 
@@ -120,20 +161,34 @@ Deno.serve(async (req) => {
 
   const verified = await verifyValorSignature(rawBody, signature, timestamp)
   if (!verified) {
+    await logEvent('invalid_signature', false, 401, { epi, batchNo, detail: 'HMAC verification failed or stale timestamp', raw: payload })
     return json({ error: 'invalid_signature' }, 401)
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-
-  const { data: result, error } = await supabase.rpc('record_valor_batch_webhook', {
+  const { data: result, error } = await supabase!.rpc('record_valor_batch_webhook', {
     p_payload: payload,
   })
 
   if (error) {
     console.error('[valor-webhook] record_valor_batch_webhook failed', error)
+    await logEvent('error', true, 500, { epi, batchNo, detail: error.message, raw: payload })
     // 500 => Valor retries (idempotency-protected).
     return json({ error: 'record_failed', detail: error.message }, 500)
   }
+
+  // Map the RPC result to a log outcome.
+  const r = (result ?? {}) as {
+    ok?: boolean; reason?: string; status?: string; batch_uuid?: string
+  }
+  const outcome =
+    r.ok === false ? 'dead_letter' : r.status === 'needs_review' ? 'needs_review' : 'processed'
+  await logEvent(outcome, true, 200, {
+    epi,
+    batchNo,
+    batchUuid: r.batch_uuid ?? null,
+    detail: r.reason ?? r.status ?? null,
+    raw: payload,
+  })
 
   return json({ ok: true, result }, 200)
 })
