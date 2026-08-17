@@ -313,6 +313,20 @@ missing or delayed `pg_net` request. The database trigger remains in place for
 POS and direct-database ticket creation. If the website cannot confirm the
 request, it preserves the ticket and shows a notification warning.
 
+### Conversation presentation
+
+- The signed-in viewer's own messages render right aligned in the brand color
+  without an avatar.
+- Every other participant renders left aligned in a white bordered bubble with
+  an author avatar, including other DEXA staff, merchants, and carriers.
+- Internal notes remain full-width amber staff-only cards and do not participate
+  in the group-chat alignment.
+- Participant side is derived by comparing `sender_id` with the current Clerk
+  user ID; roles, names, and email domains do not control message position.
+- The Context panel renders only supported metadata. HQ-created tickets show
+  their dashboard source; merchant tickets can show device and app-version
+  context without leaving an empty panel behind.
+
 9. Verify reply/private-note delivery state:
 
 ```sql

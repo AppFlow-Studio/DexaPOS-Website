@@ -68,6 +68,33 @@ export const maskAuthKey = (authKey: string): string => {
   return '****' + authKey.slice(-4)
 }
 
+/**
+ * Normalize a terminal serial number to a canonical form so the same physical
+ * device always maps to one row. Trims surrounding whitespace, collapses inner
+ * whitespace, and upper-cases. Returns null for empty/whitespace-only input so
+ * the value stored is deterministic against the
+ * `uq_payment_terminals_location_serial` partial unique index.
+ */
+export const normalizeSerial = (serial: string | null | undefined): string | null => {
+  if (!serial) return null
+  const cleaned = serial.trim().replace(/\s+/g, ' ').toUpperCase()
+  return cleaned.length > 0 ? cleaned : null
+}
+
+/**
+ * True when a Postgres error corresponds to the location+serial uniqueness
+ * violation, so callers can surface a friendly message instead of a raw
+ * constraint string.
+ */
+export const isDuplicateSerialError = (error: { code?: string; message?: string } | null | undefined): boolean => {
+  if (!error) return false
+  return (
+    error.code === '23505' &&
+    typeof error.message === 'string' &&
+    error.message.includes('uq_payment_terminals_location_serial')
+  )
+}
+
 // ============================================================================
 // Device Helper Functions
 // ============================================================================
