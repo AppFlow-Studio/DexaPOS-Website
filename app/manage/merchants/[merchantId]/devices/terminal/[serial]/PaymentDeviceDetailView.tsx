@@ -13,13 +13,18 @@ import {
 import {
     ArrowLeft, CreditCard, Wifi, WifiOff, Clock, AlertTriangle, CheckCircle2,
     XCircle, Loader2, RefreshCw, Activity, Layers, FolderOpen, KeyRound, Cpu,
-    Hash, Store, Server, Banknote, PauseCircle,
+    Hash, Store, Server, Banknote, PauseCircle, Receipt, Smartphone, Building2,
+    ExternalLink,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
+import { cn } from '@/lib/utils'
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from '@/components/ui/dialog'
 import { getPaymentDeviceDetail } from '@/app/manage/actions/admin-merchant/payment-device-detail'
 import type {
-    DeviceBatch, DevicePayment, DeviceUnsettledSummary, DeviceIdentity,
+    DeviceBatch, DevicePayment, DeviceUnsettledSummary, DeviceIdentity, DeviceWebhookEvent,
 } from '@/app/manage/actions/admin-merchant/payment-device-detail'
 
 const fmtUsd = (n: number | null | undefined) =>
@@ -44,6 +49,413 @@ const dateOnly = (iso: string | null | undefined) => {
 const batchLabel = (b: DeviceBatch) => {
     const num = b.batch_number || b.batch_id
     return b.acquirer ? `${b.acquirer}-${num}` : num
+}
+
+// ─── Webhook payload visualizer ──────────────────────────────────────────────
+// Turns a raw Valor webhook payload into a human-readable, receipt-style view
+// (KPI tiles + labeled sections) instead of a JSON blob. Valor sends money in
+// CENTS, so all *_amount fields are divided by 100 and formatted as USD. Three
+// payload shapes are handled by `event`: `batch_summary` (batch totals),
+// `transactions` (one payment + card/device/store metadata) and `batch_detail`
+// (an array of payments). A "Raw JSON" toggle is kept for byte-exact inspection.
+
+const PAYLOAD_LABELS: Record<string, string> = {
+    epi_id: 'EPI ID', rrn: 'RRN', stan_no: 'STAN', txn_id: 'Transaction ID',
+    tran_no: 'Tran No.', batch_no: 'Batch No.', batches_id: 'Batch ID', vpid: 'VPID',
+    invoice_no: 'Invoice No.', agent_bank_number: 'Agent Bank No.', mcc: 'MCC',
+    device_identifier: 'Device ID', pos_entry_mode: 'Entry Mode',
+    ecomm_channel_identifier: 'eCommerce Channel', card_holder_name: 'Cardholder',
+    card_type: 'Card Type', card_scheme: 'Card Brand', masked_card_no: 'Card Number',
+    card_level: 'Card Level', card_category: 'Card Category', issuing_bank: 'Issuing Bank',
+    country: 'Country', bin: 'BIN', txn_type: 'Transaction Type', txn_type_code: 'Type Code',
+    is_voided: 'Voided', is_reversed: 'Reversed', display_message: 'Display Message',
+    trigger_source: 'Trigger Source', timezone: 'Timezone', store_number: 'Store Number',
+    approval_code: 'Approval Code', response_code: 'Response Code', host_response: 'Host Response',
+    receipt_url: 'Receipt', summary_url: 'Batch Receipt', device_model: 'Device Model',
+    device_id: 'Device ID', device_app_version: 'App Version', message_type: 'Message Type',
+    store_name: 'Store', merchant_name: 'Merchant', mid: 'MID', store_id: 'Store ID',
+    mp_id: 'MP ID', cust_id: 'Customer ID', fee_count: 'Fee Count', tip_count: 'Tip Count',
+    amount: 'Amount', net_amount: 'Net Amount', original_amount: 'Original Amount',
+    refunded_amount: 'Refunded', purchase_amount: 'Purchase', refund_amount: 'Refund',
+    tip_amount: 'Tip', tax_amount: 'Tax', fee_amount: 'Fees', auth_amount: 'Auth Amount',
+    void_amount: 'Voids', custom_fee_amount: 'Custom Fee', cashback_amount: 'Cashback',
+    city_tax_amount: 'City Tax', state_tax_amount: 'State Tax', reduced_tax_amount: 'Reduced Tax',
+    surcharge_fee_amount: 'Surcharge Fee', merchant_fee_amount: 'Merchant Fee',
+    total_credit_amount: 'Total Credit', total_debit_amount: 'Total Debit',
+    total_other_amount: 'Total Other', cash_refund_amount: 'Cash Refund',
+    cash_discount_amount: 'Cash Discount', cash_purchase_amount: 'Cash Purchase',
+    cash_withdrawal_amount: 'Cash Withdrawal', gift_add_value_amount: 'Gift Add Value',
+    ebt_voucher_amount: 'EBT Voucher', total_ebt_cash_amount: 'Total EBT Cash',
+    total_ebt_food_amount: 'Total EBT Food', total_ebt_voucher_amount: 'Total EBT Voucher',
+    request_recv_at: 'Request Received', response_sent_at: 'Response Sent',
+    settled_at: 'Settled', created_at: 'Created', modified_at: 'Modified',
+    batch_opened_at: 'Batch Opened', batch_closed_at: 'Batch Closed',
+}
+
+const payloadLabel = (key: string) =>
+    PAYLOAD_LABELS[key] ?? key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+
+const isAmountKey = (k: string) => k === 'amount' || k.endsWith('_amount')
+const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+
+/** Valor sends money in cents — render as dollars. Accepts number or string. */
+const centsToUsd = (v: unknown): string => {
+    if (v === null || v === undefined || v === '') return '—'
+    const n = typeof v === 'number' ? v : Number(v)
+    return Number.isNaN(n) ? String(v) : usd.format(n / 100)
+}
+
+const fmtPayloadDate = (v: unknown): string => {
+    if (typeof v !== 'string' || !v) return v == null ? '—' : String(v)
+    const d = new Date(v.replace(' ', 'T'))
+    return Number.isNaN(d.getTime()) ? v : format(d, 'MMM d, yyyy · h:mm a')
+}
+
+/** Format a single leaf value for display, keyed by its field name. */
+function fmtField(key: string, value: unknown): string {
+    if (value === null || value === undefined || value === '') return '—'
+    const k = key.toLowerCase()
+    if (isAmountKey(k)) return centsToUsd(value)
+    if (k.endsWith('_at')) return fmtPayloadDate(value)
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+    if (k.startsWith('is_')) return Number(value) ? 'Yes' : 'No'
+    return String(value)
+}
+
+/** Safe nested read: pick(obj, 'card_metadata', 'issuing_bank'). */
+function pick(obj: unknown, ...keys: string[]): unknown {
+    let cur: unknown = obj
+    for (const key of keys) {
+        if (cur && typeof cur === 'object') cur = (cur as Record<string, unknown>)[key]
+        else return undefined
+    }
+    return cur
+}
+
+/** Recursively flatten a payload into humanized label/value pairs (skips empties). */
+function flattenPayload(value: unknown, prefix = ''): { label: string; value: string }[] {
+    const out: { label: string; value: string }[] = []
+    if (Array.isArray(value)) {
+        value.forEach((item, i) => out.push(...flattenPayload(item, `${prefix} #${i + 1}`.trim())))
+    } else if (value && typeof value === 'object') {
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+            const label = prefix ? `${prefix} › ${payloadLabel(k)}` : payloadLabel(k)
+            if (v && typeof v === 'object') out.push(...flattenPayload(v, label))
+            else if (v !== null && v !== undefined && v !== '') out.push({ label, value: fmtField(k, v) })
+        }
+    }
+    return out
+}
+
+const isApproved = (code: unknown) => code === '00' || code === 0 || code === '000'
+
+// ── Presentational primitives ────────────────────────────────────────────────
+function KpiTile({ label, value, accent }: { label: string; value: string; accent?: 'green' | 'red' | 'blue' }) {
+    return (
+        <div className="rounded-lg border bg-white px-3 py-2">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</div>
+            <div className={cn('mt-0.5 text-base font-semibold tabular-nums',
+                accent === 'green' ? 'text-emerald-600' : accent === 'red' ? 'text-red-600'
+                    : accent === 'blue' ? 'text-blue-600' : 'text-slate-900')}>{value}</div>
+        </div>
+    )
+}
+
+type FieldRow = { label: string; value: ReactNode }
+function SectionCard({ title, icon: Icon, rows, children }: { title: string; icon: LucideIcon; rows?: FieldRow[]; children?: ReactNode }) {
+    const shown = (rows ?? []).filter((r) => r.value !== '—' && r.value !== '' && r.value != null)
+    if (rows && shown.length === 0 && !children) return null
+    return (
+        <div className="rounded-lg border bg-white">
+            <div className="flex items-center gap-1.5 border-b bg-slate-50/70 px-3 py-1.5 text-xs font-semibold text-slate-600">
+                <Icon className="h-3.5 w-3.5 text-slate-400" />{title}
+            </div>
+            <div className="p-3">
+                {shown.length > 0 && (
+                    <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
+                        {shown.map((r, i) => (
+                            <div key={i} className="flex items-baseline justify-between gap-3 border-b border-dashed border-slate-100 pb-1">
+                                <dt className="shrink-0 text-xs text-slate-500">{r.label}</dt>
+                                <dd className="truncate text-right text-xs font-medium text-slate-800" title={typeof r.value === 'string' ? r.value : undefined}>{r.value}</dd>
+                            </div>
+                        ))}
+                    </dl>
+                )}
+                {children}
+            </div>
+        </div>
+    )
+}
+
+function ReceiptLink({ url, label }: { url: unknown; label: string }) {
+    if (typeof url !== 'string' || !url) return null
+    return (
+        <a href={url} target="_blank" rel="noreferrer"
+           className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline">
+            <Receipt className="h-3.5 w-3.5" />{label}<ExternalLink className="h-3 w-3" />
+        </a>
+    )
+}
+
+function AllFieldsBlock({ data }: { data: unknown }) {
+    const rows = flattenPayload(data)
+    if (rows.length === 0) return null
+    return (
+        <details className="rounded-lg border bg-white">
+            <summary className="cursor-pointer px-3 py-1.5 text-xs font-semibold text-slate-600">All fields ({rows.length})</summary>
+            <div className="border-t p-3">
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+                    {rows.map((r, i) => (
+                        <div key={i} className="flex items-baseline justify-between gap-3 border-b border-dashed border-slate-100 pb-0.5">
+                            <dt className="shrink-0 text-[11px] text-slate-500">{r.label}</dt>
+                            <dd className="truncate text-right text-[11px] text-slate-700" title={r.value}>{r.value}</dd>
+                        </div>
+                    ))}
+                </dl>
+            </div>
+        </details>
+    )
+}
+
+// ── Event-specific renderers ─────────────────────────────────────────────────
+function BatchSummaryView({ d }: { d: Record<string, unknown> }) {
+    return (
+        <div className="space-y-3">
+            <div className="rounded-xl border bg-gradient-to-br from-slate-50 to-white p-4">
+                <div className="flex items-start justify-between">
+                    <div>
+                        <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Batch #{String(d.batch_no ?? '—')} · {String(d.trigger_source ?? 'Batch')}</div>
+                        <div className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{centsToUsd(d.purchase_amount)}</div>
+                        <div className="mt-1 text-xs text-slate-500">Gross sales · closed {fmtPayloadDate(d.batch_closed_at)}</div>
+                    </div>
+                    <ReceiptLink url={d.summary_url} label="Batch receipt" />
+                </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <KpiTile label="Total Credit" value={centsToUsd(d.total_credit_amount)} accent="green" />
+                <KpiTile label="Total Debit" value={centsToUsd(d.total_debit_amount)} accent="green" />
+                <KpiTile label="Fees" value={centsToUsd(d.fee_amount)} />
+                <KpiTile label="Tips" value={centsToUsd(d.tip_amount)} />
+                <KpiTile label="Refunds" value={centsToUsd(d.refund_amount)} accent="red" />
+                <KpiTile label="Voids" value={centsToUsd(d.void_amount)} accent="red" />
+                <KpiTile label="Tax" value={centsToUsd(d.tax_amount)} />
+                <KpiTile label="Cashback" value={centsToUsd(d.cashback_amount)} />
+            </div>
+            <SectionCard title="Batch info" icon={Layers} rows={[
+                { label: 'EPI ID', value: fmtField('epi_id', d.epi_id) },
+                { label: 'Batch No.', value: fmtField('batch_no', d.batch_no) },
+                { label: 'Batch ID', value: fmtField('batches_id', d.batches_id) },
+                { label: 'Fee Count', value: fmtField('fee_count', d.fee_count) },
+                { label: 'Tip Count', value: fmtField('tip_count', d.tip_count) },
+                { label: 'Trigger', value: fmtField('trigger_source', d.trigger_source) },
+                { label: 'Opened', value: fmtPayloadDate(d.batch_opened_at) },
+                { label: 'Closed', value: fmtPayloadDate(d.batch_closed_at) },
+            ]} />
+            <AllFieldsBlock data={d} />
+        </div>
+    )
+}
+
+function TransactionView({ d }: { d: Record<string, unknown> }) {
+    const approved = isApproved(d.response_code)
+    return (
+        <div className="space-y-3">
+            <div className="rounded-xl border bg-gradient-to-br from-slate-50 to-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{String(d.txn_type ?? 'Transaction')} · {String(d.card_scheme ?? d.card_type ?? '')}</div>
+                        <div className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{centsToUsd(d.amount)}</div>
+                        <div className="mt-1 text-xs text-slate-500">{String(d.masked_card_no ?? '')} · {String(d.card_holder_name ?? '')}</div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5">
+                        {approved
+                            ? <Badge className="bg-emerald-600 hover:bg-emerald-600"><CheckCircle2 className="mr-1 h-3 w-3" />Approved</Badge>
+                            : <Badge variant="outline" className="border-red-300 bg-red-50 text-red-700">Code {String(d.response_code ?? '—')}</Badge>}
+                        <div className="text-[11px] text-slate-400">Net {centsToUsd(d.net_amount)}</div>
+                        <ReceiptLink url={d.receipt_url} label="Receipt" />
+                    </div>
+                </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <KpiTile label="Amount" value={centsToUsd(d.amount)} />
+                <KpiTile label="Net" value={centsToUsd(d.net_amount)} accent="green" />
+                <KpiTile label="Tip" value={centsToUsd(d.tip_amount)} />
+                <KpiTile label="Surcharge" value={centsToUsd(d.surcharge_fee_amount)} />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <SectionCard title="Card" icon={CreditCard} rows={[
+                    { label: 'Brand', value: fmtField('card_scheme', d.card_scheme) },
+                    { label: 'Type', value: fmtField('card_type', d.card_type) },
+                    { label: 'Number', value: fmtField('masked_card_no', d.masked_card_no) },
+                    { label: 'Cardholder', value: fmtField('card_holder_name', d.card_holder_name) },
+                    { label: 'Issuing Bank', value: fmtField('issuing_bank', pick(d, 'card_metadata', 'issuing_bank')) },
+                    { label: 'Country', value: fmtField('country', pick(d, 'card_metadata', 'country')) },
+                    { label: 'Level', value: fmtField('card_level', pick(d, 'card_metadata', 'card_level')) },
+                    { label: 'Category', value: fmtField('card_category', pick(d, 'card_metadata', 'card_category')) },
+                    { label: 'BIN', value: fmtField('bin', pick(d, 'card_metadata', 'bin')) },
+                ]} />
+                <SectionCard title="Transaction" icon={Hash} rows={[
+                    { label: 'Type', value: fmtField('txn_type', d.txn_type) },
+                    { label: 'Result', value: approved ? 'Approved (00)' : fmtField('response_code', d.response_code) },
+                    { label: 'Approval Code', value: fmtField('approval_code', d.approval_code) },
+                    { label: 'RRN', value: fmtField('rrn', d.rrn) },
+                    { label: 'Transaction ID', value: fmtField('txn_id', d.txn_id) },
+                    { label: 'STAN', value: fmtField('stan_no', d.stan_no) },
+                    { label: 'Invoice No.', value: fmtField('invoice_no', d.invoice_no) },
+                    { label: 'Batch No.', value: fmtField('batch_no', d.batch_no) },
+                    { label: 'Voided', value: fmtField('is_voided', d.is_voided) },
+                    { label: 'Reversed', value: fmtField('is_reversed', d.is_reversed) },
+                ]} />
+                <SectionCard title="Device" icon={Smartphone} rows={[
+                    { label: 'Model', value: fmtField('device_model', pick(d, 'device_metadata', 'device_model')) },
+                    { label: 'Device ID', value: fmtField('device_id', pick(d, 'device_metadata', 'device_id')) },
+                    { label: 'App Version', value: fmtField('device_app_version', d.device_app_version) },
+                    { label: 'Entry Mode', value: fmtField('pos_entry_mode', pick(d, 'device_metadata', 'pos_entry_mode')) },
+                    { label: 'Host Response', value: fmtField('host_response', pick(d, 'device_metadata', 'host_response')) },
+                ]} />
+                <SectionCard title="Store" icon={Building2} rows={[
+                    { label: 'Store', value: fmtField('store_name', pick(d, 'merchant_store_metadata', 'store_name')) },
+                    { label: 'Merchant', value: fmtField('merchant_name', pick(d, 'merchant_store_metadata', 'merchant_name')) },
+                    { label: 'MID', value: fmtField('mid', pick(d, 'merchant_store_metadata', 'mid')) },
+                    { label: 'Store ID', value: fmtField('store_id', pick(d, 'merchant_store_metadata', 'store_id')) },
+                    { label: 'MCC', value: fmtField('mcc', d.mcc) },
+                ]} />
+            </div>
+            <SectionCard title="Timing" icon={Clock} rows={[
+                { label: 'Created', value: fmtPayloadDate(d.created_at) },
+                { label: 'Settled', value: fmtPayloadDate(d.settled_at) },
+                { label: 'Request Received', value: fmtPayloadDate(d.request_recv_at) },
+                { label: 'Response Sent', value: fmtPayloadDate(d.response_sent_at) },
+                { label: 'Timezone', value: fmtField('timezone', d.timezone) },
+            ]} />
+            <AllFieldsBlock data={d} />
+        </div>
+    )
+}
+
+function BatchDetailView({ rows }: { rows: Record<string, unknown>[] }) {
+    const totalAmount = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+    const totalNet = rows.reduce((s, r) => s + (Number(r.net_amount) || 0), 0)
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center justify-between rounded-xl border bg-gradient-to-br from-slate-50 to-white px-4 py-3">
+                <div className="text-sm font-semibold text-slate-700">{rows.length} transaction{rows.length === 1 ? '' : 's'} in batch #{String(rows[0]?.batch_no ?? '—')}</div>
+                <div className="text-right">
+                    <div className="text-lg font-bold tabular-nums text-slate-900">{centsToUsd(totalAmount)}</div>
+                    <div className="text-[11px] text-slate-400">Net {centsToUsd(totalNet)}</div>
+                </div>
+            </div>
+            <div className="overflow-x-auto rounded-lg border bg-white">
+                <table className="w-full text-xs">
+                    <thead>
+                        <tr className="border-b bg-slate-50/70 text-left text-slate-500">
+                            <th className="px-3 py-2 font-medium">Time</th>
+                            <th className="px-3 py-2 font-medium">Type</th>
+                            <th className="px-3 py-2 font-medium">Card</th>
+                            <th className="px-3 py-2 text-right font-medium">Amount</th>
+                            <th className="px-3 py-2 text-right font-medium">Net</th>
+                            <th className="px-3 py-2 font-medium">Approval</th>
+                            <th className="px-3 py-2 font-medium">RRN</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((r, i) => (
+                            <tr key={i} className="border-t border-slate-100">
+                                <td className="whitespace-nowrap px-3 py-1.5 text-slate-500">{fmtPayloadDate(r.created_at)}</td>
+                                <td className="px-3 py-1.5">
+                                    <Badge variant="outline" className="text-[10px]">{String(r.txn_type ?? '—')}</Badge>
+                                    {Number(r.is_voided) ? <span className="ml-1 text-[10px] text-red-600">void</span> : null}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-1.5 text-slate-600">{String(r.card_scheme ?? r.card_type ?? '—')} {String(r.masked_card_no ?? '').slice(-4)}</td>
+                                <td className="px-3 py-1.5 text-right font-medium tabular-nums text-slate-900">{centsToUsd(r.amount)}</td>
+                                <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{centsToUsd(r.net_amount)}</td>
+                                <td className="px-3 py-1.5 font-mono text-slate-500">{String(r.approval_code ?? '—')}</td>
+                                <td className="px-3 py-1.5 font-mono text-slate-400">{String(r.rrn ?? '—')}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                    <tfoot>
+                        <tr className="border-t bg-slate-50/70 font-semibold">
+                            <td className="px-3 py-2 text-slate-600" colSpan={3}>Total</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-900">{centsToUsd(totalAmount)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">{centsToUsd(totalNet)}</td>
+                            <td colSpan={2} />
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <AllFieldsBlock data={rows} />
+        </div>
+    )
+}
+
+function GenericPayloadView({ data }: { data: unknown }) {
+    const rows = flattenPayload(data)
+    if (rows.length === 0) return <p className="text-sm text-muted-foreground">Empty payload.</p>
+    return (
+        <div className="rounded-lg border bg-white p-3">
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
+                {rows.map((r, i) => (
+                    <div key={i} className="flex items-baseline justify-between gap-3 border-b border-dashed border-slate-100 pb-1">
+                        <dt className="shrink-0 text-xs text-slate-500">{r.label}</dt>
+                        <dd className="truncate text-right text-xs font-medium text-slate-800" title={r.value}>{r.value}</dd>
+                    </div>
+                ))}
+            </dl>
+        </div>
+    )
+}
+
+/** Dispatch on the payload's `event` field. */
+function PayloadBody({ payload }: { payload: Record<string, unknown> }) {
+    const event = typeof payload.event === 'string' ? payload.event : ''
+    const data = 'data' in payload ? payload.data : payload
+    if (event === 'batch_summary' && data && typeof data === 'object' && !Array.isArray(data))
+        return <BatchSummaryView d={data as Record<string, unknown>} />
+    if (event === 'transactions' && data && typeof data === 'object' && !Array.isArray(data))
+        return <TransactionView d={data as Record<string, unknown>} />
+    if (event === 'batch_detail' && Array.isArray(data))
+        return <BatchDetailView rows={data as Record<string, unknown>[]} />
+    return <GenericPayloadView data={data} />
+}
+
+const EVENT_LABELS: Record<string, string> = {
+    batch_summary: 'Batch Summary', transactions: 'Transaction', batch_detail: 'Batch Detail',
+}
+
+function WebhookPayloadDialog({ e }: { e: DeviceWebhookEvent }) {
+    const [showRaw, setShowRaw] = useState(false)
+    const payload = e.raw_payload as Record<string, unknown>
+    const event = typeof payload.event === 'string' ? payload.event : ''
+    const title = EVENT_LABELS[event] ?? 'Webhook Payload'
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <button type="button" className="text-xs font-medium text-blue-600 hover:underline">View</button>
+            </DialogTrigger>
+            <DialogContent className="max-h-[85vh] max-w-3xl overflow-hidden p-0">
+                <DialogHeader className="border-b px-5 py-3">
+                    <DialogTitle className="flex flex-wrap items-center gap-2 text-base">
+                        {title}
+                        {event && <Badge variant="outline" className="font-mono text-[10px]">{event}</Badge>}
+                        {e.batch_no && <span className="text-xs font-normal text-slate-400">Batch #{e.batch_no}</span>}
+                    </DialogTitle>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                        <span>Received {dateTimeAmPm(e.received_at)}</span>
+                        <span>·</span><span>{e.outcome}</span>
+                        {e.http_status != null && <><span>·</span><span>HTTP {e.http_status}</span></>}
+                        <button type="button" onClick={() => setShowRaw((v) => !v)}
+                            className="ml-auto text-blue-600 hover:underline">{showRaw ? 'Formatted view' : 'Raw JSON'}</button>
+                    </div>
+                </DialogHeader>
+                <div className="max-h-[70vh] overflow-y-auto bg-slate-50/50 px-5 py-4">
+                    {showRaw
+                        ? <pre className="overflow-auto rounded-lg border bg-white p-3 text-[11px] leading-relaxed">{JSON.stringify(payload, null, 2)}</pre>
+                        : <PayloadBody payload={payload} />}
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
 }
 
 function ConnectionBadge({ state }: { state: string }) {
@@ -715,9 +1127,7 @@ export function PaymentDeviceDetailView({ merchantId, serial }: { merchantId: st
                                             <TableCell className="text-right text-muted-foreground">{e.latency_ms != null ? `${e.latency_ms}ms` : '—'}</TableCell>
                                             <TableCell>
                                                 {e.raw_payload
-                                                    ? <details><summary className="cursor-pointer text-xs text-blue-600">view</summary>
-                                                        <pre className="mt-1 max-h-56 max-w-md overflow-auto rounded bg-slate-50 p-2 text-[11px] leading-tight">{JSON.stringify(e.raw_payload, null, 2)}</pre>
-                                                      </details>
+                                                    ? <WebhookPayloadDialog e={e} />
                                                     : <span className="text-muted-foreground">—</span>}
                                             </TableCell>
                                         </TableRow>
