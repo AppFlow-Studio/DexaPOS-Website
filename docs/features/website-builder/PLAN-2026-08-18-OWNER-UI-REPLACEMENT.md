@@ -1,0 +1,445 @@
+# Plan — Replace the website builder UI with Owner.com's model
+
+**Date:** 2026-08-18
+**Branch:** `feat/website-owner-ui` (off `aliawdi-dev`)
+**Requested by:** team lead — *"mimic the UI and flow of owner.com; what I care about most is the same simplicity"*
+**Reference material:** [`owner.com/`](../../../owner.com/) — 23 screenshots of the live Owner dashboard, captured 2026-08-18
+**Supersedes for UI purposes:** [DESIGN-2026-08-14-BUILDER-UI.md](DESIGN-2026-08-14-BUILDER-UI.md) (decisions UI1–UI21)
+
+> **This is a UI replacement, not a rewrite.** The section contract, the registry, the resolver, the
+> renderers, the server actions and the database are **untouched**. Everything below happens inside
+> `components/site-builder/builder/**`, `components/site-builder/dashboard/**` and four route files.
+> No migration. No change to `PageDocument`. That is what makes this a two-week job instead of a quarter.
+
+---
+
+## 1. Decisions taken
+
+Agreed with the team lead before planning:
+
+| # | Decision | Consequence |
+|---|---|---|
+| **D-A** | **Style collapses to Owner's five controls** — logo, one brand colour, Light/Dark, Rounded/Square, title font from four options | Palettes, mood filters, supporting-colour overrides, font pairings, the two font pickers and the readability panel are **deleted**. One brand colour + mode derives the whole palette through the existing `deriveThemeColors` |
+| **D-B** | **Of our safety rails, only publish blockers survive** | Broken-menu-item `⚠` markers, undo/redo affordances, the save-state indicator and the page SEO fields all come out of the UI |
+| **D-C** | **Sidebar becomes a Website group with sub-items** | `app/dashboard/layout.tsx` gains a nested entry. The overview page disappears; **Pages** is the landing screen |
+| **D-D** | **Scope is Pages + Style + the page editor** | Announcements, Events, Forms, Analytics, Customer support and Careers are out. The sidebar group shows only Pages |
+
+### 1.1 One deviation from D-B, stated plainly
+
+D-B, read literally, removes autosave along with its indicator. **I am keeping the autosave machinery
+and removing every visible trace of it.** `SaveDraft`, the 1.5 s debounce, the flush on tab-hide and the
+conflict path all stay; the status text, the retry link, the undo/redo buttons and `Ctrl+Z` all go.
+
+The reason: Owner's editor has no save button either, which means it autosaves — a Build-mode editor whose
+only write is `Publish` loses a merchant's afternoon on a refresh. Removing the *indicator* is a simplicity
+win; removing the *persistence* is a data-loss bug wearing simplicity's clothes.
+
+If the team lead genuinely wants no autosave, say so and it is a one-line change to
+[BuilderShell.tsx](../../../components/site-builder/builder/BuilderShell.tsx) — but the drawer's `Done`
+button would then have to become the save point, and `Close` would need an "unsaved changes" prompt.
+
+---
+
+## 2. The Owner model, extracted
+
+Everything in this section is read off the screenshots, with the file that shows it.
+
+### 2.1 Navigation — `002837`, `003130`
+
+A collapsible **Website** group in the left sidebar, expanded to reveal `Pages · Announcements · Events ·
+Forms · Analytics · Customer support · Careers`. The active child gets a light pill background. There is no
+overview or dashboard screen above Pages — **the sidebar is the navigation, and Pages is where you land.**
+
+### 2.2 The list-screen shell — `002837`, `003248`, `003303`, `003315`, `003415`
+
+One layout, reused by every screen in the group:
+
+- `<h1>` + a single muted sentence beneath it, left-aligned
+- Actions top-right: zero or one secondary (outline) button, then one primary (solid blue) button
+- A single bordered card: a search row with a magnifier, then rows separated by hairlines
+- Right-hand columns are few and narrow — `Created by`, `Status`, `Responses`, `Date`
+- Status is a **pill that is also a dropdown** — green `Published ⌄`, grey `Unpublished ⌄`, grey `Not used ⌄`
+- Pagination bottom-left: `‹ 1 2 ›` then `1-7 of 8`
+- Empty state is a **single row inside the card** — an icon and `No events`. Not an illustration, not a hero
+
+The home page's status pill has no chevron (`002837`) — it cannot be unpublished.
+
+### 2.3 The full-screen overlay — `002918`, `002956`, `003008`, `003019`, `003053`, `003153`, `003330`, `003551`
+
+Four different jobs, one chrome:
+
+```
+[⊗ Close]  Context title            [🔨 Build | 👁 Preview]            💬  [Primary ⊕]
+```
+
+| Used for | Title | Centre | Primary |
+|---|---|---|---|
+| Page editor | page name | Build / Preview | `Publish ⊕` |
+| Style | `Style` | — | `Save ✓` |
+| New Page | `New Page` | — | `Create →` |
+| New Form | `New Form` | — | `Create →` |
+
+The overlay covers the sidebar completely. There is no breadcrumb and no secondary navigation inside it.
+
+### 2.4 The page editor in Build mode — `003551`, `003153`
+
+- Canvas centred on a light grey field, **one fixed width, no device switcher**
+- Hovering a section reveals two floating pill controls in the **gutters, outside the canvas**:
+  - left: `✏️` alone for locked sections, `✏️` over `🗑️` for deletable ones
+  - right: `⌃` over `⌄` — move up, move down
+- Between every pair of sections, a full-width band containing `⊕ Add Section`
+- The header section shows `✏️` but no `🗑️` — locked, exactly like our `masthead` zone
+- No layers panel, no zone labels, no section search, no selection ring, no undo, no save text
+
+**Preview mode** swaps the canvas for a plain render with the controls gone.
+
+### 2.5 The section drawer — `003053`
+
+Clicking `✏️` opens a **left drawer, ~240 px**, over the same canvas:
+
+- Plain stacked fields, label above control, generous vertical rhythm
+- Segmented controls for small enums — `Background: None | Photo | Color`, `Media: None | Photo | Video`,
+  `Alignment: Left | Right`
+- Image fields are a dashed dropzone with a thumbnail and a `Replace` button beneath
+- Text fields carry a **character counter in the label row**, right-aligned: `32/50`, `287/500`
+- A full-width blue **`Done`** pinned to the bottom of the drawer
+
+No tabs. No Content/Appearance split. No reset-to-default affordances. No "inherits site design" note.
+
+### 2.6 Add Section — `003224`
+
+A small centred modal, not a gallery:
+
+- Title `Add Section` + `✕`
+- A **two-column grid of plain rows** — icon, label, and a check on the selected one
+- 12 kinds visible: Content, Gallery, Features, Cards, Form, PDF, Reservations, Reviews, Scrolling Banner,
+  Popular Items, Video, Events
+- Footer: `Add ⊕`, bottom-right
+
+No search, no categories, no descriptions, no thumbnails, no "recommended" badges. **Selection is a
+two-step commit** — pick, then `Add` — which is how the modal avoids asking where the section goes.
+
+### 2.7 New Page — `002956`, `003008`, `003019`
+
+Overlay chrome, left rail of three template cards (`Article`, `Showcase`, `Blank`), live preview of the
+selected template filling the rest. `Create →` commits. The preview is a **real render**, not a thumbnail —
+`003019` shows `Blank` rendering as just header + footer.
+
+### 2.8 Style — `002918`
+
+The entire style surface, in order, in a ~240 px left rail:
+
+1. **Logo** — thumbnail in a bordered box, `⋯` overflow, `Replace` button
+2. **Brand Color** — a swatch dot and a hex value in one bordered field
+3. **Theme** — `Light | Dark` segmented
+4. **Corners** — `Rounded | Square` segmented
+5. **Titles font** — four radio rows, each with an `Aa` specimen on the right: `Sans serif`, `Serif`,
+   `Condensed`, `Custom` (showing the resolved name, e.g. `Noto Serif Display`)
+
+Live full-site preview fills the rest of the screen and scrolls. **That is the whole design system.**
+
+### 2.9 Modal grammar — `003440`, `003503`, `003517`
+
+Title + `✕`; body; footer with exactly one primary button whose icon sits on the *right* (`Add job ⊕`,
+`Add Event ⊕`, `Done ✓`). Inline validation is red text directly beneath the offending field
+(`Field is required` under the photo dropzone in `003503`). No cancel button in the footer — `✕` is the exit.
+
+---
+
+## 3. Gap analysis
+
+| Concern | Owner | Us today | Action |
+|---|---|---|---|
+| Landing screen | Pages list | Overview with readiness checklist, next-best-action, store card | **Delete overview**, Pages becomes landing |
+| Page management | Rows + status dropdown | `PageListCard` inside the overview | **Promote** to its own screen |
+| Editor columns | 1 (+ drawer) | 3 (layers, canvas, inspector) | **Collapse to 1 + drawer** |
+| Section controls | Gutter pills | Overlay toolbar, layers rows, drawer menu — three routes to the same six actions | **One route**: gutter pills |
+| Reorder | ⌃/⌄ only | dnd-kit drag, ⌃/⌄, keyboard, menu items | **⌃/⌄ only** |
+| Add section | 12 plain rows, 2-col | Categorised gallery, search, thumbnails, recommendations, availability badges | **Plain grid** |
+| Section editing | Flat fields + Done | Tabs, reset buttons, live-data notice, design link | **Flat fields + Done** |
+| Publish | One blue button | Review sheet with diff, blockers, warnings, binding health, publication target, success state | **Button + blocker message** |
+| Device preview | None | Desktop/tablet/mobile at 1120/834/390 | **Delete** |
+| Undo | None | Buttons + `Ctrl+Z` + 50-deep history | **Delete affordances**, keep history internally for the drawer's cancel path |
+| Save state | None | 6 states, relative time, retry | **Delete display**, keep machinery (§1.1) |
+| Style | 5 controls | ~40 controls across 4 tabs | **5 controls** |
+| Nav editing | Auto-derived from pages | Manual `NavEditor` with 8-item cap | **Auto-derive** (§6.4) |
+| Web address | Not in these shots | `WebAddressCard` on the overview | **Keep**, move onto Pages (§6.2) |
+
+---
+
+## 4. Target file tree
+
+```
+app/dashboard/website/
+  page.tsx                    → redirect to ./pages
+  pages/page.tsx              ★ NEW  Pages list (landing)
+  pages/[pageId]/page.tsx     ★ NEW  editor  (was builder/page.tsx)
+  style/page.tsx              ★ NEW  style overlay (was design/page.tsx)
+  preview/page.tsx              keep, unchanged
+  builder/                    ✂ delete (render-canvas.tsx + menu-catalog.ts move to ../pages/)
+  design/                     ✂ delete
+
+components/site-builder/
+  shell/                      ★ NEW — the primitives every screen is built from
+    OverlayChrome.tsx         ★ Close · title · centre slot · primary action
+    ListHeader.tsx            ★ h1 + subtitle + actions
+    DataCard.tsx              ★ search + rows + pagination + empty row
+    StatusPill.tsx            ★ green/grey pill that is also a dropdown
+    TemplatePicker.tsx        ★ left rail of templates + live preview
+  builder/
+    BuilderShell.tsx          ⟳ rewrite — overlay + canvas + drawer
+    Canvas.tsx                ⟳ rewrite the overlay layer, keep the measurement engine
+    EditorTopBar.tsx          ★ NEW (replaces Toolbar.tsx, 519 → ~140)
+    SectionDrawer.tsx         ⟳ rewrite of SettingsPanel.tsx (1034 → ~600)
+    AddSectionModal.tsx       ⟳ rewrite (251 → ~110)
+    store.ts                  ⟳ trim (556 → ~380)
+    MenuItemPicker.tsx        ⟳ strip the ⚠ rows per D-B (316 → ~230)
+    preview-sync.ts             keep, unchanged
+    save-adapter.ts             keep, unchanged
+    delete-section.ts         ⟳ drop the undo toast, keep the guard
+    section-icons.tsx           keep
+    announce.ts                 keep — ⌃/⌄ still need to announce
+    SectionList.tsx           ✂ delete (521)
+    ReviewSheet.tsx           ✂ delete (532)
+    SectionThumbnail.tsx      ✂ delete (144)
+  dashboard/
+    PagesScreen.tsx           ★ NEW — list + status pills + New Page + Change Style
+    WebAddressCard.tsx        ⟳ keep, restyled to the card grammar
+    StyleOverlay.tsx          ★ NEW (replaces WebsiteDesignWorkspace.tsx, 820 → ~260)
+    design/BrandColorField.tsx ⟳ simplified ColorField
+    design/TitleFontRadio.tsx ★ NEW — four rows with Aa specimens
+    design/ThemePreview.tsx     keep — already token-driven, no change needed
+    WebsiteOverview.tsx       ✂ delete (187)
+    PageListCard.tsx          ✂ delete — absorbed by PagesScreen (384)
+    design/NavEditor.tsx      ✂ delete (262)
+    design/FontPicker.tsx     ✂ delete
+    design/ReadabilityCheck.tsx ✂ delete
+```
+
+**Net: ≈2,100 lines deleted, ≈900 written.**
+
+---
+
+## 5. What must not change
+
+Guard these in review. Every one of them is why this is a UI-only change:
+
+- `lib/site-builder/**` — the contract, registry, schemas, resolver, normalizer, validator, diff
+- `components/site-builder/sections/**` and `PageRenderer.tsx` — the nine renderers
+- `app/dashboard/website/actions/**` — all 17 server actions, including `UnpublishPage`, which already
+  exists at [publish.ts:342](../../../app/dashboard/website/actions/publish.ts) and is what the status
+  pill's dropdown calls
+- The `data-sb-*` overlay protocol in [edit-attrs.ts](../../../components/site-builder/edit-attrs.ts) —
+  the new gutter controls read the same attributes the old overlay did
+- The database. **No migration in this branch.**
+
+---
+
+## 6. Work items
+
+### Phase 0 — Setup
+
+- [ ] **0.1** Decide whether `owner.com/` is committed as reference material or added to `.gitignore`.
+      It is currently untracked. Recommend committing it — a UI plan whose reference images live only on
+      one laptop is unreviewable.
+
+### Phase 1 — Shell primitives
+
+Build these first; every later phase consumes them.
+
+- [ ] **1.1** `shell/OverlayChrome.tsx` — props: `title`, `onClose`, `centre?`, `action`, `secondaryAction?`.
+      Fixed 56 px bar, `Close` as an outline pill with `⊗`, primary solid blue with a right-hand icon.
+- [ ] **1.2** `shell/ListHeader.tsx` — `title`, `subtitle`, `actions?`.
+- [ ] **1.3** `shell/DataCard.tsx` — `searchPlaceholder`, `columns`, `rows`, `pageSize = 7`, `emptyLabel`,
+      `emptyIcon`. Client-side search and pagination; the caller passes rows, not a query.
+- [ ] **1.4** `shell/StatusPill.tsx` — `tone: "published" | "draft" | "muted"`, `label`, `actions?`.
+      Renders a bare pill when `actions` is absent (the home-page case, `002837`).
+- [ ] **1.5** `shell/TemplatePicker.tsx` — `templates`, `selectedId`, `onSelect`, `preview`.
+
+**Acceptance:** each renders in isolation and matches its screenshot at 1366 px.
+
+### Phase 2 — Pages screen
+
+- [ ] **2.1** `app/dashboard/website/pages/page.tsx` — server component. Reuses `loadSiteContext` +
+      the existing `loadOverview` query from the current [page.tsx:25](../../../app/dashboard/website/page.tsx).
+- [ ] **2.2** `dashboard/PagesScreen.tsx` — `ListHeader` (`Pages` / *Manage pages in your website.* /
+      `Change Style` + `New Page`) over `DataCard`. Columns: title, `Created by`, `Status`.
+- [ ] **2.3** Status pill wiring — `Published ⌄` → `Unpublish`; `Unpublished ⌄` → `Publish`. Calls the
+      existing `PublishPage` / `UnpublishPage`. Home page gets a chevron-less pill.
+- [ ] **2.4** Move `WebAddressCard` beneath the list, restyled. **Keep the "published but unreachable"
+      warning** — it is the one honest thing we have that Owner does not need, because their subdomains
+      are provisioned for them.
+- [ ] **2.5** `New Page` → the template overlay (Phase 5).
+- [ ] **2.6** `app/dashboard/website/page.tsx` → `redirect("/dashboard/website/pages")`, so every existing
+      link and bookmark survives.
+- [ ] **2.7** Delete `WebsiteOverview.tsx` and `PageListCard.tsx`.
+
+**Acceptance:** a merchant can see, search, paginate, rename, delete, publish and unpublish pages without
+leaving this screen.
+
+### Phase 3 — Editor chrome
+
+- [ ] **3.1** `EditorTopBar.tsx` — `OverlayChrome` with the page name as title, `Build | Preview` centred,
+      `Publish ⊕` primary. Delete the page switcher, device switcher, undo/redo, external link and status stack.
+- [ ] **3.2** Route move: `builder/page.tsx` → `pages/[pageId]/page.tsx`. `pageId` becomes a path segment
+      instead of `?page=`; `?location=` stays a query param, matching Owner's `?locationId=`.
+      `builder/render-canvas.tsx` and `builder/menu-catalog.ts` move alongside it.
+- [ ] **3.3** `Close` returns to `/dashboard/website/pages`.
+- [ ] **3.4** Build/Preview replaces `inspectorEnabled`. Preview hides the gutter controls and the
+      `Add Section` bands; the existing new-tab link interception stays.
+- [ ] **3.5** Publish inline. `validatePage` still gates the button (**D-B**); on failure the button is
+      disabled and one line of red text sits beneath it naming the first blocker with a `Fix` link that
+      selects the offending section. Success is a toast, not a sheet.
+- [ ] **3.6** Delete `Toolbar.tsx` and `ReviewSheet.tsx`.
+
+**Acceptance:** publishing a valid page takes one click from the editor. Publishing an invalid one is
+impossible and the reason is on screen.
+
+### Phase 4 — Canvas and drawer
+
+- [ ] **4.1** Gutter controls in `Canvas.tsx`. Keep `measure()`, the `ResizeObserver`, the rect map and
+      `useRevealSelectedSection` — they are correct and hard-won. Replace the `Overlay` component: pills
+      positioned at `rect.y` in the left and right gutters instead of a toolbar above the section.
+- [ ] **4.2** `⊕ Add Section` bands between body sections, replacing `InsertPoints`. Owner's bands are
+      always visible, not hover-revealed — that is a real simplicity gain and removes the discoverability
+      problem our `+` has.
+- [ ] **4.3** Remove the selection ring and the section label chip. Owner has neither; the open drawer is
+      what tells you which section you are editing.
+- [ ] **4.4** `SectionDrawer.tsx` from `SettingsPanel.tsx`. **Keep `describeSchema` generation** — it is
+      the reason a tenth section kind costs one file, and it survives the redesign untouched. Remove: the
+      Content/Appearance tabs, `ControlRow`'s reset buttons, `InheritsSiteDesign`, the live-fields banner,
+      the section overflow menu. Add: character counters in label rows, a bottom-pinned `Done`.
+- [ ] **4.5** Fold `STYLE_FIELDS` away — with tabs gone, style and content fields render in one list, in
+      schema order. This deletes the stopgap flagged in
+      [SettingsPanel.tsx:64](../../../components/site-builder/builder/SettingsPanel.tsx).
+- [ ] **4.6** Page-settings mode of the drawer keeps **name and address only**. SEO fields come out per D-B.
+      `doc.seo` stays in the document and keeps defaulting from the page title, so the SEO surface built in
+      `192a411e` keeps working.
+- [ ] **4.7** `store.ts` — remove `device`, `pane`, `reviewOpen`, `publishResult`, `saveError`,
+      `catalogError` display paths, `selectionSource`. Add `mode: "build" | "preview"` and `drawerOpen`.
+      Keep `past`/`future` (the drawer's implicit cancel depends on it) but remove the exported undo/redo
+      affordances.
+- [ ] **4.8** Delete `SectionList.tsx`. Keep `announce.ts` and call it from the ⌃/⌄ handlers — losing the
+      layers panel must not also lose the only screen-reader feedback reordering has.
+
+**Acceptance:** every action the old three columns offered — edit, reorder, hide, duplicate, delete, add —
+is reachable from the canvas alone. Hide and duplicate move into the `✏️` pill's long-press/overflow, or
+are dropped if the team lead does not want them (§8, Q2).
+
+### Phase 5 — Add Section and New Page
+
+- [ ] **5.1** `AddSectionModal.tsx` rewrite: two-column grid of `SectionIcon` + label, single selection,
+      `Add ⊕` footer. Drop the search, the categories, the descriptions, `SectionThumbnail`, the
+      recommendation logic and the `PAGE_ESSENTIALS` list.
+- [ ] **5.2** Keep `addableKinds()` as the source — kind #10 must still appear automatically. Keep the
+      `unavailable` treatment for the gallery, as a disabled row; a card that adds a section you cannot
+      fill is worse than one that says it is not ready.
+- [ ] **5.3** Three page templates as `PageDocument` factories beside
+      [starter-page.ts](../../../lib/site-builder/starter-page.ts): `Article` (header, hero, content,
+      footer), `Showcase` (header, hero, popular-items, gallery, content, footer), `Blank` (header, footer
+      only — matching `003019` exactly).
+- [ ] **5.4** New Page overlay using `TemplatePicker`, with the preview rendered through the existing
+      `renderCanvas` action so it is a real render.
+- [ ] **5.5** Delete `SectionThumbnail.tsx`.
+
+**Acceptance:** adding a section is two clicks. Creating a page is: name it, pick a template, `Create`.
+
+### Phase 6 — Style overlay
+
+- [ ] **6.1** `StyleOverlay.tsx` — `OverlayChrome` (`Style`, `Save ✓`) + five-control rail + the existing
+      `ThemePreview` filling the rest.
+- [ ] **6.2** Derivation. The five inputs are `logo`, `brand`, `mode`, `radius`, `headingFont`. Everything
+      else comes from `deriveThemeColors({ brand, surface, text })`, where `surface`/`text` are picked by
+      `mode` (`#FFFFFF`/`#111827` light, inverted dark) and `brandContrast` from the existing
+      `readableOn(brand)`. **The full `ThemeTokens` object is still written to `merchant_sites.theme`**, so
+      the renderer, `SiteChrome` and every section stay exactly as they are — no migration, no schema change.
+- [ ] **6.3** Rehydration. `mode` is inferred from the stored surface via `isLight()`; `radius` maps to
+      `Rounded` (12 px) or `Square` (2 px); `headingFont` matches one of the four options or falls back to
+      `Custom` showing the resolved family name, as in `002918`.
+- [ ] **6.4** Nav auto-derives from published, non-home pages in list order, capped at 4 with a `More ⌄`
+      overflow — matching the rendered header in `002918` and `003551`. `parseNavItems`/`serializeNav`
+      keep working for sites with a stored nav; a site with none gets the derived one.
+- [ ] **6.5** Logo field — thumbnail + `Replace`. **Blocked on the asset pipeline** (Stage 7,
+      `site_assets`). Ship it reading `ctx.site.logoUrl`, which the header already renders, with `Replace`
+      disabled and a one-line note. Do not fake an upload.
+- [ ] **6.6** Delete `WebsiteDesignWorkspace.tsx`, `NavEditor.tsx`, `FontPicker.tsx`,
+      `ReadabilityCheck.tsx`. Simplify `ColorField.tsx` → `BrandColorField.tsx`.
+- [ ] **6.7** `design/page.tsx` → `style/page.tsx`, with a redirect from the old path.
+
+**Acceptance:** five controls, live preview, one `Save`. A merchant cannot produce an unreadable site
+because they never choose text colours.
+
+### Phase 7 — Sidebar and cleanup
+
+- [ ] **7.1** `app/dashboard/layout.tsx` — `Website` becomes a group with one child, `Pages`, using the
+      existing `SidebarMenuSubItem > SidebarMenuSubButton` pattern the nav already uses elsewhere.
+- [ ] **7.2** Strip `MenuItemPicker`'s broken-row treatment per D-B. **Flagged as a risk in §7.**
+- [ ] **7.3** Delete `delete-section.ts`'s undo toast; keep the generation guard so the drawer's cancel
+      cannot revert someone else's later edit.
+- [ ] **7.4** Update [README.md](README.md) — progress table, document list, and a note that
+      DESIGN-2026-08-14 is superseded for UI.
+
+---
+
+## 7. Risks accepted
+
+Recording these so nobody rediscovers them as bugs.
+
+| Risk | Cause | Mitigation |
+|---|---|---|
+| **86'd dishes vanish from a live page with no warning** | D-B removes the `⚠` markers | None. This is the one place we were structurally ahead of Owner. Recommend revisiting after launch — the data is already computed in `binding-health.ts`, so restoring it is a UI change only |
+| **A merchant loses work by closing the drawer** | No undo affordance | Autosave persists on a 1.5 s debounce, so at most 1.5 s is at risk |
+| **A bad brand colour produces low-contrast text** | Readability panel deleted | `deriveThemeColors` + `readableOn` must guarantee contrast. **Add a unit test asserting ≥ 4.5:1 for all five pairs across a sweep of brand hues** — this replaces the panel with an invariant, which is better |
+| **Existing merchants lose their custom palette** | Five controls cannot express ten stored colours | Stored themes keep rendering — the renderer reads the tokens, not the controls. Opening Style and saving *will* flatten a hand-tuned palette to the derived one. Show a one-time notice on first open when `matchPalette` finds no match |
+| **Deep links break** | Route moves | Redirects at both old paths (6.7, 2.6) |
+
+---
+
+## 8. Open questions
+
+Answer before Phase 4 — none of them block Phases 0–3.
+
+1. **Hide and Duplicate.** Owner's gutter shows only edit, delete, up, down. Ours also has hide and
+   duplicate. Drop them, or put them behind an overflow on the `✏️` pill? *Recommendation: overflow —
+   hidden sections are already modelled and duplicate is genuinely useful.*
+2. **Multi-location.** Owner is single-brand-per-dashboard with `?locationId=` scoping. Our
+   `?location=` does the same, but our Pages screen has no location picker. Does the Pages list need one,
+   or does the existing dashboard location scope cover it?
+3. **`Change Style` placement.** Owner puts it on Pages as a secondary button. We also reach Style from the
+   sidebar today. Keep both entry points, or Pages only?
+4. **Preview mode fidelity.** Owner's Preview appears to render in place. Ours could either do that or
+   reuse `/dashboard/website/preview`. *Recommendation: in place — it is one state flag versus a route.*
+
+---
+
+## 9. Verification
+
+- [ ] `npm run test` — the four action test suites and the `lib/site-builder` suites must stay green.
+      They cover the layer we are not touching, which is exactly what makes them the regression net.
+      **22 failures are pre-existing and unrelated** (see the vitest memory note) — compare against a
+      baseline run on `aliawdi-dev`, not against zero.
+- [ ] New unit test: theme derivation contrast sweep (§7).
+- [ ] New unit test: template factories produce documents that pass `validatePage`.
+- [ ] Manual, against each screenshot at 1366 px: Pages, Style, New Page, editor Build, editor Preview,
+      section drawer, Add Section.
+- [ ] Manual flow: create page → pick template → edit two sections → publish → unpublish → delete.
+- [ ] Keyboard: every gutter control reachable and labelled; `⌃`/`⌄` announce through `announce.ts`.
+- [ ] Confirm no file under `lib/site-builder/`, `components/site-builder/sections/` or
+      `app/dashboard/website/actions/` appears in `git diff --stat`.
+
+---
+
+## 10. Sizing
+
+| Phase | Work | Depends on |
+|---|---|---|
+| 0 · Setup | 0.5 d | — |
+| 1 · Shell primitives | 1.5 d | — |
+| 2 · Pages screen | 1.5 d | 1 |
+| 3 · Editor chrome | 1.5 d | 1 |
+| 4 · Canvas + drawer | 3 d | 3 |
+| 5 · Add Section + templates | 2 d | 1, 4 |
+| 6 · Style overlay | 2 d | 1 |
+| 7 · Sidebar + cleanup | 1 d | all |
+
+**≈13 working days**, with Phases 2/3 and 6 parallelisable.
