@@ -444,7 +444,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                           {activeTerminal.is_active && hasMultipleTerminals && (
                             <Badge
                               variant="outline"
-                              className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium"
+                              className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground"
                             >
                               Active
                             </Badge>

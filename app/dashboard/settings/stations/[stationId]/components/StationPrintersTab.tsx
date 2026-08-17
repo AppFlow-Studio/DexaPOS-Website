@@ -244,7 +244,7 @@ export function StationPrintersTab({ station }: StationPrintersTabProps) {
                         {printer.is_default_receipt && (
                           <Badge
                             variant="outline"
-                            className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium"
+                            className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground"
                           >
                             Receipt
                           </Badge>
@@ -252,7 +252,7 @@ export function StationPrintersTab({ station }: StationPrintersTabProps) {
                         {printer.is_default_kitchen && (
                           <Badge
                             variant="outline"
-                            className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium"
+                            className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground"
                           >
                             Kitchen
                           </Badge>

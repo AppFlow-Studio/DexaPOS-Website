@@ -43,7 +43,7 @@ export function PrepStationCard({
             {station.item_count > 0 && (
               <Badge
                 variant="secondary"
-                className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium tabular-nums"
+                className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium tabular-nums text-foreground"
               >
                 {station.item_count} item{station.item_count !== 1 ? "s" : ""}
               </Badge>
@@ -64,7 +64,7 @@ export function PrepStationCard({
               assignedCategories.map((name) => (
                 <Badge
                   key={name}
-                  className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium"
+                  className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground"
                 >
                   {name}
                 </Badge>

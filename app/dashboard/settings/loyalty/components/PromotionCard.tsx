@@ -121,7 +121,7 @@ export function PromotionCard({
                 squeeze the name down to a single word. */}
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <h3 className="min-w-0 text-base font-semibold">{promotion.name}</h3>
-              <Badge className="w-fit shrink-0 rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium">
+              <Badge className="w-fit shrink-0 rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground">
                 {getPromoTypeLabel()}
               </Badge>
             </div>

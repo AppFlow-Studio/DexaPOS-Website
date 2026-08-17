@@ -51,7 +51,7 @@ import {
   LogOut,
   Utensils,
   CircleSlash,
-  Coffee,
+  Armchair,
   Receipt,
   Calendar,
   MapPin,
@@ -74,6 +74,7 @@ import {
   DollarSign,
   CalendarClock,
   ShieldAlert,
+  Percent,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -132,10 +133,14 @@ const navMain = [
       {
         title: "Tables",
         url: "/dashboard/tables",
-        icon: Coffee,
+        icon: Armchair,
         items: [
-          { title: "Tables", url: "/dashboard/tables" },
-          { title: "Service Charge", url: "/dashboard/tables/service-charge" },
+          { title: "Tables", url: "/dashboard/tables", icon: Armchair },
+          {
+            title: "Service Charge",
+            url: "/dashboard/tables/service-charge",
+            icon: Percent,
+          },
         ],
       },
       {
@@ -241,46 +246,57 @@ const navMain = [
           {
             title: "Financial Information",
             url: "/dashboard/reports/financials",
+            icon: Banknote,
           },
           {
             title: "Compare Locations",
             url: "/dashboard/reports/comparison",
+            icon: GitCompare,
           },
           {
             title: "Orders",
             url: "/dashboard/orders/reports",
+            icon: ShoppingCart,
           },
           {
             title: "Sales By Items",
             url: "/dashboard/reports/sales-by-items",
+            icon: List,
           },
           {
             title: "Cash Management",
             url: "/dashboard/reports/cash-management",
+            icon: DollarSign,
           },
           {
             title: "Voids & Refunds",
             url: "/dashboard/reports/voids",
+            icon: CircleSlash,
           },
           {
             title: "Online Ordering",
             url: "/dashboard/reports/online-ordering",
+            icon: Globe,
           },
           {
             title: "Cash Drawers",
             url: "/dashboard/reports/cash-drawers",
+            icon: Receipt,
           },
           {
             title: "Tax Report",
             url: "/dashboard/reports/tax",
+            icon: Percent,
           },
           {
             title: "Kitchen Performance",
             url: "/dashboard/reports/kitchen-performance",
+            icon: Flame,
           },
           {
             title: "Discrepancy",
             url: "/dashboard/reports/discrepancy",
+            icon: ShieldAlert,
           },
         ],
       },
@@ -309,8 +325,8 @@ const navMain = [
         url: "/dashboard/tips",
         icon: DollarSign,
         items: [
-          { title: "Tip Distribution", url: "/dashboard/tips" },
-          { title: "My Tips", url: "/dashboard/tips/my-tips" },
+          { title: "Tip Distribution", url: "/dashboard/tips", icon: Users },
+          { title: "My Tips", url: "/dashboard/tips/my-tips", icon: User },
         ],
       },
       {
@@ -431,6 +447,7 @@ function MerchantSidebar() {
                                         }
                                       >
                                         <Link href="/dashboard/orders">
+                                          <ShoppingCart className="h-3 w-3" />
                                           <span>Orders</span>
                                         </Link>
                                       </SidebarMenuSubButton>
@@ -479,25 +496,33 @@ function MerchantSidebar() {
                           return (
                             <SidebarMenuItem key={menuItem.title}>
                               <Collapsible defaultOpen={isReportsOpen} className="group">
-                                <div className="flex items-center">
+                                {/* Expand-only, like Orders/Tables/Tips/Settings:
+                                    the whole row toggles rather than navigating.
+                                    The landing page is reachable from the
+                                    "General" sub-item below. */}
+                                <CollapsibleTrigger asChild>
                                   <SidebarMenuButton
-                                    asChild
                                     isActive={isReportsActive}
-                                    className="flex-1"
+                                    className="w-full"
                                   >
-                                    <Link href={menuItem.url}>
-                                      <menuItem.icon className="h-4 w-4" />
-                                      <span>{menuItem.title}</span>
-                                    </Link>
+                                    <menuItem.icon className="h-4 w-4" />
+                                    <span>{menuItem.title}</span>
+                                    <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
                                   </SidebarMenuButton>
-                                  <CollapsibleTrigger asChild>
-                                    <button className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent transition-colors shrink-0">
-                                      <ChevronRight className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                                    </button>
-                                  </CollapsibleTrigger>
-                                </div>
+                                </CollapsibleTrigger>
                                 <CollapsibleContent>
                                   <SidebarMenuSub>
+                                    <SidebarMenuSubItem>
+                                      <SidebarMenuSubButton
+                                        asChild
+                                        isActive={pathname === menuItem.url}
+                                      >
+                                        <Link href={menuItem.url}>
+                                          <BarChart3 className="h-3 w-3" />
+                                          <span>General</span>
+                                        </Link>
+                                      </SidebarMenuSubButton>
+                                    </SidebarMenuSubItem>
                                     {/* @ts-ignore */}
                                     {menuItem.items &&
                                       menuItem.items.map((subItem) => (
@@ -507,6 +532,9 @@ function MerchantSidebar() {
                                             isActive={pathname === subItem.url}
                                           >
                                             <Link href={subItem.url}>
+                                              {subItem.icon && (
+                                                <subItem.icon className="h-3 w-3" />
+                                              )}
                                               <span>{subItem.title}</span>
                                             </Link>
                                           </SidebarMenuSubButton>
@@ -551,6 +579,9 @@ function MerchantSidebar() {
                                             isActive={pathname === subItem.url}
                                           >
                                             <Link href={subItem.url}>
+                                              {subItem.icon && (
+                                                <subItem.icon className="h-3 w-3" />
+                                              )}
                                               <span>{subItem.title}</span>
                                             </Link>
                                           </SidebarMenuSubButton>
@@ -591,6 +622,9 @@ function MerchantSidebar() {
                                             isActive={pathname === subItem.url}
                                           >
                                             <Link href={subItem.url}>
+                                              {subItem.icon && (
+                                                <subItem.icon className="h-3 w-3" />
+                                              )}
                                               <span>{subItem.title}</span>
                                             </Link>
                                           </SidebarMenuSubButton>
@@ -665,6 +699,7 @@ function MerchantSidebar() {
                       }
                     >
                       <Link href="/dashboard/settings">
+                        <Settings className="h-3 w-3" />
                         <span>General</span>
                       </Link>
                     </SidebarMenuSubButton>
@@ -809,7 +844,6 @@ function MerchantSidebar() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/dashboard/profile">
                   <User className="mr-2 h-4 w-4" />
@@ -822,7 +856,6 @@ function MerchantSidebar() {
                   Settings
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Log out
@@ -1325,7 +1358,7 @@ export default function MerchantDashboardLayout({
       url: "/dashboard/locations",
       icon: MapPin,
     },
-    { title: "Tables", url: "/dashboard/tables", icon: Coffee },
+    { title: "Tables", url: "/dashboard/tables", icon: Armchair },
     { title: "Reservations", url: "/dashboard/reservations", icon: CalendarClock },
     { title: "Schedules", url: "/dashboard/schedules", icon: Calendar },
     { title: "Items", url: "/dashboard/menu/items", icon: List },

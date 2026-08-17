@@ -219,7 +219,7 @@ export default function TaxSettingsPage() {
                                                 {/* One neutral pill for both
                                                     states (§4.6b) — the word
                                                     carries the meaning. */}
-                                                <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium">
+                                                <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground">
                                                     {rate ? 'Active' : 'Not Set'}
                                                 </Badge>
                                             </TableCell>

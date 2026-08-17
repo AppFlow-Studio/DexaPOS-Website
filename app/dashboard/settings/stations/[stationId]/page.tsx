@@ -304,15 +304,15 @@ export default function StationDetailPage() {
               {/* One neutral pill per badge (§4.6b) — the word carries the
                   state; the dot is filled or hollow, never coloured. */}
               <div className="flex flex-wrap items-center gap-2">
-                <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium">
+                <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground">
                   {getStationTypeLabel(station.station_type)}
                 </Badge>
                 {station.station_code && (
-                  <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 font-mono text-xs font-medium">
+                  <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 font-mono text-xs font-medium text-foreground">
                     {station.station_code}
                   </Badge>
                 )}
-                <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium">
+                <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground">
                   <Circle
                     className={cn(
                       "mr-1 h-2 w-2",

@@ -65,7 +65,7 @@ function StatusBadge({ station }: { station: StationWithHeartbeat }) {
   if (!isActive) {
     return (
       <div className="flex flex-col gap-0.5" role="status" aria-label="Deactivated">
-        <Badge className="w-fit shrink-0 gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
+        <Badge className="w-fit shrink-0 gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-foreground">
           <PowerOff className="h-3 w-3" aria-hidden="true" />
           <span aria-hidden="true">Deactivated</span>
         </Badge>
@@ -90,7 +90,7 @@ function StatusBadge({ station }: { station: StationWithHeartbeat }) {
 
   return (
     <div className="flex flex-col gap-0.5" role="status" aria-label={ariaLabel}>
-      <Badge className="w-fit shrink-0 gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
+      <Badge className="w-fit shrink-0 gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-foreground">
         <Circle
           className={cn(
             "h-2 w-2 transition-colors duration-200",
@@ -113,7 +113,7 @@ function StatusBadge({ station }: { station: StationWithHeartbeat }) {
 
 function SyncRoleBadge({ role }: { role: StationWithHeartbeat["sync_role"] }) {
   return (
-    <Badge className="w-fit shrink-0 gap-1 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
+    <Badge className="w-fit shrink-0 gap-1 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-foreground">
       {getSyncRoleLabel(role)}
     </Badge>
   );

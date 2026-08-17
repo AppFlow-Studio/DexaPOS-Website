@@ -291,7 +291,7 @@ export default function PosSettingsPage() {
         }
         actions={
           <>
-            <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium">
+            <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground">
               Location defaults
             </Badge>
             <Button
@@ -327,7 +327,7 @@ export default function PosSettingsPage() {
               label="Receipt & Kitchen Ticket Content"
               caption="Runtime content switches shared by every POS station at this location."
               action={
-                <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium tabular-nums">
+                <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium tabular-nums text-foreground">
                   v{locationConfig._version ?? 0}
                 </Badge>
               }

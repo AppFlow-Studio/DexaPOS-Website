@@ -83,7 +83,7 @@ export function RuleCard({ rule, roles, onEdit, onDelete, onToggle, isToggling }
         <div className="min-w-0">
           <p className="text-[0.8125rem] text-muted-foreground">Type</p>
           <div className="mt-1.5">
-            <span className="inline-flex max-w-full items-center rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
+            <span className="inline-flex max-w-full items-center rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-foreground">
               <span className="truncate">{type.label}</span>
             </span>
           </div>

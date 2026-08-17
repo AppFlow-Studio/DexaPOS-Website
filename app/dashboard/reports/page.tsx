@@ -77,36 +77,15 @@ const salesOverviewDualPricingColumns: ExportColumn<SalesOverviewRow>[] = [
   { key: "cashRevenue", header: "Cash Revenue", format: usd },
 ];
 
+// Order mirrors the sidebar's Reports submenu (app/dashboard/layout.tsx) so a
+// report sits in the same position whichever way the user navigates. Keep the
+// two lists in step when adding a report.
 const SUB_REPORTS = [
   {
     label: "Financials",
     href: "/dashboard/reports/financials",
     icon: Wallet,
     desc: "P&L & waterfall statement",
-  },
-  {
-    label: "Sales by Items",
-    href: "/dashboard/reports/sales-by-items",
-    icon: BarChart3,
-    desc: "Top-selling products",
-  },
-  {
-    label: "Tax Report",
-    href: "/dashboard/reports/tax",
-    icon: Receipt,
-    desc: "Tax & tender breakdown",
-  },
-  {
-    label: "Voids & Refunds",
-    href: "/dashboard/reports/voids",
-    icon: FileText,
-    desc: "Voided transactions",
-  },
-  {
-    label: "Cash Management",
-    href: "/dashboard/reports/cash-management",
-    icon: Banknote,
-    desc: "Cash flow summary",
   },
   {
     label: "Comparison",
@@ -121,6 +100,24 @@ const SUB_REPORTS = [
     desc: "Order-level breakdown",
   },
   {
+    label: "Sales by Items",
+    href: "/dashboard/reports/sales-by-items",
+    icon: BarChart3,
+    desc: "Top-selling products",
+  },
+  {
+    label: "Cash Management",
+    href: "/dashboard/reports/cash-management",
+    icon: Banknote,
+    desc: "Cash flow summary",
+  },
+  {
+    label: "Voids & Refunds",
+    href: "/dashboard/reports/voids",
+    icon: FileText,
+    desc: "Voided transactions",
+  },
+  {
     label: "Online Ordering",
     href: "/dashboard/reports/online-ordering",
     icon: Globe,
@@ -131,6 +128,12 @@ const SUB_REPORTS = [
     href: "/dashboard/reports/cash-drawers",
     icon: Calculator,
     desc: "Drawer sessions & counts",
+  },
+  {
+    label: "Tax Report",
+    href: "/dashboard/reports/tax",
+    icon: Receipt,
+    desc: "Tax & tender breakdown",
   },
   {
     label: "Kitchen Performance",

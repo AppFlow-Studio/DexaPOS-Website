@@ -655,6 +655,50 @@ html:has([data-template]) body[data-scroll-locked] {
 }
 
 /* ---------------------------------------------------------------------------
+   Sidebar sub-item icons: neutral until selected.
+
+   The base `SidebarMenuSubButton` sets `[&>svg]:text-sidebar-accent-foreground`
+   unconditionally, so every sub-item icon rendered in the brand accent whether
+   or not it was the active route — the accent stopped marking the selection.
+
+   Inactive icons now take the sidebar's own foreground token, which is
+   near-black on the light rail (oklch(0.2795 …)) and a legible grey on the dark
+   rail (#9ca3af). A literal `black` would disappear against the #0f1115 dark
+   rail, so the token carries the intent rather than the raw colour.
+   --------------------------------------------------------------------------- */
+[data-slot="sidebar-menu-sub-button"]:not([data-active="true"]) > svg {
+  color: var(--sidebar-foreground);
+}
+
+/* ---------------------------------------------------------------------------
+   Clerk embeds (<UserProfile />) → app text colours.
+
+   Clerk bakes its palette into generated `cl-internal-*` classes and honours
+   neither `appearance.baseTheme` nor `appearance.variables` for this component
+   — verified in the browser: it sets no `--clerk-color-*` properties at all.
+   The result in dark mode was near-black type (rgb(33,33,38)) sitting on the
+   dashboard's dark card, which is C4 exactly.
+
+   Handing colour back to the app's own tokens fixes every descendant at once
+   rather than chasing one `elements` key per text node. Backgrounds are left
+   alone — those are already stripped via `elements` so the Panel shows through.
+
+   Scoped to `.clerk-themed` so it cannot reach anything else.
+   --------------------------------------------------------------------------- */
+.clerk-themed :is(h1, h2, h3, p, span, label, div, a, button) {
+  color: inherit;
+}
+
+.clerk-themed {
+  color: var(--card-foreground);
+}
+
+/* Secondary copy keeps its hierarchy instead of flattening to one colour. */
+.clerk-themed :is([class*="cl-headerSubtitle"], [class*="cl-formFieldHintText"]) {
+  color: var(--muted-foreground);
+}
+
+/* ---------------------------------------------------------------------------
    Radix portals its overlays to the <body>, outside any scoped ancestor, so
    `.tables-pill-controls` cannot reach them. These target the slots directly:
    the panel takes the tier-2 overlay radius and its rows become pills.

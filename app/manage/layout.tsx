@@ -22,7 +22,6 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -405,7 +404,6 @@ function AppSidebar() {
                                     )}
                                 </div>
                             </DropdownMenuLabel>
-                            <DropdownMenuSeparator />
                             <DropdownMenuItem asChild>
                                 <Link href="/manage/profile">
                                     <User className="mr-2 h-4 w-4" />
@@ -418,7 +416,6 @@ function AppSidebar() {
                                     Settings
                                 </Link>
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={handleSignOut}>
                                 <LogOut className="mr-2 h-4 w-4" />
                                 Log out
