@@ -4938,6 +4938,121 @@ export type Database = {
           },
         ]
       }
+      kds_routing_log: {
+        Row: {
+          created_at: string
+          displays_evaluated: number
+          displays_matched: number
+          fired_at: string
+          id: string
+          item_category_id: string | null
+          item_category_name: string | null
+          kds_display_id: string | null
+          kds_display_name: string | null
+          location_id: string
+          match_reason: string
+          matched_rule_id: string | null
+          matched_rule_type: string | null
+          matched_rule_value: string | null
+          merchant_id: string
+          order_id: string
+          order_item_id: string
+          order_type: string | null
+          outcome: string
+          prep_station_source: string | null
+          resolved_prep_station: string | null
+        }
+        Insert: {
+          created_at?: string
+          displays_evaluated?: number
+          displays_matched?: number
+          fired_at: string
+          id?: string
+          item_category_id?: string | null
+          item_category_name?: string | null
+          kds_display_id?: string | null
+          kds_display_name?: string | null
+          location_id: string
+          match_reason: string
+          matched_rule_id?: string | null
+          matched_rule_type?: string | null
+          matched_rule_value?: string | null
+          merchant_id: string
+          order_id: string
+          order_item_id: string
+          order_type?: string | null
+          outcome: string
+          prep_station_source?: string | null
+          resolved_prep_station?: string | null
+        }
+        Update: {
+          created_at?: string
+          displays_evaluated?: number
+          displays_matched?: number
+          fired_at?: string
+          id?: string
+          item_category_id?: string | null
+          item_category_name?: string | null
+          kds_display_id?: string | null
+          kds_display_name?: string | null
+          location_id?: string
+          match_reason?: string
+          matched_rule_id?: string | null
+          matched_rule_type?: string | null
+          matched_rule_value?: string | null
+          merchant_id?: string
+          order_id?: string
+          order_item_id?: string
+          order_type?: string | null
+          outcome?: string
+          prep_station_source?: string | null
+          resolved_prep_station?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_routing_log_kds_display_id_fkey"
+            columns: ["kds_display_id"]
+            isOneToOne: false
+            referencedRelation: "kds_displays"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_routing_log_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_routing_log_matched_rule_id_fkey"
+            columns: ["matched_rule_id"]
+            isOneToOne: false
+            referencedRelation: "kds_routing_rules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_routing_log_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_routing_log_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_routing_log_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kds_routing_rules: {
         Row: {
           created_at: string | null
@@ -4966,6 +5081,82 @@ export type Database = {
             columns: ["kds_display_id"]
             isOneToOne: false
             referencedRelation: "kds_displays"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kds_send_attempts: {
+        Row: {
+          actually_updated_count: number
+          created_at: string
+          device_id: string | null
+          id: string
+          idempotency_key: string | null
+          item_status: string
+          location_id: string
+          merchant_id: string
+          order_id: string
+          order_item_count: number
+          requested_count: number
+          requested_item_ids: string[]
+          staff_id: string | null
+          station_id: string | null
+          was_replay: boolean
+        }
+        Insert: {
+          actually_updated_count: number
+          created_at?: string
+          device_id?: string | null
+          id?: string
+          idempotency_key?: string | null
+          item_status: string
+          location_id: string
+          merchant_id: string
+          order_id: string
+          order_item_count: number
+          requested_count: number
+          requested_item_ids: string[]
+          staff_id?: string | null
+          station_id?: string | null
+          was_replay?: boolean
+        }
+        Update: {
+          actually_updated_count?: number
+          created_at?: string
+          device_id?: string | null
+          id?: string
+          idempotency_key?: string | null
+          item_status?: string
+          location_id?: string
+          merchant_id?: string
+          order_id?: string
+          order_item_count?: number
+          requested_count?: number
+          requested_item_ids?: string[]
+          staff_id?: string | null
+          station_id?: string | null
+          was_replay?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_send_attempts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_send_attempts_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_send_attempts_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
         ]
@@ -21337,6 +21528,19 @@ export type Database = {
           },
         ]
       }
+      v_kds_routing_health: {
+        Row: {
+          items_dropped: number | null
+          items_fired: number | null
+          items_routed_by_fallback: number | null
+          location_id: string | null
+          merchant_id: string | null
+          observed_at: string | null
+          partial_sends: number | null
+          status_divergence_count: number | null
+        }
+        Relationships: []
+      }
       v_location_menu_items: {
         Row: {
           allergens: string[] | null
@@ -23920,6 +24124,10 @@ export type Database = {
         Returns: Json
       }
       get_order_item: { Args: { p_order_item_id: string }; Returns: Json }
+      get_order_routing_trace: {
+        Args: { p_order_id: string }
+        Returns: Json
+      }
       get_organization_info: {
         Args: { p_organization_id: string }
         Returns: Json
@@ -25308,6 +25516,7 @@ export type Database = {
         Args: { p_merchant_id: string; p_schedule_id: string }
         Returns: boolean
       }
+      purge_kds_trace_ledgers: { Args: never; Returns: Json }
       qr_base64url_decode: { Args: { p_value: string }; Returns: string }
       qr_base64url_encode: { Args: { p_value: string }; Returns: string }
       qr_compute_table_signature: {
@@ -25749,6 +25958,7 @@ export type Database = {
       }
       send_order_to_kitchen_v1: {
         Args: {
+          p_device_id?: string
           p_idempotency_key?: string
           p_item_status: string
           p_items_idempotency_key?: string
@@ -25756,6 +25966,7 @@ export type Database = {
           p_order_item_ids: string[]
           p_order_status: string
           p_staff_id?: string
+          p_station_id?: string
         }
         Returns: Json
       }

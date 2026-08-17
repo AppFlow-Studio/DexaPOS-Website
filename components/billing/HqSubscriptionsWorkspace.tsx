@@ -95,6 +95,7 @@ import {
   type SubscriptionInvoiceDocumentData,
 } from '@/lib/subscription-billing/invoice-template'
 import { downloadSubscriptionInvoicePdf } from '@/lib/subscription-billing/invoice-pdf'
+import { getMerchantTierPresentation } from '@/lib/subscription-billing/merchant-tier-presentation'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
 
 type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'suspended' | 'canceled'
@@ -363,7 +364,10 @@ function formatTierPrice(monthlyPriceCents: number | null | undefined): string {
   return formatMoney(cents / 100)
 }
 
-function formatMerchantTierCapacity(plan: MerchantTierPlanRecord): string {
+function formatMerchantTierBillingUnit(plan: MerchantTierPlanRecord): string {
+  const presentation = getMerchantTierPresentation(plan.plan_code)
+  if (presentation) return presentation.billingUnit
+
   if (plan.max_locations === null) {
     return `${plan.min_locations ?? 0}+ locations`
   }
@@ -376,16 +380,11 @@ function formatMerchantTierCapacity(plan: MerchantTierPlanRecord): string {
 }
 
 function merchantTierHighlights(plan: MerchantTierPlanRecord): string[] {
-  switch (plan.plan_code) {
-    case 'basic':
-      return ['Single-location coverage', 'Flat monthly tier', 'Good starting point']
-    case 'multi_location':
-      return ['Covers 2 to 5 locations', 'Flat monthly tier', 'For growing operators']
-    case 'franchise':
-      return ['Supports 6+ locations', 'Unlimited cap in V1', 'For large merchant groups']
-    default:
-      return ['Merchant-wide plan', 'Flat monthly tier', 'Contact sales for setup']
-  }
+  return getMerchantTierPresentation(plan.plan_code)?.highlights ?? [
+    'Merchant-wide plan',
+    'Flat monthly tier',
+    'Contact sales for setup',
+  ]
 }
 
 const transactionTrendChartConfig = {
@@ -479,7 +478,6 @@ export function HqSubscriptionsWorkspace({
   const [selectedMerchantTierPlanId, setSelectedMerchantTierPlanId] = useState('')
   const [merchantTierSubscriptionStatus, setMerchantTierSubscriptionStatus] = useState<'active' | 'past_due' | 'suspended' | 'cancelled'>('active')
   const [merchantTierPeriodStart, setMerchantTierPeriodStart] = useState(startOfMonthIso())
-  const [merchantTierPeriodEnd, setMerchantTierPeriodEnd] = useState(endOfMonthIso())
 
   const sortedLocations = useMemo(
     () => [...merchant.locations].sort((a, b) => a.name.localeCompare(b.name)),
@@ -819,7 +817,6 @@ export function HqSubscriptionsWorkspace({
           setSelectedMerchantTierPlanId(nextMerchantTierSubscription.plan_id)
           setMerchantTierSubscriptionStatus(nextMerchantTierSubscription.status)
           setMerchantTierPeriodStart(nextMerchantTierSubscription.current_period_start.slice(0, 10))
-          setMerchantTierPeriodEnd(nextMerchantTierSubscription.current_period_end.slice(0, 10))
         } else {
           const suggestedPlan =
             nextMerchantTierPlans.find((plan) => plan.plan_code === nextMerchantTierStatus.required_plan_code) ??
@@ -829,7 +826,6 @@ export function HqSubscriptionsWorkspace({
           setSelectedMerchantTierPlanId(suggestedPlan?.id || '')
           setMerchantTierSubscriptionStatus('active')
           setMerchantTierPeriodStart(startOfMonthIso())
-          setMerchantTierPeriodEnd(endOfMonthIso())
         }
       } catch (error: any) {
         toast.error(error?.message || 'Failed to load subscription workspace.')
@@ -1066,7 +1062,6 @@ export function HqSubscriptionsWorkspace({
         planId: selectedMerchantTierPlanId,
         status: merchantTierSubscriptionStatus,
         currentPeriodStart: merchantTierPeriodStart,
-        currentPeriodEnd: merchantTierPeriodEnd,
         trialEndsAt: null,
       })
 
@@ -1323,10 +1318,10 @@ export function HqSubscriptionsWorkspace({
                           {formatTierPrice(plan.monthly_price_cents)}
                         </div>
                         <div className="mt-3 text-sm text-muted-foreground">
-                          {plan.description || formatMerchantTierCapacity(plan)}
+                          {plan.description || formatMerchantTierBillingUnit(plan)}
                         </div>
                         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
-                          {formatMerchantTierCapacity(plan)}
+                          {formatMerchantTierBillingUnit(plan)}
                         </div>
                         <div className="mt-4 space-y-2 text-sm text-muted-foreground">
                           {merchantTierHighlights(plan).map((line) => (
@@ -1366,7 +1361,7 @@ export function HqSubscriptionsWorkspace({
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2 md:items-end">
                 <div className="space-y-2">
                   <Label>Current Period Start</Label>
                   <Input
@@ -1375,13 +1370,11 @@ export function HqSubscriptionsWorkspace({
                     onChange={(event) => setMerchantTierPeriodStart(event.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Current Period End</Label>
-                  <Input
-                    type="date"
-                    value={merchantTierPeriodEnd}
-                    onChange={(event) => setMerchantTierPeriodEnd(event.target.value)}
-                  />
+                <div className="space-y-1 text-sm">
+                  <p className="font-medium text-foreground">Monthly auto-renewal</p>
+                  <p className="text-muted-foreground">
+                    The period end is calculated automatically. Active subscriptions renew monthly until their status is set to Cancelled.
+                  </p>
                 </div>
               </div>
 

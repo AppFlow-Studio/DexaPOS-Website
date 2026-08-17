@@ -490,6 +490,26 @@ Single index for active ticket streams and their source trackers.
 - No new migration is introduced or executed by this branch.
 - Website code is complete; single- and multi-location manual QA is pending.
 
+## Stream X: [POS-KDS - P0] KDS Routing Traceability
+
+1. Website/shared-database implementation and QA tracker:
+- `docs/features/kds/PLAN-2026-08-14-KDS-ROUTING-TRACEABILITY.md`
+
+2. Scope notes:
+- This repository owns the shared Supabase instrumentation: immutable routing
+  and send-attempt ledgers, actual-versus-requested send counts, the
+  tenant-scoped trace RPC, rolling seven-day health metrics, and honest
+  historical backfill.
+- Routing behavior, merchant-facing trace UI, and POS application changes are
+  outside this implementation pass.
+- The migration has not been executed. Temur's DDL review, deployed-signature
+  preflight, staging application, and physical KDS validation remain required.
+- The POS follow-up must consume count mismatches, pass station/device context,
+  preserve offline-replay idempotency, and complete the physical KDS QA matrix.
+- Two source-contract inconsistencies are documented: rolling seven-day
+  visibility cannot reconstruct old dropped rows, and category-name trimming
+  is deferred because it changes routing despite the instrumentation-only scope.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.

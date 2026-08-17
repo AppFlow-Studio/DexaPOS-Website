@@ -13,6 +13,7 @@ import {
   type SubscriptionInvoiceDocumentData,
   type SubscriptionInvoiceLineItem,
 } from '@/lib/subscription-billing/invoice-template'
+import { resolveMonthlyBillingPeriod } from '@/lib/subscription-billing/billing-period'
 
 export interface SubscriptionPlanRecord {
   id: string
@@ -244,7 +245,7 @@ export interface UpsertMerchantTierSubscriptionParams {
   planId: string
   status: 'active' | 'past_due' | 'suspended' | 'cancelled'
   currentPeriodStart: string
-  currentPeriodEnd: string
+  currentPeriodEnd?: string | null
   trialEndsAt?: string | null
 }
 
@@ -827,6 +828,19 @@ export async function upsertMerchantTierSubscription(
     return { success: false, error: 'merchantId and planId are required.' }
   }
 
+  let billingPeriod: ReturnType<typeof resolveMonthlyBillingPeriod>
+  try {
+    billingPeriod = resolveMonthlyBillingPeriod(
+      params.currentPeriodStart,
+      params.currentPeriodEnd,
+    )
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Invalid merchant billing period.',
+    }
+  }
+
   const serviceRole = createServiceRoleClient()
   const { data: existing, error: existingError } = await serviceRole
     .from('merchant_plan_subscriptions')
@@ -846,8 +860,8 @@ export async function upsertMerchantTierSubscription(
     merchant_id: params.merchantId,
     plan_id: params.planId,
     status: params.status,
-    current_period_start: params.currentPeriodStart,
-    current_period_end: params.currentPeriodEnd,
+    current_period_start: billingPeriod.startDate,
+    current_period_end: billingPeriod.endDate,
     trial_ends_at: params.trialEndsAt ?? null,
   }
 
@@ -874,8 +888,8 @@ export async function upsertMerchantTierSubscription(
     merchantTierSubscriptionId: result.data.id as string,
     planId: params.planId,
     status: params.status,
-    currentPeriodStart: params.currentPeriodStart,
-    currentPeriodEnd: params.currentPeriodEnd,
+    currentPeriodStart: billingPeriod.startDate,
+    currentPeriodEnd: billingPeriod.endDate,
   })
 
   if (!synced.success) {
