@@ -1,11 +1,27 @@
 # Merchant Website Builder
 
-Merchant-operated drag-and-drop website builder layered on top of the existing online-ordering storefront.
-Merchants build and publish their own multi-section sites; pages render server-side with **live** menu, price, and
-availability data drawn straight from the POS.
+Merchant-operated website builder layered on top of the existing online-ordering storefront. Merchants build and
+publish their own multi-section sites; pages render server-side with **live** menu, price, and availability data
+drawn straight from the POS.
 
 **Ticket:** [Merchant Website Builder — productionize the MockBuilder foundation](https://app.notion.com/p/Merchant-Website-Builder-productionize-the-MockBuilder-foundation-3b98280c1b1d810ab700d23393f8da56)
 **Start here:** [PLAN-00-GENERAL.md](PLAN-00-GENERAL.md)
+
+> ## 🔵 The UI was rebuilt on Owner.com's model — 2026-08-18, branch `feat/website-owner-ui`
+>
+> At the team lead's request, and prioritising **simplicity**. The three-column drag-and-drop builder is gone:
+> one canvas with controls in the gutters, a drawer instead of an inspector rail, five style controls instead of
+> forty, publish as a button instead of a review sheet. The page list replaced the overview as the landing screen.
+>
+> **It is a UI change only.** The section contract, registry, resolver, the nine renderers and all 17 server
+> actions are untouched, and there is no migration. Roughly 2,100 lines deleted against 900 written.
+>
+> Spec, decisions, accepted risks and progress: **[PLAN-2026-08-18-OWNER-UI-REPLACEMENT.md](PLAN-2026-08-18-OWNER-UI-REPLACEMENT.md)**.
+> Reference screenshots: [`owner.com/`](../../../owner.com/). This **supersedes DESIGN-2026-08-14 for UI**;
+> that document's decisions UI1–UI21 describe a surface that no longer exists.
+>
+> Two things it deliberately gave up, both recorded in the plan's §7: **86'd dishes now vanish from a live page
+> with no warning**, and there is **no way to populate `merchant_sites.nav`** until Stage 6 derives it.
 
 ## Progress
 
@@ -73,7 +89,8 @@ practice.
 | [PLAN-03-INFRA-RESOLVER-RENDERER.md](PLAN-03-INFRA-RESOLVER-RENDERER.md) | 3–4 | Bindings, live-data resolver, server renderer, builder-overlay protocol |
 | [PLAN-04-INFRA-PUBLISH-ROUTING.md](PLAN-04-INFRA-PUBLISH-ROUTING.md) | 5–6 | Versions, publish/rollback, the routing fork, caching, SEO |
 | [PLAN-05-INFRA-ASSETS-DOMAINS-FORMS.md](PLAN-05-INFRA-ASSETS-DOMAINS-FORMS.md) | 7 | Asset pipeline + quota, custom domains + TLS, form runtime |
-| [PLAN-06-FRONTEND-BUILDER.md](PLAN-06-FRONTEND-BUILDER.md) | 8–9 | Drag-and-drop canvas, undo/redo, starter templates, remaining surfaces |
+| [PLAN-06-FRONTEND-BUILDER.md](PLAN-06-FRONTEND-BUILDER.md) | 8–9 | Drag-and-drop canvas, undo/redo, starter templates, remaining surfaces. **Largely superseded** by the 2026-08-18 rebuild below |
+| [PLAN-2026-08-18-OWNER-UI-REPLACEMENT.md](PLAN-2026-08-18-OWNER-UI-REPLACEMENT.md) | 8–9 | 🔵 **The current UI spec.** Owner.com's model read off 23 screenshots: decisions, phase-by-phase work items with status, accepted risks, and the guard rails that keep it a UI-only change |
 
 ### Analysis & reference
 
@@ -82,7 +99,7 @@ practice.
 | [HANDOFF-2026-08-13-BUILD-SESSION.md](HANDOFF-2026-08-13-BUILD-SESSION.md) | **Start here to pick the work up.** Everything built, every decision taken, corrections to the plans, what is proven vs unverified, gotchas, and what to do next |
 | [GAPS-2026-08-16-WEBSITE-FEATURE-AUDIT.md](GAPS-2026-08-16-WEBSITE-FEATURE-AUDIT.md) | 🔴 **Current state of the whole feature.** Context and decisions up front, then every gap tiered by severity with file-level evidence. **Publishing does not reach the public yet** — no route serves a published page, and RLS forbids anon reads. Corrects this README's progress table |
 | [BUGS-2026-08-14-BUILDER-AUDIT.md](BUGS-2026-08-14-BUILDER-AUDIT.md) | 16 open defects in the builder, with trace evidence for why the route is slow. **C1 (autosave drops edits) must be fixed before `SaveDraft` replaces the no-op adapter** |
-| [DESIGN-2026-08-14-BUILDER-UI.md](DESIGN-2026-08-14-BUILDER-UI.md) | 🟢 **Built 2026-08-15.** The builder interface redrawn from first principles. Decision register **UI1–UI21** with build status, region-by-region spec, flows, and §8's build report — what shipped, five deviations, what is deferred and why. No migration, no change to the section contract |
+| [DESIGN-2026-08-14-BUILDER-UI.md](DESIGN-2026-08-14-BUILDER-UI.md) | ⚫ **Superseded for UI by the 2026-08-18 rebuild.** Decision register **UI1–UI21** describing the three-column builder — the layers panel, review sheet, device widths and design workspace it specifies no longer exist. Kept for the reasoning, which is still the best record of *why* each was built |
 | [RESEARCH-2026-08-14-BUILDER-UI-PRIOR-ART.md](RESEARCH-2026-08-14-BUILDER-UI-PRIOR-ART.md) | 18 shipped editors surveyed via Mobbin, with a link to every screen. Establishes that **Shopify's theme editor — not Webflow or Figma — is our reference class**, and that no surveyed product surfaces live data because none has a POS behind the page |
 | [ANALYSIS-2026-08-11-MOCKBUILDER-GAP.md](ANALYSIS-2026-08-11-MOCKBUILDER-GAP.md) | Gap analysis, decisions **D1–D6**, blocker register **B1–B12**, MockBuilder source review |
 | [FINDING-2026-08-12-EXISTING-CMS-PRIOR-ART.md](FINDING-2026-08-12-EXISTING-CMS-PRIOR-ART.md) | This repo already ships a section-tree CMS with a **server-side renderer**. Reduces the two hardest unknowns to porting problems |

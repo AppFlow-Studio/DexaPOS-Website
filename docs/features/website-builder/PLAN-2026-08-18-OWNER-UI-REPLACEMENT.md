@@ -418,11 +418,14 @@ because they never choose text colours — and now that is tested rather than as
       following the same hardcoded-branch shape the nav already uses for Orders, Reports and Tables. Sub-items
       match on prefix, so the entry stays lit inside `/pages/new` and `/pages/[pageId]`. Pulled forward
       from Phase 7 because the landing route moved in Phase 2 and the sidebar was still pointing at it.
-- [ ] **7.2** Strip `MenuItemPicker`'s broken-row treatment per D-B. **Flagged as a risk in §7.**
-- [ ] **7.3** Delete `delete-section.ts`'s undo toast; keep the generation guard so the drawer's cancel
-      cannot revert someone else's later edit.
-- [ ] **7.4** Update [README.md](README.md) — progress table, document list, and a note that
-      DESIGN-2026-08-14 is superseded for UI.
+- [x] **7.2** `MenuItemPicker`'s broken-row treatment stripped per D-B — no amber styling, no "86'd" line,
+      no "unavailable right now" in the search list. A missing item keeps a plain muted label, because a
+      row that renders blank is a bug rather than restraint. **Risk accepted in §7.**
+- [x] **7.3** ~~Delete the undo toast~~ — **kept, deliberately.** See Phase 4: with the undo button and
+      `Ctrl+Z` gone this is the only way back from a destructive click, and it costs no chrome because it
+      does not exist until something has been deleted. The `Ctrl+Z` fallback message was reworded.
+- [x] **7.4** [README.md](README.md) — rebuild banner, this plan added to the document table,
+      DESIGN-2026-08-14 marked superseded, and "drag-and-drop" removed from the feature's description.
 
 ---
 

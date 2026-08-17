@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronUp, ImageOff, Plus, TriangleAlert, X, Zap } from "lucide-react";
+import { ChevronDown, ChevronUp, ImageOff, Plus, X, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -21,23 +21,26 @@ import { cn } from "@/lib/utils";
  * Choosing which dishes a section shows.
  *
  * No other builder surveyed has this control, because no other builder has a
- * POS behind the page. Two rules make it what it is, and both are correctness
- * properties rather than polish:
+ * POS behind the page. One rule survives the Owner-shaped rebuild, and it is a
+ * correctness property rather than polish:
  *
- * 1. **A broken reference is shown, never hidden.** The renderer drops an
- *    unavailable item silently — right for a public page, wrong here. A merchant
- *    should learn their signature dish is 86'd from this panel, not from a
- *    customer. Broken rows stay, explain themselves, and offer removal.
- *
- * 2. **Nothing here is editable.** There is no price field and no name field,
- *    because there is nowhere in a section's props to put them (decision A4).
- *    The *absence* of those controls is the explanation: a merchant looking for
- *    somewhere to fix a price learns, correctly, that they fix it in the menu.
+ * **Nothing here is editable.** There is no price field and no name field,
+ * because there is nowhere in a section's props to put them (decision A4). The
+ * *absence* of those controls is the explanation: a merchant looking for
+ * somewhere to fix a price learns, correctly, that they fix it in the menu.
  *
  * The list a merchant chooses from is the resolvable set — items on a menu
  * actually serving this location — never the raw `menu_items` table. Offering
  * the wider set is how a page gets built out of dishes that silently vanish at
  * render (HANDOFF §6b).
+ *
+ * **The broken-reference warnings are gone (decision D-B).** A row whose item is
+ * 86'd or no longer on a menu here used to carry an amber marker explaining
+ * which, so a merchant learned their signature dish had vanished from this panel
+ * rather than from a customer. The renderer still drops those items silently, so
+ * that now happens with no warning anywhere. `binding-health.ts` still computes
+ * the verdict and nothing else was removed, so restoring this is a UI change of
+ * about fifteen lines. Recorded as an accepted risk in the plan's §7.
  */
 
 export interface MenuItemPickerProps {
@@ -155,11 +158,6 @@ export default function MenuItemPicker({
                     <Thumb src={item.image} className="size-7" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px]">{item.name}</span>
-                      {!item.available && (
-                        <span className="block text-[10px] text-amber-600">
-                          Unavailable right now
-                        </span>
-                      )}
                     </span>
                     {showPrices && (
                       <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
@@ -206,33 +204,21 @@ function Row({
   onRemove: () => void;
 }) {
   // Absent from the catalog entirely — deleted, or no longer on a menu serving
-  // this location. The renderer would drop it without a word.
+  // this location. It still needs a label: a row that renders blank is a bug,
+  // not restraint.
   const missing = !item;
-  const unavailable = !!item && !item.available;
-  const broken = missing || unavailable;
 
   return (
-    <li
-      className={cn(
-        "group flex items-center gap-2 rounded-md border py-1.5 pl-1.5 pr-1 transition-colors",
-        broken ? "border-amber-500/40 bg-amber-50/50" : "border-border bg-card",
-      )}
-    >
+    <li className="group flex items-center gap-2 rounded-md border border-border bg-card py-1.5 pl-1.5 pr-1">
       <Thumb src={item?.image ?? null} className="size-8" />
 
       <div className="min-w-0 flex-1">
         <p className={cn("truncate text-[13px]", missing && "text-muted-foreground")}>
-          {item?.name ?? "Removed from your menu"}
+          {item?.name ?? "No longer on your menu"}
         </p>
-        {broken && (
-          <p className="flex items-center gap-1 text-[10px] font-medium text-amber-700">
-            <TriangleAlert className="size-2.5" />
-            {missing ? "No longer on a menu here" : "86’d — hidden until you bring it back"}
-          </p>
-        )}
       </div>
 
-      {showPrices && item && !broken && (
+      {showPrices && item && (
         <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
           {money(item.price)}
         </span>
