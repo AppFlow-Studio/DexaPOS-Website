@@ -28,8 +28,8 @@ export const websiteRoutes = {
   editor: (locationId: string, pageId?: string) =>
     `/dashboard/website/pages/${q(pageId ?? "home")}?location=${q(locationId)}`,
 
-  /** Site-wide style. Phase 6 renames the underlying route to `/style`. */
-  style: (locationId: string) => `/dashboard/website/design?location=${q(locationId)}`,
+  /** Site-wide style. */
+  style: (locationId: string) => `/dashboard/website/style?location=${q(locationId)}`,
 
   /** Full-page render of the current draft. */
   preview: (locationId: string, pageId?: string) => {

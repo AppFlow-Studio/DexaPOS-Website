@@ -237,6 +237,9 @@ Guard these in review. Every one of them is why this is a UI-only change:
 not the directory. Two files there have legitimately changed so far:
 
 - `page-templates.ts` — **new**, sibling to `starter-page.ts`, which is where a reader looks for it.
+- `style-inputs.ts` and `__tests__/style-derivation.test.ts` — **new**. The five-control derivation is
+  pure theme logic and belongs beside `color.ts`, not inside a React component; putting it here is what
+  lets the readability invariant be tested at all.
 - `__tests__/render.test.tsx` — the client-component allowlist gained `shell`. That test walks
   `components/site-builder/` and fails any `"use client"` outside `builder/` and `dashboard/`, because a
   client component in the render graph breaks `renderCanvas`. `shell/` is dashboard chrome and is not
@@ -373,28 +376,41 @@ is reachable from the canvas alone.
 
 ### Phase 6 — Style overlay
 
-- [ ] **6.1** `StyleOverlay.tsx` — `OverlayChrome` (`Style`, `Save ✓`) + five-control rail + the existing
-      `ThemePreview` filling the rest.
-- [ ] **6.2** Derivation. The five inputs are `logo`, `brand`, `mode`, `radius`, `headingFont`. Everything
-      else comes from `deriveThemeColors({ brand, surface, text })`, where `surface`/`text` are picked by
-      `mode` (`#FFFFFF`/`#111827` light, inverted dark) and `brandContrast` from the existing
-      `readableOn(brand)`. **The full `ThemeTokens` object is still written to `merchant_sites.theme`**, so
-      the renderer, `SiteChrome` and every section stay exactly as they are — no migration, no schema change.
-- [ ] **6.3** Rehydration. `mode` is inferred from the stored surface via `isLight()`; `radius` maps to
-      `Rounded` (12 px) or `Square` (2 px); `headingFont` matches one of the four options or falls back to
-      `Custom` showing the resolved family name, as in `002918`.
-- [ ] **6.4** Nav auto-derives from published, non-home pages in list order, capped at 4 with a `More ⌄`
-      overflow — matching the rendered header in `002918` and `003551`. `parseNavItems`/`serializeNav`
-      keep working for sites with a stored nav; a site with none gets the derived one.
-- [ ] **6.5** Logo field — thumbnail + `Replace`. **Blocked on the asset pipeline** (Stage 7,
-      `site_assets`). Ship it reading `ctx.site.logoUrl`, which the header already renders, with `Replace`
-      disabled and a one-line note. Do not fake an upload.
-- [ ] **6.6** Delete `WebsiteDesignWorkspace.tsx`, `NavEditor.tsx`, `FontPicker.tsx`,
-      `ReadabilityCheck.tsx`. Simplify `ColorField.tsx` → `BrandColorField.tsx`.
-- [ ] **6.7** `design/page.tsx` → `style/page.tsx`, with a redirect from the old path.
+- [x] **6.1** `StyleOverlay.tsx` (820 → 341) — five-control rail plus the existing `ThemePreview`.
+- [x] **6.2** Derivation, extracted to **`lib/site-builder/style-inputs.ts`** so it is pure, testable and
+      shared with the invariant test. The full `ThemeTokens` object is still what gets stored — no
+      migration, no schema change, renderer untouched.
+- [x] **6.3** Rehydration: `mode` from `isLight(surface)`, `corner` from the radius, `headingFont`
+      matched against the three named faces or shown as `Custom`. A theme saved by the old ten-colour
+      workspace opens as its nearest equivalent instead of refusing to load — asserted by a test.
+- [ ] **6.4** Nav auto-derivation — **deferred to Stage 6, deliberately.** `buildRenderContext` hardcodes
+      `nav: []`, so nothing in the editor or preview has ever rendered a nav; only
+      `buildPublicRenderContext` reads it, through `readNav`, for a public route that does not exist yet.
+      Deriving it correctly means deriving it at render time in `public-context.ts`, which is protected
+      path and belongs with the route that will consume it. Deleting `NavEditor` therefore removes no
+      behaviour a merchant can currently observe. **Recorded as a gap: until Stage 6, a site has no way
+      to populate `merchant_sites.nav`.**
+- [x] **6.5** Logo — reads the storefront's `logoUrl` (there is no logo column on `merchant_sites`) with
+      one sentence saying where it comes from. No disabled `Replace` button pretending to work.
+- [x] **6.6** Deleted `WebsiteDesignWorkspace.tsx` (820), `NavEditor.tsx` (262), `FontPicker.tsx`,
+      `ReadabilityCheck.tsx` and `ColorField.tsx`. `ThemePreview.tsx` survives untouched — it was already
+      token-driven and needed no change.
+- [x] **6.7** `style/page.tsx`, with `design/` kept as a redirect shim.
+
+**The readability panel became an invariant, and the invariant found a bug.**
+`__tests__/style-derivation.test.ts` sweeps 48 brand colours across the hue circle in both modes and
+asserts all five text/background pairs clear 4.5:1. It failed on first run at `#D411D4`: `readableOn`
+chooses between white and a soft near-black **by a luminance threshold**, and vivid mid-tone brands land
+just dark enough to be given white at 4.35:1. `composeTheme` now escalates to the true extremes when the
+designed pair misses, which always succeeds — the worst possible background is equidistant from white and
+black and measures 4.58:1 there.
+
+Fixed locally rather than in `readableOn`, which every stored palette already depends on: changing it
+there would restyle existing merchants' sites as a side effect of a UI rebuild. **Worth revisiting in
+`color.ts` on its own terms.**
 
 **Acceptance:** five controls, live preview, one `Save`. A merchant cannot produce an unreadable site
-because they never choose text colours.
+because they never choose text colours — and now that is tested rather than asserted.
 
 ### Phase 7 — Sidebar and cleanup
 
@@ -418,7 +434,7 @@ Recording these so nobody rediscovers them as bugs.
 |---|---|---|
 | **86'd dishes vanish from a live page with no warning** | D-B removes the `⚠` markers | None. This is the one place we were structurally ahead of Owner. Recommend revisiting after launch — the data is already computed in `binding-health.ts`, so restoring it is a UI change only |
 | **A merchant loses work by closing the drawer** | No undo affordance | Autosave persists on a 1.5 s debounce, so at most 1.5 s is at risk |
-| **A bad brand colour produces low-contrast text** | Readability panel deleted | `deriveThemeColors` + `readableOn` must guarantee contrast. **Add a unit test asserting ≥ 4.5:1 for all five pairs across a sweep of brand hues** — this replaces the panel with an invariant, which is better |
+| ~~**A bad brand colour produces low-contrast text**~~ | Readability panel deleted | **Closed.** `style-derivation.test.ts` sweeps 48 hues × 2 modes × 5 pairs against 4.5:1. It found a real failure at `#D411D4`; `composeTheme` now escalates past `readableOn`'s soft near-black when needed |
 | **Existing merchants lose their custom palette** | Five controls cannot express ten stored colours | Stored themes keep rendering — the renderer reads the tokens, not the controls. Opening Style and saving *will* flatten a hand-tuned palette to the derived one. Show a one-time notice on first open when `matchPalette` finds no match |
 | **Deep links break** | Route moves | Redirects at both old paths (6.7, 2.6) |
 
