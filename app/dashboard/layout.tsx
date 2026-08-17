@@ -202,11 +202,17 @@ const navMain = [
       {
         // Sits next to Online Ordering deliberately: the Website is the
         // restaurant's marketing layer, while Online Ordering owns checkout
-        // and fulfilment. The overview is the merchant's re-entry point; the
-        // builder is a focused page-editing tool beneath it.
+        // and fulfilment. There is no overview screen — Pages is the landing
+        // surface, and the editor is a full-screen overlay above it.
         title: "Website",
-        url: "/dashboard/website",
+        url: "/dashboard/website/pages",
         icon: PanelsTopLeft,
+        items: [
+          {
+            title: "Pages",
+            url: "/dashboard/website/pages",
+          },
+        ],
       },
       {
         title: "Kiosk",
@@ -515,6 +521,55 @@ function MerchantSidebar() {
                                           <SidebarMenuSubButton
                                             asChild
                                             isActive={pathname === subItem.url}
+                                          >
+                                            <Link href={subItem.url}>
+                                              <span>{subItem.title}</span>
+                                            </Link>
+                                          </SidebarMenuSubButton>
+                                        </SidebarMenuSubItem>
+                                      ))}
+                                  </SidebarMenuSub>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            </SidebarMenuItem>
+                          );
+                        }
+
+                        // Website expands into its own screens. Sub-items match
+                        // on prefix rather than equality so the entry stays
+                        // highlighted inside /pages/new and /pages/[pageId].
+                        if (menuItem.title === "Website") {
+                          const isWebsiteOpen = pathname.startsWith("/dashboard/website");
+
+                          return (
+                            <SidebarMenuItem key={menuItem.title}>
+                              <Collapsible defaultOpen={isWebsiteOpen} className="group">
+                                <div className="flex items-center">
+                                  <SidebarMenuButton
+                                    asChild
+                                    isActive={isWebsiteOpen}
+                                    className="flex-1"
+                                  >
+                                    <Link href={menuItem.url}>
+                                      <menuItem.icon className="h-4 w-4" />
+                                      <span>{menuItem.title}</span>
+                                    </Link>
+                                  </SidebarMenuButton>
+                                  <CollapsibleTrigger asChild>
+                                    <button className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent transition-colors shrink-0">
+                                      <ChevronRight className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                                    </button>
+                                  </CollapsibleTrigger>
+                                </div>
+                                <CollapsibleContent>
+                                  <SidebarMenuSub>
+                                    {/* @ts-ignore */}
+                                    {menuItem.items &&
+                                      menuItem.items.map((subItem) => (
+                                        <SidebarMenuSubItem key={subItem.title}>
+                                          <SidebarMenuSubButton
+                                            asChild
+                                            isActive={pathname.startsWith(subItem.url)}
                                           >
                                             <Link href={subItem.url}>
                                               <span>{subItem.title}</span>

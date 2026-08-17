@@ -233,49 +233,67 @@ Guard these in review. Every one of them is why this is a UI-only change:
   the new gutter controls read the same attributes the old overlay did
 - The database. **No migration in this branch.**
 
+**Additions to `lib/site-builder/` are allowed; modifications are not.** The rule protects the contract,
+not the directory. Two files there have legitimately changed so far:
+
+- `page-templates.ts` — **new**, sibling to `starter-page.ts`, which is where a reader looks for it.
+- `__tests__/render.test.tsx` — the client-component allowlist gained `shell`. That test walks
+  `components/site-builder/` and fails any `"use client"` outside `builder/` and `dashboard/`, because a
+  client component in the render graph breaks `renderCanvas`. `shell/` is dashboard chrome and is not
+  reachable from `PageRenderer`, so it belongs on the allowlist beside the other two. **Nothing else about
+  that test was weakened** — the render-graph directories are still covered.
+
 ---
 
 ## 6. Work items
 
-### Phase 0 — Setup
+### Phase 0 — Setup ✅
 
-- [ ] **0.1** Decide whether `owner.com/` is committed as reference material or added to `.gitignore`.
-      It is currently untracked. Recommend committing it — a UI plan whose reference images live only on
-      one laptop is unreviewable.
+- [x] **0.1** `owner.com/` committed as reference material (`b19ca146`).
 
-### Phase 1 — Shell primitives
+### Phase 1 — Shell primitives ✅
 
 Build these first; every later phase consumes them.
 
-- [ ] **1.1** `shell/OverlayChrome.tsx` — props: `title`, `onClose`, `centre?`, `action`, `secondaryAction?`.
-      Fixed 56 px bar, `Close` as an outline pill with `⊗`, primary solid blue with a right-hand icon.
-- [ ] **1.2** `shell/ListHeader.tsx` — `title`, `subtitle`, `actions?`.
-- [ ] **1.3** `shell/DataCard.tsx` — `searchPlaceholder`, `columns`, `rows`, `pageSize = 7`, `emptyLabel`,
-      `emptyIcon`. Client-side search and pagination; the caller passes rows, not a query.
-- [ ] **1.4** `shell/StatusPill.tsx` — `tone: "published" | "draft" | "muted"`, `label`, `actions?`.
-      Renders a bare pill when `actions` is absent (the home-page case, `002837`).
-- [ ] **1.5** `shell/TemplatePicker.tsx` — `templates`, `selectedId`, `onSelect`, `preview`.
+- [x] **1.1** `shell/OverlayChrome.tsx` — plus `OverlayRail` and `OverlayStage`, which every overlay
+      needs and which would otherwise have been copied three times. Renders `fixed inset-0` so it covers
+      the dashboard sidebar, as Owner's does.
+- [x] **1.2** `shell/ListHeader.tsx`
+- [x] **1.3** `shell/DataCard.tsx` — alignment is a shared `gridTemplateColumns` string between the
+      heading row and the cells, so a caller adding a column cannot knock them out of step.
+- [x] **1.4** `shell/StatusPill.tsx`
+- [x] **1.5** `shell/TemplatePicker.tsx` — gained a `children` slot in the rail for the page-name field.
+
+Also added: **`components/site-builder/routes.ts`**, one place for every URL in the feature. Not in the
+original plan; added because the editor and style routes move in later phases and every screen linking to
+them would otherwise need finding by grep. The Phase 3 and 6 moves are now one line each.
 
 **Acceptance:** each renders in isolation and matches its screenshot at 1366 px.
 
-### Phase 2 — Pages screen
+### Phase 2 — Pages screen ✅
 
-- [ ] **2.1** `app/dashboard/website/pages/page.tsx` — server component. Reuses `loadSiteContext` +
-      the existing `loadOverview` query from the current [page.tsx:25](../../../app/dashboard/website/page.tsx).
-- [ ] **2.2** `dashboard/PagesScreen.tsx` — `ListHeader` (`Pages` / *Manage pages in your website.* /
-      `Change Style` + `New Page`) over `DataCard`. Columns: title, `Created by`, `Status`.
-- [ ] **2.3** Status pill wiring — `Published ⌄` → `Unpublish`; `Unpublished ⌄` → `Publish`. Calls the
-      existing `PublishPage` / `UnpublishPage`. Home page gets a chevron-less pill.
-- [ ] **2.4** Move `WebAddressCard` beneath the list, restyled. **Keep the "published but unreachable"
-      warning** — it is the one honest thing we have that Owner does not need, because their subdomains
-      are provisioned for them.
-- [ ] **2.5** `New Page` → the template overlay (Phase 5).
-- [ ] **2.6** `app/dashboard/website/page.tsx` → `redirect("/dashboard/website/pages")`, so every existing
-      link and bookmark survives.
-- [ ] **2.7** Delete `WebsiteOverview.tsx` and `PageListCard.tsx`.
+- [x] **2.1** `app/dashboard/website/pages/page.tsx`
+- [x] **2.2** `dashboard/PagesScreen.tsx`. Columns are title, **`Updated`**, `Status` — not Owner's
+      `Created by`, because `site_pages` records no author and a column that can only ever say `—` is
+      worse than one that says something true. `updated_at` we have, and it is what a merchant scanning a
+      page list actually wants.
+- [x] **2.3** Status pill wiring against the existing `PublishPage` / `UnpublishPage`. A failed publish
+      toasts with an `Open page` action — a list cannot show *where* the blocker is, so it offers the one
+      screen that can. The home page gets a chevron-less pill.
+- [x] **2.4** `WebAddressCard` beneath the list, "published but unreachable" warning intact.
+- [x] **2.5** `New Page` → the template overlay. Pulled forward from Phase 5 (see 5.3–5.4) rather than
+      leaving the screen's primary button pointing at a 404 for a phase.
+- [x] **2.6** `app/dashboard/website/page.tsx` → redirect, preserving `?location=`.
+- [x] **2.7** Deleted `WebsiteOverview.tsx` (187) and `PageListCard.tsx` (384).
 
-**Acceptance:** a merchant can see, search, paginate, rename, delete, publish and unpublish pages without
-leaving this screen.
+**Rows carry no rename or delete.** The original acceptance criterion below said they would; the
+screenshots say otherwise — `002837` and `003130` show a hovered row and an open status dropdown with no
+overflow menu anywhere. Both operations already exist in the editor's page settings, which is the better
+home for them: an address is only meaningful next to the page it addresses, and two routes to one
+operation is the duplication this rebuild exists to remove.
+
+**Acceptance:** a merchant can see, search, paginate, publish and unpublish pages without leaving this
+screen; renaming and deleting are one click away in the editor.
 
 ### Phase 3 — Editor chrome
 
@@ -334,12 +352,17 @@ are dropped if the team lead does not want them (§8, Q2).
 - [ ] **5.2** Keep `addableKinds()` as the source — kind #10 must still appear automatically. Keep the
       `unavailable` treatment for the gallery, as a disabled row; a card that adds a section you cannot
       fill is worse than one that says it is not ready.
-- [ ] **5.3** Three page templates as `PageDocument` factories beside
-      [starter-page.ts](../../../lib/site-builder/starter-page.ts): `Article` (header, hero, content,
-      footer), `Showcase` (header, hero, popular-items, gallery, content, footer), `Blank` (header, footer
-      only — matching `003019` exactly).
-- [ ] **5.4** New Page overlay using `TemplatePicker`, with the preview rendered through the existing
-      `renderCanvas` action so it is a real render.
+- [x] **5.3** `lib/site-builder/page-templates.ts` — `Article` (header, hero, content, footer),
+      `Showcase` (header, hero, popular-items, features, content, footer), `Blank` (header + footer only,
+      matching `003019`). **Showcase carries no gallery**: the registry marks that kind `unavailable`
+      until the asset library exists, and a template that arrives with a section the merchant cannot fill
+      teaches them the product is broken. It goes in when Stage 7 lands.
+- [x] **5.4** New Page overlay, previewing through the real `renderCanvas` action. Templates apply as a
+      `SaveDraft` immediately after `CreatePage` rather than as a new parameter, which keeps the create
+      action ignorant of templates — **no server action changed**.
+      **One deviation:** the rail carries a page-name field, which Owner's does not. Without it two pages
+      created in a row both want `/new-page` and the second fails on a unique constraint the merchant did
+      nothing to earn. The address is still derived, and only editable later in page settings.
 - [ ] **5.5** Delete `SectionThumbnail.tsx`.
 
 **Acceptance:** adding a section is two clicks. Creating a page is: name it, pick a template, `Create`.
@@ -371,8 +394,10 @@ because they never choose text colours.
 
 ### Phase 7 — Sidebar and cleanup
 
-- [ ] **7.1** `app/dashboard/layout.tsx` — `Website` becomes a group with one child, `Pages`, using the
-      existing `SidebarMenuSubItem > SidebarMenuSubButton` pattern the nav already uses elsewhere.
+- [x] **7.1** `app/dashboard/layout.tsx` — `Website` is now a `Collapsible` group with one child, `Pages`,
+      following the same hardcoded-branch shape the nav already uses for Orders, Reports and Tables. Sub-items
+      match on prefix, so the entry stays lit inside `/pages/new` and `/pages/[pageId]`. Pulled forward
+      from Phase 7 because the landing route moved in Phase 2 and the sidebar was still pointing at it.
 - [ ] **7.2** Strip `MenuItemPicker`'s broken-row treatment per D-B. **Flagged as a risk in §7.**
 - [ ] **7.3** Delete `delete-section.ts`'s undo toast; keep the generation guard so the drawer's cancel
       cannot revert someone else's later edit.
@@ -424,8 +449,9 @@ Answer before Phase 4 — none of them block Phases 0–3.
       section drawer, Add Section.
 - [ ] Manual flow: create page → pick template → edit two sections → publish → unpublish → delete.
 - [ ] Keyboard: every gutter control reachable and labelled; `⌃`/`⌄` announce through `announce.ts`.
-- [ ] Confirm no file under `lib/site-builder/`, `components/site-builder/sections/` or
-      `app/dashboard/website/actions/` appears in `git diff --stat`.
+- [ ] Confirm no *modified* file under `lib/site-builder/`, `components/site-builder/sections/` or
+      `app/dashboard/website/actions/` appears in `git diff --stat` — additions are fine, and the two
+      exceptions already taken are listed in §5.
 
 ---
 
