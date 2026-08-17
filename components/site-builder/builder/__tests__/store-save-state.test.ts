@@ -18,7 +18,6 @@ function makeStore(overrides: Partial<BuilderInit> = {}) {
     doc: createDemoPage(),
     canvas: null,
     page: PAGE,
-    pages: [PAGE],
     ...overrides,
   });
 }
@@ -102,38 +101,35 @@ describe("publish baseline", () => {
     store.getState().updateProps("s_demo_hero", { heading: "Now live" });
     const live: PageDocument = store.getState().doc;
 
-    store.getState().markPublished(live, "2026-08-16T10:00:00Z", {
-      versionNumber: 1,
-      publishedAt: "2026-08-16T10:00:00Z",
-      unchanged: false,
-    });
+    store.getState().markPublished(live, "2026-08-16T10:00:00Z");
 
     expect(store.getState().publishedDoc).toBe(live);
     expect(store.getState().page.status).toBe("published");
-    expect(store.getState().pages[0].publishedAt).toBe("2026-08-16T10:00:00Z");
+    expect(store.getState().page.publishedAt).toBe("2026-08-16T10:00:00Z");
     // Publishing must not touch the draft or its history.
     expect(store.getState().doc).toBe(live);
   });
 });
 
 describe("selection sync", () => {
-  it("records the origin so only the other surfaces scroll", () => {
+  it("records the origin so the canvas only scrolls when something else selected", () => {
     const store = makeStore();
 
     store.getState().select("s_demo_hero", "canvas");
     expect(store.getState().selectionSource).toBe("canvas");
     const first = store.getState().revealNonce;
 
-    // Re-selecting the same section must still bump the nonce: selecting it
-    // again from the list is a request to scroll back to it.
-    store.getState().select("s_demo_hero", "list");
-    expect(store.getState().selectionSource).toBe("list");
+    // Re-selecting the same section must still bump the nonce: the publish
+    // gate's "Fix it" link pointing at the already-selected section is a
+    // request to scroll back to it.
+    store.getState().select("s_demo_hero", "other");
+    expect(store.getState().selectionSource).toBe("other");
     expect(store.getState().revealNonce).toBe(first + 1);
   });
 
   it("does not request a scroll when clearing the selection", () => {
     const store = makeStore();
-    store.getState().select("s_demo_hero", "list");
+    store.getState().select("s_demo_hero", "other");
     const nonce = store.getState().revealNonce;
 
     store.getState().select(null);

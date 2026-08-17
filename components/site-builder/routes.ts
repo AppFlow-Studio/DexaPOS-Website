@@ -22,15 +22,11 @@ export const websiteRoutes = {
   newPage: (locationId: string) => `/dashboard/website/pages/new?location=${q(locationId)}`,
 
   /**
-   * The page editor.
-   *
-   * Still the Phase 3 target shape at the call sites; the implementation points
-   * at the surviving `/builder` route until that phase moves it.
+   * The page editor. `home` resolves to the merchant's home page, which is the
+   * right answer when a caller has a location but not a page.
    */
-  editor: (locationId: string, pageId?: string) => {
-    const base = `/dashboard/website/builder?location=${q(locationId)}`;
-    return pageId ? `${base}&page=${q(pageId)}` : base;
-  },
+  editor: (locationId: string, pageId?: string) =>
+    `/dashboard/website/pages/${q(pageId ?? "home")}?location=${q(locationId)}`,
 
   /** Site-wide style. Phase 6 renames the underlying route to `/style`. */
   style: (locationId: string) => `/dashboard/website/design?location=${q(locationId)}`,

@@ -295,63 +295,67 @@ operation is the duplication this rebuild exists to remove.
 **Acceptance:** a merchant can see, search, paginate, publish and unpublish pages without leaving this
 screen; renaming and deleting are one click away in the editor.
 
-### Phase 3 — Editor chrome
+### Phase 3 — Editor chrome ✅
 
-- [ ] **3.1** `EditorTopBar.tsx` — `OverlayChrome` with the page name as title, `Build | Preview` centred,
-      `Publish ⊕` primary. Delete the page switcher, device switcher, undo/redo, external link and status stack.
-- [ ] **3.2** Route move: `builder/page.tsx` → `pages/[pageId]/page.tsx`. `pageId` becomes a path segment
-      instead of `?page=`; `?location=` stays a query param, matching Owner's `?locationId=`.
-      `builder/render-canvas.tsx` and `builder/menu-catalog.ts` move alongside it.
-- [ ] **3.3** `Close` returns to `/dashboard/website/pages`.
-- [ ] **3.4** Build/Preview replaces `inspectorEnabled`. Preview hides the gutter controls and the
-      `Add Section` bands; the existing new-tab link interception stays.
-- [ ] **3.5** Publish inline. `validatePage` still gates the button (**D-B**); on failure the button is
-      disabled and one line of red text sits beneath it naming the first blocker with a `Fix` link that
-      selects the offending section. Success is a toast, not a sheet.
-- [ ] **3.6** Delete `Toolbar.tsx` and `ReviewSheet.tsx`.
+- [x] **3.1** `EditorTopBar.tsx` (519 → 172). Page switcher, device switcher, undo/redo, external link
+      and the two-line status stack are all gone.
+- [x] **3.2** Route move: `pages/[pageId]/page.tsx`, with `render-canvas.tsx` and `menu-catalog.ts`
+      moved to `pages/`. `builder/page.tsx` survives as a **redirect shim** so every bookmark, audit-log
+      link and shared URL keeps working. The editor also accepts **`home`** in place of an id, which is
+      what a caller with a location but no page wants and is better than guessing at a uuid.
+- [x] **3.3** `Close` returns to the page list.
+- [x] **3.4** `mode: "build" | "preview"` replaces `inspectorEnabled`. Preview renders **in place**
+      (open question 4, resolved) — one state flag, not a route.
+- [x] **3.5** Publish inline, still gated on `validatePage`. The blocker appears as a small card under the
+      button naming the first error, with `Fix it` selecting the offending section and an "and N more"
+      line when there are others.
+- [x] **3.6** Deleted `Toolbar.tsx` (519) and `ReviewSheet.tsx` (532).
 
 **Acceptance:** publishing a valid page takes one click from the editor. Publishing an invalid one is
 impossible and the reason is on screen.
 
-### Phase 4 — Canvas and drawer
+### Phase 4 — Canvas and drawer ✅
 
-- [ ] **4.1** Gutter controls in `Canvas.tsx`. Keep `measure()`, the `ResizeObserver`, the rect map and
-      `useRevealSelectedSection` — they are correct and hard-won. Replace the `Overlay` component: pills
-      positioned at `rect.y` in the left and right gutters instead of a toolbar above the section.
-- [ ] **4.2** `⊕ Add Section` bands between body sections, replacing `InsertPoints`. Owner's bands are
-      always visible, not hover-revealed — that is a real simplicity gain and removes the discoverability
-      problem our `+` has.
-- [ ] **4.3** Remove the selection ring and the section label chip. Owner has neither; the open drawer is
-      what tells you which section you are editing.
-- [ ] **4.4** `SectionDrawer.tsx` from `SettingsPanel.tsx`. **Keep `describeSchema` generation** — it is
-      the reason a tenth section kind costs one file, and it survives the redesign untouched. Remove: the
-      Content/Appearance tabs, `ControlRow`'s reset buttons, `InheritsSiteDesign`, the live-fields banner,
-      the section overflow menu. Add: character counters in label rows, a bottom-pinned `Done`.
-- [ ] **4.5** Fold `STYLE_FIELDS` away — with tabs gone, style and content fields render in one list, in
-      schema order. This deletes the stopgap flagged in
-      [SettingsPanel.tsx:64](../../../components/site-builder/builder/SettingsPanel.tsx).
-- [ ] **4.6** Page-settings mode of the drawer keeps **name and address only**. SEO fields come out per D-B.
-      `doc.seo` stays in the document and keeps defaulting from the page title, so the SEO surface built in
-      `192a411e` keeps working.
-- [ ] **4.7** `store.ts` — remove `device`, `pane`, `reviewOpen`, `publishResult`, `saveError`,
-      `catalogError` display paths, `selectionSource`. Add `mode: "build" | "preview"` and `drawerOpen`.
-      Keep `past`/`future` (the drawer's implicit cancel depends on it) but remove the exported undo/redo
-      affordances.
-- [ ] **4.8** Delete `SectionList.tsx`. Keep `announce.ts` and call it from the ⌃/⌄ handlers — losing the
-      layers panel must not also lose the only screen-reader feedback reordering has.
+- [x] **4.1** Gutter controls. `measure()`, the `ResizeObserver`, the rect map and
+      `useRevealSelectedSection` all survive untouched — they were correct and hard-won. Left pill is
+      pencil / `⋯` / trash, right pill is `⌃` / `⌄`, both outside the page edge.
+- [x] **4.2** `Add Section` bands, always visible rather than hover-revealed.
+- [x] **4.3** Selection ring and label chip replaced by a hairline inset ring. The chip is gone; the open
+      drawer names the section.
+- [x] **4.4** `SectionDrawer.tsx` (1034 → 604). `describeSchema` generation intact. Tabs, reset buttons,
+      `InheritsSiteDesign`, the live-fields banner and the section overflow menu are gone; character
+      counters and a bottom-pinned `Done` are in.
+- [x] **4.5** `STYLE_FIELDS` deleted — one list, in schema order.
+- [x] **4.6** Page settings keeps name and address. SEO fields out per D-B; `doc.seo` untouched.
+- [x] **4.7** `store.ts` (556 → 430) — `device`, `pane`, `reviewOpen`, `publishResult`, `savedAt`,
+      `pages` and `redo` removed; `mode` added. `SelectionSource` narrowed to `canvas | other` now that
+      there is no list to select from.
+- [x] **4.8** Deleted `SectionList.tsx` (521). `announce.ts` kept and called from the ⌃/⌄, hide and
+      duplicate handlers.
+
+**Hide and Duplicate live in a `⋯` overflow inside the left pill** (open question 1, resolved). Owner's
+gutter has neither, but hidden sections are already modelled and duplicate is genuinely useful; an
+overflow costs one icon and keeps the default pill at Owner's three.
+
+**Two guards kept that the plan had marked for deletion**, both because removing them would have traded
+simplicity for data loss rather than for clarity:
+
+- **The delete-undo toast (7.3).** With the undo button and `Ctrl+Z` gone, this is now the *only* way back
+  from a destructive click. It costs no chrome — it does not exist until something has been deleted — and
+  the alternative is a confirmation dialog interrupting every deletion, which is more UI, not less.
+- **A save-failure toast.** There is no status line any more, so a failing save would otherwise be
+  completely silent while a merchant kept typing into a document nothing was storing.
 
 **Acceptance:** every action the old three columns offered — edit, reorder, hide, duplicate, delete, add —
-is reachable from the canvas alone. Hide and duplicate move into the `✏️` pill's long-press/overflow, or
-are dropped if the team lead does not want them (§8, Q2).
+is reachable from the canvas alone.
 
 ### Phase 5 — Add Section and New Page
 
-- [ ] **5.1** `AddSectionModal.tsx` rewrite: two-column grid of `SectionIcon` + label, single selection,
-      `Add ⊕` footer. Drop the search, the categories, the descriptions, `SectionThumbnail`, the
-      recommendation logic and the `PAGE_ESSENTIALS` list.
-- [ ] **5.2** Keep `addableKinds()` as the source — kind #10 must still appear automatically. Keep the
-      `unavailable` treatment for the gallery, as a disabled row; a card that adds a section you cannot
-      fill is worse than one that says it is not ready.
+- [x] **5.1** `AddSectionModal.tsx` rewrite (251 → 158). Search, categories, descriptions, thumbnails,
+      recommendations and `PAGE_ESSENTIALS` all gone.
+- [x] **5.2** `addableKinds()` still the source. The `unavailable` gallery and an already-placed
+      singleton both render as disabled rows, each explaining itself in a tooltip — a greyed-out row a
+      merchant cannot get an explanation for reads as a broken product.
 - [x] **5.3** `lib/site-builder/page-templates.ts` — `Article` (header, hero, content, footer),
       `Showcase` (header, hero, popular-items, features, content, footer), `Blank` (header + footer only,
       matching `003019`). **Showcase carries no gallery**: the registry marks that kind `unavailable`
@@ -363,7 +367,7 @@ are dropped if the team lead does not want them (§8, Q2).
       **One deviation:** the rail carries a page-name field, which Owner's does not. Without it two pages
       created in a row both want `/new-page` and the second fails on a unique constraint the merchant did
       nothing to earn. The address is still derived, and only editable later in page settings.
-- [ ] **5.5** Delete `SectionThumbnail.tsx`.
+- [x] **5.5** Deleted `SectionThumbnail.tsx` (144).
 
 **Acceptance:** adding a section is two clicks. Creating a page is: name it, pick a template, `Create`.
 
@@ -422,18 +426,14 @@ Recording these so nobody rediscovers them as bugs.
 
 ## 8. Open questions
 
-Answer before Phase 4 — none of them block Phases 0–3.
-
-1. **Hide and Duplicate.** Owner's gutter shows only edit, delete, up, down. Ours also has hide and
-   duplicate. Drop them, or put them behind an overflow on the `✏️` pill? *Recommendation: overflow —
-   hidden sections are already modelled and duplicate is genuinely useful.*
+1. ~~**Hide and Duplicate.**~~ **Resolved:** behind a `⋯` overflow in the left gutter pill.
 2. **Multi-location.** Owner is single-brand-per-dashboard with `?locationId=` scoping. Our
-   `?location=` does the same, but our Pages screen has no location picker. Does the Pages list need one,
-   or does the existing dashboard location scope cover it?
-3. **`Change Style` placement.** Owner puts it on Pages as a secondary button. We also reach Style from the
-   sidebar today. Keep both entry points, or Pages only?
-4. **Preview mode fidelity.** Owner's Preview appears to render in place. Ours could either do that or
-   reuse `/dashboard/website/preview`. *Recommendation: in place — it is one state flag versus a route.*
+   `?location=` does the same, but the Pages screen has no location picker — it renders whatever
+   `loadSiteContext` resolves. Does the list need one, or does the dashboard location scope cover it?
+   **Still open; does not block Phase 6.**
+3. **`Change Style` placement.** Currently on Pages as a secondary button *and* reachable by URL. Once
+   Phase 6 moves the route, decide whether it also earns a sidebar sub-item beside `Pages`.
+4. ~~**Preview mode fidelity.**~~ **Resolved:** renders in place.
 
 ---
 

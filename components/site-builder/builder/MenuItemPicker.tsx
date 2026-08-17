@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { CatalogItem } from "@/app/dashboard/website/builder/menu-catalog";
+import type { CatalogItem } from "@/app/dashboard/website/pages/menu-catalog";
 import type { Binding } from "@/lib/site-builder/bindings/types";
 import { cn } from "@/lib/utils";
 

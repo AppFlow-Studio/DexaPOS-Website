@@ -7,61 +7,64 @@ import {
   Eye,
   EyeOff,
   Loader2,
-  MousePointerClick,
+  MoreHorizontal,
+  Pencil,
   Plus,
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PageDocument } from "@/lib/site-builder/page-document";
 import { SECTION_REGISTRY, sectionTitle } from "@/lib/site-builder/sections/registry";
 import { cn } from "@/lib/utils";
-import type { BuilderStore, DeviceMode } from "./store";
+import { announce } from "./announce";
 import { deleteSectionWithUndo } from "./delete-section";
 import { applyTextPreviewPatches, getTextPreviewPatches } from "./preview-sync";
+import type { BuilderStore } from "./store";
 
-const DEVICE_WIDTHS: Record<DeviceMode, string> = {
-  // A desktop preview must keep a desktop layout even when the editor itself is
-  // narrow. The surrounding canvas scrolls rather than silently turning this
-  // into a tablet breakpoint.
-  desktop: "1120px",
-  tablet: "834px",
-  mobile: "390px",
-};
+/**
+ * One width, not three.
+ *
+ * The device switcher is gone. A merchant judging their own restaurant site
+ * does it on the machine they are sitting at, and the three widths cost a
+ * toolbar group, a store field and three code paths to answer a question the
+ * `Preview` mode plus a browser window already answers.
+ */
+const CANVAS_WIDTH = 1120;
 
 /**
  * The editing surface.
  *
  * Renders server-produced markup and lays an interaction layer over it. The
  * canvas never re-implements a section — it asks the server to render the
- * document and positions controls over the result by reading the `data-sb-*`
- * attributes each section stamps (PLAN-03 §5).
+ * document and positions controls by reading the `data-sb-*` attributes each
+ * section stamps (PLAN-03 §5).
  *
- * **Same-document rather than an iframe.** PLAN-06 §2.3 recommended an iframe
- * for style isolation; that turned out unnecessary here because every section
- * styles itself through `--site-*` custom properties scoped to the shell, and
- * the only global CSS is class-scoped `.site-prose`. Same-document removes the
- * whole postMessage geometry protocol and makes overlay positioning a direct
- * DOM read. If merchant styling later grows teeth — arbitrary fonts, custom CSS
- * — this is the component that changes, and nothing above it.
+ * **Controls live in the gutters, outside the page.** The overlay this replaced
+ * drew a ring around the selected section, floated a title chip above it and put
+ * a six-button toolbar in its top-right corner — all of it on top of the thing
+ * the merchant was trying to look at. Moving the controls outside the canvas
+ * means the page is never obscured by the tools for editing it, which is the
+ * single biggest reason Owner's editor feels calmer than ours did.
  *
- * **The overlay is monochrome on purpose.** Everything the merchant is trying to
- * judge — their brand colour, their photos, their type — is inside the frame. An
- * editor that puts its own saturated blue right next to those makes them
- * impossible to assess, so selection is expressed in the neutral foreground
- * colour and nothing else on this surface is coloured at all.
+ * **The overlay is monochrome on purpose.** Everything a merchant is trying to
+ * judge — their brand colour, their photos, their type — is inside the frame.
  */
 export default function Canvas({ store }: { store: BuilderStore }) {
   const doc = store((s) => s.doc);
   const canvas = store((s) => s.canvas);
-  const device = store((s) => s.device);
+  const mode = store((s) => s.mode);
   const selectedId = store((s) => s.selectedId);
   const isRendering = store((s) => s.isRendering);
-  const inspectorEnabled = store((s) => s.inspectorEnabled);
   const requestCanvasRefresh = store((s) => s.requestCanvasRefresh);
   const select = store((s) => s.select);
-  const toggleInspector = store((s) => s.toggleInspector);
   const openAddSection = store((s) => s.openAddSection);
 
   const hostRef = useRef<HTMLDivElement>(null);
@@ -70,6 +73,8 @@ export default function Canvas({ store }: { store: BuilderStore }) {
   const [rects, setRects] = useState<Record<string, DOMRect>>({});
   const canvasDoc = useRef(doc);
   const previousCanvas = useRef(canvas);
+
+  const building = mode === "build";
 
   useRevealSelectedSection(store, hostRef, scrollerRef);
 
@@ -101,7 +106,7 @@ export default function Canvas({ store }: { store: BuilderStore }) {
     canvasDoc.current = doc;
   }, [doc, requestCanvasRefresh]);
 
-  /** Reads every section's box so the overlay can position itself. */
+  /** Reads every section's box so the gutters can line up with it. */
   const measure = useCallback(() => {
     const host = hostRef.current;
     if (!host) return;
@@ -125,8 +130,8 @@ export default function Canvas({ store }: { store: BuilderStore }) {
   }, []);
 
   // Re-measure whenever the markup or the viewport changes. A ResizeObserver on
-  // the host catches image loads and font swaps, which are the usual cause of
-  // an overlay drifting a few pixels after the initial paint.
+  // the host catches image loads and font swaps, which are the usual cause of an
+  // overlay drifting a few pixels after the initial paint.
   useEffect(() => {
     measure();
     const host = hostRef.current;
@@ -141,20 +146,20 @@ export default function Canvas({ store }: { store: BuilderStore }) {
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [canvas, device, measure]);
+  }, [canvas, measure]);
 
   const onClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       const target = event.target as HTMLElement;
 
-      // ── Preview mode ──────────────────────────────────────────────────────
-      // With the inspector off the page behaves as a visitor's would, which is
-      // the only way to test an accordion or an anchor link. Navigation is the
-      // exception: this is the same document as the dashboard, so following a
-      // link would unmount the builder and take unsaved edits with it. Off-page
-      // links open in a new tab instead — the merchant still gets to check
-      // where they go, and keeps their work.
-      if (!inspectorEnabled) {
+      // ── Preview ───────────────────────────────────────────────────────────
+      // The page behaves as a visitor's would, which is the only way to test an
+      // accordion or an anchor link. Navigation is the exception: this is the
+      // same document as the dashboard, so following a link would unmount the
+      // editor and take unsaved edits with it. Off-page links open in a new tab
+      // instead — the merchant still gets to check where they go, and keeps
+      // their work.
+      if (!building) {
         const link = target.closest<HTMLAnchorElement>("a[href]");
         const href = link?.getAttribute("href");
         if (href && !href.startsWith("#")) {
@@ -165,75 +170,49 @@ export default function Canvas({ store }: { store: BuilderStore }) {
       }
 
       // Links and buttons inside the canvas would navigate or submit; while
-      // editing they only ever mean "select this section".
+      // building they only ever mean "select this section".
       if (target.closest("a, button")) event.preventDefault();
 
       const sectionEl = target.closest<HTMLElement>("[data-sb-section-id]");
-      // Tagged as canvas-originated so the section list scrolls to match and
-      // this surface, which the merchant is already looking at, does not.
       select(sectionEl?.dataset.sbSectionId ?? null, "canvas");
     },
-    [inspectorEnabled, select],
+    [building, select],
   );
 
   const onMouseOver = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!inspectorEnabled) return;
+      if (!building) return;
       const sectionEl = (event.target as HTMLElement).closest<HTMLElement>("[data-sb-section-id]");
       setHoveredId(sectionEl?.dataset.sbSectionId ?? null);
     },
-    [inspectorEnabled],
+    [building],
   );
 
   return (
-    <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#f4f5f7]">
-      <StatusPill visible={isRendering}>
-        <Loader2 className="size-3 animate-spin" />
-        Updating preview
-      </StatusPill>
+    <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted/40">
+      <RenderingPill visible={isRendering} />
 
-      <StatusPill visible={!inspectorEnabled && !isRendering}>
-        <MousePointerClick className="size-3" />
-        Preview mode — links open in a new tab
-        <button
-          type="button"
-          onClick={toggleInspector}
-          className="ml-1 rounded-full bg-background/20 px-2 py-0.5 font-semibold transition-colors hover:bg-background/30"
-        >
-          Resume editing
-        </button>
-      </StatusPill>
-
-      <div ref={scrollerRef} className="flex-1 overflow-auto p-4 sm:p-8">
+      <div ref={scrollerRef} className="flex-1 overflow-auto px-4 py-6 sm:px-16 sm:py-10">
+        {/* `overflow-visible` on purpose: the gutter controls hang outside this
+            frame, which is the whole point of putting them there. */}
         <div
-          className={cn(
-            "relative mx-auto bg-white transition-[width,box-shadow] duration-300",
-            device === "desktop"
-              ? "rounded-xl shadow-[0_18px_50px_-30px_rgb(0_0_0_/_0.45)] ring-1 ring-black/10"
-              : "rounded-2xl shadow-xl ring-1 ring-foreground/10",
-          )}
-          style={{ width: DEVICE_WIDTHS[device] }}
+          className="relative mx-auto max-w-full bg-white shadow-[0_18px_50px_-30px_rgb(0_0_0_/_0.45)] ring-1 ring-black/10"
+          style={{ width: CANVAS_WIDTH }}
         >
-          <div
-            ref={hostRef}
-            onClick={onClick}
-            onMouseOver={onMouseOver}
-            onMouseLeave={() => setHoveredId(null)}
-            className="overflow-hidden rounded-xl"
-          >
+          <div ref={hostRef} onClick={onClick} onMouseOver={onMouseOver} onMouseLeave={() => setHoveredId(null)}>
             {canvas ?? <CanvasSkeleton />}
           </div>
 
-          {inspectorEnabled && (
+          {building && (
             <>
-              <Overlay
+              <Gutters
                 doc={doc}
                 rects={rects}
                 selectedId={selectedId}
                 hoveredId={hoveredId}
                 store={store}
               />
-              <InsertPoints doc={doc} rects={rects} onInsert={openAddSection} />
+              <AddSectionBands doc={doc} rects={rects} onInsert={openAddSection} />
             </>
           )}
         </div>
@@ -246,9 +225,9 @@ export default function Canvas({ store }: { store: BuilderStore }) {
  * Brings the selected section into view when the selection came from elsewhere.
  *
  * Only reacts to `revealNonce`, never to `selectedId`: re-selecting the same
- * section from the list must scroll again, and a re-render that happens to
- * carry the same id must not. Skips canvas-originated selections, which the
- * merchant is already looking at, and respects reduced-motion.
+ * section must scroll again, and a re-render that happens to carry the same id
+ * must not. Skips canvas-originated selections, which the merchant is already
+ * looking at, and respects reduced-motion.
  */
 function useRevealSelectedSection(
   store: BuilderStore,
@@ -275,17 +254,11 @@ function useRevealSelectedSection(
     const offset =
       target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
 
-    scroller.scrollTo({
-      // A little headroom so the section's own label, which sits above it, is
-      // not clipped against the top of the viewport.
-      top: Math.max(0, offset - 48),
-      behavior: reduced ? "auto" : "smooth",
-    });
+    scroller.scrollTo({ top: Math.max(0, offset - 48), behavior: reduced ? "auto" : "smooth" });
   }, [revealNonce, store, hostRef, scrollerRef]);
 }
 
-/** The one floating message slot, so two states can never stack on each other. */
-function StatusPill({ visible, children }: { visible: boolean; children: React.ReactNode }) {
+function RenderingPill({ visible }: { visible: boolean }) {
   return (
     <div
       aria-live="polite"
@@ -294,8 +267,9 @@ function StatusPill({ visible, children }: { visible: boolean; children: React.R
         visible ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-2 opacity-0",
       )}
     >
-      <span className="flex items-center gap-1.5 rounded-full bg-foreground/90 px-3 py-1.5 text-[11px] font-medium text-background shadow-lg backdrop-blur">
-        {children}
+      <span className="flex items-center gap-1.5 rounded-full bg-foreground/90 px-3 py-1.5 text-[11px] font-medium text-background shadow-lg">
+        <Loader2 className="size-3 animate-spin" />
+        Updating preview
       </span>
     </div>
   );
@@ -316,18 +290,18 @@ function CanvasSkeleton() {
 }
 
 /**
- * A `+` at every gap a section may be inserted into.
+ * `Add Section` at every gap a section may be inserted into.
  *
- * The best insert affordance in any builder surveyed, because it states position
- * without a word of UI: the merchant points at the space they want a section to
- * occupy. The alternative — one "Add section" button and a modal that then has
- * to ask *where* — makes position an extra decision taken out of context.
+ * **Always visible, not hover-revealed.** The old `+` appeared only when the
+ * pointer found a 16px strip between two sections, which made adding a section
+ * a thing you had to already know about. A labelled band states both the action
+ * and its position without a word of explanation, and a merchant who has never
+ * used a page builder can see where their next section will land.
  *
  * Only body-zone boundaries are offered. Nothing addable belongs above the hero
- * or below the footer, so those gaps are simply absent rather than present and
- * refusing.
+ * or below the footer, so those gaps are simply absent rather than refusing.
  */
-function InsertPoints({
+function AddSectionBands({
   doc,
   rects,
   onInsert,
@@ -344,10 +318,8 @@ function InsertPoints({
       const rect = rects[section.id];
       if (!rect) return;
 
-      // Above this section.
       out.push({ key: `before-${section.id}`, atIndex: index, y: rect.y });
 
-      // Below it, when it is the last body section on the page.
       const next = doc.sections[index + 1];
       if (!next || SECTION_REGISTRY[next.kind].zone !== "body") {
         out.push({ key: `after-${section.id}`, atIndex: index + 1, y: rect.y + rect.height });
@@ -362,26 +334,21 @@ function InsertPoints({
       {points.map((point) => (
         <div
           key={point.key}
-          className="group/insert pointer-events-auto absolute inset-x-0 flex h-4 items-center justify-center"
-          style={{ top: point.y - 8 }}
+          className="group/band pointer-events-auto absolute inset-x-0 flex h-7 -translate-y-1/2 items-center justify-center"
+          style={{ top: point.y }}
         >
           <span
             aria-hidden
-            className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-foreground/30 opacity-0 transition-opacity group-hover/insert:opacity-100"
+            className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-foreground/10 transition-colors group-hover/band:bg-foreground/25"
           />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="Add a section here"
-                onClick={() => onInsert(point.atIndex)}
-                className="relative flex size-5 items-center justify-center rounded-full bg-foreground text-background opacity-0 shadow-sm transition-opacity focus:outline-none focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 group-hover/insert:opacity-100"
-              >
-                <Plus className="size-3" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Add a section here</TooltipContent>
-          </Tooltip>
+          <button
+            type="button"
+            onClick={() => onInsert(point.atIndex)}
+            className="relative flex items-center gap-1 rounded-full border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-sm transition-colors hover:border-foreground/25 hover:text-foreground focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <Plus className="size-3" />
+            Add Section
+          </button>
         </div>
       ))}
     </div>
@@ -389,11 +356,13 @@ function InsertPoints({
 }
 
 /**
- * Selection rings and per-section controls, positioned absolutely over the
- * rendered markup. Pointer-events are off except on the controls themselves, so
- * hovering the page still reaches the markup underneath.
+ * Per-section controls, in the margins either side of the page.
+ *
+ * Left is what to do with the section, right is where to put it. Both appear on
+ * hover and stay while the section is selected, so the drawer never opens over
+ * a section whose controls have vanished.
  */
-function Overlay({
+function Gutters({
   doc,
   rects,
   selectedId,
@@ -409,6 +378,7 @@ function Overlay({
   const moveSectionBy = store((s) => s.moveSectionBy);
   const duplicateSection = store((s) => s.duplicateSection);
   const toggleHidden = store((s) => s.toggleHidden);
+  const select = store((s) => s.select);
 
   return (
     <div className="pointer-events-none absolute inset-0">
@@ -416,88 +386,129 @@ function Overlay({
         const rect = rects[section.id];
         if (!rect) return null;
 
-        const isSelected = section.id === selectedId;
-        const isHovered = section.id === hoveredId;
-        if (!isSelected && !isHovered) return null;
+        const active = section.id === selectedId || section.id === hoveredId;
+        if (!active) return null;
 
         const def = SECTION_REGISTRY[section.kind];
-        const zone = def.zone;
 
-        // Only offer a move that the mutation will actually accept. Zone rules
-        // are enforced in `moveSectionBy`; mirroring the boundary here is what
-        // keeps an enabled button from producing a refusal toast.
-        const prev = doc.sections[index - 1];
-        const next = doc.sections[index + 1];
-        const canMoveUp = !!prev && SECTION_REGISTRY[prev.kind].zone === zone;
-        const canMoveDown = !!next && SECTION_REGISTRY[next.kind].zone === zone;
+        // Only offer a move the mutation will accept. Zone rules are enforced in
+        // `moveSectionBy`; mirroring the boundary here is what keeps an enabled
+        // button from producing a refusal toast.
+        const previous = doc.sections[index - 1];
+        const following = doc.sections[index + 1];
+        const canMoveUp = !!previous && SECTION_REGISTRY[previous.kind].zone === def.zone;
+        const canMoveDown = !!following && SECTION_REGISTRY[following.kind].zone === def.zone;
+
+        const move = (delta: -1 | 1) => {
+          const neighbour = delta === -1 ? previous : following;
+          moveSectionBy(section.id, delta);
+          if (neighbour) {
+            announce(
+              `${sectionTitle(section)} moved ${delta === -1 ? "before" : "after"} ${sectionTitle(neighbour)}.`,
+            );
+          }
+        };
 
         return (
           <div
             key={section.id}
             className="absolute"
-            style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
+            style={{ left: 0, top: rect.y, width: "100%", height: rect.height }}
           >
-            <div
+            {/* A hairline rather than a ring: enough to say which section the
+                controls belong to, not enough to compete with the merchant's
+                own colours. */}
+            <span
+              aria-hidden
               className={cn(
-                "pointer-events-none absolute inset-0 rounded-sm ring-inset transition-colors",
-                isSelected ? "ring-2 ring-foreground/70" : "ring-1 ring-foreground/25",
+                "pointer-events-none absolute inset-0 transition-colors",
+                section.id === selectedId
+                  ? "ring-1 ring-inset ring-foreground/25"
+                  : "ring-1 ring-inset ring-foreground/10",
               )}
             />
 
-            <span
-              className={cn(
-                "pointer-events-none absolute left-0 top-0 flex max-w-[60%] -translate-y-full items-center gap-1.5 truncate rounded-t-md px-2 py-1 text-[11px] font-medium",
-                isSelected
-                  ? "bg-foreground text-background"
-                  : "bg-foreground/70 text-background",
-              )}
-            >
-              {sectionTitle(section)}
-              {section.hidden && (
-                <span className="flex items-center gap-1 rounded bg-background/20 px-1 py-px text-[10px]">
-                  <EyeOff className="size-2.5" />
-                  Hidden
-                </span>
-              )}
-            </span>
+            <GutterStack side="left">
+              <GutterButton
+                label={`Edit ${sectionTitle(section)}`}
+                onClick={() => select(section.id, "canvas")}
+              >
+                <Pencil className="size-3.5" />
+              </GutterButton>
 
-            {isSelected && (
-              <div className="pointer-events-auto absolute right-0 top-0 flex -translate-y-full items-center overflow-hidden rounded-t-md bg-foreground text-background">
-                <CanvasButton
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger
+                      aria-label={`More options for ${sectionTitle(section)}`}
+                      className="flex size-7 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    >
+                      <MoreHorizontal className="size-3.5" />
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="left">More</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="start" side="right" className="w-44">
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      toggleHidden(section.id);
+                      announce(
+                        `${sectionTitle(section)} ${section.hidden ? "shown" : "hidden"}.`,
+                      );
+                    }}
+                  >
+                    {section.hidden ? <Eye /> : <EyeOff />}
+                    {section.hidden ? "Show on the page" : "Hide from the page"}
+                  </DropdownMenuItem>
+                  {!def.singleton && (
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        duplicateSection(section.id);
+                        announce(`${sectionTitle(section)} duplicated.`);
+                      }}
+                    >
+                      <Copy />
+                      Duplicate
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {def.deletable && (
+                <GutterButton
+                  label={`Delete ${sectionTitle(section)}`}
+                  destructive
+                  onClick={() => deleteSectionWithUndo(store, section.id)}
+                >
+                  <Trash2 className="size-3.5" />
+                </GutterButton>
+              )}
+            </GutterStack>
+
+            {(canMoveUp || canMoveDown) && (
+              <GutterStack side="right">
+                <GutterButton
                   label="Move up"
                   disabled={!canMoveUp}
-                  onClick={() => moveSectionBy(section.id, -1)}
+                  onClick={() => move(-1)}
                 >
                   <ChevronUp className="size-3.5" />
-                </CanvasButton>
-                <CanvasButton
+                </GutterButton>
+                <GutterButton
                   label="Move down"
                   disabled={!canMoveDown}
-                  onClick={() => moveSectionBy(section.id, 1)}
+                  onClick={() => move(1)}
                 >
                   <ChevronDown className="size-3.5" />
-                </CanvasButton>
-                <CanvasButton
-                  label={section.hidden ? "Show section" : "Hide section"}
-                  onClick={() => toggleHidden(section.id)}
-                >
-                  {section.hidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                </CanvasButton>
-                {!def.singleton && (
-                  <CanvasButton label="Duplicate" onClick={() => duplicateSection(section.id)}>
-                    <Copy className="size-3.5" />
-                  </CanvasButton>
-                )}
-                {def.deletable && (
-                  <CanvasButton
-                    label="Delete"
-                    destructive
-                    onClick={() => deleteSectionWithUndo(store, section.id)}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </CanvasButton>
-                )}
-              </div>
+                </GutterButton>
+              </GutterStack>
+            )}
+
+            {section.hidden && (
+              <span className="pointer-events-none absolute left-3 top-3 flex items-center gap-1 rounded bg-foreground/80 px-1.5 py-0.5 text-[10px] font-medium text-background">
+                <EyeOff className="size-2.5" />
+                Hidden
+              </span>
             )}
           </div>
         );
@@ -506,7 +517,27 @@ function Overlay({
   );
 }
 
-function CanvasButton({
+/** The rounded pill of controls that sits just outside the page edge. */
+function GutterStack({
+  side,
+  children,
+}: {
+  side: "left" | "right";
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-auto absolute top-2 flex flex-col overflow-hidden rounded-lg border bg-background shadow-sm",
+        side === "left" ? "right-full mr-2" : "left-full ml-2",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function GutterButton({
   label,
   onClick,
   disabled,
@@ -528,14 +559,16 @@ function CanvasButton({
           disabled={disabled}
           onClick={onClick}
           className={cn(
-            "flex size-6 items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-            destructive ? "hover:bg-destructive" : "hover:bg-background/25",
+            "flex size-7 items-center justify-center text-muted-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30",
+            destructive
+              ? "hover:bg-destructive/10 hover:text-destructive"
+              : "hover:bg-accent hover:text-foreground",
           )}
         >
           {children}
         </button>
       </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipContent side={destructive ? "left" : "left"}>{label}</TooltipContent>
     </Tooltip>
   );
 }

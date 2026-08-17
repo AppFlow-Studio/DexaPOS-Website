@@ -1,37 +1,33 @@
 "use client";
 
-import { Layers, PanelRight, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { loadMenuCatalog, type MenuCatalog } from "@/app/dashboard/website/builder/menu-catalog";
-import { renderCanvas } from "@/app/dashboard/website/builder/render-canvas";
+import { loadMenuCatalog, type MenuCatalog } from "@/app/dashboard/website/pages/menu-catalog";
+import { renderCanvas } from "@/app/dashboard/website/pages/render-canvas";
 import type { PageDocument } from "@/lib/site-builder/page-document";
-import { cn } from "@/lib/utils";
 import AddSectionModal from "./AddSectionModal";
 import Canvas from "./Canvas";
-import ReviewSheet from "./ReviewSheet";
-import SectionList from "./SectionList";
-import SettingsPanel from "./SettingsPanel";
-import Toolbar from "./Toolbar";
+import EditorTopBar from "./EditorTopBar";
+import SectionDrawer from "./SectionDrawer";
 import { getTextPreviewPatches } from "./preview-sync";
 import { createDraftSaveAdapter } from "./save-adapter";
-import { createBuilderStore, type EditorPage, type Pane, type SaveAdapter } from "./store";
+import { createBuilderStore, type EditorPage, type SaveAdapter } from "./store";
 
 /**
- * The builder's only stateful client root.
+ * The editor's only stateful client root.
  *
  * Everything below it reads from one Zustand store whose single piece of state
  * is the page document. Re-rendering the canvas means posting that document to
  * the server and swapping in the tree it returns — so the canvas shows the same
  * markup the public site will, not an approximation of it.
  *
- * **The inspector appears on selection rather than sitting there.** Two fixed
- * rails cost about 580px of chrome, and a merchant on a 1280px laptop is then
- * judging a desktop layout through a 700px window. Making the third column a
- * consequence of selection gives two honest modes: *review*, where the canvas
- * gets everything the screen has, and *edit*, where the controls for the thing
- * you clicked are next to it. `Esc` returns to review.
+ * **One column and a drawer.** The three-column layout this replaced spent
+ * about 580px of a 1280px laptop on chrome, leaving a merchant judging a desktop
+ * layout through a 700px window. The layers panel is gone entirely — its
+ * reordering, hiding, duplicating and deleting all moved into the canvas gutters,
+ * next to the section they act on — and the inspector became a drawer that
+ * appears only while something is being edited.
  */
 export default function BuilderShell({
   initialDoc,
@@ -41,48 +37,41 @@ export default function BuilderShell({
   initialCatalog,
   clerkOrgId,
   page,
-  pages,
   publishedDoc = null,
   publishedAt = null,
   saveAdapter,
-  viewUrl,
-  publicUrl,
 }: {
   initialDoc: PageDocument;
   /**
-   * The first paint, rendered as a Server Component by the page and passed down
-   * as a prop. Server components can be handed to a client component as props —
-   * they just cannot be *imported* by one.
+   * The first paint, rendered as a Server Component by the route and passed
+   * down as a prop. Server components can be handed to a client component as
+   * props — they just cannot be *imported* by one.
    */
   initialCanvas?: React.ReactNode;
   locationId: string;
   initialRevision?: number;
-  /** Loaded on the server with the opening page; avoids a second menu request after hydration. */
+  /** Loaded on the server with the opening page; avoids a second menu request. */
   initialCatalog?: MenuCatalog;
-  /** Needed by the save and publish actions, which are org-scoped. */
   clerkOrgId: string;
   page: EditorPage;
-  pages: EditorPage[];
   publishedDoc?: PageDocument | null;
   publishedAt?: string | null;
   /** Overridable for tests; production always saves through `SaveDraft`. */
   saveAdapter?: SaveAdapter;
-  siteName?: string;
-  viewUrl?: string;
-  /**
-   * Where this site actually answers on the internet, or `null` until the
-   * merchant has claimed a web address. Distinct from `viewUrl`, which is the
-   * ordering storefront and is never where a built page is served.
-   */
-  publicUrl?: string | null;
 }) {
+  // Saves are addressed to one page; a page switch remounts this component (the
+  // route keys on page id), so the adapter never outlives its page.
+  const [resolvedAdapter] = useState(
+    () => saveAdapter ?? createDraftSaveAdapter(clerkOrgId, page.id),
+  );
+
   /**
    * Created exactly once per mount — deliberately a lazy `useState` initialiser
    * rather than `useMemo`.
    *
    * This used to be `useMemo([initialDoc, initialCanvas, initialRevision])`,
    * which caused an infinite render loop: `renderCanvas` is a Server Action, and
-   * completing one re-renders the route, so the page handed down fresh prop
+   * completing one re-renders the route, so the route handed down fresh prop
    * identities, which rebuilt the store, which gave `doc` a new identity, which
    * re-fired the render effect, which called the action again. Measured at 13
    * canvas renders per 12 seconds with nobody touching the browser.
@@ -90,23 +79,13 @@ export default function BuilderShell({
    * It was also silent data loss: rebuilding the store resets it to
    * `initialDoc`, so any unsaved edit was discarded every time the server
    * re-rendered for any reason at all.
-   *
-   * After mount the store is the source of truth and later props are ignored;
-   * `useState` guarantees that, where `useMemo` is only ever a hint.
    */
-  // Saves are addressed to one page; a page switch remounts this component
-  // (the route keys on page id), so the adapter never outlives its page.
-  const [resolvedAdapter] = useState(
-    () => saveAdapter ?? createDraftSaveAdapter(clerkOrgId, page.id),
-  );
-
   const [store] = useState(() => {
     const next = createBuilderStore({
       doc: initialDoc,
       canvas: initialCanvas,
       revision: initialRevision,
       page,
-      pages,
       publishedDoc,
       publishedAt,
       locationId,
@@ -125,14 +104,12 @@ export default function BuilderShell({
   const notice = store((s) => s.notice);
   const selectedId = store((s) => s.selectedId);
   const pageSettingsOpen = store((s) => s.pageSettingsOpen);
-  const pane = store((s) => s.pane);
   const clearNotice = store((s) => s.clearNotice);
   const setCanvas = store((s) => s.setCanvas);
   const setRendering = store((s) => s.setRendering);
   const canvasRefreshRequest = store((s) => s.canvasRefreshRequest);
-  const setPane = store((s) => s.setPane);
 
-  const inspectorOpen = selectedId !== null || pageSettingsOpen;
+  const drawerOpen = selectedId !== null || pageSettingsOpen;
 
   // Refusals — dragging the hero past the footer, deleting a locked section —
   // surface as a toast rather than failing silently.
@@ -144,109 +121,24 @@ export default function BuilderShell({
 
   useServerRender(doc, locationId, canvasRefreshRequest, setCanvas, setRendering);
   useAutosave(store, resolvedAdapter);
-  useKeyboardShortcuts(store);
+  useSaveFailureToast(store);
   useMenuCatalog(store, locationId, !!initialCatalog);
   useUnsavedChangesWarning(store);
+  useEscapeClosesDrawer(store);
 
   return (
-    // The dashboard chrome is a fixed 4rem header, and `#main-content` pads its
-    // children (`p-4 sm:p-6 pb-20 sm:pb-6` — app/dashboard/layout.tsx). The
-    // negative margins cancel that padding so the builder is full-bleed, which
-    // is both what an editor wants and what makes `100dvh - 4rem` exactly right:
-    // without them the shell overflowed by the padding, pushing the bottom pane
-    // switcher off-screen at every breakpoint.
-    <div className="-m-4 -mb-20 flex h-[calc(100dvh-4rem)] min-h-[36rem] flex-col overflow-hidden bg-background sm:-m-6 sm:-mb-6">
-      <Toolbar store={store} locationId={locationId} viewUrl={viewUrl} publicUrl={publicUrl} />
-
-      <div className="flex min-h-0 flex-1">
-        <aside
-          aria-label="Page structure"
-          className={cn(
-            "min-w-0 shrink-0 border-r",
-            // A 1024px laptop cannot honestly show three editor columns. Keep
-            // the focused, one-pane mode until there is room for a real canvas.
-            "w-full xl:block xl:w-60",
-            pane === "structure" ? "block" : "hidden",
-          )}
-        >
-          <SectionList store={store} />
-        </aside>
-
-        <div className={cn("min-w-0 flex-1", pane === "canvas" ? "flex" : "hidden xl:flex")}>
-          <Canvas store={store} />
-        </div>
-
-        <aside
-          aria-label="Settings"
-          className={cn(
-            "min-w-0 shrink-0 border-l",
-            "w-full xl:w-[21rem] 2xl:w-[23rem]",
-            inspectorOpen ? (pane === "inspector" ? "block" : "hidden xl:block") : "hidden",
-          )}
-        >
-          {inspectorOpen && (
-            <SettingsPanel store={store} locationId={locationId} clerkOrgId={clerkOrgId} />
-          )}
-        </aside>
+    <EditorTopBar store={store} clerkOrgId={clerkOrgId} locationId={locationId}>
+      <div className="flex h-full min-h-0">
+        {/* Left, as Owner's is. The canvas keeps its position on screen when the
+            drawer opens, so opening one does not shift the thing being edited. */}
+        {drawerOpen && (
+          <SectionDrawer store={store} locationId={locationId} clerkOrgId={clerkOrgId} />
+        )}
+        <Canvas store={store} />
       </div>
 
-      <MobilePaneSwitcher pane={pane} setPane={setPane} inspectorOpen={inspectorOpen} />
-
       <AddSectionModal store={store} />
-      <ReviewSheet
-        store={store}
-        clerkOrgId={clerkOrgId}
-        locationId={locationId}
-        publicUrl={publicUrl}
-      />
-    </div>
-  );
-}
-
-/**
- * Below `lg`, drill in rather than hide.
- *
- * Panels that simply disappear at a breakpoint leave a merchant on a small
- * laptop or a tablet with controls they cannot reach at all. Three tabs cost one
- * row of chrome and keep every part of the builder available at every size.
- */
-function MobilePaneSwitcher({
-  pane,
-  setPane,
-  inspectorOpen,
-}: {
-  pane: Pane;
-  setPane: (pane: Pane) => void;
-  inspectorOpen: boolean;
-}) {
-  const tabs: { id: Pane; label: string; Icon: typeof Layers; disabled?: boolean }[] = [
-    { id: "structure", label: "Sections", Icon: Layers },
-    { id: "canvas", label: "Page", Icon: Square },
-    { id: "inspector", label: "Settings", Icon: PanelRight, disabled: !inspectorOpen },
-  ];
-
-  return (
-    <nav
-      aria-label="Builder panes"
-      className="flex shrink-0 items-stretch border-t bg-background xl:hidden"
-    >
-      {tabs.map(({ id, label, Icon, disabled }) => (
-        <button
-          key={id}
-          type="button"
-          disabled={disabled}
-          aria-current={pane === id}
-          onClick={() => setPane(id)}
-          className={cn(
-            "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors disabled:opacity-30",
-            pane === id ? "text-foreground" : "text-muted-foreground",
-          )}
-        >
-          <Icon className="size-4" />
-          {label}
-        </button>
-      ))}
-    </nav>
+    </EditorTopBar>
   );
 }
 
@@ -255,8 +147,8 @@ function MobilePaneSwitcher({
  *
  * Marked, non-empty text fields are updated synchronously by Canvas. Structural
  * changes, rich text and anything without a suitable marker still use this
- * canonical server render, so the builder and public storefront keep one markup
- * implementation.
+ * canonical server render, so the editor and the public storefront keep one
+ * markup implementation.
  */
 function useServerRender(
   doc: PageDocument,
@@ -272,7 +164,7 @@ function useServerRender(
   const latest = useRef(0);
 
   useEffect(() => {
-    // The page already rendered the first canvas and passed it in.
+    // The route already rendered the first canvas and passed it in.
     if (first.current) {
       first.current = false;
       return;
@@ -308,12 +200,11 @@ function useServerRender(
 }
 
 /**
- * Loads the menu once per builder session.
+ * Loads the menu once per editor session.
  *
- * Two features depend on it — the dish picker and the `⚠` markers — and both
- * want the same answer, so it is fetched here rather than by whichever panel
- * happens to mount first. A failure is not fatal: the picker explains itself and
- * the markers stay silent rather than claiming everything is fine.
+ * Fetched here rather than by whichever panel happens to mount first. A failure
+ * is not fatal: the dish picker explains itself rather than claiming the menu is
+ * empty.
  */
 function useMenuCatalog(
   store: ReturnType<typeof createBuilderStore>,
@@ -344,10 +235,13 @@ function useMenuCatalog(
 /**
  * Autosave.
  *
- * Debounced 1.5 s with a flush on tab-hide, per PLAN-02 §5. The adapter is a
- * no-op until the site tables exist, but the timing, the save-state transitions
- * and the conflict path are all real — so wiring `SaveDraft` in later changes
- * one function, not this hook.
+ * Debounced 1.5 s with a flush on tab-hide, per PLAN-02 §5.
+ *
+ * **The indicator is gone; the machinery is not.** Owner's editor has no save
+ * button either, which means it autosaves — and an editor whose only write is
+ * `Publish` loses a merchant's afternoon to a refresh. Removing the status text
+ * is a simplicity win; removing the persistence would be a data-loss bug wearing
+ * simplicity's clothes.
  */
 function useAutosave(store: ReturnType<typeof createBuilderStore>, adapter: SaveAdapter) {
   const doc = store((s) => s.doc);
@@ -394,8 +288,6 @@ function useAutosave(store: ReturnType<typeof createBuilderStore>, adapter: Save
           });
           return;
         }
-        // Persistent, not a toast: a save failure the merchant scrolls past is a
-        // merchant who keeps typing into a document nothing is storing.
         setSaveState("error");
         setSaveError(outcome.message);
       } finally {
@@ -421,12 +313,41 @@ function useAutosave(store: ReturnType<typeof createBuilderStore>, adapter: Save
 }
 
 /**
+ * Says so, once, when a save fails.
+ *
+ * There is no status line to carry this any more. A merchant typing into a
+ * document nothing is storing has to be told — in an editor that otherwise says
+ * nothing about saving at all, this is the one moment silence would be a lie.
+ */
+function useSaveFailureToast(store: ReturnType<typeof createBuilderStore>) {
+  const saveState = store((s) => s.saveState);
+  const saveError = store((s) => s.saveError);
+  const announced = useRef(false);
+
+  useEffect(() => {
+    if (saveState === "error" && saveError) {
+      if (announced.current) return;
+      announced.current = true;
+      toast.error(saveError, {
+        description: "Your recent changes are not stored. Keep this tab open.",
+        duration: Infinity,
+        action: {
+          label: "Try again",
+          onClick: () => store.getState().setSaveState("dirty"),
+        },
+      });
+      return;
+    }
+    if (saveState === "saved") announced.current = false;
+  }, [saveState, saveError, store]);
+}
+
+/**
  * Warns before a reload or tab close that would discard unsaved work.
  *
  * Autosave usually gets there first — this covers the window between the last
- * keystroke and the debounce, and the case that matters far more: a save that
- * is failing. Registered only while there is something to lose, so the browser
- * does not prompt on a clean exit.
+ * keystroke and the debounce, and the case that matters far more: a save that is
+ * failing. Registered only while there is something to lose.
  */
 function useUnsavedChangesWarning(store: ReturnType<typeof createBuilderStore>) {
   const saveState = store((s) => s.saveState);
@@ -440,58 +361,36 @@ function useUnsavedChangesWarning(store: ReturnType<typeof createBuilderStore>) 
   }, [atRisk]);
 }
 
-function useKeyboardShortcuts(store: ReturnType<typeof createBuilderStore>) {
+/**
+ * The one keyboard shortcut left.
+ *
+ * Undo, redo and the command-palette Add Section are gone with their buttons.
+ * Escape stays because closing a panel with it is not a builder convention a
+ * merchant has to learn — it is what every panel everywhere already does.
+ */
+function useEscapeClosesDrawer(store: ReturnType<typeof createBuilderStore>) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      // A keydown can be targeted at `document` itself — nothing guarantees an
-      // Element here, and calling `.matches` on one that is not throws and takes
-      // every shortcut down with it, including Escape.
+      if (event.key !== "Escape") return;
+
+      // An open popover, dropdown or dialog owns this Escape. Radix renders open
+      // layers into these wrappers and has not yet unmounted them when this
+      // window listener runs, so without the guard one keypress dismisses two
+      // things and only one of them was asked for.
+      const layerOpen = document.querySelector(
+        '[data-radix-popper-content-wrapper], [role="dialog"][data-state="open"]',
+      );
+      if (layerOpen) return;
+
       const target = event.target;
-      const typing =
+      if (
         target instanceof Element &&
-        target.matches("input, textarea, select, [contenteditable]");
-
-      const mod = event.metaKey || event.ctrlKey;
-
-      // Add Section is reachable while typing: it opens a search field, so a
-      // merchant part-way through editing a heading can still reach for it.
-      if (mod && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        store.getState().openAddSection();
+        target.matches("input, textarea, select, [contenteditable]")
+      ) {
         return;
       }
 
-      // Never steal undo from a field the merchant is typing in.
-      if (typing) return;
-
-      if (mod && event.key.toLowerCase() === "z") {
-        event.preventDefault();
-        if (event.shiftKey) store.getState().redo();
-        else store.getState().undo();
-        return;
-      }
-
-      // Shopify's inspector toggle, same shortcut — the one piece of muscle
-      // memory a merchant may already have from another builder.
-      if (mod && event.shiftKey && event.key.toLowerCase() === "i") {
-        event.preventDefault();
-        store.getState().toggleInspector();
-        return;
-      }
-
-      if (event.key === "Escape") {
-        // An open popover, dropdown or dialog owns this Escape. Without the
-        // guard, dismissing the publish popover also closed the inspector
-        // behind it — one keypress, two things dismissed, only one of them
-        // asked for. Radix renders open layers into these wrappers and has not
-        // yet unmounted them when this window listener runs.
-        const layerOpen = document.querySelector(
-          '[data-radix-popper-content-wrapper], [role="dialog"][data-state="open"]',
-        );
-        if (layerOpen) return;
-
-        store.getState().closeInspector();
-      }
+      store.getState().closeDrawer();
     };
 
     window.addEventListener("keydown", onKeyDown);

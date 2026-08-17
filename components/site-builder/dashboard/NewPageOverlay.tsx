@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { CreatePage } from "@/app/dashboard/website/actions/pages";
 import { SaveDraft } from "@/app/dashboard/website/actions/draft";
-import { renderCanvas } from "@/app/dashboard/website/builder/render-canvas";
+import { renderCanvas } from "@/app/dashboard/website/pages/render-canvas";
 import { Button } from "@/components/ui/button";
 import { createPageFromTemplate, type PageTemplateId } from "@/lib/site-builder/page-templates";
 import { checkPagePath, slugifyPagePath } from "@/lib/site-builder/reserved-paths";
