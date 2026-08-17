@@ -130,8 +130,36 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
     <div className="space-y-8">
       {/* Opt-In Status */}
       <Card className="overflow-hidden rounded-[24px] border-0 bg-muted/25 shadow-none">
-        <CardHeader className="px-4 pb-4 pt-5 sm:px-6 sm:pt-6">
-          <CardTitle className="text-base font-bold text-foreground">Communication Preferences</CardTitle>
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3 px-4 pb-4 pt-5 sm:px-6 sm:pt-6">
+          <CardTitle className="min-w-0 flex-1 text-base font-bold text-foreground">Communication Preferences</CardTitle>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              onClick={handleUpdatePreferences}
+              disabled={updatePrefsMutation.isPending}
+              size="sm"
+              className="h-9 rounded-full px-4 font-semibold"
+            >
+              {updatePrefsMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Preferences"
+              )}
+            </Button>
+            {!isUnsubscribed && (
+              <Button
+                onClick={handleUnsubscribe}
+                disabled={unsubscribeMutation.isPending}
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-full border-0 bg-muted/60 px-4 font-semibold shadow-none hover:bg-muted"
+              >
+                Unsubscribe
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-5 px-4 pb-5 pt-2 sm:px-6 sm:pb-6">
           {isUnsubscribed && (
@@ -238,33 +266,6 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-2 pt-2 sm:grid-cols-2">
-            <Button
-              onClick={handleUpdatePreferences}
-              disabled={updatePrefsMutation.isPending}
-              className="h-10 w-full rounded-full font-semibold"
-            >
-              {updatePrefsMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Preferences"
-              )}
-            </Button>
-            {!isUnsubscribed && (
-              <Button
-                onClick={handleUnsubscribe}
-                disabled={unsubscribeMutation.isPending}
-                variant="outline"
-                className="h-10 w-full rounded-full border-0 bg-muted/60 font-semibold shadow-none hover:bg-muted"
-              >
-                Unsubscribe
-              </Button>
-            )}
           </div>
         </CardContent>
       </Card>

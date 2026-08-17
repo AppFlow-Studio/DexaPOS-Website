@@ -104,6 +104,10 @@ export function QrTableManager({
   const [isLoading, setIsLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [brandMode, setBrandMode] = useState<QrBrandMode>("merchant");
+  const [bulkProgress, setBulkProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     setIsLoading(true);
@@ -150,17 +154,49 @@ export function QrTableManager({
 
   async function handleGenerateMissing() {
     await withBusy("bulk-generate", async () => {
-      const result = await generateMissingQrCodesForLocation(locationId);
-      if (!result.success) {
-        toast.error(result.error || "Failed to generate QR codes");
-        return;
+      // Each call is its own request with a fresh Clerk token, so a location
+      // with hundreds of tables can never outlive a single JWT. The action is
+      // idempotent — it always works off the tables still missing a code — so
+      // looping until `remaining` hits zero is safe, and so is retrying.
+      let totalGenerated = 0;
+
+      try {
+        for (;;) {
+          const result = await generateMissingQrCodesForLocation(locationId);
+          totalGenerated += result.generated;
+
+          if (!result.success) {
+            setBulkProgress(null);
+            toast.error(
+              totalGenerated > 0
+                ? `Generated ${totalGenerated} QR code${totalGenerated === 1 ? "" : "s"}, then stopped: ${result.error ?? "unknown error"}`
+                : result.error || "Failed to generate QR codes"
+            );
+            await loadSnapshot();
+            return;
+          }
+
+          if (result.remaining <= 0) break;
+
+          setBulkProgress({
+            done: totalGenerated,
+            total: totalGenerated + result.remaining,
+          });
+
+          // A batch that generates nothing while still reporting work left
+          // would spin forever — bail instead of hanging the button.
+          if (result.generated === 0) break;
+        }
+
+        toast.success(
+          totalGenerated > 0
+            ? `Generated ${totalGenerated} QR code${totalGenerated === 1 ? "" : "s"}`
+            : "No missing QR codes to generate"
+        );
+        await loadSnapshot();
+      } finally {
+        setBulkProgress(null);
       }
-      toast.success(
-        result.generated > 0
-          ? `Generated ${result.generated} QR code${result.generated === 1 ? "" : "s"}`
-          : "No missing QR codes to generate"
-      );
-      await loadSnapshot();
     });
   }
 
@@ -493,7 +529,9 @@ export function QrTableManager({
               ) : (
                 <ScanLine className="mr-2 h-4 w-4" />
               )}
-              Generate Missing
+              {bulkProgress
+                ? `Generating ${bulkProgress.done} of ${bulkProgress.total}`
+                : "Generate Missing"}
             </Button>
           </div>
         }

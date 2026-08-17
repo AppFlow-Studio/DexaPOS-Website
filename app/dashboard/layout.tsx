@@ -1350,36 +1350,68 @@ export default function MerchantDashboardLayout({
     { id: "staff", label: "Staff", icon: Users, url: "/dashboard/staff" },
   ];
 
-  // Mirror the sidebar's singular-"Location" label for the mobile menu; the
-  // locations page renders the single-store detail itself.
+  // Every page the sidebar can reach, flattened in sidebar order — nothing
+  // expands on mobile, so sub-items (Service Charge, the report pages, My Tips)
+  // are listed inline rather than hidden behind a disclosure. The account rows
+  // (Settings, Support, Profile) close the list, mirroring the sidebar footer.
+  //
+  // Keep in step with `navMain` above; a page added there needs a row here or
+  // it becomes unreachable on a phone.
   const dashboardMoreItems: MoreNavItem[] = [
+    // Operations — "Home"/"Orders" already have bottom-bar tabs.
     {
       title: activeLocationCount === 1 ? "Location" : "Locations",
       url: "/dashboard/locations",
       icon: MapPin,
     },
     { title: "Tables", url: "/dashboard/tables", icon: Armchair },
+    { title: "Service Charge", url: "/dashboard/tables/service-charge", icon: Percent },
     { title: "Reservations", url: "/dashboard/reservations", icon: CalendarClock },
-    { title: "Schedules", url: "/dashboard/schedules", icon: Calendar },
+
+    // Menus & Products — "Menus" has a bottom-bar tab.
     { title: "Items", url: "/dashboard/menu/items", icon: List },
+    { title: "Out of stock", url: "/dashboard/menu/out-of-stock", icon: CircleSlash },
     { title: "Categories", url: "/dashboard/menu/categories", icon: Tag },
     { title: "Discounts", url: "/dashboard/discounts", icon: Banknote },
     { title: "Modifiers", url: "/dashboard/menu/modifiers", icon: Layers },
+
+    // Management — "Staff" has a bottom-bar tab.
+    { title: "Schedules", url: "/dashboard/schedules", icon: Calendar },
     { title: "Online Ordering", url: "/dashboard/online-ordering", icon: Globe },
+    { title: "Kiosk", url: "/dashboard/kiosk", icon: MonitorPlay },
     { title: "Customers", url: "/dashboard/customers", icon: User },
     { title: "Inventory", url: "/dashboard/inventory", icon: Package },
     { title: "Subscriptions", url: "/dashboard/subscriptions", icon: FileText },
     { title: "Devices", url: "/dashboard/devices", icon: Monitor },
     { title: "Cash Drawers", url: "/dashboard/cash-drawers", icon: Banknote },
     { title: "Audit Logs", url: "/dashboard/audit-logs", icon: GitCompare },
+
+    // Reports — the landing page then each report, in sidebar order.
     { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
+    { title: "Financial Information", url: "/dashboard/reports/financials", icon: Banknote },
+    { title: "Compare Locations", url: "/dashboard/reports/comparison", icon: GitCompare },
+    { title: "Order Reports", url: "/dashboard/orders/reports", icon: ShoppingCart },
+    { title: "Sales By Items", url: "/dashboard/reports/sales-by-items", icon: List },
+    { title: "Cash Management", url: "/dashboard/reports/cash-management", icon: DollarSign },
+    { title: "Voids & Refunds", url: "/dashboard/reports/voids", icon: CircleSlash },
+    { title: "Online Ordering Report", url: "/dashboard/reports/online-ordering", icon: Globe },
+    { title: "Cash Drawer Reports", url: "/dashboard/reports/cash-drawers", icon: Receipt },
+    { title: "Tax Report", url: "/dashboard/reports/tax", icon: Percent },
+    { title: "Kitchen Performance", url: "/dashboard/reports/kitchen-performance", icon: Flame },
+    { title: "Discrepancy", url: "/dashboard/reports/discrepancy", icon: ShieldAlert },
+
+    // Financial
     { title: "Transactions", url: "/dashboard/transactions", icon: Receipt },
     { title: "Invoices", url: "/dashboard/invoices", icon: FileText },
     { title: "Payments", url: "/dashboard/payments", icon: CreditCard },
-    { title: "Tips", url: "/dashboard/tips", icon: DollarSign },
+    { title: "Tip Distribution", url: "/dashboard/tips", icon: Users },
+    { title: "My Tips", url: "/dashboard/tips/my-tips", icon: User },
     { title: "TSYS Disputes", url: "/dashboard/payments/disputes", icon: ShieldAlert },
+
+    // Account — matches the sidebar footer.
     { title: "Settings", url: "/dashboard/settings", icon: Settings },
     { title: "Support", url: "/dashboard/support", icon: MessageCircle },
+    { title: "Profile", url: "/dashboard/profile", icon: User },
   ];
 
   // h-svh + max-h-svh + min-h-0 + overflow-hidden caps the shell at the

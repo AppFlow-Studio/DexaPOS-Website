@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Table,
   TableBody,
@@ -12,13 +13,32 @@ import { PageLoader } from "@/components/ui/page-loader";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Mail, MoreHorizontal, Phone, UserRound } from "lucide-react";
+import {
+  Calendar,
+  Loader2,
+  Mail,
+  MoreHorizontal,
+  Phone,
+  UserRound,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useDeleteCustomer } from "../hooks/useCustomers";
+import { toast } from "sonner";
 import { format } from "date-fns";
 import type { CustomerListItem } from "@/types/customer";
 import { getCustomerDisplayName } from "@/types/customer";
@@ -111,36 +131,97 @@ function CustomerActions({
   onViewProfile?: (customer: CustomerListItem) => void;
   alwaysVisible?: boolean;
 }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const deleteCustomer = useDeleteCustomer();
+  const displayName = getCustomerDisplayName(customer);
+
+  const handleDelete = () => {
+    deleteCustomer.mutate(customer.id, {
+      onSuccess: (result: any) => {
+        if (result?.error) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success(`${displayName} deleted`);
+        setConfirmOpen(false);
+      },
+      onError: () => {
+        toast.error("Could not delete this customer. Please try again.");
+      },
+    });
+  };
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "h-8 w-8 rounded-full transition-opacity",
-            !alwaysVisible && "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-          )}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <span className="sr-only">Open customer actions</span>
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem
-          onClick={(event) => {
-            event.stopPropagation();
-            onViewProfile?.(customer);
-          }}
-        >
-          View Profile
-        </DropdownMenuItem>
-        <DropdownMenuItem className="text-destructive focus:text-destructive">
-          Delete Customer
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-8 w-8 rounded-full transition-opacity",
+              !alwaysVisible && "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+            )}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="sr-only">Open customer actions</span>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={(event) => {
+              event.stopPropagation();
+              onViewProfile?.(customer);
+            }}
+          >
+            View Profile
+          </DropdownMenuItem>
+          {/* preventDefault keeps the menu from closing before the confirm
+              dialog mounts; without it the click falls through to the row and
+              opens the customer panel instead. */}
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={(event) => {
+              event.preventDefault();
+              setConfirmOpen(true);
+            }}
+          >
+            Delete Customer
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent onClick={(event) => event.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {displayName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes {displayName} from your customer list. Their order
+              history is kept, so this can be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteCustomer.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                handleDelete();
+              }}
+              disabled={deleteCustomer.isPending}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {deleteCustomer.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

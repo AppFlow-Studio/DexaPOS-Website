@@ -28,6 +28,7 @@ import { useSettlementBatches, useBatchPayments } from "../../hooks/useSettlemen
 import { usePayments } from "../../hooks/usePayments";
 import { PaymentFilters } from "@/types/payment";
 import { CardBrandIcon } from "./CardBrandIcon";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 import {
