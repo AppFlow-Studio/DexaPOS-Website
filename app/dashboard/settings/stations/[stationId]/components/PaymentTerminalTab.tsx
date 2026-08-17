@@ -113,7 +113,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
 
   // Create terminal form state
   const [terminalName, setTerminalName] = useState("");
-  const [createType, setCreateType] = useState<TerminalType>("dejavoo");
+  const [createType, setCreateType] = useState<TerminalType>("castles");
   const [authKey, setAuthKey] = useState("");
   const [apiEnvironment, setApiEnvironment] =
     useState<ApiEnvironment>("sandbox");
@@ -139,10 +139,10 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
     [terminals],
   );
 
-  // Check which providers are already registered on this station
-  const hasDejavoo = terminals.some((t) => t.terminal_type === "dejavoo");
+  // Check which providers are already registered on this station. Castles is
+  // the only provider that can currently be added — Valor is not a
+  // `terminal_type` value yet, so it renders as a disabled placeholder.
   const hasCastles = terminals.some((t) => t.terminal_type === "castles");
-  const canAddProvider = !hasDejavoo || !hasCastles;
 
   const linkMutation = useLinkTerminalToStation();
   const unlinkMutation = useUnlinkTerminalFromStation();
@@ -221,7 +221,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
         input: {
           location_id: station.location_id,
           station_id: station.id,
-          terminal_name: terminalName || (isCastlesCreate ? "Castles Terminal" : "Dejavoo Terminal"),
+          terminal_name: terminalName || (isCastlesCreate ? "Castles Terminal" : "Payment Terminal"),
           terminal_type: createType,
           register_id: isCastlesCreate ? "CASTLES" : registerId,
           auth_key: isCastlesCreate ? "CASTLES" : authKey,
@@ -352,17 +352,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                 <p className="text-sm text-muted-foreground max-w-sm mt-2 mb-6">
                   Choose a payment terminal provider to register on this station.
                 </p>
-                <div className="grid gap-4 sm:grid-cols-2 w-full max-w-md">
-                  <button
-                    onClick={() => openCreateDialog("dejavoo")}
-                    className="flex min-w-0 cursor-pointer flex-col items-center gap-3 rounded-2xl border-0 bg-muted/45 p-6 shadow-none transition-colors hover:bg-muted"
-                  >
-                    <Image src="/dejavoo.png" alt="Dejavoo" width={40} height={40} />
-                    <div>
-                      <p className="font-medium">Dejavoo</p>
-                      <p className="text-xs text-muted-foreground">Cloud / SPIN API</p>
-                    </div>
-                  </button>
+                <div className="grid w-full max-w-md gap-4 sm:grid-cols-2">
                   <button
                     onClick={() => openCreateDialog("castles")}
                     className="flex min-w-0 cursor-pointer flex-col items-center gap-3 rounded-2xl border-0 bg-muted/45 p-6 shadow-none transition-colors hover:bg-muted"
@@ -371,6 +361,27 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                     <div>
                       <p className="font-medium">Castles</p>
                       <p className="text-xs text-muted-foreground">Local TCP</p>
+                    </div>
+                  </button>
+                  {/* Valor is not selectable yet: `terminal_type` has no `valor`
+                      value, so there is nothing to create. Rendered disabled
+                      rather than omitted so the roadmap is visible. */}
+                  <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    className="flex min-w-0 cursor-not-allowed flex-col items-center gap-3 rounded-2xl border-0 bg-muted/45 p-6 opacity-50 shadow-none"
+                  >
+                    <Image
+                      src="/valorlogo.jpg"
+                      alt="Valor"
+                      width={40}
+                      height={40}
+                      className="rounded grayscale"
+                    />
+                    <div>
+                      <p className="font-medium text-muted-foreground">Valor</p>
+                      <p className="text-xs text-muted-foreground">Coming soon</p>
                     </div>
                   </button>
                 </div>
@@ -427,10 +438,11 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                 {activeTerminal && (
                   <>
                     <div className="flex min-w-0 items-center gap-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-xl">
-                        {activeTerminal.terminal_type === "dejavoo" ? (
-                          <Image src="/dejavoo.png" alt="Dejavoo" width={32} height={32} />
-                        ) : activeTerminal.terminal_type === "castles" ? (
+                      {/* Any terminal_type without its own logo — including
+                          legacy Dejavoo rows — falls through to the generic
+                          card icon rather than rendering a retired brand. */}
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl">
+                        {activeTerminal.terminal_type === "castles" ? (
                           <Image src="/castles.jpg" alt="Castles" width={32} height={32} className="rounded" />
                         ) : (
                           <CreditCard className="h-8 w-8 text-muted-foreground" />
@@ -678,31 +690,30 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                   </>
                 )}
 
-                {/* Add another provider if slot available */}
-                {canAddProvider && (
-                  <div className="flex gap-3">
-                    {!hasDejavoo && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openCreateDialog("dejavoo")}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Dejavoo
-                      </Button>
-                    )}
-                    {!hasCastles && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openCreateDialog("castles")}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Castles
-                      </Button>
-                    )}
-                  </div>
-                )}
+                {/* Add another provider. The Valor placeholder always renders,
+                    so this row is never empty. */}
+                <div className="flex flex-wrap gap-3">
+                  {!hasCastles && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                      onClick={() => openCreateDialog("castles")}
+                    >
+                      <Plus className="mr-1.5 h-4 w-4" />
+                      Add Castles
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled
+                    className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    Add Valor (Coming soon)
+                  </Button>
+                </div>
               </div>
             )}
           </StationPanelContent>
