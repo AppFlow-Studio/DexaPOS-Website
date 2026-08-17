@@ -19,17 +19,23 @@
 -- later is private by default — it has to be named here to become public, which
 -- is the safe direction for that mistake to fall.
 --
--- `email` is deliberately absent. An earlier draft of this function returned it,
--- and verifying against a live page showed it being handed to anon and rendered
--- by nothing — no section reads `ResolvedLocation.email`. The only effect was
--- making a merchant's contact address, often the account's own mailbox, bulk
--- readable by anyone who can call this. That is the exact mistake the explicit
--- column list exists to prevent. If a section ever needs to show an email,
--- adding it back is a deliberate act.
+-- `email` **is** included, and that was argued over. The case for dropping it
+-- was that no built-site section renders it yet, so it looked like public
+-- exposure with no feature attached. That case does not survive contact with
+-- the rest of the codebase:
 --
--- DROP before CREATE, not CREATE OR REPLACE: Postgres refuses to replace a
--- function whose RETURNS TABLE signature has changed, and staging already
--- carries the earlier draft.
+--   * the ordering storefront already publishes it to anonymous visitors, as a
+--     `mailto:` link on the info page (app/sites/components/InfoPanel.tsx), so
+--     withholding it here would make a merchant's *website* less capable than
+--     the storefront it replaces; and
+--   * `locations.email` is classified in app/manage/actions/email-duplicates.ts
+--     as an organizational contact column — "org metadata, not a login
+--     identity" — which is to say a restaurant's published contact address,
+--     not somebody's private mailbox.
+--
+-- The columns this function must never carry are the ones below it in the
+-- table: `ein`, `tax_id`, `luqra_mid`, `sales_tax_rate` and
+-- `processor_fee_percentage`. A public contact email is not in that company.
 drop function if exists public.get_public_locations(uuid, uuid[]);
 
 create function public.get_public_locations(
@@ -46,6 +52,7 @@ returns table (
   postal_code text,
   country text,
   phone text,
+  email text,
   latitude numeric,
   longitude numeric,
   timezone text,
@@ -66,6 +73,7 @@ as $$
     l.postal_code,
     l.country,
     l.phone,
+    l.email,
     l.latitude,
     l.longitude,
     l.timezone,
@@ -97,7 +105,7 @@ as $$
 $$;
 
 comment on function public.get_public_locations(uuid, uuid[]) is
-  'Presentational location fields for public site rendering. Explicit column list; never exposes contact email, tax or processor columns.';
+  'Presentational location fields for public site rendering. Explicit column list; never exposes tax or processor columns.';
 
 revoke all on function public.get_public_locations(uuid, uuid[]) from public;
 grant execute on function public.get_public_locations(uuid, uuid[]) to anon, authenticated;
