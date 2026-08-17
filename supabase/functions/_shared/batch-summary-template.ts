@@ -45,6 +45,18 @@ export interface BatchSummary {
     refunds?: number | string | null;
     net_deposit?: number | string | null;
   };
+  // All-tender totals for the batch's business day. Cash lives ONLY here
+  // (cash never carries a settlement batch), so it's the source of truth for
+  // the cash line on the printed ticket.
+  business_day?: {
+    business_date?: string | null;
+    cash_total?: number | string | null;
+    cash_count?: number | string | null;
+    card_total?: number | string | null;
+    gift_total?: number | string | null;
+    house_total?: number | string | null;
+    gross?: number | string | null;
+  } | null;
   card_brands?: Record<string, AmountCount> | null;
   entry_modes?: Record<string, AmountCount> | null;
   payment_methods?: Record<string, AmountCount> | null;
@@ -127,6 +139,20 @@ function fmtDatetime(v?: string | null): string {
 
 function titleCase(s: string): string {
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Human batch label, matching the dashboard (BatchesView / ManualBatchoutDialog):
+ * prefer the host batch number with the acquirer prefix (e.g. "VALOR-7"); only
+ * fall back to the internal batch_id surrogate (e.g. "LAZY-VALOR-…") when no host
+ * number exists.
+ */
+function formatBatchLabel(h: BatchSummary["header"]): string {
+  const number = h.batch_number ?? h.castles_batch_num ?? null;
+  if (number != null && String(number).trim() !== "") {
+    return h.acquirer ? `${h.acquirer}-${number}` : String(number);
+  }
+  return h.batch_id ? String(h.batch_id) : "—";
 }
 
 const CARD_BRAND_LABELS: Record<string, string> = {
@@ -239,7 +265,7 @@ export function renderBatchSummaryHtml(
   // ── Header meta rows ──
   const headerRows = [
     lineRow("Business date", batchDate, { strong: true }),
-    h.batch_id ? lineRow("Batch", String(h.batch_id), { mono: true }) : "",
+    lineRow("Batch", formatBatchLabel(h), { mono: true }),
     h.acquirer ? lineRow("Acquirer", String(h.acquirer)) : "",
     h.processor ? lineRow("Processor", titleCase(String(h.processor))) : "",
     h.terminal_name ? lineRow("Terminal", String(h.terminal_name)) : "",
@@ -254,17 +280,29 @@ export function renderBatchSummaryHtml(
     lineRow("Transactions", fmtInt(h.transaction_count)),
   ].join("");
 
-  // ── Sales ──
+  // ── Sales (card settlement) ──
+  // Cash/gift/house are settlement-batch scoped and are always $0 here — cash
+  // never carries a settlement batch. The real tender split lives in the
+  // Business Day block below, so this section stays card-settlement only.
   const s = summary.sales ?? {};
   const salesRows = [
     lineRow("Credit / card", fmtMoney(s.credit_total)),
-    lineRow("Cash", fmtMoney(s.cash_total)),
-    num(s.gift_total) !== 0 ? lineRow("Gift", fmtMoney(s.gift_total)) : "",
-    num(s.house_total) !== 0
-      ? lineRow("House account", fmtMoney(s.house_total))
-      : "",
     lineRow("Gross sales", fmtMoney(s.gross), { strong: true }),
   ].join("");
+
+  // ── Business day (all tenders for the day, incl. cash) ──
+  const bd = summary.business_day ?? null;
+  const businessDayRows = bd
+    ? [
+        lineRow(`Cash (${fmtInt(bd.cash_count)})`, fmtMoney(bd.cash_total)),
+        lineRow("Card", fmtMoney(bd.card_total)),
+        num(bd.gift_total) !== 0 ? lineRow("Gift", fmtMoney(bd.gift_total)) : "",
+        num(bd.house_total) !== 0
+          ? lineRow("House account", fmtMoney(bd.house_total))
+          : "",
+        lineRow("Gross (all tenders)", fmtMoney(bd.gross), { strong: true }),
+      ].join("")
+    : "";
 
   // ── Refunds / tips ──
   const tips = num(summary.net?.tips ?? summary.adjustments?.tip_total);
@@ -356,6 +394,11 @@ export function renderBatchSummaryHtml(
               ${rule()}
               ${sectionHeading("Sales")}
               ${salesRows}
+              ${
+                businessDayRows
+                  ? `${rule()}${sectionHeading("Business Day · All Tenders")}${businessDayRows}`
+                  : ""
+              }
               ${rule()}
               ${sectionHeading("Refunds & Tips")}
               ${refundTipRows}
