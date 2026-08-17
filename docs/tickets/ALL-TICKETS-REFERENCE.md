@@ -490,6 +490,26 @@ Single index for active ticket streams and their source trackers.
 - No new migration is introduced or executed by this branch.
 - Website code is complete; single- and multi-location manual QA is pending.
 
+## Stream X: August 16 Billing Reports and POS Handoff
+
+1. Billing auto-renew with an optional operator-entered period end:
+- `docs/features/billing/BUG-2026-08-16-BILLING-AUTO-RENEW-OPTIONAL-END.md`
+
+2. Merchant tier catalog and price refresh:
+- `docs/features/billing/BUG-2026-08-16-MERCHANT-TIER-CATALOG-REFRESH.md`
+
+3. POS auto-create order handoff:
+- `docs/features/pos-settings/HANDOFF-2026-08-16-AUTO-CREATE-ORDER-NOT-TRIGGERING.md`
+
+4. Scope notes:
+- The first two reports apply to the website and shared billing catalog.
+- The tier migration preserves referenced IDs and legacy internal plan codes.
+- The migration is authored but is not executed by this branch.
+- Auto-create order behavior is owned by Dexa-POS; the POS repository was
+  inspected read-only and no POS file was changed.
+- Website automated verification is recorded in the ticket documents; staging
+  migration and billing-flow QA remain required before closure.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
