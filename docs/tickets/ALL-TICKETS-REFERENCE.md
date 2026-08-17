@@ -490,25 +490,25 @@ Single index for active ticket streams and their source trackers.
 - No new migration is introduced or executed by this branch.
 - Website code is complete; single- and multi-location manual QA is pending.
 
-## Stream X: August 16 Billing Reports and POS Handoff
+## Stream X: [POS-KDS - P0] KDS Routing Traceability
 
-1. Billing auto-renew with an optional operator-entered period end:
-- `docs/features/billing/BUG-2026-08-16-BILLING-AUTO-RENEW-OPTIONAL-END.md`
+1. Website/shared-database implementation and QA tracker:
+- `docs/features/kds/PLAN-2026-08-14-KDS-ROUTING-TRACEABILITY.md`
 
-2. Merchant tier catalog and price refresh:
-- `docs/features/billing/BUG-2026-08-16-MERCHANT-TIER-CATALOG-REFRESH.md`
-
-3. POS auto-create order handoff:
-- `docs/features/pos-settings/HANDOFF-2026-08-16-AUTO-CREATE-ORDER-NOT-TRIGGERING.md`
-
-4. Scope notes:
-- The first two reports apply to the website and shared billing catalog.
-- The tier migration preserves referenced IDs and legacy internal plan codes.
-- The migration is authored but is not executed by this branch.
-- Auto-create order behavior is owned by Dexa-POS; the POS repository was
-  inspected read-only and no POS file was changed.
-- Website automated verification is recorded in the ticket documents; staging
-  migration and billing-flow QA remain required before closure.
+2. Scope notes:
+- This repository owns the shared Supabase instrumentation: immutable routing
+  and send-attempt ledgers, actual-versus-requested send counts, the
+  tenant-scoped trace RPC, rolling seven-day health metrics, and honest
+  historical backfill.
+- Routing behavior, merchant-facing trace UI, and POS application changes are
+  outside this implementation pass.
+- The migration has not been executed. Temur's DDL review, deployed-signature
+  preflight, staging application, and physical KDS validation remain required.
+- The POS follow-up must consume count mismatches, pass station/device context,
+  preserve offline-replay idempotency, and complete the physical KDS QA matrix.
+- Two source-contract inconsistencies are documented: rolling seven-day
+  visibility cannot reconstruct old dropped rows, and category-name trimming
+  is deferred because it changes routing despite the instrumentation-only scope.
 
 ## Notes
 
