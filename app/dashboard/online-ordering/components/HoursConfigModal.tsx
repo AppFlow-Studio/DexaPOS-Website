@@ -83,7 +83,7 @@ function DayRow({ day, schedule, onChange, onCopyToAll }: DayRowProps) {
   return (
     <div
       className={cn(
-        "grid grid-cols-[120px_60px_1fr_100px_40px] gap-3 items-center py-3 px-4 rounded-lg transition-colors",
+        "grid grid-cols-[100px_48px_1fr_72px_36px] gap-2 items-center py-3 px-4 rounded-lg transition-colors",
         schedule.enabled ? "bg-card" : "bg-muted/30"
       )}
     >
@@ -91,7 +91,7 @@ function DayRow({ day, schedule, onChange, onCopyToAll }: DayRowProps) {
       <div className="flex items-center gap-2">
         <Label
           className={cn(
-            "font-medium",
+            "font-medium text-sm",
             !schedule.enabled && "text-muted-foreground"
           )}
         >
@@ -100,11 +100,13 @@ function DayRow({ day, schedule, onChange, onCopyToAll }: DayRowProps) {
       </div>
 
       {/* Enable Toggle */}
-      <Switch
-        checked={schedule.enabled}
-        onCheckedChange={(enabled) => onChange({ ...schedule, enabled })}
-        aria-label={`Enable ${getDayLabel(day)}`}
-      />
+      <div className="flex justify-center">
+        <Switch
+          checked={schedule.enabled}
+          onCheckedChange={(enabled) => onChange({ ...schedule, enabled })}
+          aria-label={`Enable ${getDayLabel(day)}`}
+        />
+      </div>
 
       {/* Time Pickers */}
       {schedule.enabled && !schedule.is24Hours ? (
@@ -113,7 +115,7 @@ function DayRow({ day, schedule, onChange, onCopyToAll }: DayRowProps) {
             value={schedule.from}
             onValueChange={(from) => onChange({ ...schedule, from })}
           >
-            <SelectTrigger className="w-[110px]">
+            <SelectTrigger className="w-[110px] h-9">
               <SelectValue>{formatTime12h(schedule.from)}</SelectValue>
             </SelectTrigger>
             <SelectContent className="max-h-[300px]">
@@ -125,13 +127,13 @@ function DayRow({ day, schedule, onChange, onCopyToAll }: DayRowProps) {
             </SelectContent>
           </Select>
 
-          <span className="text-muted-foreground">to</span>
+          <span className="text-muted-foreground text-sm">to</span>
 
           <Select
             value={schedule.to}
             onValueChange={(to) => onChange({ ...schedule, to })}
           >
-            <SelectTrigger className="w-[110px]">
+            <SelectTrigger className="w-[110px] h-9">
               <SelectValue>{formatTime12h(schedule.to)}</SelectValue>
             </SelectTrigger>
             <SelectContent className="max-h-[300px]">
@@ -144,14 +146,14 @@ function DayRow({ day, schedule, onChange, onCopyToAll }: DayRowProps) {
           </Select>
         </div>
       ) : schedule.enabled && schedule.is24Hours ? (
-        <div className="text-sm text-muted-foreground">Open 24 hours</div>
+        <div className="text-sm text-muted-foreground whitespace-nowrap">Open 24 hours</div>
       ) : (
         <div className="text-sm text-muted-foreground">Closed</div>
       )}
 
       {/* 24 Hours Checkbox */}
-      {schedule.enabled && (
-        <div className="flex items-center gap-2">
+      {schedule.enabled ? (
+        <div className="flex items-center gap-1.5">
           <Checkbox
             id={`24h-${day}`}
             checked={schedule.is24Hours}
@@ -166,15 +168,16 @@ function DayRow({ day, schedule, onChange, onCopyToAll }: DayRowProps) {
             24H
           </Label>
         </div>
+      ) : (
+        <div />
       )}
-      {!schedule.enabled && <div />}
 
       {/* Copy to All Button */}
-      {schedule.enabled && (
+      {schedule.enabled ? (
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-8 w-8 shrink-0"
           onClick={handleCopyToAll}
           title="Copy to all days"
         >
@@ -184,8 +187,9 @@ function DayRow({ day, schedule, onChange, onCopyToAll }: DayRowProps) {
             <Copy className="h-4 w-4" />
           )}
         </Button>
+      ) : (
+        <div />
       )}
-      {!schedule.enabled && <div />}
     </div>
   );
 }
@@ -290,7 +294,7 @@ export function HoursConfigModal({
 
           {/* Days List */}
           <div className="overflow-x-auto">
-            <div className="space-y-2 min-w-[460px]">
+            <div className="space-y-2 min-w-[400px]">
               {dayOrder.map((day) => (
                 <DayRow
                   key={day}

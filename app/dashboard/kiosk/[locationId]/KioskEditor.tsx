@@ -400,6 +400,10 @@ function KioskGallerySlot({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
   const atLimit = images.length >= 5;
+  const tileWidth =
+    aspectRatio >= 1
+      ? "w-full sm:w-[calc((100%-0.5rem)/2)]"
+      : "w-1/2 sm:w-[calc((100%-1.5rem)/4)]";
 
   function pickFile() {
     if (disabled || uploading || atLimit) return;
@@ -451,9 +455,16 @@ function KioskGallerySlot({
         }}
       />
 
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+      <div className="flex flex-wrap justify-center gap-2">
         {images.map((url, index) => (
-          <div key={url} className="group relative overflow-hidden rounded-xl border border-border/60 bg-muted/40" style={{ aspectRatio }}>
+          <div
+            key={url}
+            className={cn(
+              "group relative overflow-hidden rounded-xl border border-border/60 bg-muted/40",
+              tileWidth,
+            )}
+            style={{ aspectRatio }}
+          >
             <img src={url} alt={`${title} ${index + 1}`} className="h-full w-full object-cover" />
             <span className="absolute left-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-sm bg-background/90 px-1 text-[10px] font-medium tabular-nums">
               {index + 1}
@@ -475,7 +486,10 @@ function KioskGallerySlot({
             type="button"
             onClick={pickFile}
             disabled={disabled || uploading}
-            className="flex items-center justify-center rounded-xl border border-dashed border-border/60 text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:bg-muted/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            className={cn(
+              "flex items-center justify-center rounded-xl border border-dashed border-border/60 text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:bg-muted/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+              tileWidth,
+            )}
             style={{ aspectRatio }}
           >
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -793,7 +807,7 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
   const saveState: "clean" | "dirty" | "saving" = isPending ? "saving" : isDirty ? "dirty" : "clean";
 
   return (
-    <PageShell width="narrow" className="pb-16">
+    <PageShell width="narrow">
       <PageHeader
         title="Kiosk"
         subtitle={data.location.name}
@@ -1119,19 +1133,6 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
           >
               <KioskGallerySlot
                 title="Images — Vertical"
-                helper="Wide banner above the menu grid"
-                aspectRatio={21 / 9}
-                aspectLabel="21:9"
-                images={draft.order_banner_images_vertical}
-                disabled={isPending}
-                uploading={uploadingAsset === "order_banner_image_vertical"}
-                onAdd={(file) => uploadGalleryImage(file, "order_banner_image_vertical", "order_banner_images_vertical")}
-                onRemove={(url) =>
-                  updateDraft({ order_banner_images_vertical: draft.order_banner_images_vertical.filter((item) => item !== url) })
-                }
-              />
-              <KioskGallerySlot
-                title="Images — Horizontal"
                 helper="Tall sidebar next to the menu grid"
                 aspectRatio={3 / 4}
                 aspectLabel="3:4"
@@ -1141,6 +1142,19 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                 onAdd={(file) => uploadGalleryImage(file, "order_banner_image_horizontal", "order_banner_images_horizontal")}
                 onRemove={(url) =>
                   updateDraft({ order_banner_images_horizontal: draft.order_banner_images_horizontal.filter((item) => item !== url) })
+                }
+              />
+              <KioskGallerySlot
+                title="Images — Horizontal"
+                helper="Wide banner above the menu grid"
+                aspectRatio={21 / 9}
+                aspectLabel="21:9"
+                images={draft.order_banner_images_vertical}
+                disabled={isPending}
+                uploading={uploadingAsset === "order_banner_image_vertical"}
+                onAdd={(file) => uploadGalleryImage(file, "order_banner_image_vertical", "order_banner_images_vertical")}
+                onRemove={(url) =>
+                  updateDraft({ order_banner_images_vertical: draft.order_banner_images_vertical.filter((item) => item !== url) })
                 }
               />
           </KioskSection>
@@ -1338,7 +1352,7 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
         </TabsContent>
       </Tabs>
 
-      <div className="space-y-4">
+      <div className="hidden space-y-4 md:block">
         <div>
           <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
             Preview

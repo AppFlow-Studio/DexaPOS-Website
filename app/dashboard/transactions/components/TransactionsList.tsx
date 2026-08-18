@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { OrderResponse } from "@/types/order-management";
 import { getPaymentStatusLabel } from "@/lib/constants/payment-status";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 // ============================================================================
 // Types & Constants
@@ -571,9 +572,10 @@ export function TransactionsList({
 
                     {/* Payment status — independent of order status (payment_status enum) */}
                     <TableCell>
-                      <span className={BADGE_SHELL}>
-                        {getPaymentStatusLabel(tx.payment_status)}
-                      </span>
+                      <StatusBadge
+                        status={tx.payment_status}
+                        label={getPaymentStatusLabel(tx.payment_status)}
+                      />
                     </TableCell>
 
                     <TableCell className="text-xs text-muted-foreground">
@@ -635,9 +637,10 @@ export function TransactionsList({
 
                   <div className="mt-3 flex min-w-0 flex-wrap items-center gap-1.5">
                     <span className={BADGE_SHELL}>{getStatusLabel(tx.status)}</span>
-                    <span className={BADGE_SHELL}>
-                      {getPaymentStatusLabel(tx.payment_status)}
-                    </span>
+                    <StatusBadge
+                      status={tx.payment_status}
+                      label={getPaymentStatusLabel(tx.payment_status)}
+                    />
                   </div>
 
                   <div className="mt-4 grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-sm">

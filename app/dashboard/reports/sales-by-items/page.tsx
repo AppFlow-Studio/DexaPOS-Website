@@ -313,11 +313,13 @@ export default function SalesByItemsPage() {
                 Clear filters
               </Button>
             )}
-            <MobileColumnsButton
-              columns={TABLE_COLUMNS}
-              hidden={hiddenCols}
-              onChange={setHiddenCols}
-            />
+            <div className="flex w-full justify-start md:contents">
+              <MobileColumnsButton
+                columns={TABLE_COLUMNS}
+                hidden={hiddenCols}
+                onChange={setHiddenCols}
+              />
+            </div>
             <ReportExportButtons
               className="contents [&>button:last-child]:order-2"
               data={processed}

@@ -63,6 +63,27 @@ export function MobileColumnsButton({
   onChange,
   className,
 }: MobileColumnsButtonProps) {
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const [alignOffset, setAlignOffset] = React.useState(0);
+
+  /**
+   * Radix anchors the panel to the trigger, and the trigger sits wherever the
+   * toolbar wraps it — usually hard against one edge on a narrow phone, which
+   * leaves the menu spilling over the card. Radix's positioning transform
+   * lives on a wrapper element we don't render, so it can't be overridden with
+   * a class; the supported lever is `alignOffset`. Measuring the gap between
+   * the trigger's centre and the viewport's centre when the menu opens turns
+   * that lever into "centre this on the screen".
+   */
+  const recenter = React.useCallback((open: boolean) => {
+    if (!open) return;
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const triggerCenter = rect.left + rect.width / 2;
+    setAlignOffset(window.innerWidth / 2 - triggerCenter);
+  }, []);
+
   const toggleable = columns.filter((c) => !c.locked);
   if (toggleable.length === 0) return null;
 
@@ -82,9 +103,10 @@ export function MobileColumnsButton({
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={recenter}>
       <DropdownMenuTrigger asChild>
         <Button
+          ref={triggerRef}
           variant="outline"
           size="sm"
           className={cn(
@@ -98,7 +120,12 @@ export function MobileColumnsButton({
           </span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
+      <DropdownMenuContent
+        align="center"
+        alignOffset={alignOffset}
+        collisionPadding={16}
+        className="w-52 max-w-[calc(100vw-2rem)]"
+      >
         <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Visible columns
         </DropdownMenuLabel>

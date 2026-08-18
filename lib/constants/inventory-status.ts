@@ -23,9 +23,9 @@ const PURCHASE_ORDER_STATUS_STYLES: Record<string, StatusBadgeStyle> = {
     bg: "bg-emerald-50 dark:bg-emerald-900/20",
   },
   paid: {
-    dot: "bg-blue-500",
-    text: "text-blue-700 dark:text-blue-400",
-    bg: "bg-blue-50 dark:bg-blue-900/20",
+    dot: "bg-green-500",
+    text: "text-green-700 dark:text-green-400",
+    bg: "bg-green-50 dark:bg-green-900/20",
   },
   cancelled: {
     dot: "bg-rose-500",

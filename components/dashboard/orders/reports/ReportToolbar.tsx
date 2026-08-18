@@ -71,7 +71,7 @@ export function ReportToolbar<T extends Record<string, any>>({
         />
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         {isFiltered && (
           <p className="mr-1 hidden text-[0.8125rem] text-muted-foreground tabular-nums sm:block">
             {filteredCount.toLocaleString()} of {totalCount.toLocaleString()}
@@ -79,11 +79,13 @@ export function ReportToolbar<T extends Record<string, any>>({
         )}
 
         {columnConfig && hiddenColumns && onColumnVisibilityChange && (
-          <MobileColumnsButton
-            columns={columnConfig}
-            hidden={hiddenColumns}
-            onChange={onColumnVisibilityChange}
-          />
+          <div className="flex w-full justify-start md:contents">
+            <MobileColumnsButton
+              columns={columnConfig}
+              hidden={hiddenColumns}
+              onChange={onColumnVisibilityChange}
+            />
+          </div>
         )}
 
         <Button

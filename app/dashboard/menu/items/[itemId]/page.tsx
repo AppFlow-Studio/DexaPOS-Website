@@ -833,14 +833,14 @@ export default function MenuItemDetailPage() {
               {menuItem.allergens && menuItem.allergens.length > 0 && (
                 <div>
                   <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                    <AlertTriangle className="h-4 w-4 shrink-0 text-orange-500" />
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
                     Allergens
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {menuItem.allergens.map((allergen: string) => (
                       <span
                         key={allergen}
-                        className="inline-flex shrink-0 items-center rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700 dark:bg-orange-900/20 dark:text-orange-400"
+                        className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium text-foreground"
                       >
                         {allergen}
                       </span>

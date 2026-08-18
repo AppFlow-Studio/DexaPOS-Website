@@ -82,6 +82,7 @@ import {
   inventoryStockState,
   purchaseOrderStatusLabel,
 } from "@/lib/constants/inventory-status";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   PurchaseOrderWithDetails,
   VendorWithStats,
@@ -203,15 +204,6 @@ function ScopeBadge({
     <Badge variant="secondary" className="gap-1 border-0 text-xs text-muted-foreground">
       {!compact && <MapPin className="h-3 w-3" />}
       Local
-    </Badge>
-  );
-}
-
-function POStatusBadge({ status }: { status: string }) {
-  return (
-    <Badge variant="secondary" className="gap-1.5 border-0 text-muted-foreground">
-      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
-      {purchaseOrderStatusLabel(status)}
     </Badge>
   );
 }
@@ -1559,7 +1551,10 @@ export default function InventoryPage() {
                       </div>
 
                       <div className="col-span-2">
-                        <POStatusBadge status={po.status} />
+                        <StatusBadge
+                          status={po.status}
+                          label={purchaseOrderStatusLabel(po.status)}
+                        />
                       </div>
 
                       <div
@@ -1614,7 +1609,10 @@ export default function InventoryPage() {
                             {po.po_number}
                           </span>
                         </button>
-                        <POStatusBadge status={po.status} />
+                        <StatusBadge
+                          status={po.status}
+                          label={purchaseOrderStatusLabel(po.status)}
+                        />
                       </div>
 
                       <button

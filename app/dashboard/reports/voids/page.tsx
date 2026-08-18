@@ -247,7 +247,7 @@ export default function VoidsReportPage() {
 
       {/* ── Voids Table ── */}
       <Card className="overflow-hidden">
-        <div className="flex items-center justify-between px-5 pb-4 pt-5">
+        <div className="px-5 pb-4 pt-5">
           <div>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-muted-foreground/50" />
@@ -261,6 +261,7 @@ export default function VoidsReportPage() {
             columns={VOID_COLUMNS}
             hidden={hiddenVoidCols}
             onChange={setHiddenVoidCols}
+            className="mt-3"
           />
         </div>
         <CardContent className="p-0">
@@ -368,7 +369,7 @@ export default function VoidsReportPage() {
 
       {/* ── Refunds Table ── */}
       <Card className="overflow-hidden">
-        <div className="flex items-center justify-between px-5 pb-4 pt-5">
+        <div className="px-5 pb-4 pt-5">
           <div>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-muted-foreground/50" />
@@ -382,6 +383,7 @@ export default function VoidsReportPage() {
             columns={REFUND_COLUMNS}
             hidden={hiddenRefundCols}
             onChange={setHiddenRefundCols}
+            className="mt-3"
           />
         </div>
         <CardContent className="p-0">

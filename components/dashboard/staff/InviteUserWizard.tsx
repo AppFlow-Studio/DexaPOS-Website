@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -479,7 +480,7 @@ export function InviteUserWizard({
       <DialogContent
         elevation={elevated ? "above-sheet" : "default"}
         overlayClassName="bg-background/60 backdrop-blur-md"
-        className="flex h-[92vh] max-h-[92vh] w-full max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-3xl border bg-card p-0 max-sm:h-dvh max-sm:max-h-none max-sm:overflow-hidden sm:max-w-5xl"
+        className="flex h-[92vh] max-h-[92vh] w-full max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-3xl border bg-card p-0 max-sm:h-dvh max-sm:max-h-none max-sm:overflow-hidden max-sm:rounded-none max-sm:border-0 sm:max-w-5xl"
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
@@ -1411,18 +1412,27 @@ export function InviteUserWizard({
           </div>
         </div>
 
-        {/* Discard confirmation stays inside the dialog so it stacks above it. */}
-        {showDiscardConfirm && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center rounded-3xl bg-black/50">
-            <div className="bg-background rounded-2xl border shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold">
-                  Discard staff creation?
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  All entered information will be lost.
-                </p>
-              </div>
+        {/* Nested Radix dialog: it registers as a branch of the outer dialog
+            so its buttons receive clicks, and its overlay dims the whole
+            viewport — the staff page behind the wizard fades too. */}
+        <DialogPrimitive.Root
+          open={showDiscardConfirm}
+          onOpenChange={(open) => {
+            if (!open) setShowDiscardConfirm(false);
+          }}
+        >
+          <DialogPrimitive.Portal>
+            <DialogPrimitive.Overlay className="fixed inset-0 z-[220] bg-black/50" />
+            <DialogPrimitive.Content
+              className="fixed top-1/2 left-1/2 z-[220] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-3xl border bg-background p-6 shadow-lg"
+              onInteractOutside={(e) => e.preventDefault()}
+            >
+              <DialogPrimitive.Title className="text-lg font-semibold">
+                Discard staff creation?
+              </DialogPrimitive.Title>
+              <DialogPrimitive.Description className="text-sm text-muted-foreground">
+                All entered information will be lost.
+              </DialogPrimitive.Description>
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
@@ -1442,9 +1452,9 @@ export function InviteUserWizard({
                   Discard
                 </Button>
               </div>
-            </div>
-          </div>
-        )}
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
       </DialogContent>
     </Dialog>
   );

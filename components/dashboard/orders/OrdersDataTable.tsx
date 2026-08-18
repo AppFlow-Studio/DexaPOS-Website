@@ -80,6 +80,7 @@ interface OrdersDataTableProps {
     locationsMap?: Map<string, string>
     pageSize?: number
     hideOrderStatus?: boolean
+    hideOrderTypeBadge?: boolean
 }
 
 // Format date to "Today at 9:53 pm" or "Dec 15 at 2:30 pm"
@@ -182,7 +183,7 @@ const COLUMN_LABELS: Record<string, string> = {
     created_by: 'Staff',
 }
 
-export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showLocationColumn, locationsMap, pageSize = 50, hideOrderStatus = false }: OrdersDataTableProps) {
+export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showLocationColumn, locationsMap, pageSize = 50, hideOrderStatus = false, hideOrderTypeBadge = false }: OrdersDataTableProps) {
     const [sorting, setSorting] = React.useState<SortingState>([
         { id: 'created_at', desc: true },
     ])
@@ -306,7 +307,7 @@ export function OrdersDataTable({ data, isLoading, onOrderClick, readOnly, showL
                             {typeConfig.icon}
                             <span className="font-medium text-foreground/80">{typeConfig.label}</span>
                         </span>
-                        <DeliveryPlatformBadge order={order} />
+                        {!hideOrderTypeBadge && <DeliveryPlatformBadge order={order} />}
                     </div>
                 )
             },
