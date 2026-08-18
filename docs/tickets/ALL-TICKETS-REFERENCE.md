@@ -492,6 +492,9 @@ Single index for active ticket streams and their source trackers.
 
 ## Stream X: August 16 Billing Reports and POS Handoff
 
+Combined resolution report:
+- `docs/tickets/REPORT-2026-08-16-THREE-REPORTED-TICKETS.md`
+
 1. Billing auto-renew with an optional operator-entered period end:
 - `docs/features/billing/BUG-2026-08-16-BILLING-AUTO-RENEW-OPTIONAL-END.md`
 
