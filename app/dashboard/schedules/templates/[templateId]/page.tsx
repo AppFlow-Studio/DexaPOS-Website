@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 import { useScheduleTemplateStore } from "@/stores/useScheduleTemplateStore";
 import { useUnifiedStaff } from "@/app/dashboard/hooks/useStaff";
 import { ScheduleTemplate, TemplateShift } from "@/types/schedule";
@@ -179,9 +178,6 @@ export default function EditTemplatePage({
 
   const handleSave = () => {
     if (!template || !template.name.trim()) {
-      toast("Name Required", {
-        description: "Please enter a name for the template before saving.",
-      });
       return;
     }
 
@@ -192,9 +188,6 @@ export default function EditTemplatePage({
       shifts: template.shifts,
     });
 
-    toast("Template Updated", {
-      description: `The template "${template.name}" has been successfully updated.`,
-    });
     router.back();
   };
 

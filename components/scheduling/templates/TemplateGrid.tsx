@@ -238,7 +238,7 @@ const TemplateGrid: React.FC<TemplateGridProps> = ({
           <div>
           {employees.map((employee, index) => (
             <div
-              key={employee.id}
+              key={employee.id ?? `employee-${index}`}
               className="flex border-b group transition-colors hover:bg-muted/5 even:bg-muted/[0.02]"
             >
               {/* Employee Column */}

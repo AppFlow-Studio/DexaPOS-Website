@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { Receipt, LogIn, UtensilsCrossed, RotateCcw } from "lucide-react";
 import { useSession } from "../hooks/useSession";
 import { getOrderHistory, type OrderHistoryEntry } from "../order-actions";
@@ -114,16 +113,7 @@ function ReorderButton({ order, slug }: { order: OrderHistoryEntry; slug: string
     }
 
     if (added === 0) {
-      toast.error("Couldn't reorder", {
-        description: "These items are no longer available on the menu.",
-      });
       return;
-    }
-
-    if (skipped > 0) {
-      toast.success(`${added} ${added === 1 ? "item" : "items"} added to cart`, {
-        description: `${skipped} ${skipped === 1 ? "item is" : "items are"} no longer available and were skipped.`,
-      });
     }
 
     setAdded(true);

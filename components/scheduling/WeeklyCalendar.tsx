@@ -34,7 +34,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Plus, AlertTriangle, UserRound, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ShiftCard } from "./ShiftCard";
-import { toast } from "sonner";
 import React from "react";
 
 interface WeeklyCalendarProps {
@@ -144,9 +143,6 @@ export function WeeklyCalendar({
       };
 
       if (checkConflicts(scheduleId, potentialShift, shift.id)) {
-        toast.error("Conflict detected", {
-          description: "This shift overlaps with another shift.",
-        });
         return;
       }
 

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 import { useScheduleTemplateStore } from "@/stores/useScheduleTemplateStore";
 import { useUnifiedStaff } from "@/app/dashboard/hooks/useStaff";
 import { ScheduleTemplate, TemplateShift } from "@/types/schedule";
@@ -146,9 +145,6 @@ export default function CreateTemplatePage() {
 
   const handleSave = () => {
     if (!template.name.trim()) {
-      toast("Name Required", {
-        description: "Please enter a name for the template before saving.",
-      });
       return;
     }
 
@@ -163,9 +159,6 @@ export default function CreateTemplatePage() {
     };
 
     actions.addTemplate(finalTemplate);
-    toast("Template Created", {
-      description: `The template "${template.name}" has been successfully created.`,
-    });
     router.back();
   };
 

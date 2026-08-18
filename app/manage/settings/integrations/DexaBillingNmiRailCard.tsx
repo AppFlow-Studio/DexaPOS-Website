@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -37,11 +36,9 @@ export function DexaBillingNmiRailCard({ config, canEdit }: Props) {
       })
 
       if (!result.success) {
-        toast.error(result.error || 'Failed to save Dexa Billing NMI config.')
         return
       }
 
-      toast.success('Dexa Billing NMI config saved.')
       setPrivateApiKey('')
       setWebhookSecret('')
     })

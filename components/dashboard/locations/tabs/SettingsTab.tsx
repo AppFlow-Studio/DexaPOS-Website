@@ -88,25 +88,16 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
             if (result.error) {
                 // Revert on error
                 setIsAcceptingOrders(isAcceptingOrders)
-                toast.error('Update Failed', { description: result.error })
                 return
             }
 
             const newStatus = result.data?.is_accepting_orders
             setIsAcceptingOrders(newStatus ?? !isAcceptingOrders)
 
-            toast.success(newStatus ? 'Now Accepting Orders' : 'Stopped Accepting Orders', {
-                description: newStatus
-                    ? 'Customers can now place orders at this location.'
-                    : 'This location is no longer accepting new orders.',
-                icon: newStatus ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4" />,
-            })
-
             queryClient.invalidateQueries({ queryKey: ['locations'] })
             onUpdate?.()
         } catch (error) {
             setIsAcceptingOrders(isAcceptingOrders)
-            toast.error('Update Failed', { description: 'An unexpected error occurred' })
         } finally {
             setIsTogglingOrders(false)
         }
@@ -121,10 +112,8 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
             })
             if (result.error) {
                 setUseMerchantDefaults(!checked)
-                toast.error('Update Failed', { description: result.error })
                 return
             }
-            toast.success(checked ? 'Using Organization Defaults' : 'Using Custom Pricing')
             void Promise.all([
                 queryClient.invalidateQueries({ queryKey: ['locations'] }),
                 queryClient.invalidateQueries({ queryKey: ['merchant-pricing-defaults'] }),

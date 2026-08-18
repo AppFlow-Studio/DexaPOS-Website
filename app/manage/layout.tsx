@@ -67,7 +67,6 @@ import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
 import type { PermissionCode } from '@/lib/admin/permission-codes'
 import { selectHqOrganization } from '@/lib/admin/hq-identity'
-import { toast } from 'sonner'
 import { DeviceRegistryCommandPaletteProvider } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { GetUnreadTicketCounts } from '@/app/manage/actions/support'
@@ -445,11 +444,6 @@ function DeniedParamHandler() {
             'audit.view': "You don't have access to Audit Logs.",
             'merchants.create': "You don't have access to Create Merchant.",
         }
-
-        toast.error(
-            deniedMessageByRequirement[required] ||
-            "You don't have permission to access that page."
-        )
 
         const nextParams = new URLSearchParams(searchParams.toString())
         nextParams.delete('denied')

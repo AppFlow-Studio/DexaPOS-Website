@@ -30,7 +30,6 @@ import {
   usePlatformSettlementBatchPayments,
   usePlatformSettlementBatches,
 } from '@/lib/queries/use-platform-analytics'
-import { toast } from 'sonner'
 import { PermissionGate } from '@/components/admin/PermissionGate'
 import { ManualBatchoutDialog } from './ManualBatchoutDialog'
 
@@ -316,19 +315,16 @@ export function BatchReconciliationSection({
 
   const handleBatchExport = () => {
     if (!selectedBatch) {
-      toast.info('Select a batch first.')
       return
     }
 
     if (batchPayments.length === 0) {
-      toast.info('No linked payments to export for this batch.')
       return
     }
 
     const csv = buildBatchExportCsv(selectedBatch, batchPayments)
     const filename = `DEXA_Batch_${formatBatchLabel(selectedBatch)}_${selectedBatch.business_date}.csv`
     downloadCsv(csv, filename)
-    toast.success(`Exported ${batchPayments.length.toLocaleString()} payment rows.`)
   }
 
   return (

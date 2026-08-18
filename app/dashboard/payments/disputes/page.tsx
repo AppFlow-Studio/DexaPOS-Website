@@ -16,7 +16,6 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Empty } from "@/components/ui/empty";
@@ -179,11 +178,9 @@ function ChargebackDetail({
 
     const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
     if (!allowed.includes(file.type)) {
-      toast.error("Only PDF, JPEG, PNG, or WEBP files are allowed.");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      toast.error("File must be under 10 MB.");
       return;
     }
 
@@ -222,10 +219,7 @@ function ChargebackDetail({
 
       if (!result.success) throw new Error(result.error);
 
-      toast.success("Document uploaded successfully.");
       onRefresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setIsUploading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -236,10 +230,7 @@ function ChargebackDetail({
     startSubmitTransition(async () => {
       const result = await SubmitChargebackDefense(clerkOrgId, row.id);
       if (result.success) {
-        toast.success("Defense submitted successfully.");
         onRefresh();
-      } else {
-        toast.error(result.error ?? "Failed to submit defense.");
       }
     });
   };

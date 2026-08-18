@@ -33,7 +33,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
 import { uploadStoreImage } from "@/lib/storage/actions";
 import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
@@ -355,7 +354,6 @@ function CompletedSetupPanel({
         assetType,
       });
       if (!result.success || !result.url) {
-        toast.error(result.error || "Failed to upload image");
         return;
       }
 
@@ -363,9 +361,6 @@ function CompletedSetupPanel({
       if (assetType === "hero") onUpdate({ heroImageUrl: result.url });
       if (assetType === "favicon") onUpdate({ faviconUrl: result.url });
       if (assetType === "og") onUpdate({ ogImageUrl: result.url });
-      toast.success("Image uploaded");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to upload image");
     } finally {
       setUploading((prev) => ({ ...prev, [assetType]: false }));
     }
@@ -1345,7 +1340,6 @@ export default function OnlineOrderingPage() {
   async function openRequirements(locationId: string) {
     const req = await getOnlineStoreRequestRequirements(locationId);
     if (!req.success) {
-      toast.error(req.error || "Failed to load required fields");
       return;
     }
     setRequirementsMissing(req.missing);
@@ -1366,7 +1360,6 @@ export default function OnlineOrderingPage() {
       return;
     }
 
-    toast.error((result as any)?.error || "Failed to request setup");
   }
 
   async function handleSaveRequirements(locationId: string) {
@@ -1400,25 +1393,21 @@ export default function OnlineOrderingPage() {
 
       const saveResult = await saveOnlineStoreRequestRequirements(formData);
       if (!saveResult.success) {
-        toast.error(saveResult.error || "Failed to save required information");
         return;
       }
 
       const req = await getOnlineStoreRequestRequirements(locationId);
       if (!req.success) {
-        toast.error(req.error || "Failed to refresh requirements");
         return;
       }
 
       if (req.complete) {
         setRequirementsOpen(false);
         setRequirementsMissing(null);
-        toast.success("Information saved. Submitting request...");
         await handleRequestSetup(locationId);
       } else {
         setRequirementsMissing(req.missing);
         setRequirementsDraft((req.values as any) || {});
-        toast.error("Some required fields are still missing.");
       }
     } finally {
       setRequirementsSaving(false);

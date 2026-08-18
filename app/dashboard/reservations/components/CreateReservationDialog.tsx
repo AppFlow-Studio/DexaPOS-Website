@@ -36,7 +36,6 @@ import {
   isPastAtLocation,
   zonedToday
 } from '@/lib/reservations/local-time'
-import { toast } from 'sonner'
 import type { ConflictResult } from '@/lib/reservations/conflict-detection'
 import type { Reservation } from '@/types/floor-plan'
 
@@ -202,7 +201,6 @@ export default function CreateReservationDialog ({
         : 'Please fill in the required fields before creating the reservation.'
 
     setSubmitError(message)
-    toast.error(message)
   }
 
   const handleCreateAnyway = () => {

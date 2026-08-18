@@ -13,7 +13,6 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Clock, Edit, Save, X, Copy, Loader2, Moon } from 'lucide-react'
-import { toast } from 'sonner'
 import { UpdateLocation } from '@/app/dashboard/actions/locations'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
@@ -99,7 +98,6 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
         const newHours: BusinessHours = {}
         DAYS_OF_WEEK.forEach(({ key }) => { newHours[key] = { ...mondayHours } })
         setBusinessHours(newHours)
-        toast.info('Copied Monday hours to all days')
     }
 
     const handleSave = async () => {
@@ -139,21 +137,13 @@ export function HoursTab({ location, onUpdate, setHasUnsavedChanges }: HoursTabP
             })
 
             if (result.error) {
-                toast.error('Update Failed', { description: result.error })
                 return
             }
-
-            toast.success('Business Hours Updated', {
-                description: 'Operating hours have been saved.',
-                icon: <Clock className="h-4 w-4" />,
-            })
 
             queryClient.invalidateQueries({ queryKey: ['locations'] })
             onUpdate?.()
             setIsEditing(false)
             setHasUnsavedChanges(false)
-        } catch {
-            toast.error('Update Failed', { description: 'An unexpected error occurred' })
         } finally {
             setIsSaving(false)
         }
