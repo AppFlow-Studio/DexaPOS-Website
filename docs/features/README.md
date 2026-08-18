@@ -12,6 +12,7 @@ without hiding ownership.
 | [`device-management/`](device-management/README.md) | Device registry, admin device UI, and Landi links |
 | [`identity-access/`](identity-access/README.md) | Clerk linkage, RBAC, staff PINs, OTP, and account provisioning |
 | [`inventory/`](inventory/README.md) | Inventory feature planning and remaining work |
+| [`kds/`](kds/README.md) | KDS routing, state, station configuration, traceability, and health |
 | [`location-management/`](location-management/README.md) | Single-location behavior, onboarding, and location UX |
 | [`menu-management/`](menu-management/README.md) | Menus, categories, items, modifiers, recipes, and menu sync |
 | [`merchant-management/`](merchant-management/README.md) | Merchant creation, business information, and onboarding |

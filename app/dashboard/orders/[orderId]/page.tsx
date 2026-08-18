@@ -26,6 +26,7 @@ import { PaymentStatusBadge } from "@/components/dashboard/orders/PaymentStatusB
 import { OrderStatusTimeline } from "@/components/dashboard/orders/OrderStatusTimeline";
 import { RichTimeline } from "@/components/dashboard/orders/RichTimeline";
 import { KitchenActivitySection } from "@/components/dashboard/orders/KitchenActivitySection";
+import { KDSRoutingTraceSection } from "@/components/dashboard/orders/KDSRoutingTraceSection";
 import { cn } from "@/lib/utils";
 import { orderTypeLabel } from "@/lib/constants/order-type";
 import {
@@ -755,6 +756,9 @@ export default function OrderDetailPage() {
           {orderFullHistory && (
             <KitchenActivitySection items={orderFullHistory.items} />
           )}
+
+          {/* KDS Routing - where each fired item was routed and why */}
+          <KDSRoutingTraceSection orderId={orderId} variant="page" />
 
           {/* Payment History */}
           {payments.length > 0 && (

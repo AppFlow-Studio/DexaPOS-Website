@@ -66,6 +66,10 @@ import {
   invoiceStatusLabel,
   subscriptionStatusLabel,
 } from '@/lib/constants/subscription-status'
+import {
+  getMerchantTierFallbackName,
+  getMerchantTierPresentation,
+} from '@/lib/subscription-billing/merchant-tier-presentation'
 
 interface MerchantSubscriptionOverviewCardProps {
   merchantName: string
@@ -172,7 +176,10 @@ function formatTierPrice(monthlyPriceCents: number): string {
   return monthlyPriceCents > 0 ? `${formatMoney(monthlyPriceCents / 100)}/mo` : 'Contact for pricing'
 }
 
-function formatTierCapacity(plan: MerchantTierPlanViewRecord): string {
+function formatTierBillingUnit(plan: MerchantTierPlanViewRecord): string {
+  const presentation = getMerchantTierPresentation(plan.plan_code)
+  if (presentation) return presentation.billingUnit
+
   if (plan.max_locations === null) {
     return `${plan.min_locations ?? 0}+ locations`
   }
@@ -185,16 +192,11 @@ function formatTierCapacity(plan: MerchantTierPlanViewRecord): string {
 }
 
 function merchantTierHighlights(plan: MerchantTierPlanViewRecord): string[] {
-  switch (plan.plan_code) {
-    case 'basic':
-      return ['Single-location coverage', 'Flat monthly plan visibility', 'Contact Dexa for activation']
-    case 'multi_location':
-      return ['Supports 2 to 5 locations', 'Flat monthly tier', 'Built for growing merchant groups']
-    case 'franchise':
-      return ['Supports 6 or more locations', 'Unlimited cap in V1', 'Best fit for large operators']
-    default:
-      return ['Merchant-wide plan', 'Flat monthly structure', 'Contact Dexa for activation']
-  }
+  return getMerchantTierPresentation(plan.plan_code)?.highlights ?? [
+    'Merchant-wide plan',
+    'Flat monthly structure',
+    'Contact Dexa for activation',
+  ]
 }
 
 function usageLabel(planStatus: MerchantPlanStatusView): string {
@@ -445,7 +447,7 @@ export function MerchantSubscriptionOverviewCard({
     : 'Contact your DEXA rep'
 
   const requiredPlanLabel = merchantPlanStatus.required_plan_code
-    ? PLAN_NAME_BY_CODE[merchantPlanStatus.required_plan_code] || merchantPlanStatus.required_plan_code
+    ? getMerchantTierFallbackName(merchantPlanStatus.required_plan_code)
     : null
 
   return (
@@ -550,10 +552,10 @@ export function MerchantSubscriptionOverviewCard({
                     <div className="text-xl font-semibold">{plan.display_name}</div>
                     <div className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{formatTierPrice(plan.monthly_price_cents)}</div>
                     <div className="mt-3 text-sm text-muted-foreground">
-                      {plan.description || formatTierCapacity(plan)}
+                      {plan.description || formatTierBillingUnit(plan)}
                     </div>
                     <div className="mt-6 rounded-xl bg-background/80 px-3 py-2 text-sm font-medium text-foreground">
-                      {formatTierCapacity(plan)}
+                      {formatTierBillingUnit(plan)}
                     </div>
                     <div className="mt-6 space-y-3 text-sm text-muted-foreground">
                       {merchantTierHighlights(plan).map((line) => (

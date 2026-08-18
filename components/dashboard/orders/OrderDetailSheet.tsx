@@ -56,6 +56,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { GetOrderDetails } from "@/app/dashboard/actions/order";
 import { GetOrderFullHistory } from "@/app/dashboard/actions/order-full-history";
+import { KDSRoutingTraceSection } from "@/components/dashboard/orders/KDSRoutingTraceSection";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
@@ -1423,6 +1424,13 @@ export function OrderDetailSheet({
                   <KitchenSection items={fullHistory.items} />
                 </SectionCard>
               )}
+
+              {/* ─── KDS Routing (where each fired item was routed) ─── */}
+              <KDSRoutingTraceSection
+                orderId={order?.id}
+                enabled={open}
+                variant="sheet"
+              />
 
               {/* ─── Pricing Breakdown ─── */}
               <SectionCard

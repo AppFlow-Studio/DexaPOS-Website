@@ -35,6 +35,9 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { isSupportMessageMine } from "@/lib/support/message-alignment";
+import { buildSupportTicketContext } from "@/lib/support/ticket-context";
+import { toast } from "sonner";
 import {
   GetAdminTicketDetail,
   AdminAddMessage,
@@ -94,10 +97,21 @@ function DateSeparator({ date }: { date: string }) {
   );
 }
 
-function MessageBubble({ message }: { message: SupportTicketMessage }) {
-  const isMerchant = message.sender_role === "merchant";
+function MessageBubble({
+  message,
+  currentUserId,
+}: {
+  message: SupportTicketMessage;
+  currentUserId?: string;
+}) {
+  const isMine = isSupportMessageMine(message.sender_id, currentUserId);
   const isInternal = message.is_internal;
   const initials = message.sender_name ? getInitials(message.sender_name) : "?";
+  const senderLabel = isMine
+    ? `${message.sender_name} (you)`
+    : message.sender_role === "admin"
+      ? `${message.sender_name} (DEXA)`
+      : message.sender_name;
 
   // Internal notes: full-width amber card
   if (isInternal) {
@@ -125,20 +139,21 @@ function MessageBubble({ message }: { message: SupportTicketMessage }) {
   }
 
   return (
-    <div className={cn("flex gap-3", !isMerchant && "flex-row-reverse")}>
-      <div
-        className={cn(
-          "h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold",
-          isMerchant ? "bg-gray-200 text-gray-700" : "bg-indigo-600 text-white"
-        )}
-      >
-        {initials}
-      </div>
+    <div
+      className={cn("flex w-full items-start gap-3", isMine && "justify-end")}
+      data-message-party={isMine ? "self" : "other"}
+      aria-label={isMine ? "Your message" : `Message from ${message.sender_name}`}
+    >
+      {!isMine && (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-100 text-xs font-bold text-gray-700">
+          {initials}
+        </div>
+      )}
 
-      <div className={cn("max-w-[70%] space-y-1", !isMerchant && "items-end flex flex-col")}>
-        <div className={cn("flex items-center gap-2", !isMerchant && "flex-row-reverse")}>
+      <div className={cn("flex max-w-[70%] flex-col gap-1", isMine && "items-end")}>
+        <div className={cn("flex items-center gap-2", isMine && "flex-row-reverse")}>
           <span className="text-xs font-medium text-muted-foreground">
-            {isMerchant ? message.sender_name : `${message.sender_name} (DEXA)`}
+            {senderLabel}
           </span>
           <span className="text-xs text-muted-foreground/70">
             {formatMessageTime(message.created_at)}
@@ -147,9 +162,9 @@ function MessageBubble({ message }: { message: SupportTicketMessage }) {
         <div
           className={cn(
             "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
-            isMerchant
-              ? "bg-gray-100 text-gray-900 rounded-tl-sm"
-              : "bg-indigo-600 text-white rounded-tr-sm"
+            isMine
+              ? "rounded-tr-sm bg-blue-600 text-white"
+              : "rounded-tl-sm border border-[#E5E7EB] bg-white text-gray-950 shadow-sm"
           )}
         >
           <p className="whitespace-pre-wrap">{message.message}</p>
@@ -304,7 +319,7 @@ export default function AdminTicketDetailPage() {
 
   const merchantInfo = ticket.merchant as any;
   const locationInfo = ticket.location as any;
-  const metadata = ticket.metadata as any;
+  const contextItems = buildSupportTicketContext(ticket.metadata);
   const isHQInternal = ticket.ticket_scope === "hq_internal";
 
   // Build messages with date separators
@@ -373,7 +388,11 @@ export default function AdminTicketDetailPage() {
             item.type === "separator" ? (
               <DateSeparator key={item.key} date={item.date} />
             ) : (
-              <MessageBubble key={item.data.id} message={item.data} />
+              <MessageBubble
+                key={item.data.id}
+                message={item.data}
+                currentUserId={userInfo?.id}
+              />
             )
           )}
           <div ref={messagesEndRef} />
@@ -695,22 +714,22 @@ export default function AdminTicketDetailPage() {
         )}
 
         {/* Context from metadata */}
-        {metadata && Object.keys(metadata).length > 0 && (
+        {contextItems.length > 0 && (
           <>
             <Separator />
             <SidebarSection title="Context">
-              <div className="space-y-1 text-xs text-muted-foreground">
-                {metadata.userAgent && (
-                  <p className="truncate" title={metadata.userAgent}>
-                    Device:{" "}
-                    {/Android/.test(metadata.userAgent)
-                      ? "Android"
-                      : /iPhone|iPad/.test(metadata.userAgent)
-                      ? "iOS"
-                      : "Desktop"}
-                  </p>
-                )}
-                {metadata.app_version && <p>App version: {metadata.app_version}</p>}
+              <div className="space-y-1.5 text-xs">
+                {contextItems.map((item) => (
+                  <div key={item.label} className="flex items-start justify-between gap-3">
+                    <span className="text-muted-foreground">{item.label}</span>
+                    <span
+                      className="max-w-[9rem] truncate text-right font-medium text-foreground"
+                      title={item.title || item.value}
+                    >
+                      {item.value}
+                    </span>
+                  </div>
+                ))}
               </div>
             </SidebarSection>
           </>
