@@ -6,7 +6,6 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import {
   GetLoyaltyPrograms,
   CreateLoyaltyProgram,
@@ -227,11 +226,8 @@ export function useCreatePromotion() {
       queryClient.invalidateQueries({
         queryKey: ['promotions', variables.clerkOrgId],
       });
-      toast.success('Promotion created successfully');
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to create promotion');
-    },
+      },
+    onError: (error: Error) => {},
   });
 }
 
@@ -261,11 +257,8 @@ export function useUpdatePromotion() {
       queryClient.invalidateQueries({
         queryKey: ['promotions', variables.clerkOrgId],
       });
-      toast.success('Promotion updated successfully');
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update promotion');
-    },
+      },
+    onError: (error: Error) => {},
   });
 }
 
@@ -295,13 +288,8 @@ export function useTogglePromotion() {
       queryClient.invalidateQueries({
         queryKey: ['promotions', variables.clerkOrgId],
       });
-      toast.success(
-        variables.isActive ? 'Promotion activated' : 'Promotion deactivated'
-      );
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to toggle promotion');
-    },
+      },
+    onError: (error: Error) => {},
   });
 }
 
@@ -329,11 +317,8 @@ export function useDeletePromotion() {
       queryClient.invalidateQueries({
         queryKey: ['promotions', variables.clerkOrgId],
       });
-      toast.success('Promotion deleted');
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete promotion');
-    },
+      },
+    onError: (error: Error) => {},
   });
 }
 

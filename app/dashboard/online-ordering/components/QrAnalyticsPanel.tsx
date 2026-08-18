@@ -149,7 +149,7 @@ export function QrAnalyticsPanel({
       >
         <div className="space-y-6">
         {!qrEnabled ? (
-          <div className="border-l-2 border-amber-500 bg-amber-50/60 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
+          <div className="border-l-2 border-border bg-muted px-4 py-3 text-sm text-foreground">
             QR analytics can still show historical activity, but new scans stay
             off until QR Table Ordering is enabled for this branch.
           </div>

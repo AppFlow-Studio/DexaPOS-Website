@@ -25,7 +25,6 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Globe, MapPin, Info } from 'lucide-react'
-import { toast } from 'sonner'
 import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
 import { cn } from '@/lib/utils'
 
@@ -129,11 +128,8 @@ export function MenuFormSheet({
           if (uploadedAsset) {
             await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
           }
-          toast.error('Failed to update menu', { description: result.error })
           return
         }
-
-        toast.success('Menu updated successfully')
       } else {
         const result = await createAdminMenu(merchantId, {
           name: values.name,
@@ -147,11 +143,8 @@ export function MenuFormSheet({
           if (uploadedAsset) {
             await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
           }
-          toast.error('Failed to create menu', { description: result.error })
           return
         }
-
-        toast.success('Menu created successfully')
       }
 
       onSuccess()
@@ -160,7 +153,6 @@ export function MenuFormSheet({
       if (uploadedAsset) {
         await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
       }
-      toast.error('An unexpected error occurred')
       console.error(error)
     }
   }

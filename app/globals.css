@@ -758,3 +758,29 @@ html:has([data-template]) body[data-scroll-locked] {
   background-color: var(--muted-foreground) !important;
   opacity: 0.6;
 }
+
+/* Sonner notifications use one neutral treatment for every category. Individual
+   calls may provide a success/error/warning style, so these global overrides
+   intentionally take precedence over per-toast category colours. */
+[data-sonner-toast][data-styled="true"] {
+  background: #e5e7eb !important;
+  border-color: #d1d5db !important;
+  color: #111827 !important;
+}
+
+[data-sonner-toast][data-styled="true"] :is([data-title], [data-description]),
+[data-sonner-toast][data-styled="true"] [data-icon],
+[data-sonner-toast][data-styled="true"] [data-icon] svg,
+[data-sonner-toast][data-styled="true"] [data-close-button] {
+  color: #111827 !important;
+}
+
+[data-sonner-toast][data-styled="true"] [data-close-button] {
+  background: #e5e7eb !important;
+  border-color: #d1d5db !important;
+}
+
+[data-sonner-toast][data-styled="true"] [data-button] {
+  background: #111827 !important;
+  color: #e5e7eb !important;
+}

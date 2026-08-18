@@ -246,55 +246,63 @@ export default function TemplateLibraryPage() {
                 <CardHeader className="relative gap-1 px-4 sm:px-6">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1 space-y-1">
-                      <CardTitle
-                        title={template.name}
-                        className="truncate pr-8 text-lg font-semibold text-foreground"
-                      >
-                        {template.name}
-                      </CardTitle>
-                      {/* At most two badges on one non-wrapping row. "Active"
-                          counts as one of the two, so the row can never grow
-                          past the card: a third badge plus a "+N" was what
-                          overflowed under the menu button. Everything not
-                          shown is folded into the single "+N" count. */}
                       {(() => {
                         const tags = template.tags ?? [];
                         const showActive = isActive && !isSelectionMode;
-                        const tagSlots = showActive ? 1 : 2;
-                        const shownTags = tags.slice(0, tagSlots);
+                        // "Active" shares the title's row, so it no longer
+                        // competes with the tags for a slot below.
+                        const shownTags = tags.slice(0, 2);
                         const overflow = tags.length - shownTags.length;
 
-                        if (!showActive && tags.length === 0) return null;
-
                         return (
-                          <div className="flex min-w-0 items-center gap-1">
-                            {/* "Active" is status rather than decoration, so
-                                it survives on mobile; the tags and their
-                                overflow count are sm:-only to keep the mobile
-                                card compact. */}
-                            {showActive && (
-                              <Badge
-                                variant="secondary"
-                                className="shrink-0 text-xs"
+                          <>
+                            {/* flex-wrap puts "Active" beside the name when the
+                                row has room and drops it to its own line when
+                                it doesn't. The title uses `break-words` rather
+                                than `truncate`: a truncating title never
+                                overflows, so the badge would never be pushed
+                                to a second line and the wrap could not trigger.
+                                pr-8 keeps the first line clear of the menu
+                                button. */}
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
+                              <CardTitle
+                                title={template.name}
+                                className="min-w-0 break-words text-lg font-semibold text-foreground"
                               >
-                                Active
-                              </Badge>
+                                {template.name}
+                              </CardTitle>
+                              {showActive && (
+                                <Badge
+                                  variant="secondary"
+                                  className="shrink-0 text-xs"
+                                >
+                                  Active
+                                </Badge>
+                              )}
+                            </div>
+
+                            {/* Tags stay sm:-only to keep the mobile card
+                                compact; the row disappears entirely when the
+                                template has none. */}
+                            {tags.length > 0 && (
+                              <div className="hidden min-w-0 items-center gap-1 sm:flex">
+                                {shownTags.map((tag) => (
+                                  <Badge
+                                    key={tag}
+                                    variant="outline"
+                                    className="min-w-0 truncate text-xs"
+                                  >
+                                    {tag}
+                                  </Badge>
+                                ))}
+                                {overflow > 0 && (
+                                  <span className="shrink-0 text-xs text-muted-foreground">
+                                    +{overflow}
+                                  </span>
+                                )}
+                              </div>
                             )}
-                            {shownTags.map((tag) => (
-                              <Badge
-                                key={tag}
-                                variant="outline"
-                                className="hidden min-w-0 truncate text-xs sm:inline-flex"
-                              >
-                                {tag}
-                              </Badge>
-                            ))}
-                            {overflow > 0 && (
-                              <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-                                +{overflow}
-                              </span>
-                            )}
-                          </div>
+                          </>
                         );
                       })()}
                     </div>

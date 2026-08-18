@@ -185,6 +185,110 @@ interface LogAuditEventParams {
 }
 
 /**
+ * Remove internal IDs and technical fields from the log for a cleaner Manager view.
+ *
+ * Module-scoped so the single-event and bulk paths sanitize identically — a
+ * divergence here would mean the same action logs different payloads depending
+ * on which entry point wrote it.
+ */
+function sanitizeAuditRecord(obj: Record<string, unknown> | undefined) {
+  if (!obj) return undefined;
+  const sanitized = { ...obj };
+  const technicalKeys = [
+    "id",
+    "merchant_id",
+    "location_id",
+    "clerk_org_id",
+    "organization_id",
+    "org_id",
+    "created_at",
+    "updated_at",
+    "deleted_at",
+    "clerkorgid",
+  ];
+
+  Object.keys(sanitized).forEach((key) => {
+    const lowerKey = key.toLowerCase();
+    const value = sanitized[key];
+
+    const isTechnicalKey = technicalKeys.some(
+      (tk) => tk.toLowerCase() === lowerKey,
+    );
+    const isIdKey =
+      lowerKey.endsWith("_id") || key.endsWith("Id") || lowerKey === "id";
+    const hasUuidValue = isUuid(value as string | null | undefined);
+
+    if (isTechnicalKey || isIdKey || hasUuidValue) {
+      delete sanitized[key];
+    }
+  });
+  return sanitized;
+}
+
+/**
+ * Diff + sanitize a params.changes payload into what gets persisted.
+ */
+function buildAuditChanges(changes: LogAuditEventParams["changes"]) {
+  if (!changes?.before && !changes?.after) return changes;
+
+  let processedBefore = changes.before;
+  let processedAfter = changes.after;
+
+  if (changes.before && changes.after) {
+    const diff = computeDiff(changes.before, changes.after);
+    processedBefore = diff.before;
+    processedAfter = diff.after;
+  }
+
+  return {
+    ...changes,
+    before: sanitizeAuditRecord(processedBefore as Record<string, unknown>),
+    after: sanitizeAuditRecord(processedAfter as Record<string, unknown>),
+  };
+}
+
+/**
+ * Build the `log_audit_event` RPC argument object for one event, given an
+ * already-resolved actor and scope. Shared by both entry points.
+ */
+function buildAuditRpcArgs(
+  params: LogAuditEventParams,
+  resolved: {
+    merchantId: string | undefined;
+    locationId: string | null | undefined;
+    userId: string | null;
+    userName: string;
+    impersonationSessionId: string | null;
+    impersonatorUserId: string | null;
+  },
+) {
+  return {
+    p_merchant_id: resolved.merchantId || null,
+    p_location_id: resolved.locationId || null,
+    p_actor_user_id: resolved.userId,
+    p_actor_name: resolved.userName,
+    p_actor_role: null,
+    p_action: params.action,
+    p_action_category: params.actionCategory,
+    p_severity: params.severity || "info",
+    p_resource_type: params.resourceType || null,
+    p_resource_id: isUuid(params.resourceId) ? params.resourceId : null,
+    p_resource_name: params.resourceName || null,
+    p_changes: buildAuditChanges(params.changes) || null,
+    p_metadata:
+      sanitizeAuditRecord({
+        ...(params.metadata as Record<string, unknown> | undefined),
+        ...(params.resourceId && !isUuid(params.resourceId)
+          ? { external_id: params.resourceId }
+          : {}),
+      } as Record<string, unknown>) || null,
+    p_pii_access_type: params.piiAccessType ?? null,
+    p_impersonation_session_id: resolved.impersonationSessionId,
+    p_impersonator_user_id: resolved.impersonatorUserId,
+  };
+}
+
+/**
  * Helper to compute shallow diff between two objects
  * Returns objects containing only the keys that have changed
  */
@@ -294,104 +398,21 @@ export async function LogAuditEvent(
   const userId = user?.id || null;
   const userName = user?.fullName || user?.firstName || "System";
 
-  /**
-   * Remove internal IDs and technical fields from the log for a cleaner Manager view.
-   */
-  const sanitizeRecord = (obj: Record<string, unknown> | undefined) => {
-    if (!obj) return undefined;
-    const sanitized = { ...obj };
-    const technicalKeys = [
-      "id",
-      "merchant_id",
-      "location_id",
-      "clerk_org_id",
-      "organization_id",
-      "org_id",
-      "created_at",
-      "updated_at",
-      "deleted_at",
-      "clerkorgid",
-    ];
-
-    const isUuid = (val: unknown): boolean =>
-      typeof val === "string" &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        val,
-      );
-
-    Object.keys(sanitized).forEach((key) => {
-      const lowerKey = key.toLowerCase();
-      const value = sanitized[key];
-
-      const isTechnicalKey = technicalKeys.some(
-        (tk) => tk.toLowerCase() === lowerKey,
-      );
-      const isIdKey =
-        lowerKey.endsWith("_id") || key.endsWith("Id") || lowerKey === "id";
-      const hasUuidValue = isUuid(value);
-
-      if (isTechnicalKey || isIdKey || hasUuidValue) {
-        delete sanitized[key];
-      }
-    });
-    return sanitized;
-  };
-
-  // Compute diffs if both before and after are provided to save storage space
-  let finalChanges = params.changes;
-
-  if (params.changes?.before || params.changes?.after) {
-    const beforeRaw = params.changes.before || {};
-    const afterRaw = params.changes.after || {};
-
-    // Compute diff if both exist, otherwise take the one provided (e.g. for Created/Deleted)
-    let processedBefore = params.changes.before;
-    let processedAfter = params.changes.after;
-
-    if (params.changes.before && params.changes.after) {
-      const diff = computeDiff(params.changes.before, params.changes.after);
-      processedBefore = diff.before;
-      processedAfter = diff.after;
-    }
-
-    // Sanitize the result so Managers don't see UUIDs
-    finalChanges = {
-      ...params.changes,
-      before: sanitizeRecord(processedBefore as Record<string, unknown>),
-      after: sanitizeRecord(processedAfter as Record<string, unknown>),
-    };
-  }
-
   // Call RPC. When impersonation is active, p_impersonation_session_id flips
   // is_impersonation=true server-side and links the row to the session.
   // actor_user_id remains the real Clerk user (the HQ admin) per the audit
   // identity contract documented in the migration.
-  const { data, error } = await supabase.rpc("log_audit_event", {
-    p_merchant_id: merchantId || null,
-    p_location_id: locationId || null,
-    p_actor_user_id: userId,
-    p_actor_name: userName,
-    p_actor_role: null, // Could fetch from member info if needed
-    p_action: params.action,
-    p_action_category: params.actionCategory,
-    p_severity: params.severity || "info",
-    p_resource_type: params.resourceType || null,
-    // resource_id is a uuid column; non-UUID identifiers (e.g. Clerk
-    // "orginv_..." invitation IDs) get redirected into metadata.external_id.
-    p_resource_id: isUuid(params.resourceId) ? params.resourceId : null,
-    p_resource_name: params.resourceName || null,
-    p_changes: finalChanges || null,
-    p_metadata:
-      sanitizeRecord({
-        ...(params.metadata as Record<string, unknown> | undefined),
-        ...(params.resourceId && !isUuid(params.resourceId)
-          ? { external_id: params.resourceId }
-          : {}),
-      } as Record<string, unknown>) || null,
-    p_pii_access_type: params.piiAccessType ?? null,
-    p_impersonation_session_id: impersonation?.sessionId ?? null,
-    p_impersonator_user_id: impersonation ? impersonation.hqUserId : null,
-  });
+  const { data, error } = await supabase.rpc(
+    "log_audit_event",
+    buildAuditRpcArgs(params, {
+      merchantId,
+      locationId,
+      userId,
+      userName,
+      impersonationSessionId: impersonation?.sessionId ?? null,
+      impersonatorUserId: impersonation ? impersonation.hqUserId : null,
+    }) as never,
+  );
 
   if (error) {
     console.error("Error logging audit event:", error);
@@ -399,6 +420,79 @@ export async function LogAuditEvent(
   }
 
   return { success: true, logId: data };
+}
+
+/**
+ * Log many audit events that share one actor and one merchant/location scope.
+ *
+ * `LogAuditEvent` resolves the actor on every call, and that resolution
+ * includes `currentUser()` — an outbound HTTP request to Clerk. In a bulk loop
+ * that cost dominates: N items meant N Clerk round-trips plus N RPCs, all
+ * serial, and a long enough run outlived the request's own short-lived Clerk
+ * token and died with "JWT expired" partway through.
+ *
+ * This resolves the actor once, then issues the RPCs concurrently, turning
+ * O(N) external hops into one. Callers must pass `merchantId` explicitly so no
+ * per-event merchant lookup is needed.
+ *
+ * Best-effort, like `LogAuditEvent`: a failed audit row is reported but never
+ * throws, because losing a log entry must not roll back the work it describes.
+ */
+export async function LogAuditEvents(
+  events: LogAuditEventParams[],
+  scope: { merchantId: string; locationId?: string | null },
+): Promise<{ success: boolean; logged: number; failed: number }> {
+  if (events.length === 0) return { success: true, logged: 0, failed: 0 };
+
+  const supabase = createServerSupabaseClient();
+
+  // Resolved once for the whole batch — this is the entire point of this
+  // function. Impersonation cannot change mid-batch, and neither can the actor.
+  const impersonation = await resolveImpersonationFromCookies().catch(
+    () => null,
+  );
+  const user = await currentUser();
+  const userId = user?.id || null;
+  const userName = user?.fullName || user?.firstName || "System";
+
+  const merchantId = impersonation ? impersonation.merchantId : scope.merchantId;
+  const locationId =
+    scope.locationId === "all" ? null : (scope.locationId ?? null);
+
+  const results = await Promise.all(
+    events.map((event) =>
+      supabase
+        .rpc(
+          "log_audit_event",
+          buildAuditRpcArgs(event, {
+            merchantId,
+            locationId:
+              event.locationId === undefined
+                ? locationId
+                : event.locationId === "all"
+                  ? null
+                  : event.locationId,
+            userId,
+            userName,
+            impersonationSessionId: impersonation?.sessionId ?? null,
+            impersonatorUserId: impersonation ? impersonation.hqUserId : null,
+          }) as never,
+        )
+        .then(({ error }) => error ?? null)
+        .catch((err: unknown) => err as Error),
+    ),
+  );
+
+  const failures = results.filter(Boolean);
+  if (failures.length > 0) {
+    console.error("[LogAuditEvents] Some audit events failed:", failures);
+  }
+
+  return {
+    success: failures.length === 0,
+    logged: results.length - failures.length,
+    failed: failures.length,
+  };
 }
 
 // ============================================================================

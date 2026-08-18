@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   AlertTriangle,
   Check,
@@ -15,6 +15,7 @@ import {
   Trash2,
   Upload,
   Video,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -280,18 +281,25 @@ function SlotHeader({
   title,
   helper,
   badge,
+  hideIconOnMobile = false,
 }: {
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   title: string;
   helper: string;
   badge?: React.ReactNode;
+  hideIconOnMobile?: boolean;
 }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-2.5">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-          {icon}
-        </div>
+        {icon ? (
+          <div className={cn(
+            "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground",
+            hideIconOnMobile && "hidden md:flex",
+          )}>
+            {icon}
+          </div>
+        ) : null}
         <div className="min-w-0">
           <p className="text-sm font-medium leading-tight">{title}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{helper}</p>
@@ -403,7 +411,7 @@ function KioskGallerySlot({
   const tileWidth =
     aspectRatio >= 1
       ? "w-full sm:w-[calc((100%-0.5rem)/2)]"
-      : "w-1/2 sm:w-[calc((100%-1.5rem)/4)]";
+      : "w-[calc((100%-0.5rem)/2)] sm:w-[calc((100%-1.5rem)/4)]";
 
   function pickFile() {
     if (disabled || uploading || atLimit) return;
@@ -429,6 +437,7 @@ function KioskGallerySlot({
     <div className="space-y-3">
       <SlotHeader
         icon={<ImageIcon className="h-4 w-4" />}
+        hideIconOnMobile
         title={title}
         helper={helper}
         badge={
@@ -439,9 +448,20 @@ function KioskGallerySlot({
             <Badge variant="secondary" className="font-mono text-[10px] font-normal">
               {images.length}/5
             </Badge>
+            <Button type="button" variant="outline" size="sm" className="hidden md:inline-flex" onClick={pickFile} disabled={disabled || uploading || atLimit}>
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              Upload
+            </Button>
           </div>
         }
       />
+
+      <div className="flex justify-center md:hidden">
+        <Button type="button" variant="outline" size="sm" onClick={pickFile} disabled={disabled || uploading || atLimit}>
+          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          Upload
+        </Button>
+      </div>
 
       <input
         ref={inputRef}
@@ -455,7 +475,8 @@ function KioskGallerySlot({
         }}
       />
 
-      <div className="flex flex-wrap justify-center gap-2">
+      {images.length > 0 ? (
+        <div className="flex flex-wrap justify-center gap-2">
         {images.map((url, index) => (
           <div
             key={url}
@@ -474,28 +495,14 @@ function KioskGallerySlot({
               onClick={() => onRemove(url)}
               disabled={disabled}
               aria-label={`Remove image ${index + 1}`}
-              className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-sm bg-background/90 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 disabled:opacity-0"
+              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow-sm transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:opacity-50"
             >
-              <Trash2 className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         ))}
-
-        {!atLimit ? (
-          <button
-            type="button"
-            onClick={pickFile}
-            disabled={disabled || uploading}
-            className={cn(
-              "flex items-center justify-center rounded-xl border border-dashed border-border/60 text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:bg-muted/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
-              tileWidth,
-            )}
-            style={{ aspectRatio }}
-          >
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <ImageCropDialog
         file={pendingFile}
@@ -756,7 +763,17 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
         toast.error(result.error);
         return null;
       }
-      toast.success("Asset uploaded");
+      toast.success("Asset uploaded", {
+        icon: <Check className="h-5 w-5 text-foreground" />,
+        style: {
+          background: "#e5e7eb",
+          borderColor: "#d1d5db",
+          color: "#111827",
+          "--success-bg": "#e5e7eb",
+          "--success-border": "#d1d5db",
+          "--success-text": "#111827",
+        } as CSSProperties,
+      });
       return result.data.url;
     } finally {
       setUploadingAsset(null);

@@ -1459,8 +1459,9 @@ export function StaffDetailSheet({
             dashboard.
           </BottomSheetDescription>
         </BottomSheetHeader>
-        <BottomSheetBody className="flex-1 overflow-x-hidden overflow-y-auto bg-white px-4 sm:px-6">
-          <div className="min-w-0 space-y-6 p-1">
+        <div className="relative min-h-0 flex-1">
+          <BottomSheetBody className="h-full overflow-x-hidden overflow-y-auto bg-white px-4 sm:px-6">
+            <div className="min-w-0 space-y-6 p-1">
             <section className="rounded-[28px] bg-muted/40 p-4">
               <div className="flex items-start">
                 <div className="min-w-0 flex-1 space-y-3">
@@ -1560,8 +1561,11 @@ export function StaffDetailSheet({
                 currentUserRoleLevel={currentUserLevel}
               />
             )}
-          </div>
-        </BottomSheetBody>
+            </div>
+          </BottomSheetBody>
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-10 h-7 bg-gradient-to-b from-white via-white/85 to-transparent backdrop-blur-sm" />
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-7 bg-gradient-to-t from-white via-white/85 to-transparent backdrop-blur-sm" />
+        </div>
         <BottomSheetFooter className="border-t-0 bg-white">
           <div className="flex w-full items-center justify-between gap-2 sm:justify-end">
             <Button variant="outline" onClick={() => onOpenChange(false)}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import {
@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { buildQrTableUrl } from "@/app/sites/lib/store-url";
 import {
   Ban,
+  Check,
   Copy,
   Download,
   ExternalLink,
@@ -40,7 +41,6 @@ import {
   RefreshCw,
   RotateCcw,
   ScanLine,
-  ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -71,6 +71,22 @@ function formatDateTime(value: string | null) {
 }
 
 type QrBrandMode = "merchant" | "dexa";
+
+const neutralQrToastStyle = {
+  background: "#e5e7eb",
+  borderColor: "#d1d5db",
+  color: "#111827",
+  "--success-bg": "#e5e7eb",
+  "--success-border": "#d1d5db",
+  "--success-text": "#111827",
+} as CSSProperties;
+
+function showQrGeneratedToast(message: string) {
+  toast.success(message, {
+    icon: <Check className="h-5 w-5 text-[#111827]" />,
+    style: neutralQrToastStyle,
+  });
+}
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -211,11 +227,11 @@ export function QrTableManager({
         return;
       }
       if (result.action === "reprint_existing") {
-        toast.success(`Existing QR is ready to reprint for ${row.tableLabel}`);
+        showQrGeneratedToast(`Existing QR is ready to reprint for ${row.tableLabel}`);
       } else if (regenerate) {
-        toast.success(`QR regenerated for ${row.tableLabel}`);
+        showQrGeneratedToast(`QR regenerated for ${row.tableLabel}`);
       } else {
-        toast.success(`QR generated for ${row.tableLabel}`);
+        showQrGeneratedToast(`QR generated for ${row.tableLabel}`);
       }
       await loadSnapshot();
     });
@@ -429,12 +445,17 @@ export function QrTableManager({
     try {
       const blob = await buildPdfBlob(row);
       const url = URL.createObjectURL(blob);
-      const printWindow = window.open(url, "_blank", "noopener,noreferrer");
+      // With `noopener`, browsers are allowed to return null even after they
+      // successfully open the tab. That produced a false “pop-up blocked”
+      // toast for the PDF preview. Open first so the return value accurately
+      // represents a blocked pop-up, then sever the opener relationship.
+      const printWindow = window.open(url, "_blank");
       if (!printWindow) {
         URL.revokeObjectURL(url);
         toast.error("Pop-up blocked while opening the print preview.");
         return;
       }
+      printWindow.opener = null;
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
       toast.success(`Print preview opened for ${row.tableLabel}`);
     } catch (error) {
@@ -458,11 +479,14 @@ export function QrTableManager({
       return;
     }
 
-    const previewWindow = window.open(qrUrl, "_blank", "noopener,noreferrer");
+    // See the PDF preview: `noopener` can return null even when the browser
+    // did open the tab, which makes the blocked-pop-up check unreliable.
+    const previewWindow = window.open(qrUrl, "_blank");
     if (!previewWindow) {
       toast.error("Pop-up blocked while opening the guest preview.");
       return;
     }
+    previewWindow.opener = null;
 
     toast.success(`Guest preview opened for ${row.tableLabel}`);
   }
@@ -547,7 +571,7 @@ export function QrTableManager({
         </StatRow>
 
         {!acceptsDineIn ? (
-          <div className="rounded-2xl border-0 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-none dark:bg-amber-900/20 dark:text-amber-200">
+          <div className="rounded-2xl border-0 bg-muted px-4 py-3 text-sm text-foreground shadow-none">
             QR scan handling is currently disabled for this store. You can still prepare codes here, but guests will not be allowed to order from scans until <span className="font-medium">Enable QR Table Ordering</span> is turned on above.
           </div>
         ) : null}
@@ -625,7 +649,7 @@ export function QrTableManager({
                       key={row.floorPlanObjectId}
                       className="flex min-w-0 flex-col gap-3 py-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4"
                     >
-                      <div className="space-y-2">
+                      <div className="min-w-0 flex-1 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium">{row.tableLabel}</p>
                           {getStatusBadge(row.qrStatus)}
@@ -645,10 +669,11 @@ export function QrTableManager({
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
+                      <div className="grid w-full grid-cols-2 gap-2 sm:w-64 lg:w-64 [&_button]:w-full [&_button]:justify-start [&_button]:px-2 [&_button]:text-xs">
                         {row.qrStatus === "not_generated" ? (
                           <Button
                             size="sm"
+                            className="col-start-2"
                             onClick={() => void handleGenerate(row, false)}
                             disabled={busyKey !== null || !qrEntitled}
                           >
@@ -713,7 +738,7 @@ export function QrTableManager({
                                 disabled={!row.tableToken}
                               >
                                 <Download className="mr-2 h-4 w-4" />
-                                Assets
+                                QR assets
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52">
@@ -765,13 +790,10 @@ export function QrTableManager({
             </div>
           ))}
 
-        <div className="rounded-2xl border-0 bg-[#0C4FD1]/5 px-4 py-3 text-sm text-muted-foreground shadow-none dark:bg-[#6CA0FF]/10">
-          <div className="flex items-start gap-2">
-            <ShieldAlert className="mt-0.5 h-4 w-4 text-[#0C4FD1]" />
-            <p>
-              Preview and export actions now use the shared store host contract and current table token. They still need end-to-end staging scan validation before the related ticket items are safe to close.
-            </p>
-          </div>
+        <div className="rounded-2xl border-0 bg-muted px-4 py-3 text-sm text-foreground shadow-none">
+          <p>
+            Preview and export actions now use the shared store host contract and current table token. They still need end-to-end staging scan validation before the related ticket items are safe to close.
+          </p>
         </div>
         </div>
       </PanelSection>

@@ -161,8 +161,10 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
         />
 
         {/* Toggle chips (DS-CTL-03) rather than a row of loose checkboxes —
-            the checkbox+label pairs read as a form inside what is a toolbar. */}
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            the checkbox+label pairs read as a form inside what is a toolbar.
+            The group scrolls horizontally as one strip on narrow screens so the
+            chips stay on a single line instead of stacking down the toolbar. */}
+        <div className="no-scrollbar -mx-1 flex min-w-0 flex-1 basis-full items-center gap-1.5 overflow-x-auto px-1 sm:basis-auto">
           {FILTERABLE_STATUSES.map((s) => {
             const active = statusFilter.includes(s.value);
             return (
