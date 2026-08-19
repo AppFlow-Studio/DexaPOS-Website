@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   useCreateStation,
   useUpdateStation,
@@ -98,6 +98,7 @@ export function AddStationDialog({
   const updateKdsMutation = useUpdateKdsDisplay();
 
   const [activeTab, setActiveTab] = useState("basic");
+  const tabRailRef = useRef<HTMLDivElement>(null);
 
   // Basic Info
   const [stationName, setStationName] = useState("");
@@ -168,6 +169,17 @@ export function AddStationDialog({
       setActiveTab("basic");
     }
   }, [isKds, activeTab]);
+
+  useEffect(() => {
+    const activeTrigger = tabRailRef.current?.querySelector<HTMLElement>(
+      '[data-state="active"]',
+    );
+    activeTrigger?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [activeTab, isKds]);
 
   // Reset form when dialog opens/closes
   useEffect(() => {
@@ -424,8 +436,7 @@ export function AddStationDialog({
           separate themselves from scrolling content (§5.5). */}
       <DialogContent className={cn(
         "flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0",
-        "sm:h-auto sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:rounded-3xl sm:max-w-[760px]",
-        isKds && "sm:max-w-[920px]"
+        "sm:h-auto sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:rounded-3xl sm:max-w-[760px]"
       )}>
         <DialogHeader className="shrink-0 px-6 pb-4 pt-6">
           <div className="flex items-start gap-4">
@@ -453,7 +464,7 @@ export function AddStationDialog({
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           {/* §4.5 pill rail — a scroller, not a fixed grid, so five tabs stay
               reachable at 320px. Classes are literal (C7). */}
-          <div className="thin-scrollbar w-full min-w-0 overflow-x-auto pb-1">
+          <div ref={tabRailRef} className="thin-scrollbar w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain pb-1">
             <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
               <TabsTrigger value="basic" className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border">
                 Basic Info
@@ -481,7 +492,7 @@ export function AddStationDialog({
             {/* Station Type Selection */}
             <div className="grid gap-2">
               <Label>Station Type</Label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
                 <StationTypeCard
                   type="register"
                   label="Register"

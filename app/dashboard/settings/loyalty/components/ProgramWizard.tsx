@@ -876,6 +876,8 @@ export function ProgramWizard({
               value={formData.starts_at}
               onChange={(value) => setFormData({ ...formData, starts_at: value })}
               placeholder="No start date"
+              className="border-0 bg-muted/60 shadow-none"
+              compactCalendar
             />
           </div>
           <div className="space-y-2">
@@ -885,6 +887,9 @@ export function ProgramWizard({
               value={formData.ends_at}
               onChange={(value) => setFormData({ ...formData, ends_at: value })}
               placeholder="No end date"
+              className="border-0 bg-muted/60 shadow-none"
+              align="end"
+              compactCalendar
             />
           </div>
         </div>
@@ -969,7 +974,7 @@ export function ProgramWizard({
               <SelectTrigger id="icon">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent side="top" position="popper">
                 {/* The glyph is the choice being made; the hue was decoration
                     on top of it (§4.6b). Colour lives on the program's own
                     `display_color` swatch below, not here. */}
@@ -1017,7 +1022,7 @@ export function ProgramWizard({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Wizard — full screen below `sm` (§13.1). The dialog clips and the body
           below is the only scroller, so the bar tracks the panel edge. */}
-      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-hidden rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-2xl sm:rounded-3xl">
+      <DialogContent className="thin-scrollbar flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-y-auto overscroll-contain rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-2xl sm:rounded-3xl">
         <DialogHeader className="shrink-0">
           <DialogTitle>{isEditing ? 'Edit Program' : 'Create Loyalty Program'}</DialogTitle>
           <DialogDescription>
@@ -1026,14 +1031,14 @@ export function ProgramWizard({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto py-4">
+        <div className="min-w-0 space-y-0 py-4 [&_input]:border-0 [&_input]:bg-muted/60 [&_input]:shadow-none [&_textarea]:border-0 [&_textarea]:bg-muted/60 [&_textarea]:shadow-none [&_[data-slot=select-trigger]]:border-0 [&_[data-slot=select-trigger]]:bg-muted/60 [&_[data-slot=select-trigger]]:shadow-none">
           {step === 1 && renderStep1()}
           {step === 2 && renderStep2()}
           {step === 3 && renderStep3()}
           {step === 4 && renderStep4()}
         </div>
 
-        <DialogFooter className="flex shrink-0 justify-between">
+        <DialogFooter className="flex shrink-0 justify-center gap-2 sm:justify-center">
           <Button variant="outline" onClick={handleBack} disabled={step === 1}>
             <ChevronLeft className="h-4 w-4 mr-2" />
             Back

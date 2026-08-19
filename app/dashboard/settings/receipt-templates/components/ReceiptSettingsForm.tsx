@@ -85,7 +85,7 @@ export function ReceiptSettingsForm({
             <Label className="text-sm font-medium">Header Text</Label>
             <Textarea
               placeholder="Custom header text (e.g. address, phone)..."
-              className="resize-none text-sm"
+              className="resize-none border-0 bg-muted/60 text-sm shadow-none"
               rows={2}
               value={formState.header_text}
               onChange={(e) => onChange({ header_text: e.target.value })}
@@ -96,7 +96,7 @@ export function ReceiptSettingsForm({
             <Label className="text-sm font-medium">Footer Text</Label>
             <Textarea
               placeholder="Custom footer text (e.g. return policy, thank you message)..."
-              className="resize-none text-sm"
+              className="resize-none border-0 bg-muted/60 text-sm shadow-none"
               rows={2}
               value={formState.footer_text}
               onChange={(e) => onChange({ footer_text: e.target.value })}

@@ -146,7 +146,7 @@ function StatCard({
             <Icon className="h-4 w-4 text-muted-foreground" />
           </div>
           <div className="min-w-0">
-            <p className="text-[1.75rem] font-medium leading-tight tracking-[-0.02em] tabular-nums">
+            <p className="text-[1.5rem] font-medium leading-tight tracking-[-0.02em] tabular-nums">
               {value}
             </p>
             <p className="text-sm text-muted-foreground">{label}</p>

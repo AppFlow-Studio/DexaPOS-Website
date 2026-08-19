@@ -282,7 +282,7 @@ export function TipPoolDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-hidden rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-2xl sm:rounded-3xl">
+        <DialogContent className="thin-scrollbar flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-y-auto rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-2xl sm:rounded-3xl">
           <DialogHeader className="shrink-0">
             <DialogTitle>{pool ? "Edit Tip Pool" : "Create Tip Pool"}</DialogTitle>
             <DialogDescription>
@@ -290,7 +290,7 @@ export function TipPoolDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="thin-scrollbar min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto py-2">
+          <div className="min-w-0 space-y-6 py-2">
             {/* ────── SECTION 1: BASICS ────── */}
             <section className="space-y-4">
               <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
@@ -304,7 +304,10 @@ export function TipPoolDialog({
                   value={formData.name}
                   onChange={(e) => set("name", e.target.value)}
                   placeholder="e.g., Front of House Pool, Bar Pool"
-                  className={cn("mt-1", validationErrors.name && "border-red-500")}
+                  className={cn(
+                    "mt-1 border-0 bg-muted/60 shadow-none",
+                    validationErrors.name && "border border-red-500"
+                  )}
                 />
                 {validationErrors.name && (
                   <p className="mt-1 text-xs text-destructive">{validationErrors.name}</p>
@@ -318,7 +321,7 @@ export function TipPoolDialog({
                   value={formData.description}
                   onChange={(e) => set("description", e.target.value)}
                   placeholder="Optional description"
-                  className="mt-1"
+                  className="mt-1 border-0 bg-muted/60 shadow-none"
                   rows={2}
                 />
               </div>
@@ -343,6 +346,7 @@ export function TipPoolDialog({
                   <div className="mt-1">
                     <DatePopover
                       id="pool-eff-date"
+                      className="border-0 bg-muted/60 shadow-none"
                       value={formData.effective_date}
                       onChange={(v) => {
                         set("effective_date", v ?? "");
@@ -358,6 +362,8 @@ export function TipPoolDialog({
                   <div className="mt-1">
                     <DatePopover
                       id="pool-end-date"
+                      className="border-0 bg-muted/60 shadow-none"
+                      align="end"
                       value={formData.end_date || ""}
                       min={formData.effective_date}
                       placeholder="No end date"
@@ -380,7 +386,7 @@ export function TipPoolDialog({
                     onChange={(e) =>
                       set("priority", parseInt(e.target.value) || 100)
                     }
-                    className="mt-1 w-28"
+                    className="mt-1 w-28 border-0 bg-muted/60 shadow-none"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     Lower runs first. Default 100. Pools with the same priority run in creation order.
@@ -517,7 +523,7 @@ export function TipPoolDialog({
                     onChange={(e) =>
                       set("source_percentage", Math.min(100, Math.max(1, parseInt(e.target.value) || 1)))
                     }
-                    className="w-20"
+                    className="w-20 border-0 bg-muted/60 shadow-none"
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -542,7 +548,7 @@ export function TipPoolDialog({
                   value={formData.distribution_method}
                   onValueChange={(v) => handleMethodChange(v as TipPoolFormData["distribution_method"])}
                 >
-                  <SelectTrigger className="mt-1 w-full min-w-0">
+                  <SelectTrigger className="mt-1 w-full min-w-0 border-0 bg-muted/60 shadow-none">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -592,7 +598,7 @@ export function TipPoolDialog({
                 {/* Add contributing role dropdown */}
                 {roles.filter((r) => !formData.contributing_role_codes.includes(r.code)).length > 0 && (
                   <Select onValueChange={(v) => toggleContributing(v)}>
-                    <SelectTrigger className="w-full min-w-0">
+                    <SelectTrigger className="w-full min-w-0 border-0 bg-muted/60 shadow-none">
                       <SelectValue placeholder="Add contributing role..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -656,7 +662,7 @@ export function TipPoolDialog({
                                   parseFloat(e.target.value) || 0
                                 )
                               }
-                              className="w-20 h-8 text-sm"
+                              className="w-20 h-8 border-0 bg-muted/60 text-sm shadow-none"
                             />
                             <span className="text-sm text-muted-foreground">%</span>
                           </div>
@@ -678,7 +684,7 @@ export function TipPoolDialog({
                                 )
                               }
                               className={cn(
-                                "w-20 h-8 text-sm",
+                                "w-20 h-8 border-0 bg-muted/60 text-sm shadow-none",
                                 validationErrors.points &&
                                   share.is_eligible &&
                                   (!share.points_per_hour || share.points_per_hour <= 0) &&
@@ -752,7 +758,7 @@ export function TipPoolDialog({
                 {availableReceivingRoles.length > 0 && (
                   <div className="mt-2">
                     <Select onValueChange={(v) => addRoleShare(v)}>
-                      <SelectTrigger className="w-full min-w-0">
+                      <SelectTrigger className="w-full min-w-0 border-0 bg-muted/60 shadow-none">
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           <Plus className="w-3.5 h-3.5" />
                           <span>Add receiving role...</span>
@@ -772,14 +778,13 @@ export function TipPoolDialog({
             </section>
           </div>
 
-          <DialogFooter className="shrink-0 pt-4">
+          <DialogFooter className="shrink-0 justify-center pt-4 sm:justify-center">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
               Cancel
             </Button>
             <Button
               onClick={handleSubmit}
               disabled={!isValid || isLoading}
-              className="bg-teal-500 hover:bg-teal-600 text-white"
             >
               {isLoading ? "Saving..." : pool ? "Update Pool" : "Create Pool"}
             </Button>
@@ -801,7 +806,6 @@ export function TipPoolDialog({
             <AlertDialogCancel>Go Back</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmUnderWarning}
-              className="bg-teal-500 hover:bg-teal-600 text-white"
             >
               Save Anyway
             </AlertDialogAction>

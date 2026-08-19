@@ -155,7 +155,7 @@ export function TipOutRuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-hidden rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-md sm:rounded-3xl">
+      <DialogContent className="thin-scrollbar flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-y-auto rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-md sm:rounded-3xl">
         <DialogHeader className="shrink-0">
           <DialogTitle>
             {rule ? "Edit Tip-Out Rule" : "Create Tip-Out Rule"}
@@ -165,7 +165,7 @@ export function TipOutRuleDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="thin-scrollbar min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto py-4">
+        <div className="min-w-0 space-y-4 py-4">
           <div>
             <Label htmlFor="from-role">From Role *</Label>
             <Select
@@ -174,7 +174,7 @@ export function TipOutRuleDialog({
                 handleChange("from_role_code", value)
               }
             >
-              <SelectTrigger id="from-role" className="mt-1 w-full min-w-0">
+              <SelectTrigger id="from-role" className="mt-1 w-full min-w-0 border-0 bg-muted/60 shadow-none">
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
@@ -200,7 +200,7 @@ export function TipOutRuleDialog({
                 handleChange("to_role_code", value)
               }
             >
-              <SelectTrigger id="to-role" className="mt-1 w-full min-w-0">
+              <SelectTrigger id="to-role" className="mt-1 w-full min-w-0 border-0 bg-muted/60 shadow-none">
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
@@ -311,7 +311,7 @@ export function TipOutRuleDialog({
                 handleChange("tip_out_value", parseFloat(e.target.value) || 0)
               }
               placeholder={formData.tip_out_type === "flat_amount" ? "0.00" : "0"}
-              className="mt-1"
+              className="mt-1 border-0 bg-muted/60 shadow-none"
             />
             {formData.tip_out_type !== "flat_amount" && (
               <p className="text-xs text-muted-foreground mt-1">
@@ -331,6 +331,7 @@ export function TipOutRuleDialog({
               <div className="mt-1">
                 <DatePopover
                   id="effective-date"
+                  className="border-0 bg-muted/60 shadow-none"
                   value={formData.effective_date}
                   onChange={(v) => {
                     handleChange("effective_date", v ?? "");
@@ -346,6 +347,8 @@ export function TipOutRuleDialog({
               <div className="mt-1">
                 <DatePopover
                   id="end-date"
+                  className="border-0 bg-muted/60 shadow-none"
+                  align="end"
                   value={formData.end_date || ""}
                   min={formData.effective_date}
                   placeholder="No end date"
@@ -368,14 +371,13 @@ export function TipOutRuleDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 pt-4">
+        <DialogFooter className="shrink-0 justify-center pt-4 sm:justify-center">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={!isValid() || isLoading}
-            className="bg-teal-500 hover:bg-teal-600 text-white"
           >
             {isLoading ? "Saving..." : rule ? "Update Rule" : "Create Rule"}
           </Button>

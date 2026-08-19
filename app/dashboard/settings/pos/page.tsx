@@ -678,8 +678,8 @@ export default function PosSettingsPage() {
                   )}
 
                   <div className="space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
+                    <div className="grid min-w-0 gap-4 2xl:grid-cols-2">
+                      <div className="min-w-0 space-y-2">
                         <Label>UI scale override</Label>
                         <Select
                           value={stationOverrides.display?.uiScale ?? INHERIT}
@@ -694,7 +694,7 @@ export default function PosSettingsPage() {
                             )
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full min-w-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -709,7 +709,7 @@ export default function PosSettingsPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
+                      <div className="min-w-0 space-y-2">
                         <Label>Theme override</Label>
                         <Select
                           value={stationOverrides.display?.appTheme ?? INHERIT}
@@ -724,7 +724,7 @@ export default function PosSettingsPage() {
                             )
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full min-w-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -886,9 +886,10 @@ export default function PosSettingsPage() {
                     </div>
                   </div>
 
-                  <div className="flex justify-end gap-2">
+                  <div className="flex flex-col gap-2 2xl:flex-row 2xl:justify-end">
                     <Button
                       variant="outline"
+                      className="w-full 2xl:w-auto"
                       disabled={!stationIsDirty || saveStationMutation.isPending}
                       onClick={() => {
                         const next = normalizeStationOverrides(
@@ -902,6 +903,7 @@ export default function PosSettingsPage() {
                       Reset
                     </Button>
                     <Button
+                      className="w-full 2xl:w-auto"
                       disabled={!stationIsDirty || saveStationMutation.isPending}
                       onClick={handleSaveStation}
                     >

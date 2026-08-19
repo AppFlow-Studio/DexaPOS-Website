@@ -88,7 +88,7 @@ export function AddEditPrepStationDialog({
     <Dialog open={open} onOpenChange={(o) => !isPending && onOpenChange(o)}>
       {/* §13.1 — a panel the user fills in goes full-screen below `sm`.
           `h-dvh`, not `h-screen`: 100vh sits behind the mobile address bar. */}
-      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-hidden rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-[425px] sm:rounded-3xl">
+      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-hidden rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-[520px] sm:rounded-3xl">
         <DialogHeader className="shrink-0">
           <DialogTitle>
             {isEditing ? "Edit Prep Station" : "Add Prep Station"}
@@ -102,8 +102,8 @@ export function AddEditPrepStationDialog({
 
         {/* The dialog clips; this body is the only scroller, so the bar tracks
             the panel edge rather than cutting across the rounded corner. */}
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex min-w-0 flex-1 flex-col">
+          <div className="min-w-0 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="station-name">Name</Label>
             <Input
@@ -123,7 +123,7 @@ export function AddEditPrepStationDialog({
           </div>
           </div>
 
-          <DialogFooter className="shrink-0 pt-4">
+          <DialogFooter className="shrink-0 justify-center pt-4 sm:justify-center">
             <Button
               type="button"
               variant="outline"

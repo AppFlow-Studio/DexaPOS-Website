@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Search, Clock, Cake, PartyPopper, RotateCcw, Share2, Calendar, Banknote, Package } from 'lucide-react';
 import { DateTimePicker } from '@/components/ui/date-time-picker';
+import { TimePickerTrigger } from '@/components/ui/time-picker';
 import type { Promotion, PromotionInsert } from '../../../actions/loyalty-programs';
 
 interface MenuItem {
@@ -244,7 +245,7 @@ export function PromotionDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Editor — full screen below `sm` (§13.1); the dialog clips and the body
           below is the only scroller. */}
-      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-hidden rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-3xl sm:rounded-3xl">
+      <DialogContent className="thin-scrollbar flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-y-auto overscroll-contain rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-3xl sm:rounded-3xl">
         <DialogHeader className="shrink-0">
           <DialogTitle>{isEditing ? 'Edit Promotion' : 'Create Promotion'}</DialogTitle>
           <DialogDescription>
@@ -252,7 +253,7 @@ export function PromotionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="thin-scrollbar min-h-0 min-w-0 flex-1 space-y-6 overflow-y-auto">
+        <div className="min-w-0 space-y-6 py-2 [&_input]:border-0 [&_input]:bg-muted/60 [&_input]:shadow-none [&_textarea]:border-0 [&_textarea]:bg-muted/60 [&_textarea]:shadow-none [&_[data-slot=select-trigger]]:border-0 [&_[data-slot=select-trigger]]:bg-muted/60 [&_[data-slot=select-trigger]]:shadow-none">
           {/* Basic Info Section */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Promotion Details</h3>
@@ -315,20 +316,22 @@ export function PromotionDialog({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="time-start">Start time *</Label>
-                    <Input
+                    <TimePickerTrigger
                       id="time-start"
-                      type="time"
                       value={formData.active_time_start || ''}
-                      onChange={(e) => setFormData({ ...formData, active_time_start: e.target.value })}
+                      onChange={(value) => setFormData({ ...formData, active_time_start: value })}
+                      className="w-full rounded-full border-0 bg-muted/60 shadow-none"
+                      compact
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="time-end">End time *</Label>
-                    <Input
+                    <TimePickerTrigger
                       id="time-end"
-                      type="time"
                       value={formData.active_time_end || ''}
-                      onChange={(e) => setFormData({ ...formData, active_time_end: e.target.value })}
+                      onChange={(value) => setFormData({ ...formData, active_time_end: value })}
+                      className="w-full rounded-full border-0 bg-muted/60 shadow-none"
+                      compact
                     />
                   </div>
                 </div>
@@ -823,6 +826,7 @@ export function PromotionDialog({
                     })
                   }
                   placeholder="No start date"
+                  className="border-0 bg-muted/60 shadow-none"
                 />
               </div>
               <div className="space-y-2">
@@ -838,6 +842,8 @@ export function PromotionDialog({
                     })
                   }
                   placeholder="No end date"
+                  className="border-0 bg-muted/60 shadow-none"
+                  align="end"
                 />
               </div>
             </div>
@@ -907,7 +913,7 @@ export function PromotionDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 pt-4">
+        <DialogFooter className="shrink-0 justify-center pt-4 sm:justify-center">
           <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>

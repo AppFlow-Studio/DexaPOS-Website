@@ -23,6 +23,8 @@ interface DatePopoverProps {
   min?: string;
   /** Maximum selectable date as `yyyy-MM-dd`. */
   max?: string;
+  /** Horizontal alignment for the calendar relative to its trigger. */
+  align?: "start" | "center" | "end";
   className?: string;
 }
 
@@ -36,6 +38,7 @@ export function DatePopover({
   placeholder = "Pick a date",
   min,
   max,
+  align = "start",
   className,
 }: DatePopoverProps) {
   const [open, setOpen] = useState(false);
@@ -72,7 +75,7 @@ export function DatePopover({
           sits low or far right (e.g. inside a scrolled dialog). */}
       <PopoverContent
         className="w-auto max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl p-0"
-        align="start"
+        align={align}
         collisionPadding={16}
         avoidCollisions
       >

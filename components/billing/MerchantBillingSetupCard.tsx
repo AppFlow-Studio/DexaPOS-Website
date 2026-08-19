@@ -11,7 +11,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Separator } from '@/components/ui/separator'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   getMerchantBillingCardSetup,
   getMerchantBillingProfiles,
@@ -248,7 +254,7 @@ export function MerchantBillingSetupCard({
         </AlertDescription>
       </Alert>
 
-      <Card>
+      <Card className="rounded-3xl">
         <CardHeader>
           <CardTitle>Billing Profile Scope</CardTitle>
           <CardDescription>
@@ -258,25 +264,27 @@ export function MerchantBillingSetupCard({
         <CardContent>
           <div className="space-y-2">
             <Label htmlFor="billing-scope">Profile Scope</Label>
-            <select
-              id="billing-scope"
-              value={selectedScope}
-              onChange={(event) => setSelectedScope(event.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              {locations.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
-              <option value={MERCHANT_WIDE_VALUE}>Merchant-wide (legacy / shared)</option>
-            </select>
+            <Select value={selectedScope} onValueChange={setSelectedScope}>
+              <SelectTrigger id="billing-scope" className="w-full rounded-2xl border-border/70 bg-muted/40">
+                <SelectValue placeholder="Select profile scope" />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl border-border/70 p-1">
+                {locations.map((location) => (
+                  <SelectItem key={location.id} value={location.id} className="rounded-xl">
+                    {location.name}
+                  </SelectItem>
+                ))}
+                <SelectItem value={MERCHANT_WIDE_VALUE} className="rounded-xl">
+                  Merchant-wide (legacy / shared)
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
 
       {scopedPrimaryProfile && (
-        <Card>
+        <Card className="rounded-3xl">
           <CardHeader>
             <CardTitle className="text-base">Current Primary Billing Method</CardTitle>
             <CardDescription>
@@ -312,7 +320,7 @@ export function MerchantBillingSetupCard({
         </Card>
       )}
 
-      <Card>
+      <Card className="rounded-3xl">
         <CardHeader>
           <CardTitle>Update Billing Method</CardTitle>
           <CardDescription>Save a primary billing profile for the selected scope.</CardDescription>
@@ -325,14 +333,14 @@ export function MerchantBillingSetupCard({
               value={method}
               onValueChange={(value) => setMethod(value as MerchantBillingMethod)}
             >
-              <label className="flex cursor-pointer items-center gap-3 rounded-md border p-3">
+              <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-border/70 bg-muted/20 p-3">
                 <RadioGroupItem value="ach" id="billing-ach" />
                 <div>
                   <div className="font-medium">ACH / Bank Account</div>
                   <div className="text-xs text-muted-foreground">Can be location-specific or merchant-wide</div>
                 </div>
               </label>
-              <label className="flex cursor-pointer items-center gap-3 rounded-md border p-3">
+              <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-border/70 bg-muted/20 p-3">
                 <RadioGroupItem value="card" id="billing-card" />
                 <div>
                   <div className="font-medium">Credit / Debit Card</div>
@@ -341,8 +349,6 @@ export function MerchantBillingSetupCard({
               </label>
             </RadioGroup>
           </div>
-
-          <Separator />
 
           {method === 'ach' ? (
             <div className="grid gap-4 md:grid-cols-2">
