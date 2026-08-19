@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   MessageCircle,
@@ -17,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useMyTickets } from "../hooks/useSupport";
+import { GetUnreadTicketCounts } from "../actions/support";
 import {
   SupportTicket,
   TICKET_CATEGORY_LABELS,
@@ -43,7 +45,13 @@ function getStatusIcon(status: TicketStatus) {
   return <Clock className="h-4 w-4 text-blue-500" />;
 }
 
-function TicketCard({ ticket }: { ticket: SupportTicket }) {
+function TicketCard({
+  ticket,
+  unreadCount,
+}: {
+  ticket: SupportTicket;
+  unreadCount: number;
+}) {
   const router = useRouter();
   const isWaiting = ticket.status === "waiting_on_merchant";
   const isResolved = ticket.status === "resolved" || ticket.status === "closed";
@@ -68,6 +76,11 @@ function TicketCard({ ticket }: { ticket: SupportTicket }) {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {unreadCount > 0 && (
+            <Badge className="rounded-full border-0 bg-red-600 text-xs font-semibold text-white hover:bg-red-600">
+              {unreadCount} unread
+            </Badge>
+          )}
           <Badge
             variant="outline"
             className={cn("text-xs", TICKET_STATUS_COLORS[ticket.status])}
@@ -114,6 +127,11 @@ export default function SupportPage() {
   const { data: result, isLoading } = useMyTickets(
     statusFilter as TicketStatus | "all"
   );
+  const { data: unreadCounts } = useQuery({
+    queryKey: ["merchant-unread-ticket-counts"],
+    queryFn: GetUnreadTicketCounts,
+    staleTime: 30_000,
+  });
 
   const tickets = result?.data || [];
   const total = result?.total || 0;
@@ -193,7 +211,17 @@ export default function SupportPage() {
             )}
           </div>
         ) : (
-          tickets.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} />)
+          tickets.map((ticket) => (
+            <TicketCard
+              key={ticket.id}
+              ticket={ticket}
+              unreadCount={
+                unreadCounts?.perTicket.find(
+                  (entry) => entry.ticket_id === ticket.id,
+                )?.count ?? 0
+              }
+            />
+          ))
         )}
       </div>
     </div>

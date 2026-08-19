@@ -310,6 +310,14 @@ Single index for active ticket streams and their source trackers.
 - Website-created support tickets immediately request the same idempotent
   notification endpoint used by the Supabase trigger; POS and direct inserts
   remain covered by `pg_net`.
+- Website-created merchant replies, HQ replies, developer updates, and private
+  notes now request that same message-level idempotent endpoint immediately
+  after the message is saved. The database trigger remains the primary path;
+  the application request is a non-blocking fallback and cannot duplicate a
+  delivery because `message_id` is unique in the delivery ledger.
+- The HQ and merchant support inboxes now render the existing per-ticket unread
+  counts, while the shared header support badge continues to show the aggregate
+  unread total and refresh through Realtime.
 - `20260806160000_support_ticket_email_assignment_consistency.sql` aligns the
   dashboard unassigned metric with HQ email assignees.
 - New-ticket attempts are recorded in
@@ -322,9 +330,10 @@ Single index for active ticket streams and their source trackers.
   `supabase/migrations/20260729140000_hq_support_ticket_email_assignees.sql`.
 - Platform Admin receives `hq.support.view` and `hq.support.manage` through the
   companion role-permission migration.
-- Local implementation is complete. Migration/Vault configuration,
-  cross-scope RLS checks, cross-source ticket/reply/private-note email checks,
-  and staging QA remain.
+- Local implementation is complete. No additional migration was introduced by
+  the message-fallback/unread-inbox hardening. Existing migration/Vault
+  configuration, cross-scope RLS checks, cross-source
+  ticket/reply/private-note email checks, and staging QA remain.
 
 ## Stream T: [Reporting - Kiosk] Website Channel-Segmented Reports
 

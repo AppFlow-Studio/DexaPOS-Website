@@ -9,6 +9,14 @@ const migration = readFileSync(
   ),
   "utf8",
 );
+const merchantActions = readFileSync(
+  resolve(process.cwd(), "app/dashboard/actions/support.ts"),
+  "utf8",
+);
+const adminActions = readFileSync(
+  resolve(process.cwd(), "app/manage/actions/support.ts"),
+  "utf8",
+);
 
 describe("support ticket thread notification migration", () => {
   it("queues notifications for every inserted support ticket message", () => {
@@ -44,5 +52,16 @@ describe("support ticket thread notification migration", () => {
     );
     expect(migration).toContain("FROM PUBLIC, anon, authenticated");
     expect(migration).toContain("TO service_role");
+  });
+
+  it("requests the idempotent fallback after merchant and HQ message writes", () => {
+    expect(merchantActions).toContain(
+      "requestSupportTicketMessageNotification(",
+    );
+    expect(adminActions).toContain(
+      "requestSupportTicketMessageNotification(",
+    );
+    expect(merchantActions).toContain("notificationWarning");
+    expect(adminActions).toContain("notificationWarning");
   });
 });

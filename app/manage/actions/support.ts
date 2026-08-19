@@ -10,7 +10,10 @@ import {
   parseSupportAssigneeEmails,
   validateSupportAssigneeSelection,
 } from "@/lib/support/assignees";
-import { requestSupportTicketCreatedNotification } from "@/lib/support/ticket-notification-request";
+import {
+  requestSupportTicketCreatedNotification,
+  requestSupportTicketMessageNotification,
+} from "@/lib/support/ticket-notification-request";
 import {
   SupportTicket,
   SupportTicketWithMessages,
@@ -494,7 +497,11 @@ export async function AdminAddMessage(
   message: string,
   isInternal: boolean = false,
   attachments: AttachmentInput[] = []
-): Promise<{ data?: { message_id: string }; error?: string }> {
+): Promise<{
+  data?: { message_id: string };
+  error?: string;
+  notificationWarning?: string;
+}> {
   await assertHQPermission("hq.support.manage");
 
   const supabase = createServiceRoleClient();
@@ -515,7 +522,24 @@ export async function AdminAddMessage(
   });
 
   if (error) return { error: error.message };
-  return { data };
+
+  const notificationResult = await requestSupportTicketMessageNotification(
+    data.message_id,
+  );
+  const notificationWarning = notificationResult.ok
+    ? undefined
+    : "Message saved, but email notification delivery could not be confirmed.";
+
+  if (!notificationResult.ok) {
+    console.error("[AdminAddMessage] Notification request failed", {
+      ticketId,
+      messageId: data.message_id,
+      isInternal,
+      error: notificationResult.error,
+    });
+  }
+
+  return { data, notificationWarning };
 }
 
 // ============================================================================

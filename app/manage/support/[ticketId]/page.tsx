@@ -240,6 +240,9 @@ export default function AdminTicketDetailPage() {
             ? "Developer update added"
             : "Reply sent",
       );
+      if (res.notificationWarning) {
+        toast.warning(res.notificationWarning);
+      }
       setReply("");
       setAttachments([]);
       setUploadKey((k) => k + 1);
