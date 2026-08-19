@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,17 +48,13 @@ export function OverviewSection({ itemId, item, globalScope }: SectionRenderCtx)
       return res;
     },
     onSuccess: () => {
-      toast.success("Overview saved");
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       invalidateOrderOutSync(queryClient);
     },
-    onError: (err) =>
-      toast.error("Save failed", {
-        description: err instanceof Error ? err.message : String(err),
-      }),
+    onError: (err) => {},
   });
 
   return (

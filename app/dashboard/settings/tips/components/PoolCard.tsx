@@ -46,7 +46,7 @@ const intervalConfig: Record<string, { label: string }> = {
 /** A quiet attribute chip. One neutral borderless pill for every value. */
 function AttributeChip({ label }: { label: string }) {
   return (
-    <span className="inline-flex max-w-full items-center rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium">
+    <span className="inline-flex max-w-full items-center rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-foreground">
       <span className="truncate">{label}</span>
     </span>
   );

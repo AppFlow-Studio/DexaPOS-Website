@@ -98,24 +98,18 @@ function CapabilityCard({
   label: string;
   enabled: boolean;
 }) {
+  // No ring on the enabled row: a border around some rows and not others reads
+  // as a second set of boxes inside the panel. Enabled vs disabled is carried
+  // by the fill weight, the label colour, and the trailing glyph.
   return (
     <div
       className={cn(
         "flex min-w-0 items-center gap-3 rounded-2xl border-0 p-3 shadow-none transition-colors",
-        enabled
-          ? "bg-muted ring-1 ring-border"
-          : "bg-muted/45"
+        enabled ? "bg-muted" : "bg-muted/45"
       )}
     >
-      <div
-        className={cn(
-          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
-          "bg-muted/60"
-        )}
-      >
-        <Icon
-          className={cn("h-5 w-5", "text-muted-foreground")}
-        />
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted/60">
+        <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
       <div className="flex-1">
         <p className={cn("font-medium", !enabled && "text-muted-foreground")}>
@@ -145,15 +139,19 @@ function StatCard({
   return (
     <StationPanel>
       <StationPanelContent className="pt-6">
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted/60">
-            <Icon className="h-6 w-6 text-muted-foreground" />
+        {/* The icon is a quiet marker, not the subject — the figure carries the
+            emphasis (§3.2), so the badge stays well under the value's size. */}
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted/60">
+            <Icon className="h-4 w-4 text-muted-foreground" />
           </div>
-          <div>
-            <p className="text-2xl font-bold">{value}</p>
+          <div className="min-w-0">
+            <p className="text-[1.75rem] font-medium leading-tight tracking-[-0.02em] tabular-nums">
+              {value}
+            </p>
             <p className="text-sm text-muted-foreground">{label}</p>
             {subtext && (
-              <p className="text-xs text-muted-foreground mt-1">{subtext}</p>
+              <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">{subtext}</p>
             )}
           </div>
         </div>
@@ -174,18 +172,13 @@ function HardwareFeatureChip({
   return (
     <div
       className={cn(
+        // No ring on the available chip — same reason as CapabilityCard: the
+        // fill weight and the trailing glyph already carry the state.
         "flex min-w-0 items-center gap-2 rounded-full border-0 px-3 py-2 text-sm shadow-none",
-        available
-          ? "bg-muted ring-1 ring-border"
-          : "bg-muted/45"
+        available ? "bg-muted" : "bg-muted/45"
       )}
     >
-      <Icon
-        className={cn(
-          "h-4 w-4 shrink-0",
-          "text-muted-foreground"
-        )}
-      />
+      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
       <span
         className={cn(
           "font-medium",
@@ -1025,7 +1018,7 @@ export function StationOverviewTab({ station, timeFilter }: StationOverviewTabPr
                   key={device.id}
                   className="group flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/45 p-3 shadow-none"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted/60 text-sm">
                     {getDeviceTypeIcon(device.device_type)}
                   </div>
                   <div className="min-w-0 flex-1">

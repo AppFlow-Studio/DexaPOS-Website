@@ -60,7 +60,9 @@ import {
   Loader2,
   AlertTriangle,
   FolderOpen,
+  Plus,
 } from "lucide-react";
+import { AddStationDeviceDialog } from "./AddStationDeviceDialog";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -164,6 +166,7 @@ function DeviceActionMenu({
 
 export function StationDevicesTab({ station }: StationDevicesTabProps) {
   const [deviceToDelete, setDeviceToDelete] = useState<StationDevice | null>(null);
+  const [isAddDeviceOpen, setIsAddDeviceOpen] = useState(false);
   const [testingDeviceId, setTestingDeviceId] = useState<string | null>(null);
   const [printingDeviceId, setPrintingDeviceId] = useState<string | null>(null);
   const [openingDrawerId, setOpeningDrawerId] = useState<string | null>(null);
@@ -229,11 +232,22 @@ export function StationDevicesTab({ station }: StationDevicesTabProps) {
     <>
       <StationPanel>
         <StationPanelHeader>
-          <div>
-            <StationPanelTitle className="text-lg">Peripheral Devices</StationPanelTitle>
-            <StationPanelDescription>
-              Printers, cash drawers, and other devices connected to this station
-            </StationPanelDescription>
+          {/* Wraps rather than squeezing: a shrink-0 action beside a
+              non-wrapping title collapses the heading on a phone. */}
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+            <div className="min-w-0 flex-1 basis-64">
+              <StationPanelTitle className="text-lg">Peripheral Devices</StationPanelTitle>
+              <StationPanelDescription>
+                Printers, cash drawers, and other devices connected to this station
+              </StationPanelDescription>
+            </div>
+            <Button
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => setIsAddDeviceOpen(true)}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              Add Device
+            </Button>
           </div>
         </StationPanelHeader>
         <StationPanelContent>
@@ -243,10 +257,17 @@ export function StationDevicesTab({ station }: StationDevicesTabProps) {
                 <Printer className="h-8 w-8 text-muted-foreground" />
               </div>
               <h3 className="text-lg font-semibold">No devices connected</h3>
-              <p className="text-sm text-muted-foreground max-w-sm mt-2">
+              <p className="mt-2 max-w-sm text-sm text-muted-foreground">
                 Peripherals pair from the POS tablet and appear here once
-                connected.
+                connected, or add one manually.
               </p>
+              <Button
+                className="mt-4 h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                onClick={() => setIsAddDeviceOpen(true)}
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add Device
+              </Button>
             </div>
           ) : (
             <Table>
@@ -391,6 +412,12 @@ export function StationDevicesTab({ station }: StationDevicesTabProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AddStationDeviceDialog
+        open={isAddDeviceOpen}
+        onOpenChange={setIsAddDeviceOpen}
+        stationId={station.id}
+      />
     </>
   );
 }

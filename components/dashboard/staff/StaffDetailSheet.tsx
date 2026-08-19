@@ -42,12 +42,18 @@ import {
   DollarSign,
   ArrowUpCircle,
   Loader2,
-  ChevronRight,
   Shield,
   Star,
   MapPin,
+  MoreVertical,
 } from "lucide-react";
 import { CredentialToast } from "@/components/ui/credential-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { LocationAssignmentSheet } from "./LocationAssignmentSheet";
 import {
   useDeactivateStaff,
@@ -513,6 +519,26 @@ export function StaffDetailSheet({
       memberId: staff.member_id,
       locationId,
     });
+  };
+
+  // Per-location status, mirroring the "Status at this Location" switch in the
+  // assignment panel. Distinct from handleStatusToggle, which acts on the
+  // primary location and so represents the whole staff member.
+  const handleToggleLocationStatus = (
+    locationId: string,
+    isActive: boolean
+  ) => {
+    if (!staff.staff_profile_id) {
+      toast.error("No staff profile found");
+      return;
+    }
+    const staffProfileId = staff.staff_profile_id;
+
+    if (isActive) {
+      deactivateStaff.mutate({ staffProfileId, locationId });
+    } else {
+      reactivateStaff.mutate({ staffProfileId, locationId });
+    }
   };
 
   const panelItems: Array<{
@@ -1205,23 +1231,12 @@ export function StaffDetailSheet({
           <div
             key={`${assignment.location_id}:${assignment.role_code}`}
             className={cn(
-              "group relative -mx-2 rounded-2xl px-2 py-4 transition-colors hover:bg-muted/40 focus-within:ring-2 focus-within:ring-[#0C4FD1] focus-within:ring-offset-2 focus-within:ring-offset-card",
+              "group relative -mx-2 rounded-2xl px-2 py-4",
               !assignment.is_active && "opacity-70"
             )}
           >
-            {/* Full-card click target sits behind the content so the action
-                buttons below remain siblings, not nested <button>s. */}
-            <button
-              type="button"
-              className="absolute inset-0 z-0 rounded-2xl focus:outline-none"
-              aria-label={`Open ${assignment.location_name} assignment`}
-              onClick={() => {
-                setSelectedAssignmentLocationId(assignment.location_id);
-                setIsLocationSheetOpen(true);
-              }}
-            />
-            <div className="pointer-events-none relative z-10 flex flex-wrap items-start justify-between gap-3">
-              <div>
+            <div className="relative z-10 flex items-start justify-between gap-3 sm:flex-wrap">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-medium">{assignment.location_name}</p>
                   {assignment.is_primary && <Badge>Primary</Badge>}
@@ -1229,7 +1244,7 @@ export function StaffDetailSheet({
                     <Badge variant="outline">Inactive</Badge>
                   )}
                   {assignment.has_pin && (
-                    <Badge variant="secondary" className="gap-1">
+                    <Badge variant="secondary" className="hidden gap-1 sm:inline-flex">
                       <Lock className="h-3 w-3" />
                       PIN
                     </Badge>
@@ -1240,7 +1255,9 @@ export function StaffDetailSheet({
                 </p>
               </div>
 
-              <div className="pointer-events-auto flex items-center gap-2">
+              {/* Desktop: actions inline. Mobile: collapsed into the menu
+                  below, so a narrow card keeps one control in the corner. */}
+              <div className="hidden items-center gap-2 sm:flex">
                 {assignment.is_active && !assignment.is_primary && (
                   <Button
                     variant="ghost"
@@ -1276,11 +1293,85 @@ export function StaffDetailSheet({
                     <UserX className="h-4 w-4" />
                   </Button>
                 )}
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-full"
+                  onClick={() => {
+                    setSelectedAssignmentLocationId(assignment.location_id);
+                    setIsLocationSheetOpen(true);
+                  }}
+                  title={`Edit ${assignment.location_name} assignment`}
+                  aria-label={`Edit ${assignment.location_name} assignment`}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
               </div>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 rounded-full sm:hidden"
+                    aria-label={`Actions for ${assignment.location_name}`}
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                {/* z-[210]: this card lives inside a z-[200] sheet, and the
+                    menu portals to the document root — the z-50 default would
+                    render it behind the sheet. */}
+                <DropdownMenuContent align="end" className="z-[210] w-52">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSelectedAssignmentLocationId(assignment.location_id);
+                      setIsLocationSheetOpen(true);
+                    }}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit assignment
+                  </DropdownMenuItem>
+                  {!assignment.is_primary && assignment.is_active && (
+                    <DropdownMenuItem
+                      onClick={() => handleSetPrimary(assignment.location_id)}
+                      disabled={setPrimary.isPending}
+                    >
+                      <Star className="mr-2 h-4 w-4" />
+                      Set as primary
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    onClick={() =>
+                      handleToggleLocationStatus(
+                        assignment.location_id,
+                        assignment.is_active
+                      )
+                    }
+                    disabled={
+                      deactivateStaff.isPending || reactivateStaff.isPending
+                    }
+                  >
+                    <UserCheck className="mr-2 h-4 w-4" />
+                    {assignment.is_active ? "Deactivate here" : "Reactivate here"}
+                  </DropdownMenuItem>
+                  {!assignment.is_primary && (
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() =>
+                        handleRemoveFromLocation(assignment.location_id)
+                      }
+                      disabled={removeFromLocation.isPending}
+                    >
+                      <UserX className="mr-2 h-4 w-4" />
+                      Remove from location
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
-            <div className="pointer-events-none relative z-10 mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="relative z-10 mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <InfoRow
                 label="Role"
                 value={formatRoleLabel(

@@ -28,7 +28,6 @@ import {
     Globe,
     Loader2
 } from 'lucide-react'
-import { toast } from 'sonner'
 import { UpdateLocation } from '@/app/dashboard/actions/locations'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
@@ -115,7 +114,6 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
 
         if (section === 'basic') {
             if (!basicInfo.name.trim()) {
-                toast.error('Validation Error', { description: 'Location name is required' })
                 setIsSaving(false)
                 return
             }
@@ -131,7 +129,6 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
             }
         } else if (section === 'address') {
             if (!addressInfo.address_line1.trim() || !addressInfo.city.trim() || !addressInfo.state || !addressInfo.postal_code.trim()) {
-                toast.error('Validation Error', { description: 'Address, city, state, and ZIP code are required' })
                 setIsSaving(false)
                 return
             }
@@ -152,21 +149,13 @@ export function DetailsTab({ location, onUpdate, setHasUnsavedChanges }: Details
             const result = await UpdateLocation(location.id, updateData)
 
             if (result.error) {
-                toast.error('Update Failed', { description: result.error })
                 return
             }
-
-            toast.success('Location Updated', {
-                description: `${section.charAt(0).toUpperCase() + section.slice(1)} information saved successfully.`,
-                icon: <Save className="h-4 w-4" />,
-            })
 
             queryClient.invalidateQueries({ queryKey: ['locations'] })
             onUpdate?.()
             setEditSection(null)
             setHasUnsavedChanges(false)
-        } catch (error) {
-            toast.error('Update Failed', { description: 'An unexpected error occurred' })
         } finally {
             setIsSaving(false)
         }

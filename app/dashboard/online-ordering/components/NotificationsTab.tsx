@@ -234,7 +234,7 @@ export function NotificationsTab({
                     ) : null}
                   </div>
                   <Badge
-                    className="shrink-0"
+                    className="shrink-0 capitalize"
                     variant={
                       row.status === "sent"
                         ? "default"

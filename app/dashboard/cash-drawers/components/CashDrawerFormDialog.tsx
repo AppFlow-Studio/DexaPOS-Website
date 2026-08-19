@@ -108,8 +108,8 @@ export function CashDrawerFormDialog({
           the base `grid`, and `overflow-hidden` to override the base's
           `max-sm:overflow-y-auto` — a rounded/clipping panel must never be the
           scroller itself, or the footer scrolls away with the content. */}
-      <DialogContent className="flex flex-col overflow-hidden max-sm:overflow-hidden sm:max-h-[85dvh] sm:max-w-md">
-        <DialogHeader className="shrink-0">
+      <DialogContent className="flex flex-col overflow-hidden max-sm:overflow-hidden sm:max-h-[85dvh] sm:max-w-md p-0">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle>{isEdit ? 'Edit Cash Drawer' : 'Add Cash Drawer'}</DialogTitle>
           <DialogDescription>
             {isEdit
@@ -118,7 +118,9 @@ export function CashDrawerFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto">
+        {/* Horizontal padding lives here (not on the panel) so the input focus
+            ring isn't clipped by the scroller's overflow on either side. */}
+        <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-6">
           <div className="space-y-2">
             <Label htmlFor="cd-name">Name</Label>
             <Input
@@ -172,7 +174,7 @@ export function CashDrawerFormDialog({
           </div>
         </div>
 
-        <DialogFooter className="shrink-0">
+        <DialogFooter className="shrink-0 px-6 pb-6">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>

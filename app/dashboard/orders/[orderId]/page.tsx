@@ -64,7 +64,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Order,
@@ -253,15 +252,10 @@ export default function OrderDetailPage() {
     try {
       const result = await RefundOrder(clerkOrgId, orderId);
       if (result.success) {
-        toast.success("Order refunded successfully");
         queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
         queryClient.invalidateQueries({ queryKey: ["orders"] });
         setConfirmRefundOpen(false);
-      } else {
-        toast.error(result.error || "Failed to refund order");
       }
-    } catch {
-      toast.error("An unexpected error occurred");
     } finally {
       setIsRefunding(false);
     }
@@ -273,15 +267,10 @@ export default function OrderDetailPage() {
     try {
       const result = await VoidOrder(clerkOrgId, orderId);
       if (result.success) {
-        toast.success("Order voided successfully");
         queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
         queryClient.invalidateQueries({ queryKey: ["orders"] });
         setConfirmVoidOpen(false);
-      } else {
-        toast.error(result.error || "Failed to void order");
       }
-    } catch {
-      toast.error("An unexpected error occurred");
     } finally {
       setIsVoiding(false);
     }

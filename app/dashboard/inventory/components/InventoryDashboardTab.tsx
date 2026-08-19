@@ -31,7 +31,7 @@ import {
 import { useInventoryKpis, useCogsReport } from "../hooks/useInventoryReports";
 import type { DateRange } from "../../actions/inventory-reports";
 
-const TEAL = "#2DD4BF";
+const BLUE = "#3B82F6";
 
 function fmtMoney(n: number): string {
   return `$${n.toLocaleString("en-US", {
@@ -149,8 +149,8 @@ export function InventoryDashboardTab({
                 <AreaChart data={trendData} margin={{ left: 8, right: 8, top: 8 }}>
                   <defs>
                     <linearGradient id="cogsFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={TEAL} stopOpacity={0.3} />
-                      <stop offset="95%" stopColor={TEAL} stopOpacity={0} />
+                      <stop offset="5%" stopColor={BLUE} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={BLUE} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid vertical={false} {...CHART_GRID} />
@@ -165,7 +165,7 @@ export function InventoryDashboardTab({
                   <Area
                     type="monotone"
                     dataKey="cogs"
-                    stroke={TEAL}
+                    stroke={BLUE}
                     strokeWidth={2}
                     fill="url(#cogsFill)"
                     name="COGS"
@@ -211,7 +211,7 @@ export function InventoryDashboardTab({
                     width={110}
                   />
                   <Tooltip formatter={(v: number) => fmtMoney(v)} />
-                  <Bar dataKey="cogs" fill={TEAL} radius={[0, 4, 4, 0]} name="COGS" />
+                  <Bar dataKey="cogs" fill={BLUE} radius={[0, 4, 4, 0]} name="COGS" />
                 </BarChart>
               </ResponsiveContainer>
             )}

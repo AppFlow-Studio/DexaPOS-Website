@@ -159,7 +159,6 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
 
     const handleSubmit = async () => {
         if (!selectedType || !selectedLocationId || !stationName) {
-            toast.error('Please fill in all required fields')
             return
         }
 
@@ -179,13 +178,9 @@ export function AddStationDialog({ open, onOpenChange, merchantId, locations }: 
             })
 
             if (result.success) {
-                toast.success('Station created successfully')
                 onOpenChange(false)
-            } else {
-                toast.error(result.error || 'Failed to create station')
             }
-        } catch (error) {
-            toast.error('Failed to create station')
+        } catch {
         }
     }
 

@@ -240,7 +240,7 @@ function PeriodWizardContent({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="flex flex-col gap-0 overflow-hidden sm:max-h-[calc(100vh-2rem)] sm:max-w-[480px]">
+      <DialogContent className="flex flex-col gap-0 overflow-y-auto sm:max-h-[calc(100vh-2rem)] sm:max-w-[480px]">
         <DialogHeader className="shrink-0 pr-10">
           <div className="flex items-start gap-3 text-left">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -259,7 +259,14 @@ function PeriodWizardContent({
           </div>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-2">
+        {/*
+          `overflow-y-auto` clips on both axes, so anything drawn outside a
+          child's border box is cut off at this edge — the name input's
+          `focus-visible:ring-[3px]` sits outside its border and was being
+          sliced flat on the left. The horizontal padding is symmetric and
+          wider than the ring so it has room to render on either side.
+        */}
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-1">
           <div className="flex items-center justify-center gap-1 py-6">
             {[1, 2, 3].map((s) => (
               <div key={s} className="flex items-center">

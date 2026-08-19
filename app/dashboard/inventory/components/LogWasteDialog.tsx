@@ -33,7 +33,7 @@ import {
   Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DatePopover } from "../../settings/tips/components/DatePopover";
+import { DatePopover } from "@/components/ui/date-popover";
 import { WasteReason, LogWasteInput } from "../../actions/waste";
 
 export interface WastePickItem {

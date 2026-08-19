@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner";
 
 interface Location {
   id: string;
@@ -54,10 +53,6 @@ export function LocationMultiSelector({
       onChange(selectedIds.filter((i) => i !== id));
     } else {
       if (selectedIds.length >= maxSelections) {
-        toast.error("Maximum Selection Reached", {
-          description: `You can only compare up to ${maxSelections} locations at once for better visualization.`,
-          icon: <AlertCircle className="h-4 w-4 text-destructive" />,
-        });
         return;
       }
       onChange([...selectedIds, id]);
@@ -72,9 +67,6 @@ export function LocationMultiSelector({
       // Usually "Select All" should be available if total locations <= maxSelections
       // If > maxSelections, maybe just select the first N
       if (locations.length > maxSelections) {
-        toast.warning("Limited Selection", {
-          description: `Selected the first ${maxSelections} locations.`,
-        });
         onChange(locations.slice(0, maxSelections).map((l) => l.id));
       } else {
         onChange(locations.map((l) => l.id));

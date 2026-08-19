@@ -38,7 +38,6 @@ import {
   Building,
 } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import {
   GetPurchaseOrderDetails,
   LogPurchaseOrderDelivery,
@@ -50,33 +49,13 @@ import {
   DiscrepancyReportItem,
 } from "@/types/inventory";
 import { useUpdatePurchaseOrderStatus } from "../hooks/useInventoryManagement";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { purchaseOrderStatusLabel } from "@/lib/constants/inventory-status";
 
 interface PurchaseOrderDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   purchaseOrderId: string | null;
-}
-
-// ============================================================================
-// Status Badge Component
-// ============================================================================
-function POStatusBadge({ status }: { status: string }) {
-  const labels: Record<string, string> = {
-    draft: "Draft",
-    pending: "Pending",
-    received: "Received",
-    paid: "Paid",
-    cancelled: "Cancelled",
-  };
-
-  return (
-    <Badge
-      variant="secondary"
-      className="border-0 font-medium text-muted-foreground"
-    >
-      {labels[status] || status}
-    </Badge>
-  );
 }
 
 // ============================================================================
@@ -161,7 +140,10 @@ export function PurchaseOrderDetailSheet({
                   <div className="min-w-0 flex-1 text-left">
                     <DialogTitle className="flex flex-wrap items-center gap-2">
                       {po.po_number}
-                      <POStatusBadge status={po.status} />
+                      <StatusBadge
+                        status={po.status}
+                        label={purchaseOrderStatusLabel(po.status)}
+                      />
                     </DialogTitle>
                     <DialogDescription>
                       Created{" "}

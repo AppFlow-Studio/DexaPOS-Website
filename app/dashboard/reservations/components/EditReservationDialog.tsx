@@ -28,9 +28,8 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertTriangle, CalendarDays, Clock3, Crown, Loader2, Users } from 'lucide-react'
-import { DatePopover } from '@/app/dashboard/settings/tips/components/DatePopover'
+import { DatePopover } from '@/components/ui/date-popover'
 import { useUpdateReservation } from '@/app/dashboard/hooks/useReservations'
-import { toast } from 'sonner'
 import type { Reservation } from '@/types/floor-plan'
 
 const schema = z.object({
@@ -162,7 +161,6 @@ export default function EditReservationDialog ({
         : 'Please fill in the required fields before saving changes.'
 
     setSubmitError(message)
-    toast.error(message)
   }
 
   if (!reservation) return null

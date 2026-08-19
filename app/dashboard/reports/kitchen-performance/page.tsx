@@ -292,7 +292,7 @@ export default function KitchenPerformancePage() {
 
       {/* Station Breakdown Table */}
       <Card className="overflow-hidden">
-        <div className="flex items-center justify-between px-5 pb-4 pt-5">
+        <div className="px-5 pb-4 pt-5">
           <div>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <ChefHat className="h-4 w-4 text-muted-foreground" /> Station Breakdown
@@ -305,6 +305,7 @@ export default function KitchenPerformancePage() {
             columns={TABLE_COLUMNS}
             hidden={hiddenCols}
             onChange={setHiddenCols}
+            className="mt-3"
           />
         </div>
         <CardContent className="p-0">

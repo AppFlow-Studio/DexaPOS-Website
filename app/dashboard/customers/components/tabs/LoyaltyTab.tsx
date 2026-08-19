@@ -15,12 +15,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
   Table,
   TableBody,
   TableCell,
@@ -273,59 +267,51 @@ function TransactionHistorySheet({
   );
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="h-dvh w-screen max-w-none overflow-y-auto border-0 bg-white dark:bg-background sm:max-w-2xl">
-        <SheetHeader>
-          <SheetTitle>Transaction History</SheetTitle>
-        </SheetHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-dvh flex-col p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[85vh] sm:max-w-2xl sm:overflow-hidden">
+        <DialogHeader className="shrink-0 px-6 pt-6 text-left">
+          <DialogTitle>Transaction History</DialogTitle>
+        </DialogHeader>
 
-        {history && history.length > 0 ? (
-          <div className="mt-6 border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader className="bg-muted/30">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+          {history && history.length > 0 ? (
+            <Table variant="data">
+              <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead className="w-24">Date</TableHead>
-                  <TableHead className="flex-1">Description</TableHead>
-                  <TableHead className="text-right w-20">Change</TableHead>
-                  <TableHead className="text-right w-24">Balance</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="w-20 text-right">Change</TableHead>
+                  <TableHead className="w-24 text-right">Balance</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {history.map((tx: any) => (
                   <TableRow key={tx.id}>
-                    <TableCell className="text-sm">
+                    <TableCell className="text-sm tabular-nums">
                       {new Date(tx.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-sm">{tx.description}</TableCell>
-                    <TableCell className="text-right">
-                      <span
-                        className={
-                          tx.points_delta >= 0
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }
-                      >
-                        {tx.points_delta >= 0 ? "+" : ""}
-                        {tx.points_delta}
-                      </span>
+                    <TableCell className="text-right text-sm font-medium tabular-nums">
+                      {tx.points_delta >= 0 ? "+" : ""}
+                      {tx.points_delta}
                     </TableCell>
-                    <TableCell className="text-right text-sm font-medium">
+                    <TableCell className="text-right text-sm font-medium tabular-nums">
                       {tx.balance_points}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <p className="text-sm text-muted-foreground">
-              No transaction history
-            </p>
-          </div>
-        )}
-      </SheetContent>
-    </Sheet>
+          ) : (
+            <div className="py-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                No transaction history
+              </p>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

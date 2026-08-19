@@ -12,7 +12,7 @@ import {
   StatTile,
   LocationIndicator,
 } from "@/components/dashboard/shell";
-import { DatePopover } from "@/app/dashboard/settings/tips/components/DatePopover";
+import { DatePopover } from "@/components/ui/date-popover";
 import {
   DEFAULT_RESERVATION_TIMEZONE,
   zonedToday,

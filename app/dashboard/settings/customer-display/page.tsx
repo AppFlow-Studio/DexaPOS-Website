@@ -6,7 +6,6 @@ import { Switch } from '@/components/ui/switch'
 import { MultiFileUpload } from '@/components/ui/multi-file-upload'
 import { useGatedLocationId, useGatedLocation } from '@/stores/location-store'
 import { MapPin, Loader2, Trash2, Save, Info } from 'lucide-react'
-import { toast } from 'sonner'
 import Image from 'next/image'
 import {
     AlertDialog,
@@ -131,7 +130,6 @@ export default function CustomerDisplaySettingsPage() {
             setImages(data || [])
         } catch (error) {
             console.error('Error fetching images:', error)
-            toast.error('Failed to load images')
         } finally {
             setLoading(false)
         }
@@ -148,7 +146,6 @@ export default function CustomerDisplaySettingsPage() {
 
     const handleRejectedFiles = (rejections: FileRejection[]) => {
         if (rejections.length === 0) return
-        toast.error(buildRejectedFilesMessage(rejections))
     }
 
     // Handle Upload
@@ -238,18 +235,12 @@ export default function CustomerDisplaySettingsPage() {
                     ? ` Optimized ${optimizedCount} image(s) and saved ${formatBytes(totalBytesSaved)} before upload.`
                     : ''
 
-                toast.success(`${successCount} image(s) uploaded successfully.${optimizationMessage}`)
                 setSelectedFiles([]) // Clear selection on success
                 fetchImages()
-            }
-            
-            if (errors.length > 0) {
-                toast.error(`Failed to upload: ${errors.join(', ')}`)
             }
 
         } catch (error: any) {
             console.error('Error uploading batch:', error)
-            toast.error(`Batch upload failed: ${error.message || 'Unknown error'}`)
         } finally {
             setUploading(false)
         }
@@ -282,7 +273,6 @@ export default function CustomerDisplaySettingsPage() {
             }
         } catch (error) {
             console.error('Error updating status:', error)
-            toast.error('Failed to update status')
         }
     }
 
@@ -351,14 +341,8 @@ export default function CustomerDisplaySettingsPage() {
                 backingFileCleanupFailed = true
             }
 
-            if (backingFileCleanupFailed) {
-                toast.warning('Image was removed, but backing file cleanup could not be completed.')
-            } else {
-                toast.success('Image deleted successfully')
-            }
         } catch (error: any) {
             console.error('Error deleting image:', error)
-            toast.error(`Failed to delete image: ${error.message}`)
         } finally {
             setDeleteId(null)
         }

@@ -26,7 +26,6 @@ import {
   Clock,
   User,
 } from "lucide-react";
-import { toast } from "sonner";
 
 interface SwapProposalWizardProps {
   open: boolean;
@@ -101,11 +100,6 @@ export function SwapProposalWizard({
 
   const handleSubmit = () => {
     // In a real implementation, this would call the store action
-    toast.success("Swap Request Sent", {
-      description: `Request sent to ${
-        selectedPeer?.display_name || "peer"
-      } for approval.`,
-    });
     onOpenChange(false);
     onComplete?.();
     // Reset state

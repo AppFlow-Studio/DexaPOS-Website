@@ -13,7 +13,7 @@ import {
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DatePopover } from "@/app/dashboard/settings/tips/components/DatePopover";
+import { DatePopover } from "@/components/ui/date-popover";
 import { TipStatusBadge } from "./TipStatusBadge";
 import {
   Tooltip,

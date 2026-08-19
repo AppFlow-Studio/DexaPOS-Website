@@ -87,6 +87,7 @@ interface OrdersDataTableProps {
     sortingValue?: SortingState
     onSortingChange?: OnChangeFn<SortingState>
     searchPlaceholder?: string
+    hideOrderTypeBadge?: boolean
 }
 
 // Format date to "Today at 9:53 pm" or "Dec 15 at 2:30 pm"
@@ -204,6 +205,7 @@ export function OrdersDataTable({
     sortingValue,
     onSortingChange,
     searchPlaceholder = 'Search orders...',
+    hideOrderTypeBadge = false,
 }: OrdersDataTableProps) {
     const [localSorting, setLocalSorting] = React.useState<SortingState>([
         { id: 'created_at', desc: true },
@@ -347,7 +349,7 @@ export function OrdersDataTable({
                             {typeConfig.icon}
                             <span className="font-medium text-foreground/80">{typeConfig.label}</span>
                         </span>
-                        <DeliveryPlatformBadge order={order} />
+                        {!hideOrderTypeBadge && <DeliveryPlatformBadge order={order} />}
                     </div>
                 )
             },

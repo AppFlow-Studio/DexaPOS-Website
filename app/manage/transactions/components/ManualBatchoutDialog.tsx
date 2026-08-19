@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { AlertTriangle, Loader2, ShieldCheck } from 'lucide-react'
-import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -86,20 +85,14 @@ export function ManualBatchoutDialog({
       // runs the reconciliation. `result` is the action's own return value.
       const result = await runManualBatchout(targetBatch.id, targetBatch.merchant_id, cleanReason)
       if (!result?.success) {
-        toast.error(result?.error || 'Manual batchout failed.')
         return
       }
 
-      toast.success(
-        `Batch ${batchLabel(targetBatch)} marked settled` +
-          (result.payments_settled ? ` — ${result.payments_settled.toLocaleString()} payment(s) settled.` : '.')
-      )
       await onSuccess?.()
     } catch (error) {
       // The admin dismissed the verification modal — not an error, abort quietly.
       if (isReverificationCancelledError(error)) return
       console.error('[ManualBatchoutDialog] confirm error:', error)
-      toast.error(error instanceof Error ? error.message : 'Manual batchout failed.')
     } finally {
       setSubmitting(false)
     }

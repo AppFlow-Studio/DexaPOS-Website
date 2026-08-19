@@ -52,7 +52,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { DatePopover } from "./DatePopover";
+import { DatePopover } from "@/components/ui/date-popover";
 import type { TipPoolConfigWithShares, Role } from "@/app/dashboard/actions/tips";
 import { getLocalDateKey } from "@/lib/dates/local-date-key";
 

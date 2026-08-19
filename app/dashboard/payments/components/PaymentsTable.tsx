@@ -371,7 +371,11 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                   </tr>
                 ))}
               </tbody>
-              {(() => {
+            </table>
+          </div>
+          {/* Payment summary. Lives outside the <table> — a <div> is not a
+              valid child of <table> and breaks hydration. */}
+          {(() => {
                 const items = payment.order_payment_items ?? [];
                 const itemsSubtotal = items.reduce(
                   (s, it) => s + Number(it.subtotal_paid || 0),
@@ -518,8 +522,6 @@ function PaymentDetailPanel({ payment }: { payment: PaymentRecord }) {
                   </div>
                 );
               })()}
-            </table>
-          </div>
         </div>
       )}
 

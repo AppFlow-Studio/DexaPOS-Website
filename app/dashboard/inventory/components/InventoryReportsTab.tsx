@@ -43,7 +43,8 @@ import {
 } from "../hooks/useInventoryReports";
 import type { DateRange } from "../../actions/inventory-reports";
 
-const TEAL = "#2DD4BF";
+const BLUE = "#3B82F6";
+const LIGHT_BLUE = "#93C5FD";
 const ROSE = "#F43F5E";
 const SLATE = "#94A3B8";
 
@@ -204,8 +205,8 @@ export function InventoryReportsTab({
                 />
                 <Tooltip formatter={(v: number) => fmtMoney(v)} />
                 <Legend />
-                <Bar dataKey="theoretical" fill={SLATE} radius={[4, 4, 0, 0]} name="Theoretical" />
-                <Bar dataKey="actual" fill={TEAL} radius={[4, 4, 0, 0]} name="Actual" />
+                <Bar dataKey="theoretical" fill={LIGHT_BLUE} radius={[4, 4, 0, 0]} name="Theoretical" />
+                <Bar dataKey="actual" fill={BLUE} radius={[4, 4, 0, 0]} name="Actual" />
               </BarChart>
             </ResponsiveContainer>
           )}

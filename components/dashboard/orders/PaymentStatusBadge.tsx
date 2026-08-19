@@ -1,10 +1,10 @@
 'use client'
 
 import { PaymentStatus } from '@/types/order-management'
-import { cn } from '@/lib/utils'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 interface PaymentStatusBadgeProps {
-    status: PaymentStatus
+    status: PaymentStatus | string
     className?: string
     /**
      * Optional dimension label (e.g. "Payment") rendered as a "{prefix}: {label}" pill.
@@ -15,7 +15,7 @@ interface PaymentStatusBadgeProps {
     prefix?: string
 }
 
-/** Human-readable label per payment status. Presentation is deliberately flat — no per-status colour. */
+/** Human-readable label per payment status. */
 const STATUS_LABELS: Record<PaymentStatus, string> = {
     pending: 'Awaiting Payment',
     processing: 'Processing',
@@ -31,16 +31,13 @@ const STATUS_LABELS: Record<PaymentStatus, string> = {
 }
 
 export function PaymentStatusBadge({ status, className, prefix }: PaymentStatusBadgeProps) {
-    const label = STATUS_LABELS[status] || STATUS_LABELS.pending
+    const label = STATUS_LABELS[status as PaymentStatus] || STATUS_LABELS.pending
 
     return (
-        <span
-            className={cn(
-                'inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground',
-                className
-            )}
-        >
-            {prefix ? `${prefix}: ${label}` : label}
-        </span>
+        <StatusBadge
+            status={status}
+            label={prefix ? `${prefix}: ${label}` : label}
+            className={className}
+        />
     )
 }

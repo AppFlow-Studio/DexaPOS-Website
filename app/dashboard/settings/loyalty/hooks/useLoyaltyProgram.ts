@@ -80,11 +80,8 @@ export function useCreateLoyaltyProgram() {
       queryClient.invalidateQueries({
         queryKey: ['loyalty-programs', variables.clerkOrgId],
       });
-      toast.success('Loyalty program created successfully');
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to create loyalty program');
-    },
+    onError: (error: Error) => {},
   });
 }
 
@@ -114,11 +111,8 @@ export function useUpdateLoyaltyProgram() {
       queryClient.invalidateQueries({
         queryKey: ['loyalty-programs', variables.clerkOrgId],
       });
-      toast.success('Loyalty program updated successfully');
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to update loyalty program');
-    },
+    onError: (error: Error) => {},
   });
 }
 
@@ -148,13 +142,8 @@ export function useToggleLoyaltyProgram() {
       queryClient.invalidateQueries({
         queryKey: ['loyalty-programs', variables.clerkOrgId],
       });
-      toast.success(
-        variables.isActive ? 'Program activated' : 'Program deactivated'
-      );
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to toggle loyalty program');
-    },
+    onError: (error: Error) => {},
   });
 }
 
@@ -182,11 +171,8 @@ export function useDeleteLoyaltyProgram() {
       queryClient.invalidateQueries({
         queryKey: ['loyalty-programs', variables.clerkOrgId],
       });
-      toast.success('Loyalty program deleted');
     },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to delete loyalty program');
-    },
+    onError: (error: Error) => {},
   });
 }
 

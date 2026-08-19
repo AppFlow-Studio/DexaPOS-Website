@@ -233,13 +233,15 @@ function getCategoryLabel(log: AuditLogWithLocation): string {
 function AuditCard({
   log,
   onOpen,
+  showCategory,
 }: {
   log: AuditLogWithLocation;
   onOpen: (log: AuditLogWithLocation) => void;
+  showCategory: boolean;
 }) {
   const { sentence, highlight, iconName } = buildAuditSentence(log);
   const severity = log.severity ?? "info";
-  const categoryLabel = getCategoryLabel(log);
+  const categoryLabel = showCategory ? getCategoryLabel(log) : null;
   const relativeTime = formatRelativeTime(log.created_at);
 
   return (
@@ -275,10 +277,14 @@ function AuditCard({
               <Clock className="size-3 shrink-0" />
               {relativeTime}
             </span>
-            <span aria-hidden className="shrink-0 text-muted-foreground/40">
-              ·
-            </span>
-            <span className="min-w-0 break-words">{categoryLabel}</span>
+            {categoryLabel && (
+              <>
+                <span aria-hidden className="shrink-0 text-muted-foreground/40">
+                  ·
+                </span>
+                <span className="min-w-0 break-words">{categoryLabel}</span>
+              </>
+            )}
             {severity !== "info" && (
               <span
                 className={cn(
@@ -804,7 +810,12 @@ export default function AuditLogsPage() {
           ) : (
             <div className="space-y-2.5">
               {logs.map((log) => (
-                <AuditCard key={log.id} log={log} onOpen={openDetail} />
+                <AuditCard
+                  key={log.id}
+                  log={log}
+                  onOpen={openDetail}
+                  showCategory={activeTab === "all"}
+                />
               ))}
             </div>
           )}

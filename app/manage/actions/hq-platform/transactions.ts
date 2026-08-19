@@ -2085,7 +2085,7 @@ export async function manualBatchout(
   // 4a. Load the batch; verify ownership and that it isn't already settled.
   const { data: batch, error: fetchError } = await admin
     .from('settlement_batches')
-    .select('id, merchant_id, status, closed_at, settlement_date')
+    .select('id, merchant_id, status, closed_at, settlement_date, gross_amount, origin')
     .eq('id', batchId)
     .maybeSingle()
 
@@ -2101,16 +2101,29 @@ export async function manualBatchout(
     return { success: false, error: 'Batch is already settled.' }
   }
 
-  // 4b. Count the payments that will cascade to settled (for the confirmation toast).
-  const { count: pendingCount } = await admin
+  // 4b. Load the linked payments once: they drive the cascade count AND (for an
+  //     open lazy batch that never carried a processor gross) the seeded totals so
+  //     the batch reconciles instead of showing a false gross-vs-linked discrepancy.
+  const { data: linkedPayments } = await admin
     .from('order_payments')
-    .select('id', { count: 'exact', head: true })
+    .select('is_settled, is_voided, status, total_amount')
     .eq('settlement_batch_id', batchId)
-    .eq('is_settled', false)
+
+  const pendingCount = (linkedPayments ?? []).filter((p) => !p.is_settled).length
+  // Reconciliation counts a payment unless it's voided or failed/pending — mirror
+  // get_admin_settlement_batches' linked_payment_amount so discrepancy nets to 0.
+  const eligible = (linkedPayments ?? []).filter(
+    (p) => !p.is_voided && !['failed', 'pending'].includes(String(p.status)),
+  )
+  const linkedTotal =
+    Math.round(eligible.reduce((s, p) => s + (Number(p.total_amount) || 0), 0) * 100) / 100
 
   // 4c. Mark the batch settled. The AFTER-UPDATE cascade trigger flips the linked
-  //     order_payments to is_settled=true in the same statement.
+  //     order_payments to is_settled=true in the same statement. Seed gross/txn
+  //     from the linked payments only when the batch has no processor-reported
+  //     gross yet (an open lazy/backfilled batch), and stamp origin='hq_manual'.
   const nowIso = new Date().toISOString()
+  const needsSeed = !batch.gross_amount || Number(batch.gross_amount) === 0
   const { data: updatedRows, error: updateError } = await admin
     .from('settlement_batches')
     .update({
@@ -2119,6 +2132,16 @@ export async function manualBatchout(
       settlement_date: batch.settlement_date ?? nowIso.slice(0, 10),
       last_attempt_at: nowIso,
       failure_reason: cleanReason,
+      origin: batch.origin ?? 'hq_manual',
+      ...(needsSeed
+        ? {
+            gross_amount: linkedTotal,
+            tip_amount: 0,
+            net_deposit: linkedTotal,
+            transaction_count: eligible.length,
+            sales_count: eligible.length,
+          }
+        : {}),
     })
     .eq('id', batchId)
     .eq('merchant_id', merchantId)

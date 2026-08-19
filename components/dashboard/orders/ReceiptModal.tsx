@@ -357,7 +357,7 @@ export function ReceiptModal({
           siblings of the single scroll area (see §"Overlay scroll structure" in
           docs/UI-DESIGN-SYSTEM.md). */}
       <DialogContent
-        className="sm:max-w-md p-0 gap-0 flex flex-col overflow-hidden max-sm:overflow-hidden sm:max-h-[88vh] bg-[#faf9f6] dark:bg-zinc-900"
+        className="sm:max-w-md p-0 gap-0 flex flex-col overflow-hidden max-sm:overflow-hidden sm:h-[88vh] bg-[#faf9f6] dark:bg-zinc-900"
         showCloseButton={false}
         elevation="above-sheet"
       >
@@ -372,12 +372,12 @@ export function ReceiptModal({
             scrollbar tracks the panel edge instead of floating in dead space
             beside the paper. */}
         <div className="receipt-scroll thin-scrollbar relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
-          <div className="px-5 pb-5">
+          <div className="flex min-h-full flex-col px-5 pb-5">
 
           {/* Receipt Paper */}
           <div
             className={cn(
-              "receipt-paper relative mx-auto w-full sm:max-w-[350px]",
+              "receipt-paper relative mx-auto w-full sm:max-w-[350px] flex-1",
               "bg-[#faf9f6] dark:bg-zinc-900",
               "font-mono text-xs leading-relaxed",
               "text-zinc-800 dark:text-zinc-200",
@@ -675,13 +675,13 @@ export function ReceiptModal({
         {/* Action Buttons — part of the panel, hidden while printing. No
             border-t or tint: the footer shares the panel's paper colour, so a
             divider or a grey band would read as a seam across one surface. */}
-        <div className="no-print shrink-0 flex flex-wrap gap-2 justify-end px-5 py-3">
+        <div className="no-print shrink-0 flex flex-wrap gap-2 justify-center px-5 py-3">
           {showAdminActions && order.status !== 'refunded' && order.status !== 'void' && (
             <>
               <Button
                 variant="outline"
                 size="sm"
-                className="mr-auto text-amber-600 border-amber-200 hover:bg-amber-50 dark:border-amber-900/50 dark:hover:bg-amber-950/40"
+                className="text-amber-600 border-amber-200 hover:bg-amber-50 dark:border-amber-900/50 dark:hover:bg-amber-950/40"
                 onClick={() => setConfirmRefundOpen(true)}
               >
                 <RotateCcw className="h-4 w-4 mr-2" />

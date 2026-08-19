@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select'
 import { X, Plus, Edit2, Trash2, Loader2, Save } from 'lucide-react'
 import { PhoneInput } from '@/components/ui/phone-input'
+import { DatePopover } from '@/components/ui/date-popover'
 import { formatPhoneForDisplay, normalizePhone } from '@/lib/phone'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
@@ -65,6 +66,12 @@ const SUGGESTED_TAGS = [
   'CATERING_CLIENT'
 ]
 
+/**
+ * Cards that can be edited independently. Each one saves only the columns it
+ * owns, so saving "Dining Preferences" never writes contact or personal fields.
+ */
+type EditableSection = 'contact' | 'personal' | 'dining'
+
 // Helper to display tags in user-friendly format
 const formatTagForDisplay = (tag: string): string => {
   return tag
@@ -73,11 +80,69 @@ const formatTagForDisplay = (tag: string): string => {
     .join(' ')
 }
 
+/**
+ * Per-card header actions: a single Edit button when idle, and Save sitting
+ * next to Cancel while that card is being edited.
+ */
+function SectionActions ({
+  isEditing,
+  isSaving,
+  disabled,
+  onEdit,
+  onSave,
+  onCancel
+}: {
+  isEditing: boolean
+  isSaving: boolean
+  disabled: boolean
+  onEdit: () => void
+  onSave: () => void
+  onCancel: () => void
+}) {
+  if (!isEditing) {
+    return (
+      <Button size='sm' variant='outline' onClick={onEdit} disabled={disabled}>
+        <Edit2 className='w-4 h-4 mr-2' />
+        Edit
+      </Button>
+    )
+  }
+
+  return (
+    <div className='flex items-center gap-2'>
+      <Button size='sm' onClick={onSave} disabled={isSaving}>
+        {isSaving ? (
+          <>
+            <Loader2 className='w-4 h-4 mr-2 animate-spin' />
+            Saving...
+          </>
+        ) : (
+          <>
+            <Save className='w-4 h-4 mr-2' />
+            Save
+          </>
+        )}
+      </Button>
+      <Button
+        size='sm'
+        variant='secondary'
+        onClick={onCancel}
+        disabled={isSaving}
+      >
+        <X className='w-4 h-4 mr-2' />
+        Cancel
+      </Button>
+    </div>
+  )
+}
+
 export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
   const customerId = customer?.id
 
-  // Form state
-  const [isEditing, setIsEditing] = useState(false)
+  // Only one section is editable at a time; `null` means everything is read-only.
+  const [editingSection, setEditingSection] = useState<EditableSection | null>(
+    null
+  )
   const [noteText, setNoteText] = useState('')
   const [tagInput, setTagInput] = useState('')
 
@@ -131,26 +196,64 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
     }
   }, [profileDetails])
 
-  const handleSaveProfile = async () => {
+  /** Builds the partial update payload owned by a single card. */
+  const buildSectionUpdates = (section: EditableSection) => {
+    switch (section) {
+      case 'contact':
+        return {
+          name,
+          phone: (normalizePhone(phone) ?? phone) || null,
+          email,
+          address
+        }
+      case 'personal':
+        return {
+          birthday: birthday || null,
+          anniversary: anniversary || null,
+          vip_level: vipLevel,
+          company_name: companyName
+        }
+      case 'dining':
+        return {
+          dietary_preferences: dietaryPrefs,
+          allergy_notes: allergyNotes,
+          preferred_server_id: preferredServerId || null,
+          preferred_table: preferredTable,
+          preferred_seating: preferredSeating
+        }
+    }
+  }
+
+  const handleSaveSection = async (section: EditableSection) => {
     await updateProfileMutation.mutateAsync({
       customerId: customerId!,
-      updates: {
-        name,
-        phone: (normalizePhone(phone) ?? phone) || null,
-        email,
-        address,
-        birthday: birthday || null,
-        anniversary: anniversary || null,
-        dietary_preferences: dietaryPrefs,
-        allergy_notes: allergyNotes,
-        preferred_server_id: preferredServerId || null,
-        preferred_table: preferredTable,
-        preferred_seating: preferredSeating,
-        company_name: companyName,
-        vip_level: vipLevel
-      }
+      updates: buildSectionUpdates(section)
     })
-    setIsEditing(false)
+    setEditingSection(null)
+  }
+
+  /** Discards in-progress edits by re-reading the last loaded profile. */
+  const handleCancelSection = (section: EditableSection) => {
+    if (profileDetails) {
+      if (section === 'contact') {
+        setName(profileDetails.name || '')
+        setPhone(profileDetails.phone || '')
+        setEmail(profileDetails.email || '')
+        setAddress(profileDetails.address || '')
+      } else if (section === 'personal') {
+        setBirthday(profileDetails.birthday || '')
+        setAnniversary(profileDetails.anniversary || '')
+        setVipLevel(profileDetails.vip_level || 'None')
+        setCompanyName(profileDetails.company_name || '')
+      } else {
+        setDietaryPrefs(profileDetails.dietary_preferences || [])
+        setAllergyNotes(profileDetails.allergy_notes || '')
+        setPreferredServerId(profileDetails.preferred_server_id || '')
+        setPreferredTable(profileDetails.preferred_table || '')
+        setPreferredSeating(profileDetails.preferred_seating || '')
+      }
+    }
+    setEditingSection(null)
   }
 
   const handleAddNote = async () => {
@@ -225,28 +328,19 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
     <div className='space-y-6'>
       {/* Contact Information */}
       <Card className='rounded-2xl border-0 bg-muted/35 shadow-none'>
-        <CardHeader className='flex flex-row items-center justify-between'>
+        <CardHeader className='flex flex-row flex-wrap items-center justify-between gap-2'>
           <CardTitle className='text-sm'>Contact Information</CardTitle>
-          <Button
-            size='sm'
-            variant={isEditing ? 'secondary' : 'outline'}
-            onClick={() => setIsEditing(!isEditing)}
-          >
-            {isEditing ? (
-              <>
-                <X className='w-4 h-4 mr-2' />
-                Cancel
-              </>
-            ) : (
-              <>
-                <Edit2 className='w-4 h-4 mr-2' />
-                Edit
-              </>
-            )}
-          </Button>
+          <SectionActions
+            isEditing={editingSection === 'contact'}
+            isSaving={updateProfileMutation.isPending}
+            disabled={editingSection !== null}
+            onEdit={() => setEditingSection('contact')}
+            onSave={() => handleSaveSection('contact')}
+            onCancel={() => handleCancelSection('contact')}
+          />
         </CardHeader>
         <CardContent className='space-y-4'>
-          {!isEditing ? (
+          {editingSection !== 'contact' ? (
             <div className='space-y-3'>
               <div>
                 <p className='text-xs font-medium text-muted-foreground'>
@@ -306,11 +400,19 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
 
       {/* Personal Details */}
       <Card className='rounded-2xl border-0 bg-muted/35 shadow-none'>
-        <CardHeader>
+        <CardHeader className='flex flex-row flex-wrap items-center justify-between gap-2'>
           <CardTitle className='text-sm'>Personal Details</CardTitle>
+          <SectionActions
+            isEditing={editingSection === 'personal'}
+            isSaving={updateProfileMutation.isPending}
+            disabled={editingSection !== null}
+            onEdit={() => setEditingSection('personal')}
+            onSave={() => handleSaveSection('personal')}
+            onCancel={() => handleCancelSection('personal')}
+          />
         </CardHeader>
         <CardContent className='space-y-4'>
-          {!isEditing ? (
+          {editingSection !== 'personal' ? (
             <div className='grid grid-cols-2 gap-4'>
               <div>
                 <p className='text-xs font-medium text-muted-foreground'>
@@ -351,23 +453,26 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
             </div>
           ) : (
             <div className='space-y-3'>
-              <div className='grid grid-cols-2 gap-3'>
-                <div>
+              {/* Native `type='date'` pickers render an unstyleable browser
+                  popup that overflowed the sheet on narrow screens; DatePopover
+                  is collision-aware and stays inside the viewport. */}
+              <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+                <div className='min-w-0 space-y-1.5'>
                   <label className='text-sm font-medium'>Birthday</label>
-                  <Input
+                  <DatePopover
                     className={MUTED_FIELD_CLASS}
-                    type='date'
                     value={birthday}
-                    onChange={e => setBirthday(e.target.value)}
+                    onChange={value => setBirthday(value ?? '')}
+                    placeholder='Select date'
                   />
                 </div>
-                <div>
+                <div className='min-w-0 space-y-1.5'>
                   <label className='text-sm font-medium'>Anniversary</label>
-                  <Input
+                  <DatePopover
                     className={MUTED_FIELD_CLASS}
-                    type='date'
                     value={anniversary}
-                    onChange={e => setAnniversary(e.target.value)}
+                    onChange={value => setAnniversary(value ?? '')}
+                    placeholder='Select date'
                   />
                 </div>
               </div>
@@ -403,11 +508,19 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
 
       {/* Dining Preferences */}
       <Card className='rounded-2xl border-0 bg-muted/35 shadow-none'>
-        <CardHeader>
+        <CardHeader className='flex flex-row flex-wrap items-center justify-between gap-2'>
           <CardTitle className='text-sm'>Dining Preferences</CardTitle>
+          <SectionActions
+            isEditing={editingSection === 'dining'}
+            isSaving={updateProfileMutation.isPending}
+            disabled={editingSection !== null}
+            onEdit={() => setEditingSection('dining')}
+            onSave={() => handleSaveSection('dining')}
+            onCancel={() => handleCancelSection('dining')}
+          />
         </CardHeader>
         <CardContent className='space-y-4'>
-          {!isEditing ? (
+          {editingSection !== 'dining' ? (
             <div className='space-y-3'>
               <div>
                 <p className='text-xs font-medium text-muted-foreground'>
@@ -713,27 +826,6 @@ export function DetailsTab ({ customer, merchantId }: DetailsTabProps) {
         </CardContent>
       </Card>
 
-      {/* Save Button */}
-      {isEditing && (
-        <div className='fixed bottom-4 right-4 flex gap-2'>
-          <Button
-            onClick={handleSaveProfile}
-            disabled={updateProfileMutation.isPending}
-          >
-            {updateProfileMutation.isPending ? (
-              <>
-                <Loader2 className='w-4 h-4 mr-2 animate-spin' />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className='w-4 h-4 mr-2' />
-                Save Changes
-              </>
-            )}
-          </Button>
-        </div>
-      )}
     </div>
   )
 }

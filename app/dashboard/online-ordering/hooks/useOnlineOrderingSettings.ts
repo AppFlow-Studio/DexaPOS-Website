@@ -6,7 +6,7 @@ import {
   requestOnlineOrderingSetup,
   saveOnlineOrderingSettings,
 } from "../actions";
-import { toast } from "sonner";
+
 
 export type OnlineStoreSetupStatus =
   | "not_requested"
@@ -331,7 +331,6 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
         }
       } catch (error) {
         console.error("Failed to load settings:", error);
-        toast.error("Failed to load online ordering settings");
       } finally {
         set({ isLoading: false });
       }
@@ -358,7 +357,6 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
         (s) => s.locationId === locationId
       );
       if (!currentSettings) {
-        toast.error("No settings to save");
         return;
       }
 
@@ -406,22 +404,8 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
           deliveryRadiusMiles: currentSettings.deliveryRadiusMiles,
         });
         await get().loadSettings(locationId);
-        if (saveResult.domainWhitelistError) {
-          toast.warning(
-            `Settings saved, but payment-domain sync needs attention: ${saveResult.domainWhitelistError}`,
-          );
-        } else if (saveResult.domainWhitelistSkipped) {
-          toast.warning(
-            "Settings saved. Payment-domain sync was skipped because no active online-ordering payment device is ready yet.",
-          );
-        } else {
-          toast.success("Settings saved");
-        }
       } catch (error) {
         console.error("Failed to save settings:", error);
-        toast.error(
-          error instanceof Error ? error.message : "Failed to save settings"
-        );
       } finally {
         set({ isSaving: false });
       }
@@ -429,23 +413,18 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
 
     discardChanges: async (locationId: string) => {
       await get().loadSettings(locationId);
-      toast.info("Changes discarded");
     },
     requestSetup: async (locationId: string) => {
       try {
         const result = await requestOnlineOrderingSetup(locationId);
         if (result?.success) {
           await get().loadSettings(locationId);
-          toast.success("Setup request submitted to HQ");
           return result;
         }
         // Let the page decide how to render the missing-fields UI.
         return result;
       } catch (error) {
         console.error("Failed to request setup:", error);
-        toast.error(
-          error instanceof Error ? error.message : "Failed to request setup"
-        );
         return { success: false, error: error instanceof Error ? error.message : "Failed to request setup" } as any;
       }
     },

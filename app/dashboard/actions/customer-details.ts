@@ -34,7 +34,8 @@ export async function UpdateCustomerProfile({
   customerId: string;
   updates: {
     name?: string;
-    phone?: string;
+    // Nullable in the DB: clearing a phone writes null, not "".
+    phone?: string | null;
     email?: string;
     address?: string;
     birthday?: string | null;

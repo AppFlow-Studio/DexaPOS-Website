@@ -2,13 +2,13 @@
 
 import * as React from "react";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { LocationAssignment, EmploymentType } from "@/types/staff";
 import { cn } from "@/lib/utils";
 import {
@@ -32,7 +31,6 @@ import {
   Loader2,
   Save,
   X,
-  ArrowLeft,
 } from "lucide-react";
 import { StaffPinField } from "./StaffPinField";
 import {
@@ -199,34 +197,22 @@ export function LocationAssignmentSheet({
   void currentUserRoleLevel;
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-full sm:max-w-md flex flex-col px-4 z-[200]"
-      >
-        <SheetHeader>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => onOpenChange(false)}
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div className="flex-1">
-              <SheetTitle className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                {assignment.location_name}
-              </SheetTitle>
-              <SheetDescription>
-                Manage {memberName}'s assignment at this location
-              </SheetDescription>
-            </div>
-          </div>
-        </SheetHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* Mobile fills the screen via the base max-sm:h-dvh rules, so the
+          height cap and the clip are both scoped to sm+ — an unprefixed
+          max-h/overflow here would override them and re-cap the panel. */}
+      <DialogContent className="z-[200] flex h-dvh flex-col p-0 max-sm:overflow-hidden sm:h-auto sm:max-h-[85vh] sm:overflow-hidden sm:max-w-lg">
+        <DialogHeader className="shrink-0 px-6 pt-6 text-left">
+          <DialogTitle className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+            {assignment.location_name}
+          </DialogTitle>
+          <DialogDescription>
+            Manage {memberName}'s assignment at this location
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto py-6 space-y-6">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
           {/* Status Badge */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -258,8 +244,6 @@ export function LocationAssignmentSheet({
             )}
           </div>
 
-          <Separator />
-
           {/* Role (read-only — set at the org level) */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">Role</Label>
@@ -275,7 +259,6 @@ export function LocationAssignmentSheet({
           {/* Employment Details (POS staff only) */}
           {!isClerkUser && (
             <>
-              <Separator />
               <div className="space-y-4">
                 <h4 className="text-sm font-medium">Employment Details</h4>
 
@@ -323,8 +306,6 @@ export function LocationAssignmentSheet({
             </>
           )}
 
-          <Separator />
-
           {/* Status Toggle */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -345,8 +326,6 @@ export function LocationAssignmentSheet({
               />
             </div>
           </div>
-
-          <Separator />
 
           {/* PIN Management */}
           <div className="space-y-3">
@@ -389,7 +368,7 @@ export function LocationAssignmentSheet({
           </div>
         </div>
 
-        <SheetFooter className="border-t pt-4">
+        <DialogFooter className="shrink-0 px-6 pb-6">
           <div className="flex items-center gap-2 w-full">
             <Button
               variant="outline"
@@ -420,8 +399,8 @@ export function LocationAssignmentSheet({
               )}
             </Button>
           </div>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

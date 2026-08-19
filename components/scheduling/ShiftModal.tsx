@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { TimePickerPopover } from "@/components/ui/time-picker";
 import { useUnifiedStaff } from "@/app/dashboard/hooks/useStaff";
 import { useScheduleStore } from "@/stores/useScheduleStore";
 import { Shift, Role, TemplateShift } from "@/types/schedule";
@@ -306,12 +307,12 @@ export function ShiftModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex flex-col gap-0 overflow-hidden sm:max-h-[calc(100dvh-2rem)] sm:max-w-[425px]">
-        <DialogHeader className="shrink-0 pb-4 pr-10">
+      <DialogContent className="flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-2rem)] sm:max-w-[600px]">
+        <DialogHeader className="shrink-0 px-6 pb-4 pr-10 pt-6">
           <DialogTitle>{editShift ? "Edit Shift" : "New Shift"}</DialogTitle>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain py-4 pr-2">
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain px-6 py-4">
           {/* Employee Select */}
           <div className="grid gap-2">
             <Label>Employee</Label>
@@ -319,12 +320,17 @@ export function ShiftModal({
               <SelectTrigger>
                 <SelectValue placeholder="Select employee" />
               </SelectTrigger>
-              <SelectContent>
-                {staffMembers.map((staff) => (
-                  <SelectItem key={staff.member_id} value={staff.member_id}>
-                    {staff.display_name}
-                  </SelectItem>
-                ))}
+              <SelectContent className="max-h-40">
+                {staffMembers
+                  .filter((staff) => staff.member_id)
+                  .map((staff) => (
+                    <SelectItem
+                      key={staff.member_id}
+                      value={staff.member_id}
+                    >
+                      {staff.display_name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -372,41 +378,38 @@ export function ShiftModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label>Start Time</Label>
-              <Input
-                type="time"
-                min={startTime}
-                step={900}
+              <TimePickerPopover
                 value={startTime}
-                onChange={(e) => {
-                  setStartTime(e.target.value);
+                onChange={(v) => {
+                  setStartTime(v);
                   setError(null);
                 }}
               />
             </div>
             <div className="grid gap-2">
               <Label>End Time</Label>
-              <Input
-                type="time"
-                step={900}
+              <TimePickerPopover
                 value={endTime}
-                onChange={(e) => {
-                  setEndTime(e.target.value);
+                onChange={(v) => {
+                  setEndTime(v);
                   setError(null);
                 }}
               />
             </div>
           </div>
 
-          <div
-            className={`rounded-xl px-3 py-2 text-xs ${
-              shiftDurationMinutes > 0
-                ? "bg-muted/50 text-muted-foreground"
-                : "bg-destructive/10 text-destructive"
-            }`}
-          >
-            {shiftDurationMinutes > 0
-              ? `${formatMinutes(shiftDurationMinutes)} scheduled · ${formatMinutes(breakMinutes)} break · ${formatMinutes(workingMinutes)} working`
-              : "Choose an end time later than the start time."}
+          <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs">
+            {shiftDurationMinutes > 0 ? (
+              <span className="text-muted-foreground">
+                {formatMinutes(shiftDurationMinutes)} scheduled ·{" "}
+                {formatMinutes(breakMinutes)} break ·{" "}
+                {formatMinutes(workingMinutes)} working
+              </span>
+            ) : (
+              <span className="text-destructive">
+                Choose an end time later than the start time.
+              </span>
+            )}
           </div>
 
           {/* New Fields: Break, Pace, Staffing */}
@@ -491,18 +494,19 @@ export function ShiftModal({
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
+              className="rounded-2xl border-0 bg-muted/60 shadow-none focus-visible:ring-0"
             />
           </div>
 
           {error && <p className="text-sm text-red-500">{error}</p>}
         </div>
 
-        <DialogFooter className="shrink-0 gap-2 border-t border-border/60 pt-4">
+        <DialogFooter className="flex-row justify-center gap-2 border-t border-border/60 px-6 pb-6 pt-4 sm:flex-row sm:justify-end">
           {editShift && (
             <Button
               variant="destructive"
               onClick={handleDelete}
-              className="mr-auto"
+              className="sm:mr-auto"
             >
               {showDeleteConfirm ? "Confirm Delete?" : "Delete"}
             </Button>

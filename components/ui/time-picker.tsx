@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { Button } from './button'
 import { Clock, ChevronUp, ChevronDown } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select'
+import { Popover, PopoverContent, PopoverTrigger } from './popover'
 
 interface TimePickerProps {
     value?: string // "HH:MM" format (24h)
@@ -493,6 +494,48 @@ export function TimeInput({ value = '09:00', onChange, className, disabled }: Ti
                 </SelectContent>
             </Select>
         </div>
+    )
+}
+
+// Filled pill trigger that opens a rounded popover with the time wheel
+interface TimePickerPopoverProps {
+    value?: string
+    onChange?: (value: string) => void
+    placeholder?: string
+    className?: string
+    disabled?: boolean
+}
+
+export function TimePickerPopover({ value, onChange, placeholder = "Select time", className, disabled }: TimePickerPopoverProps) {
+    const displayValue = React.useMemo(() => {
+        if (!value) return placeholder
+        const [h, m] = value.split(':').map(Number)
+        const period = h >= 12 ? 'PM' : 'AM'
+        const hour12 = h % 12 || 12
+        return `${hour12}:${m.toString().padStart(2, '0')} ${period}`
+    }, [value, placeholder])
+
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    disabled={disabled}
+                    className={cn(
+                        "w-full justify-start border-0 bg-muted/60 font-normal shadow-none",
+                        !value && "text-muted-foreground",
+                        className
+                    )}
+                >
+                    <Clock className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{displayValue}</span>
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto rounded-2xl p-0">
+                <TimePicker value={value} onChange={onChange} />
+            </PopoverContent>
+        </Popover>
     )
 }
 

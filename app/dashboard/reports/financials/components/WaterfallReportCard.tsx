@@ -94,24 +94,22 @@ function WaterfallRow({ item }: { item: WaterfallLineItem }) {
 
       {hasTransactions && (
         <CollapsibleContent>
-          <div className="ml-6 mr-4 mb-2 border-l-2 border-muted pl-4">
+          <div className="ml-2 mr-2 mb-2 border-l-2 border-muted pl-3 sm:ml-6 sm:mr-4 sm:pl-4">
             <div className="max-h-[240px] overflow-y-auto space-y-1">
               {item.transactions.map((tx) => (
                 <div
                   key={tx.order_id}
-                  className="flex items-center justify-between py-1.5 text-xs text-muted-foreground"
+                  className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-1.5 text-xs text-muted-foreground"
                 >
-                  <div className="flex items-center gap-3">
-                    <Link
-                      href={`/dashboard/orders/${tx.order_id}`}
-                      className="text-primary hover:underline font-medium"
-                    >
-                      #{tx.order_number}
-                    </Link>
-                    <span>
-                      {format(new Date(tx.created_at), "MMM d, h:mm a")}
-                    </span>
-                  </div>
+                  <Link
+                    href={`/dashboard/orders/${tx.order_id}`}
+                    className="text-primary hover:underline font-medium"
+                  >
+                    #{tx.order_number}
+                  </Link>
+                  <span className="order-last w-full sm:order-none sm:mr-auto sm:w-auto">
+                    {format(new Date(tx.created_at), "MMM d, h:mm a")}
+                  </span>
                   <span className="font-mono tabular-nums">
                     {formatCurrency(tx.amount)}
                   </span>

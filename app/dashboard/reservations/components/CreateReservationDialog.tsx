@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { DatePopover } from '@/app/dashboard/settings/tips/components/DatePopover'
+import { DatePopover } from '@/components/ui/date-popover'
 import { AlertTriangle, CalendarDays, Clock3, Crown, Loader2, Users } from 'lucide-react'
 import { useCreateReservation } from '@/app/dashboard/hooks/useReservations'
 import { detectReservationConflict } from '@/lib/reservations/conflict-detection'
@@ -36,7 +36,6 @@ import {
   isPastAtLocation,
   zonedToday
 } from '@/lib/reservations/local-time'
-import { toast } from 'sonner'
 import type { ConflictResult } from '@/lib/reservations/conflict-detection'
 import type { Reservation } from '@/types/floor-plan'
 
@@ -202,7 +201,6 @@ export default function CreateReservationDialog ({
         : 'Please fill in the required fields before creating the reservation.'
 
     setSubmitError(message)
-    toast.error(message)
   }
 
   const handleCreateAnyway = () => {

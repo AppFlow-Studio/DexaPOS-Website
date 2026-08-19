@@ -2188,9 +2188,25 @@ export async function revokeTableQrCode(
   return { success: true };
 }
 
+/**
+ * How many tables one `generateMissingQrCodesForLocation` call will process.
+ *
+ * The Clerk session token is minted once per server action and is short-lived,
+ * so a single call that walks hundreds of tables outlives its own JWT and dies
+ * with "JWT expired" partway through. The client drives this in batches instead
+ * — each call is a fresh request with a fresh token — so wall-clock time per
+ * call stays well inside the token lifetime no matter how many tables exist.
+ */
+const QR_GENERATE_BATCH_SIZE = 25;
+
 export async function generateMissingQrCodesForLocation(
   locationId: string
-): Promise<{ success: boolean; generated: number; error?: string }> {
+): Promise<{
+  success: boolean;
+  generated: number;
+  remaining: number;
+  error?: string;
+}> {
   const supabase = createServerSupabaseClient();
   const { data: location, error: locationError } = await supabase
     .from("locations")
@@ -2202,10 +2218,14 @@ export async function generateMissingQrCodesForLocation(
     return {
       success: false,
       generated: 0,
+      remaining: 0,
       error: locationError?.message || "Location not found",
     };
   }
 
+  // Entitlement is checked once for the whole batch. It cannot change midway,
+  // and re-checking per table cost four service-role queries each — the bulk of
+  // the round-trips that made this action outrun its token.
   const qrBillingGate = await getQrBillingGateStatus(
     locationId,
     location.merchant_id as string
@@ -2214,6 +2234,7 @@ export async function generateMissingQrCodesForLocation(
     return {
       success: false,
       generated: 0,
+      remaining: 0,
       error:
         qrBillingGate.reason ||
         "QR Table Ordering is not available for the current subscription tier.",
@@ -2222,25 +2243,66 @@ export async function generateMissingQrCodesForLocation(
 
   const snapshot = await getQrTableManagerSnapshot(locationId);
   if (!snapshot.success) {
-    return { success: false, generated: 0, error: snapshot.error };
+    return { success: false, generated: 0, remaining: 0, error: snapshot.error };
   }
 
+  const pending = snapshot.tables.filter(
+    (row) => row.qrStatus === "not_generated"
+  );
+  const batch = pending.slice(0, QR_GENERATE_BATCH_SIZE);
+
+  const db = supabase as any;
   let generated = 0;
-  for (const row of snapshot.tables) {
-    if (row.qrStatus !== "not_generated") continue;
-    const result = await generateQrCodeForTable(row.floorPlanObjectId);
-    if (!result.success) {
+
+  for (const row of batch) {
+    const { data, error } = await db.rpc("generate_table_qr_code", {
+      p_floor_plan_object_id: row.floorPlanObjectId,
+      p_regenerate: false,
+    });
+
+    const result = data as { success?: boolean; error?: string; action?: string };
+
+    if (error || !result?.success) {
+      // Report partial progress rather than discarding it: everything already
+      // generated is committed, and the run is safe to resume because
+      // already-generated tables are filtered out above.
       return {
         success: false,
         generated,
-        error: result.error || `Failed on ${row.tableLabel}`,
+        remaining: pending.length - generated,
+        error:
+          error?.message ||
+          result?.error ||
+          `Failed on ${row.tableLabel}`,
       };
     }
+
+    await LogAuditEvent({
+      merchantId: location.merchant_id as string,
+      action: "Generated Table QR Code",
+      actionCategory: "settings",
+      resourceType: "table_qr_code",
+      resourceId: row.floorPlanObjectId,
+      resourceName: row.tableLabel,
+      locationId,
+      changes: {
+        after: {
+          table_label: row.tableLabel,
+          qr_action: result.action ?? "generated",
+          bulk: true,
+        },
+      },
+    });
+
     generated += 1;
   }
 
   revalidatePath("/dashboard/online-ordering");
-  return { success: true, generated };
+  return {
+    success: true,
+    generated,
+    remaining: pending.length - generated,
+  };
 }
 
 
