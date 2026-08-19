@@ -1,6 +1,11 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   GetInvoices,
@@ -21,21 +26,33 @@ import {
 } from "@/app/actions/invoices/send-invoice";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useLocationStore } from "@/stores/location-store";
+import type { PaginationParams } from "@/types/pagination";
 
 // =============================================================================
 // Queries
 // =============================================================================
 
-export function useInvoices(status?: InvoiceStatus | null) {
+export function useInvoices(
+  status?: InvoiceStatus | null,
+  pagination?: PaginationParams,
+) {
   const clerkOrgId = useClerkOrgId();
   const { selectedLocationId } = useLocationStore();
   const effectiveLocationId =
     selectedLocationId === "all" ? null : selectedLocationId;
 
   return useQuery({
-    queryKey: ["invoices", clerkOrgId, effectiveLocationId, status ?? "all"],
-    queryFn: () => GetInvoices(clerkOrgId!, effectiveLocationId, status),
+    queryKey: [
+      "invoices",
+      clerkOrgId,
+      effectiveLocationId,
+      status ?? "all",
+      pagination,
+    ],
+    queryFn: () =>
+      GetInvoices(clerkOrgId!, effectiveLocationId, status, pagination),
     enabled: !!clerkOrgId,
+    placeholderData: keepPreviousData,
   });
 }
 

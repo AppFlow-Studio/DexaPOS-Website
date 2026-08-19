@@ -1,4 +1,5 @@
 // types/database.types.ts
+import type { PaginationParams } from "@/types/pagination";
 export type OrderStatus =
   | "draft"
   | "pending"
@@ -119,6 +120,27 @@ export interface OrderFilters {
     min?: number;
     max?: number;
   };
+}
+
+export interface OrderOverviewRecord {
+  status: OrderStatus;
+  payment_status: PaymentStatus;
+  total_amount: number;
+  order_type: OrderType;
+  table_number?: string | null;
+  created_at: string;
+}
+
+export type OrderSortField =
+  | "created_at"
+  | "display_number"
+  | "status"
+  | "total_amount";
+
+export interface OrderPageOptions extends PaginationParams {
+  search?: string;
+  sortBy?: OrderSortField;
+  sortDirection?: "asc" | "desc";
 }
 
 export interface OrderItem {

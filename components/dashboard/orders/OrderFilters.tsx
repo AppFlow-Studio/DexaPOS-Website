@@ -101,6 +101,7 @@ export function OrderFilters({ className }: OrderFiltersProps) {
   // Helper to update URL params
   const updateParams = (updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString());
+    params.delete("page");
 
     Object.entries(updates).forEach(([key, value]) => {
       if (value === null) {
