@@ -21,7 +21,12 @@ drawn straight from the POS.
 > that document's decisions UI1–UI21 describe a surface that no longer exists.
 >
 > Two things it deliberately gave up, both recorded in the plan's §7: **86'd dishes now vanish from a live page
-> with no warning**, and there is **no way to populate `merchant_sites.nav`** until Stage 6 derives it.
+> with no warning**, and there was **no way to populate `merchant_sites.nav`**.
+>
+> **The nav hole is closed as of 2026-08-19.** Navigation is edited from the header block, seeded from published
+> pages, and kept in step by publish / unpublish / rename / delete — see
+> [PLAN-2026-08-18-OWNER-TEARDOWN-PARITY.md](PLAN-2026-08-18-OWNER-TEARDOWN-PARITY.md) Phase 0. The same pass
+> added per-section capability flags and Owner's character caps (Phase 1).
 
 ## Progress
 
@@ -91,6 +96,8 @@ practice.
 | [PLAN-05-INFRA-ASSETS-DOMAINS-FORMS.md](PLAN-05-INFRA-ASSETS-DOMAINS-FORMS.md) | 7 | Asset pipeline + quota, custom domains + TLS, form runtime |
 | [PLAN-06-FRONTEND-BUILDER.md](PLAN-06-FRONTEND-BUILDER.md) | 8–9 | Drag-and-drop canvas, undo/redo, starter templates, remaining surfaces. **Largely superseded** by the 2026-08-18 rebuild below |
 | [PLAN-2026-08-18-OWNER-UI-REPLACEMENT.md](PLAN-2026-08-18-OWNER-UI-REPLACEMENT.md) | 8–9 | 🔵 **The current UI spec.** Owner.com's model read off 23 screenshots: decisions, phase-by-phase work items with status, accepted risks, and the guard rails that keep it a UI-only change |
+| [PLAN-2026-08-18-OWNER-TEARDOWN-PARITY.md](PLAN-2026-08-18-OWNER-TEARDOWN-PARITY.md) | 7–11 | 🟢 **The current parity plan.** Written against a teardown of the running Owner.com app. Decisions W1–W6, the five mechanisms, 18-kind catalogue, twelve phases with checkable work items, sizing and risks |
+| [PLAN-2026-08-18-OWNER-FULL-FEATURE-PARITY.md](PLAN-2026-08-18-OWNER-FULL-FEATURE-PARITY.md) | 7–11 | ⚫ **Superseded** by the teardown plan above. Kept for its data-model and security sections |
 
 ### Analysis & reference
 
@@ -103,6 +110,7 @@ practice.
 | [RESEARCH-2026-08-14-BUILDER-UI-PRIOR-ART.md](RESEARCH-2026-08-14-BUILDER-UI-PRIOR-ART.md) | 18 shipped editors surveyed via Mobbin, with a link to every screen. Establishes that **Shopify's theme editor — not Webflow or Figma — is our reference class**, and that no surveyed product surfaces live data because none has a POS behind the page |
 | [ANALYSIS-2026-08-11-MOCKBUILDER-GAP.md](ANALYSIS-2026-08-11-MOCKBUILDER-GAP.md) | Gap analysis, decisions **D1–D6**, blocker register **B1–B12**, MockBuilder source review |
 | [FINDING-2026-08-12-EXISTING-CMS-PRIOR-ART.md](FINDING-2026-08-12-EXISTING-CMS-PRIOR-ART.md) | This repo already ships a section-tree CMS with a **server-side renderer**. Reduces the two hardest unknowns to porting problems |
+| [`docs/research/owner-com-website-tab/`](../../research/owner-com-website-tab/) | 🔎 **The teardown.** 2026-08-18 read-only capture of a live Owner.com merchant account — 28 screenshots, 15 feature docs covering every sub-page, section editor and behaviour. Source of truth for the parity target. ⚠️ Contains real customer/applicant PII; keep internal |
 | [RESEARCH-OWNER-COM.md](RESEARCH-OWNER-COM.md) | The reference product — what to copy, what not to, and where they are structurally beatable |
 | [VISION-UNBOUNDED.md](VISION-UNBOUNDED.md) | The ceiling. No constraints. Tags every idea **[COMPATIBLE]** or **[REQUIRES CHANGE]** against the v1 architecture |
 

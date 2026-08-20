@@ -472,6 +472,60 @@ Recording these so nobody rediscovers them as bugs.
       `app/dashboard/website/actions/` appears in `git diff --stat` — additions are fine, and the two
       exceptions already taken are listed in §5.
 
+### 9.1 Browser QA run — 2026-08-18 ✅
+
+Run against staging as *Joes Coffee Shop* at 1366 px, Next 16.2.12 dev. Every surface loads with a clean
+console, and the full lifecycle **create → template → edit → publish → unpublish → page settings → delete**
+completes. Two defects were found and fixed; both are below.
+
+**Defect 1 — the three redirect shims were dead, and so is every other redirect page in the app.**
+
+`/dashboard/website`, `/website/builder` and `/website/design` all rendered *"This page couldn't load"*
+and never redirected. The cause is not ours: a `redirect()` from an App Router page under a
+`force-dynamic` layout does not emit an HTTP 3xx, because the response has already begun streaming.
+Next answers **200** and asks the client router to navigate instead. That path is broken in 16.2.12 —
+the router state becomes a promise, `useActionQueue` calls `use()` conditionally on exactly that
+(`next/dist/client/components/use-action-queue.js`, final line), the hook count changes between
+renders, and React throws *"Rendered more hooks than during the previous render."*
+See https://github.com/vercel/next.js/issues/78396.
+
+Proof it is not this branch: **`/dashboard/billing`** — five lines, untouched by this work, on `main` —
+fails identically.
+
+Fixed by moving all three into `redirects()` in `next.config.ts` and deleting the three page components.
+A config redirect is served by the routing layer before React exists: a real 307, no render, no
+hydration, immune to this class of bug, and correct with JS disabled. `permanent: false` deliberately —
+a 308 is cached by browsers indefinitely, a poor trade for an internal route that may move again.
+The `?page=` → `/pages/{id}` lift needs a `has` query capture plus a bare fallback to `/pages/home`.
+
+> **Still broken elsewhere, and out of scope for this branch:** `/dashboard/billing`,
+> `/manage/settings`, `/manage/create-merchant` and `/merchant/kiosk` are pure path-to-path
+> redirect pages with the same defect and the same four-line fix. The conditional ones
+> (`/admin`, `/dashboard/subscriptions`, `/dashboard/settings/billing`) cannot move to config —
+> they branch on auth — and stay exposed until Next is upgraded.
+
+**Defect 2 — page settings were unreachable, so no page could be renamed or deleted.**
+
+`openPageSettings` existed in the store and `SectionDrawer` rendered a complete `PageSettings` panel
+behind it — page name, web address, and *Remove this page* with its confirm dialog — but **nothing in
+any UI ever called it**. Deleting `PageListCard` removed the only entry point and nothing replaced it,
+which no test could catch: every unit under it passes in isolation.
+
+Fixed by making the editor's title the way in. `OverlayChrome` gained an optional `onTitleClick`;
+`EditorTopBar` wires it to `openPageSettings` in Build mode only, since Preview closes the drawer by
+design and a title that did nothing there would read as broken. The gear is always visible rather than
+revealed on hover — a control you can only find once you are already touching it is how this got lost
+in the first place.
+
+### 9.2 Known rough edges, not fixed
+
+- **`/website/builder?page=X` keeps a redundant `?page=` after redirecting.** Next passes source query
+  strings through automatically. Inert — the editor reads the path segment — and it only affects
+  legacy links.
+- **The delete dialog mis-describes a page that was published and then unpublished.** The copy keys off
+  `page.publishedAt`, which unpublish clears, so it says *"never been published, so no guest has seen
+  it"* about a page guests could have seen. One-line copy fix; no data consequence.
+
 ---
 
 ## 10. Sizing
