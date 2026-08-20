@@ -4,6 +4,12 @@ import { createHash } from "node:crypto";
 
 import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
 import type { ActionResult, SitePageRow, SitePageVersionRow } from "@/lib/site-builder/db-types";
+import {
+  appendNavItem,
+  parseNavItems,
+  removeNavItemByPath,
+  serializeNav,
+} from "@/lib/site-builder/nav";
 import { normalizePageWithReport } from "@/lib/site-builder/normalize";
 import type { PageDocument } from "@/lib/site-builder/page-document";
 import { validatePage } from "@/lib/site-builder/validate";
@@ -114,6 +120,10 @@ export async function PublishPage(
       // is in exactly that state — and such a merchant would otherwise press
       // Publish forever without ever becoming visible.
       await ensureSiteIsLive(supabase, page.site_id);
+      // Same reasoning as `ensureSiteIsLive`: the version is unchanged, but a
+      // page whose link was never written is still unreachable, and pressing
+      // Publish again is exactly what a merchant would do about it.
+      await syncNavForPage(supabase, page, "published");
 
       return {
         data: {
@@ -186,6 +196,7 @@ export async function PublishPage(
   if (pointerError) return { error: pointerError.message, code: "db_error" };
 
   await stampSitePublishTimes(supabase, page.site_id, version.published_at);
+  await syncNavForPage(supabase, page, "published");
 
   await LogAuditEvent({
     clerkOrgId,
@@ -208,6 +219,62 @@ export async function PublishPage(
       unchanged: false,
     },
   };
+}
+
+/**
+ * Keeps the site navigation honest about what is public.
+ *
+ * **This is the difference between publishing a page and publishing a page
+ * anyone can find.** Nothing wrote `merchant_sites.nav`, while the public
+ * renderer read it — so a merchant could publish a page, see it live at its own
+ * address, and have no visitor ever reach it, because no link to it existed
+ * anywhere on the site.
+ *
+ * Two directions, both narrow:
+ *
+ *  - **on publish**, append the page if its destination is not already listed.
+ *    Append only: a merchant who has arranged their navigation must not find it
+ *    rearranged because they republished.
+ *  - **on unpublish**, drop it. A link to an unpublished page is a link to a
+ *    404, and leaving one there would trade an unreachable page for a broken
+ *    one.
+ *
+ * The home page is never added — the logo already links there, and a "Home"
+ * item beside it is a wasted slot out of eight.
+ *
+ * **Best effort, and deliberately so.** A publish that succeeded must not be
+ * reported as failed because a navigation link could not be written. The page
+ * is live either way, and the merchant can add the link by hand.
+ */
+async function syncNavForPage(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  page: SitePageRow,
+  action: "published" | "unpublished",
+): Promise<void> {
+  if (page.is_home) return;
+
+  try {
+    const { data } = await supabase
+      .from("merchant_sites")
+      .select("nav")
+      .eq("id", page.site_id)
+      .maybeSingle();
+
+    const current = parseNavItems((data as { nav: unknown } | null)?.nav);
+    const next =
+      action === "published"
+        ? appendNavItem(current, { label: page.title, path: page.path })
+        : removeNavItemByPath(current, page.path);
+
+    if (next === current) return;
+
+    await supabase
+      .from("merchant_sites")
+      .update({ nav: serializeNav(next) })
+      .eq("id", page.site_id);
+  } catch (error) {
+    console.error("[site-builder] nav sync failed:", error);
+  }
 }
 
 /**
@@ -389,6 +456,8 @@ export async function UnpublishPage(
       .update({ render_mode: "template" })
       .eq("id", page.site_id);
   }
+
+  await syncNavForPage(supabase, page, "unpublished");
 
   await LogAuditEvent({
     clerkOrgId,

@@ -20,7 +20,7 @@ import type { Section, SectionOf } from "./sections/types";
  * Bumped whenever a stored document's shape changes in a way older code would
  * not understand. Every bump needs a migration in `./migrations`.
  */
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 export interface PageSeo {
   title?: string;

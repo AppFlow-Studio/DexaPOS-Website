@@ -102,3 +102,38 @@ export function groupByType(
   }
   return grouped;
 }
+
+/**
+ * Every asset id a document references, deduplicated.
+ *
+ * Structural for the same reason `extractBindings` is: the content reshape
+ * added two asset slots to one section and this needed no change, and the
+ * gallery's array of them works without a special case. An `AssetRef` is
+ * recognised by carrying an `assetId` string, which is the shape
+ * `assetRefSchema` guarantees.
+ *
+ * Hidden sections are included deliberately, unlike bindings. Resolving an
+ * asset is one row of an `= ANY(...)` that has already been issued, whereas a
+ * binding is a menu query — and a merchant unhiding a section should not watch
+ * its photograph pop in a moment later.
+ */
+export function collectAssetIds(doc: PageDocument): string[] {
+  const seen = new Set<string>();
+
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+
+    const record = value as Record<string, unknown>;
+    if (typeof record.assetId === "string" && record.assetId) seen.add(record.assetId);
+
+    Object.values(record).forEach(visit);
+  };
+
+  for (const section of doc.sections) visit(section.props);
+
+  return [...seen];
+}

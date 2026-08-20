@@ -1,6 +1,7 @@
 "use client";
 
 import { CircleCheck, Plus } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -13,8 +14,13 @@ import {
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SectionKind } from "@/lib/site-builder/sections/kinds";
-import { addableKinds, SECTION_REGISTRY } from "@/lib/site-builder/sections/registry";
+import {
+  availableKinds,
+  kindsAwaitingFeature,
+  SECTION_REGISTRY,
+} from "@/lib/site-builder/sections/registry";
 import { cn } from "@/lib/utils";
+import { websiteRoutes } from "../routes";
 import { announce } from "./announce";
 import { SectionIcon } from "./section-icons";
 import type { BuilderStore } from "./store";
@@ -58,8 +64,17 @@ export default function AddSectionModal({ store }: { store: BuilderStore }) {
 function SectionGrid({ store }: { store: BuilderStore }) {
   const doc = store((s) => s.doc);
   const addSection = store((s) => s.addSection);
+  const locationId = store((s) => s.locationId);
 
-  const kinds = addableKinds();
+  const features = store((s) => s.features);
+
+  // Feature-gated kinds are ABSENT, not disabled. The alternative — a greyed
+  // row per kind — turns the catalogue into a list of things this restaurant
+  // does not have, which is the opposite of what a merchant opened it for.
+  // What they lose is the answer to "where did Reviews go", and that is what
+  // the line beneath the grid is for.
+  const kinds = availableKinds(features);
+  const awaiting = kindsAwaitingFeature(features);
   const present = new Set(doc.sections.map((section) => section.kind));
 
   const firstAvailable = kinds.find((kind) => !isBlocked(kind, present));
@@ -88,6 +103,24 @@ function SectionGrid({ store }: { store: BuilderStore }) {
           />
         ))}
       </div>
+
+      {awaiting.length > 0 && (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {awaiting.map(({ feature, featureLabel, kinds: hidden }) => (
+            <span key={feature} className="block">
+              {listLabels(hidden)} appear here once{" "}
+              <strong className="font-medium text-foreground">{featureLabel}</strong> is on in{" "}
+              <Link
+                href={websiteRoutes.settings(locationId ?? undefined)}
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                website settings
+              </Link>
+              .
+            </span>
+          ))}
+        </p>
+      )}
 
       <DialogFooter>
         <Button disabled={!chosen} onClick={add}>
@@ -160,4 +193,11 @@ function SectionRow({
       <TooltipContent className="max-w-56">{reason}</TooltipContent>
     </Tooltip>
   );
+}
+
+/** "Reviews", or "Reviews and Reservations" — never a bare comma-separated list of two. */
+function listLabels(kinds: SectionKind[]): string {
+  const labels = kinds.map((kind) => `${SECTION_REGISTRY[kind].label} sections`);
+  if (labels.length <= 1) return labels[0] ?? "";
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }

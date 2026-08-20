@@ -45,8 +45,11 @@ describe("describeSchema", () => {
     ["hero", "primaryCta", "link"],
     ["header", "sticky", "boolean"],
     ["header", "logoAlign", "select"],
-    ["content", "body", "richtext"],
-    ["content", "imagePosition", "select"],
+    ["content", "title", "text"],
+    ["content", "subtitle", "text"],
+    ["content", "background", "select"],
+    ["content", "media", "select"],
+    ["content", "button", "link"],
     ["gallery", "images", "image"],
     ["gallery", "columns", "select"],
     ["popular-items", "items", "binding-list"],
@@ -56,9 +59,21 @@ describe("describeSchema", () => {
     ["location", "location", "binding-list"],
     ["location", "mapStyle", "select"],
     ["footer", "links", "repeater"],
+    ["video", "videoId", "video"],
   ])("classifies %s.%s as %s", (kind, field, expected) => {
     const controls = controlsFor(kind as (typeof SECTION_KINDS)[number]);
     expect(controls[field]?.kind).toBe(expected);
+  });
+
+  /**
+   * The FAQ answer is the only merchant-authored markup left on a built page —
+   * the content reshape (decision W3) took the other one. It lives inside a
+   * repeater, so the classification has to be asserted on the sub-control.
+   */
+  it("classifies the faq answer as rich text, inside its repeater", () => {
+    const items = controlsFor("faq").items;
+    expect(items.kind).toBe("repeater");
+    expect(items.fields?.find((f) => f.name === "answer")?.kind).toBe("richtext");
   });
 
   it("marks optional fields optional and required fields required", () => {
@@ -84,6 +99,13 @@ describe("describeSchema", () => {
     expect(controlsFor("popular-items").items.maxItems).toBe(24);
     expect(controlsFor("gallery").images.maxItems).toBe(24);
     expect(controlsFor("faq").items.maxItems).toBe(30);
+  });
+
+  it("reads number bounds from the schema instead of assuming percentages", () => {
+    expect(controlsFor("hero").overlayOpacity).toMatchObject({ min: 0, max: 100 });
+    expect(controlsFor("events").limit).toMatchObject({ min: 1, max: 24 });
+    const rating = controlsFor("reviews").items.fields?.find((field) => field.name === "rating");
+    expect(rating).toMatchObject({ min: 1, max: 5 });
   });
 
   it("describes repeater sub-fields", () => {

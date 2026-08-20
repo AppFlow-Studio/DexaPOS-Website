@@ -115,3 +115,73 @@ export function moveNavItem(items: NavItem[], index: number, direction: -1 | 1):
   [next[index], next[target]] = [next[target], next[index]];
   return next;
 }
+
+/**
+ * Whether two items point at the same place.
+ *
+ * Labels are the merchant's business — two links may legitimately be called the
+ * same thing — so identity is the destination, never the text.
+ */
+export function isSameNavTarget(a: NavItem, b: NavItem): boolean {
+  if (a.href !== undefined || b.href !== undefined) {
+    return (a.href ?? "").trim().toLowerCase() === (b.href ?? "").trim().toLowerCase();
+  }
+  return normalizeNavPath(a.path ?? "") === normalizeNavPath(b.path ?? "");
+}
+
+/**
+ * Appends an item unless its destination is already in the list.
+ *
+ * **Append only, never reorder.** This runs when a page is published, and a
+ * merchant who has spent time arranging their navigation must not find it
+ * rearranged because they republished a page. A new page joins the end; where
+ * it goes after that is their call.
+ *
+ * Silently does nothing at `MAX_NAV_ITEMS`. The alternative — refusing the
+ * publish, or dropping an existing link to make room — would let a navigation
+ * limit block a merchant from putting their new opening hours live.
+ */
+export function appendNavItem(items: NavItem[], item: NavItem): NavItem[] {
+  if (items.some((existing) => isSameNavTarget(existing, item))) return items;
+  if (items.length >= MAX_NAV_ITEMS) return items;
+  return [...items, item];
+}
+
+/** Drops every item pointing at `path`. Used when a page stops being public. */
+export function removeNavItemByPath(items: NavItem[], path: string): NavItem[] {
+  const target = normalizeNavPath(path);
+  return items.filter((item) => item.href !== undefined || normalizeNavPath(item.path ?? "") !== target);
+}
+
+/** A page, as much of one as the navigation cares about. */
+export interface NavPage {
+  title: string;
+  path: string;
+  isHome: boolean;
+  isPublished: boolean;
+}
+
+/**
+ * Derives navigation from the pages that are actually published.
+ *
+ * The backfill for every site built before there was an editor for this. Those
+ * sites carry `{"items":[]}`, which renders as a header with no links at all —
+ * so a merchant could publish four pages and have visitors reach exactly one of
+ * them, the home page, by typing its address.
+ *
+ * **The home page is deliberately not included**, matching what happens when a
+ * page is published: the logo links home already, and a "Home" item beside it
+ * spends one of eight slots saying so twice. The two paths have to agree, or a
+ * site's navigation would depend on whether it was backfilled or built up one
+ * publish at a time.
+ *
+ * Publication order, because that is the order a merchant built the pages in
+ * and it is a better guess than alphabetical. It is only ever a starting point:
+ * the editor owns the list from the first time it is opened.
+ */
+export function deriveNavFromPages(pages: NavPage[]): NavItem[] {
+  return pages
+    .filter((page) => page.isPublished && !page.isHome)
+    .slice(0, MAX_NAV_ITEMS)
+    .map((page) => ({ label: page.title.trim() || "Untitled", path: normalizeNavPath(page.path) }));
+}

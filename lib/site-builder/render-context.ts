@@ -8,6 +8,10 @@
 
 import type { ResolvedMap } from "./bindings/resolved";
 import { readableOn } from "./color";
+import type { RenderEvent } from "./events/event-map";
+import type { ResolvedForm } from "./forms/form-map";
+import type { SiteBrand, SiteFeatures } from "./site-settings";
+import { DEFAULT_BRAND, DEFAULT_FEATURES } from "./site-settings";
 import type { SectionKind } from "./sections/kinds";
 import type { SectionOf } from "./sections/types";
 
@@ -104,6 +108,15 @@ export function resolveTheme(
 }
 
 /** Site-level facts a section may display without binding to them. */
+/** A resolved asset, as a renderer needs it. */
+export interface ResolvedAsset {
+  url: string;
+  /** The library's default alt text. An `AssetRef.alt` overrides it. */
+  alt: string | null;
+  width: number | null;
+  height: number | null;
+}
+
 export interface RenderSite {
   siteId: string;
   /**
@@ -146,6 +159,25 @@ export interface RenderSite {
    * shows a dual-pricing disclosure, a built page showing prices must too.
    */
   pricingDisclosureText: string | null;
+  /**
+   * The merchant's brand toggles, as the *renderer* sees them.
+   *
+   * A section reads these to decide whether a capability exists at all — the
+   * header's "Book a table" button is `features.reservations && brand.reservationUrl`,
+   * not a per-page prop. Putting it on the context rather than in each section's
+   * props is what stops a merchant having to switch reservations on in nine
+   * places.
+   */
+  features: SiteFeatures;
+  /**
+   * Brand facts a section may display without binding to them: social accounts,
+   * the reservation link, cuisines, price range.
+   *
+   * These are *site-wide*, so a section that renders them carries a `show…`
+   * boolean and nothing else. The footer's `showSocial` is the pattern: the page
+   * decides whether, the brand decides what.
+   */
+  brand: SiteBrand;
 }
 
 export interface RenderContext {
@@ -155,13 +187,75 @@ export interface RenderContext {
   /** Carried from day one; retrofitting a locale through 9 renderers is misery. */
   locale: string;
   /**
-   * Resolves an `AssetRef.assetId` to a URL.
+   * Resolves an `AssetRef.assetId` to something renderable.
    *
-   * Stubbed to `null` in v1 — `site_assets` is Stage 7. Renderers must already
-   * treat a null result as "no image" rather than a broken one, so turning the
-   * asset pipeline on later changes nothing in this layer.
+   * Returns the intrinsic dimensions alongside the URL so `SiteImage` can emit
+   * `width`/`height` and stop the layout shift that merchant photography
+   * otherwise causes on every page it appears on — a Core Web Vitals number, on
+   * a product sold partly on search ranking.
+   *
+   * `null` means "no image", never "broken image": a deleted asset, an id from
+   * another merchant, or a reference that predates the library all resolve the
+   * same way, and every renderer already treats that as nothing to draw.
    */
-  resolveAssetUrl: (assetId: string) => string | null;
+  resolveAsset: (assetId: string) => ResolvedAsset | null;
+  /**
+   * Resolves a `form` section's `formId` to a definition it can render.
+   *
+   * The same indirection as `resolveAsset`, and for the same reason: a form is
+   * a reusable object referenced by id, never a snapshot embedded in the page.
+   * That is what lets one form sit on four pages with one inbox behind it, and
+   * what makes editing the form update all four without republishing any.
+   *
+   * `null` means "no form to draw" — deleted, unpublished, or belonging to
+   * another merchant — and the section renders nothing rather than a broken
+   * embed.
+   */
+  resolveForm: (formId: string) => ResolvedForm | null;
+  /**
+   * The result of a form post that has just redirected back to this page.
+   *
+   * Carried on the context rather than read inside the section because a
+   * section performs no I/O and receives no request — and because a page may
+   * hold two forms, so the id has to be compared rather than a bare boolean
+   * passed down. `formStateFor` does that comparison.
+   */
+  formState?: { submitted?: string | null; error?: string | null };
+  /**
+   * When this request was served, as an epoch milliseconds stamp.
+   *
+   * Exists for the public form's minimum-fill-time check, which needs a "when
+   * was this page drawn" value and has no JavaScript to measure one with. It
+   * lives here rather than being read inside the form because a section must be
+   * a pure function of its inputs — calling `Date.now()` during render is
+   * exactly the impurity React's own lint rule objects to, and the context is
+   * assembled once per request in a loader where the call is honest.
+   *
+   * `0` means "not stamped", and the submit handler treats that as no signal
+   * rather than as an instant submission.
+   */
+  renderedAt?: number;
+  /**
+   * The site's live events.
+   *
+   * A list rather than a resolver, unlike `resolveAsset` and `resolveForm`,
+   * because the `events` section references no particular event — it renders
+   * whatever is upcoming. That is the whole point of events being first-class
+   * records: one added today appears on every page carrying the section,
+   * without any of them being republished.
+   *
+   * Already loaded; the section filters it to what is upcoming, which depends
+   * on the viewer's local date and so cannot be done in SQL.
+   */
+  events?: RenderEvent[];
+  /**
+   * Where an event's detail page lives, given its slug.
+   *
+   * Supplied rather than derived for the same reason as `orderUrl`: the built
+   * site is at a host root on a subdomain and under `/sites/{slug}` on the path
+   * form, and a renderer that hardcoded one would be broken on the other.
+   */
+  eventUrl?: (slug: string) => string;
 }
 
 /**
@@ -189,15 +283,33 @@ export interface SectionRenderProps<K extends SectionKind = SectionKind> {
   ctx: RenderContext;
 }
 
+/**
+ * `RenderSite` minus the two settings blocks, which every caller would
+ * otherwise have to spell out in full to say "this merchant has none".
+ */
+export type RenderSiteInput = Omit<RenderSite, "features" | "brand"> &
+  Partial<Pick<RenderSite, "features" | "brand">>;
+
 export function createRenderContext(
-  overrides: Partial<RenderContext> & { site: RenderSite },
+  overrides: Partial<Omit<RenderContext, "site">> & { site: RenderSiteInput },
 ): RenderContext {
+  const { site, ...rest } = overrides;
+
   return {
     mode: "public",
     locale: "en-US",
     theme: DEFAULT_THEME,
-    resolveAssetUrl: () => null,
-    ...overrides,
+    // No library by default. Tests, fixtures and any surface that has not
+    // loaded assets render text and skip photographs rather than
+    // reaching for a URL that would not exist.
+    resolveAsset: () => null,
+    resolveForm: () => null,
+    ...rest,
+    // Everything off and nothing set, unless the caller says otherwise. A
+    // fixture that has never heard of brand settings renders exactly as it did
+    // before they existed, which is what keeps this addition invisible to the
+    // 400-odd tests that predate it.
+    site: { features: DEFAULT_FEATURES, brand: DEFAULT_BRAND, ...site },
   };
 }
 

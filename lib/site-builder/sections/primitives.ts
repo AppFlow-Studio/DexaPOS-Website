@@ -71,8 +71,38 @@ export const sectionStyleSchema = z.object({
 /** Rich-text HTML. Sanitized on write and on render — never trusted. */
 export const richTextSchema = z.string().max(20_000);
 
-/** Short plain-text heading. */
-export const headingSchema = z.string().max(160);
+/**
+ * The copy limits, and the cheapest quality mechanism in the product.
+ *
+ * These are Owner.com's numbers, read off a live account
+ * (docs/research/owner-com-website-tab/features/06-section-types.md). They are
+ * hard caps with a live counter beside the field, not warnings a merchant can
+ * push past, and they are the reason an Owner site never carries a headline
+ * that wraps to four ugly lines.
+ *
+ * We used to allow 160 / 2 000. Nothing enforced a house style, so the only
+ * thing standing between a merchant and an unreadable page was their own
+ * judgement about typography — which is precisely the thing this product exists
+ * to not require of them.
+ *
+ * **A cap is only real if the counter can see it.** `describeSchema` reads these
+ * back off the Zod check, so changing a number here changes the limit, the
+ * counter and the validation together. Nothing restates them.
+ *
+ * Tightening a cap must never destroy stored copy: `normalizePage` truncates an
+ * over-long value and reports the repair, rather than failing the field and
+ * letting it fall back to a default. See `clampStrings` there.
+ */
+export const TITLE_MAX = 50;
+export const SUBTITLE_MAX = 500;
+/** The hero gets more room because it is the one line that carries the page. */
+export const HERO_TITLE_MAX = 150;
 
-/** Longer plain-text supporting copy. */
-export const proseSchema = z.string().max(2_000);
+/** A section's own title. */
+export const titleSchema = z.string().max(TITLE_MAX);
+
+/** Supporting copy under a title. */
+export const subtitleSchema = z.string().max(SUBTITLE_MAX);
+
+/** The hero's headline. */
+export const heroTitleSchema = z.string().max(HERO_TITLE_MAX);

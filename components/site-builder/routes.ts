@@ -31,6 +31,52 @@ export const websiteRoutes = {
   /** Site-wide style. */
   style: (locationId: string) => `/dashboard/website/style?location=${q(locationId)}`,
 
+  /**
+   * Brand settings — the toggles and facts every page reads.
+   *
+   * Takes an optional location because it is linked to from inside the editor,
+   * which may be on a page with no location of its own; the screen itself is
+   * merchant-wide and only uses the parameter to resolve a storefront.
+   */
+  settings: (locationId?: string) =>
+    locationId
+      ? `/dashboard/website/settings?location=${q(locationId)}`
+      : "/dashboard/website/settings",
+
+  /**
+   * Marketing pixels. Named `tracking` rather than `analytics` because it shows
+   * no data — decision W6, and the one place this plan deliberately departs
+   * from Owner's own naming.
+   */
+  tracking: (locationId?: string) =>
+    locationId
+      ? `/dashboard/website/tracking?location=${q(locationId)}`
+      : "/dashboard/website/tracking",
+
+  /** The events list. */
+  events: (locationId?: string) =>
+    locationId
+      ? `/dashboard/website/events?location=${q(locationId)}`
+      : "/dashboard/website/events",
+
+  /** The forms list. Forms are brand-level, so no location is required. */
+  forms: (locationId?: string) =>
+    locationId
+      ? `/dashboard/website/forms?location=${q(locationId)}`
+      : "/dashboard/website/forms",
+
+  /** The form builder — the page editor's shell, editing a form. */
+  formEditor: (formId: string, locationId?: string) =>
+    locationId
+      ? `/dashboard/website/forms/${q(formId)}?location=${q(locationId)}`
+      : `/dashboard/website/forms/${q(formId)}`,
+
+  /** One form's submissions. */
+  formSubmissions: (formId: string, locationId?: string) =>
+    locationId
+      ? `/dashboard/website/forms/${q(formId)}/submissions?location=${q(locationId)}`
+      : `/dashboard/website/forms/${q(formId)}/submissions`,
+
   /** Full-page render of the current draft. */
   preview: (locationId: string, pageId?: string) => {
     const base = `/dashboard/website/preview?location=${q(locationId)}`;

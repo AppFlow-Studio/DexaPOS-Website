@@ -2,6 +2,10 @@ import { builtSiteMetadata, renderBuiltSite } from "./built-site";
 import { getStorefrontData, getStorefrontMetaData } from "../actions";
 import { getStoreTaxRateByLocationId } from "../order-actions";
 import { notFound } from "next/navigation";
+import {
+  FORM_ERROR_PARAM,
+  FORM_SUBMITTED_PARAM,
+} from "@/lib/site-builder/forms/protocol";
 import { AnalyticsScripts } from "../components/AnalyticsScripts";
 import { CartSidebar } from "../components/CartSidebar";
 import { FloatingCartBar } from "../components/FloatingCartBar";
@@ -14,6 +18,7 @@ interface PageProps {
   params: Promise<{
     slug: string;
   }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 function absoluteUrl(url: string | null | undefined): string | null {
@@ -113,14 +118,17 @@ function buildOpeningHoursSpec(
   return out.length ? out : undefined;
 }
 
-export default async function StorefrontPage({ params }: PageProps) {
+export default async function StorefrontPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const { site, location, menus } = await getStorefrontData(slug);
 
   // The routing fork (B3/D5). Returns null unless this merchant has actually
   // published a built site, in which case everything below is untouched —
   // decision D1 requires a template storefront to be byte-for-byte unaffected.
-  const built = await renderBuiltSite(slug, "", { hasActiveStorefront: !!location });
+  const built = await renderBuiltSite(slug, "", {
+    hasActiveStorefront: !!location,
+    formState: await readFormState(searchParams),
+  });
   if (built) return built;
 
   if (!location) {
@@ -217,4 +225,25 @@ export default async function StorefrontPage({ params }: PageProps) {
       </StorefrontRoot>
     </>
   );
+}
+
+/**
+ * The outcome of a form post, read off the query string.
+ *
+ * Both values are form ids echoed back by the submit handler, so they are
+ * compared against a rendered form's own id rather than trusted — a crafted
+ * `?submitted=` cannot make an arbitrary form claim it was sent.
+ */
+async function readFormState(
+  searchParams: Promise<Record<string, string | string[] | undefined>> | undefined,
+): Promise<{ submitted?: string | null; error?: string | null } | undefined> {
+  if (!searchParams) return undefined;
+  const params = await searchParams;
+  const one = (value: string | string[] | undefined) =>
+    typeof value === "string" ? value : null;
+
+  return {
+    submitted: one(params[FORM_SUBMITTED_PARAM]),
+    error: one(params[FORM_ERROR_PARAM]),
+  };
 }

@@ -53,17 +53,19 @@ describe("section registry", () => {
     });
 
     /**
-     * Gallery depends entirely on the asset library: `resolveAssetUrl` returns
-     * null for every id, so a gallery added today can never hold a photo.
-     * Delete this expectation when Stage 7 lands — it is the reminder.
+     * Gallery was gated from v1 until the asset library landed: `resolveAsset`
+     * returned null for every id, so a gallery added then could never hold a
+     * photograph. The gate came off with the library — this is the assertion
+     * that replaced the reminder telling us to remove it.
      */
-    it("keeps gallery gated until the asset library exists", () => {
-      expect(SECTION_REGISTRY.gallery.unavailable).toBeTruthy();
+    it("offers the gallery now that photographs can be uploaded", () => {
+      expect(SECTION_REGISTRY.gallery.unavailable).toBeUndefined();
+      expect(addableKinds()).toContain("gallery");
     });
 
-    it("leaves every other kind usable", () => {
+    it("gates only PDF until the asset library accepts documents", () => {
       const gated = SECTION_KINDS.filter((kind) => SECTION_REGISTRY[kind].unavailable);
-      expect(gated).toEqual(["gallery"]);
+      expect(gated).toEqual(["pdf"]);
     });
   });
 

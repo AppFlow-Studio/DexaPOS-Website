@@ -1,30 +1,14 @@
 "use client";
 
-import {
-  ChevronDown,
-  ChevronUp,
-  Copy,
-  Eye,
-  EyeOff,
-  Loader2,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, EyeOff, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PageDocument } from "@/lib/site-builder/page-document";
 import { SECTION_REGISTRY, sectionTitle } from "@/lib/site-builder/sections/registry";
 import { cn } from "@/lib/utils";
 import { announce } from "./announce";
+import { measureSectionRects, SECTION_BOUNDARY_SELECTOR } from "./canvas-dom";
 import { deleteSectionWithUndo } from "./delete-section";
 import { applyTextPreviewPatches, getTextPreviewPatches } from "./preview-sync";
 import type { BuilderStore } from "./store";
@@ -111,22 +95,7 @@ export default function Canvas({ store }: { store: BuilderStore }) {
     const host = hostRef.current;
     if (!host) return;
 
-    const hostBox = host.getBoundingClientRect();
-    const next: Record<string, DOMRect> = {};
-
-    host.querySelectorAll<HTMLElement>("[data-sb-section-id]").forEach((el) => {
-      const id = el.dataset.sbSectionId;
-      if (!id) return;
-      const box = el.getBoundingClientRect();
-      next[id] = new DOMRect(
-        box.left - hostBox.left,
-        box.top - hostBox.top,
-        box.width,
-        box.height,
-      );
-    });
-
-    setRects(next);
+    setRects(measureSectionRects(host));
   }, []);
 
   // Re-measure whenever the markup or the viewport changes. A ResizeObserver on
@@ -139,7 +108,7 @@ export default function Canvas({ store }: { store: BuilderStore }) {
 
     const observer = new ResizeObserver(measure);
     observer.observe(host);
-    host.querySelectorAll("[data-sb-section-id]").forEach((el) => observer.observe(el));
+    host.querySelectorAll(SECTION_BOUNDARY_SELECTOR).forEach((el) => observer.observe(el));
 
     window.addEventListener("resize", measure);
     return () => {
@@ -173,16 +142,22 @@ export default function Canvas({ store }: { store: BuilderStore }) {
       // building they only ever mean "select this section".
       if (target.closest("a, button")) event.preventDefault();
 
-      const sectionEl = target.closest<HTMLElement>("[data-sb-section-id]");
-      select(sectionEl?.dataset.sbSectionId ?? null, "canvas");
+      // Clicking a section is the same act as pressing its pencil, so a kind
+      // with no editor must not open an empty drawer for it.
+      const sectionEl = target.closest<HTMLElement>(SECTION_BOUNDARY_SELECTOR);
+      const id = sectionEl?.dataset.sbSectionId ?? null;
+      const kind = doc.sections.find((section) => section.id === id)?.kind;
+      select(kind && !SECTION_REGISTRY[kind].editable ? null : id, "canvas");
     },
-    [building, select],
+    [building, select, doc],
   );
 
   const onMouseOver = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (!building) return;
-      const sectionEl = (event.target as HTMLElement).closest<HTMLElement>("[data-sb-section-id]");
+      const sectionEl = (event.target as HTMLElement).closest<HTMLElement>(
+        SECTION_BOUNDARY_SELECTOR,
+      );
       setHoveredId(sectionEl?.dataset.sbSectionId ?? null);
     },
     [building],
@@ -246,7 +221,7 @@ function useRevealSelectedSection(
 
     const scroller = scrollerRef.current;
     const target = hostRef.current?.querySelector<HTMLElement>(
-      `[data-sb-section-id="${CSS.escape(selectedId)}"]`,
+      `[data-sb-boundary][data-sb-section-id="${CSS.escape(selectedId)}"]`,
     );
     if (!scroller || !target) return;
 
@@ -361,6 +336,19 @@ function AddSectionBands({
  * Left is what to do with the section, right is where to put it. Both appear on
  * hover and stay while the section is selected, so the drawer never opens over
  * a section whose controls have vanished.
+ *
+ * **The control set is per kind, and absent controls are absent — not greyed
+ * out.** A header shows one button; a footer shows none. The merchant never
+ * discovers a limit by clicking into it, which is the difference between a tool
+ * that feels considered and one that feels like it keeps saying no. The flags
+ * come from the registry, and `mutations.ts` refuses exactly the operations the
+ * gutters decline to offer, so the affordance and the invariant cannot drift.
+ *
+ * `Hide` and `Duplicate` used to live in an overflow menu here. Both are gone:
+ * neither exists in the product this is modelled on, and both asked a merchant
+ * to make a decision about page structure that the section catalogue already
+ * makes for them. `hidden` is still honoured by the renderer for documents that
+ * carry it.
  */
 function Gutters({
   doc,
@@ -376,8 +364,6 @@ function Gutters({
   store: BuilderStore;
 }) {
   const moveSectionBy = store((s) => s.moveSectionBy);
-  const duplicateSection = store((s) => s.duplicateSection);
-  const toggleHidden = store((s) => s.toggleHidden);
   const select = store((s) => s.select);
 
   return (
@@ -394,10 +380,20 @@ function Gutters({
         // Only offer a move the mutation will accept. Zone rules are enforced in
         // `moveSectionBy`; mirroring the boundary here is what keeps an enabled
         // button from producing a refusal toast.
+        // A neighbour that cannot move cannot be swapped with either, which is
+        // what keeps the hero from displacing the header.
         const previous = doc.sections[index - 1];
         const following = doc.sections[index + 1];
-        const canMoveUp = !!previous && SECTION_REGISTRY[previous.kind].zone === def.zone;
-        const canMoveDown = !!following && SECTION_REGISTRY[following.kind].zone === def.zone;
+        const canMoveUp =
+          def.movable &&
+          !!previous &&
+          SECTION_REGISTRY[previous.kind].zone === def.zone &&
+          SECTION_REGISTRY[previous.kind].movable;
+        const canMoveDown =
+          def.movable &&
+          !!following &&
+          SECTION_REGISTRY[following.kind].zone === def.zone &&
+          SECTION_REGISTRY[following.kind].movable;
 
         const move = (delta: -1 | 1) => {
           const neighbour = delta === -1 ? previous : following;
@@ -428,77 +424,35 @@ function Gutters({
               )}
             />
 
-            <GutterStack side="left">
-              <GutterButton
-                label={`Edit ${sectionTitle(section)}`}
-                onClick={() => select(section.id, "canvas")}
-              >
-                <Pencil className="size-3.5" />
-              </GutterButton>
-
-              <DropdownMenu>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger
-                      aria-label={`More options for ${sectionTitle(section)}`}
-                      className="flex size-7 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                    >
-                      <MoreHorizontal className="size-3.5" />
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="left">More</TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent align="start" side="right" className="w-44">
-                  <DropdownMenuItem
-                    onSelect={() => {
-                      toggleHidden(section.id);
-                      announce(
-                        `${sectionTitle(section)} ${section.hidden ? "shown" : "hidden"}.`,
-                      );
-                    }}
+            {(def.editable || def.deletable) && (
+              <GutterStack side="left">
+                {def.editable && (
+                  <GutterButton
+                    label={`Edit ${sectionTitle(section)}`}
+                    onClick={() => select(section.id, "canvas")}
                   >
-                    {section.hidden ? <Eye /> : <EyeOff />}
-                    {section.hidden ? "Show on the page" : "Hide from the page"}
-                  </DropdownMenuItem>
-                  {!def.singleton && (
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        duplicateSection(section.id);
-                        announce(`${sectionTitle(section)} duplicated.`);
-                      }}
-                    >
-                      <Copy />
-                      Duplicate
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <Pencil className="size-3.5" />
+                  </GutterButton>
+                )}
 
-              {def.deletable && (
-                <GutterButton
-                  label={`Delete ${sectionTitle(section)}`}
-                  destructive
-                  onClick={() => deleteSectionWithUndo(store, section.id)}
-                >
-                  <Trash2 className="size-3.5" />
-                </GutterButton>
-              )}
-            </GutterStack>
+                {def.deletable && (
+                  <GutterButton
+                    label={`Delete ${sectionTitle(section)}`}
+                    destructive
+                    onClick={() => deleteSectionWithUndo(store, section.id)}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </GutterButton>
+                )}
+              </GutterStack>
+            )}
 
             {(canMoveUp || canMoveDown) && (
               <GutterStack side="right">
-                <GutterButton
-                  label="Move up"
-                  disabled={!canMoveUp}
-                  onClick={() => move(-1)}
-                >
+                <GutterButton label="Move up" disabled={!canMoveUp} onClick={() => move(-1)}>
                   <ChevronUp className="size-3.5" />
                 </GutterButton>
-                <GutterButton
-                  label="Move down"
-                  disabled={!canMoveDown}
-                  onClick={() => move(1)}
-                >
+                <GutterButton label="Move down" disabled={!canMoveDown} onClick={() => move(1)}>
                   <ChevronDown className="size-3.5" />
                 </GutterButton>
               </GutterStack>

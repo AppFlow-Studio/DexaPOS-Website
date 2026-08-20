@@ -33,10 +33,23 @@ export interface MerchantSiteRow {
    */
   subdomain: string | null;
   render_mode: RenderMode;
+  /** The website's own logo. NULL falls back to a storefront's `logo_url`. */
+  logo_asset_id: string | null;
   nav: { items: unknown[] };
   theme: Record<string, unknown>;
   site_seo: Record<string, unknown>;
   integrations: Record<string, unknown>;
+  /**
+   * Availability toggles — `reviews`, `rewards`, `giftCards`, `reservations`.
+   *
+   * Deliberately typed loosely here and given its shape by
+   * `resolveFeatures()`: the column is free-form jsonb written by whatever
+   * build was deployed at the time, so a row may be `{}` or may carry a key
+   * this build has never heard of.
+   */
+  features: Record<string, unknown>;
+  /** Brand facts a page may display. Read through `resolveBrand()`. */
+  brand: Record<string, unknown>;
   schema_version: number;
   max_pages: number | null;
   max_asset_bytes: number | null;
@@ -91,6 +104,43 @@ export interface SitePage extends Omit<SitePageRow, "draft_content"> {
 /** Summary shape for the pages list; deliberately omits the document. */
 export type SitePageSummary = Omit<SitePageRow, "draft_content">;
 
+/**
+ * A row of the website asset library.
+ *
+ * Page documents reference these by `id` and never by URL — see
+ * `assetRefSchema`. That indirection is what lets the CDN hostname change, or
+ * the storage provider change, without rewriting merchant JSONB (including
+ * immutable published version rows, which must never be rewritten).
+ */
+export interface SiteAssetRow {
+  id: string;
+  merchant_id: string;
+  storage_path: string;
+  cdn_url: string;
+  original_filename: string | null;
+  mime_type: string;
+  bytes: number;
+  width: number | null;
+  height: number | null;
+  alt_text: string | null;
+  deleted_at: string | null;
+  uploaded_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** What the picker and the renderer need. Omits storage path and byte count. */
+export interface SiteAssetSummary {
+  id: string;
+  cdnUrl: string;
+  altText: string | null;
+  width: number | null;
+  height: number | null;
+  originalFilename: string | null;
+  bytes: number;
+  createdAt: string;
+}
+
 /** Uniform action result, matching the repo's `{ data?, error? }` convention. */
 export interface ActionResult<T> {
   data?: T;
@@ -111,4 +161,8 @@ export type ActionErrorCode =
   | "page_limit_reached"
   | "not_deletable"
   | "invalid_document"
+  | "asset_too_large"
+  | "asset_type_rejected"
+  | "quota_exceeded"
+  | "upload_failed"
   | "db_error";

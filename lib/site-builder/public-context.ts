@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { assetResolver, loadPublicAssetMap } from "./asset-map";
 import {
   createRenderContext,
   resolveTheme,
@@ -7,6 +8,12 @@ import {
   type ThemeTokens,
 } from "./render-context";
 import type { RenderDecision } from "./resolve-render-mode";
+import {
+  readSiteSettings,
+  resolvePricingLocation,
+  type SiteBrand,
+  type SiteFeatures,
+} from "./site-settings";
 
 /**
  * The render context for a **public** visitor.
@@ -64,6 +71,9 @@ export interface PublicSiteContext {
   resolver: { locationId: string | null; scoped: boolean };
   merchantId: string;
   deliveryPricingEnabled: boolean;
+  /** The resolved settings, for callers that need them outside the render context. */
+  features: SiteFeatures;
+  brand: SiteBrand;
 }
 
 /**
@@ -79,20 +89,48 @@ export async function buildPublicRenderContext(
   decision: Extract<RenderDecision, { mode: "builder" }>,
   /** `''` when the site is at a host root, `/sites/{slug}` on the path form. */
   basePath: string,
+  /**
+   * Asset ids this page references, collected from the published document by
+   * the caller — which is the only place the document is parsed.
+   */
+  assetIds: string[] = [],
 ): Promise<PublicSiteContext> {
-  const { data } = await supabase
-    .from("online_store_config")
-    .select(STORE_COLUMNS)
-    .eq("merchant_id", decision.merchantId);
+  // Both round trips are independent, so they overlap rather than queue. The
+  // asset lookup is a single `= ANY(...)`, however many photographs the page
+  // carries.
+  const [{ data }, assets] = await Promise.all([
+    supabase.from("online_store_config").select(STORE_COLUMNS).eq("merchant_id", decision.merchantId),
+    loadPublicAssetMap(supabase, decision.merchantId, assetIds),
+  ]);
 
   const configs = ((data ?? []) as Record<string, unknown>[]).filter(
     (row) => row.is_active !== false,
   );
 
+  const { features, brand } = readSiteSettings({
+    features: decision.features,
+    brand: decision.brand,
+  });
+
+  /**
+   * The location this page is *priced* against.
+   *
+   * A page about one restaurant always answers for itself. A brand page falls
+   * back to the merchant's chosen default — but only if that branch still has a
+   * live storefront, which is what `availableLocationIds` checks. A default
+   * pointing at a branch that has since closed resolves to no default, and the
+   * page goes back to withholding prices rather than quoting a closed kitchen's.
+   */
+  const pricingLocationId = resolvePricingLocation({
+    pageLocationId: decision.locationId,
+    brand,
+    availableLocationIds: configs.map((row) => String(row.location_id)),
+  });
+
   // A location page speaks for one restaurant; a brand page borrows branding
   // from the first storefront but stays unscoped.
-  const scoped = decision.locationId
-    ? configs.find((row) => row.location_id === decision.locationId)
+  const scoped = pricingLocationId
+    ? configs.find((row) => row.location_id === pricingLocationId)
     : undefined;
   const branding = toBranding(scoped ?? configs[0]);
 
@@ -102,12 +140,15 @@ export async function buildPublicRenderContext(
     mode: "public",
     site: {
       siteId: decision.siteId,
-      // The PAGE's location, not the storefront's. Null on a brand page, which
-      // is what withholds prices.
-      locationId: decision.locationId,
+      // The page's own location, or the brand default when it has none. Null
+      // is what withholds prices — see `resolvePricingLocation`, which is the
+      // single place that rule is decided.
+      locationId: pricingLocationId,
       slug: branding?.slug ?? "",
       name: branding?.name ?? "Our restaurant",
-      logoUrl: branding?.logoUrl ?? null,
+      // The website's own logo wins; a merchant who has never set one keeps
+              // borrowing their ordering storefront's, exactly as before.
+      logoUrl: decision.logoUrl ?? branding?.logoUrl ?? null,
       heroImageUrl: branding?.heroImageUrl ?? null,
       phone: branding?.phone ?? null,
       basePath,
@@ -118,21 +159,32 @@ export async function buildPublicRenderContext(
       menuUrl: orderUrl,
       nav: readNav(decision.nav, basePath),
       pricingDisclosureText: branding?.pricingDisclosureText ?? null,
+      features,
+      brand,
     },
     theme: resolveTheme(
       pickThemeTokens(decision.theme),
       branding?.legacyTheme ?? {},
     ),
+    resolveAsset: assetResolver(assets),
+    // Assembled once per request, in a loader — not during render.
+    renderedAt: Date.now(),
   });
 
   return {
     ctx,
     resolver: {
-      locationId: decision.locationId ?? branding?.locationId ?? null,
-      scoped: decision.locationId !== null,
+      locationId: pricingLocationId ?? branding?.locationId ?? null,
+      // `scoped` and "shows prices" are the same question, so it follows the
+      // resolved location rather than the page's own. A brand page with a
+      // default location is genuinely scoped: there is one kitchen answering
+      // for it, so its 86'd items are its own.
+      scoped: pricingLocationId !== null,
     },
     merchantId: decision.merchantId,
     deliveryPricingEnabled: branding?.deliveryPricingEnabled ?? true,
+    features,
+    brand,
   };
 }
 

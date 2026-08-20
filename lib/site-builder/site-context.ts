@@ -2,6 +2,7 @@ import { cache } from "react";
 
 import type { MerchantSiteRow } from "./db-types";
 import type { ResolverContext, ResolverSources } from "./bindings/resolve";
+import { assetResolver, EMPTY_ASSET_MAP, type AssetMap } from "./asset-map";
 import {
   createRenderContext,
   resolveTheme,
@@ -9,7 +10,9 @@ import {
   type RenderMode,
   type ThemeTokens,
 } from "./render-context";
+import { readNav } from "./public-context";
 import { getRequestSupabase } from "./request-scope";
+import { readSiteSettings, type SiteBrand, type SiteFeatures } from "./site-settings";
 
 /**
  * Loads the site-level facts a render needs, and turns them into a
@@ -49,6 +52,12 @@ export interface SiteContext {
   };
   /** Global Website-tab design settings. Storefront values remain the fallback. */
   websiteTheme: Partial<ThemeTokens>;
+  /** The merchant's brand toggles, resolved. Everything off before they set any. */
+  features: SiteFeatures;
+  /** Brand facts — social accounts, reservation link, cuisines, price range. */
+  brand: SiteBrand;
+  /** `merchant_sites.nav`, raw. Turned into links by `buildRenderContext`. */
+  nav: unknown;
 }
 
 type StoreConfigRow = Record<string, string | boolean | null>;
@@ -130,11 +139,34 @@ export const fetchMerchantSite = cache(
   },
 );
 
-/** Website-wide design is optional while the website migration rolls out. */
-async function fetchWebsiteTheme(merchantId: string): Promise<Partial<ThemeTokens>> {
+/**
+ * Everything the editor needs off `merchant_sites`, from the one memoised read.
+ *
+ * A merchant who has never opened the builder has no row at all, so every field
+ * has to survive its absence — which is exactly what `readSiteSettings` and
+ * `resolveTheme` already do for a row that exists but is missing keys.
+ */
+async function fetchWebsiteSettings(merchantId: string): Promise<{
+  websiteTheme: Partial<ThemeTokens>;
+  features: SiteFeatures;
+  brand: SiteBrand;
+  nav: unknown;
+}> {
   const site = await fetchMerchantSite(merchantId);
-  if (!site?.theme || typeof site.theme !== "object") return {};
-  return pickThemeTokens(site.theme as Record<string, unknown>);
+  const { features, brand } = readSiteSettings({
+    features: site?.features,
+    brand: site?.brand,
+  });
+
+  return {
+    websiteTheme:
+      site?.theme && typeof site.theme === "object"
+        ? pickThemeTokens(site.theme as Record<string, unknown>)
+        : {},
+    features,
+    brand,
+    nav: site?.nav ?? null,
+  };
 }
 
 export async function loadSiteContext(
@@ -144,9 +176,9 @@ export async function loadSiteContext(
   const merchantId = await fetchMerchantId(clerkOrgId);
   if (!merchantId) return null;
 
-  const [configs, websiteTheme] = await Promise.all([
+  const [configs, website] = await Promise.all([
     fetchStoreConfigs(merchantId),
-    fetchWebsiteTheme(merchantId),
+    fetchWebsiteSettings(merchantId),
   ]);
   const config = locationId
     ? configs.find((c) => c.location_id === locationId)
@@ -180,11 +212,23 @@ export async function loadSiteContext(
       card: nullableString(config.card_color),
       fontFamily: nullableString(config.font_family),
     },
-    websiteTheme,
+    websiteTheme: website.websiteTheme,
+    features: website.features,
+    brand: website.brand,
+    nav: website.nav,
   };
 }
 
-export function buildRenderContext(site: SiteContext, mode: RenderMode): RenderContext {
+export function buildRenderContext(
+  site: SiteContext,
+  mode: RenderMode,
+  /**
+   * The assets this page references. Optional so that callers which render no
+   * images — and the tests — need not load one; an absent map simply means the
+   * canvas draws text and skips photographs.
+   */
+  assets: AssetMap = EMPTY_ASSET_MAP,
+): RenderContext {
   const basePath = `/sites/${site.slug}`;
 
   return createRenderContext({
@@ -203,14 +247,30 @@ export function buildRenderContext(site: SiteContext, mode: RenderMode): RenderC
       // to be. Until that collision is resolved, both point at the storefront.
       orderUrl: basePath,
       menuUrl: basePath,
-      nav: [],
+      /**
+       * The real navigation, not an empty list.
+       *
+       * This was hardcoded to `[]`, which meant the builder canvas and the
+       * preview drew a header with no links on a site that has them — a
+       * merchant arranging their navigation watched nothing change beside them.
+       * It was defensible when nothing could edit the nav; it stopped being
+       * defensible the moment the nav editor shipped.
+       *
+       * `basePath` here is the storefront path form, which is what the editor
+       * previews at; the public render prefixes the same stored paths with `''`
+       * when the visitor arrived by subdomain. One stored nav, correct at both.
+       */
+      nav: readNav(site.nav, basePath),
       pricingDisclosureText: site.pricingDisclosureText,
+      features: site.features,
+      brand: site.brand,
     },
     // The website theme wins; anything it does not set falls back to the older
     // storefront colours, then to the DexaPOS defaults. `resolveTheme` also
     // carries `headingFont` back to `fontFamily` for sites saved before the
     // heading typeface existed.
     theme: resolveTheme(site.websiteTheme, legacyStorefrontTheme(site.colors)),
+    resolveAsset: assetResolver(assets),
   });
 }
 

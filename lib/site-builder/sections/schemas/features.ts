@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { headingSchema, proseSchema } from "../primitives";
+import { titleSchema, subtitleSchema } from "../primitives";
 
 /**
  * Short value propositions — "Free delivery over $30", "Open late", "Family
@@ -11,8 +11,8 @@ import { headingSchema, proseSchema } from "../primitives";
  * than a crash.
  */
 export const featuresSchema = z.object({
-  heading: headingSchema.optional(),
-  subheading: proseSchema.optional(),
+  heading: titleSchema.optional(),
+  subheading: subtitleSchema.optional(),
   items: z
     .array(
       z.object({

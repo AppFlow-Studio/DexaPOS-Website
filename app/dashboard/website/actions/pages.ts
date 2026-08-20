@@ -3,6 +3,13 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
 import { createEmptyPage } from "@/lib/site-builder/page-document";
+import {
+  normalizeNavPath,
+  parseNavItems,
+  removeNavItemByPath,
+  serializeNav,
+  type NavItem,
+} from "@/lib/site-builder/nav";
 import { checkPagePath, slugifyPagePath } from "@/lib/site-builder/reserved-paths";
 import { createStarterHomePage } from "@/lib/site-builder/starter-page";
 import type {
@@ -197,6 +204,25 @@ export async function RenamePage(
     return { error: error?.message ?? "Could not rename the page", code: "db_error" };
   }
 
+  const renamed = data as SitePageSummary;
+
+  // A moved page takes its navigation link with it; a retitled one keeps the
+  // label the merchant chose in the nav editor, which may deliberately differ
+  // from the page title ("Menu" for a page called "Our Full Menu").
+  if (patch.path !== undefined && patch.path !== before.path) {
+    const from = normalizeNavPath(before.path);
+    const to = normalizeNavPath(renamed.path);
+    await patchSiteNav(supabase, renamed.site_id, (items) => {
+      let changed = false;
+      const next = items.map((item) => {
+        if (item.href !== undefined || normalizeNavPath(item.path ?? "") !== from) return item;
+        changed = true;
+        return { ...item, path: to };
+      });
+      return changed ? next : items;
+    });
+  }
+
   await LogAuditEvent({
     clerkOrgId,
     action: "renamed_website_page",
@@ -204,14 +230,50 @@ export async function RenamePage(
     severity: "info",
     resourceType: "site_page",
     resourceId: pageId,
-    resourceName: (data as SitePageSummary).title,
+    resourceName: renamed.title,
     changes: {
       before: { title: before.title, path: before.path },
       after: patch,
     },
   });
 
-  return { data: data as SitePageSummary };
+  return { data: renamed };
+}
+
+/**
+ * Applies a change to the site navigation after a page changed underneath it.
+ *
+ * The nav stores a *path*, so a page whose address changes leaves a link
+ * pointing at nothing, and an archived page leaves one pointing at a 404. Both
+ * are the same bug as the one that prompted this work — content and navigation
+ * disagreeing about what exists — just arriving from the other direction.
+ *
+ * Best effort: a rename that succeeded must not be reported as failed because
+ * its link could not be updated.
+ */
+async function patchSiteNav(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  siteId: string,
+  change: (items: NavItem[]) => NavItem[],
+): Promise<void> {
+  try {
+    const { data } = await supabase
+      .from("merchant_sites")
+      .select("nav")
+      .eq("id", siteId)
+      .maybeSingle();
+
+    const current = parseNavItems((data as { nav: unknown } | null)?.nav);
+    const next = change(current);
+    if (next === current) return;
+
+    await supabase
+      .from("merchant_sites")
+      .update({ nav: serializeNav(next) })
+      .eq("id", siteId);
+  } catch (error) {
+    console.error("[site-builder] nav patch failed:", error);
+  }
 }
 
 /**
@@ -247,6 +309,10 @@ export async function DeletePage(
     .eq("id", pageId);
 
   if (error) return { error: error.message, code: "db_error" };
+
+  await patchSiteNav(supabase, page.site_id, (items) =>
+    removeNavItemByPath(items, page.path),
+  );
 
   await LogAuditEvent({
     clerkOrgId,

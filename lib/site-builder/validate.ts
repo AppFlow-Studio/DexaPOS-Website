@@ -151,6 +151,29 @@ export function validatePage(
     const def = SECTION_REGISTRY[section.kind];
     const props = section.props as Record<string, unknown>;
 
+    if (!section.hidden) {
+      const incompleteMessage = incompleteSectionMessage(section.kind, props);
+      if (incompleteMessage) {
+        err("incomplete_section", incompleteMessage, {
+          sectionId: section.id,
+          kind: section.kind,
+        });
+      }
+
+      for (const target of collectLinkTargets(props)) {
+        if (
+          (target.kind === "page" || target.kind === "url" || target.kind === "phone") &&
+          !target.value?.trim()
+        ) {
+          err(
+            "incomplete_link",
+            `${def.label} has a link with no ${target.kind === "phone" ? "phone number" : "destination"}.`,
+            { sectionId: section.id, kind: section.kind },
+          );
+        }
+      }
+    }
+
     if (Array.isArray(props.items) && props.items.length === 0 && !section.hidden) {
       warn("empty_section", `${def.label} is empty and will not show anything.`, {
         sectionId: section.id,
@@ -199,6 +222,68 @@ export function validatePage(
   }
 
   return { ok: errors.length === 0, errors, warnings };
+}
+
+/** Required content that schemas intentionally allow to be empty while editing. */
+function incompleteSectionMessage(
+  kind: SectionKind,
+  props: Record<string, unknown>,
+): string | null {
+  switch (kind) {
+    case "video":
+      return typeof props.videoId === "string" && props.videoId.trim()
+        ? null
+        : "Add a video link or hide the Video section before publishing.";
+    case "form":
+      return typeof props.formId === "string" && props.formId.trim()
+        ? null
+        : "Choose a form or hide the Form section before publishing.";
+    case "pdf":
+      return isAssetRef(props.file)
+        ? null
+        : "Add a document or hide the PDF section before publishing.";
+    case "integrations":
+      return typeof props.embedUrl === "string" && props.embedUrl.trim()
+        ? null
+        : "Add an embed link or hide the Integration section before publishing.";
+    default:
+      return null;
+  }
+}
+
+function isAssetRef(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Record<string, unknown>).assetId === "string" &&
+    Boolean((value as Record<string, unknown>).assetId)
+  );
+}
+
+/** Walks props for link-target shapes at any depth, including footer repeaters. */
+function collectLinkTargets(props: unknown): { kind: string; value?: string }[] {
+  const out: { kind: string; value?: string }[] = [];
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (typeof value !== "object" || value === null) return;
+    const record = value as Record<string, unknown>;
+    if (
+      typeof record.kind === "string" &&
+      ["order", "menu", "contact", "page", "url", "phone"].includes(record.kind)
+    ) {
+      out.push({
+        kind: record.kind,
+        value: typeof record.value === "string" ? record.value : undefined,
+      });
+      return;
+    }
+    Object.values(record).forEach(visit);
+  };
+  visit(props);
+  return out;
 }
 
 /** Walks props for `{ type, id }` binding shapes, at any depth. */

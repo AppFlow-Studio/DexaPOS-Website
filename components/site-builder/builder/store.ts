@@ -5,11 +5,9 @@ import { create } from "zustand";
 import type { CatalogItem } from "@/app/dashboard/website/pages/menu-catalog";
 import {
   addSection,
-  duplicateSection,
   moveSectionBy,
   removeSection,
   restoreRequiredSection,
-  setSectionHidden,
   updateSectionProps,
   updateSeo,
   type MutationResult,
@@ -17,6 +15,7 @@ import {
 import type { PageDocument } from "@/lib/site-builder/page-document";
 import type { SectionKind } from "@/lib/site-builder/sections/kinds";
 import { sectionTitle } from "@/lib/site-builder/sections/registry";
+import { DEFAULT_FEATURES, type SiteFeatures } from "@/lib/site-builder/site-settings";
 
 /**
  * Builder state.
@@ -32,6 +31,13 @@ import { sectionTitle } from "@/lib/site-builder/sections/registry";
  * between), `reviewOpen`/`publishResult` (publishing is a button, not a sheet)
  * and `savedAt` (no save indicator). History survives because deletion still
  * offers an undo and the drawer needs a way back — it just has no toolbar.
+ *
+ * `toggleHidden` and `duplicateSection` went the same way with the gutter's
+ * overflow menu. `setSectionHidden` and `duplicateSection` remain in
+ * `mutations.ts` — they are pure, tested, and the renderer still honours
+ * `hidden` on stored documents — but nothing in the editor calls them, because
+ * a merchant choosing between "delete this" and "hide this" is a decision the
+ * product should not be asking them to make.
  */
 
 export type SaveState = "idle" | "dirty" | "saving" | "saved" | "conflict" | "error";
@@ -117,6 +123,15 @@ interface BuilderState {
   selectionSource: SelectionSource;
   /** The location this editor session is scoped to. */
   locationId: string | null;
+  /**
+   * The merchant's brand toggles.
+   *
+   * State rather than a prop threaded to the Add Section modal, because two
+   * separate things read it — the catalogue, which omits what is off, and
+   * `addSection`, which refuses it. A modal-only prop would have left the
+   * mutation unguarded.
+   */
+  features: SiteFeatures;
   /** Bumped on every selection so the canvas can scroll exactly once. */
   revealNonce: number;
   /** Optimistic-concurrency token from the server. */
@@ -165,12 +180,10 @@ interface BuilderState {
   removeSection: (id: string) => { title: string; generation: number } | null;
   /** Undoes a specific deletion, or does nothing if the edit is no longer on top. */
   undoDelete: (generation: number) => boolean;
-  duplicateSection: (id: string) => void;
   /** Repairs a document that is missing a required header/hero/footer. */
   restoreRequiredSection: (kind: SectionKind, locationId?: string) => void;
   moveSectionBy: (id: string, delta: number) => void;
   updateProps: (id: string, patch: Record<string, unknown>) => void;
-  toggleHidden: (id: string) => void;
   updateSeo: (patch: Partial<PageDocument["seo"]>) => void;
 
   // history — internal only. Deletion offers an undo; there is no toolbar.
@@ -220,6 +233,8 @@ export interface BuilderInit {
    * are born invalid without it.
    */
   locationId?: string | null;
+  /** Defaults to everything off, which is what a merchant who has never opened settings has. */
+  features?: SiteFeatures;
 }
 
 export function createBuilderStore(init: BuilderInit) {
@@ -253,6 +268,7 @@ export function createBuilderStore(init: BuilderInit) {
       saveError: null,
       selectionSource: "other",
       locationId: init.locationId ?? null,
+      features: init.features ?? DEFAULT_FEATURES,
       revealNonce: 0,
       revision: init.revision ?? 0,
       editGeneration: 0,
@@ -279,6 +295,7 @@ export function createBuilderStore(init: BuilderInit) {
           addSection(get().doc, kind, {
             atIndex: index ?? undefined,
             ctx: init.locationId ? { locationId: init.locationId } : undefined,
+            features: get().features,
           }),
         );
 
@@ -320,8 +337,6 @@ export function createBuilderStore(init: BuilderInit) {
         return true;
       },
 
-      duplicateSection: (id) => apply(duplicateSection(get().doc, id)),
-
       restoreRequiredSection: (kind, locationId) => {
         const before = get().doc.sections.map((s) => s.id);
         apply(
@@ -342,12 +357,6 @@ export function createBuilderStore(init: BuilderInit) {
       moveSectionBy: (id, delta) => apply(moveSectionBy(get().doc, id, delta)),
 
       updateProps: (id, patch) => apply(updateSectionProps(get().doc, id, patch)),
-
-      toggleHidden: (id) => {
-        const section = get().doc.sections.find((s) => s.id === id);
-        if (!section) return;
-        apply(setSectionHidden(get().doc, id, !section.hidden));
-      },
 
       updateSeo: (patch) => {
         const { doc, past } = get();

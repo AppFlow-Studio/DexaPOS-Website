@@ -1,5 +1,6 @@
 import { lookupLocation } from "@/lib/site-builder/bindings/resolved";
 import type { SectionRenderProps } from "@/lib/site-builder/render-context";
+import { SOCIAL_LABELS } from "@/lib/site-builder/site-settings";
 import { fieldAttrsFor } from "../edit-attrs";
 import { Container, resolveHref } from "../section-shell";
 import BusinessHours, { formatAddress } from "./shared/BusinessHours";
@@ -20,10 +21,12 @@ export default function FooterSection({ section, resolved, ctx }: SectionRenderP
   const location = result.status === "ok" ? result.data : null;
   const address = location && showAddress ? formatAddress(location) : null;
 
+  const social = ctx.site.brand.social;
   const year = new Date().getFullYear();
 
   return (
     <footer
+      id="contact"
       className="w-full border-t"
       style={{
         background: "var(--site-surface-muted)",
@@ -93,12 +96,33 @@ export default function FooterSection({ section, resolved, ctx }: SectionRenderP
             {copyrightText || `© ${year} ${ctx.site.name}. All rights reserved.`}
           </p>
           {/*
-            Social links live on the site, not the page — `showSocial` only
-            controls whether the footer renders them. The site-level social
-            config arrives with the settings surface; until then this is inert
-            rather than fabricating placeholder icons.
+            Social accounts live on the site, not the page: `showSocial` decides
+            *whether* this footer draws them, and brand settings decide *what*.
+            That split is why a merchant types their Instagram address once
+            rather than once per page — and why this was inert until the
+            settings screen existed to fill it.
+
+            Names rather than icons. Lucide carries Instagram, Facebook, X and
+            YouTube but not TikTok, Yelp or Tripadvisor, and a footer that draws
+            four logos and three words looks like something failed to load.
+            Seven words look deliberate.
           */}
-          {showSocial && ctx.site.nav.length === 0 && null}
+          {showSocial && social.length > 0 && (
+            <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              {social.map((link) => (
+                <li key={link.platform}>
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer me"
+                    className="font-medium transition-opacity hover:opacity-100"
+                  >
+                    {SOCIAL_LABELS[link.platform]}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </Container>
     </footer>

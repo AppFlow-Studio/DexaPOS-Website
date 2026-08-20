@@ -4,15 +4,21 @@ import { notFound } from "next/navigation";
 import { cache, type ReactElement } from "react";
 
 import PageRenderer, { SiteChrome } from "@/components/site-builder/PageRenderer";
+import SiteAnalyticsScripts from "@/components/site-builder/tracking/SiteAnalyticsScripts";
 import { collectBindings } from "@/lib/site-builder/bindings/collect";
 import { resolveBindings } from "@/lib/site-builder/bindings/resolve";
 import { emptyResolvedMap } from "@/lib/site-builder/bindings/resolved";
 import { createSupabaseResolverSources } from "@/lib/site-builder/bindings/supabase-sources";
 import { buildRestaurantJsonLd, soleLocation } from "@/lib/site-builder/json-ld";
 import { normalizePage } from "@/lib/site-builder/normalize";
+import { collectAssetIds } from "@/lib/site-builder/bindings/collect";
+import { loadPublicAssetMap } from "@/lib/site-builder/asset-map";
 import { buildPublicRenderContext } from "@/lib/site-builder/public-context";
 import { sitePublicUrl } from "@/lib/site-builder/public-url";
 import { resolveRenderMode } from "@/lib/site-builder/resolve-render-mode";
+import { resolveTracking } from "@/lib/site-builder/tracking";
+import { collectFormIds, formResolver, loadPublicFormMap } from "@/lib/site-builder/forms/form-map";
+import { loadPublicEvents } from "@/lib/site-builder/events/event-map";
 import { createAnonSupabaseClient } from "@/lib/supabase/anon";
 
 /**
@@ -64,7 +70,12 @@ export async function builtSiteMetadata(
   if (decision.mode !== "builder") return null;
 
   const doc = normalizePage(decision.content);
-  const seo = (doc.seo ?? {}) as { title?: string; description?: string };
+  const seo = (doc.seo ?? {}) as {
+    title?: string;
+    description?: string;
+    ogImageAssetId?: string;
+    noindex?: boolean;
+  };
   const siteSeo = (decision.siteSeo ?? {}) as { titleSuffix?: string; description?: string };
 
   // The page's own title wins; the page *name* is the fallback, because a
@@ -88,23 +99,63 @@ export async function builtSiteMetadata(
   // `mode: "builder"` for a brand address.
   const canonical = sitePublicUrl(slug, path);
 
+  /**
+   * The sharing image, resolved from the library, falling back to the site's
+   * own logo.
+   *
+   * One extra round trip, and only when the merchant has actually chosen an
+   * image — `loadPublicAssetMap` short-circuits on an empty id list. The
+   * fallback matters more than the field does: a link with no preview image
+   * gets a blank card in every messaging app there is, and a restaurant's logo
+   * is better than nothing every time.
+   */
+  const ogImage = seo.ogImageAssetId
+    ? (
+        await loadPublicAssetMap(createAnonSupabaseClient(), decision.merchantId, [
+          seo.ogImageAssetId,
+        ])
+      ).get(seo.ogImageAssetId)?.url
+    : undefined;
+
+  const image = ogImage ?? decision.logoUrl ?? undefined;
+
   return {
     title,
     description,
     alternates: { canonical },
+    // A merchant can take one page out of search results without unpublishing
+    // it — a booking confirmation or a page shared only by link. `follow` stays
+    // on: the page's own links to the rest of the site are still worth crawling.
+    ...(seo.noindex ? { robots: { index: false, follow: true } } : {}),
     openGraph: {
       title: title?.absolute,
       description,
       url: canonical,
       type: "website",
+      ...(image ? { images: [image] } : {}),
     },
+    ...(image ? { twitter: { card: "summary_large_image" as const, images: [image] } } : {}),
   };
 }
 
 export async function renderBuiltSite(
   slug: string,
   path: string,
-  { hasActiveStorefront }: { hasActiveStorefront: boolean },
+  {
+    hasActiveStorefront,
+    formState,
+  }: {
+    hasActiveStorefront: boolean;
+    /**
+     * The outcome of a form post that has just redirected back here.
+     *
+     * Read from the query string by the route and passed in rather than reached
+     * for inside a section, because sections perform no I/O and receive no
+     * request — and because a page may carry two forms, so the id has to be
+     * compared rather than a boolean passed down.
+     */
+    formState?: { submitted?: string | null; error?: string | null };
+  },
 ): Promise<ReactElement | null> {
   const supabase = createAnonSupabaseClient();
   const decision = await getSiteDecision(slug, path, hasActiveStorefront);
@@ -134,13 +185,37 @@ export async function renderBuiltSite(
   const viaSubdomain = host.split(":")[0].split(".")[0] === slug;
   const basePath = viaSubdomain ? "" : `/sites/${slug}`;
 
-  const { ctx, resolver, merchantId, deliveryPricingEnabled } =
-    await buildPublicRenderContext(supabase, decision, basePath);
-
   // Published content is normalized on the way out as well as in: a version
   // written by an older build must render rather than throw on someone's live
-  // site.
+  // site. It happens before the context is built because the asset ids are read
+  // off the repaired document — a section dropped by normalization must not
+  // have its photograph fetched.
   const doc = normalizePage(decision.content);
+
+  const { ctx, resolver, merchantId, deliveryPricingEnabled } =
+    await buildPublicRenderContext(supabase, decision, basePath, collectAssetIds(doc));
+
+  // Forms this page embeds. A separate round trip from the asset map because it
+  // is a different read path — the SECURITY DEFINER form function, which serves
+  // only PUBLISHED definitions, so a merchant editing a form does not change
+  // what live visitors are filling in until they publish it.
+  // Forms and events are independent round trips, so they overlap. Events are
+  // only fetched when the page actually carries an events section — most pages
+  // do not, and this is a whole extra query.
+  const wantsEvents = doc.sections.some((section) => section.kind === "events");
+
+  const [forms, events] = await Promise.all([
+    loadPublicFormMap(supabase, decision.siteId, collectFormIds(doc)),
+    wantsEvents ? loadPublicEvents(supabase, decision.siteId) : Promise.resolve([]),
+  ]);
+
+  const publicCtx = {
+    ...ctx,
+    resolveForm: formResolver(forms),
+    formState,
+    events,
+    eventUrl: (eventSlug: string) => `${basePath}/events/${eventSlug}`,
+  };
 
   // No storefront to borrow a location from means nothing to resolve against.
   // An empty map is the same thing every binding already handles as
@@ -174,13 +249,22 @@ export async function renderBuiltSite(
       description: (decision.siteSeo as { description?: string } | null)?.description,
       image: ctx.site.logoUrl ?? ctx.site.heroImageUrl,
       location: soleLocation(resolved.locations),
+      brand: ctx.site.brand,
+      acceptsReservations: ctx.site.features.reservations,
     }),
   );
 
   return (
-    <SiteChrome ctx={ctx}>
+    <SiteChrome ctx={publicCtx}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
-      <PageRenderer doc={doc} resolved={resolved} ctx={ctx} />
+      {/*
+        The merchant's own marketing pixels, on the built site and nowhere else.
+        Re-validated here rather than trusted from the database — see
+        `resolveTracking`, which is the boundary these values must not cross
+        unchecked because they end up inside inline script source.
+      */}
+      <SiteAnalyticsScripts tracking={resolveTracking(decision.integrations)} />
+      <PageRenderer doc={doc} resolved={resolved} ctx={publicCtx} />
     </SiteChrome>
   );
 }

@@ -129,6 +129,22 @@ describe("renderer architecture", () => {
    */
   const CLIENT_UI_DIRS = new Set(["builder", "dashboard", "shell"]);
 
+  /**
+   * Rendered by the **public route** (`built-site.tsx`) but never by
+   * `PageRenderer`, so they are outside the graph this rule protects.
+   *
+   * A different reason from `CLIENT_UI_DIRS` above, and worth keeping separate:
+   * those are dashboard UI that a visitor never sees at all. `tracking/` ships
+   * to visitors — it is just mounted beside the page rather than inside it.
+   * `SiteAnalyticsScripts` is a server component that renders one small client
+   * island for the delegated click listener, which is the whole client-side
+   * footprint of marketing pixels.
+   *
+   * The carve-out is only safe while nothing in the render graph reaches in
+   * here, which is what the next test asserts rather than assumes.
+   */
+  const PUBLIC_ROUTE_ONLY_DIRS = new Set(["tracking"]);
+
   it("has no client components anywhere in the render graph", () => {
     const renderRoot = join(process.cwd(), "components/site-builder");
     const offenders: string[] = [];
@@ -144,7 +160,9 @@ describe("renderer architecture", () => {
         // *other* directory here is in the render graph and must stay
         // server-only.
         if (entry.isDirectory()) {
-          if (!CLIENT_UI_DIRS.has(entry.name)) walk(path);
+          if (!CLIENT_UI_DIRS.has(entry.name) && !PUBLIC_ROUTE_ONLY_DIRS.has(entry.name)) {
+            walk(path);
+          }
           continue;
         }
         if (entry.name.endsWith(".tsx") || entry.name.endsWith(".ts")) {
@@ -155,6 +173,46 @@ describe("renderer architecture", () => {
             .split("\n")
             .some((line) => /^\s*["']use client["'];?\s*$/.test(line));
           if (isClient) offenders.push(entry.name);
+        }
+      }
+    };
+
+    walk(renderRoot);
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * The carve-out above is only sound while the render graph cannot reach the
+   * directories it excludes — otherwise excluding a directory from the scan
+   * would quietly *create* the breakage the scan exists to catch.
+   *
+   * So: nothing under the render graph may import from `tracking/`. A section
+   * that wants to report a click imports `trackAttrs` from
+   * `lib/site-builder/tracking` instead — a pure module with no React in it,
+   * which is exactly why the attribute-plus-delegated-listener design was
+   * chosen over an `onClick`.
+   */
+  it("keeps the public-route-only directories out of the render graph", () => {
+    const renderRoot = join(process.cwd(), "components/site-builder");
+    const offenders: string[] = [];
+
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (!CLIENT_UI_DIRS.has(entry.name) && !PUBLIC_ROUTE_ONLY_DIRS.has(entry.name)) {
+            walk(path);
+          }
+          continue;
+        }
+        if (!entry.name.endsWith(".tsx") && !entry.name.endsWith(".ts")) continue;
+
+        const source = readFileSync(path, "utf-8");
+        for (const excluded of PUBLIC_ROUTE_ONLY_DIRS) {
+          const reaches =
+            source.includes(`components/site-builder/${excluded}/`) ||
+            new RegExp(`from\s+["'][./]*${excluded}/`).test(source);
+          if (reaches) offenders.push(`${entry.name} → ${excluded}/`);
         }
       }
     };
@@ -203,6 +261,42 @@ describe("PageRenderer", () => {
     expect(html).toContain("Our story");
     expect(html).toContain("123 Bedford Ave");
     expect(html).toContain("</footer>");
+    expect(html).toContain('<footer id="contact"');
+  });
+
+  it("renders every selected Hero carousel frame without adding a client component", () => {
+    const doc = demoWith([]);
+    const heroId = doc.sections.find((section) => section.kind === "hero")!.id;
+    const changed = updateSectionProps(doc, heroId, {
+      image: { assetId: "hero-1", alt: "Dining room" },
+      carousel: [
+        { assetId: "hero-1", alt: "Dining room duplicate" },
+        { assetId: "hero-2", alt: "Dinner plate" },
+        { assetId: "hero-2", alt: "Dinner plate duplicate" },
+      ],
+    });
+    expect(changed.ok).toBe(true);
+    if (!changed.ok) return;
+
+    const ctx = ctxFor();
+    ctx.resolveAsset = (assetId) => ({
+      url: `https://cdn.example/${assetId}.jpg`,
+      alt: null,
+      width: 1600,
+      height: 900,
+    });
+    const html = renderToStaticMarkup(
+      <SiteChrome ctx={ctx}>
+        <PageRenderer doc={changed.doc} resolved={mapWith()} ctx={ctx} />
+      </SiteChrome>,
+    );
+
+    expect(html).toContain('data-hero-carousel="true"');
+    expect(html).toContain("https://cdn.example/hero-1.jpg");
+    expect(html).toContain("https://cdn.example/hero-2.jpg");
+    expect(html.match(/src="https:\/\/cdn\.example\/hero-1\.jpg"/g)).toHaveLength(1);
+    expect(html.match(/src="https:\/\/cdn\.example\/hero-2\.jpg"/g)).toHaveLength(1);
+    expect(html).toContain("prefers-reduced-motion");
   });
 
   it("emits theme tokens as CSS custom properties on the shell", () => {
@@ -303,11 +397,22 @@ describe("popular-items — decision D6 at render time", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("merchant content is sanitized on render", () => {
+  /**
+   * The FAQ answer is the last merchant-authored markup on a built page. The
+   * content section used to be the other one; decision W3 replaced its
+   * rich-text body with a plain-text subtitle, which is why this assertion
+   * moved rather than disappeared.
+   */
   it("strips script tags from rich text", () => {
     let doc = demoWith([]);
-    const contentId = doc.sections.find((s) => s.kind === "content")!.id;
-    const result = updateSectionProps(doc, contentId, {
-      body: '<p>Hello</p><script>alert("xss")</script><img src=x onerror="alert(1)">',
+    const faqId = doc.sections.find((s) => s.kind === "faq")!.id;
+    const result = updateSectionProps(doc, faqId, {
+      items: [
+        {
+          question: "Are you open on Sundays?",
+          answer: '<p>Hello</p><script>alert("xss")</script><img src=x onerror="alert(1)">',
+        },
+      ],
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -317,6 +422,25 @@ describe("merchant content is sanitized on render", () => {
     expect(html).toContain("Hello");
     expect(html).not.toContain("<script");
     expect(html).not.toContain("onerror");
+  });
+
+  /**
+   * The reshape's security dividend: a content subtitle is a text node, so
+   * markup in it is escaped by React rather than sanitized by an allowlist we
+   * have to keep correct.
+   */
+  it("escapes markup typed into a content subtitle", () => {
+    const doc = demoWith([]);
+    const contentId = doc.sections.find((s) => s.kind === "content")!.id;
+    const result = updateSectionProps(doc, contentId, {
+      subtitle: '<script>alert("xss")</script>',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const html = render(result.doc, mapWith());
+    expect(html).not.toContain("<script");
+    expect(html).toContain("&lt;script&gt;");
   });
 
   it("neutralizes a javascript: URL in a footer link", () => {

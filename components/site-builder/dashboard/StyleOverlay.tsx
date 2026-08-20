@@ -4,7 +4,8 @@ import { Check, CircleCheck, ImageOff, Loader2 } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { UpdateSiteSettings } from "@/app/dashboard/website/actions/site";
+import { SetSiteLogo, UpdateSiteSettings } from "@/app/dashboard/website/actions/site";
+import AssetPicker from "../builder/AssetPicker";
 import { Button } from "@/components/ui/button";
 import { isHexColor } from "@/lib/site-builder/color";
 import type { MerchantSiteRow } from "@/lib/site-builder/db-types";
@@ -84,6 +85,9 @@ export default function StyleOverlay({
 
   const [saved, setSaved] = useState<StyleDraft>(() => withDraft(readStyleInputs(stored)));
   const [draft, setDraft] = useState<StyleDraft>(saved);
+  const [logoAsset, setLogoAsset] = useState<{ assetId: string; alt?: string } | undefined>(
+    website.logo_asset_id ? { assetId: website.logo_asset_id } : undefined,
+  );
 
   const theme = useMemo(() => composeTheme(draft), [draft]);
   const dirty = !same(draft, saved);
@@ -150,13 +154,35 @@ export default function StyleOverlay({
                   </span>
                 )}
               </div>
-              {/* Not a disabled button pretending to work: the asset library is
-                  Stage 7, and a Replace that silently does nothing is worse than
-                  one sentence saying where logos come from today. */}
-              <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-                Your logo comes from your online store branding. Uploading one here arrives with the
-                asset library.
-              </p>
+              {/*
+                The button that spent three phases explaining why it did
+                nothing. It now sets `merchant_sites.logo_asset_id`, saved on
+                the spot rather than with the rest of the style: it is a
+                different column and a different kind of change, and a merchant
+                who picks a logo and closes the panel should keep it.
+              */}
+              <div className="mt-2">
+                <AssetPicker
+                  label=""
+                  clerkOrgId={clerkOrgId}
+                  value={logoAsset}
+                  onChange={async (next) => {
+                    setLogoAsset(next);
+                    const result = await SetSiteLogo(clerkOrgId, website.id, next?.assetId ?? null);
+                    if (result.error) {
+                      toast.error(result.error);
+                      return;
+                    }
+                    toast.success(next ? "Logo updated." : "Logo removed.");
+                  }}
+                />
+              </div>
+              {!logoAsset && logoUrl && (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                  Your website is currently showing the logo from your online store branding. Choose
+                  one here to use a different logo on your website.
+                </p>
+              )}
             </Field>
 
             <Field label="Brand Color">

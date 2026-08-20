@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { headingSchema, proseSchema, richTextSchema } from "../primitives";
+import { titleSchema, subtitleSchema, richTextSchema } from "../primitives";
 
 /**
  * Frequently asked questions.
@@ -9,8 +9,8 @@ import { headingSchema, proseSchema, richTextSchema } from "../primitives";
  * source for `FAQPage` structured data later.
  */
 export const faqSchema = z.object({
-  heading: headingSchema.optional(),
-  subheading: proseSchema.optional(),
+  heading: titleSchema.optional(),
+  subheading: subtitleSchema.optional(),
   items: z
     .array(
       z.object({

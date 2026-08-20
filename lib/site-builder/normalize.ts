@@ -21,6 +21,7 @@ import {
   type PageDocument,
   type PageSeo,
 } from "./page-document";
+import { stringMaxOf } from "./schema-introspect";
 import { getSectionDefinition } from "./sections/registry";
 import { sectionStyleSchema } from "./sections/primitives";
 import type { Section } from "./sections/types";
@@ -35,6 +36,7 @@ export type RepairKind =
   | "duplicate_id"
   | "invalid_style"
   | "invalid_seo"
+  | "truncated"
   | "migrated";
 
 export interface Repair {
@@ -77,6 +79,46 @@ function pickValidFields(
     if (parsed.success) out[key] = parsed.data;
   }
   return out;
+}
+
+/**
+ * Truncates stored strings that are longer than their field's current cap.
+ *
+ * **This is what makes tightening a character cap safe.** Without it, lowering
+ * the title limit from 160 to 50 would fail that field's parse, `pickValidFields`
+ * would drop it, and the section would fall back to its default — so a merchant
+ * would open their page and find their headline replaced by the words "About
+ * us". Truncating keeps the first 50 characters of what they actually wrote and
+ * records that it happened.
+ *
+ * Top-level string fields only. Nested repeater rows carry their own caps, and
+ * none of them has ever been tightened; when one is, this is where it grows.
+ *
+ * Read-time only. Nothing rewrites the stored jsonb — a later edit saves the
+ * truncated value, and until then the original is still on disk.
+ */
+function clampStrings(
+  schema: z.ZodObject<any>,
+  raw: unknown,
+): { props: unknown; clamped: string[] } {
+  if (!isPlainObject(raw)) return { props: raw, clamped: [] };
+
+  const shape = schema.shape as Record<string, z.ZodTypeAny>;
+  const clamped: string[] = [];
+  let out: Record<string, unknown> | null = null;
+
+  for (const [key, field] of Object.entries(shape)) {
+    const value = raw[key];
+    if (typeof value !== "string") continue;
+    const max = stringMaxOf(field);
+    if (max === undefined || value.length <= max) continue;
+
+    out ??= { ...raw };
+    out[key] = value.slice(0, max);
+    clamped.push(key);
+  }
+
+  return { props: out ?? raw, clamped };
 }
 
 function normalizeSeo(raw: unknown, repairs: Repair[]): PageSeo {
@@ -130,13 +172,19 @@ function normalizeSection(
   }
   seenIds.add(id);
 
-  // Props: whole-object parse first, field-level salvage as the fallback.
-  const parsed = def.schema.safeParse(raw.props);
+  // Props: clamp over-long copy, then whole-object parse, with field-level
+  // salvage as the fallback.
+  const { props: clampedProps, clamped } = clampStrings(def.schema, raw.props);
+  if (clamped.length > 0) {
+    repairs.push({ kind: "truncated", detail: `${def.kind}: ${clamped.join(", ")}` });
+  }
+
+  const parsed = def.schema.safeParse(clampedProps);
   let props: unknown;
   if (parsed.success) {
     props = parsed.data;
   } else {
-    props = { ...def.defaults(), ...pickValidFields(def.schema, raw.props) };
+    props = { ...def.defaults(), ...pickValidFields(def.schema, clampedProps) };
     repairs.push({
       kind: "invalid_props",
       detail: `${def.kind}: ${parsed.error.issues.map((i) => i.path.join(".") || "(root)").join(", ")}`,

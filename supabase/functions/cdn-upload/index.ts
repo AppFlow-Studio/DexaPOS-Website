@@ -7,7 +7,13 @@ type MerchantAssetCategory =
   | "menu-categories"
   | "menu-items"
   | "menus"
-  | "documents";
+  | "documents"
+  // Website builder media (parity plan Phase 3). Uploads reach this category
+  // only through `UploadSiteAsset`, which applies a *stricter* gate than the
+  // one below — it rejects SVG outright and verifies the file's magic bytes
+  // against its declared type. The allowlist here stays as it was so the
+  // categories that predate it keep working.
+  | "website";
 
 type OrganizationAssetCategory = "logos" | "documents";
 
@@ -92,6 +98,47 @@ function jsonResponse(body: CdnResponse | { error: string }, status = 200): Resp
       ...corsHeaders,
     },
   });
+}
+
+/**
+ * The categories that actually exist, at runtime.
+ *
+ * **`MerchantAssetCategory` above is a type, and types do not survive to
+ * runtime.** `category` was interpolated straight into the storage path with
+ * nothing checking it, so an authenticated merchant admin could send
+ * `category: "../../organizations/<someone>/logos"` and write outside their own
+ * directory — `sanitizeFileName` rejects `..` and slashes, but only in
+ * `fileName`. These sets are what makes the union real.
+ */
+const MERCHANT_CATEGORIES = new Set<string>([
+  "logos",
+  "cfd-images",
+  "menu-categories",
+  "menu-items",
+  "menus",
+  "documents",
+  "website",
+]);
+
+const ORGANIZATION_CATEGORIES = new Set<string>(["logos", "documents"]);
+
+function isValidCategory(scope: string, category: unknown): boolean {
+  if (typeof category !== "string") return false;
+  return scope === "merchant"
+    ? MERCHANT_CATEGORIES.has(category)
+    : ORGANIZATION_CATEGORIES.has(category);
+}
+
+/**
+ * Refuses a path that could climb out of the directory it was scoped to.
+ *
+ * The delete path checked `storagePath.startsWith("merchants/{id}/")`, which
+ * `merchants/{id}/../../elsewhere` satisfies — the prefix matches before the
+ * traversal resolves. Checked here as well as by the prefix so that a future
+ * caller building a path a different way inherits the guard.
+ */
+function hasTraversal(path: string): boolean {
+  return path.includes("..") || path.includes("\\");
 }
 
 function isUploadRequest(body: unknown): body is UploadRequest {
@@ -294,6 +341,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         return jsonResponse({ success: false, error: "Invalid fileName" }, 400);
       }
 
+      // Before `buildStoragePath`, which interpolates this directly.
+      if (!isValidCategory(body.scope, body.category)) {
+        return jsonResponse({ success: false, error: "Invalid category" }, 400);
+      }
+
       const allowedTypes = getAllowedTypes(body.category);
       if (!allowedTypes.has(body.contentType)) {
         return jsonResponse(
@@ -344,7 +396,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     const expectedPrefix = getExpectedDeletePrefix(body);
-    if (!body.storagePath.startsWith(expectedPrefix)) {
+    if (!body.storagePath.startsWith(expectedPrefix) || hasTraversal(body.storagePath)) {
       return jsonResponse({ success: false, error: "Cannot delete outside allowed scope" }, 403);
     }
 

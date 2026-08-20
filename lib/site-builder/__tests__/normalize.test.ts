@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { normalizePage, normalizePageWithReport } from "../normalize";
-import { createStarterPage } from "../page-document";
+import { CURRENT_SCHEMA_VERSION, createStarterPage } from "../page-document";
 
 const validHeader = {
   id: "s_header",
@@ -127,7 +127,12 @@ describe("normalizePage", () => {
   });
 
   it("stamps the current schema version onto whatever it repairs", () => {
-    expect(normalizePage({ sections: [] }).schemaVersion).toBe(1);
-    expect(normalizePage({ schemaVersion: 99, sections: [] }).schemaVersion).toBe(1);
+    expect(normalizePage({ sections: [] }).schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    // A document written by a *newer* build than this one. No migration can run
+    // forwards from 99, so it is stamped with the version this build actually
+    // understands rather than being trusted to describe itself.
+    expect(normalizePage({ schemaVersion: 99, sections: [] }).schemaVersion).toBe(
+      CURRENT_SCHEMA_VERSION,
+    );
   });
 });

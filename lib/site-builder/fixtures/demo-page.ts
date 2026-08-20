@@ -96,11 +96,13 @@ export function createDemoPage(options: DemoPageOptions = {}): PageDocument {
         id: "s_demo_content",
         kind: "content",
         props: {
-          heading: "Our story",
-          body:
-            "<p>We opened in 1998 with one oven and a short menu. Twenty-six years later the menu is still short — we would rather do a few things properly.</p><p>Everything is made in house: the dough, the sauce, the sausage. If you ask what is good tonight, we will actually tell you.</p>",
-          imagePosition: "none",
-          cta: { label: "Book a table", target: { kind: "contact" } },
+          background: "none",
+          media: "none",
+          alignment: "left",
+          title: "Our story",
+          subtitle:
+            "We opened in 1998 with one oven and a short menu. Twenty-six years later the menu is still short — we would rather do a few things properly. Everything is made in house.",
+          button: { label: "Book a table", target: { kind: "contact" } },
         },
       },
       {

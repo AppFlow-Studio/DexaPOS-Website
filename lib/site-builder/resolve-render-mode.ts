@@ -40,6 +40,14 @@ export type RenderDecision =
       nav: unknown;
       theme: unknown;
       siteSeo: unknown;
+      /** The website's own logo, already resolved to a URL. Null falls back. */
+      logoUrl: string | null;
+      /** `merchant_sites.features` — raw. Read through `resolveFeatures`. */
+      features: unknown;
+      /** `merchant_sites.brand` — raw. Read through `resolveBrand`. */
+      brand: unknown;
+      /** `merchant_sites.integrations` — raw. Read through `resolveTracking`. */
+      integrations: unknown;
     }
   /** The site is live but has nothing at this path — a built 404, not a template. */
   | { mode: "builder_not_found"; siteId: string }
@@ -69,6 +77,25 @@ export interface SiteRequestFacts {
     nav: unknown;
     theme: unknown;
     siteSeo: unknown;
+    /**
+     * The website's own logo, already resolved to a URL by the RPC.
+     *
+     * Optional here and required on the decision: a merchant who has never set
+     * one has no logo fact at all, and the decision normalises that to null so
+     * the renderer has one shape to read rather than two.
+     */
+    logoUrl?: string | null;
+    /**
+     * The two settings blocks, raw.
+     *
+     * Optional for the same reason as `logoUrl`: a fixture written before these
+     * columns existed still describes a valid site, and `resolveFeatures` /
+     * `resolveBrand` turn `undefined` into the same "nothing set" every other
+     * missing value resolves to.
+     */
+    features?: unknown;
+    brand?: unknown;
+    integrations?: unknown;
   } | null;
   /** True when the slug matched a brand subdomain rather than a storefront. */
   addressedBySubdomain: boolean;
@@ -155,6 +182,10 @@ export function decideRenderMode(facts: SiteRequestFacts): RenderDecision {
     nav: site.nav,
     theme: site.theme,
     siteSeo: site.siteSeo,
+    logoUrl: site.logoUrl ?? null,
+    features: site.features ?? null,
+    brand: site.brand ?? null,
+    integrations: site.integrations ?? null,
   };
 }
 
@@ -168,6 +199,10 @@ interface PublicSitePageRow {
   site_nav: unknown;
   site_theme: unknown;
   site_seo: unknown;
+  site_logo_url: string | null;
+  site_features: unknown;
+  site_brand: unknown;
+  site_integrations: unknown;
   page_id: string | null;
   page_title: string | null;
   page_path: string | null;
@@ -228,6 +263,10 @@ export async function loadSiteRequestFacts(
       nav: row.site_nav,
       theme: row.site_theme,
       siteSeo: row.site_seo,
+      logoUrl: row.site_logo_url ?? null,
+      features: row.site_features,
+      brand: row.site_brand,
+      integrations: row.site_integrations,
     },
     page:
       row.page_id && row.version_id

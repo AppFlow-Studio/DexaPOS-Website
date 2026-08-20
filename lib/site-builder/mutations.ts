@@ -19,7 +19,8 @@ import {
 } from "./page-document";
 import type { SectionKind } from "./sections/kinds";
 import { SECTION_KINDS, ZONE_ORDER } from "./sections/kinds";
-import { SECTION_REGISTRY, type SectionDefaultsContext } from "./sections/registry";
+import { isKindAvailable, SECTION_REGISTRY, type SectionDefaultsContext } from "./sections/registry";
+import { FEATURE_LABELS, type SiteFeatures } from "./site-settings";
 import type { Section } from "./sections/types";
 
 export type MutationResult =
@@ -30,6 +31,9 @@ export type MutationRefusal =
   | "unknown_section"
   | "not_addable"
   | "not_deletable"
+  | "not_movable"
+  | "not_editable"
+  | "feature_off"
   | "singleton_exists"
   | "cross_zone_move"
   | "out_of_range"
@@ -52,16 +56,33 @@ function withSections(doc: PageDocument, sections: Section[]): PageDocument {
  * zone, so a body section dropped "above the header" lands at the top of the
  * body rather than being rejected outright. That is friendlier than refusing,
  * and it is impossible to end up with an illegal order.
+ *
+ * `features` is optional, and its absence means "do not check". Every caller
+ * that has the merchant's toggles to hand should pass them — the editor and the
+ * server both do — but this module is also driven by fixtures, templates and
+ * tests that legitimately have no merchant behind them, and making them invent
+ * one would be worse than the narrow rule that an omitted argument checks
+ * nothing.
  */
 export function addSection(
   doc: PageDocument,
   kind: SectionKind,
-  options: { atIndex?: number; ctx?: SectionDefaultsContext } = {},
+  options: { atIndex?: number; ctx?: SectionDefaultsContext; features?: SiteFeatures } = {},
 ): MutationResult {
   const def = SECTION_REGISTRY[kind];
   if (!def) return refuse("unknown_section", `Unknown section type "${kind}".`);
   if (!def.addable) {
     return refuse("not_addable", `${def.label} sections cannot be added manually.`);
+  }
+  // The same invariant the Add Section catalogue enforces by omission. The
+  // catalogue is the affordance; this is the rule, so a stale open tab or a
+  // direct call cannot add a section the merchant's settings do not allow.
+  if (options.features && !isKindAvailable(kind, options.features)) {
+    const required = def.requiresFeature!;
+    return refuse(
+      "feature_off",
+      `Turn on ${FEATURE_LABELS[required]} in your website settings to add a ${def.label} section.`,
+    );
   }
   if (def.singleton && doc.sections.some((s) => s.kind === kind)) {
     return refuse("singleton_exists", `This page already has a ${def.label} section.`);
@@ -185,7 +206,26 @@ export function moveSection(
   if (toIndex === fromIndex) return { ok: true, doc };
 
   const moving = doc.sections[fromIndex];
-  const movingZone = SECTION_REGISTRY[moving.kind].zone;
+  const movingDef = SECTION_REGISTRY[moving.kind];
+
+  /**
+   * Structural sections do not move.
+   *
+   * The zone rules below only ever refused a move *between* zones, which left
+   * the masthead — header and hero together — internally reorderable. A
+   * merchant could therefore swap the two and publish a page whose navigation
+   * sat underneath its own hero image. Nothing in the canvas offered that
+   * deliberately; it was simply the one arrangement the rules did not cover.
+   *
+   * Checked here rather than only in the gutters so that every writer of a
+   * document is bound by it — the canvas, a future conversational editor, an
+   * import tool.
+   */
+  if (!movingDef.movable) {
+    return refuse("not_movable", `${movingDef.label} sections stay where they are.`);
+  }
+
+  const movingZone = movingDef.zone;
 
   const next = [...doc.sections];
   next.splice(fromIndex, 1);
@@ -196,10 +236,10 @@ export function moveSection(
   const after = next[toIndex + 1];
   const rank = ZONE_ORDER[movingZone];
   if (before && ZONE_ORDER[SECTION_REGISTRY[before.kind].zone] > rank) {
-    return refuse("cross_zone_move", `${SECTION_REGISTRY[moving.kind].label} cannot move there.`);
+    return refuse("cross_zone_move", `${movingDef.label} cannot move there.`);
   }
   if (after && ZONE_ORDER[SECTION_REGISTRY[after.kind].zone] < rank) {
-    return refuse("cross_zone_move", `${SECTION_REGISTRY[moving.kind].label} cannot move there.`);
+    return refuse("cross_zone_move", `${movingDef.label} cannot move there.`);
   }
 
   return { ok: true, doc: withSections(doc, next) };
@@ -231,6 +271,14 @@ export function updateSectionProps(
   if (!section) return refuse("unknown_section", "That section is no longer on the page.");
 
   const def = SECTION_REGISTRY[section.kind];
+
+  // A kind with no editor has nothing a merchant could legitimately be sending.
+  // The drawer never opens for one, so an edit arriving here is a bug or a
+  // forged request rather than a merchant typing.
+  if (!def.editable) {
+    return refuse("not_editable", `${def.label} sections are not edited here.`);
+  }
+
   const candidate = { ...(section.props as Record<string, unknown>), ...patch };
   const parsed = def.schema.safeParse(candidate);
   if (!parsed.success) {

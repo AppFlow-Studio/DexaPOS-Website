@@ -1,5 +1,6 @@
 import type { RenderContext } from "@/lib/site-builder/render-context";
 import type { LinkTarget, SectionStyle } from "@/lib/site-builder/sections/primitives";
+import { trackAttrs } from "@/lib/site-builder/tracking";
 
 /**
  * Shared chrome for section renderers: spacing, background tone, alignment, and
@@ -156,6 +157,13 @@ export function CtaButton({
       style={styles}
       // A merchant-entered external link is untrusted; never hand it window.opener.
       {...(target.kind === "url" ? { rel: "noopener noreferrer", target: "_blank" } : {})}
+      /*
+        A click on "Order Online" is the closest thing a marketing site has to a
+        conversion — it is the moment a visitor leaves for the ordering
+        storefront. An attribute rather than an onClick, so this stays a server
+        component; one delegated listener picks it up. See `TrackingEvents`.
+      */
+      {...(target.kind === "order" ? trackAttrs("order_click") : {})}
       {...attrs}
     >
       {label}

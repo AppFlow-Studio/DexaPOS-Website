@@ -41,10 +41,15 @@ export default function EditorTopBar({
   const page = store((s) => s.page);
   const mode = store((s) => s.mode);
   const setMode = store((s) => s.setMode);
+  const openPageSettings = store((s) => s.openPageSettings);
 
   return (
     <OverlayChrome
       title={page.title}
+      // The page's own name is the way into its settings — renaming it, its
+      // URL, and removing it. Only in Build: Preview closes the drawer by
+      // design, so a title that opened it there would appear to do nothing.
+      onTitleClick={mode === "build" ? openPageSettings : undefined}
       closeHref={websiteRoutes.pages(locationId)}
       centre={<ModeSwitch mode={mode} onChange={setMode} />}
       action={<PublishButton store={store} clerkOrgId={clerkOrgId} />}

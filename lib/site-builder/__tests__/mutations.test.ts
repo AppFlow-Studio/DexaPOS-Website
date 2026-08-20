@@ -163,11 +163,20 @@ describe("moveSection", () => {
     expect(result.doc.sections.findIndex((s) => s.id === contentId)).toBe(from + 1);
   });
 
+  /**
+   * Still refused, but now for a stronger reason than it used to be.
+   *
+   * This asserted `cross_zone_move`, which was the only rule that existed: the
+   * hero was refused a trip into the body, while being free to swap with the
+   * header inside the masthead. `movable: false` refuses the move outright, so
+   * the reason arrives before the zone arithmetic is ever reached. See
+   * `capabilities.test.ts` for the hole that closed.
+   */
   it("refuses to drag the hero below a body section", () => {
     const result = moveSection(doc, idOf(doc, "hero"), doc.sections.length - 1);
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.reason).toBe("cross_zone_move");
+    expect(result.reason).toBe("not_movable");
   });
 
   it("refuses to drag a body section above the header", () => {

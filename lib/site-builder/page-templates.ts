@@ -116,11 +116,13 @@ function article({ locationId, title }: PageTemplateOptions): PageDocument {
         id: "s_tpl_body",
         kind: "content",
         props: {
-          heading: "Tell your story",
-          body:
-            "<p>Write two or three sentences here. Guests choosing between you and somewhere else read this page, so be concrete — a year, a family name, a dish you refuse to change.</p>",
-          imagePosition: "right",
-          cta: { label: "Contact us", target: { kind: "contact" } },
+          background: "none",
+          media: "none",
+          alignment: "right",
+          title: "Tell your story",
+          subtitle:
+            "Guests choosing between you and somewhere else read this page, so be concrete — a year, a family name, a dish you refuse to change.",
+          button: { label: "Contact us", target: { kind: "contact" } },
         },
       },
     ] as PageDocument["sections"],
@@ -189,9 +191,11 @@ function showcase({ locationId, title }: PageTemplateOptions): PageDocument {
         id: "s_tpl_body",
         kind: "content",
         props: {
-          heading: "About this page",
-          body: "<p>Add a paragraph here, or remove this section if the food says enough.</p>",
-          imagePosition: "none",
+          background: "none",
+          media: "none",
+          alignment: "left",
+          title: "About this page",
+          subtitle: "Add a sentence here, or remove this section if the food says enough.",
         },
       },
     ] as PageDocument["sections"],

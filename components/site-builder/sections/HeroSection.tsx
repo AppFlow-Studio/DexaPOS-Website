@@ -1,3 +1,5 @@
+import type { AssetRef } from "@/lib/site-builder/bindings/types";
+import type { RenderContext } from "@/lib/site-builder/render-context";
 import type { SectionRenderProps } from "@/lib/site-builder/render-context";
 import { fieldAttrsFor } from "../edit-attrs";
 import SiteImage from "../SiteImage";
@@ -14,19 +16,20 @@ import { Container, CtaButton, sectionStyleProps } from "../section-shell";
  * that renders eagerly with high fetch priority.
  */
 export default function HeroSection({ section, ctx }: SectionRenderProps<"hero">) {
-  const { variant, heading, subheading, image, overlayOpacity, primaryCta, secondaryCta } =
-    section.props;
+  const {
+    variant,
+    heading,
+    subheading,
+    image,
+    carousel,
+    overlayOpacity,
+    primaryCta,
+    secondaryCta,
+  } = section.props;
   const f = fieldAttrsFor(ctx.mode, section.id);
 
   // Falls back to the storefront's existing hero so a freshly created site is
   // never blank, even before the asset pipeline exists.
-  const imageProps = {
-    asset: image ?? null,
-    ctx,
-    fallbackUrl: ctx.site.heroImageUrl,
-    priority: true,
-  } as const;
-
   const ctas = (
     <div className="mt-8 flex flex-wrap items-center gap-3">
       {primaryCta && (
@@ -67,9 +70,12 @@ export default function HeroSection({ section, ctx }: SectionRenderProps<"hero">
             )}
             {ctas}
           </div>
-          <SiteImage
-            {...imageProps}
-            className="aspect-[4/3] w-full rounded-[var(--site-radius)] object-cover"
+          <HeroMedia
+            sectionId={section.id}
+            image={image}
+            carousel={carousel}
+            ctx={ctx}
+            className="aspect-[4/3] w-full rounded-[var(--site-radius)]"
           />
         </Container>
       </section>
@@ -83,7 +89,13 @@ export default function HeroSection({ section, ctx }: SectionRenderProps<"hero">
       className={`relative w-full overflow-hidden ${isSpotlight ? "min-h-[70vh]" : "min-h-[52vh]"}`}
       style={{ background: "var(--site-surface-dark)", color: "var(--site-text-on-dark)" }}
     >
-      <SiteImage {...imageProps} className="absolute inset-0 h-full w-full object-cover" />
+      <HeroMedia
+        sectionId={section.id}
+        image={image}
+        carousel={carousel}
+        ctx={ctx}
+        className="absolute inset-0 h-full w-full"
+      />
       <div
         className="absolute inset-0"
         style={{ background: "#000", opacity: (overlayOpacity ?? 35) / 100 }}
@@ -110,5 +122,85 @@ export default function HeroSection({ section, ctx }: SectionRenderProps<"hero">
         <div className={isSpotlight ? "" : "flex justify-center"}>{ctas}</div>
       </Container>
     </section>
+  );
+}
+
+/**
+ * A zero-JavaScript carousel keeps the public renderer server-only while still
+ * making every selected Hero photograph visible. The first resolved frame is
+ * eager/LCP; later frames stay lazy. Reduced-motion visitors see only frame 1.
+ */
+function HeroMedia({
+  sectionId,
+  image,
+  carousel,
+  ctx,
+  className,
+}: {
+  sectionId: string;
+  image?: AssetRef;
+  carousel?: AssetRef[];
+  ctx: RenderContext;
+  className: string;
+}) {
+  const seenAssetIds = new Set<string>();
+  if (image) seenAssetIds.add(image.assetId);
+  const extras = (carousel ?? []).filter((asset) => {
+    if (seenAssetIds.has(asset.assetId) || !ctx.resolveAsset(asset.assetId)) return false;
+    seenAssetIds.add(asset.assetId);
+    return true;
+  });
+  const hasPrimary = Boolean(image || ctx.site.heroImageUrl);
+  const frames: (AssetRef | null)[] = [...(hasPrimary ? [image ?? null] : []), ...extras];
+
+  if (frames.length <= 1) {
+    return (
+      <SiteImage
+        asset={frames[0] ?? image ?? null}
+        ctx={ctx}
+        fallbackUrl={ctx.site.heroImageUrl}
+        priority
+        className={`${className} object-cover`}
+      />
+    );
+  }
+
+  const secondsPerFrame = 5;
+  const duration = frames.length * secondsPerFrame;
+  const holdUntil = 100 / frames.length;
+  const fadeFrom = Math.max(0, holdUntil - Math.min(4, holdUntil / 4));
+  const animationName = `site-hero-carousel-${frames.length}`;
+  const scope = `hero-carousel-${sectionId.replace(/[^A-Za-z0-9_-]/g, "")}`;
+
+  return (
+    <div className={`${scope} ${className} relative overflow-hidden`} data-hero-carousel="true">
+      <style>{`
+        @keyframes ${animationName} {
+          0%, ${fadeFrom}% { opacity: 1; }
+          ${holdUntil}%, 100% { opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .${scope} .site-hero-carousel-frame { animation: none !important; opacity: 0 !important; }
+          .${scope} .site-hero-carousel-frame:first-of-type { opacity: 1 !important; }
+        }
+      `}</style>
+      {frames.map((asset, index) => (
+        <SiteImage
+          key={`${asset?.assetId ?? "fallback"}-${index}`}
+          asset={asset}
+          ctx={ctx}
+          fallbackUrl={index === 0 ? ctx.site.heroImageUrl : null}
+          priority={index === 0}
+          className="site-hero-carousel-frame absolute inset-0 h-full w-full object-cover opacity-0"
+          style={{
+            animationName,
+            animationDuration: `${duration}s`,
+            animationDelay: `${index * secondsPerFrame}s`,
+            animationIterationCount: "infinite",
+            animationTimingFunction: "ease-in-out",
+          }}
+        />
+      ))}
+    </div>
   );
 }

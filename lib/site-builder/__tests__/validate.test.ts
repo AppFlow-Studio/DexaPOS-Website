@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { updateSectionProps, updateSeo } from "../mutations";
+import { addSection, updateSectionProps, updateSeo } from "../mutations";
 import { createEmptyPage, createStarterPage, type PageDocument } from "../page-document";
 import { SECTION_REGISTRY } from "../sections/registry";
 import { validatePage } from "../validate";
@@ -167,6 +167,42 @@ describe("validatePage", () => {
     });
     expect(result.ok).toBe(false);
     expect(codes(result.errors)).toContain("invalid_section_props");
+  });
+
+  it.each(["video", "form", "pdf", "integrations"] as const)(
+    "blocks an incomplete visible %s section",
+    (kind) => {
+      const added = addSection(starter(), kind);
+      expect(added.ok).toBe(true);
+      if (!added.ok) return;
+      const result = validatePage(added.doc);
+      expect(codes(result.errors)).toContain("incomplete_section");
+    },
+  );
+
+  it("allows an incomplete section to remain as a hidden draft", () => {
+    const added = addSection(starter(), "video");
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    const videoId = added.doc.sections.find((section) => section.kind === "video")!.id;
+    const hidden = {
+      ...added.doc,
+      sections: added.doc.sections.map((section) =>
+        section.id === videoId ? { ...section, hidden: true } : section,
+      ),
+    };
+    expect(codes(validatePage(hidden).errors)).not.toContain("incomplete_section");
+  });
+
+  it("blocks destinations that need a value when none is selected", () => {
+    const doc = starter();
+    const heroId = doc.sections.find((section) => section.kind === "hero")!.id;
+    const changed = updateSectionProps(doc, heroId, {
+      primaryCta: { label: "About us", target: { kind: "page" } },
+    });
+    expect(changed.ok).toBe(true);
+    if (!changed.ok) return;
+    expect(codes(validatePage(changed.doc).errors)).toContain("incomplete_link");
   });
 
   it("derives its required kinds from the registry, not a hardcoded list", () => {

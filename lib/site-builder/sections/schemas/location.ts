@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { bindingSchema } from "../../bindings/types";
-import { headingSchema, proseSchema } from "../primitives";
+import { titleSchema, subtitleSchema } from "../primitives";
 
 /**
  * Address, hours, map and directions.
@@ -13,8 +13,8 @@ import { headingSchema, proseSchema } from "../primitives";
  * worse than an unexpected update.
  */
 export const locationSchema = z.object({
-  heading: headingSchema.optional(),
-  subheading: proseSchema.optional(),
+  heading: titleSchema.optional(),
+  subheading: subtitleSchema.optional(),
   location: bindingSchema("location"),
   showMap: z.boolean(),
   showHours: z.boolean(),

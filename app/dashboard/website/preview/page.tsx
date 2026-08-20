@@ -6,6 +6,7 @@ import { LoadDraft } from "@/app/dashboard/website/actions/draft";
 import { ListPages } from "@/app/dashboard/website/actions/pages";
 import { GetSite } from "@/app/dashboard/website/actions/site";
 import PageRenderer, { SiteChrome } from "@/components/site-builder/PageRenderer";
+import { websiteRoutes } from "@/components/site-builder/routes";
 import { collectBindings } from "@/lib/site-builder/bindings/collect";
 import { resolveBindings } from "@/lib/site-builder/bindings/resolve";
 import type { RenderMode } from "@/lib/site-builder/render-context";
@@ -72,7 +73,7 @@ export default async function WebsitePreviewPage({
           website.error ??
           "You have not started a website. Open the page editor and your home page will be created for you."
         }
-        action={{ href: "/dashboard/website", label: "Go to Website" }}
+        action={{ href: websiteRoutes.pages(site.locationId), label: "Go to Website" }}
       />
     );
   }
@@ -83,7 +84,7 @@ export default async function WebsitePreviewPage({
       <PreviewNotice
         title="This website has no pages"
         detail={pages.error ?? "Open the page editor to create your home page."}
-        action={{ href: "/dashboard/website/builder", label: "Open the editor" }}
+        action={{ href: websiteRoutes.editor(site.locationId), label: "Open the editor" }}
       />
     );
   }
@@ -99,7 +100,7 @@ export default async function WebsitePreviewPage({
       <PreviewNotice
         title={`Could not open “${page.title}”`}
         detail={draft.error ?? "The draft could not be loaded."}
-        action={{ href: "/dashboard/website", label: "Back to Website" }}
+        action={{ href: websiteRoutes.pages(site.locationId), label: "Back to Website" }}
       />
     );
   }

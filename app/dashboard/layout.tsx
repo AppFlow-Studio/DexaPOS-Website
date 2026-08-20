@@ -212,6 +212,27 @@ const navMain = [
             title: "Pages",
             url: "/dashboard/website/pages",
           },
+          {
+            title: "Events",
+            url: "/dashboard/website/events",
+          },
+          {
+            title: "Forms",
+            url: "/dashboard/website/forms",
+          },
+          {
+            // NOT "Analytics" — it shows no data, and a merchant who clicks
+            // Analytics expecting visitor numbers files a support ticket.
+            title: "Tracking",
+            url: "/dashboard/website/tracking",
+          },
+          {
+            // The brand layer: what the website offers, and the facts every
+            // page reads. Style is reached from Pages because it is about the
+            // pages you are looking at; this is not.
+            title: "Settings",
+            url: "/dashboard/website/settings",
+          },
         ],
       },
       {

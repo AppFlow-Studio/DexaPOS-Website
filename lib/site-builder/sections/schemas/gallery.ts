@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { assetRefSchema } from "../../bindings/types";
-import { headingSchema, proseSchema } from "../primitives";
+import { titleSchema, subtitleSchema } from "../primitives";
 
 /**
  * Photo gallery. Images are `AssetRef`s, never URLs — see bindings/types.ts.
@@ -11,8 +11,8 @@ import { headingSchema, proseSchema } from "../primitives";
  * purpose is ranking.
  */
 export const gallerySchema = z.object({
-  heading: headingSchema.optional(),
-  subheading: proseSchema.optional(),
+  heading: titleSchema.optional(),
+  subheading: subtitleSchema.optional(),
   images: z.array(assetRefSchema).max(24),
   layout: z.enum(["grid", "masonry", "carousel"]),
   columns: z.union([z.literal(2), z.literal(3), z.literal(4)]),

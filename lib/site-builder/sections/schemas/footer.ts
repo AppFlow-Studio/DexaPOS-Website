@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { bindingSchema } from "../../bindings/types";
-import { linkTargetSchema, proseSchema } from "../primitives";
+import { linkTargetSchema, subtitleSchema } from "../primitives";
 
 /**
  * Site footer. Locked to the colophon zone; not addable, not deletable.
@@ -14,7 +14,7 @@ export const footerSchema = z.object({
   showHours: z.boolean(),
   showPhone: z.boolean(),
   showSocial: z.boolean(),
-  tagline: proseSchema.optional(),
+  tagline: subtitleSchema.optional(),
   copyrightText: z.string().max(200).optional(),
   links: z
     .array(

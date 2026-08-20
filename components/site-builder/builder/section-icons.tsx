@@ -8,6 +8,7 @@ import {
   MessageCircleQuestion,
   PanelBottom,
   PanelTop,
+  Plug,
   Sparkles,
   Text,
   UtensilsCrossed,
@@ -40,6 +41,7 @@ const ICONS: Record<string, LucideIcon> = {
   Sparkles,
   MessageCircleQuestion,
   MapPin,
+  Plug,
 };
 
 export function SectionIcon({ name, className }: { name: string; className?: string }) {

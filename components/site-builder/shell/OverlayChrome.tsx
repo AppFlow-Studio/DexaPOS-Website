@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleX } from "lucide-react";
+import { CircleX, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ export default function OverlayChrome({
   centre,
   action,
   aside,
+  onTitleClick,
   onClose,
   closeHref,
   children,
@@ -42,6 +43,14 @@ export default function OverlayChrome({
   action?: React.ReactNode;
   /** Anything sitting just before the primary action. */
   aside?: React.ReactNode;
+  /**
+   * Makes the title itself the way into the settings for the thing it names.
+   *
+   * Optional because most overlays title a *mode* — `Style`, `New Page` —
+   * which has nothing behind it. Where the title names an object the merchant
+   * owns, this is where renaming, its URL and removing it live.
+   */
+  onTitleClick?: () => void;
   /** Takes precedence over `closeHref`. */
   onClose?: () => void;
   /** Where `Close` goes when there is nothing to tear down first. */
@@ -63,7 +72,22 @@ export default function OverlayChrome({
           Close
         </Button>
 
-        <h1 className="min-w-0 truncate text-sm font-semibold">{title}</h1>
+        {onTitleClick ? (
+          // The gear stays visible rather than appearing on hover. A control
+          // that only exists once you are already touching it is how the page
+          // settings drawer came to be unreachable in the first place.
+          <button
+            type="button"
+            onClick={onTitleClick}
+            aria-label={`${title} — page settings`}
+            className="-mx-1.5 flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-accent"
+          >
+            <h1 className="min-w-0 truncate text-sm font-semibold">{title}</h1>
+            <Settings2 className="size-3.5 shrink-0 text-muted-foreground" />
+          </button>
+        ) : (
+          <h1 className="min-w-0 truncate text-sm font-semibold">{title}</h1>
+        )}
 
         {/* Absolutely centred rather than flex-centred: the title on the left
             and the actions on the right are different widths on every screen,

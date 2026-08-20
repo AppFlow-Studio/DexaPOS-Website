@@ -23,6 +23,8 @@ export type ControlKind =
   | "select"
   | "image"
   | "binding-list"
+  | "form"
+  | "video"
   | "repeater"
   | "link"
   | "unsupported";
@@ -36,7 +38,19 @@ export interface FieldControl {
   /** Options for `select`. */
   options?: { value: string; label: string }[];
   min?: number;
+  /**
+   * The real limit, read off the Zod `.max()` check.
+   *
+   * It used to be `MAX_SAFE_INTEGER` for a hardcoded list of field names and
+   * `undefined` for everything else — a flag meaning "render a textarea"
+   * wearing a number's clothes. The consequence was that the character counter
+   * in the drawer, which asks for a *real* limit, never had one: it was written,
+   * shipped and silently inert on every field of every section. `multiline` now
+   * carries the layout decision and this carries the cap.
+   */
   max?: number;
+  /** Render a textarea rather than a single-line input. */
+  multiline?: boolean;
   /** Max array length for `repeater` / `binding-list`. */
   maxItems?: number;
   /** Sub-controls for `repeater` entries. */
@@ -54,7 +68,14 @@ export interface FieldControl {
 }
 
 /** Fields long enough to want a textarea rather than a single-line input. */
-const MULTILINE_FIELDS = new Set(["subheading", "description", "tagline", "answer", "question"]);
+const MULTILINE_FIELDS = new Set([
+  "subheading",
+  "subtitle",
+  "description",
+  "tagline",
+  "answer",
+  "question",
+]);
 const RICHTEXT_FIELDS = new Set(["body", "answer"]);
 
 interface ZodDef {
@@ -92,6 +113,56 @@ function unwrap(schema: unknown): { inner: unknown; optional: boolean } {
   return { inner: current, optional };
 }
 
+/**
+ * The `.max()` on a string schema, or `undefined` when it has none.
+ *
+ * Zod 4 stores checks as objects carrying `_zod.def = { check, maximum }`. That
+ * is internal, which is exactly why `schema-introspect.test.ts` asserts the
+ * caps it produces for every schema: a Zod upgrade that moves this breaks CI
+ * rather than silently removing every character counter in the editor.
+ */
+function maxLengthOf(def: ZodDef | undefined): number | undefined {
+  for (const check of def?.checks ?? []) {
+    const inner = (check as { _zod?: { def?: { check?: string; maximum?: number } } })?._zod?.def;
+    if (inner?.check === "max_length" && typeof inner.maximum === "number") {
+      return inner.maximum;
+    }
+  }
+  return undefined;
+}
+
+/** Reads inclusive `.min()` / `.max()` bounds from a Zod number schema. */
+function numberBoundsOf(def: ZodDef | undefined): { min?: number; max?: number } {
+  let min: number | undefined;
+  let max: number | undefined;
+
+  for (const check of def?.checks ?? []) {
+    const inner = (check as {
+      _zod?: { def?: { check?: string; value?: number; inclusive?: boolean } };
+    })?._zod?.def;
+    if (typeof inner?.value !== "number" || inner.inclusive === false) continue;
+    if (inner.check === "greater_than") min = inner.value;
+    if (inner.check === "less_than") max = inner.value;
+  }
+
+  return { min, max };
+}
+
+/**
+ * The character cap on one schema field, or `undefined` if it is not a capped
+ * string. Unwraps `.optional()` on the way in.
+ *
+ * Exported for `normalize`, which needs the caps to *truncate* stored copy that
+ * predates a tightened limit. Both callers therefore read the same source, so a
+ * cap can never be enforced in one place and unknown in the other.
+ */
+export function stringMaxOf(field: unknown): number | undefined {
+  const { inner } = unwrap(field);
+  const def = defOf(inner);
+  if (def?.type !== "string") return undefined;
+  return maxLengthOf(def);
+}
+
 export function describeSchema(schema: z.ZodObject<any>): FieldControl[] {
   const shape = schema.shape as Record<string, unknown>;
   return Object.entries(shape).map(([name, field]) => describeField(name, field));
@@ -103,19 +174,31 @@ export function describeField(name: string, field: unknown): FieldControl {
   const base = { name, label: humanize(name), optional };
 
   switch (def?.type) {
-    case "string":
+    case "string": {
+      // `formId` is a string in the schema because that is what it is, but a
+      // text box asking a merchant to type a uuid is not a control. Named here
+      // rather than given its own Zod type so the section schema stays plain
+      // data — the same reasoning as `RICHTEXT_FIELDS` and `MULTILINE_FIELDS`
+      // directly below.
+      if (name === "formId") return { ...base, kind: "form" };
+      if (name === "videoId") return { ...base, kind: "video" };
+
+      const max = maxLengthOf(def);
       return {
         ...base,
         kind: RICHTEXT_FIELDS.has(name) ? "richtext" : "text",
-        // Surfaced so the control can render a textarea rather than an input.
-        max: MULTILINE_FIELDS.has(name) ? Number.MAX_SAFE_INTEGER : undefined,
+        ...(max === undefined ? {} : { max }),
+        // A textarea is a layout decision about the *shape* of the copy, so it
+        // stays a field-name list. It is no longer entangled with the cap.
+        multiline: MULTILINE_FIELDS.has(name),
       };
+    }
 
     case "boolean":
       return { ...base, kind: "boolean" };
 
     case "number":
-      return { ...base, kind: "number", min: 0, max: 100 };
+      return { ...base, kind: "number", ...numberBoundsOf(def) };
 
     case "enum":
       return {

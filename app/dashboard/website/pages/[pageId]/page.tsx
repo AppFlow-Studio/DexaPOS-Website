@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { CreateHomePage, ListPages } from "@/app/dashboard/website/actions/pages";
 import { LoadDraft } from "@/app/dashboard/website/actions/draft";
 import { GetPublishedDocument } from "@/app/dashboard/website/actions/publish";
-import { GetOrCreateSite } from "@/app/dashboard/website/actions/site";
+import { EnsureNavSeeded, GetOrCreateSite } from "@/app/dashboard/website/actions/site";
 import BuilderShell from "@/components/site-builder/builder/BuilderShell";
 import type { ResolverSources } from "@/lib/site-builder/bindings/resolve";
 import type { SitePageSummary } from "@/lib/site-builder/db-types";
@@ -120,6 +120,18 @@ export default async function EditorRoute({
   const doc = draft.data.document;
   const initialCatalog = await catalogPromise;
 
+  /**
+   * The navigation, seeded from published pages the first time a site with an
+   * empty one is opened.
+   *
+   * Sites built before there was an editor for this carry `{"items":[]}`, which
+   * renders a header with no links — so their published pages were live and
+   * unreachable. Seeding here rather than in a data migration means the derived
+   * list is only ever a starting point: from the moment the merchant opens the
+   * header, the stored nav is theirs.
+   */
+  const navItems = await EnsureNavSeeded(orgId, websiteResult.data.id, websiteResult.data.nav);
+
   // The first canvas is rendered here as a Server Component and handed down as
   // a prop. A client component may RECEIVE a server-rendered tree; it just may
   // not import one. Later renders come from the `renderCanvas` action, which
@@ -133,6 +145,7 @@ export default async function EditorRoute({
       initialRevision={draft.data.revision}
       clerkOrgId={orgId}
       locationId={site.locationId}
+      features={site.features}
       page={{
         id: page.id,
         title: page.title,
@@ -140,6 +153,16 @@ export default async function EditorRoute({
         isHome: page.is_home,
         status: page.status,
         publishedAt: page.published_at,
+      }}
+      site={{
+        id: websiteResult.data.id,
+        nav: navItems,
+        pages: pages.map((p) => ({
+          title: p.title,
+          path: p.path,
+          isHome: p.is_home,
+          isPublished: p.status === "published",
+        })),
       }}
       publishedDoc={published.data?.document ?? null}
       publishedAt={published.data?.publishedAt ?? null}

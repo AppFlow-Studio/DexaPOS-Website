@@ -2,11 +2,18 @@
  * The closed set of section kinds a merchant page can contain, and the zones
  * that constrain where each one may sit.
  *
- * v1 ships 9 of the 17 kinds in the MockBuilder spec. `reviews` and
- * `reservations` are deliberately absent — neither has a data source in this
- * repo yet (no reviews table; `lib/reservations/` is a single file). The rest
- * (`cards`, `form`, `pdf`, `video`, `events`, `scrolling-banner`) are additive:
- * a schema file plus a registry entry each, with no migration.
+ * v1 shipped 9. Phase 4 of the Owner parity plan added five more — `cards`,
+ * `reviews`, `scrolling-banner`, `video` and `pdf` — each a schema file, a
+ * registry entry and a renderer, with no migration.
+ *
+ * `reviews` is the interesting one: it was cut from v1 on the assumption that
+ * reviews meant a live Google feed. The Owner teardown showed theirs is
+ * **manually curated** — a repeater of a quote and a name — which removed the
+ * blocker entirely.
+ *
+ * Forms and Events landed with plan phases 7 and 8. Integrations then landed as
+ * a strict provider allowlist. The target's one remaining kind, `reservations`,
+ * needs a public write path into the existing reservations table.
  *
  * See docs/features/website-builder/PLAN-01-INFRA-SECTION-CONTRACT.md
  */
@@ -15,9 +22,17 @@ export const SECTION_KINDS = [
   "header",
   "hero",
   "content",
+  "cards",
   "gallery",
   "popular-items",
   "features",
+  "reviews",
+  "scrolling-banner",
+  "video",
+  "pdf",
+  "form",
+  "events",
+  "integrations",
   "faq",
   "location",
   "footer",
@@ -56,6 +71,7 @@ export const SECTION_CATEGORIES = [
   { id: "menu", label: "Menu" },
   { id: "story", label: "Your story" },
   { id: "media", label: "Photos" },
+  { id: "extras", label: "Extras" },
   { id: "visit", label: "Visit us" },
   /** Header, hero and footer. Never offered in the modal; present for completeness. */
   { id: "frame", label: "Page frame" },

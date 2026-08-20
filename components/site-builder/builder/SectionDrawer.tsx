@@ -17,14 +17,24 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { Binding } from "@/lib/site-builder/bindings/types";
+import type { NavItem } from "@/lib/site-builder/nav";
 import { checkPagePath } from "@/lib/site-builder/reserved-paths";
 import { describeSchema, type FieldControl } from "@/lib/site-builder/schema-introspect";
 import { SECTION_REGISTRY, sectionTitle } from "@/lib/site-builder/sections/registry";
+import { parseVideoRef } from "@/lib/site-builder/sections/schemas/video";
 import type { Section } from "@/lib/site-builder/sections/types";
 import { cn } from "@/lib/utils";
 import { websiteRoutes } from "../routes";
 import { OverlayRail } from "../shell/OverlayChrome";
+import AssetPicker, { AssetListPicker } from "./AssetPicker";
+import FormPicker from "./FormPicker";
 import MenuItemPicker from "./MenuItemPicker";
+import NavEditor, {
+  NavDoneButton,
+  useNavDraft,
+  type NavDraft,
+  type NavPageOption,
+} from "./NavEditor";
 import type { BuilderStore } from "./store";
 
 /**
@@ -42,18 +52,35 @@ import type { BuilderStore } from "./store";
  * duplicating controls that now live in the canvas gutter. Nine fields felt
  * like thirty. They are now nine fields and a `Done` button.
  */
+/** What the header section's editor needs, which is site-wide rather than page-wide. */
+export interface DrawerSite {
+  id: string;
+  nav: NavItem[];
+  pages: NavPageOption[];
+}
+
 export default function SectionDrawer({
   store,
   locationId,
   clerkOrgId,
+  site,
 }: {
   store: BuilderStore;
   locationId: string;
   clerkOrgId: string;
+  site: DrawerSite;
 }) {
   const doc = store((s) => s.doc);
   const selectedId = store((s) => s.selectedId);
   const pageSettingsOpen = store((s) => s.pageSettingsOpen);
+
+  /**
+   * Held here rather than inside `SectionSettings`, which is keyed on the
+   * section id and therefore remounts on every selection change. A merchant who
+   * arranged their navigation and then clicked another section to check
+   * something would have lost the arrangement without being told.
+   */
+  const navDraft = useNavDraft({ siteId: site.id, clerkOrgId, initialItems: site.nav });
 
   if (pageSettingsOpen) return <PageSettings store={store} clerkOrgId={clerkOrgId} />;
 
@@ -61,7 +88,15 @@ export default function SectionDrawer({
   if (!section) return null;
 
   return (
-    <SectionSettings key={section.id} section={section} store={store} locationId={locationId} />
+    <SectionSettings
+      key={section.id}
+      section={section}
+      store={store}
+      locationId={locationId}
+      clerkOrgId={clerkOrgId}
+      site={site}
+      navDraft={navDraft}
+    />
   );
 }
 
@@ -69,26 +104,58 @@ function SectionSettings({
   section,
   store,
   locationId,
+  clerkOrgId,
+  site,
+  navDraft,
 }: {
   section: Section;
   store: BuilderStore;
   locationId: string;
+  clerkOrgId: string;
+  site: DrawerSite;
+  navDraft: NavDraft;
 }) {
   const def = SECTION_REGISTRY[section.kind];
   const updateProps = store((s) => s.updateProps);
   const closeDrawer = store((s) => s.closeDrawer);
 
-  const controls = useMemo(() => describeSchema(def.schema), [def.schema]);
   const props = section.props as Record<string, unknown>;
 
+  // Recomputed as the merchant chooses, so switching Background to Photo makes
+  // the picker appear in the same interaction rather than the next one.
+  const controls = useMemo(() => {
+    const all = describeSchema(def.schema);
+    const hidden = new Set(def.hiddenFields?.(props) ?? []);
+    return hidden.size === 0 ? all : all.filter((control) => !hidden.has(control.name));
+  }, [def, props]);
+
+  const isHeader = section.kind === "header";
+
   return (
-    <OverlayRail footer={<DoneButton onClick={closeDrawer} />}>
+    <OverlayRail
+      footer={
+        isHeader ? (
+          <NavDoneButton draft={navDraft} onClose={closeDrawer} />
+        ) : (
+          <DoneButton onClick={closeDrawer} />
+        )
+      }
+    >
       <div className="border-b px-4 py-3">
-        <h2 className="truncate text-sm font-semibold">{sectionTitle(section)}</h2>
+        <h2 className="truncate text-sm font-semibold">
+          {isHeader ? "Navigation" : sectionTitle(section)}
+        </h2>
         <p className="truncate text-xs text-muted-foreground">{def.label}</p>
       </div>
 
-      <div className="space-y-5 p-4">
+      {/* The navigation is the reason a merchant opens the header, so it comes
+          first; the header's own presentation settings sit under it. */}
+      {isHeader && <NavEditor draft={navDraft} pages={site.pages} />}
+
+      <div className={cn("space-y-5 p-4", isHeader && "border-t")}>
+        {isHeader && (
+          <p className="text-xs font-medium text-muted-foreground">Header appearance</p>
+        )}
         {controls.map((control) => (
           <Control
             key={control.name}
@@ -96,6 +163,10 @@ function SectionSettings({
             value={props[control.name]}
             store={store}
             locationId={locationId}
+            clerkOrgId={clerkOrgId}
+            pages={site.pages}
+            sectionProps={props}
+            onPatch={(patch) => updateProps(section.id, patch)}
             onChange={(value) => updateProps(section.id, { [control.name]: value })}
           />
         ))}
@@ -157,13 +228,15 @@ function FieldLabel({
 }
 
 /**
- * A counter is only honest when the limit is real. `MAX_SAFE_INTEGER` is how the
- * introspector spells "no limit", and a rich-text body has no meaningful one.
+ * A counter is only honest when the limit is real.
+ *
+ * Rich text has no meaningful character budget — a merchant writing a paragraph
+ * is not rationing characters — so it gets no counter even though its schema
+ * carries a sanity cap.
  */
 function countableMax(control: FieldControl): number | null {
   if (control.kind !== "text") return null;
-  if (control.max == null || control.max === Number.MAX_SAFE_INTEGER) return null;
-  return control.max;
+  return control.max ?? null;
 }
 
 function Control({
@@ -171,12 +244,20 @@ function Control({
   value,
   store,
   locationId,
+  clerkOrgId,
+  pages,
+  sectionProps,
+  onPatch,
   onChange,
 }: {
   control: FieldControl;
   value: unknown;
   store: BuilderStore;
   locationId: string;
+  clerkOrgId: string;
+  pages: NavPageOption[];
+  sectionProps?: Record<string, unknown>;
+  onPatch?: (patch: Record<string, unknown>) => void;
   onChange: (value: unknown) => void;
 }) {
   switch (control.kind) {
@@ -276,6 +357,7 @@ function Control({
 
     case "link": {
       const link = (value ?? {}) as { label?: string; target?: { kind?: string; value?: string } };
+      const pageOptions = pages.filter((page) => page.isPublished);
       return (
         <div>
           <FieldLabel control={control} />
@@ -297,23 +379,53 @@ function Control({
             <select
               aria-label={`${control.label} destination`}
               value={link.target?.kind ?? "order"}
-              onChange={(e) =>
+              onChange={(e) => {
+                const kind = e.target.value;
+                const keepsValue = kind === link.target?.kind;
+                const nextValue =
+                  kind === "page"
+                    ? keepsValue
+                      ? link.target?.value
+                      : pageOptions[0]?.path
+                    : kind === "url" || kind === "phone"
+                      ? keepsValue
+                        ? link.target?.value
+                        : ""
+                      : undefined;
                 onChange({
                   label: link.label ?? "Order Now",
-                  // Keep a typed URL/phone around when the merchant tries a
-                  // different link type. Changing their mind should not destroy
-                  // work.
-                  target: { kind: e.target.value, value: link.target?.value },
-                })
-              }
+                  target: { kind, ...(nextValue ? { value: nextValue } : {}) },
+                });
+              }}
               className={inputClass}
             >
               <option value="order">Go to ordering</option>
               <option value="menu">Go to the menu</option>
               <option value="contact">Jump to contact</option>
+              <option value="page">Another page</option>
               <option value="url">External link</option>
               <option value="phone">Call us</option>
             </select>
+            {link.target?.kind === "page" && (
+              <select
+                aria-label="Page destination"
+                value={link.target.value ?? ""}
+                onChange={(e) =>
+                  onChange({
+                    label: link.label ?? "Learn more",
+                    target: { kind: "page", value: e.target.value },
+                  })
+                }
+                className={inputClass}
+              >
+                {pageOptions.length === 0 && <option value="">No published pages</option>}
+                {pageOptions.map((page) => (
+                  <option key={page.path} value={page.path}>
+                    {page.title}
+                  </option>
+                ))}
+              </select>
+            )}
             {(link.target?.kind === "url" || link.target?.kind === "phone") && (
               <input
                 type="text"
@@ -334,6 +446,28 @@ function Control({
       );
     }
 
+    case "video":
+      return (
+        <VideoLinkControl
+          control={control}
+          value={value}
+          provider={sectionProps?.provider === "vimeo" ? "vimeo" : "youtube"}
+          onChange={(provider, videoId) =>
+            onPatch ? onPatch({ provider, videoId }) : onChange(videoId)
+          }
+        />
+      );
+
+    case "form":
+      return (
+        <FormPicker
+          value={typeof value === "string" ? value : ""}
+          onChange={onChange}
+          locationId={locationId}
+          clerkOrgId={clerkOrgId}
+        />
+      );
+
     case "binding-list":
       return (
         <BindingControl
@@ -346,11 +480,23 @@ function Control({
       );
 
     case "image":
-      return (
-        <div>
-          <FieldLabel control={control} />
-          <Placeholder detail="Photo uploads arrive with the asset library." />
-        </div>
+      // A gallery is an array of assets; a hero or a content background is one.
+      // Both come through the same control kind, told apart by `maxItems`.
+      return control.maxItems === undefined ? (
+        <AssetPicker
+          label={control.label}
+          clerkOrgId={clerkOrgId}
+          value={value as { assetId: string; alt?: string } | undefined}
+          onChange={onChange}
+        />
+      ) : (
+        <AssetListPicker
+          label={control.label}
+          clerkOrgId={clerkOrgId}
+          maxItems={control.maxItems}
+          value={(value as { assetId: string; alt?: string }[] | undefined) ?? []}
+          onChange={onChange}
+        />
       );
 
     case "repeater": {
@@ -384,6 +530,9 @@ function Control({
                       value={row[sub.name]}
                       store={store}
                       locationId={locationId}
+                      clerkOrgId={clerkOrgId}
+                      pages={pages}
+                      sectionProps={row}
                       onChange={(next) =>
                         onChange(rows.map((r, i) => (i === index ? { ...r, [sub.name]: next } : r)))
                       }
@@ -417,6 +566,70 @@ function Control({
   }
 }
 
+function VideoLinkControl({
+  control,
+  value,
+  provider,
+  onChange,
+}: {
+  control: FieldControl;
+  value: unknown;
+  provider: "youtube" | "vimeo";
+  onChange: (provider: "youtube" | "vimeo", videoId: string) => void;
+}) {
+  const savedValue = typeof value === "string" ? value : "";
+  const initialLink = savedValue
+    ? provider === "vimeo"
+      ? `https://vimeo.com/${savedValue}`
+      : `https://youtu.be/${savedValue}`
+    : "";
+  const [draft, setDraft] = useState(initialLink);
+  const [error, setError] = useState<string | null>(null);
+
+  const update = (next: string) => {
+    setDraft(next);
+    if (!next.trim()) {
+      setError(null);
+      onChange(provider, "");
+      return;
+    }
+
+    const parsed = parseVideoRef(next);
+    if (!parsed) {
+      setError("Paste a valid YouTube or Vimeo link.");
+      return;
+    }
+
+    setError(null);
+    onChange(parsed.provider, parsed.videoId);
+  };
+
+  return (
+    <label className="block">
+      <FieldLabel control={{ ...control, label: "Video link" }} />
+      <input
+        type="text"
+        inputMode="url"
+        placeholder="https://youtube.com/watch?v=…"
+        value={draft}
+        onChange={(event) => update(event.target.value)}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? "video-link-error" : undefined}
+        className={cn(inputClass, error && "border-destructive focus-visible:border-destructive")}
+      />
+      <p
+        id={error ? "video-link-error" : undefined}
+        className={cn(
+          "mt-1.5 text-[11px] leading-relaxed",
+          error ? "text-destructive" : "text-muted-foreground",
+        )}
+      >
+        {error ?? `Paste a YouTube or Vimeo link. Current provider: ${provider === "vimeo" ? "Vimeo" : "YouTube"}.`}
+      </p>
+    </label>
+  );
+}
+
 /**
  * Keeps a small local draft for text fields.
  *
@@ -436,9 +649,21 @@ function TextControl({
 }) {
   const savedValue = String(value ?? "");
   const [draft, setDraft] = useState(savedValue);
-  const isLong = control.kind === "richtext" || control.max === Number.MAX_SAFE_INTEGER;
+  const isLong = control.kind === "richtext" || control.multiline === true;
+  const max = countableMax(control);
 
-  const update = (next: string) => {
+  /**
+   * The cap is enforced here, on the way in.
+   *
+   * Owner's fields simply stop accepting characters at the limit rather than
+   * accepting them and refusing the save. That matters because our mutation
+   * layer *rejects* invalid props rather than repairing them: a merchant who
+   * pasted 60 characters into a 50-character title would otherwise watch the
+   * canvas stop updating with no explanation, because every keystroke after the
+   * cap was being silently refused.
+   */
+  const update = (raw: string) => {
+    const next = max !== null ? raw.slice(0, max) : raw;
     setDraft(next);
     if (next || control.optional) onChange(next || undefined);
   };
@@ -449,6 +674,7 @@ function TextControl({
       {isLong ? (
         <textarea
           rows={control.kind === "richtext" ? 6 : 3}
+          maxLength={max ?? undefined}
           value={draft}
           onChange={(e) => update(e.target.value)}
           onBlur={() => {
@@ -459,6 +685,7 @@ function TextControl({
       ) : (
         <input
           type="text"
+          maxLength={max ?? undefined}
           value={draft}
           onChange={(e) => update(e.target.value)}
           onBlur={() => {
@@ -700,6 +927,8 @@ function PageSettings({ store, clerkOrgId }: { store: BuilderStore; clerkOrgId: 
         )}
         {saving && <p className="text-[11px] text-muted-foreground">Saving…</p>}
 
+        <PageSeoFields store={store} clerkOrgId={clerkOrgId} />
+
         {!page.isHome && (
           <>
             <Button
@@ -748,6 +977,101 @@ function PageSettings({ store, clerkOrgId }: { store: BuilderStore; clerkOrgId: 
         )}
       </div>
     </OverlayRail>
+  );
+}
+
+/**
+ * How this page appears in a search result and when someone shares its link.
+ *
+ * A deliberate divergence from Owner, who has no SEO surface anywhere in their
+ * Website tab — and it is the divergence easiest to justify, because we sell to
+ * restaurants who are found through search and through a link pasted into a
+ * group chat. The cost is four optional fields; the benefit is that a merchant
+ * can write "Sunday roast in Camden — booking recommended" instead of shipping
+ * a page whose preview says "About us".
+ *
+ * **Collapsed by default**, because none of it is required and a merchant who
+ * came here to rename a page should not have to scroll past it. It is part of
+ * the document, so it autosaves and versions with the page — unlike the name
+ * and address above it, which live on the row.
+ *
+ * The placeholders show what the page will use if these are left empty, which
+ * is the whole reason a merchant can safely ignore the section: the page name
+ * already becomes the title, and there is no state in which a page has no
+ * title at all.
+ */
+function PageSeoFields({ store, clerkOrgId }: { store: BuilderStore; clerkOrgId: string }) {
+  const seo = store((s) => s.doc.seo);
+  const updateSeo = store((s) => s.updateSeo);
+  const page = store((s) => s.page);
+
+  const DESCRIPTION_MAX = 160;
+
+  return (
+    <details className="rounded-md border">
+      <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-medium [&::-webkit-details-marker]:hidden">
+        Search &amp; sharing
+        <span className="ml-1 font-normal text-muted-foreground">optional</span>
+      </summary>
+
+      <div className="space-y-4 border-t p-3">
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-medium">Search title</span>
+          <input
+            type="text"
+            value={seo.title ?? ""}
+            maxLength={70}
+            placeholder={page.title}
+            onChange={(e) => updateSeo({ title: e.target.value || undefined })}
+            className={inputClass}
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-medium">
+            Description{" "}
+            <span className="font-normal text-muted-foreground">
+              {(seo.description ?? "").length}/{DESCRIPTION_MAX}
+            </span>
+          </span>
+          <textarea
+            rows={3}
+            value={seo.description ?? ""}
+            maxLength={DESCRIPTION_MAX}
+            placeholder="One or two sentences, as they should read under your link."
+            onChange={(e) => updateSeo({ description: e.target.value || undefined })}
+            className={cn(inputClass, "resize-y")}
+          />
+        </label>
+
+        <div>
+          <AssetPicker
+            label="Sharing image"
+            clerkOrgId={clerkOrgId}
+            value={seo.ogImageAssetId ? { assetId: seo.ogImageAssetId } : undefined}
+            onChange={(value) => updateSeo({ ogImageAssetId: value?.assetId })}
+          />
+          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+            Shown when this page&rsquo;s link is posted. Without one, your logo is used.
+          </p>
+        </div>
+
+        <label className="flex cursor-pointer items-start justify-between gap-3">
+          <span className="min-w-0">
+            <span className="block text-xs font-medium">Hide from search engines</span>
+            <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+              The page stays live and anyone with the link can open it. It simply stops appearing in
+              results — for a page you only share directly.
+            </span>
+          </span>
+          <Switch
+            checked={seo.noindex === true}
+            onCheckedChange={(next) => updateSeo({ noindex: next || undefined })}
+            aria-label="Hide from search engines"
+          />
+        </label>
+      </div>
+    </details>
   );
 }
 

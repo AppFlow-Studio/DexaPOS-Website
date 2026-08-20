@@ -106,11 +106,13 @@ export function createStarterHomePage(options: StarterPageOptions): PageDocument
         id: "s_home_story",
         kind: "content",
         props: {
-          heading: "Our story",
-          body:
-            "<p>Write two or three sentences about how this restaurant started and who runs it. Guests choosing between you and somewhere else read this.</p><p>Keep it concrete — a year, a family name, a dish you refuse to change.</p>",
-          imagePosition: "none",
-          cta: { label: "Contact us", target: { kind: "contact" } },
+          background: "none",
+          media: "none",
+          alignment: "left",
+          title: "Our story",
+          subtitle:
+            "Write a sentence or two about how this restaurant started and who runs it. Keep it concrete — a year, a family name, a dish you refuse to change.",
+          button: { label: "Contact us", target: { kind: "contact" } },
         },
       },
       {

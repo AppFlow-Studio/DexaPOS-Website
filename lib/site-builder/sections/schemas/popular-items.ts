@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { bindingSchema } from "../../bindings/types";
-import { headingSchema, linkTargetSchema, proseSchema } from "../primitives";
+import { titleSchema, linkTargetSchema, subtitleSchema } from "../primitives";
 
 /**
  * A curated row of menu items — "Guest Favorites".
@@ -15,8 +15,8 @@ import { headingSchema, linkTargetSchema, proseSchema } from "../primitives";
  * than a rule someone has to remember.
  */
 export const popularItemsSchema = z.object({
-  heading: headingSchema.optional(),
-  subheading: proseSchema.optional(),
+  heading: titleSchema.optional(),
+  subheading: subtitleSchema.optional(),
   items: z.array(bindingSchema("menu_item")).max(24),
   layout: z.enum(["grid-2", "grid-3", "grid-4", "carousel"]),
   showPrices: z.boolean(),

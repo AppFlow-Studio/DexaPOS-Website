@@ -9,9 +9,10 @@ import type { PageDocument } from "@/lib/site-builder/page-document";
 import AddSectionModal from "./AddSectionModal";
 import Canvas from "./Canvas";
 import EditorTopBar from "./EditorTopBar";
-import SectionDrawer from "./SectionDrawer";
+import SectionDrawer, { type DrawerSite } from "./SectionDrawer";
 import { getTextPreviewPatches } from "./preview-sync";
 import { createDraftSaveAdapter } from "./save-adapter";
+import type { SiteFeatures } from "@/lib/site-builder/site-settings";
 import { createBuilderStore, type EditorPage, type SaveAdapter } from "./store";
 
 /**
@@ -37,8 +38,10 @@ export default function BuilderShell({
   initialCatalog,
   clerkOrgId,
   page,
+  site,
   publishedDoc = null,
   publishedAt = null,
+  features,
   saveAdapter,
 }: {
   initialDoc: PageDocument;
@@ -54,8 +57,19 @@ export default function BuilderShell({
   initialCatalog?: MenuCatalog;
   clerkOrgId: string;
   page: EditorPage;
+  /**
+   * The site this page belongs to, for the header section's navigation editor.
+   * Site-wide rather than page-wide, which is exactly why it arrives beside the
+   * page rather than inside its document.
+   */
+  site: DrawerSite;
   publishedDoc?: PageDocument | null;
   publishedAt?: string | null;
+  /**
+   * The merchant's brand toggles, which decide what the Add Section catalogue
+   * offers. Site-wide, like `site` above, and for the same reason.
+   */
+  features?: SiteFeatures;
   /** Overridable for tests; production always saves through `SaveDraft`. */
   saveAdapter?: SaveAdapter;
 }) {
@@ -89,6 +103,7 @@ export default function BuilderShell({
       publishedDoc,
       publishedAt,
       locationId,
+      features,
     });
     if (initialCatalog) {
       next.getState().setCatalog(
@@ -132,7 +147,12 @@ export default function BuilderShell({
         {/* Left, as Owner's is. The canvas keeps its position on screen when the
             drawer opens, so opening one does not shift the thing being edited. */}
         {drawerOpen && (
-          <SectionDrawer store={store} locationId={locationId} clerkOrgId={clerkOrgId} />
+          <SectionDrawer
+            store={store}
+            locationId={locationId}
+            clerkOrgId={clerkOrgId}
+            site={site}
+          />
         )}
         <Canvas store={store} />
       </div>
