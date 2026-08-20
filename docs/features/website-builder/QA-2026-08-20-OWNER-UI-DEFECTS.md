@@ -354,3 +354,64 @@ Worth keeping intact through any rework:
 4. **P2-1** — one fix (resolve asset previews without opening the picker) repairs both Events and the Hero carousel.
 5. **P1-5, P1-6** as one responsive pass.
 6. P3 as a sweep, starting with the Add Section icon set (P3-9) since it is the most-seen screen.
+
+---
+
+## 6. Fix log
+
+Started 2026-08-21. Two design forks were put to the team lead and answered:
+
+- **Brand name** → an editable field, defaulting to the merchant name.
+- **Nav safety** → **editor warnings only**, no render-time filter. Accepted consequence, stated plainly:
+  a dead link already stored on a live site stays live until a merchant opens the NavEditor. The editor is
+  therefore built to make that link impossible to miss and one click to remove, rather than a passive badge.
+
+### A · P1-2 — the brand site's own name
+
+| # | Item | State |
+|---|---|---|
+| A1 | `brand.name` on `siteBrandSchema` + `resolveBrand` (free-form jsonb; **no migration**) | ✅ |
+| A2 | Migration `20260824120000_website_brand_name.sql` — `get_public_site_page` also returns `merchant_name` | ✅ written, ⬜ **not applied** |
+| A3 | Carry `merchantName` through `PublicSitePageRow` → `SiteRequestFacts` → `RenderDecision` | ✅ |
+| A4 | `public-context.ts` — resolved through the shared `siteDisplayName` | ✅ |
+| A5 | `site-context.ts` — same function, so the editor matches the public page | ✅ |
+| A6 | "Business name" field in Website settings | ✅ |
+| A7 | Tests — 15 new, in `site-settings.test.ts` | ✅ |
+
+**Precedence, decided once in `siteDisplayName`:** merchant's own setting → `merchants.name` →
+a borrowed storefront's `store_name` → `"Our restaurant"`. Logo, hero and phone still borrow from a branch;
+the name no longer does.
+
+**Verified in the browser 2026-08-21.** The editor canvas now reads *Joes Coffee Shop* in the header and
+`© 2026 Joes Coffee Shop` in the footer ([fix-05](qa-2026-08-20/fix-05-brand-name-editor.png)); the settings
+field shows the merchant name as its placeholder so the default is visible
+([fix-06](qa-2026-08-20/fix-06-business-name-field.png)). One "Downtown Hamra" remains on the page, inside a
+**Location & Hours** section beside that branch's street address and phone — which is correct and deliberately
+untouched.
+
+🔴 **The public page still shows the old name until the migration is applied.** The editor reads `merchants`
+directly, so it was fixed the moment the code shipped; the public renderer cannot, because `anon` has no grant
+on `merchants` and must not get one. Confirmed the pre-migration path degrades rather than breaks:
+`/sites/joes-coffee-shop` still returns HTTP 200, `merchant_name` reads as null and the resolver falls through
+to the storefront name — exactly today's behaviour.
+
+### B · P1-1 — nav links to unpublished pages
+
+| # | Item | State |
+|---|---|---|
+| B1 | Per-row dead-link warning in `NavEditor` (the picker already warned; saved rows never did) | ✅ |
+| B2 | Summary banner + one-click remove for every dead link | ✅ |
+| B3 | Tests — 9 new, in `nav-sync.test.ts` | ✅ |
+
+**The QA note was half wrong and the code is better for it.** `syncNavForPage` *does* already append on publish
+and remove on unpublish (`publish.ts:266`), so "nothing keeps nav true" was not the bug. Three real gaps let a
+dead link survive anyway: the ⊕ Page picker offers unpublished pages on purpose, the sync is best-effort inside
+a `try`/`catch` so a failed write is silent, and any site built before the sync carries whatever it carried.
+`navLinkStatus` and `deadNavLinks` in `lib/site-builder/nav.ts` now answer the question the editor was never
+asking.
+
+**Verified in the browser 2026-08-21** against Joes' real dead link: the drawer names *Career* in a destructive
+banner, marks the row `⚠ Not published · /career` — status first, so the drawer's 256px truncation can never eat
+the warning — and **Remove this link** drops it, taking the count `3/8 → 2/8` and flipping the footer to *Save
+navigation* ([fix-03](qa-2026-08-20/fix-03-nav-row.png), [fix-04](qa-2026-08-20/fix-04-nav-repaired.png)).
+Left unsaved: it is the merchant's live data, and per the decision above the repair is theirs to commit.

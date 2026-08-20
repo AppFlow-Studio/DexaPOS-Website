@@ -28,6 +28,8 @@ export type RenderDecision =
       mode: "builder";
       siteId: string;
       merchantId: string;
+      /** `merchants.name` — the display fallback for the site's own name. */
+      merchantName: string | null;
       pageId: string;
       pageTitle: string;
       pagePath: string;
@@ -71,6 +73,12 @@ export interface SiteRequestFacts {
   site: {
     id: string;
     merchantId: string;
+    /**
+     * `merchants.name`, the display fallback when the merchant has set no
+     * business name of their own. Null only if the join found nothing, which
+     * the FK makes impossible in practice.
+     */
+    merchantName: string | null;
     renderMode: "template" | "builder";
     /** Pages with a live version, across the whole site. Drives rule 5. */
     publishedPageCount: number;
@@ -171,6 +179,7 @@ export function decideRenderMode(facts: SiteRequestFacts): RenderDecision {
     mode: "builder",
     siteId: site.id,
     merchantId: site.merchantId,
+    merchantName: site.merchantName ?? null,
     pageId: page.id,
     pageTitle: page.title,
     pagePath: page.path,
@@ -193,6 +202,7 @@ export function decideRenderMode(facts: SiteRequestFacts): RenderDecision {
 interface PublicSitePageRow {
   site_id: string;
   merchant_id: string;
+  merchant_name: string | null;
   render_mode: string;
   addressed_by_subdomain: boolean;
   published_page_count: number;
@@ -258,6 +268,7 @@ export async function loadSiteRequestFacts(
     site: {
       id: row.site_id,
       merchantId: row.merchant_id,
+      merchantName: row.merchant_name ?? null,
       renderMode: row.render_mode === "builder" ? "builder" : "template",
       publishedPageCount: row.published_page_count,
       nav: row.site_nav,

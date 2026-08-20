@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_NAV_ITEMS,
   appendNavItem,
+  deadNavLinks,
   deriveNavFromPages,
   isSameNavTarget,
+  navLinkStatus,
   removeNavItemByPath,
   serializeNav,
   type NavItem,
@@ -174,5 +176,91 @@ describe("publish → reachable, unpublish → no dead link", () => {
     ];
     const after = serializeNav(removeNavItemByPath(items, "about"));
     expect(readNav(after, "/sites/joes").map((l) => l.label)).toEqual(["Menu"]);
+  });
+});
+
+/**
+ * The editor's dead-link warning.
+ *
+ * `syncNavForPage` keeps the column true whenever a page is published or
+ * unpublished through the Pages screen, so these cases are the ones it cannot
+ * reach: a merchant linking a page they have not published yet, a sync whose
+ * write failed silently (it is best-effort inside a `try`/`catch`), a page
+ * deleted out from under a link, and every site built before the sync existed.
+ *
+ * Modelled on the real failure found on Joes Coffee Shop, 2026-08-20: their
+ * published header linked `/career` while that page sat unpublished, so the
+ * site's own navigation handed visitors a 404.
+ */
+describe("navLinkStatus", () => {
+  const pages: NavPage[] = [
+    { title: "Home", path: "", isHome: true, isPublished: true },
+    { title: "About us", path: "about-us", isHome: false, isPublished: true },
+    { title: "Career", path: "career", isHome: false, isPublished: false },
+  ];
+
+  it("passes a link to a published page", () => {
+    expect(navLinkStatus({ label: "About us", path: "about-us" }, pages)).toBe("ok");
+  });
+
+  it("flags Joes' real /career link as unpublished", () => {
+    expect(navLinkStatus({ label: "Career", path: "career" }, pages)).toBe("unpublished");
+  });
+
+  it("flags a link whose page no longer exists", () => {
+    expect(navLinkStatus({ label: "Specials", path: "specials" }, pages)).toBe("missing");
+  });
+
+  it("passes external links untouched — we cannot check someone else's server", () => {
+    expect(navLinkStatus({ label: "Book", href: "https://resy.com/joes" }, pages)).toBe("ok");
+  });
+
+  it("ignores a leading slash, because storage and typing disagree about it", () => {
+    expect(navLinkStatus({ label: "Career", path: "/career" }, pages)).toBe("unpublished");
+  });
+
+  it("treats the home page like any other — an unpublished home is still dead", () => {
+    const unpublishedHome: NavPage[] = [{ title: "Home", path: "", isHome: true, isPublished: false }];
+    expect(navLinkStatus({ label: "Home", path: "" }, unpublishedHome)).toBe("unpublished");
+  });
+});
+
+describe("deadNavLinks", () => {
+  const pages: NavPage[] = [
+    { title: "Home", path: "", isHome: true, isPublished: true },
+    { title: "About us", path: "about-us", isHome: false, isPublished: true },
+    { title: "Career", path: "career", isHome: false, isPublished: false },
+  ];
+
+  it("returns nothing when every link resolves", () => {
+    expect(deadNavLinks([{ label: "About us", path: "about-us" }], pages)).toEqual([]);
+  });
+
+  it("reports the index, so the banner can remove exactly those rows", () => {
+    const items: NavItem[] = [
+      { label: "Home", path: "" },
+      { label: "About us", path: "about-us" },
+      { label: "Career", path: "career" },
+      { label: "Gone", path: "gone" },
+    ];
+
+    expect(deadNavLinks(items, pages).map((d) => [d.index, d.status])).toEqual([
+      [2, "unpublished"],
+      [3, "missing"],
+    ]);
+  });
+
+  it("removing by the reported indices leaves only live links", () => {
+    const items: NavItem[] = [
+      { label: "About us", path: "about-us" },
+      { label: "Career", path: "career" },
+      { label: "Gone", path: "gone" },
+    ];
+
+    const doomed = new Set(deadNavLinks(items, pages).map((d) => d.index));
+    const kept = items.filter((_, i) => !doomed.has(i));
+
+    expect(kept).toEqual([{ label: "About us", path: "about-us" }]);
+    expect(deadNavLinks(kept, pages)).toEqual([]);
   });
 });

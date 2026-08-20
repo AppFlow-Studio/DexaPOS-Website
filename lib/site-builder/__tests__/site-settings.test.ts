@@ -13,7 +13,9 @@ import {
 import {
   DEFAULT_BRAND,
   DEFAULT_FEATURES,
+  MAX_BRAND_NAME,
   resolveBrand,
+  siteDisplayName,
   resolveFeatures,
   resolvePricingLocation,
   siteBrandSchema,
@@ -368,3 +370,86 @@ describe("siteBrandSchema", () => {
 function brandWith(patch: Partial<SiteBrand>): SiteBrand {
   return { ...DEFAULT_BRAND, ...patch };
 }
+
+/**
+ * The name a website calls itself.
+ *
+ * The bug, found on Joes Coffee Shop 2026-08-20 and confirmed by anonymous
+ * curl: a merchant-level brand site rendered "Downtown Hamra" — one of five
+ * branches — as its header brand, footer name and copyright line, ten times on
+ * one page, while the merchant's own name appeared nowhere. The cause was
+ * precedence: `buildPublicRenderContext` read `configs[0].store_name`, and a
+ * brand page has no location to pick a better row with.
+ *
+ * These lock the order down. Both the public renderer and the editor call this
+ * one function, so a merchant can never see one name on the canvas and another
+ * on their live page.
+ */
+describe("siteDisplayName", () => {
+  it("prefers what the merchant set over everything else", () => {
+    expect(
+      siteDisplayName({
+        brandName: "Joe's",
+        merchantName: "Joes Coffee Shop",
+        storefrontName: "Downtown Hamra",
+      }),
+    ).toBe("Joe's");
+  });
+
+  it("falls back to the merchant name — the fix for Joes, who set nothing", () => {
+    expect(
+      siteDisplayName({ merchantName: "Joes Coffee Shop", storefrontName: "Downtown Hamra" }),
+    ).toBe("Joes Coffee Shop");
+  });
+
+  it("uses a branch name only when there is nothing better", () => {
+    expect(siteDisplayName({ storefrontName: "Downtown Hamra" })).toBe("Downtown Hamra");
+  });
+
+  it("never returns an empty name", () => {
+    expect(siteDisplayName({})).toBe("Our restaurant");
+    expect(siteDisplayName({ fallback: "Your restaurant" })).toBe("Your restaurant");
+  });
+
+  it("treats blank and whitespace-only values as unset, not as a name", () => {
+    expect(
+      siteDisplayName({ brandName: "   ", merchantName: "", storefrontName: "Downtown Hamra" }),
+    ).toBe("Downtown Hamra");
+  });
+
+  it("trims, so a stray space cannot shift the header layout", () => {
+    expect(siteDisplayName({ brandName: "  Joe's  " })).toBe("Joe's");
+  });
+
+  it("tolerates nulls from the database without falling through them", () => {
+    expect(siteDisplayName({ brandName: null, merchantName: "Joes Coffee Shop" })).toBe(
+      "Joes Coffee Shop",
+    );
+  });
+});
+
+describe("resolveBrand — name", () => {
+  it("keeps a stored name", () => {
+    expect(resolveBrand({ name: "Joe's" }).name).toBe("Joe's");
+  });
+
+  it("omits the key entirely when unset, so the fallback can apply", () => {
+    expect(resolveBrand({}).name).toBeUndefined();
+    expect(DEFAULT_BRAND.name).toBeUndefined();
+  });
+
+  it("treats a blank string as unset rather than storing an empty name", () => {
+    expect(resolveBrand({ name: "   " }).name).toBeUndefined();
+  });
+
+  it("clamps rather than rejects, so tightening the cap cannot blank a name", () => {
+    const long = "a".repeat(MAX_BRAND_NAME + 40);
+    expect(resolveBrand({ name: long }).name).toHaveLength(MAX_BRAND_NAME);
+  });
+
+  it("ignores a non-string without taking the rest of the block down", () => {
+    const brand = resolveBrand({ name: { evil: true }, cuisines: ["Coffee"] });
+    expect(brand.name).toBeUndefined();
+    expect(brand.cuisines).toEqual(["Coffee"]);
+  });
+});

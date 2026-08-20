@@ -12,7 +12,12 @@ import {
 } from "./render-context";
 import { readNav } from "./public-context";
 import { getRequestSupabase } from "./request-scope";
-import { readSiteSettings, type SiteBrand, type SiteFeatures } from "./site-settings";
+import {
+  readSiteSettings,
+  siteDisplayName,
+  type SiteBrand,
+  type SiteFeatures,
+} from "./site-settings";
 
 /**
  * Loads the site-level facts a render needs, and turns them into a
@@ -78,22 +83,37 @@ type StoreConfigRow = Record<string, string | boolean | null>;
  * construction, and `cache()` keys on argument identity, so taking one would
  * defeat the memo. See `request-scope.ts`.
  */
-export const fetchMerchantId = cache(async (clerkOrgId: string): Promise<string | null> => {
-  const { data, error } = await getRequestSupabase()
-    .from("merchants")
-    .select("id")
-    .eq("clerk_org_id", clerkOrgId)
-    .single();
+export const fetchMerchant = cache(
+  async (clerkOrgId: string): Promise<{ id: string; name: string | null } | null> => {
+    const { data, error } = await getRequestSupabase()
+      .from("merchants")
+      // `name` rides along on the lookup every caller already makes: it is the
+      // fallback the website's own name resolves through when the merchant has
+      // not set one, and paying a second round trip for one string on a query
+      // that is already memoised per request would be silly.
+      .select("id, name")
+      .eq("clerk_org_id", clerkOrgId)
+      .single();
 
-  if (!data?.id) {
-    // "No merchant for this org" and "merchant has no storefront" are different
-    // problems with different fixes, so they are logged and reported separately
-    // rather than collapsed into one unhelpful message.
-    console.warn(`[site-builder] no merchant for clerk org ${clerkOrgId}`, error?.message ?? "");
-    return null;
-  }
-  return data.id as string;
-});
+    if (!data?.id) {
+      // "No merchant for this org" and "merchant has no storefront" are different
+      // problems with different fixes, so they are logged and reported separately
+      // rather than collapsed into one unhelpful message.
+      console.warn(`[site-builder] no merchant for clerk org ${clerkOrgId}`, error?.message ?? "");
+      return null;
+    }
+    return { id: data.id as string, name: (data as { name?: unknown }).name as string | null };
+  },
+);
+
+/**
+ * Just the id, for the callers that only ever wanted that.
+ *
+ * Delegates rather than querying, so it shares `fetchMerchant`'s memo and costs
+ * nothing extra.
+ */
+export const fetchMerchantId = async (clerkOrgId: string): Promise<string | null> =>
+  (await fetchMerchant(clerkOrgId))?.id ?? null;
 
 /**
  * Every storefront the merchant owns.
@@ -173,8 +193,9 @@ export async function loadSiteContext(
   clerkOrgId: string,
   locationId?: string,
 ): Promise<SiteContext | null> {
-  const merchantId = await fetchMerchantId(clerkOrgId);
-  if (!merchantId) return null;
+  const merchant = await fetchMerchant(clerkOrgId);
+  if (!merchant) return null;
+  const merchantId = merchant.id;
 
   const [configs, website] = await Promise.all([
     fetchStoreConfigs(merchantId),
@@ -198,7 +219,14 @@ export async function loadSiteContext(
     locationId: String(config.location_id),
     storeConfigId: String(config.id),
     slug: String(config.slug ?? ""),
-    name: String(config.store_name ?? "Your restaurant"),
+    // Same precedence as the public renderer, through the same function, so the
+    // canvas cannot show one name while the live page shows another.
+    name: siteDisplayName({
+      brandName: website.brand.name,
+      merchantName: merchant.name,
+      storefrontName: nullableString(config.store_name),
+      fallback: "Your restaurant",
+    }),
     logoUrl: nullableString(config.logo_url),
     heroImageUrl: nullableString(config.hero_image_url),
     phone: nullableString(config.phone),

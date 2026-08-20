@@ -1,6 +1,6 @@
 "use client";
 
-import { GripVertical, Link2, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, GripVertical, Link2, MoreHorizontal, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -13,9 +13,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  deadNavLinks,
   isExternalHref,
   MAX_NAV_ITEMS,
   moveNavItem,
+  navLinkStatus,
   normalizeNavPath,
   type NavItem,
 } from "@/lib/site-builder/nav";
@@ -144,6 +146,16 @@ export default function NavEditor({
 
   const full = items.length >= MAX_NAV_ITEMS;
 
+  /**
+   * Links a visitor cannot open, recomputed on every render.
+   *
+   * Nav is site-wide and saves outside the page draft, so a link that has gone
+   * dead is already dead on the live site — this panel is where a merchant
+   * finds out. Kept as a list rather than a boolean so the banner can name them
+   * and remove exactly those rows.
+   */
+  const dead = deadNavLinks(items, pages);
+
   /** Pages not already linked. A page listed twice is a mistake, not a choice. */
   const linkable = pages.filter(
     (page) =>
@@ -179,6 +191,53 @@ export default function NavEditor({
         <strong className="font-medium text-foreground">all pages</strong>, and go live as soon as
         you save them — they are not part of this page&rsquo;s draft.
       </p>
+
+      {dead.length > 0 && (
+        <div
+          role="alert"
+          className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3"
+        >
+          <p className="flex items-start gap-2 text-[11px] leading-relaxed text-foreground">
+            <AlertTriangle aria-hidden className="mt-px size-3.5 shrink-0 text-destructive" />
+            <span>
+              {dead.length === 1 ? (
+                <>
+                  <strong className="font-medium">{dead[0].item.label}</strong>{" "}
+                  is in your menu but visitors get a &ldquo;page not found&rdquo;{" "}
+                  {dead[0].status === "missing"
+                    ? "— that page no longer exists."
+                    : "— that page is not published."}
+                </>
+              ) : (
+                <>
+                  <strong className="font-medium">{dead.length} links</strong>{" "}
+                  in your menu lead to a &ldquo;page not found&rdquo;. Publish those pages, or
+                  remove the links.
+                </>
+              )}
+            </span>
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 w-full text-[11px]"
+            onClick={() => {
+              const doomed = new Set(dead.map((entry) => entry.index));
+              setItems(items.filter((_, i) => !doomed.has(i)));
+              setEditing(null);
+              announce(
+                dead.length === 1
+                  ? `${dead[0].item.label} removed from the navigation.`
+                  : `${dead.length} broken links removed from the navigation.`,
+              );
+            }}
+          >
+            <Trash2 className="size-3.5" />
+            {dead.length === 1 ? "Remove this link" : `Remove all ${dead.length}`}
+          </Button>
+        </div>
+      )}
 
       <div>
         <div className="mb-1.5 flex items-baseline justify-between">
@@ -236,11 +295,33 @@ export default function NavEditor({
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-medium">{item.label}</span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
-                      {item.href !== undefined
-                        ? item.href
-                        : `Page · /${normalizeNavPath(item.path ?? "")}`}
-                    </span>
+                    {(() => {
+                      // The destination line doubles as the health line: a dead
+                      // link says so where the merchant is already looking,
+                      // rather than only in the banner above the list.
+                      const status = navLinkStatus(item, pages);
+                      const where =
+                        item.href !== undefined
+                          ? item.href
+                          : `Page · /${normalizeNavPath(item.path ?? "")}`;
+
+                      return status === "ok" ? (
+                        <span className="block truncate text-[11px] text-muted-foreground">
+                          {where}
+                        </span>
+                      ) : (
+                        // Status first, destination second: the drawer is 256px
+                        // and something has to truncate. It must not be the
+                        // word telling the merchant the link is broken.
+                        <span className="flex items-center gap-1 text-[11px] text-destructive">
+                          <AlertTriangle aria-hidden className="size-3 shrink-0" />
+                          <span className="shrink-0 font-medium">
+                            {status === "missing" ? "Page deleted" : "Not published"}
+                          </span>
+                          <span className="truncate opacity-80">· {where}</span>
+                        </span>
+                      );
+                    })()}
                   </span>
 
                   <DropdownMenu>

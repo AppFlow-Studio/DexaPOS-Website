@@ -158,6 +158,14 @@ export const PRICE_RANGE_HINTS: Record<PriceRange, string> = {
 export const MAX_CUISINES = 5;
 export const MAX_SOCIAL_LINKS = SOCIAL_PLATFORMS.length;
 
+/**
+ * The cap on the public business name.
+ *
+ * It renders in the header beside the logo and again in the footer, both on one
+ * line, so this is a layout limit rather than a data one.
+ */
+export const MAX_BRAND_NAME = 60;
+
 export const socialLinkSchema = z.object({
   platform: z.enum(SOCIAL_PLATFORMS),
   url: httpUrlSchema,
@@ -166,6 +174,24 @@ export const socialLinkSchema = z.object({
 export type SocialLink = z.infer<typeof socialLinkSchema>;
 
 export const siteBrandSchema = z.object({
+  /**
+   * What the website calls the business.
+   *
+   * **The site is one per merchant; a storefront is one per branch.** Before
+   * this existed the public header and footer took their name from
+   * `online_store_config.store_name` of whichever storefront came back first,
+   * so Joes Coffee Shop's brand site called itself "Downtown Hamra" — one of
+   * its five branches — on every page, ten times over, including the copyright
+   * line. Borrowing a branch's logo and phone is a reasonable fallback;
+   * borrowing its *name* is the one field where doing so is simply wrong,
+   * because the name is the brand rather than a per-branch fact.
+   *
+   * Optional, and resolved through `merchants.name` when unset, so a merchant
+   * who never opens this screen still gets their own name rather than a
+   * branch's. Stored here as well because a trading name and a merchant record
+   * name are often not the same string.
+   */
+  name: z.string().trim().min(1).max(MAX_BRAND_NAME).optional(),
   social: z.array(socialLinkSchema).max(MAX_SOCIAL_LINKS),
   /**
    * Where "Book a table" goes.
@@ -252,8 +278,16 @@ export function resolveBrand(stored: unknown): SiteBrand {
   const reservationUrl = httpUrlSchema.safeParse(source.reservationUrl);
   const priceRange = PRICE_RANGES.find((range) => range === source.priceRange);
   const defaultLocationId = z.string().uuid().safeParse(source.defaultLocationId);
+  // Trimmed and clamped rather than rejected, for the same reason `clampStrings`
+  // exists: a name stored before this cap tightened must keep its first 60
+  // characters, not fall back to a branch name.
+  const name =
+    typeof source.name === "string" && source.name.trim()
+      ? source.name.trim().slice(0, MAX_BRAND_NAME)
+      : undefined;
 
   return {
+    ...(name ? { name } : {}),
     social: uniqueSocial,
     cuisines,
     ...(reservationUrl.success ? { reservationUrl: reservationUrl.data } : {}),
@@ -261,6 +295,39 @@ export function resolveBrand(stored: unknown): SiteBrand {
     ...(defaultLocationId.success ? { defaultLocationId: defaultLocationId.data } : {}),
     forceLocationChoice: source.forceLocationChoice === true,
   };
+}
+
+/**
+ * What the website calls itself, in precedence order.
+ *
+ * One function because there are two callers — `buildPublicRenderContext` and
+ * the editor's `site-context` — and a merchant whose canvas says one name while
+ * their live page says another has no way to tell which is the bug. Keeping the
+ * order here is what makes the preview honest.
+ *
+ *  1. **The merchant's own setting.** Explicit, so nothing overrides it.
+ *  2. **`merchants.name`.** The reason the fix works for merchants who never
+ *     open Website settings, which today is all of them.
+ *  3. **A storefront's `store_name`.** Legacy floor only. It names one branch,
+ *     so it is wrong on a brand site by construction — kept solely so a
+ *     merchant record with an empty name cannot render a site with no name.
+ *  4. `"Our restaurant"`, when every one of those is blank.
+ */
+export function siteDisplayName(input: {
+  /** `merchant_sites.brand.name`, already through `resolveBrand`. */
+  brandName?: string | null;
+  /** `merchants.name`. */
+  merchantName?: string | null;
+  /** `online_store_config.store_name` of a borrowed branch. */
+  storefrontName?: string | null;
+  /** What to say when nothing is set. Differs between public and editor copy. */
+  fallback?: string;
+}): string {
+  const first = [input.brandName, input.merchantName, input.storefrontName].find(
+    (candidate) => typeof candidate === "string" && candidate.trim(),
+  );
+
+  return first ? first.trim() : (input.fallback ?? "Our restaurant");
 }
 
 /**

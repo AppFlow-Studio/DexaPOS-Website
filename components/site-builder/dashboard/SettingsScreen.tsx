@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   FEATURE_DESCRIPTIONS,
   FEATURE_LABELS,
+  MAX_BRAND_NAME,
   MAX_CUISINES,
   PRICE_RANGE_HINTS,
   PRICE_RANGES,
@@ -53,12 +54,18 @@ export default function SettingsScreen({
   features: savedFeatures,
   brand: savedBrand,
   locations,
+  merchantName,
 }: {
   clerkOrgId: string;
   siteId: string;
   features: SiteFeatures;
   brand: SiteBrand;
   locations: { id: string; name: string }[];
+  /**
+   * What the site calls itself when the field below is blank. Shown as the
+   * placeholder so the merchant can see the default rather than guess at it.
+   */
+  merchantName: string;
 }) {
   const [features, setFeatures] = useState(savedFeatures);
   const [brand, setBrand] = useState(savedBrand);
@@ -104,6 +111,33 @@ export default function SettingsScreen({
         title="Website settings"
         subtitle="What your website offers, and the details every page shows."
       />
+
+      <Card
+        title="Business name"
+        description="What your website calls you, in the header and the footer of every page."
+      >
+        <div className="space-y-2 p-4">
+          <Input
+            value={brand.name ?? ""}
+            maxLength={MAX_BRAND_NAME}
+            placeholder={merchantName}
+            aria-label="Business name"
+            className="w-full sm:w-96"
+            onChange={(e) => {
+              // Empty means "use the default", which is an absent key rather
+              // than an empty string — `siteBrandSchema` treats the field as
+              // optional and a stored "" would render a site with no name.
+              const next = e.target.value;
+              patchBrand({ name: next.trim() ? next : undefined });
+            }}
+          />
+          <p className="text-xs text-muted-foreground">
+            Leave this empty to use <span className="font-medium text-foreground">{merchantName}</span>.
+            Your branches keep their own names on your ordering pages — this is the name for the
+            website as a whole.
+          </p>
+        </div>
+      </Card>
 
       <Card
         title="Features"

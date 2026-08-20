@@ -11,6 +11,7 @@ import type { RenderDecision } from "./resolve-render-mode";
 import {
   readSiteSettings,
   resolvePricingLocation,
+  siteDisplayName,
   type SiteBrand,
   type SiteFeatures,
 } from "./site-settings";
@@ -145,7 +146,22 @@ export async function buildPublicRenderContext(
       // single place that rule is decided.
       locationId: pricingLocationId,
       slug: branding?.slug ?? "",
-      name: branding?.name ?? "Our restaurant",
+      /**
+       * The site's own name, in the one order that is correct for a site that
+       * is one per merchant rather than one per branch.
+       *
+       * The storefront name comes LAST and only as a legacy floor. Before it
+       * moved down here it came first, so a brand page took the `store_name`
+       * of whichever storefront `configs[0]` happened to be — Joes Coffee Shop
+       * published a site calling itself "Downtown Hamra" throughout. Logo,
+       * hero and phone still borrow from a branch quite happily; the name is
+       * the one field where a branch cannot speak for the brand.
+       */
+      name: siteDisplayName({
+        brandName: brand.name,
+        merchantName: decision.merchantName,
+        storefrontName: branding?.name ?? null,
+      }),
       // The website's own logo wins; a merchant who has never set one keeps
               // borrowing their ordering storefront's, exactly as before.
       logoUrl: decision.logoUrl ?? branding?.logoUrl ?? null,

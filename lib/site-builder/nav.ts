@@ -153,6 +153,54 @@ export function removeNavItemByPath(items: NavItem[], path: string): NavItem[] {
   return items.filter((item) => item.href !== undefined || normalizeNavPath(item.path ?? "") !== target);
 }
 
+/**
+ * Whether a stored link still points at something a visitor can open.
+ *
+ *  - `ok` — an external URL, or an internal path whose page is published.
+ *  - `unpublished` — the page exists but is not live, so the link 404s.
+ *  - `missing` — no page has that path at all; it was deleted or renamed.
+ *
+ * External links are always `ok` because we cannot check them without making a
+ * request from the merchant's browser to a third party, which is not a thing an
+ * editor panel should do.
+ */
+export type NavLinkStatus = "ok" | "unpublished" | "missing";
+
+/**
+ * The publish state of one link's destination.
+ *
+ * `syncNavForPage` already removes a link when its page is unpublished through
+ * the Pages screen, so in principle this can never fire. In practice it fires
+ * for three reasons the sync cannot cover: a merchant can add an unpublished
+ * page from the ⊕ Page picker on purpose (they are about to publish it), the
+ * sync is best-effort inside a `try`/`catch` and a failed write is silent, and
+ * every site built before the sync existed still carries whatever it carried.
+ *
+ * Verified against Joes Coffee Shop on 2026-08-20: their live header linked
+ * `/career` while that page sat unpublished, so visitors got a 404 from the
+ * site's own navigation.
+ */
+export function navLinkStatus(item: NavItem, pages: NavPage[]): NavLinkStatus {
+  if (item.href !== undefined) return "ok";
+
+  const target = normalizeNavPath(item.path ?? "");
+  const page = pages.find((candidate) => normalizeNavPath(candidate.path) === target);
+
+  if (!page) return "missing";
+  return page.isPublished ? "ok" : "unpublished";
+}
+
+/** Every index in `items` whose destination a visitor cannot open. */
+export function deadNavLinks(
+  items: NavItem[],
+  pages: NavPage[],
+): { index: number; item: NavItem; status: Exclude<NavLinkStatus, "ok"> }[] {
+  return items.flatMap((item, index) => {
+    const status = navLinkStatus(item, pages);
+    return status === "ok" ? [] : [{ index, item, status }];
+  });
+}
+
 /** A page, as much of one as the navigation cares about. */
 export interface NavPage {
   title: string;

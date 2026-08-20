@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import SettingsScreen from "@/components/site-builder/dashboard/SettingsScreen";
 import { Button } from "@/components/ui/button";
 import type { MerchantSiteRow } from "@/lib/site-builder/db-types";
-import { loadSiteContext } from "@/lib/site-builder/site-context";
+import { fetchMerchant, loadSiteContext } from "@/lib/site-builder/site-context";
 import { readSiteSettings } from "@/lib/site-builder/site-settings";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -35,6 +35,10 @@ export default async function WebsiteSettingsRoute({
   const params = await searchParams;
   const storefront = await loadSiteContext(orgId, params.location);
   if (!storefront) redirect("/dashboard/website/pages");
+
+  // Shares `loadSiteContext`'s memo, so this is a read of an already-fetched
+  // row rather than a second round trip.
+  const merchant = await fetchMerchant(orgId);
 
   const supabase = createServerSupabaseClient();
 
@@ -78,6 +82,7 @@ export default async function WebsiteSettingsRoute({
       features={features}
       brand={brand}
       locations={locations}
+      merchantName={merchant?.name?.trim() || "Your restaurant"}
     />
   );
 }
