@@ -22,6 +22,11 @@ import {
   type PlatformChannelStatus,
 } from "@/lib/orderout/helpers";
 import { auth } from "@clerk/nextjs/server";
+import {
+  filterOnlineVisibleMenuIds,
+  getMenuOnlineVisibility,
+  ONLINE_VISIBILITY_BLOCK_MESSAGE,
+} from "@/lib/menu/menu-channel-visibility.server";
 
 // ============================================================================
 // Types
@@ -398,6 +403,10 @@ export async function pushMenuToOrderOut(
     const supabase = params.internal
       ? createServiceRoleClient()
       : createServerSupabaseClient();
+
+    if (!(await getMenuOnlineVisibility(supabase, locationId, menuId))) {
+      return { success: false, error: ONLINE_VISIBILITY_BLOCK_MESSAGE };
+    }
 
     // 1. Resolve merchant
     const { data: merchant, error: merchantError } = await supabase
@@ -1833,6 +1842,9 @@ export async function setPrimaryOnlineMenu(
   }
 
   const supabase = createServerSupabaseClient();
+  if (!(await getMenuOnlineVisibility(supabase, locationId, menuId))) {
+    return { success: false, error: ONLINE_VISIBILITY_BLOCK_MESSAGE };
+  }
   const { error } = await supabase.rpc("set_primary_online_menu_v1", {
     p_location_id: locationId,
     p_menu_id: menuId,
@@ -1892,7 +1904,12 @@ export async function getLocationOnlineMenu(
     .eq("orderout_restaurant_id", restaurant.id)
     .eq("is_active", true);
 
-  const rows = links ?? [];
+  const visibleMenuIds = await filterOnlineVisibleMenuIds(
+    supabase,
+    locationId,
+    (links ?? []).map((link) => link.menu_id),
+  );
+  const rows = (links ?? []).filter((link) => visibleMenuIds.includes(link.menu_id));
   const primaryMenuId = rows.find((l) => l.is_primary)?.menu_id ?? null;
 
   let primaryMenuName: string | null = null;
@@ -1981,6 +1998,10 @@ export async function publishOnlineMenu(
   const willDesignate =
     !!designateMenuId && designateMenuId !== primary?.menu_id;
   const publishMenuId = willDesignate ? designateMenuId! : targetMenuId;
+
+  if (!(await getMenuOnlineVisibility(supabase, locationId, publishMenuId))) {
+    return { success: false, error: ONLINE_VISIBILITY_BLOCK_MESSAGE };
+  }
 
   // 1) Push the menu to OrderOut (creates/updates its link).
   const push = await pushMenuToOrderOut({
@@ -2213,6 +2234,10 @@ export async function pushMenuToConnectedChannels(
     const supabase = internal
       ? createServiceRoleClient()
       : createServerSupabaseClient();
+
+    if (!(await getMenuOnlineVisibility(supabase, locationId, menuId))) {
+      return { success: false, error: ONLINE_VISIBILITY_BLOCK_MESSAGE };
+    }
 
     // Best-effort reconcile of stuck rows. Never fail the action on reconcile error.
     try {

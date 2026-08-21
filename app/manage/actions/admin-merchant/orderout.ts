@@ -20,6 +20,11 @@ import {
   type PushChannelsHistoryEntry,
   type PushChannelsLiveStatus,
 } from '@/app/dashboard/actions/orderout'
+import {
+  filterOnlineVisibleMenuIds,
+  getMenuOnlineVisibility,
+  ONLINE_VISIBILITY_BLOCK_MESSAGE,
+} from '@/lib/menu/menu-channel-visibility.server'
 
 // ============================================================================
 // Types
@@ -450,6 +455,10 @@ export async function adminPushMenuToOrderOut(
 
     const supabase = createServerSupabaseClient()
 
+    if (!(await getMenuOnlineVisibility(supabase, locationId, menuId))) {
+      return { success: false, error: ONLINE_VISIBILITY_BLOCK_MESSAGE }
+    }
+
     // Get OrderOut restaurant for this location
     const { data: restaurant, error: restaurantError } = await supabase
       .from('orderout_restaurants')
@@ -824,6 +833,10 @@ export async function adminPushMenuToConnectedChannels(
     const { userId } = await assertHQPermission('hq.merchant.update')
 
     const supabase = createServerSupabaseClient()
+
+    if (!(await getMenuOnlineVisibility(supabase, locationId, menuId))) {
+      return { success: false, error: ONLINE_VISIBILITY_BLOCK_MESSAGE }
+    }
 
     // Lazy reconcile
     try {
@@ -1368,7 +1381,12 @@ export async function getAdminLocationOnlineMenu(
       .eq('orderout_restaurant_id', restaurant.id)
       .eq('is_active', true)
 
-    const rows = links ?? []
+    const visibleMenuIds = await filterOnlineVisibleMenuIds(
+      supabase,
+      locationId,
+      (links ?? []).map((link) => link.menu_id),
+    )
+    const rows = (links ?? []).filter((link) => visibleMenuIds.includes(link.menu_id))
     const primaryMenuId = rows.find((l) => l.is_primary)?.menu_id ?? null
 
     let primaryMenuName: string | null = null
@@ -1439,6 +1457,10 @@ export async function adminPublishOnlineMenu(
 
     const willDesignate = !!designateMenuId && designateMenuId !== primary?.menu_id
     const publishMenuId = willDesignate ? designateMenuId! : targetMenuId
+
+    if (!(await getMenuOnlineVisibility(supabase, locationId, publishMenuId))) {
+      return { success: false, error: ONLINE_VISIBILITY_BLOCK_MESSAGE }
+    }
 
     const push = await adminPushMenuToOrderOut({
       merchantId,

@@ -45,7 +45,7 @@ import {
   AssignScheduleToMenu,
   RemoveScheduleFromMenu,
 } from "../../actions/schedules";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import { Empty } from "@/components/ui/empty";
 import { toast } from "sonner";
@@ -105,6 +105,14 @@ import {
   useRestoreItemsBatch,
   type SnoozeDuration,
 } from "@/lib/queries/use-snoozes";
+import {
+  GetLocationMenu,
+  SetLocationMenuChannelVisibility,
+} from "../../actions/location-menus";
+import {
+  normalizeMenuChannelVisibility,
+  type MenuChannelVisibility,
+} from "@/lib/menu/menu-channel-visibility";
 
 export default function MenuDetailPage() {
   const params = useParams();
@@ -125,6 +133,48 @@ export default function MenuDetailPage() {
   // menu/item core scope) still get a real location id for OrderOut sync —
   // without changing the 'all'/core scope used by menu/item editing below.
   const orderOutLocationId = useGatedLocationId() ?? "";
+  const [isSavingChannelVisibility, setIsSavingChannelVisibility] = useState(false);
+  const { data: locationMenu } = useQuery({
+    queryKey: ["location-menu", orderOutLocationId, menuId],
+    queryFn: () => GetLocationMenu(orderOutLocationId, menuId),
+    enabled: Boolean(orderOutLocationId && menuId),
+  });
+  const channelVisibility = normalizeMenuChannelVisibility(locationMenu);
+
+  const handleChannelVisibilityChange = async (
+    visibility: MenuChannelVisibility,
+  ) => {
+    if (!orderOutLocationId) {
+      toast.error("Select a location", {
+        description: "Platform visibility is configured separately for each location.",
+      });
+      return;
+    }
+
+    setIsSavingChannelVisibility(true);
+    try {
+      const result = await SetLocationMenuChannelVisibility(
+        orderOutLocationId,
+        menuId,
+        visibility,
+      );
+      if (result.error) {
+        toast.error("Visibility update failed", { description: result.error });
+        return;
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["location-menu", orderOutLocationId, menuId],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["menus"] }),
+        queryClient.invalidateQueries({ queryKey: ["location-online-menu"] }),
+        queryClient.invalidateQueries({ queryKey: ["orderout"] }),
+      ]);
+      toast.success("Platform visibility updated");
+    } finally {
+      setIsSavingChannelVisibility(false);
+    }
+  };
   const { data: userInfo } = useUserInfo();
   const merchantId =
     userInfo?.members?.[0]?.organizations?.merchants?.id || "";
@@ -1462,6 +1512,9 @@ export default function MenuDetailPage() {
             isSavingSettings={isSavingSettings}
             selectedImageFileName={imageUpload.selectedFileName}
             selectedLocationId={selectedLocationId}
+            channelVisibilityLocationId={orderOutLocationId || null}
+            channelVisibility={channelVisibility}
+            isSavingChannelVisibility={isSavingChannelVisibility}
             locations={locations ?? []}
             onClearImage={imageUpload.clear}
             onImageSelect={imageUpload.selectFile}
@@ -1469,6 +1522,7 @@ export default function MenuDetailPage() {
             onDescriptionChange={setEditedDescription}
             onLocationChange={setEditedLocationId}
             onToggleActive={handleToggleMenuActive}
+            onChannelVisibilityChange={handleChannelVisibilityChange}
             onSaveSettings={handleSaveSettings}
             onCancelSettings={() => {
               setEditedName(menu.name);

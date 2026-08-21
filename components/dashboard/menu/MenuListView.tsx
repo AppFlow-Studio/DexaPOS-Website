@@ -33,6 +33,11 @@ import {
   Star,
 } from "lucide-react";
 import { MenuActionsDropdown } from "./MenuActionsDropdown";
+import { MenuChannelVisibilityControls } from "./MenuChannelVisibilityControls";
+import {
+  normalizeMenuChannelVisibility,
+  type MenuChannelVisibility,
+} from "@/lib/menu/menu-channel-visibility";
 import { useIsSingleLocation } from "@/stores/location-store";
 import {
   DndContext,
@@ -64,6 +69,9 @@ export interface MenuWithLocation {
   display_order: number | null;
   created_at: string;
   updated_at: string;
+  is_visible_on_pos?: boolean;
+  is_visible_on_kiosk?: boolean;
+  is_visible_online?: boolean;
   // Location relation from join
   locations?: {
     id: string;
@@ -93,6 +101,12 @@ interface MenuListViewProps {
   /** Menu ids linked+active on OrderOut for the location (eligible to become primary) */
   linkedMenuIds?: string[];
   onSetOnlineMenu?: (menuId: string) => void;
+  onChannelVisibilityChange?: (
+    menuId: string,
+    visibility: MenuChannelVisibility,
+  ) => void;
+  channelVisibilityDisabled?: boolean;
+  savingVisibilityMenuId?: string | null;
 }
 
 // Internal Helper Interface for Actions
@@ -111,6 +125,9 @@ function SortableGridCard({
   isFiltered,
   onlineMenuId,
   linkedMenuIds,
+  onChannelVisibilityChange,
+  channelVisibilityDisabled,
+  isSavingVisibility,
 }: {
   menu: MenuWithLocation;
   handleRowClick: (id: string) => void;
@@ -118,9 +135,14 @@ function SortableGridCard({
   isFiltered?: boolean;
   onlineMenuId?: string | null;
   linkedMenuIds?: string[];
+  onChannelVisibilityChange?: MenuListViewProps["onChannelVisibilityChange"];
+  channelVisibilityDisabled?: boolean;
+  isSavingVisibility?: boolean;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
-  const canSetOnlineMenu = linkedMenuIds?.includes(menu.id) ?? false;
+  const visibility = normalizeMenuChannelVisibility(menu);
+  const canSetOnlineMenu = visibility.is_visible_online &&
+    (linkedMenuIds?.includes(menu.id) ?? false);
   const {
     attributes,
     listeners,
@@ -189,6 +211,12 @@ function SortableGridCard({
           </div>
         </CardHeader>
         <CardContent>
+          <MenuChannelVisibilityControls
+            compact
+            value={visibility}
+            disabled={channelVisibilityDisabled || isSavingVisibility}
+            onChange={(next) => onChannelVisibilityChange?.(menu.id, next)}
+          />
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap min-w-0">
               <Badge variant={menu.is_active ? "default" : "secondary"}>
@@ -218,6 +246,9 @@ function SortableTableRow({
   isFiltered,
   onlineMenuId,
   linkedMenuIds,
+  onChannelVisibilityChange,
+  channelVisibilityDisabled,
+  isSavingVisibility,
 }: {
   menu: MenuWithLocation;
   index: number;
@@ -229,9 +260,14 @@ function SortableTableRow({
   isFiltered?: boolean;
   onlineMenuId?: string | null;
   linkedMenuIds?: string[];
+  onChannelVisibilityChange?: MenuListViewProps["onChannelVisibilityChange"];
+  channelVisibilityDisabled?: boolean;
+  isSavingVisibility?: boolean;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
-  const canSetOnlineMenu = linkedMenuIds?.includes(menu.id) ?? false;
+  const visibility = normalizeMenuChannelVisibility(menu);
+  const canSetOnlineMenu = visibility.is_visible_online &&
+    (linkedMenuIds?.includes(menu.id) ?? false);
   const {
     attributes,
     listeners,
@@ -334,6 +370,14 @@ function SortableTableRow({
           {isOnlineMenu && <OnlineMenuBadge />}
         </div>
       </TableCell>
+      <TableCell onClick={(event) => event.stopPropagation()}>
+        <MenuChannelVisibilityControls
+          compact
+          value={visibility}
+          disabled={channelVisibilityDisabled || isSavingVisibility}
+          onChange={(next) => onChannelVisibilityChange?.(menu.id, next)}
+        />
+      </TableCell>
       <TableCell className="text-muted-foreground">
         {new Date(menu.created_at).toLocaleDateString()}
       </TableCell>
@@ -371,6 +415,9 @@ export function MenuListView({
   onlineMenuId,
   linkedMenuIds,
   onSetOnlineMenu,
+  onChannelVisibilityChange,
+  channelVisibilityDisabled = false,
+  savingVisibilityMenuId,
 }: MenuListViewProps) {
   const router = useRouter();
   const actions = { onToggleActive, onDelete, onDuplicate, onSettings, onSetOnlineMenu };
@@ -462,13 +509,16 @@ export function MenuListView({
                 isFiltered={isFiltered}
                 onlineMenuId={onlineMenuId}
                 linkedMenuIds={linkedMenuIds}
+                onChannelVisibilityChange={onChannelVisibilityChange}
+                channelVisibilityDisabled={channelVisibilityDisabled}
+                isSavingVisibility={savingVisibilityMenuId === menu.id}
               />
             ))}
           </div>
         </SortableContext>
       ) : (
         <div className="rounded-md border animate-in fade-in duration-300 overflow-x-auto">
-          <Table className="min-w-[700px]">
+          <Table className="min-w-[980px]">
             <TableHeader>
               <TableRow className="bg-muted/50">
                 <TableHead className="w-[80px]">Order</TableHead>
@@ -476,6 +526,7 @@ export function MenuListView({
                 <TableHead>Description</TableHead>
                 <TableHead className="w-[150px]">Location</TableHead>
                 <TableHead className="w-[100px]">Status</TableHead>
+                <TableHead className="w-[330px]">Platforms</TableHead>
                 <TableHead className="w-[120px]">Created</TableHead>
                 <TableHead className="w-[80px] text-right">Actions</TableHead>
               </TableRow>
@@ -498,6 +549,9 @@ export function MenuListView({
                     isFiltered={isFiltered}
                     onlineMenuId={onlineMenuId}
                     linkedMenuIds={linkedMenuIds}
+                    onChannelVisibilityChange={onChannelVisibilityChange}
+                    channelVisibilityDisabled={channelVisibilityDisabled}
+                    isSavingVisibility={savingVisibilityMenuId === menu.id}
                   />
                 ))}
               </SortableContext>

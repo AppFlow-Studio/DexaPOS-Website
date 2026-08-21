@@ -18,6 +18,8 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { useIsSingleLocation } from '@/stores/location-store'
+import { MenuChannelVisibilityControls } from '../MenuChannelVisibilityControls'
+import type { MenuChannelVisibility } from '@/lib/menu/menu-channel-visibility'
 
 interface MenuSettingsTabProps {
     menu: MenuWithCategories
@@ -33,6 +35,9 @@ interface MenuSettingsTabProps {
     isSavingSettings: boolean
     selectedImageFileName?: string | null
     selectedLocationId: string | null
+    channelVisibilityLocationId: string | null
+    channelVisibility: MenuChannelVisibility
+    isSavingChannelVisibility: boolean
     locations: LocationsModel[]
     onClearImage: () => void
     onImageSelect: (file: File | null) => void
@@ -40,6 +45,7 @@ interface MenuSettingsTabProps {
     onDescriptionChange: (description: string) => void
     onLocationChange: (locationId: string | null) => void
     onToggleActive: () => void
+    onChannelVisibilityChange: (visibility: MenuChannelVisibility) => void
     onSaveSettings: () => void
     onCancelSettings: () => void
     onDeleteMenu: () => void
@@ -59,6 +65,9 @@ export function MenuSettingsTab({
     isSavingSettings,
     selectedImageFileName,
     selectedLocationId,
+    channelVisibilityLocationId,
+    channelVisibility,
+    isSavingChannelVisibility,
     locations,
     onClearImage,
     onImageSelect,
@@ -66,6 +75,7 @@ export function MenuSettingsTab({
     onDescriptionChange,
     onLocationChange,
     onToggleActive,
+    onChannelVisibilityChange,
     onSaveSettings,
     onCancelSettings,
     onDeleteMenu,
@@ -146,6 +156,27 @@ export function MenuSettingsTab({
                             </>
                         )}
                     </Button>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">Platform Visibility</CardTitle>
+                    <CardDescription>
+                        Choose where this menu can be browsed at the selected location. Active status and schedules still apply.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <MenuChannelVisibilityControls
+                        value={channelVisibility}
+                        disabled={!channelVisibilityLocationId || isSavingChannelVisibility}
+                        onChange={onChannelVisibilityChange}
+                    />
+                    {!channelVisibilityLocationId && (
+                        <p className="mt-3 text-xs text-muted-foreground">
+                            Select a location to configure platform visibility.
+                        </p>
+                    )}
                 </CardContent>
             </Card>
 
