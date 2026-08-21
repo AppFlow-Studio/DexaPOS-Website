@@ -22,7 +22,13 @@ export function buildStoreUrl(input: {
 
   if (ROOT_DOMAIN) {
     const isDev = ROOT_DOMAIN.includes("localhost");
-    if (isDev) return `http://${slug}.localhost:3000`;
+    // Windows does not reliably resolve arbitrary `*.localhost` names. The
+    // direct route is handled by the same storefront middleware and works on
+    // every development machine without hosts-file entries.
+    if (isDev) {
+      const developmentOrigin = APP_URL || "http://localhost:3000";
+      return `${normalizeBaseUrl(developmentOrigin)}/sites/${slug}`;
+    }
     return `https://${slug}.${ROOT_DOMAIN}`;
   }
 

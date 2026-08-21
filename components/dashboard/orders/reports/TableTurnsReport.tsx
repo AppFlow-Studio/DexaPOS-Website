@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useTablePerformance } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
-import { SummaryCard } from './SummaryCard'
+import { SummaryCard, SummaryCardRow } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
@@ -27,6 +27,7 @@ export function TableTurnsReport({
 }: TableTurnsReportProps) {
   const { data, isLoading } = useTablePerformance(dateFrom, dateTo)
   const [searchQuery, setSearchQuery] = useState('')
+  const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<string>>(() => new Set(['total_sessions', 'total_revenue', 'total_covers']))
 
   const filteredData = useMemo(() => {
     if (!data?.table_utilization) return []
@@ -74,6 +75,15 @@ export function TableTurnsReport({
     },
   ]
 
+  const columnConfig = [
+    { id: 'table_name', label: 'Table Name', locked: true },
+    { id: 'total_sessions', label: 'Total Sessions' },
+    { id: 'avg_turn_time_minutes', label: 'Avg Turn Time (min)', locked: true },
+    { id: 'total_revenue', label: 'Total Revenue' },
+    { id: 'revpash', label: 'RevPASH', locked: true },
+    { id: 'total_covers', label: 'Total Covers' },
+  ]
+
   const exportColumns = [
     { key: 'table_name' as const, header: 'Table Name' },
     { key: 'total_sessions' as const, header: 'Total Sessions' },
@@ -113,9 +123,9 @@ export function TableTurnsReport({
   ]
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <SummaryCardRow>
         <SummaryCard
           label="Avg Turn Time"
           value={`${formatMinutes(data.avg_turn_time_minutes)} min`}
@@ -131,7 +141,7 @@ export function TableTurnsReport({
           value={formatCurrency(avgRevPASH)}
           icon={<Table className="h-5 w-5" />}
         />
-      </div>
+      </SummaryCardRow>
 
       {/* Tables Table */}
       <ReportToolbar
@@ -148,8 +158,11 @@ export function TableTurnsReport({
         dateFrom={dateFrom}
         dateTo={dateTo}
         summaryCards={summaryCardsData}
+        columnConfig={columnConfig}
+        hiddenColumns={hiddenColumnIds}
+        onColumnVisibilityChange={setHiddenColumnIds}
       />
-      <ReportDataTable columns={columns} data={filteredData} />
+      <ReportDataTable columns={columns} data={filteredData} hiddenColumnIds={hiddenColumnIds} />
     </div>
   )
 }

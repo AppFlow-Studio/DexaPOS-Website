@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useFinancialKPIs } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
-import { SummaryCard } from './SummaryCard'
+import { SummaryCard, SummaryCardRow } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
@@ -100,7 +100,7 @@ export function PaymentSummaryReport({
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <SummaryCardRow>
         <SummaryCard
           label="Total Revenue"
           value={formatCurrency(totalRevenue)}
@@ -116,7 +116,7 @@ export function PaymentSummaryReport({
           value={formatCurrency(avgTransaction)}
           icon={<TrendingUp className="h-5 w-5" />}
         />
-      </div>
+      </SummaryCardRow>
 
       {/* Payment Methods Table */}
       {paymentMethodsData.length > 0 ? (

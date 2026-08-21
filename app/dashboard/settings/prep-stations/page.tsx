@@ -11,8 +11,6 @@ import {
 import { AddEditPrepStationDialog } from "./components/AddEditPrepStationDialog";
 import { PrepStationCard } from "./components/PrepStationCard";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Empty } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -29,7 +27,14 @@ import {
   useGatedLocationId,
   useGatedLocation,
 } from "@/stores/location-store";
-import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import {
+  LocationIndicator,
+  PageHeader,
+  PageShell,
+  Panel,
+  PanelSection,
+} from "@/components/dashboard/shell";
 
 export default function PrepStationsPage() {
   // Resolve to the gated location so single-location accounts (locked to 'all')
@@ -38,8 +43,7 @@ export default function PrepStationsPage() {
   const selectedLocationId = gatedLocationId ?? "all";
   const isAllLocations = !gatedLocationId;
   const selectedLocation = useGatedLocation();
-  const { data: userInfo } = useUserInfo();
-  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
+  const clerkOrgId = useClerkOrgId();
 
   const {
     data: prepStations = [],
@@ -102,156 +106,171 @@ export default function PrepStationsPage() {
 
   if (!mounted) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Prep Stations</h2>
-          <p className="text-muted-foreground">
-            Manage kitchen prep stations for KDS routing
-          </p>
+      <PageShell>
+        <PageHeader
+          title="Prep stations"
+          subtitle="Manage kitchen routing and KDS preparation areas."
+          indicator={
+            <LocationIndicator
+              isAllLocations={isAllLocations}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full rounded-2xl" />
+          ))}
         </div>
-        <div className="h-96 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-        </div>
-      </div>
+      </PageShell>
     );
   }
 
   // Show location selection prompt when "All Locations" is selected
   if (isAllLocations) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Prep Stations</h2>
-          <p className="text-muted-foreground">
-            Manage kitchen prep stations for KDS routing
-          </p>
-        </div>
+      <PageShell>
+        <PageHeader
+          title="Prep stations"
+          subtitle="Manage kitchen routing and KDS preparation areas."
+          indicator={<LocationIndicator isAllLocations locationName={null} />}
+        />
 
-        <Card>
-          <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-            <MapPin className="h-12 w-12 mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">Select a Location</h3>
-            <p className="text-muted-foreground max-w-md">
+        <Panel padded>
+          <div className="flex min-h-64 flex-col items-center justify-center text-center">
+            <MapPin className="mb-4 h-12 w-12 text-muted-foreground" />
+            <h3 className="mb-2 text-lg font-semibold">Select a Location</h3>
+            <p className="max-w-md text-muted-foreground">
               Prep stations are location-specific. Please select a location from
               the dropdown above to manage prep stations for that location.
             </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </Panel>
+      </PageShell>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">
-              Prep Stations
-            </h2>
-            <p className="text-muted-foreground">
-              Configure prep stations for{" "}
-              <span className="font-medium">{selectedLocation?.name}</span>
-            </p>
-          </div>
-          <Skeleton className="h-10 w-40" />
-        </div>
+      <PageShell>
+        <PageHeader
+          title="Prep stations"
+          subtitle="Manage kitchen routing and KDS preparation areas."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+          actions={<Skeleton className="h-9 w-40 rounded-full" />}
+        />
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full" />
+            <Skeleton key={i} className="h-20 w-full rounded-2xl" />
           ))}
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   if (isError) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Prep Stations</h2>
-          <p className="text-muted-foreground">
-            Configure prep stations for{" "}
-            <span className="font-medium">{selectedLocation?.name}</span>
-          </p>
-        </div>
-        <Card>
-          <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-            <AlertTriangle className="h-12 w-12 mb-4 text-destructive" />
-            <h3 className="text-lg font-semibold mb-2">
+      <PageShell>
+        <PageHeader
+          title="Prep stations"
+          subtitle="Manage kitchen routing and KDS preparation areas."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
+        <Panel padded>
+          <div className="flex min-h-64 flex-col items-center justify-center text-center">
+            <AlertTriangle className="mb-4 h-12 w-12 text-destructive" />
+            <h3 className="mb-2 text-lg font-semibold">
               Failed to load prep stations
             </h3>
-            <p className="text-muted-foreground max-w-md">
+            <p className="max-w-md text-muted-foreground">
               {error instanceof Error
                 ? error.message
                 : "An error occurred while loading prep stations."}
             </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </Panel>
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <PageShell>
       {/* Mobile notice */}
-      <div className="sm:hidden flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 p-4">
-        <Flame className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Use a larger screen to configure prep stations</p>
-          <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">Kitchen station routing and display assignment require a tablet or desktop.</p>
+      <div className="flex min-w-0 items-start gap-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none sm:hidden">
+        <Flame className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium">Use a larger screen to configure prep stations</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Kitchen station routing and display assignment require a tablet or desktop.</p>
         </div>
       </div>
 
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Prep Stations</h2>
-          <p className="text-muted-foreground">
-            Configure prep stations for{" "}
-            <span className="font-medium">{selectedLocation?.name}</span>
-          </p>
-        </div>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Prep Station
-        </Button>
-      </div>
+      <PageHeader
+        title="Prep stations"
+        subtitle="Route menu items and categories to the correct KDS preparation area."
+        indicator={
+          <LocationIndicator
+            isAllLocations={false}
+            locationName={selectedLocation?.name}
+          />
+        }
+        actions={
+          <Button
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            onClick={() => setIsAddDialogOpen(true)}
+          >
+            <Plus className="mr-1.5 h-4 w-4" />
+            Add Prep Station
+          </Button>
+        }
+      />
 
-      {/* Info */}
-      <div className="text-sm text-muted-foreground bg-muted/50 border rounded-lg p-3">
-        Prep stations define where items are prepared in the kitchen. Assign
-        items or set category defaults to route orders to the correct KDS
-        display. Items without a station route to Expo (catch-all).
-      </div>
-
-      {/* Content */}
-      {prepStations.length === 0 ? (
-        <Empty
+      <Panel>
+        <PanelSection
           icon={Flame}
-          title="No prep stations configured"
-          description="Add your first prep station to start routing items to specific KDS displays."
-          action={
-            <Button onClick={() => setIsAddDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Prep Station
-            </Button>
-          }
-        />
-      ) : (
-        <div className="space-y-3">
-          {prepStations.map((station) => (
-            <PrepStationCard
-              key={station.id}
-              station={station}
-              assignedCategories={categoriesByStationId[station.id] || []}
-              onEdit={handleEdit}
-              onDelete={handleDeleteClick}
-              onToggleActive={handleToggleActive}
-            />
-          ))}
-        </div>
-      )}
+          label="Prep stations"
+          caption="Prep stations define where items are prepared in the kitchen. Assign items or set category defaults to route orders to the correct KDS display. Items without a station route to Expo (catch-all)."
+        >
+          {prepStations.length === 0 ? (
+            <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center shadow-none">
+              <Flame className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+              <p className="font-medium text-foreground">No prep stations configured</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Add your first prep station to start routing items to specific KDS displays.
+              </p>
+              <Button
+                className="mt-4 h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                onClick={() => setIsAddDialogOpen(true)}
+              >
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add Prep Station
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {prepStations.map((station) => (
+                <PrepStationCard
+                  key={station.id}
+                  station={station}
+                  assignedCategories={categoriesByStationId[station.id] || []}
+                  onEdit={handleEdit}
+                  onDelete={handleDeleteClick}
+                  onToggleActive={handleToggleActive}
+                />
+              ))}
+            </div>
+          )}
+        </PanelSection>
+      </Panel>
 
       {/* Add/Edit Dialog */}
       <AddEditPrepStationDialog
@@ -300,9 +319,9 @@ export default function PrepStationsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {stationToDelete && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
               <div
-                className="h-8 w-8 rounded-full flex-shrink-0"
+                className="h-8 w-8 shrink-0 rounded-full"
                 style={{ backgroundColor: stationToDelete.color }}
               />
               <div>
@@ -337,6 +356,6 @@ export default function PrepStationsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

@@ -78,39 +78,39 @@ export function OverviewTab({
           title="LAST VISIT"
           value={lastVisitRelative}
           subtitle={lastVisitAbsolute ?? undefined}
-          className="bg-card border border-border/50 shadow-sm rounded-lg p-6 hover:shadow-md transition-shadow"
+          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="TOTAL VISITS"
           value={String(totalVisits)}
           trend={visitTrendLabel ? { direction: visitTrendDir, label: visitTrendLabel } : undefined}
-          className="bg-card border border-border/50 shadow-sm rounded-lg p-6 hover:shadow-md transition-shadow"
+          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="LIFETIME SPEND"
           value={`$${lifetimeSpend.toLocaleString()}`}
           badge={percentileBadge ?? undefined}
-          className="bg-card border border-border/50 shadow-sm rounded-lg p-6 hover:shadow-md transition-shadow"
+          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
           isLoading={isLoadingProfile || isLoadingSpend}
         />
         <MetricCard
           title="AVG. SPEND"
           value={`$${avgSpend.toFixed(2)}`}
-          className="bg-card border border-border/50 shadow-sm rounded-lg p-6 hover:shadow-md transition-shadow"
+          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="AVG. TIP"
           value={`${avgTip.toFixed(1)}%`}
-          className="bg-card border border-border/50 shadow-sm rounded-lg p-6 hover:shadow-md transition-shadow"
+          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="CUSTOMER SINCE"
           value={customerSince ?? "—"}
-          className="bg-card border border-border/50 shadow-sm rounded-lg p-6 hover:shadow-md transition-shadow"
+          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
           isLoading={isLoadingProfile}
         />
       </div>
@@ -118,7 +118,7 @@ export function OverviewTab({
       {/* Spend Over Time + Visit Pattern */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Spend Over Time */}
-        <Card className="border border-border/50 shadow-sm bg-card rounded-lg overflow-hidden">
+        <Card className="overflow-hidden rounded-2xl border-0 bg-muted/35 shadow-none">
           <CardHeader className="pb-4 pt-6 px-6">
             <CardTitle className="text-sm font-bold text-foreground tracking-normal">
               Spend Over Time
@@ -156,7 +156,7 @@ export function OverviewTab({
         </Card>
 
         {/* Visit Pattern */}
-        <Card className="border border-border/50 shadow-sm bg-card rounded-lg overflow-hidden">
+        <Card className="overflow-hidden rounded-2xl border-0 bg-muted/35 shadow-none">
           <CardHeader className="pb-4 pt-6 px-6">
             <CardTitle className="text-sm font-bold text-foreground tracking-normal">
               Visit Pattern
@@ -188,7 +188,7 @@ export function OverviewTab({
       {/* Order Channels + Most Ordered Items */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Order Channels */}
-        <Card className="border border-border/50 shadow-sm bg-card rounded-lg overflow-hidden h-full">
+        <Card className="h-full overflow-hidden rounded-2xl border-0 bg-muted/35 shadow-none">
           <CardHeader className="pb-4 pt-6 px-6">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-bold text-foreground tracking-normal">
@@ -238,7 +238,7 @@ export function OverviewTab({
         </Card>
 
         {/* Most Ordered Items (last 90 days) */}
-        <Card className="border border-border/50 shadow-sm bg-card rounded-lg overflow-hidden h-full">
+        <Card className="h-full overflow-hidden rounded-2xl border-0 bg-muted/35 shadow-none">
           <CardHeader className="pb-4 pt-6 px-6">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-bold text-foreground tracking-normal">
@@ -284,7 +284,7 @@ export function OverviewTab({
       </div>
 
       {/* Activity Timeline */}
-      <div className="border border-border/50 bg-card rounded-lg p-6 shadow-sm">
+      <div className="rounded-2xl border-0 bg-muted/35 p-4 shadow-none sm:p-6">
         <h3 className="text-sm font-bold text-foreground tracking-normal mb-6">
           Recent Activity
         </h3>

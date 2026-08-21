@@ -248,15 +248,14 @@ export default function AdminTicketDetailPage() {
       setUploadKey((k) => k + 1);
       invalidate();
     },
-    onError: () => toast.error("Failed to send message"),
+    onError: () => {},
   });
 
   const statusMutation = useMutation({
     mutationFn: ({ status, notes }: { status: TicketStatus; notes?: string }) =>
       AdminUpdateTicketStatus(ticketId, status, notes),
     onSuccess: (res) => {
-      if (res.error) { toast.error(res.error); return; }
-      toast.success("Status updated");
+      if (res.error) { return; }
       invalidate();
     },
   });
@@ -265,8 +264,7 @@ export default function AdminTicketDetailPage() {
     mutationFn: ({ to, name }: { to: string | null; name: string | null }) =>
       AssignTicket(ticketId, to, name),
     onSuccess: (res) => {
-      if (res.error) { toast.error(res.error); return; }
-      toast.success("Ticket assigned");
+      if (res.error) { return; }
       invalidate();
     },
   });
@@ -274,8 +272,7 @@ export default function AdminTicketDetailPage() {
   const priorityMutation = useMutation({
     mutationFn: (priority: TicketPriority) => UpdateTicketPriority(ticketId, priority),
     onSuccess: (res) => {
-      if (res.error) { toast.error(res.error); return; }
-      toast.success("Priority updated");
+      if (res.error) { return; }
       invalidate();
     },
   });
@@ -283,7 +280,7 @@ export default function AdminTicketDetailPage() {
   const categoryMutation = useMutation({
     mutationFn: (category: TicketCategory) => UpdateTicketCategory(ticketId, category),
     onSuccess: (res) => {
-      if (res.error) { toast.error(res.error); return; }
+      if (res.error) { return; }
       invalidate();
     },
   });

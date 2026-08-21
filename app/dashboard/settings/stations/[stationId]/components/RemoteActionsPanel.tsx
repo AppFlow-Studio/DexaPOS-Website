@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  StationPanel,
+  StationPanelContent,
+  StationPanelDescription,
+  StationPanelHeader,
+  StationPanelTitle,
+} from "./StationPanel";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -138,15 +144,15 @@ export function RemoteActionsPanel({ station }: RemoteActionsPanelProps) {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Remote Actions</CardTitle>
-          <CardDescription>
+      <StationPanel>
+        <StationPanelHeader>
+          <StationPanelTitle>Remote Actions</StationPanelTitle>
+          <StationPanelDescription>
             Send commands to this station remotely. Actions are broadcast in
             real-time to the POS device.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </StationPanelDescription>
+        </StationPanelHeader>
+        <StationPanelContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {ACTIONS.map((action) => {
               const isDisabled =
@@ -183,8 +189,8 @@ export function RemoteActionsPanel({ station }: RemoteActionsPanelProps) {
               Some actions are unavailable while the station is offline.
             </p>
           )}
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
 
       {/* Confirmation Dialog */}
       <AlertDialog

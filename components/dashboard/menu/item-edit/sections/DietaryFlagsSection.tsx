@@ -58,7 +58,7 @@ export function DietaryFlagsSection({ itemId, item, globalScope }: SectionRender
   return (
     <div className="space-y-4">
       <SectionHeader title="Dietary Flags" scope={globalScope} />
-      <div className="space-y-3 rounded-lg border bg-card p-4">
+      <div className="space-y-3 rounded-2xl border bg-card p-6">
         <p className="text-xs text-muted-foreground">
           These appear as filter chips on the storefront. Only tags present on
           at least one item in the menu are shown to customers.

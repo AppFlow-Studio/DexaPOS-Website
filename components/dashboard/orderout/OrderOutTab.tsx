@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -196,17 +190,12 @@ export function OrderOutTab({
   if (!isOnboarded) {
     if (showOnboardingForm) {
       return (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Plug className="h-5 w-5" />
-              Connect to OrderOut
-            </CardTitle>
-            <CardDescription>
-              Fill in your restaurant details to get started with delivery platforms
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <Panel>
+          <PanelSection
+            icon={Plug}
+            label="Connect to OrderOut"
+            caption="Fill in your restaurant details to get started with delivery platforms."
+          >
             <OrderOutOnboardingForm
               defaultValues={{
                 accountName: merchantName || "",
@@ -241,14 +230,19 @@ export function OrderOutTab({
               }}
               onCancel={() => onShowOnboardingForm(false)}
             />
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       );
     }
 
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center py-12">
+      <Panel>
+        <PanelSection
+          icon={Plug}
+          label="Delivery integrations"
+          caption="Connect this location to Uber Eats, DoorDash, and Grubhub through OrderOut."
+        >
+        <div className="flex flex-col items-start py-2 sm:items-center sm:py-6 sm:text-center">
           <Plug className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">Connect to Delivery Platforms</h3>
           <p className="text-sm text-muted-foreground text-center mb-6 max-w-md">
@@ -263,8 +257,9 @@ export function OrderOutTab({
             <Plus className="h-4 w-4 mr-2" />
             Connect to OrderOut
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+        </PanelSection>
+      </Panel>
     );
   }
 
@@ -273,29 +268,36 @@ export function OrderOutTab({
     <div className="space-y-6">
       {/* A. Setup Progress */}
       {allSetupDone ? (
-        <Card className="border-green-200 dark:border-green-900 bg-green-50/50 dark:bg-green-950/20">
-          <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-4">
+        <Panel className="border-green-200 bg-green-50/40 dark:border-green-900 dark:bg-green-950/20">
+          <PanelSection
+            icon={CheckCircle2}
+            label="Delivery channels connected"
+            caption="This location is ready to receive orders from its connected platforms."
+            action={
+              <Button variant="outline" size="sm" asChild>
+                <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
+                  Open Dashboard
+                  <ExternalLink className="ml-1 h-3 w-3" />
+                </a>
+              </Button>
+            }
+          >
             <div className="flex items-center gap-3">
               <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
               <span className="text-sm font-medium text-green-700 dark:text-green-400">
                 All set! Your location is connected to delivery platforms.
               </span>
             </div>
-            <Button variant="outline" size="sm" asChild className="shrink-0 self-start sm:self-auto">
-              <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
-                Open Dashboard
-                <ExternalLink className="h-3 w-3 ml-1" />
-              </a>
-            </Button>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Setup Progress</CardTitle>
-            <CardDescription>Complete these steps to start receiving delivery orders</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <Panel>
+          <PanelSection
+            icon={Plug}
+            label="Setup progress"
+            caption="Complete these steps to start receiving delivery orders."
+          >
+            <div className="space-y-4">
             <SetupStep completed={hasAccount} label="Account Created" />
             <SetupStep completed={hasRestaurant} label="Restaurant Created" />
             <SetupStep
@@ -309,8 +311,9 @@ export function OrderOutTab({
               label="Sync a Menu"
               description={!hasSyncedMenus ? "Go to a menu's OrderOut tab to push it" : undefined}
             />
-          </CardContent>
-        </Card>
+            </div>
+          </PanelSection>
+        </Panel>
       )}
 
       {/* A2. Merchant self-confirmation (tick what you've connected in OrderOut) */}
@@ -324,25 +327,23 @@ export function OrderOutTab({
       />
 
       {/* B. Connected Channels */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <CardTitle className="text-base">Connected Channels</CardTitle>
-              <CardDescription>Delivery platforms linked to this location</CardDescription>
-              {isOnboarded && webhookHealth && (
-                <WebhookHealthIndicator health={webhookHealth} />
-              )}
-            </div>
-            <Button variant="outline" size="sm" asChild className="shrink-0 self-start">
+      <Panel>
+        <PanelSection
+          icon={Plug}
+          label="Connected channels"
+          caption="Delivery platforms linked to this location."
+          action={
+            <Button variant="outline" size="sm" asChild>
               <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
                 Manage
-                <ExternalLink className="h-3 w-3 ml-1" />
+                <ExternalLink className="ml-1 h-3 w-3" />
               </a>
             </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
+          }
+        >
+          {isOnboarded && webhookHealth && (
+            <WebhookHealthIndicator health={webhookHealth} />
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {KNOWN_PLATFORMS.map((platform) => {
               const platformUpper = platform.toUpperCase();
@@ -357,7 +358,7 @@ export function OrderOutTab({
               return (
                 <div
                   key={platform}
-                  className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-3 ${
+                  className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl p-3 ${
                     isActive ? style.bg : "bg-muted/30"
                   }`}
                 >
@@ -393,7 +394,7 @@ export function OrderOutTab({
               return (
                 <div
                   key={channel}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-3 mt-3 bg-blue-50 dark:bg-blue-950/20"
+                  className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-blue-50 p-3 dark:bg-blue-950/20"
                 >
                   <Plug className="h-5 w-5 text-blue-600 shrink-0" />
                   <p className="text-sm font-medium shrink-0">{channel}</p>
@@ -411,23 +412,16 @@ export function OrderOutTab({
                 </div>
               );
             })}
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
       {/* C. Synced Menus */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <RefreshCw className="h-4 w-4" />
-                Synced Menus
-              </CardTitle>
-              <CardDescription>Menus pushed to OrderOut for delivery platforms</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection
+          icon={RefreshCw}
+          label="Synced menus"
+          caption="Menus pushed to OrderOut for delivery platforms."
+        >
           {syncedMenus.length === 0 ? (
             <div className="flex flex-col items-center py-6 text-center">
               <Package className="h-8 w-8 text-muted-foreground mb-2" />
@@ -436,7 +430,8 @@ export function OrderOutTab({
               </p>
             </div>
           ) : (
-            <Table>
+            <div className="overflow-x-auto">
+            <Table className="min-w-[760px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Menu Name</TableHead>
@@ -473,9 +468,10 @@ export function OrderOutTab({
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
       {/* C2. Push to Channels + History */}
       <PushChannelsCard
@@ -489,15 +485,12 @@ export function OrderOutTab({
       <PushChannelsHistoryCard clerkOrgId={clerkOrgId} locationId={locationId} />
 
       {/* D. Recent Orders */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <ShoppingBag className="h-4 w-4" />
-            Recent Delivery Orders
-          </CardTitle>
-          <CardDescription>Last 10 orders from delivery platforms</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection
+          icon={ShoppingBag}
+          label="Recent delivery orders"
+          caption="The last 10 orders received from delivery platforms."
+        >
           {recentOrders.length === 0 ? (
             <div className="flex flex-col items-center py-6 text-center">
               <ShoppingBag className="h-8 w-8 text-muted-foreground mb-2" />
@@ -506,7 +499,8 @@ export function OrderOutTab({
               </p>
             </div>
           ) : (
-            <Table>
+            <div className="overflow-x-auto">
+            <Table className="min-w-[860px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Order #</TableHead>
@@ -550,9 +544,10 @@ export function OrderOutTab({
                 })}
               </TableBody>
             </Table>
+            </div>
           )}
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
       {/* E. DEV-only: synthetic OrderOut webhook tester */}
       {process.env.NODE_ENV === "development" && (

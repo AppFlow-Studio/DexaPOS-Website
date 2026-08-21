@@ -253,11 +253,11 @@ export function FloorPlanEditorSidebar({
         <h3 className="font-semibold text-sm">Shape Library</h3>
         <p className="text-xs text-muted-foreground">Drag or click shapes onto the canvas</p>
         <div className="mt-3 grid gap-2">
-          <Button variant="default" size="sm" onClick={onOpenShapePicker}>
+          <Button variant="default" size="sm" onClick={onOpenShapePicker} className="rounded-full">
             <Plus className="mr-2 h-4 w-4" />
             Add Object
           </Button>
-          <Button variant="outline" size="sm" onClick={onOpenQuickSetup}>
+          <Button variant="outline" size="sm" onClick={onOpenQuickSetup} className="rounded-full">
             <LayoutGrid className="mr-2 h-4 w-4" />
             Quick Setup
           </Button>
@@ -319,7 +319,7 @@ export function FloorPlanEditorSidebar({
                           draggable
                           onDragStart={(e) => handleDragStart(e, shape.id)}
                           onClick={() => onAddShape?.(shape.id as keyof typeof TABLE_SHAPES)}
-                          className="flex flex-col items-center gap-1.5 p-2.5 rounded border border-border bg-background hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing transition-all"
+                          className="flex flex-col items-center gap-1.5 p-2.5 rounded-2xl border-0 bg-muted/50 shadow-none hover:bg-primary/10 cursor-grab active:cursor-grabbing transition-colors"
                           title={shape.label}
                         >
                           <div className="w-10 h-10 flex items-center justify-center pointer-events-none">

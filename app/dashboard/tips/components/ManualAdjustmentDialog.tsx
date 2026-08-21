@@ -85,16 +85,16 @@ export function ManualAdjustmentDialog({
 
         <div className="space-y-4 py-4">
           {detail && (
-            <div className="grid grid-cols-2 gap-4 p-3 bg-muted/50 rounded">
+            <div className="grid grid-cols-2 gap-4 rounded-2xl bg-muted/60 p-3">
               <div>
                 <p className="text-xs text-muted-foreground">Current Net Tips</p>
-                <p className="font-semibold text-base">
+                <p className="text-base font-semibold tabular-nums">
                   ${detail.net_tips.toFixed(2)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Preview Net Tips</p>
-                <p className="font-semibold text-base text-primary">
+                <p className="text-base font-semibold tabular-nums text-[#0C4FD1] dark:text-[#6CA0FF]">
                   ${previewNetTips}
                 </p>
               </div>
@@ -124,7 +124,7 @@ export function ManualAdjustmentDialog({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g., Correcting duplicate tip entry, Refund"
-              className="mt-1"
+              className="mt-1 border-0 bg-muted/40 text-muted-foreground placeholder:text-muted-foreground/60"
             />
           </div>
         </div>

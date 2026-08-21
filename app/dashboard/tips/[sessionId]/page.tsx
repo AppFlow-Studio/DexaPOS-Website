@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Card } from "@/components/ui/card";
+import { Panel } from "@/components/dashboard/shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
@@ -26,7 +26,8 @@ import { ManualAdjustmentDialog } from "../components/ManualAdjustmentDialog";
 import { ConfigSnapshotPanel } from "../components/ConfigSnapshotPanel";
 import { ExportHistoryPanel } from "../components/ExportHistoryPanel";
 import { VoidDialog } from "../components/VoidDialog";
-import { STATUS_CONFIG, SHIFT_LABELS, formatDate } from "../lib/constants";
+import { SHIFT_LABELS, formatDate } from "../lib/constants";
+import { TipStatusBadge } from "../components/TipStatusBadge";
 import type { TipDetailWithStaff } from "@/app/dashboard/actions/tips";
 
 export default function SessionReviewPage() {
@@ -122,10 +123,6 @@ export default function SessionReviewPage() {
     });
   };
 
-  const statusCfg = session
-    ? STATUS_CONFIG[session.status] ?? STATUS_CONFIG.draft
-    : null;
-
   const isEditable = session?.status === "calculated" || session?.status === "pending_approval";
   const canApprove = isEditable;
   const canVoid = session?.status !== "voided";
@@ -154,9 +151,11 @@ export default function SessionReviewPage() {
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Tip Distribution
         </Button>
-        <Card className="p-8 text-center">
-          <p className="text-muted-foreground">Session not found</p>
-        </Card>
+        <Panel>
+          <div className="p-8 text-center">
+            <p className="text-muted-foreground">Session not found</p>
+          </div>
+        </Panel>
       </div>
     );
   }
@@ -180,17 +179,11 @@ export default function SessionReviewPage() {
           Back to Tip Distribution
         </Button>
 
-        <nav className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
-          <span>Reports</span>
-          <ChevronRight className="w-3.5 h-3.5" />
-          <span>Tip Distribution</span>
-          <ChevronRight className="w-3.5 h-3.5" />
-          <span className="text-foreground font-medium">Session Review</span>
-        </nav>
+    
       </div>
 
       {/* HEADER */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">{sessionDateFormatted}</h1>
@@ -204,14 +197,7 @@ export default function SessionReviewPage() {
             <Badge variant="secondary" className="text-xs">
               {SHIFT_LABELS[session.shift_period] || session.shift_period}
             </Badge>
-            {statusCfg && (
-              <Badge
-                variant="outline"
-                className={`text-xs font-medium ${statusCfg.className}`}
-              >
-                {statusCfg.label}
-              </Badge>
-            )}
+            <TipStatusBadge status={session.status} />
             {session.data_start_after && session.data_cutoff_at && (
               <span className="text-xs text-muted-foreground">
                 {format(new Date(session.data_start_after), "h:mm a")} —{" "}
@@ -220,7 +206,7 @@ export default function SessionReviewPage() {
             )}
             {session.calculated_at && (
               <span className="text-xs text-muted-foreground">
-                Calculated{" "}
+                at{" "}
                 {format(new Date(session.calculated_at), "MMM d 'at' h:mm a")}
               </span>
             )}
@@ -228,12 +214,12 @@ export default function SessionReviewPage() {
         </div>
 
         {/* ACTION BUTTONS */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2">
           {canApprove && (
             <Button
               onClick={handleApprove}
               disabled={approveMutation.isPending}
-              className="bg-teal-500 hover:bg-teal-600 text-white"
+              
             >
               {approveMutation.isPending ? "Approving..." : "Approve"}
             </Button>

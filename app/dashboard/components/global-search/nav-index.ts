@@ -117,7 +117,7 @@ export const NAV_INDEX: NavSearchItem[] = [
   { label: "Loyalty", path: "/dashboard/settings/loyalty", section: "Settings", icon: Gift, keywords: ["rewards", "points"] },
 
   // ── Help (footer) ───────────────────────────────────────────────────────
-  { label: "Get Help", path: "/dashboard/support", section: "Help", icon: MessageCircle, keywords: ["support", "contact", "tickets"] },
+  { label: "Support", path: "/dashboard/support", section: "Help", icon: MessageCircle, keywords: ["support", "contact", "tickets", "get help", "help"] },
 ];
 
 /** Default recent items shown on first open before any nav history exists. */

@@ -24,8 +24,9 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { DatePopover } from "./DatePopover";
+import { DatePopover } from "@/components/ui/date-popover";
 import type { TipOutRule, Role } from "@/app/dashboard/actions/tips";
+import { getLocalDateKey } from "@/lib/dates/local-date-key";
 
 interface TipOutRuleDialogProps {
   open: boolean;
@@ -34,6 +35,7 @@ interface TipOutRuleDialogProps {
   roles: Role[];
   existingRules: TipOutRule[];
   clerkOrgId: string | undefined;
+  timeZone?: string | null;
   isLoading?: boolean;
   onSubmit: (data: TipOutRuleFormData) => void;
   onDeactivateRule?: (ruleId: string) => void;
@@ -49,15 +51,17 @@ export interface TipOutRuleFormData {
   end_date: string | null;
 }
 
-const defaultFormData: TipOutRuleFormData = {
-  from_role_code: "",
-  to_role_code: "",
-  tip_out_type: "percentage_of_sales",
-  tip_out_value: 0,
-  is_active: true,
-  effective_date: new Date().toISOString().split("T")[0],
-  end_date: null,
-};
+function createDefaultFormData(timeZone?: string | null): TipOutRuleFormData {
+  return {
+    from_role_code: "",
+    to_role_code: "",
+    tip_out_type: "percentage_of_sales",
+    tip_out_value: 0,
+    is_active: true,
+    effective_date: getLocalDateKey(new Date(), timeZone),
+    end_date: null,
+  };
+}
 
 export function TipOutRuleDialog({
   open,
@@ -66,11 +70,14 @@ export function TipOutRuleDialog({
   roles,
   existingRules,
   clerkOrgId,
+  timeZone,
   isLoading,
   onSubmit,
   onDeactivateRule,
 }: TipOutRuleDialogProps) {
-  const [formData, setFormData] = useState<TipOutRuleFormData>({ ...defaultFormData });
+  const [formData, setFormData] = useState<TipOutRuleFormData>(() =>
+    createDefaultFormData(timeZone),
+  );
 
   // Reset form when dialog opens/closes or rule changes
   useEffect(() => {
@@ -87,13 +94,9 @@ export function TipOutRuleDialog({
         end_date: rule.end_date ?? null,
       });
     } else {
-      setFormData({
-        ...defaultFormData,
-        effective_date: new Date().toISOString().split("T")[0],
-        end_date: null,
-      });
+      setFormData(createDefaultFormData(timeZone));
     }
-  }, [rule, open]);
+  }, [rule, open, timeZone]);
 
   // ─── Reciprocity check (client-side) ──────────────────────
   const conflictingRule = useMemo(() => {
@@ -152,8 +155,8 @@ export function TipOutRuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="thin-scrollbar flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-y-auto rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-md sm:rounded-3xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle>
             {rule ? "Edit Tip-Out Rule" : "Create Tip-Out Rule"}
           </DialogTitle>
@@ -162,7 +165,7 @@ export function TipOutRuleDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="min-w-0 space-y-4 py-4">
           <div>
             <Label htmlFor="from-role">From Role *</Label>
             <Select
@@ -171,7 +174,7 @@ export function TipOutRuleDialog({
                 handleChange("from_role_code", value)
               }
             >
-              <SelectTrigger id="from-role" className="mt-1 w-full min-w-0">
+              <SelectTrigger id="from-role" className="mt-1 w-full min-w-0 border-0 bg-muted/60 shadow-none">
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
@@ -197,7 +200,7 @@ export function TipOutRuleDialog({
                 handleChange("to_role_code", value)
               }
             >
-              <SelectTrigger id="to-role" className="mt-1 w-full min-w-0">
+              <SelectTrigger id="to-role" className="mt-1 w-full min-w-0 border-0 bg-muted/60 shadow-none">
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
               <SelectContent>
@@ -227,9 +230,9 @@ export function TipOutRuleDialog({
 
           {/* ─── Reciprocity warning ─── */}
           {conflictingRule && (
-            <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-              <AlertDescription className="text-amber-800 dark:text-amber-200">
+            <Alert className="rounded-2xl border-0 bg-muted/60 shadow-none">
+              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              <AlertDescription>
                 <p className="text-sm">
                   A rule already exists sending tips the other direction:{" "}
                   <strong>
@@ -244,7 +247,7 @@ export function TipOutRuleDialog({
                     variant="link"
                     size="sm"
                     onClick={handleDeactivateConflicting}
-                    className="text-amber-700 dark:text-amber-300 underline p-0 h-auto mt-1"
+                    className="mt-1 h-auto p-0 underline"
                   >
                     Deactivate existing rule
                   </Button>
@@ -308,7 +311,7 @@ export function TipOutRuleDialog({
                 handleChange("tip_out_value", parseFloat(e.target.value) || 0)
               }
               placeholder={formData.tip_out_type === "flat_amount" ? "0.00" : "0"}
-              className="mt-1"
+              className="mt-1 border-0 bg-muted/60 shadow-none"
             />
             {formData.tip_out_type !== "flat_amount" && (
               <p className="text-xs text-muted-foreground mt-1">
@@ -328,6 +331,7 @@ export function TipOutRuleDialog({
               <div className="mt-1">
                 <DatePopover
                   id="effective-date"
+                  className="border-0 bg-muted/60 shadow-none"
                   value={formData.effective_date}
                   onChange={(v) => {
                     handleChange("effective_date", v ?? "");
@@ -343,6 +347,8 @@ export function TipOutRuleDialog({
               <div className="mt-1">
                 <DatePopover
                   id="end-date"
+                  className="border-0 bg-muted/60 shadow-none"
+                  align="end"
                   value={formData.end_date || ""}
                   min={formData.effective_date}
                   placeholder="No end date"
@@ -365,14 +371,13 @@ export function TipOutRuleDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 justify-center pt-4 sm:justify-center">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
             onClick={handleSubmit}
             disabled={!isValid() || isLoading}
-            className="bg-teal-500 hover:bg-teal-600 text-white"
           >
             {isLoading ? "Saving..." : rule ? "Update Rule" : "Create Rule"}
           </Button>

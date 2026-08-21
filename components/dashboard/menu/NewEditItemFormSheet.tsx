@@ -66,8 +66,7 @@ import {
   CheckCircle2,
   Plus,
   X,
-  Grip,
-  GripVertical,
+  ArrowUpDown,
   Search,
   Loader2,
   Flame,
@@ -99,30 +98,9 @@ import {
 } from "@/stores/location-store";
 import { useItemSnooze } from "@/lib/queries/use-snoozes";
 import { setItemAvailabilityScoped } from "@/app/dashboard/actions/menu-items-rpc";
-import {
-  DndContext,
-  closestCenter,
-  MouseSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS as DndCSS } from "@dnd-kit/utilities";
 import ModifierItemRow, { ExtendedModifierItem } from "./ModifierItemRow";
 import { LocationLibraryItem, ModifierGroup, ModifierItem } from "@/types/menu";
-import {
-  LevelIndicator,
-  EditingContextBanner,
-  getEditingLevel,
-  type PricingLevel,
-} from "./LevelIndicator";
+import { ScopeBanner } from "./ScopeBanner";
 import { AffectsTag } from "./AffectsTag";
 import { DisabledFieldBanner } from "./DisabledFieldBanner";
 import { CascadeLadder } from "./CascadeLadder";
@@ -575,9 +553,8 @@ function EditingContextIndicator({ context }: { context: EditingContext }) {
     <div className="relative">
       <div
         className={cn(
-          "flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-help hover:shadow-sm",
+          "flex cursor-help items-center gap-2 rounded-full border-0 px-3 py-2 shadow-none transition-colors",
           levelInfo.bgColor,
-          levelInfo.borderColor,
           levelInfo.color,
         )}
         onMouseEnter={() => setIsOpen(true)}
@@ -591,7 +568,7 @@ function EditingContextIndicator({ context }: { context: EditingContext }) {
       {/* Hover Card */}
       {isOpen && (
         <div
-          className="absolute bottom-full left-0 mb-2 w-80 p-4 bg-background border rounded-lg shadow-xl z-50 animate-in fade-in-0 zoom-in-95 duration-150"
+          className="absolute bottom-full left-0 z-50 mb-2 w-80 rounded-2xl border bg-card p-4 shadow-lg animate-in fade-in-0 zoom-in-95 duration-150"
           onMouseEnter={() => setIsOpen(true)}
           onMouseLeave={() => setIsOpen(false)}
         >
@@ -600,7 +577,7 @@ function EditingContextIndicator({ context }: { context: EditingContext }) {
             <div className="flex items-center gap-3">
               <div
                 className={cn(
-                  "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
                   levelInfo.bgColor,
                 )}
               >
@@ -620,7 +597,7 @@ function EditingContextIndicator({ context }: { context: EditingContext }) {
             </p>
 
             {/* Affects */}
-            <div className="rounded-lg bg-muted/50 p-2.5">
+            <div className="rounded-2xl border-0 bg-muted/60 p-2.5 shadow-none">
               <p className="text-[11px] font-medium text-muted-foreground mb-0.5">
                 Changes will affect:
               </p>
@@ -664,7 +641,7 @@ function EditingContextIndicator({ context }: { context: EditingContext }) {
 
             {/* Reset info */}
             {context.resetLabel && (
-              <div className="pt-2 border-t flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-1.5 pt-2 text-[11px] text-muted-foreground">
                 <RotateCcw className="h-3 w-3" />
                 <span>"{context.resetLabel}" removes this override</span>
               </div>
@@ -690,21 +667,6 @@ interface ModifierGroupSearchListProps {
   onSelect: (groupId: string) => void;
 }
 
-function SortableModifierGroupRow({ id, children }: { id: string; children: React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: DndCSS.Transform.toString(transform), transition }}
-      className={isDragging ? "opacity-50 z-50" : undefined}
-      {...attributes}
-      {...listeners}
-    >
-      {children}
-    </div>
-  );
-}
-
 function ModifierGroupSearchList({
   availableGroups,
   onSelect,
@@ -722,23 +684,23 @@ function ModifierGroupSearchList({
   }, [availableGroups, searchQuery]);
 
   return (
-    <div className="rounded-lg border bg-muted/30 overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border-0 bg-muted/60 shadow-none">
       {/* Search Input */}
-      <div className="p-2 border-b bg-background/50">
+      <div className="p-2">
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
           <input
             type="text"
             placeholder="Search modifier groups..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-9 pl-9 pr-3 rounded-md border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            className="h-9 w-full rounded-full border-0 bg-background pl-9 pr-8 text-[0.8125rem] shadow-none placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-foreground"
+              className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
               <X className="h-4 w-4" />
             </button>
@@ -773,11 +735,8 @@ function ModifierGroupSearchList({
                 key={group.id}
                 type="button"
                 onClick={() => onSelect(group.id)}
-                className="w-full p-2.5 rounded-md bg-background hover:bg-accent transition-colors text-left flex items-center gap-3 group"
+                className="group flex w-full items-center gap-3 rounded-2xl bg-background p-2.5 text-left transition-colors hover:bg-accent"
               >
-                <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center shrink-0 group-hover:bg-purple-100 transition-colors">
-                  <Layers className="h-4 w-4 text-muted-foreground group-hover:text-purple-600 transition-colors" />
-                </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm flex items-center gap-2">
                     {group.name}
@@ -789,9 +748,6 @@ function ModifierGroupSearchList({
                         Required
                       </Badge>
                     )}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {group.modifier_group_items?.length || 0} options
                   </div>
                 </div>
                 <Plus className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
@@ -893,16 +849,8 @@ export function NewEditItemFormSheet({
   const [selectedModifiers, setSelectedModifiers] = React.useState<string[]>(
     [],
   );
-  const [expandedSections, setExpandedSections] = React.useState({
-    general: true,
-    pricing: true,
-    modifiers: false,
-    categories: false,
-    tax: false,
-    availability: false,
-    locationBadges: false,
-    recipe: false,
-  });
+  const [isReorderingModifiers, setIsReorderingModifiers] =
+    React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isResetting, setIsResetting] = React.useState(false);
   const [showAddModifier, setShowAddModifier] = React.useState(false);
@@ -933,6 +881,30 @@ export function NewEditItemFormSheet({
     fileNamePrefix: "item",
   });
   const draftHydratedRef = React.useRef(false);
+  const sectionTabsScrollRef = React.useRef<HTMLDivElement>(null);
+  const keepSelectedSectionVisible = React.useCallback((value: string) => {
+    requestAnimationFrame(() => {
+      const scroller = sectionTabsScrollRef.current;
+      const trigger = scroller?.querySelector<HTMLElement>(
+        `[data-item-section="${value}"]`,
+      );
+      if (!scroller || !trigger) return;
+
+      const scrollerRect = scroller.getBoundingClientRect();
+      const triggerRect = trigger.getBoundingClientRect();
+      const centeredLeft =
+        scroller.scrollLeft +
+        triggerRect.left -
+        scrollerRect.left -
+        (scrollerRect.width - triggerRect.width) / 2;
+      const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
+
+      scroller.scrollTo({
+        left: Math.max(0, Math.min(centeredLeft, maxScrollLeft)),
+        behavior: "smooth",
+      });
+    });
+  }, []);
   const draftKey = React.useMemo(() => {
     const scopeKey = isAllLocations ? "global" : selectedLocationId ?? "location-none";
     const menuScope = menuId ?? "library";
@@ -979,6 +951,7 @@ export function NewEditItemFormSheet({
       const isLibraryLocationScope = !isAllLocations && !menuId && !categoryId;
       return {
         level: (isLibraryLocationScope ? 3 : editingContext.level) as CascadeLevel,
+        scopeType: isLibraryLocationScope ? "location-item" : "cascade",
         locationName: isAllLocations ? null : currentLocationName,
         categoryName: categoryName ?? null,
         menuName: menuName ?? null,
@@ -1169,9 +1142,9 @@ export function NewEditItemFormSheet({
         if (cancelled) return;
         const ids = groups.map((g: any) => g.id);
         setSelectedModifiers(ids);
-        if (ids.length > 0) {
-          setExpandedSections((prev) => ({ ...prev, modifiers: true }));
-        }
+        // Previously auto-expanded the Modifiers collapsible. With tabs the
+        // sections are peers, so forcing the panel away from General on open
+        // would hide the fields the user came to edit.
       });
     } else {
       form.reset({
@@ -1254,10 +1227,6 @@ export function NewEditItemFormSheet({
     } satisfies NewEditItemDraft);
   }, [draftKey, editItem, open, selectedCategories, selectedModifiers, watchedValues]);
 
-  const toggleSection = (section: keyof typeof expandedSections) => {
-    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
-  };
-
   const toggleCategory = (categoryId: string) => {
     setSelectedCategories((prev) =>
       prev.includes(categoryId)
@@ -1275,63 +1244,54 @@ export function NewEditItemFormSheet({
     );
   };
 
-  const modifierDndSensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
-  );
+  const moveSelectedModifier = async (
+    modifierId: string,
+    direction: "up" | "down",
+  ) => {
+    if (!canManageModifierLinks || isReorderingModifiers) return;
 
-  const handleModifierDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    const currentIndex = selectedModifiers.indexOf(modifierId);
+    if (currentIndex === -1) return;
+
+    const targetIndex =
+      direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= selectedModifiers.length) return;
+
+    const previous = [...selectedModifiers];
+    const reordered = [...selectedModifiers];
+    [reordered[currentIndex], reordered[targetIndex]] = [
+      reordered[targetIndex],
+      reordered[currentIndex],
+    ];
+
+    // Move immediately in the UI. New items persist this order on Save; edits
+    // also persist immediately so the arrows never appear unresponsive.
+    setSelectedModifiers(reordered);
     if (!editItem) return;
 
-    const reordered = (() => {
-      const oldIndex = selectedModifiers.indexOf(active.id as string);
-      const newIndex = selectedModifiers.indexOf(over.id as string);
-      if (oldIndex === -1 || newIndex === -1) return null;
-      return arrayMove(selectedModifiers, oldIndex, newIndex);
-    })();
-    if (!reordered) return;
+    setIsReorderingModifiers(true);
+    try {
+      const locationId = isAllLocations ? null : (selectedLocationId ?? null);
+      const result = await ReorderMenuItemModifierGroups(
+        editItem.id,
+        reordered.map((groupId, index) => ({
+          modifierGroupId: groupId,
+          displayOrder: index + 1,
+        })),
+        locationId,
+      );
 
-    // Update UI immediately (optimistic)
-    setSelectedModifiers(reordered);
-
-    // Call the RPC directly — this writes only menu_item_modifier_groups.display_order
-    // for this specific item, never touching library order or other items
-    const locationId = isAllLocations ? null : (selectedLocationId ?? null);
-    const result = await ReorderMenuItemModifierGroups(
-      editItem.id,
-      reordered.map((groupId, idx) => ({ modifierGroupId: groupId, displayOrder: idx + 1 })),
-      locationId,
-    );
-    if (result.error) {
-      toast.error("Failed to save modifier order", { description: result.error });
-      // Rollback
-      setSelectedModifiers(selectedModifiers);
+      if (!result.error) return;
+      setSelectedModifiers(previous);
+      toast.error("Failed to save modifier order", {
+        description: result.error,
+      });
+    } catch {
+      setSelectedModifiers(previous);
+      toast.error("Failed to save modifier order");
+    } finally {
+      setIsReorderingModifiers(false);
     }
-  };
-
-  const moveSelectedModifier = (modifierId: string, direction: "up" | "down") => {
-    if (!canManageModifierLinks) return;
-
-    setSelectedModifiers((prev) => {
-      const currentIndex = prev.indexOf(modifierId);
-      if (currentIndex === -1) return prev;
-
-      const targetIndex =
-        direction === "up" ? currentIndex - 1 : currentIndex + 1;
-
-      if (targetIndex < 0 || targetIndex >= prev.length) {
-        return prev;
-      }
-
-      const next = [...prev];
-      [next[currentIndex], next[targetIndex]] = [
-        next[targetIndex],
-        next[currentIndex],
-      ];
-      return next;
-    });
   };
 
   const toggleAllergen = (allergen: string) => {
@@ -1648,7 +1608,7 @@ export function NewEditItemFormSheet({
     const currentLevel = editingContext.level;
 
     return (
-      <div className="space-y-2 p-3 rounded-lg bg-muted/30 border border-dashed">
+      <div className="space-y-2 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
           Price Hierarchy
         </div>
@@ -1734,10 +1694,10 @@ export function NewEditItemFormSheet({
         )}
 
         {/* Effective Price */}
-        <div className="pt-2 mt-2 border-t">
+        <div className="mt-2 pt-2">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Effective Price:</span>
-            <span className="text-lg font-bold text-green-600">
+            <span className="text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
               ${editItem.effective_price?.toFixed(2)}
             </span>
           </div>
@@ -1762,8 +1722,15 @@ export function NewEditItemFormSheet({
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <DialogContent
-        overlayClassName="bg-slate-950/40 backdrop-blur-md"
-        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-x-hidden overflow-y-auto max-h-[92vh] rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
+        overlayClassName="bg-background/60 backdrop-blur-md"
+        // Must not scroll: it owns `rounded-3xl`, and a scrollbar on the rounded
+        // element renders in its padding box — visually outside the corner. Fixed
+        // flex column + overflow-hidden so the body's scrollbar is clipped inside.
+        // `max-sm:overflow-hidden` overrides the base `max-sm:overflow-y-auto`:
+        // on mobile the base makes the dialog itself scroll AND sets `h-dvh`, which
+        // together with the inner scroll body produced two scrollbars and dead
+        // space under the footer. The inner body is the only scroller.
+        className="flex max-h-[92vh] w-full max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-3xl border bg-card p-0 max-sm:h-dvh max-sm:max-h-none max-sm:overflow-hidden sm:max-w-5xl xl:max-w-6xl"
       >
         <Form {...form}>
           <form
@@ -1799,14 +1766,15 @@ export function NewEditItemFormSheet({
                     : "Please review the highlighted fields and try again.",
               });
             })}
-            className="flex flex-col min-w-0"
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
           >
-        <DialogHeader className="sticky top-0 z-10 border-b border-border/70 bg-background/95 px-4 sm:px-6 py-5 pr-14 text-left sm:text-left">
-          <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
-            <Sparkles className="h-5 w-5 text-primary animate-pulse" />
-            {editItem ? "Edit Menu Item" : "Create New Menu Item"}
+        <DialogHeader className="min-w-0 shrink-0 px-4 py-4 pr-14 text-left sm:px-6 sm:py-5 sm:text-left">
+          <DialogTitle className="flex min-w-0 items-center text-xl font-semibold tracking-tight sm:text-[1.625rem]">
+            <span className="min-w-0 truncate">
+              {editItem ? "Edit Menu Item" : "Create New Menu Item"}
+            </span>
           </DialogTitle>
-          <DialogDescription asChild><div className="space-y-2 max-w-[80ch] text-sm leading-6 text-muted-foreground">
+          <DialogDescription asChild><div className="max-w-[80ch] space-y-2 text-sm leading-5 text-muted-foreground sm:leading-6">
             <span>
               {isSingleLocation
                 ? "Update this item's details, pricing, availability, and customization options."
@@ -1816,50 +1784,23 @@ export function NewEditItemFormSheet({
             {/* Context Badges */}
             {editItem && (
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                {/* Level Badge */}
-                {!isSingleLocation && (
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "gap-1",
-                    editingContext.level === 1 &&
-                      "bg-gray-100 text-gray-700 border-gray-300",
-                    editingContext.level === 2 &&
-                      "bg-blue-100 text-blue-700 border-blue-300",
-                    editingContext.level === 3 &&
-                      "bg-purple-100 text-purple-700 border-purple-300",
-                    editingContext.level === 4 &&
-                      "bg-amber-100 text-amber-700 border-amber-300",
-                    editingContext.level === 5 &&
-                      "bg-green-100 text-green-700 border-green-300",
-                  )}
-                >
-                  {editingContext.level === 1 && <Globe className="h-3 w-3" />}
-                  {editingContext.level === 2 && <Tag className="h-3 w-3" />}
-                  {editingContext.level === 3 && <Building2 className="h-3 w-3" />}
-                  {editingContext.level === 4 && <MenuIcon className="h-3 w-3" />}
-                  {editingContext.level === 5 && <MapPin className="h-3 w-3" />}
-                  Level {editingContext.level}
-                </Badge>
-                )}
-
                 {/* Location Badge */}
                 {!isAllLocations && (
-                  <Badge variant="secondary" className="gap-1">
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                     <MapPin className="h-3 w-3" />
                     {currentLocationName}
-                  </Badge>
+                  </span>
                 )}
 
                 {/* Menu Badge */}
                 {menuId && menuName && (
-                  <Badge variant="secondary" className="gap-1">
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                     <MenuIcon className="h-3 w-3" />
                     {menuName}
                     {isMenuLocationOwned && (
                       <span className="text-xs">(Your Menu)</span>
                     )}
-                  </Badge>
+                  </span>
                 )}
 
                 {/* Override indicator */}
@@ -1868,26 +1809,28 @@ export function NewEditItemFormSheet({
                     editItem.has_category_override ||
                     editItem.has_location_category_override ||
                     editItem.has_location_menu_override) && (
-                    <Badge
-                      variant="outline"
-                      className="gap-1 bg-amber-50 text-amber-600 border-amber-200"
-                    >
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
                       <Info className="h-3 w-3" />
                       Has overrides
-                    </Badge>
+                    </span>
                   )}
               </div>
             )}
           </div></DialogDescription>
         </DialogHeader>
 
-          <div className="flex flex-col lg:flex-row w-full min-w-0">
+          {/* Scrolling body — the only scroll container; see the note on DialogContent. */}
+          {/* Body. On desktop each column scrolls independently (matching
+              CreateItemWizard) so the preview does not ride along with the form:
+              the parent is overflow-hidden and each column owns its scroll.
+              Below `lg` the columns stack and the form pane carries the scroll. */}
+          <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
             {/* Form Section */}
-            <div className="flex-1 px-4 sm:px-6 py-5 space-y-4 min-w-0 overflow-x-hidden">
+            <div className="thin-scrollbar min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
               {/* Editing Context Banner - Shows which level user is editing */}
               {editItem && editingContext.level > 1 && (
-                <EditingContextBanner
-                  level={editingContext.level as PricingLevel}
+                <ScopeBanner
+                  level={editingContext.level as CascadeLevel}
                   locationName={
                     !isAllLocations ? "Current Location" : undefined
                   }
@@ -1911,28 +1854,47 @@ export function NewEditItemFormSheet({
               )}
 
               <div className="space-y-4">
-                  <div className="space-y-0">
-
-                    {/* SECTION 1: GENERAL (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.general}
-                      onOpenChange={() => toggleSection("general")}
+                  <Tabs
+                    defaultValue="general"
+                    className="w-full"
+                    onValueChange={keepSelectedSectionVisible}
+                  >
+                    {/* Pill tabs mirroring CreateItemWizard. Classes are literal,
+                        not {TOKEN} — Tailwind does not scan computed strings (C7). */}
+                    <div
+                      ref={sectionTabsScrollRef}
+                      className="no-scrollbar mb-4 w-full min-w-0 overflow-x-auto pb-1 sm:mb-6"
                     >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <Settings2 className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Basic Information</span>
-                            {!isSingleLocation && !editingContext.canEditBaseFields && editItem && (
-                              <Badge variant="outline" className="text-xs">
-                                View Only
-                              </Badge>
-                            )}
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.general && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-4 pt-4">
+                      <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                        {[
+                          { value: "general", label: "General" },
+                          { value: "pricing", label: "Pricing" },
+                          { value: "modifiers", label: "Modifiers" },
+                          { value: "categories", label: "Categories" },
+                          // Edit-only sections have no counterpart in the create
+                          // wizard; they stay, but only when editing.
+                          ...(editItem
+                            ? [{ value: "recipe", label: "Recipe" }]
+                            : []),
+                          { value: "tax", label: "Tax & Fees" },
+                          { value: "availability", label: "Availability" },
+                          ...(editItem && gatedLocationId
+                            ? [{ value: "locationBadges", label: "Badges" }]
+                            : []),
+                        ].map((t) => (
+                          <TabsTrigger
+                            key={t.value}
+                            value={t.value}
+                            data-item-section={t.value}
+                            className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                          >
+                            {t.label}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                    </div>
+
+                    <TabsContent value="general" className="space-y-4 mt-0">
 
                       <FormField
                         control={form.control}
@@ -1969,7 +1931,7 @@ export function NewEditItemFormSheet({
                             <FormLabel>Description</FormLabel>
                             <FormControl>
                               <textarea
-                                className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                                className="flex min-h-[100px] w-full resize-none rounded-2xl border-0 bg-muted/60 px-3 py-2 text-sm shadow-none ring-offset-background placeholder:text-muted-foreground focus-visible:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                                 placeholder="Describe your dish..."
                                 disabled={
                                   !editingContext.canEditBaseFields &&
@@ -2031,12 +1993,11 @@ export function NewEditItemFormSheet({
                                     !!editItem
                                   }
                                   className={cn(
-                                    "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                                    "border hover:scale-105 active:scale-95",
-                                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                                    "rounded-full border-0 px-3 py-1.5 text-sm font-medium shadow-none transition-colors",
+                                    "disabled:cursor-not-allowed disabled:opacity-50",
                                     watchedValues.allergens?.includes(allergen)
-                                      ? "bg-orange-500 text-white border-orange-500 shadow-md"
-                                      : "bg-background border-border hover:border-orange-500/50",
+                                      ? "bg-orange-500 text-white"
+                                      : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
                                   )}
                                 >
                                   {allergen}
@@ -2046,38 +2007,9 @@ export function NewEditItemFormSheet({
                           </FormItem>
                         )}
                       />
-                      </CollapsibleContent>
-                    </Collapsible>
+                    </TabsContent>
 
-                    {/* SECTION 2: PRICING & INVENTORY (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.pricing}
-                      onOpenChange={() => toggleSection("pricing")}
-                      className="border-t pt-4 mt-6"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4 text-green-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Pricing & Inventory</span>
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "text-xs",
-                                editingContext.level === 1 && "bg-gray-100",
-                                editingContext.level === 2 && "bg-blue-100 text-blue-700",
-                                editingContext.level === 3 && "bg-purple-100 text-purple-700",
-                                editingContext.level === 4 && "bg-amber-100 text-amber-700",
-                                editingContext.level === 5 && "bg-green-100 text-green-700",
-                              )}
-                            >
-                              {editingContext.priceLabel}
-                            </Badge>
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.pricing && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-4 pt-4">
+                    <TabsContent value="pricing" className="space-y-4 mt-0">
 
                       {/* Price Breakdown - Detailed vertical breakdown */}
                       {editItem && !isSingleLocation && <PriceBreakdown />}
@@ -2115,7 +2047,7 @@ export function NewEditItemFormSheet({
                       {/* Delivery Pricing */}
                         <div className="space-y-3">
                           {/* Delivery price input — always shown */}
-                          <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/30 space-y-2">
+                          <div className="space-y-2 rounded-2xl border-0 bg-amber-50 p-3 shadow-none dark:bg-amber-900/20">
                             <label className="text-sm font-medium text-amber-800">
                               {editingContext.priceLabel} (Delivery)
                             </label>
@@ -2126,7 +2058,7 @@ export function NewEditItemFormSheet({
                                 step="0.01"
                                 min="0"
                                 placeholder="0.00"
-                                className="pl-7 border-amber-300 focus:ring-amber-500"
+                                className="h-9 bg-background pl-7 text-[0.8125rem] tabular-nums focus:ring-2 focus:ring-amber-500/30"
                                 value={form.watch("delivery_price") ?? ""}
                                 onChange={(e) => {
                                   const val = e.target.value === "" ? null : parseFloat(e.target.value);
@@ -2182,7 +2114,9 @@ export function NewEditItemFormSheet({
                                   <SelectValue placeholder="Select tracking mode" />
                                 </SelectTrigger>
                               </FormControl>
-                              <SelectContent>
+                              {/* Opens upward: last field in its section, so a
+                                  downward menu is clipped by the scroll container. */}
+                              <SelectContent side="top" align="start">
                                 <SelectItem value="in_stock">
                                   In Stock
                                 </SelectItem>
@@ -2201,42 +2135,45 @@ export function NewEditItemFormSheet({
                           </FormItem>
                         )}
                       />
-                      </CollapsibleContent>
-                    </Collapsible>
+                    </TabsContent>
 
-                    {/* SECTION 3: MODIFIERS (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.modifiers}
-                      onOpenChange={() => toggleSection("modifiers")}
-                      className="border-t pt-4 mt-6"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <Layers className="h-4 w-4 text-purple-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Modifier Groups</span>
+                    <TabsContent value="modifiers" className="space-y-4 mt-0">
+
+                      {/* Modifier guidance changes with the permissions for this scope. */}
+                      <div className="rounded-2xl bg-muted/50 px-3 py-2.5 text-xs leading-5 text-muted-foreground">
+                        {canManageModifierLinks ? (
+                          <div className="space-y-1">
+                            <p className="flex items-start gap-1.5">
+                              <Info className="mt-1 h-3 w-3 shrink-0" />
+                              <span>
+                                Add or remove groups here. Edit option details on the{" "}
+                                <Link
+                                  href="/dashboard/menu/modifiers"
+                                  className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+                                >
+                                  Modifiers page
+                                </Link>.
+                              </span>
+                            </p>
+                            <p className="flex items-start gap-1.5">
+                              <ArrowUpDown className="mt-1 h-3 w-3 shrink-0" />
+                              <span>Use the arrows to reorder groups for this item.</span>
+                            </p>
                           </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.modifiers && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-4 pt-4">
-
-                      {/* Modifier Info */}
-                      <div className="space-y-1.5 px-1">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <Info className="h-3 w-3 shrink-0" />
-                          Add or remove groups here. Edit individual options in the{" "}
-                          <Link
-                            href="/dashboard/menu/modifiers"
-                            className="font-medium underline underline-offset-2 hover:text-primary"
-                          >
-                            Modifiers page
-                          </Link>.
-                        </p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <GripVertical className="h-3 w-3 shrink-0" />
-                          Drag to reorder — order is saved per-item and does not affect other items or the library.
-                        </p>
+                        ) : (
+                          <p className="flex items-start gap-1.5">
+                            <Info className="mt-1 h-3 w-3 shrink-0" />
+                            <span>
+                              Group assignments are managed on the{" "}
+                              <Link
+                                href="/dashboard/menu/modifiers"
+                                className="font-medium text-foreground underline underline-offset-2 hover:text-primary"
+                              >
+                                Modifiers page
+                              </Link>. Stock controls remain available for this location.
+                            </span>
+                          </p>
+                        )}
                       </div>
                       {(() => {
                         // Build selected groups with enriched data from editItem (has location-specific overrides)
@@ -2324,15 +2261,6 @@ export function NewEditItemFormSheet({
                                 </p>
                               </div>
                             ) : (
-                              <DndContext
-                                sensors={modifierDndSensors}
-                                collisionDetection={closestCenter}
-                                onDragEnd={handleModifierDragEnd}
-                              >
-                              <SortableContext
-                                items={selectedGroups.map((g: any) => g.id)}
-                                strategy={verticalListSortingStrategy}
-                              >
                               <div className="space-y-2">
                                 {selectedGroups.map(
                                   (group: any, index: number) => {
@@ -2347,23 +2275,38 @@ export function NewEditItemFormSheet({
                                       !isLocationOwnedGroup;
 
                                     return (
-                                      <SortableModifierGroupRow key={group.id} id={group.id}>
+                                      <div key={group.id}>
+                                      {/* White group card on the sheet's own white
+                                          body, so it needs a hairline ring to read as
+                                          a distinct surface. The options region below
+                                          is muted, which inverts the usual nesting —
+                                          that's deliberate: it makes the group name
+                                          the prominent element, not the option list. */}
                                       <div
-                                        className="rounded-lg border border-primary/30 bg-primary/5 overflow-hidden"
+                                        className="overflow-hidden rounded-2xl border-0 bg-card shadow-none ring-1 ring-border/60"
                                       >
-                                        <div className="p-3 flex items-center gap-3">
-                                          {/* Drag Handle */}
-                                          <div className="text-muted-foreground/50 cursor-grab active:cursor-grabbing">
-                                            <Grip className="h-4 w-4" />
-                                          </div>
-
-                                          {/* Icon */}
-                                          <div className="h-8 w-8 rounded-md bg-purple-100 flex items-center justify-center shrink-0">
-                                            <Layers className="h-4 w-4 text-purple-600" />
-                                          </div>
+                                        {/* `flex-wrap` + a `basis` floor keeps the group
+                                            name readable beside stock and reorder controls. */}
+                                        <div className="relative grid min-w-0 grid-cols-1 gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                          {canManageModifierLinks && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="sm"
+                                              className="absolute right-2 top-2 h-8 gap-1 px-2 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                              onClick={() =>
+                                                toggleModifier(group.id)
+                                              }
+                                              aria-label={`Remove ${group.name} from this item`}
+                                              title="Remove from this item (the modifier group stays in the library)"
+                                            >
+                                              <X className="h-3.5 w-3.5" />
+                                              Remove
+                                            </Button>
+                                          )}
 
                                           {/* Info */}
-                                          <div className="flex-1 min-w-0">
+                                          <div className="min-w-0 pr-20 sm:col-span-2">
                                             <div className="font-medium text-sm flex items-center gap-2 flex-wrap">
                                               {group.name}
                                               {group.is_required && (
@@ -2377,25 +2320,32 @@ export function NewEditItemFormSheet({
                                               {!isSingleLocation && (group.source === "location" ? (
                                                 <Badge
                                                   variant="outline"
-                                                  className="text-[10px] h-4 px-1.5 gap-0.5 bg-blue-50 text-blue-700 border-blue-200"
+                                                  className="h-4 gap-0.5 border-0 bg-blue-50 px-1.5 text-[10px] text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
                                                 >
                                                   This Location
                                                 </Badge>
                                               ) : !isAllLocations ? (
                                                 <Badge
                                                   variant="outline"
-                                                  className="text-[10px] h-4 px-1.5 gap-0.5 bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                  className="h-4 gap-0.5 border-0 bg-emerald-50 px-1.5 text-[10px] text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
                                                 >
                                                   Global
                                                 </Badge>
                                               ) : null)}
                                             </div>
-                                            <div className="text-xs text-muted-foreground">
-                                              {group.modifier_group_items
-                                                ?.length || 0}{" "}
-                                              options • Min:{" "}
-                                              {group.min_selections || 0} • Max:{" "}
-                                              {group.max_selections || "∞"}
+                                            <div className="flex flex-wrap items-baseline gap-x-1.5 text-xs text-muted-foreground">
+                                              <span className="whitespace-nowrap">
+                                                Min:{" "}
+                                                <span className="tabular-nums">
+                                                  {group.min_selections || 0}
+                                                </span>
+                                              </span>
+                                              <span className="whitespace-nowrap">
+                                                • Max:{" "}
+                                                <span className="tabular-nums">
+                                                  {group.max_selections || "∞"}
+                                                </span>
+                                              </span>
                                             </div>
                                           </div>
 
@@ -2406,24 +2356,26 @@ export function NewEditItemFormSheet({
                                             optionIds={(
                                               group.modifier_group_items ?? []
                                             ).map((o: any) => o.id)}
-                                            className="shrink-0"
+                                            className="w-full items-center justify-center sm:col-start-2 sm:row-start-2 sm:ml-auto sm:w-auto sm:items-end sm:justify-end"
                                           />
 
-                                          {/* Reorder / Remove Controls */}
+                                          {/* Reorder controls */}
                                           {canManageModifierLinks && (
-                                            <div className="flex items-center gap-1">
+                                            <div className="flex w-full items-center gap-1 sm:col-start-1 sm:row-start-2">
                                               <Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-7 w-7 text-muted-foreground"
+                                                className="h-8 w-8 text-muted-foreground"
                                                 onClick={() =>
                                                   moveSelectedModifier(
                                                     group.id,
                                                     "up",
                                                   )
                                                 }
-                                                disabled={index === 0}
+                                                disabled={
+                                                  isReorderingModifiers || index === 0
+                                                }
                                                 aria-label={`Move ${group.name} up`}
                                               >
                                                 <ChevronUp className="h-4 w-4" />
@@ -2432,7 +2384,7 @@ export function NewEditItemFormSheet({
                                                 type="button"
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-7 w-7 text-muted-foreground"
+                                                className="h-8 w-8 text-muted-foreground"
                                                 onClick={() =>
                                                   moveSelectedModifier(
                                                     group.id,
@@ -2440,24 +2392,13 @@ export function NewEditItemFormSheet({
                                                   )
                                                 }
                                                 disabled={
+                                                  isReorderingModifiers ||
                                                   index ===
                                                   selectedGroups.length - 1
                                                 }
                                                 aria-label={`Move ${group.name} down`}
                                               >
                                                 <ChevronDown className="h-4 w-4" />
-                                              </Button>
-                                              <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                onClick={() =>
-                                                  toggleModifier(group.id)
-                                                }
-                                                aria-label={`Remove ${group.name}`}
-                                              >
-                                                <X className="h-4 w-4" />
                                               </Button>
                                             </div>
                                           )}
@@ -2468,20 +2409,21 @@ export function NewEditItemFormSheet({
                                           group.modifier_group_items &&
                                           group.modifier_group_items.length >
                                             0 && (
-                                            <div className="border-t bg-background/50 px-3 py-2 space-y-1">
+                                            <div className="bg-muted/30 px-3 py-2">
                                               <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-1 flex items-center gap-1.5">
                                                 <span>Options Preview</span>
                                                 <Badge
                                                   variant="outline"
                                                   className="text-[9px] h-3.5 px-1"
                                                 >
-                                                  Read-only
+                                                  Details read-only
                                                 </Badge>
                                               </div>
-                                              {group.modifier_group_items.map(
-                                                (
-                                                  item: FlatItem["modifier_groups"][number]["items"][number],
-                                                ) => {
+                                              <div className="overflow-hidden rounded-xl bg-card ring-1 ring-border/50 divide-y divide-border/50">
+                                                {group.modifier_group_items.map(
+                                                  (
+                                                    item: FlatItem["modifier_groups"][number]["items"][number],
+                                                  ) => {
                                                   const itemOverride =
                                                     item.location_override;
                                                   const price =
@@ -2496,94 +2438,63 @@ export function NewEditItemFormSheet({
                                                   const canOverrideOnly =
                                                     isOverrideScope;
                                                   return (
-                                                    <div
-                                                      key={item.id}
-                                                      className="flex flex-col gap-2 rounded-lg border bg-white px-3 py-2"
-                                                    >
+                                                    <div key={item.id} className="flex flex-col gap-2 px-3 py-2.5">
                                                       <div className="flex items-center justify-between gap-2">
                                                         <div>
                                                           <div className="font-medium text-sm">
                                                             {item.name}
                                                           </div>
                                                           {item.description && (
-                                                            <div className="text-xs text-muted-foreground">
+                                                            <div className="hidden text-xs text-muted-foreground sm:block">
                                                               {item.description}
                                                             </div>
                                                           )}
                                                         </div>
                                                         {!isSingleLocation && (
-                                                          <Badge
-                                                            variant="outline"
-                                                            className="text-[10px]"
-                                                          >
-                                                            {canOverrideOnly
-                                                              ? "Location Override"
-                                                              : "Global"}
-                                                          </Badge>
+                                                          <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                                                            {canOverrideOnly ? "Location override" : "Global"}
+                                                          </span>
                                                         )}
                                                       </div>
 
-                                                      {/* Read-only display of modifier items */}
-                                                      <div className="grid grid-cols-2 gap-3 items-center opacity-75">
-                                                        <div>
-                                                          <label className="text-xs text-muted-foreground">
-                                                            Price
-                                                          </label>
-                                                          <div className="text-sm font-medium">
-                                                            $
-                                                            {(
-                                                              price ?? 0
-                                                            ).toFixed(2)}
-                                                          </div>
-                                                        </div>
-
-                                                        <div>
-                                                          <label className="text-xs text-muted-foreground">
-                                                            Status
-                                                          </label>
-                                                          <div className="flex items-center gap-1.5">
-                                                            <div
+                                                      {/* On desktop the values and stock action form the
+                                                          lower row. On mobile the values span the row and
+                                                          the action sits centered underneath. */}
+                                                      <div className="mt-0.5 flex flex-col gap-2.5 sm:mt-3 sm:flex-row sm:items-center sm:justify-between">
+                                                        <div className="flex w-full items-center justify-between text-sm opacity-75 sm:w-auto sm:justify-start sm:gap-4">
+                                                          <span className="font-medium tabular-nums">
+                                                            ${(price ?? 0).toFixed(2)}
+                                                          </span>
+                                                          <span className="flex items-center gap-1.5">
+                                                            <span
                                                               className={cn(
-                                                                "h-2 w-2 rounded-full",
+                                                                "h-2 w-2 shrink-0 rounded-full",
                                                                 isActive
-                                                                  ? "bg-green-500"
-                                                                  : "bg-gray-300",
+                                                                  ? "bg-emerald-500"
+                                                                  : "bg-muted-foreground/40",
                                                               )}
                                                             />
-                                                            <span className="text-sm">
-                                                              {isActive
-                                                                ? "Active"
-                                                                : "Inactive"}
-                                                            </span>
-                                                          </div>
+                                                            {isActive ? "Active" : "Inactive"}
+                                                          </span>
                                                         </div>
-                                                      </div>
-
-                                                      {/* Out of stock (86) — per-location, interactive
-                                                          (price/status above stay read-only). item.id is
-                                                          the modifier_group_items.id the snooze keys on. */}
-                                                      <div className="flex items-center justify-between gap-2 border-t pt-2">
-                                                        <span className="text-xs text-muted-foreground">
-                                                          Out of stock (86)
-                                                        </span>
                                                         <ModifierStockToggle
                                                           modifierGroupItemId={item.id}
+                                                          className="w-full items-center justify-center sm:w-auto sm:items-end sm:justify-end"
                                                         />
                                                       </div>
                                                     </div>
                                                   );
-                                                },
-                                              )}
+                                                  },
+                                                )}
+                                              </div>
                                             </div>
                                           )}
                                       </div>
-                                      </SortableModifierGroupRow>
+                                      </div>
                                     );
                                   },
                                 )}
                               </div>
-                              </SortableContext>
-                              </DndContext>
                             )}
 
                             {/* Add Modifier Section (All Levels) */}
@@ -2591,7 +2502,7 @@ export function NewEditItemFormSheet({
                               availableGroups.length > 0 && (
                                 <div className="pt-2">
                                   {/* Add Button / Collapsible Trigger */}
-                                  <div className="pt-4 border-t">
+                                  <div className="pt-4">
                                     <Collapsible
                                       open={showAddModifier}
                                       onOpenChange={setShowAddModifier}
@@ -2600,10 +2511,10 @@ export function NewEditItemFormSheet({
                                         <button
                                           type="button"
                                           className={cn(
-                                            "w-full p-3 rounded-lg border-2 border-dashed transition-all flex items-center justify-center gap-2",
+                                            "flex w-full items-center justify-center gap-2 rounded-2xl border-0 p-3 shadow-none transition-colors",
                                             showAddModifier
-                                              ? "border-primary bg-primary/5 text-primary"
-                                              : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/5",
+                                              ? "bg-primary/10 text-primary"
+                                              : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
                                           )}
                                         >
                                           <Plus
@@ -2653,7 +2564,7 @@ export function NewEditItemFormSheet({
                             )}
 
                             {!canManageModifierLinks && (
-                              <div className="text-xs text-muted-foreground bg-muted/40 border rounded-md p-2">
+                              <div className="rounded-2xl border-0 bg-muted/60 p-3 text-xs text-muted-foreground">
                                 Modifier links are managed from the Modifiers page.
                                 Use &quot;Add to Item&quot; or &quot;Add to Category&quot; buttons there
                                 {isSingleLocation
@@ -2664,35 +2575,9 @@ export function NewEditItemFormSheet({
                           </>
                         );
                       })()}
-                      </CollapsibleContent>
-                    </Collapsible>
+                    </TabsContent>
 
-                    {/* SECTION 4: CATEGORIES (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.categories}
-                      onOpenChange={() => toggleSection("categories")}
-                      className="border-t pt-4 mt-6"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <Tag className="h-4 w-4 text-blue-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Categories</span>
-                            {selectedCategories.length > 0 && (
-                              <Badge variant="secondary" className="text-xs">
-                                {selectedCategories.length}
-                              </Badge>
-                            )}
-                            {!editingContext.canEditBaseFields && editItem && (
-                              <Badge variant="outline" className="text-xs ml-auto">
-                                View Only
-                              </Badge>
-                            )}
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.categories && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-3 pt-4">
+                    <TabsContent value="categories" className="space-y-4 mt-0">
                       {/* Suggestion for new items */}
                       {!editItem &&
                         selectedCategories.length === 0 &&
@@ -2704,7 +2589,7 @@ export function NewEditItemFormSheet({
                         )}
 
                       {categories.length === 0 ? (
-                        <div className="text-center py-6 text-muted-foreground text-sm border border-dashed rounded-lg">
+                        <div className="rounded-2xl border-0 bg-muted/60 py-6 text-center text-sm text-muted-foreground shadow-none">
                           <Tag className="h-8 w-8 mx-auto mb-2 opacity-50" />
                           <p>No categories available</p>
                           <p className="text-xs mt-1">
@@ -2723,7 +2608,7 @@ export function NewEditItemFormSheet({
                                 placeholder="Search categories..."
                                 value={categorySearch}
                                 onChange={(e) => setCategorySearch(e.target.value)}
-                                className="w-full h-9 pl-9 pr-8 rounded-md border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                                className="h-9 w-full rounded-full border-0 bg-muted/60 pl-9 pr-8 text-[0.8125rem] shadow-none placeholder:text-muted-foreground focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/20"
                               />
                               {categorySearch && (
                                 <button
@@ -2738,7 +2623,7 @@ export function NewEditItemFormSheet({
                             <button
                               type="button"
                               onClick={() => setCategorySortDesc((v) => !v)}
-                              className="inline-flex items-center gap-1 h-9 px-3 rounded-md border bg-background text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                              className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full border-0 bg-muted/60 px-4 text-xs font-medium text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground"
                               title={`Sort ${categorySortDesc ? "Z → A" : "A → Z"}`}
                             >
                               {categorySortDesc ? "Z – A" : "A – Z"}
@@ -2761,12 +2646,11 @@ export function NewEditItemFormSheet({
                                     !!editItem
                                   }
                                   className={cn(
-                                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all",
-                                    "border hover:scale-105 active:scale-95",
-                                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                                    "inline-flex items-center gap-1.5 rounded-full border-0 px-3 py-1.5 text-sm font-medium shadow-none transition-colors",
+                                    "disabled:cursor-not-allowed disabled:opacity-50",
                                     selectedCategories.includes(category.id)
-                                      ? "bg-primary text-primary-foreground border-primary shadow-md"
-                                      : "bg-background border-border hover:border-primary/50",
+                                      ? "bg-primary text-primary-foreground"
+                                      : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
                                   )}
                                 >
                                   {category.name}
@@ -2786,7 +2670,7 @@ export function NewEditItemFormSheet({
 
                           {/* Skip option for new items */}
                           {!editItem && (
-                            <div className="pt-2 border-t">
+                            <div className="pt-2">
                               <button
                                 type="button"
                                 className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
@@ -2801,31 +2685,15 @@ export function NewEditItemFormSheet({
                           )}
                         </div>
                       )}
-                      </CollapsibleContent>
-                    </Collapsible>
+                    </TabsContent>
 
-                    {/* SECTION 5: TAX & FEES (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.tax}
-                      onOpenChange={() => toggleSection("tax")}
-                      className="border-t pt-4 mt-6"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4 text-emerald-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Tax &amp; Fees</span>
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.tax && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-4 pt-4">
+                    <TabsContent value="tax" className="space-y-4 mt-0">
                       {/* Tax Exempt Switch */}
                       <FormField
                         control={form.control}
                         name="is_tax_exempt"
                         render={({ field }: { field: any }) => (
-                          <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                          <FormItem className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                             <div className="space-y-0.5">
                               <FormLabel className="text-base">
                                 Tax Exempt
@@ -2870,7 +2738,9 @@ export function NewEditItemFormSheet({
                                   <SelectValue placeholder="Select tax category" />
                                 </SelectTrigger>
                               </FormControl>
-                              <SelectContent>
+                              {/* Opens upward: last field in its section, so a
+                                  downward menu is clipped by the scroll container. */}
+                              <SelectContent side="top" align="start">
                                 {TAX_CATEGORIES.map((category) => (
                                   <SelectItem key={category} value={category}>
                                     {TAX_CATEGORY_LABELS[category]}
@@ -2892,7 +2762,7 @@ export function NewEditItemFormSheet({
 
                       {/* Tax Rate Preview */}
                       {!isAllLocations && !watchedValues.is_tax_exempt && (
-                        <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                        <div className="space-y-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                           <div className="flex items-center gap-2">
                             <Info className="h-4 w-4 text-muted-foreground" />
                             <h4 className="text-sm font-medium">
@@ -2936,7 +2806,7 @@ export function NewEditItemFormSheet({
                                     ${taxAmount.toFixed(2)}
                                   </span>
                                 </div>
-                                <div className="pt-2 border-t flex justify-between">
+                                <div className="flex justify-between pt-2">
                                   <span className="font-semibold">
                                     Total with Tax:
                                   </span>
@@ -2982,31 +2852,15 @@ export function NewEditItemFormSheet({
                           </AlertDescription>
                         </Alert>
                       )}
-                      </CollapsibleContent>
-                    </Collapsible>
+                    </TabsContent>
 
-                    {/* SECTION 6: AVAILABILITY (collapsible) */}
-                    <Collapsible
-                      open={expandedSections.availability}
-                      onOpenChange={() => toggleSection("availability")}
-                      className="border-t pt-4 mt-2"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle2 className="h-4 w-4 text-blue-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Availability &amp; Channels</span>
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.availability && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-4 pt-4">
+                    <TabsContent value="availability" className="space-y-4 mt-0">
                       {/* General Availability Toggle */}
                       <FormField
                         control={form.control}
                         name="availability"
                         render={({ field }: { field: any }) => (
-                          <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                          <FormItem className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                             <div className="space-y-0.5">
                               <FormLabel className="text-base">
                                 {editingContext.level === 1
@@ -3067,7 +2921,7 @@ export function NewEditItemFormSheet({
                                   control={form.control}
                                   name="available_channels"
                                   render={({ field }: { field: any }) => (
-                                    <FormItem className="flex items-start space-x-3 space-y-0 rounded-lg border p-3">
+                                    <FormItem className="flex items-start space-x-3 space-y-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
                                       <FormControl>
                                         <Checkbox
                                           checked={field.value?.includes(
@@ -3185,8 +3039,8 @@ export function NewEditItemFormSheet({
                         />
                       ) : (
                         editItem && (
-                          <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm dark:bg-blue-950/30 dark:border-blue-900">
-                            <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0 dark:text-blue-400" />
+                          <div className="flex items-start gap-2 rounded-2xl border-0 bg-blue-50 p-3 text-sm shadow-none dark:bg-blue-900/20">
+                            <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
                             <p className="text-blue-800 dark:text-blue-300">
                               Prep stations are location-specific. Select a
                               location to assign a prep station to this item.
@@ -3195,30 +3049,11 @@ export function NewEditItemFormSheet({
                         )
                       )}
 
-                      </CollapsibleContent>
-                    </Collapsible>
+                    </TabsContent>
 
-                    {/* SECTION 7: LOCATION BADGES (collapsible, edit-only, location-only).
-                        Shown whenever a concrete location resolves (specific location
-                        OR single-location account locked to 'all'). */}
-                    {editItem && gatedLocationId && (
-                    <Collapsible
-                      open={expandedSections.locationBadges}
-                      onOpenChange={() => toggleSection("locationBadges")}
-                      className="border-t pt-4 mt-2"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <Sparkles className="h-4 w-4 text-amber-500" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Location Badges</span>
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.locationBadges && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-3 pt-4">
+                    <TabsContent value="locationBadges" className="space-y-4 mt-0">
                         <div className="space-y-3">
-                          <div className="flex items-center justify-between rounded-lg border p-3">
+                          <div className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
                             <div className="space-y-0.5">
                               <div className="flex items-center gap-2 text-sm font-medium">🔥 Popular</div>
                               <p className="text-xs text-muted-foreground">Highlighted on the storefront</p>
@@ -3229,7 +3064,7 @@ export function NewEditItemFormSheet({
                               disabled={popularMutation.isPending}
                             />
                           </div>
-                          <div className="flex items-center justify-between rounded-lg border p-3">
+                          <div className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
                             <div className="space-y-0.5">
                               <div className="flex items-center gap-2 text-sm font-medium">✨ New</div>
                               <p className="text-xs text-muted-foreground">Shown as new at this branch</p>
@@ -3241,27 +3076,9 @@ export function NewEditItemFormSheet({
                             />
                           </div>
                         </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                    )}
+                    </TabsContent>
 
-                    {/* SECTION 8: RECIPE (collapsible, edit-only) */}
-                    {editItem && (
-                    <Collapsible
-                      open={expandedSections.recipe}
-                      onOpenChange={() => toggleSection("recipe")}
-                      className="border-t pt-4 mt-2"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button type="button" className="flex items-center justify-between w-full group">
-                          <div className="flex items-center gap-2">
-                            <Tag className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Recipe</span>
-                          </div>
-                          <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedSections.recipe && "rotate-180")} />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-4 pt-4">
+                    <TabsContent value="recipe" className="space-y-4 mt-0">
                       {editItem ? (
                         <RecipeManager
                           menuItemId={editItem.id}
@@ -3293,15 +3110,13 @@ export function NewEditItemFormSheet({
                           </p>
                         </div>
                       )}
-                      </CollapsibleContent>
-                    </Collapsible>
-                    )}
-                  </div>
+                    </TabsContent>
+                  </Tabs>
               </div>
             </div>
 
             {/* Preview Section */}
-            <div className="hidden min-h-0 w-[360px] shrink-0 overflow-y-auto border-l border-border/70 bg-muted/10 px-6 py-5 lg:block">
+            <div className="thin-scrollbar hidden min-h-0 w-[360px] shrink-0 overflow-y-auto bg-muted/30 px-6 py-5 lg:block">
               {/* <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
                                 <Sparkles className="h-4 w-4" />
                                 Live Preview
@@ -3320,7 +3135,7 @@ export function NewEditItemFormSheet({
                     .filter(Boolean)}
                   allergens={watchedValues.allergens ?? []}
                   availability={watchedValues.availability}
-                  className="shadow-xl"
+                  className="shadow-sm"
                 />
 
                 {/* Summary info */}
@@ -3346,12 +3161,20 @@ export function NewEditItemFormSheet({
               </div>
             </div>
           </div>
-        <DialogFooter className="sticky bottom-0 z-10 border-t border-border/70 bg-background/95 px-4 sm:px-6 py-4 sm:justify-end gap-2">
+        <DialogFooter className="min-w-0 shrink-0 grid grid-cols-2 gap-2 border-t border-border/60 bg-card px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex sm:justify-end sm:px-6 sm:py-4">
+          <div className="col-span-2 flex min-w-0 justify-center sm:hidden">
+            <AffectsTag
+              ctx={scopeCtx}
+              variant="inline"
+              prefix="Changes apply to "
+              hideIcon
+            />
+          </div>
           <Button
             type="button"
             variant="outline"
             onClick={handleClose}
-            className="w-full sm:w-auto"
+            className="h-11 w-full rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:h-9 sm:w-auto"
           >
             Cancel
           </Button>
@@ -3359,7 +3182,7 @@ export function NewEditItemFormSheet({
             type="submit"
             form="item-form"
             disabled={isSubmitting}
-            className="w-full sm:w-auto sm:min-w-[150px]"
+            className="h-11 w-full rounded-full px-4 text-[0.8125rem] font-medium sm:h-9 sm:w-auto sm:min-w-[150px]"
           >
             {isSubmitting ? (
               <>
@@ -3386,8 +3209,10 @@ export function NewEditItemFormSheet({
               </>
             ) : (
               <>
-                {editItem ? "Save" : "Create Item"}
-                <AffectsTag ctx={scopeCtx} variant="save-button" />
+                {editItem ? "Save changes" : "Create item"}
+                <span className="hidden sm:contents">
+                  <AffectsTag ctx={scopeCtx} variant="save-button" />
+                </span>
               </>
             )}
           </Button>
@@ -3433,16 +3258,18 @@ function PriceLevelRow({
   return (
     <div
       className={cn(
-        "flex items-center justify-between py-1.5 px-2 rounded text-sm",
-        isCurrentLevel && "bg-blue-50 border border-blue-200",
+        "flex items-center justify-between rounded-full px-2.5 py-1.5 text-sm",
+        isCurrentLevel && "bg-blue-50 dark:bg-blue-900/20",
         !isActive && "opacity-50",
       )}
     >
       <div className="flex items-center gap-2">
         <span
           className={cn(
-            "w-5 h-5 rounded-full flex items-center justify-center text-xs",
-            isCurrentLevel ? "bg-blue-500 text-white" : "bg-muted",
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs tabular-nums",
+            isCurrentLevel
+              ? "bg-blue-500 text-white"
+              : "bg-muted text-muted-foreground",
           )}
         >
           {level}

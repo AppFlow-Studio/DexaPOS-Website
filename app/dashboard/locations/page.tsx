@@ -10,7 +10,7 @@ import {
     MapPin, Plus, Building2, Edit, Search,
     Phone, Mail, Clock, Globe, Layers, CheckCircle,
     Settings, LayoutGrid, List, XCircle,
-    Archive, RotateCcw, Loader2,
+    Archive, Loader2,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useLocations } from '../hooks/useLocations'
@@ -47,7 +47,12 @@ export default function LocationsPage() {
 
     const userRole = userInfo?.members?.[0]?.role as string | undefined
     const isOwner = userRole === 'merchant.owner'
-    const canCreateLocation = userRole === 'merchant.admin' || isOwner
+    const canCreateLocation = [
+        'merchant.owner',
+        'merchant.admin',
+        'org:admin',
+        'admin',
+    ].includes(userRole ?? '')
 
     const { selectedLocationId, setSelectedLocation } = useLocationStore()
     const isSingleLocation = useIsSingleLocation()
@@ -66,6 +71,7 @@ export default function LocationsPage() {
 
     const activeLocations = locationsList.filter(l => l.is_active)
     const archivedLocations = locationsList.filter(l => !l.is_active)
+    const hasOnlyInactiveLocations = activeLocations.length === 0 && archivedLocations.length > 0
 
     const statusFiltered = locationsList.filter(l => {
         if (statusFilter === 'active') return l.is_active
@@ -73,12 +79,18 @@ export default function LocationsPage() {
         return true
     })
 
-    const filteredLocations = statusFiltered.filter(location =>
-        location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        location.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        location.state?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        location.code?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const filteredLocations = statusFiltered
+        .filter(location =>
+            location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            location.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            location.state?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            location.code?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+        .sort((a, b) =>
+            statusFilter === 'all'
+                ? Number(b.is_active) - Number(a.is_active)
+                : 0
+        )
 
     const acceptingOrders = locationsList.filter(l => l.is_accepting_orders).length
 
@@ -110,16 +122,16 @@ export default function LocationsPage() {
         try {
             const result = await RestoreLocation(location.id)
             if (result.error) {
-                toast.error('Restore Failed', { description: result.error })
+                toast.error('Activation Failed', { description: result.error })
                 return
             }
-            toast.success('Location Restored', {
-                description: `"${location.name}" is active again.`
+            toast.success('Location Activated', {
+                description: `"${location.name}" is now active.`
             })
             queryClient.invalidateQueries({ queryKey: ['locations'] })
             refetch()
         } catch {
-            toast.error('Restore Failed', { description: 'Unable to restore the location. Please try again.' })
+            toast.error('Activation Failed', { description: 'Unable to activate the location. Please try again.' })
         } finally {
             setRestoringId(null)
         }
@@ -165,57 +177,84 @@ export default function LocationsPage() {
     const isSelected = (id: string) => selectedLocationId === id
 
     // ─── Shared action buttons ────────────────────────────────────────────────
-    const ActionButtons = ({ location, compact = false }: { location: Location; compact?: boolean }) => {
+    const ActionButtons = ({
+        location,
+        compact = false,
+        primaryAlwaysVisible = false,
+    }: {
+        location: Location
+        compact?: boolean
+        primaryAlwaysVisible?: boolean
+    }) => {
         const isRestoring = restoringId === location.id
+        const compactVisibility = compact
+            ? 'opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100'
+            : ''
 
         if (!location.is_active) {
+            if (!canCreateLocation) return null
+
             return (
-                <div className={cn("flex items-center gap-1", compact ? "opacity-0 group-hover:opacity-100 transition-opacity" : "")}>
+                <div className="flex items-center gap-1">
                     <Button
-                        variant="ghost"
                         size="sm"
-                        className="h-8 px-2 text-muted-foreground hover:text-foreground gap-1.5"
+                        className="h-8 w-8 gap-0 rounded-full p-0 sm:w-auto sm:gap-1.5 sm:px-3"
+                        aria-label={`Activate ${location.name}`}
                         onClick={(e) => { e.stopPropagation(); handleRestore(location) }}
                         disabled={isRestoring}
                     >
                         {isRestoring
                             ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <RotateCcw className="h-3.5 w-3.5" />
+                            : <CheckCircle className="h-3.5 w-3.5" />
                         }
-                        <span className="text-xs">Restore</span>
+                        <span className="hidden text-xs sm:inline">Activate</span>
                     </Button>
                 </div>
             )
         }
 
         return (
-            <div className={cn("flex items-center gap-1", compact ? "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" : "")}>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    onClick={(e) => { e.stopPropagation(); handleEditLocation(location) }}
+            <div className="flex shrink-0 items-center gap-1">
+                <div
+                    className={cn(
+                        'flex items-center gap-1',
+                        !primaryAlwaysVisible && compactVisibility,
+                    )}
                 >
-                    <Edit className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/locations/${location.id}/settings`) }}
-                >
-                    <Settings className="h-4 w-4" />
-                </Button>
-                {isOwner && (
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-amber-600"
-                        title="Archive location"
-                        onClick={(e) => { e.stopPropagation(); setArchivingLocation(location) }}
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        aria-label={`Edit ${location.name}`}
+                        title="Edit location"
+                        onClick={(e) => { e.stopPropagation(); handleEditLocation(location) }}
                     >
-                        <Archive className="h-4 w-4" />
+                        <Edit className="h-4 w-4" />
                     </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        aria-label={`Open settings for ${location.name}`}
+                        title="Location settings"
+                        onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/locations/${location.id}/settings`) }}
+                    >
+                        <Settings className="h-4 w-4" />
+                    </Button>
+                </div>
+                {isOwner && (
+                    <div className={compactVisibility}>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-amber-600"
+                            aria-label={`Archive ${location.name}`}
+                            title="Archive location"
+                            onClick={(e) => { e.stopPropagation(); setArchivingLocation(location) }}
+                        >
+                            <Archive className="h-4 w-4" />
+                        </Button>
+                    </div>
                 )}
             </div>
         )
@@ -223,81 +262,189 @@ export default function LocationsPage() {
 
     // ─── Single-location detail view ──────────────────────────────────────────
     // A one-active-location account gets a focused view of that store (matching
-    // the singular "Location" nav) instead of the list-with-add. No Add Location,
-    // no list/search/multi-stats. Multi-location accounts fall through unchanged.
-    if (!isLoading && isSingleLocation && activeLocations.length === 1) {
-        const store = activeLocations[0]
+    // the singular "Location" nav). Keep the same view when the account has one
+    // inactive store so activation never becomes hidden behind an empty list.
+    const focusedStore = isSingleLocation && activeLocations.length === 1
+        ? activeLocations[0]
+        : locationsList.length === 1
+            ? locationsList[0]
+            : null
+
+    if (!isLoading && focusedStore) {
+        const store = focusedStore
         return (
             <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0">
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">Location</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
+                    <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em]">Location</h1>
+                    <p className="mt-1 text-sm text-muted-foreground">
                         Manage your store&apos;s details and settings
                     </p>
                 </div>
 
-                <div className="rounded-xl border bg-card p-5 sm:p-6 max-w-2xl">
-                    <div className="flex items-start justify-between gap-3 mb-5">
+                {/* Matches the dashboard Overview container: one rounded-2xl
+                    shell holding identity and details, without internal
+                    hairlines. */}
+                <div className="overflow-hidden rounded-2xl border bg-card max-w-2xl">
+                    {/* Identity — name and badges are stacked rows on narrow
+                        screens and share a line from sm up. Side by side at
+                        320px, the badges left the name almost no width. */}
+                    <div className="px-6 py-8 sm:flex sm:items-start sm:justify-between sm:gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                            <div className="h-11 w-11 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                                <MapPin className="h-5 w-5 text-primary" />
+                            <div className={cn(
+                                "hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg sm:flex",
+                                store.is_active ? "bg-primary/10" : "bg-muted"
+                            )}>
+                                <MapPin className={cn(
+                                    "h-5 w-5",
+                                    store.is_active ? "text-primary" : "text-muted-foreground"
+                                )} />
                             </div>
                             <div className="min-w-0">
-                                <p className="font-semibold text-lg leading-tight truncate">{store.name}</p>
+                                <p className="text-[1.25rem] font-medium leading-tight tracking-[-0.01em] truncate">
+                                    {store.name}
+                                </p>
                                 {store.code && (
-                                    <p className="text-xs text-muted-foreground font-mono mt-0.5">{store.code}</p>
+                                    <p className="text-[0.8125rem] text-muted-foreground font-mono mt-1 truncate">{store.code}</p>
                                 )}
                             </div>
                         </div>
-                        <div className="flex flex-wrap gap-1.5 justify-end shrink-0">
-                            <Badge variant="default" className="text-xs px-2 py-0">Active</Badge>
-                            {store.is_accepting_orders && (
-                                <Badge className="text-xs px-2 py-0 bg-emerald-600 hover:bg-emerald-600">Taking Orders</Badge>
+                        <div className="flex flex-wrap gap-1.5 mt-3 sm:mt-0 sm:justify-end shrink-0">
+                            <Badge
+                                variant={store.is_active ? "secondary" : "outline"}
+                                className="rounded-full text-xs font-medium px-2.5 py-0.5"
+                            >
+                                {store.is_active ? 'Active' : 'Inactive'}
+                            </Badge>
+                            {store.is_active && store.is_accepting_orders && (
+                                <Badge className="rounded-full text-xs font-medium px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-600">
+                                    Taking Orders
+                                </Badge>
                             )}
                         </div>
                     </div>
 
-                    <div className="space-y-3 text-sm">
-                        <div className="flex items-start gap-2">
-                            <Building2 className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                            <div className="text-muted-foreground leading-snug min-w-0">
-                                <p>{store.address_line1}</p>
-                                <p>{store.city}, {store.state} {store.postal_code}</p>
+                    {/* Details — label/value rows */}
+                    <div className="px-6 pb-8">
+                        <div className="space-y-0">
+                            <div className="flex items-start justify-between gap-4 py-2.5">
+                                <span className="flex items-center gap-2 text-[0.9375rem] text-muted-foreground">
+                                    <Building2 className="h-4 w-4 shrink-0" />
+                                    Address
+                                </span>
+                                <div className="text-sm text-right leading-snug min-w-0">
+                                    <p>{store.address_line1}</p>
+                                    <p>{store.city}, {store.state} {store.postal_code}</p>
+                                </div>
                             </div>
+                            {store.phone && (
+                                <div className="flex items-center justify-between gap-4 py-2.5">
+                                    <span className="flex items-center gap-2 text-[0.9375rem] text-muted-foreground">
+                                        <Phone className="h-4 w-4 shrink-0" />
+                                        Phone
+                                    </span>
+                                    <span className="text-sm tabular-nums">{formatPhoneForDisplay(store.phone)}</span>
+                                </div>
+                            )}
+                            {store.email && (
+                                <div className="flex items-center justify-between gap-4 py-2.5">
+                                    <span className="flex items-center gap-2 text-[0.9375rem] text-muted-foreground shrink-0">
+                                        <Mail className="h-4 w-4 shrink-0" />
+                                        Email
+                                    </span>
+                                    <span className="text-sm text-right min-w-0 truncate">{store.email}</span>
+                                </div>
+                            )}
+                            {store.timezone && (
+                                <div className="flex items-center justify-between gap-4 py-2.5">
+                                    <span className="flex items-center gap-2 text-[0.9375rem] text-muted-foreground">
+                                        <Clock className="h-4 w-4 shrink-0" />
+                                        Timezone
+                                    </span>
+                                    <span className="text-sm">{getTimezoneLabel(store.timezone)}</span>
+                                </div>
+                            )}
                         </div>
-                        {store.phone && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                                <Phone className="h-4 w-4 shrink-0" />{formatPhoneForDisplay(store.phone)}
-                            </div>
-                        )}
-                        {store.email && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                                <Mail className="h-4 w-4 shrink-0" />{store.email}
-                            </div>
-                        )}
-                        {store.timezone && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                                <Clock className="h-4 w-4 shrink-0" />{getTimezoneLabel(store.timezone)}
-                            </div>
-                        )}
-                    </div>
 
-                    <div className="flex flex-wrap gap-2 mt-6">
-                        <Button size="sm" className="gap-2" onClick={() => handleEditLocation(store)}>
-                            <Edit className="h-4 w-4" />
-                            Edit details
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-2"
-                            onClick={() => router.push(`/dashboard/locations/${store.id}/settings`)}
-                        >
-                            <Settings className="h-4 w-4" />
-                            Tax &amp; banking
-                        </Button>
+                        {/* Pill actions, matching the dashboard's "View report" style */}
+                        <div className="flex flex-wrap gap-2 mt-6">
+                            {!store.is_active && canCreateLocation && (
+                                <Button
+                                    size="sm"
+                                    className="h-9 w-9 gap-0 rounded-full p-0 sm:w-auto sm:gap-2 sm:px-4"
+                                    aria-label={`Activate ${store.name}`}
+                                    onClick={() => handleRestore(store)}
+                                    disabled={restoringId === store.id}
+                                >
+                                    {restoringId === store.id
+                                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                                        : <CheckCircle className="h-4 w-4" />
+                                    }
+                                    <span className="hidden sm:inline">Activate location</span>
+                                </Button>
+                            )}
+                            <Button
+                                size="sm"
+                                variant={store.is_active ? "default" : "outline"}
+                                className="gap-2 rounded-full px-4"
+                                onClick={() => handleEditLocation(store)}
+                            >
+                                <Edit className="h-4 w-4" />
+                                Edit details
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-2 rounded-full px-4"
+                                onClick={() => router.push(`/dashboard/locations/${store.id}/settings`)}
+                            >
+                                <Settings className="h-4 w-4" />
+                                Tax &amp; banking
+                            </Button>
+                        </div>
                     </div>
                 </div>
+
+                {store.is_active && canCreateLocation && archivedLocations.length > 0 && (
+                    <div className="max-w-2xl rounded-2xl border bg-card p-6">
+                        <div className="mb-4">
+                            <h2 className="font-medium">Inactive locations</h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Activate a location to make it available again.
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            {archivedLocations.map(location => (
+                                <div
+                                    key={location.id}
+                                    className="flex items-center gap-3 rounded-xl bg-muted/40 px-4 py-3"
+                                >
+                                    <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted sm:flex">
+                                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-medium">{location.name}</p>
+                                        <p className="truncate text-xs text-muted-foreground">
+                                            {location.city}, {location.state}
+                                        </p>
+                                    </div>
+                                    <Button
+                                        size="sm"
+                                        className="h-8 w-8 shrink-0 gap-0 rounded-full p-0 sm:w-auto sm:gap-1.5 sm:px-3"
+                                        aria-label={`Activate ${location.name}`}
+                                        onClick={() => handleRestore(location)}
+                                        disabled={restoringId === location.id}
+                                    >
+                                        {restoringId === location.id
+                                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            : <CheckCircle className="h-3.5 w-3.5" />
+                                        }
+                                        <span className="hidden sm:inline">Activate</span>
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <LocationDetailSheet
                     location={editingLocation}
@@ -315,13 +462,13 @@ export default function LocationsPage() {
             {/* ── Header ─────────────────────────────────────────────────────── */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">Locations</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
+                    <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em]">Locations</h1>
+                    <p className="mt-1 text-sm text-muted-foreground">
                         Manage your business locations and storefronts
                     </p>
                 </div>
                 {canCreateLocation && (
-                    <Button onClick={() => router.push('/dashboard/locations/new')} size="sm" className="gap-2 self-start sm:self-auto shrink-0">
+                    <Button onClick={() => router.push('/dashboard/locations/new')} size="sm" className="gap-2 rounded-full px-4 self-start sm:self-auto shrink-0">
                         <Plus className="h-4 w-4" />
                         Add Location
                     </Button>
@@ -329,27 +476,29 @@ export default function LocationsPage() {
             </div>
 
             {/* ── Stats ──────────────────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            {/* One container holding all three stat columns, matching the
+                dashboard Overview shell rather than three separate boxes. */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 overflow-hidden rounded-2xl border bg-card">
                 {[
                     { label: 'Active', value: activeLocations.length, icon: CheckCircle, color: 'text-emerald-500' },
                     { label: 'Archived', value: archivedLocations.length, icon: Archive, color: 'text-muted-foreground' },
                     { label: 'Taking Orders', value: acceptingOrders, icon: MapPin, color: 'text-primary' },
                 ].map(stat => (
-                    <div key={stat.label} className="rounded-xl border bg-card px-4 py-3 flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                            <stat.icon className={cn("h-4 w-4", stat.color)} />
+                    <div key={stat.label} className="px-6 py-5">
+                        <div className="flex items-center gap-2 text-[0.9375rem] text-muted-foreground">
+                            <stat.icon className={cn("h-4 w-4 shrink-0", stat.color)} />
+                            {stat.label}
                         </div>
-                        <div>
-                            <p className="text-2xl font-bold leading-none">{isLoading ? '—' : stat.value}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
-                        </div>
+                        <p className="mt-1 text-[2rem] font-medium leading-tight tracking-[-0.02em] tabular-nums">
+                            {isLoading ? '—' : stat.value}
+                        </p>
                     </div>
                 ))}
             </div>
 
             {/* ── Active location banner ──────────────────────────────────────── */}
             {selectedLocationId !== 'all' && (
-                <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="flex items-center justify-between rounded-xl bg-primary/5 px-4 py-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
                     <div className="flex items-center gap-2 text-sm min-w-0">
                         <CheckCircle className="h-4 w-4 text-primary shrink-0" />
                         <span className="text-muted-foreground shrink-0">Viewing</span>
@@ -373,44 +522,45 @@ export default function LocationsPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full min-w-0">
                 {/* Status filter tabs */}
                 <div className="overflow-x-auto w-full sm:w-auto shrink-0">
-                <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5 w-fit">
+                <div className="flex items-center gap-0.5 rounded-full bg-muted/70 p-1 w-fit">
                     {([
                         { key: 'active', label: `Active (${activeLocations.length})` },
                         { key: 'archived', label: `Archived (${archivedLocations.length})` },
                         { key: 'all', label: 'All' },
                     ] as { key: StatusFilter; label: string }[]).map(tab => (
-                        <Button
+                        <button
                             key={tab.key}
-                            variant="ghost"
-                            size="sm"
+                            type="button"
                             className={cn(
-                                "h-8 px-3 rounded-md text-xs font-medium",
-                                statusFilter === tab.key && "bg-background shadow-sm text-foreground"
+                                "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium transition-colors",
+                                statusFilter === tab.key
+                                    ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                                    : "text-muted-foreground hover:text-foreground"
                             )}
                             onClick={() => setStatusFilter(tab.key)}
                         >
                             {tab.label}
-                        </Button>
+                        </button>
                     ))}
                 </div>
                 </div>
 
                 <div className="relative flex-1 w-full sm:w-auto">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                     <Input
                         placeholder="Search locations..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9 w-full"
+                        className="h-9 w-full pl-9 text-[0.8125rem]"
                     />
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                    <div className="flex items-center rounded-lg border bg-muted/40 p-0.5 gap-0.5">
+                    <div className="flex items-center gap-0.5 rounded-full bg-muted/70 p-1">
                         <Button
                             variant="ghost"
                             size="sm"
-                            className={cn("h-8 w-8 p-0 rounded-md", viewMode === 'grid' && "bg-background shadow-sm text-foreground")}
+                            className={cn("h-8 w-8 p-0 rounded-full", viewMode === 'grid' && "bg-background shadow-sm ring-1 ring-border text-foreground")}
                             onClick={() => setViewMode('grid')}
                         >
                             <LayoutGrid className="h-4 w-4" />
@@ -418,7 +568,7 @@ export default function LocationsPage() {
                         <Button
                             variant="ghost"
                             size="sm"
-                            className={cn("h-8 w-8 p-0 rounded-md", viewMode === 'list' && "bg-background shadow-sm text-foreground")}
+                            className={cn("h-8 w-8 p-0 rounded-full", viewMode === 'list' && "bg-background shadow-sm ring-1 ring-border text-foreground")}
                             onClick={() => setViewMode('list')}
                         >
                             <List className="h-4 w-4" />
@@ -434,29 +584,44 @@ export default function LocationsPage() {
             {isLoading ? (
                 viewMode === 'grid' ? (
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {[1, 2, 3].map(i => <Skeleton key={i} className="h-52 w-full rounded-xl" />)}
+                        {[1, 2, 3].map(i => <Skeleton key={i} className="h-52 w-full rounded-2xl" />)}
                     </div>
                 ) : (
                     <div className="space-y-2">
-                        {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
+                        {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)}
                     </div>
                 )
             ) : filteredLocations.length === 0 ? (
-                <div className="rounded-xl border bg-card">
+                <div className="rounded-2xl border bg-card">
                     <Empty
                         icon={MapPin}
-                        title={statusFilter === 'archived' ? "No archived locations" : locationsList.length === 0 ? "No locations yet" : "No locations found"}
+                        title={
+                            statusFilter === 'archived'
+                                ? "No inactive locations"
+                                : hasOnlyInactiveLocations
+                                    ? "No active locations"
+                                    : locationsList.length === 0
+                                        ? "No locations yet"
+                                        : "No locations found"
+                        }
                         description={
                             statusFilter === 'archived'
-                                ? "Archived locations will appear here"
-                                : locationsList.length === 0
-                                    ? canCreateLocation
-                                        ? "Get started by adding your first business location"
-                                        : "Contact your admin to add a location"
-                                    : "Try adjusting your search or filter"
+                                ? "Inactive locations will appear here"
+                                : hasOnlyInactiveLocations
+                                    ? "Activate an inactive location to make it available again"
+                                    : locationsList.length === 0
+                                        ? canCreateLocation
+                                            ? "Get started by adding your first business location"
+                                            : "Contact your admin to add a location"
+                                        : "Try adjusting your search or filter"
                         }
                         action={
-                            locationsList.length === 0 && canCreateLocation ? (
+                            statusFilter === 'active' && hasOnlyInactiveLocations && canCreateLocation ? (
+                                <Button onClick={() => { setSearchTerm(''); setStatusFilter('archived') }}>
+                                    <Archive className="h-4 w-4 mr-2" />
+                                    View inactive locations
+                                </Button>
+                            ) : locationsList.length === 0 && canCreateLocation ? (
                                 <Button onClick={() => router.push('/dashboard/locations/new')}>
                                     <Plus className="h-4 w-4 mr-2" />
                                     Add Location
@@ -473,12 +638,12 @@ export default function LocationsPage() {
                         <div
                             key={location.id}
                             className={cn(
-                                "group relative rounded-xl border bg-card p-5 overflow-hidden",
+                                "group relative rounded-2xl border bg-card p-6 overflow-hidden",
                                 "transition-all duration-150",
                                 "animate-in fade-in slide-in-from-bottom-3",
                                 location.is_active
-                                    ? "cursor-pointer hover:shadow-md hover:border-primary/30"
-                                    : "opacity-60 cursor-default",
+                                    ? "cursor-pointer hover:border-primary/30"
+                                    : "cursor-default",
                                 isSelected(location.id) && "border-primary ring-1 ring-primary bg-primary/2"
                             )}
                             style={{ animationDelay: `${index * 40}ms` }}
@@ -486,17 +651,22 @@ export default function LocationsPage() {
                         >
                             {/* Top row */}
                             <div className="flex items-start justify-between gap-2 mb-4">
-                                <div className="flex items-center gap-3 min-w-0">
+                                <div className={cn(
+                                    "flex items-center gap-3 min-w-0",
+                                    !location.is_active && "opacity-60",
+                                )}>
                                     <div className={cn(
-                                        "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
+                                        "hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg sm:flex",
                                         location.is_active ? "bg-primary/10" : "bg-muted"
                                     )}>
                                         <MapPin className={cn("h-5 w-5", location.is_active ? "text-primary" : "text-muted-foreground")} />
                                     </div>
                                     <div className="min-w-0">
-                                        <p className="font-semibold leading-tight truncate">{location.name}</p>
+                                        <p className="text-[1.0625rem] font-medium leading-tight tracking-[-0.01em] truncate">
+                                            {location.name}
+                                        </p>
                                         {location.code && (
-                                            <p className="text-xs text-muted-foreground font-mono mt-0.5">{location.code}</p>
+                                            <p className="text-[0.8125rem] text-muted-foreground font-mono mt-1">{location.code}</p>
                                         )}
                                     </div>
                                 </div>
@@ -504,7 +674,10 @@ export default function LocationsPage() {
                             </div>
 
                             {/* Address */}
-                            <div className="flex items-start gap-2 mb-3">
+                            <div className={cn(
+                                "flex items-start gap-2 mb-3",
+                                !location.is_active && "opacity-60",
+                            )}>
                                 <Building2 className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
                                 <div className="text-sm text-muted-foreground leading-snug min-w-0">
                                     <p className="truncate">{location.address_line1}</p>
@@ -513,7 +686,10 @@ export default function LocationsPage() {
                             </div>
 
                             {/* Contact row */}
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mb-4">
+                            <div className={cn(
+                                "flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground mb-4",
+                                !location.is_active && "opacity-60",
+                            )}>
                                 {location.phone && (
                                     <span className="flex items-center gap-1">
                                         <Phone className="h-3 w-3" />{formatPhoneForDisplay(location.phone)}
@@ -527,7 +703,10 @@ export default function LocationsPage() {
                             </div>
 
                             {/* Badges */}
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className={cn(
+                                "flex flex-wrap gap-1.5",
+                                !location.is_active && "opacity-60",
+                            )}>
                                 {!location.is_active ? (
                                     <Badge variant="secondary" className="text-xs px-2 py-0 gap-1">
                                         <Archive className="h-2.5 w-2.5" />
@@ -562,7 +741,7 @@ export default function LocationsPage() {
             ) : (
 
                 /* ── List view ─────────────────────────────────────────────── */
-                <div className="rounded-xl border bg-card divide-y overflow-hidden">
+                <div className="rounded-2xl border bg-card overflow-hidden">
                     {filteredLocations.map((location, index) => (
                         <div
                             key={location.id}
@@ -571,7 +750,7 @@ export default function LocationsPage() {
                                 "transition-colors animate-in fade-in",
                                 location.is_active
                                     ? "cursor-pointer hover:bg-muted/40"
-                                    : "opacity-60 cursor-default",
+                                    : "cursor-default",
                                 isSelected(location.id) && "bg-primary/3 border-l-2 border-l-primary"
                             )}
                             style={{ animationDelay: `${index * 30}ms` }}
@@ -579,14 +758,18 @@ export default function LocationsPage() {
                         >
                             {/* Icon */}
                             <div className={cn(
-                                "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
-                                location.is_active ? "bg-primary/10" : "bg-muted"
+                                "hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg sm:flex",
+                                location.is_active ? "bg-primary/10" : "bg-muted",
+                                !location.is_active && "opacity-60",
                             )}>
                                 <MapPin className={cn("h-5 w-5", location.is_active ? "text-primary" : "text-muted-foreground")} />
                             </div>
 
                             {/* Name + address */}
-                            <div className="flex-1 min-w-0">
+                            <div className={cn(
+                                "flex-1 min-w-0",
+                                !location.is_active && "opacity-60",
+                            )}>
                                 <div className="flex items-center gap-2">
                                     <p className="font-medium leading-tight truncate">{location.name}</p>
                                     {location.code && (
@@ -599,7 +782,10 @@ export default function LocationsPage() {
                             </div>
 
                             {/* Contact */}
-                            <div className="hidden md:flex flex-col gap-1 text-xs text-muted-foreground min-w-0 w-36">
+                            <div className={cn(
+                                "hidden md:flex flex-col gap-1 text-xs text-muted-foreground min-w-0 w-36",
+                                !location.is_active && "opacity-60",
+                            )}>
                                 {location.phone && (
                                     <span className="flex items-center gap-1.5 truncate">
                                         <Phone className="h-3 w-3 shrink-0" />{location.phone}
@@ -613,7 +799,10 @@ export default function LocationsPage() {
                             </div>
 
                             {/* Badges */}
-                            <div className="hidden lg:flex items-center gap-1.5 shrink-0">
+                            <div className={cn(
+                                "hidden lg:flex items-center gap-1.5 shrink-0",
+                                !location.is_active && "opacity-60",
+                            )}>
                                 {!location.is_active ? (
                                     <Badge variant="secondary" className="text-xs px-2 py-0 gap-1">
                                         <Archive className="h-2.5 w-2.5" />
@@ -632,7 +821,11 @@ export default function LocationsPage() {
                             </div>
 
                             {/* Actions */}
-                            <ActionButtons location={location} compact />
+                            <ActionButtons
+                                location={location}
+                                compact
+                                primaryAlwaysVisible
+                            />
                         </div>
                     ))}
                 </div>
@@ -650,7 +843,7 @@ export default function LocationsPage() {
                             Archive <strong>{archivingLocation?.name}</strong>? This location will stop accepting orders,
                             staff scoped only here will be deactivated, and any open cash drawer sessions will be flagged for
                             close-out. Historical reports will still include this location&apos;s data.
-                            You can restore it at any time.
+                            You can activate it again at any time.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

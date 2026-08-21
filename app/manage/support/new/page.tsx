@@ -10,7 +10,6 @@ import {
   LockKeyhole,
   MessageSquarePlus,
 } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,14 +67,11 @@ export default function NewHQSupportTicketPage() {
       .then((result) => {
         if (!active) return;
         if (result.error) {
-          toast.error(result.error);
           return;
         }
         setAvailableAssignees(result.data ?? []);
       })
-      .catch(() => {
-        if (active) toast.error("Failed to load support assignees");
-      })
+      .catch(() => {})
       .finally(() => {
         if (active) setIsLoadingAssignees(false);
       });
@@ -98,7 +94,6 @@ export default function NewHQSupportTicketPage() {
 
     try {
       if (isUploading) {
-        toast.error("Wait for attachments to finish uploading");
         return;
       }
 
@@ -109,17 +104,10 @@ export default function NewHQSupportTicketPage() {
         uploadSessionId,
       });
       if (result.error || !result.data) {
-        toast.error(result.error || "Failed to create ticket");
         return;
       }
 
-      toast.success(`${result.data.ticket_number} created`);
-      if (result.notificationWarning) {
-        toast.warning(result.notificationWarning);
-      }
       router.push(`/manage/support/${result.data.ticket_id}`);
-    } catch {
-      toast.error("Failed to create ticket");
     } finally {
       setIsSubmitting(false);
     }

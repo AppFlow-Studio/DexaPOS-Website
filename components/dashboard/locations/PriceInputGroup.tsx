@@ -60,6 +60,8 @@ export function PriceInputGroup({
 
   // Toggle: when ON, editing cash auto-calculates card at the dual pricing %
   const [autoCalcCard, setAutoCalcCard] = useState(true);
+  // Dual-pricing info tooltip — controlled so it can toggle on click/tap.
+  const [infoOpen, setInfoOpen] = useState(false);
 
   // Local string state so the user can type freely (e.g. "1." mid-entry)
   const [cardDisplay, setCardDisplay] = useState(price > 0 ? String(price) : "");
@@ -120,23 +122,38 @@ export function PriceInputGroup({
   };
 
   return (
-    <div className="space-y-4 p-4 rounded-lg bg-muted/20 border border-border/50">
+    <div className="space-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-sm font-medium flex items-center gap-2">
           {label} Configuration
           {isDual && (
-            <Badge variant="outline" className="text-[10px] h-5 bg-blue-50 text-blue-700 border-blue-200">
+            <Badge variant="outline" className="h-5 bg-blue-50 text-[10px] text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
               Dual Pricing Active ({percentage}%)
             </Badge>
           )}
         </h4>
         {isDual && (
+          // Controlled + button trigger: Radix tooltips open on hover/focus
+          // only, and `asChild` onto a bare <svg> leaves nothing focusable — so
+          // clicking (and any touch device) did nothing. A real button with an
+          // explicit click toggle makes it work by pointer, touch and keyboard.
           <TooltipProvider>
-            <Tooltip>
+            <Tooltip open={infoOpen} onOpenChange={setInfoOpen}>
               <TooltipTrigger asChild>
-                <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                <button
+                  type="button"
+                  aria-label="About dual pricing"
+                  onClick={() => setInfoOpen((prev) => !prev)}
+                  className="rounded-full text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Info className="h-4 w-4 cursor-help" />
+                </button>
               </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
+              {/* z-[250]: TooltipContent portals at z-50, but the dialogs this
+                  group renders inside sit at z-[100]–z-[210], so the default
+                  tooltip painted *behind* the dialog and looked like nothing
+                  happened on click. */}
+              <TooltipContent className="z-[250] max-w-xs">
                 <p>Dual Pricing is enabled.</p>
                 <p>Edit either price — the other is auto-calculated at {percentage}%.</p>
               </TooltipContent>
@@ -161,7 +178,10 @@ export function PriceInputGroup({
               onChange={handleCardInput}
               disabled={disabled}
               placeholder="0.00"
-              className={cn("pl-7", isDual && "border-blue-200 focus-visible:ring-blue-500")}
+              className={cn(
+                "border-0 bg-background pl-7 shadow-none tabular-nums",
+                isDual && "focus-visible:ring-blue-500/40",
+              )}
             />
           </div>
         </div>
@@ -181,7 +201,10 @@ export function PriceInputGroup({
               onChange={handleCashInput}
               disabled={disabled}
               placeholder="0.00"
-              className={cn("pl-7", isDual && "border-blue-200 focus-visible:ring-blue-500")}
+              className={cn(
+                "border-0 bg-background pl-7 shadow-none tabular-nums",
+                isDual && "focus-visible:ring-blue-500/40",
+              )}
             />
           </div>
         </div>

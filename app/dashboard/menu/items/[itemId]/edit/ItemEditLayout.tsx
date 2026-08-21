@@ -157,7 +157,7 @@ export function ItemEditLayout({ itemId }: ItemEditLayoutProps) {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="border-b bg-background px-4 py-3 sm:px-6">
+      <div className="border-b border-border/60 bg-background px-4 py-3 sm:px-6">
         <ScopeContextStrip />
         <div className="mt-3">
           <ItemQuickActions item={item} itemId={itemId} />
@@ -166,7 +166,7 @@ export function ItemEditLayout({ itemId }: ItemEditLayoutProps) {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Sticky section nav */}
-        <aside className="hidden w-[180px] shrink-0 border-r bg-muted/20 px-3 py-4 md:block">
+        <aside className="hidden w-[180px] shrink-0 border-r border-border/60 bg-muted/30 px-3 py-4 md:block">
           <nav className="flex flex-col gap-1">
             {SECTIONS.map((section) => (
               <button
@@ -174,7 +174,7 @@ export function ItemEditLayout({ itemId }: ItemEditLayoutProps) {
                 type="button"
                 onClick={() => handleNavClick(section.id)}
                 className={cn(
-                  "rounded px-2 py-1.5 text-left text-xs font-medium transition-colors",
+                  "rounded-full px-3 py-1.5 text-left text-xs font-medium transition-colors",
                   activeSection === section.id
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -206,7 +206,7 @@ export function ItemEditLayout({ itemId }: ItemEditLayoutProps) {
         </main>
 
         {/* Live summary card */}
-        <aside className="hidden w-[300px] shrink-0 border-l bg-muted/10 px-4 py-6 lg:block">
+        <aside className="hidden w-[300px] shrink-0 border-l border-border/60 bg-muted/30 px-4 py-6 lg:block">
           <ItemSummaryCard item={item} itemId={itemId} />
         </aside>
       </div>

@@ -63,9 +63,10 @@ export function VoidDialog({
             onChange={(e) => setReason(e.target.value)}
             placeholder="Why is this distribution being voided? (min 10 characters)"
             rows={3}
+            className="border-0 bg-muted/40 text-muted-foreground placeholder:text-muted-foreground/60"
           />
           {reason.length > 0 && !isValid && (
-            <p className="text-xs text-red-500">
+            <p className="text-xs text-destructive">
               Reason must be at least 10 characters ({reason.trim().length}/10)
             </p>
           )}

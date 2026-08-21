@@ -1,27 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  useIsAllLocations,
-  useSelectedLocation,
-} from "@/stores/location-store";
-import { useOrders } from "../hooks/useOrder";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { OnChangeFn, SortingState } from "@tanstack/react-table";
+import { useOrderOverview, useOrdersPage } from "../hooks/useOrder";
 import { isOrderReportable } from "@/lib/reporting/recognized-order";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ShoppingBag,
   Clock,
   CheckCircle,
-  DollarSign,
+  CircleDollarSign,
   QrCode,
-  MapPin,
-  Globe,
+  Calendar,
   RefreshCcwDot,
   BarChart3,
   FileText,
@@ -29,9 +19,9 @@ import {
 import Link from "next/link";
 import { OrdersDataTable } from "@/components/dashboard/orders/OrdersDataTable";
 import {
-  Order,
   OrderResponse,
   OrderStatus,
+  OrderSortField,
   OrderType,
   PaymentMethod,
   OrderFilters,
@@ -40,6 +30,7 @@ import { OrderDetailSheet } from "@/components/dashboard/orders/OrderDetailSheet
 import { Empty } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import { OrderFilters as OrderFiltersComponent } from "@/components/dashboard/orders/OrderFilters";
+import { OverviewLinkButton } from "../components/OverviewSection";
 import { ORDER_STATUS_GROUPS } from "@/lib/constants/order-status";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -49,12 +40,23 @@ import {
 } from "recharts";
 
 import { cn } from "@/lib/utils";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { buildPaginationMeta } from "@/lib/pagination";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 
 export default function OrdersPage() {
-  const selectedLocation = useSelectedLocation();
-  const isAllLocations = useIsAllLocations();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const requestedPage = Number(searchParams.get("page"));
+  const page = Number.isFinite(requestedPage)
+    ? Math.max(1, Math.floor(requestedPage))
+    : 1;
+  const pageSize = 25;
+  const [orderSearch, setOrderSearch] = useState("");
+  const debouncedOrderSearch = useDebounce(orderSearch, 300);
+  const [orderSorting, setOrderSorting] = useState<SortingState>([
+    { id: "created_at", desc: true },
+  ]);
 
   // Parse filters from URL
   const filters: OrderFilters = useMemo(() => {
@@ -93,18 +95,35 @@ export default function OrdersPage() {
     };
   }, [searchParams]);
 
+  const activeSort = orderSorting[0];
+  const sortBy: OrderSortField =
+    activeSort?.id === "order_display"
+      ? "display_number"
+      : activeSort?.id === "status" || activeSort?.id === "total_amount"
+        ? activeSort.id
+        : "created_at";
+
   const {
-    data: orders,
-    isLoading,
+    data: orderResult,
+    isLoading: isLoadingOrders,
+    isFetching: isFetchingOrders,
     refetch: refetchOrders,
-  } = useOrders(filters);
+  } = useOrdersPage(filters, {
+    page,
+    pageSize,
+    search: debouncedOrderSearch,
+    sortBy,
+    sortDirection: activeSort?.desc === false ? "asc" : "desc",
+  });
 
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(
     null
   );
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  const ordersList = Array.isArray(orders) ? orders : [];
+  const ordersList = orderResult?.data ?? [];
+  const pagination =
+    orderResult?.pagination ?? buildPaginationMeta(0, { page, pageSize });
 
   // Stats dataset: same date-range + location as the table, but NOT narrowed by the
   // table's status/type/payment chips. This keeps the KPI cards a stable glance metric
@@ -113,8 +132,51 @@ export default function OrdersPage() {
     () => ({ dateRange: filters.dateRange }),
     [filters.dateRange]
   );
-  const { data: statsOrders } = useOrders(statsFilters);
-  const statsList = Array.isArray(statsOrders) ? statsOrders : [];
+  const { data: statsOrders, isLoading: isLoadingStats } = useOrderOverview(
+    statsFilters.dateRange,
+  );
+  const statsList = useMemo(
+    () => (Array.isArray(statsOrders) ? statsOrders : []),
+    [statsOrders],
+  );
+
+  const setPage = useCallback(
+    (nextPage: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (nextPage <= 1) params.delete("page");
+      else params.set("page", String(nextPage));
+      const query = params.toString();
+      router.replace(query ? `/dashboard/orders?${query}` : "/dashboard/orders", {
+        scroll: false,
+      });
+    },
+    [router, searchParams],
+  );
+
+  const handleOrderSearchChange = useCallback(
+    (value: string) => {
+      setOrderSearch(value);
+      setPage(1);
+    },
+    [setPage],
+  );
+
+  const handleOrderSortingChange = useCallback<OnChangeFn<SortingState>>(
+    (updater) => {
+      setOrderSorting((current) => {
+        const next = typeof updater === "function" ? updater(current) : updater;
+        return next.slice(0, 1);
+      });
+      setPage(1);
+    },
+    [setPage],
+  );
+
+  useEffect(() => {
+    if (orderResult && page > orderResult.pagination.totalPages) {
+      setPage(orderResult.pagination.totalPages);
+    }
+  }, [orderResult, page, setPage]);
 
   const OPEN_STATUSES = ORDER_STATUS_GROUPS.open as readonly OrderStatus[];
 
@@ -136,6 +198,7 @@ export default function OrdersPage() {
     from.setDate(from.getDate() - (days - 1));
     from.setHours(0, 0, 0, 0);
     const params = new URLSearchParams(searchParams.toString());
+    params.delete("page");
     params.set("from", from.toISOString());
     params.set("to", to.toISOString());
     router.push(`?${params.toString()}`);
@@ -165,6 +228,26 @@ export default function OrdersPage() {
         : filters.dateRange?.from || filters.dateRange?.to
           ? "selected range"
           : "all time";
+
+  // Plain-text window shown beside the preset pills, mirroring the dashboard's
+  // Overview range bar ("Jul 01 – Jul 30"). Derived from the same URL-backed
+  // dateRange the presets and the table's DateRangePicker both write.
+  const rangeSummary = useMemo(() => {
+    const { from, to } = filters.dateRange ?? {};
+    if (!from && !to) return "All time";
+
+    const fmt = (d: Date) =>
+      d.toLocaleDateString("en-US", { month: "short", day: "2-digit" });
+
+    if (from && to) {
+      const fromDay = new Date(from);
+      const toDay = new Date(to);
+      return fromDay.toDateString() === toDay.toDateString()
+        ? fmt(fromDay)
+        : `${fmt(fromDay)} – ${fmt(toDay)}`;
+    }
+    return from ? `From ${fmt(new Date(from))}` : `Until ${fmt(new Date(to!))}`;
+  }, [filters.dateRange]);
 
   // KPI rollups over the stats dataset (date-range + location scoped, status-unfiltered).
   // "Open" uses the shared ORDER_STATUS_GROUPS so it can't drift from the table filter.
@@ -215,6 +298,62 @@ export default function OrdersPage() {
         maximumFractionDigits: 2,
       }),
     []
+  );
+
+  // The five glance metrics, described as data so every tile renders through one
+  // markup path — colors stay on the reference's blue-led ramp rather than each
+  // tile inventing its own hue.
+  const KPI_TILES = useMemo(
+    () => [
+      {
+        key: "orders",
+        label: "Total orders",
+        icon: ShoppingBag,
+        value: stats.total,
+        dataKey: "orders",
+        color: "#0C4FD1",
+        caption: null as string | null,
+      },
+      {
+        key: "open",
+        label: "Open",
+        icon: Clock,
+        value: stats.open,
+        dataKey: "open",
+        color: "#f59e0b",
+        caption: null as string | null,
+      },
+      {
+        key: "completed",
+        label: "Completed",
+        icon: CheckCircle,
+        value: stats.completed,
+        dataKey: "completed",
+        color: "#10b981",
+        caption: null as string | null,
+      },
+      {
+        key: "revenue",
+        label: "Revenue",
+        icon: CircleDollarSign,
+        value: revenueFormatter.format(stats.revenue),
+        dataKey: "revenue",
+        color: "#0d9488",
+        caption: null as string | null,
+      },
+      {
+        key: "qr",
+        label: "QR table",
+        icon: QrCode,
+        value: stats.qrTableOrders,
+        dataKey: "qrTableOrders",
+        color: "#6366f1",
+        caption: stats.topQrTable
+          ? `Most active: ${stats.topQrTable}`
+          : "No QR table orders",
+      },
+    ],
+    [stats, revenueFormatter]
   );
 
   // Build daily breakdown for sparkline charts over the active date window
@@ -299,43 +438,41 @@ export default function OrdersPage() {
     <main className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">Orders</h1>
-          </div>
-          <p className="text-sm text-muted-foreground">
+        <div className="min-w-0">
+          <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em]">
+            Orders
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             View and manage all orders across your locations
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="flex-1 sm:flex-none" asChild>
-            <Link href="/dashboard/orders/analytics">
-              <BarChart3 className="h-4 w-4" />
-              Analytics
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" className="flex-1 sm:flex-none" asChild>
-            <Link href="/dashboard/orders/reports">
-              <FileText className="h-4 w-4" />
-              Reports
-            </Link>
-          </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <OverviewLinkButton href="/dashboard/orders/analytics">
+            <BarChart3 className="mr-0.5 h-4 w-4" />
+            Analytics
+          </OverviewLinkButton>
+          <OverviewLinkButton href="/dashboard/orders/reports">
+            <FileText className="mr-0.5 h-4 w-4" />
+            Reports
+          </OverviewLinkButton>
         </div>
       </div>
 
-      {/* Stats Time Range Selector + Cards */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-muted-foreground">Overview</h2>
-          <div className="flex bg-muted/50 p-0.5 rounded-lg gap-0.5">
+      {/* Overview: one bordered container, hairline-divided rows — the same
+          shell the dashboard Overview uses, so both pages read as one system. */}
+      <div className="rounded-3xl border bg-card">
+        {/* Range bar: pill tabs on the left, resolved window on the right. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-6 py-4">
+          <div className="flex items-center gap-0.5 rounded-full bg-muted/70 p-1">
             {RANGE_PRESETS.map((range) => (
               <button
                 key={range.value}
+                type="button"
                 onClick={() => setPresetRange(range.value)}
                 className={cn(
-                  "px-3 py-1 rounded-md text-xs font-medium transition-colors",
+                  "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium transition-colors",
                   activePreset === range.value
-                    ? "bg-background text-foreground shadow-sm"
+                    ? "bg-background text-foreground shadow-sm ring-1 ring-border"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -343,268 +480,125 @@ export default function OrdersPage() {
               </button>
             ))}
           </div>
+          <div className="flex items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
+            <Calendar className="h-3.5 w-3.5" />
+            {rangeSummary}
+          </div>
         </div>
 
-      <div className="grid gap-4 grid-cols-2 xl:grid-cols-5">
-        {/* Total Orders */}
-        <Card className="border-border/60 shadow-none overflow-hidden">
-          <CardContent className="p-5">
-            {isLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-8 w-16" />
-                <Skeleton className="h-12 w-full" />
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-muted-foreground">Total Orders</span>
-                  <ShoppingBag className="h-4 w-4 text-muted-foreground/40" />
+        {/* KPI tiles. No rules anywhere — not between the tiles, and none
+            splitting them off from the range bar above. Whitespace alone does
+            the separating, leaving the container's rounded outline as the only
+            edge on the block. */}
+        <div className="grid grid-cols-2 gap-x-2 gap-y-6 px-2 pb-6 xl:grid-cols-5">
+          {KPI_TILES.map((tile) => (
+            // min-w-0: without it the grid track floors at its content's
+            // intrinsic width, so a wide figure like "$2,674.53" pushes past
+            // the column instead of the text scaling down inside it.
+            <div key={tile.key} className="min-w-0 px-4">
+              {isLoadingStats ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-9 w-24" />
+                  <Skeleton className="h-12 w-full" />
                 </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-semibold tracking-tight">{stats.total}</span>
-                  <span className="text-xs text-muted-foreground/60">{rangeLabel}</span>
-                </div>
-                <div className="mt-3 h-12">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="ordersGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#6366f1" stopOpacity={0.25} />
-                          <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <Area
-                        type="monotone"
-                        dataKey="orders"
-                        stroke="#6366f1"
-                        strokeWidth={2}
-                        fill="url(#ordersGrad)"
-                        dot={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+              ) : (
+                <>
+                  {/* Section label in the brand blue, as on the reference. */}
+                  <div className="flex items-center gap-2 text-[0.9375rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+                    <tile.icon className="h-[1.0625rem] w-[1.0625rem] shrink-0" />
+                    <span className="truncate">{tile.label}</span>
+                  </div>
 
-        {/* Pending */}
-        <Card className="border-border/60 shadow-none overflow-hidden">
-          <CardContent className="p-5">
-            {isLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-8 w-16" />
-                <Skeleton className="h-12 w-full" />
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-muted-foreground">Open</span>
-                  <Clock className="h-4 w-4 text-amber-400" />
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-semibold tracking-tight text-amber-600 dark:text-amber-400">{stats.open}</span>
-                  <span className="text-xs text-muted-foreground/60">{rangeLabel}</span>
-                </div>
-                <div className="mt-3 h-12">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="pendingGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.2} />
-                          <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <Area
-                        type="monotone"
-                        dataKey="open"
-                        stroke="#f59e0b"
-                        strokeWidth={1.5}
-                        fill="url(#pendingGrad)"
-                        dot={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                  {/* Currency runs much wider than the plain counts, so the
+                      figure steps down a size on narrow columns and returns to
+                      the reference's 2rem once the tiles go single-file. */}
+                  <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-x-2">
+                    <span className="min-w-0 max-w-full truncate text-[1.625rem] font-medium leading-tight tracking-[-0.02em] tabular-nums sm:text-[2rem]">
+                      {tile.value}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {rangeLabel}
+                    </span>
+                  </div>
 
-        {/* Completed */}
-        <Card className="border-border/60 shadow-none overflow-hidden">
-          <CardContent className="p-5">
-            {isLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-8 w-16" />
-                <Skeleton className="h-12 w-full" />
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-muted-foreground">Completed</span>
-                  <CheckCircle className="h-4 w-4 text-emerald-400" />
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">{stats.completed}</span>
-                  <span className="text-xs text-muted-foreground/60">{rangeLabel}</span>
-                </div>
-                <div className="mt-3 h-12">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="completedGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#10b981" stopOpacity={0.2} />
-                          <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <Area
-                        type="monotone"
-                        dataKey="completed"
-                        stroke="#10b981"
-                        strokeWidth={1.5}
-                        fill="url(#completedGrad)"
-                        dot={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                  {tile.caption && (
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      {tile.caption}
+                    </p>
+                  )}
 
-        {/* Revenue */}
-        <Card className="border-border/60 shadow-none overflow-hidden">
-          <CardContent className="p-5">
-            {isLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-8 w-24" />
-                <Skeleton className="h-12 w-full" />
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-muted-foreground">Revenue</span>
-                  <DollarSign className="h-4 w-4 text-muted-foreground/40" />
-                </div>
-                <div className="flex items-baseline gap-2 min-w-0">
-                  <span className="text-3xl font-semibold tracking-tight truncate">
-                    {revenueFormatter.format(stats.revenue)}
-                  </span>
-                  <span className="text-xs text-muted-foreground/60 shrink-0">{rangeLabel}</span>
-                </div>
-                <div className="mt-3 h-12">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#0d9488" stopOpacity={0.25} />
-                          <stop offset="100%" stopColor="#0d9488" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <Area
-                        type="monotone"
-                        dataKey="revenue"
-                        stroke="#0d9488"
-                        strokeWidth={2}
-                        fill="url(#revenueGrad)"
-                        dot={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* QR Table Orders */}
-        <Card className="border-border/60 shadow-none overflow-hidden">
-          <CardContent className="p-5">
-            {isLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-8 w-16" />
-                <Skeleton className="h-12 w-full" />
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium text-muted-foreground">QR Table</span>
-                  <QrCode className="h-4 w-4 text-[#0C4FD1]" />
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-semibold tracking-tight text-[#0C4FD1]">
-                    {stats.qrTableOrders}
-                  </span>
-                  <span className="text-xs text-muted-foreground/60">{rangeLabel}</span>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {stats.topQrTable
-                    ? `Most active table: ${stats.topQrTable}`
-                    : "No QR table orders in this range."}
-                </p>
-                <div className="mt-3 h-12">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailyData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="qrOrdersGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#0C4FD1" stopOpacity={0.22} />
-                          <stop offset="100%" stopColor="#0C4FD1" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <Area
-                        type="monotone"
-                        dataKey="qrTableOrders"
-                        stroke="#0C4FD1"
-                        strokeWidth={2}
-                        fill="url(#qrOrdersGrad)"
-                        dot={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-      </div>
-
-      {/* Filter Tabs and Orders Table */}
-      <Card className="border-border/60 shadow-none">
-        <CardHeader className="w-full pb-4">
-          <div className="flex flex-col items-start justify-between w-full space-y-4">
-            <div className="flex items-center justify-between w-full">
-              <CardTitle className="text-base font-medium">All Orders</CardTitle>
-              <Button
-                variant="ghost"
-                className="text-muted-foreground hover:text-foreground cursor-pointer"
-                size="sm"
-                onClick={async () => await refetchOrders()}
-              >
-                <RefreshCcwDot className="h-4 w-4 mr-2" />
-                Refresh
-              </Button>
+                  <div className="mt-4 h-12">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={dailyData}
+                        margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+                      >
+                        <defs>
+                          <linearGradient
+                            id={`ordersKpiGrad-${tile.key}`}
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="0%"
+                              stopColor={tile.color}
+                              stopOpacity={0.22}
+                            />
+                            <stop
+                              offset="100%"
+                              stopColor={tile.color}
+                              stopOpacity={0}
+                            />
+                          </linearGradient>
+                        </defs>
+                        <Area
+                          type="monotone"
+                          dataKey={tile.dataKey}
+                          stroke={tile.color}
+                          strokeWidth={2}
+                          fill={`url(#ordersKpiGrad-${tile.key})`}
+                          dot={false}
+                          isAnimationActive={false}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </>
+              )}
             </div>
-            <OrderFiltersComponent className="w-full" />
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Orders Table */}
-          {isLoading && ordersList.length === 0 ? (
+          ))}
+        </div>
+      </div>
+
+      {/* All Orders. Same single-frame treatment as the Overview: one rounded
+          container, nothing inside it drawing its own box. */}
+      <div className="rounded-3xl border bg-card px-6 py-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[1.0625rem] font-semibold">All Orders</h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="cursor-pointer rounded-full text-muted-foreground hover:text-foreground"
+            onClick={async () => await refetchOrders()}
+          >
+            <RefreshCcwDot className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
+
+        <OrderFiltersComponent className="mt-4 w-full" />
+
+        <div className="mt-4">
+          {isLoadingOrders && ordersList.length === 0 ? (
             <div className="space-y-2">
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
               <Skeleton className="h-10 w-full" />
             </div>
-          ) : ordersList.length === 0 ? (
+          ) : ordersList.length === 0 && !orderSearch ? (
             <Empty
               icon={ShoppingBag}
               title={"No orders found"}
@@ -613,12 +607,24 @@ export default function OrdersPage() {
           ) : (
             <OrdersDataTable
               data={ordersList}
-              isLoading={isLoading}
+              isLoading={isFetchingOrders}
               onOrderClick={handleOrderClick}
+              serverPaginated
+              searchValue={orderSearch}
+              onSearchChange={handleOrderSearchChange}
+              searchPlaceholder="Search order number or customer..."
+              sortingValue={orderSorting}
+              onSortingChange={handleOrderSortingChange}
             />
           )}
-        </CardContent>
-      </Card>
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            isLoading={isFetchingOrders}
+            itemLabel="orders"
+          />
+        </div>
+      </div>
 
       {/* Order Detail Sheet */}
       <OrderDetailSheet

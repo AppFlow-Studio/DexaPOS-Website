@@ -45,6 +45,12 @@ const SCHEDULE_COLORS = [
 
 export function WeeklyScheduleView({ schedules, className }: WeeklyScheduleViewProps) {
     const [currentTime, setCurrentTime] = useState(new Date())
+    const [focusedScheduleId, setFocusedScheduleId] = useState<string | null>(null)
+
+    const activeFocusedScheduleId =
+        focusedScheduleId && schedules.some((schedule) => schedule.id === focusedScheduleId)
+            ? focusedScheduleId
+            : null
 
     // Update current time every minute
     useEffect(() => {
@@ -74,6 +80,7 @@ export function WeeklyScheduleView({ schedules, className }: WeeklyScheduleViewP
         }> = []
 
         schedules.forEach((schedule, scheduleIndex) => {
+            if (activeFocusedScheduleId && schedule.id !== activeFocusedScheduleId) return
             const color = SCHEDULE_COLORS[scheduleIndex % SCHEDULE_COLORS.length]
             schedule.schedule_time_slots?.forEach(slot => {
                 if (schedule.is_active) {
@@ -88,7 +95,7 @@ export function WeeklyScheduleView({ schedules, className }: WeeklyScheduleViewP
         })
 
         return slots
-    }, [schedules])
+    }, [activeFocusedScheduleId, schedules])
 
     // Group slots by day
     const slotsByDay = useMemo(() => {
@@ -107,7 +114,7 @@ export function WeeklyScheduleView({ schedules, className }: WeeklyScheduleViewP
     }
 
     return (
-        <Card className={cn("overflow-hidden", className)}>
+        <Card className={cn("overflow-hidden rounded-3xl", className)}>
             <CardHeader className="pb-2">
                 <CardTitle className="text-base flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
@@ -121,9 +128,21 @@ export function WeeklyScheduleView({ schedules, className }: WeeklyScheduleViewP
                         {schedules.map((schedule, index) => {
                             const color = SCHEDULE_COLORS[index % SCHEDULE_COLORS.length]
                             return (
-                                <div
-                                    key={schedule.id}
-                                    className="flex items-center gap-2 text-xs"
+                                <button
+                                    type="button"
+                                    key={`${schedule.id}-${index}`}
+                                    aria-pressed={activeFocusedScheduleId === schedule.id}
+                                    onClick={() =>
+                                        setFocusedScheduleId((current) =>
+                                            current === schedule.id ? null : schedule.id,
+                                        )
+                                    }
+                                    className={cn(
+                                        "flex items-center gap-2 rounded-full text-xs transition-opacity",
+                                        activeFocusedScheduleId && activeFocusedScheduleId !== schedule.id
+                                            ? "opacity-35"
+                                            : "opacity-100",
+                                    )}
                                 >
                                     <div className={cn(
                                         "w-3 h-3 rounded-sm border-l-2",
@@ -131,14 +150,16 @@ export function WeeklyScheduleView({ schedules, className }: WeeklyScheduleViewP
                                         color.border
                                     )} />
                                     <span className="text-muted-foreground">{schedule.name}</span>
-                                </div>
+                                </button>
                             )
                         })}
                     </div>
                 )}
 
-                {/* Calendar Grid */}
-                <div className="overflow-x-auto">
+                {/* Calendar Grid. The scroll container cannot be clipped by the
+                    Card's radius (a scroll box paints its own square corners), so
+                    it carries the matching bottom rounding itself. */}
+                <div className="overflow-x-auto rounded-b-3xl">
                     <div className="min-w-[600px]">
                         {/* Hour Labels */}
                         <div className="flex border-b bg-muted/30">

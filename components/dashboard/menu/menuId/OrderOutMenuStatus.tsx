@@ -1,7 +1,6 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import {
   CheckCircle2,
   XCircle,
@@ -34,40 +33,49 @@ export function formatTimeAgo(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
+/**
+ * Soft tint + icon rather than a solid saturated fill (D-11). Classes are
+ * literal strings, not sourced from a `.ts` constants module — Tailwind does
+ * not scan those, so the rule would never be generated (C7).
+ */
+const SYNC_BADGE =
+  "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium";
+const SYNC_BADGE_NEUTRAL = "bg-muted/60 text-muted-foreground";
+
 export function SyncStatusBadge({ lastSync }: { lastSync: OrderOutMenuSyncStatus["lastSync"] }) {
   if (!lastSync) {
     return (
-      <Badge variant="secondary">
-        <Clock className="h-3 w-3 mr-1" />
+      <span className={`${SYNC_BADGE} ${SYNC_BADGE_NEUTRAL}`}>
+        <Clock className="h-3 w-3" />
         Never Synced
-      </Badge>
+      </span>
     );
   }
   if (lastSync.status === "success") {
     return (
-      <Badge variant="default" className="bg-green-600">
-        <CheckCircle2 className="h-3 w-3 mr-1" />
+      <span className={`${SYNC_BADGE} bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400`}>
+        <CheckCircle2 className="h-3 w-3" />
         Synced {formatTimeAgo(lastSync.completedAt || lastSync.createdAt)}
-      </Badge>
+      </span>
     );
   }
   if (lastSync.status === "failed") {
     return (
-      <Badge variant="destructive">
-        <XCircle className="h-3 w-3 mr-1" />
+      <span className={`${SYNC_BADGE} bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400`}>
+        <XCircle className="h-3 w-3" />
         Sync Failed
-      </Badge>
+      </span>
     );
   }
   if (lastSync.status === "pending") {
     return (
-      <Badge variant="secondary">
-        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+      <span className={`${SYNC_BADGE} ${SYNC_BADGE_NEUTRAL}`}>
+        <Loader2 className="h-3 w-3 animate-spin" />
         Syncing...
-      </Badge>
+      </span>
     );
   }
-  return <Badge variant="secondary">{lastSync.status}</Badge>;
+  return <span className={`${SYNC_BADGE} ${SYNC_BADGE_NEUTRAL}`}>{lastSync.status}</span>;
 }
 
 export function OrderOutMenuStatus({
@@ -80,33 +88,28 @@ export function OrderOutMenuStatus({
 
   if (isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">OrderOut Status</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection label="OrderOut Status">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading...
           </div>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
     );
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">
-          OrderOut Delivery
-        </CardTitle>
-        <SyncStatusBadge lastSync={lastSync ?? null} />
-      </CardHeader>
-      <CardContent className="space-y-3">
+    <Panel>
+      <PanelSection
+        label="OrderOut Delivery"
+        action={<SyncStatusBadge lastSync={lastSync ?? null} />}
+        className="space-y-3"
+      >
         {ooMenuId && (
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">Menu ID:</span>
-            <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Menu ID</span>
+            <code className="rounded-full bg-muted/60 px-2.5 py-0.5 font-mono text-xs">
               {ooMenuId}
             </code>
           </div>
@@ -140,13 +143,13 @@ export function OrderOutMenuStatus({
               Error details
             </button>
             {showError && (
-              <p className="text-xs text-destructive bg-destructive/10 rounded p-2">
+              <p className="rounded-2xl bg-destructive/10 p-3 text-xs text-destructive">
                 {lastSync.errorDetails}
               </p>
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   );
 }

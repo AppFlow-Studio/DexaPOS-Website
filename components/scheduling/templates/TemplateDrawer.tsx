@@ -25,7 +25,9 @@ export const TemplateDrawer: React.FC<TemplateDrawerProps> = ({
   }, [templates, activeTemplateIds]);
 
   return (
-    <div className={`w-64 bg-background border-l flex flex-col ${className}`}>
+    <div
+      className={`flex h-72 w-full shrink-0 flex-col border-t bg-background md:h-auto md:w-64 md:border-t-0 md:border-l ${className ?? ""}`}
+    >
       {/* Header */}
       <div className="p-4 border-b">
         <div className="flex items-center gap-2 mb-1">

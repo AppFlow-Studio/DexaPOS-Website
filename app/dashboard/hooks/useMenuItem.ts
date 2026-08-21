@@ -5,7 +5,7 @@ import { useLocationStore } from "@/stores/location-store"
 export function useMenuItem(itemId: string) {
     const { selectedLocationId } = useLocationStore()
     return useQuery({
-        queryKey: ['menu-item', itemId],
+        queryKey: ['menu-item', itemId, selectedLocationId],
         queryFn: () => GetMenuItem(itemId, selectedLocationId),
         enabled: !!itemId,
     })

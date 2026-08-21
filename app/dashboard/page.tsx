@@ -1,29 +1,19 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
-  DollarSign,
   ShoppingCart,
   Users,
-  TrendingUp,
   MapPin,
   Building2,
   Utensils,
-  ArrowRight,
-  Clock,
   CheckCircle,
   AlertCircle,
   Lock,
   QrCode,
   X,
+  CircleDollarSign,
+  Tag,
 } from "lucide-react";
 import {
   useLocationStore,
@@ -36,10 +26,8 @@ import {
   useLocationScopedSchedules,
 } from "./hooks/useLocationScoped";
 import { useOrders } from "./hooks/useOrder";
-import { isOrderReportable } from "@/lib/reporting/recognized-order";
 import {
   useOrderAnalytics,
-  useOrderStats,
   useFinancialKPIs,
   useWaterfallReport,
   useRevenueByCategoryReport,
@@ -52,17 +40,8 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Area,
   AreaChart,
   ResponsiveContainer,
@@ -70,14 +49,25 @@ import {
 } from "recharts";
 import { useUnifiedStaff, usePinStatus } from "./hooks/useStaff";
 import { DashboardWaterfallCard } from "./components/DashboardWaterfallCard";
-import {
-  NetRevenueByCategoryCard,
-  type DateRangeOption,
-} from "./components/NetRevenueByCategoryCard";
+import { NetRevenueByCategoryCard } from "./components/NetRevenueByCategoryCard";
 import { TransactionVolumeCard } from "./components/TransactionVolumeCard";
 import { NetCollectedBySourceCard } from "./components/NetCollectedBySourceCard";
 import { TaxableRevenueByTenderCard } from "./components/TaxableRevenueByTenderCard";
 import { fillDailyFinancialStats } from "@/lib/reporting/date-range";
+import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { DashboardGreeting } from "./components/DashboardGreeting";
+import {
+  OverviewRangeTabs,
+  resolveOverviewRange,
+  type OverviewRange,
+} from "./components/OverviewRangeTabs";
+import {
+  OverviewSection,
+  OverviewSplit,
+  OverviewSubLabel,
+  OverviewListRow,
+  OverviewBreakdown,
+} from "./components/OverviewSection";
 
 export default function MerchantDashboardPage() {
   const { selectedLocationId, locations } = useLocationStore();
@@ -111,13 +101,6 @@ export default function MerchantDashboardPage() {
 
   const now = useMemo(() => new Date(), []);
 
-  // Fetch analytics data
-  const { data: analytics7Days, isLoading: analyticsLoading7Days } =
-    useOrderAnalytics(last7Days, now);
-  const { data: analytics30Days, isLoading: analyticsLoading30Days } =
-    useOrderAnalytics(last30Days, now);
-  const { data: stats7Days } = useOrderStats(last7Days, now);
-  const { data: stats30Days } = useOrderStats(last30Days, now);
 
   // NEW: Use Financial KPIs RPC for more accurate aggregated data
   const { data: kpis7Days, isLoading: kpisLoading7Days } = useFinancialKPIs(
@@ -129,38 +112,51 @@ export default function MerchantDashboardPage() {
     now
   );
 
+  // ---- Financial reports: one shared range drives all five cards, mirroring
+  // how the Overview container works. Previously each card had its own window
+  // (four hardcoded to 30 days, the treemap with its own dropdown).
+  const [financialRange, setFinancialRange] = useState<OverviewRange>("30d");
+  const { from: financialFrom, to: financialTo } = useMemo(
+    () => resolveOverviewRange(financialRange),
+    [financialRange]
+  );
+
   // Waterfall report for dashboard card
   const { data: waterfallReport, isLoading: waterfallLoading } =
-    useWaterfallReport(last30Days, now);
+    useWaterfallReport(financialFrom, financialTo);
 
   // Transaction volume report (Credits vs Debits by payment type)
   const { data: transactionVolumeReport, isLoading: transactionVolumeLoading } =
-    useTransactionVolumeReport(last30Days, now);
+    useTransactionVolumeReport(financialFrom, financialTo);
 
   // Net Collected by Order Source (TICKET-005)
   const { data: netCollectedBySourceReport, isLoading: netCollectedBySourceLoading } =
-    useNetCollectedBySourceReport(last30Days, now);
+    useNetCollectedBySourceReport(financialFrom, financialTo);
 
   // Taxable Revenue by Tender Type (TICKET-002)
   const { data: taxableRevenueByTenderReport, isLoading: taxableRevenueByTenderLoading } =
-    useTaxableRevenueByTenderReport(last30Days, now);
-
-  // Revenue by Category tree map
-  const [categoryDateRange, setCategoryDateRange] =
-    useState<DateRangeOption>("7d");
-
-  const categoryDateFrom = useMemo(() => {
-    const date = new Date();
-    const days = categoryDateRange === "7d" ? 7 : categoryDateRange === "30d" ? 30 : 90;
-    date.setDate(date.getDate() - days);
-    date.setHours(0, 0, 0, 0);
-    return date;
-  }, [categoryDateRange]);
+    useTaxableRevenueByTenderReport(financialFrom, financialTo);
 
   const {
     data: revenueByCategoryReport,
     isLoading: revenueByCategoryLoading,
-  } = useRevenueByCategoryReport(categoryDateFrom, now);
+  } = useRevenueByCategoryReport(financialFrom, financialTo);
+
+  // ---- Overview: one shared date range drives every section in the container.
+  const [range, setRange] = useState<OverviewRange>("30d");
+  const { from: rangeFrom, to: rangeTo } = useMemo(
+    () => resolveOverviewRange(range),
+    [range]
+  );
+
+  const { data: rangeKpis, isLoading: rangeKpisLoading } = useFinancialKPIs(
+    rangeFrom,
+    rangeTo
+  );
+  const { data: rangeAnalytics, isLoading: rangeAnalyticsLoading } =
+    useOrderAnalytics(rangeFrom, rangeTo);
+
+  const { data: userInfo } = useUserInfo();
 
   const menusList = Array.isArray(menus) ? menus : [];
   const itemsList = Array.isArray(menuItems) ? menuItems : [];
@@ -173,56 +169,10 @@ export default function MerchantDashboardPage() {
     (l) => l.is_accepting_orders
   ).length;
 
-  // Calculate today's stats - use KPIs if available for consistency
-  const todayStats = useMemo(() => {
-    // Local calendar "today" (e.g. "2026-06-29"), computed fresh on every
-    // recompute — never a frozen mount-time value. get_financial_kpis buckets
-    // daily_stats by the location-local calendar day, so we match on a local
-    // date string (not the UTC `toISOString()` date, which drifts across the
-    // UTC/local midnight boundary and would select the wrong day).
-    const todayKey = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
-
-    if (kpis7Days?.daily_stats) {
-      // No bucket for today => 0 recognized orders today (NOT the latest
-      // historical day — the previous code fell through to yesterday's count).
-      const todayMatch = kpis7Days.daily_stats.find((d) =>
-        d.date.startsWith(todayKey)
-      );
-
-      return {
-        revenue: todayMatch?.net_sales || 0,
-        orders: todayMatch?.order_count || 0,
-        completed: todayMatch?.order_count || 0,
-      };
-    }
-
-    // Fallback (KPIs unavailable): recognized orders created today, locally.
-    // Both revenue and count derive from the same set so they agree.
-    const todayOrders = ordersList.filter((order) => {
-      const orderKey = new Date(order.created_at).toLocaleDateString("en-CA");
-      return orderKey === todayKey && isOrderReportable(order);
-    });
-
-    const revenueToday = todayOrders.reduce(
-      (sum, o) => sum + Number(o.total_amount || 0),
-      0
-    );
-    const ordersToday = todayOrders.length;
-
-    return {
-      revenue: revenueToday,
-      orders: ordersToday,
-      completed: ordersToday,
-    };
-  }, [ordersList, kpis7Days]);
-
-  // Calculate growth (comparing last 7 days to previous 7 days)
+  // Growth: last 7 days vs the 7 before them, extracted from the 30-day KPIs.
+  // Note this is always a 7-day comparison and does not follow the Overview
+  // range picker — the underlying RPC would need a second window to do that.
   const growth = useMemo(() => {
-    // Current period revenue
-    const currentPeriod = kpis7Days?.summary?.net_sales || 0;
-
-    // We already have 7-day KPIs. For growth, we ideally want the 7 days before those.
-    // But since we have 30 days, we can extract the previous period from there.
     if (!kpis30Days?.daily_stats) return 0;
 
     const last14Days = kpis30Days.daily_stats.slice(-14);
@@ -235,33 +185,7 @@ export default function MerchantDashboardPage() {
 
     if (previous7DaysSales === 0) return last7DaysSales > 0 ? 100 : 0;
     return ((last7DaysSales - previous7DaysSales) / previous7DaysSales) * 100;
-  }, [kpis7Days, kpis30Days]);
-
-  // Prepare chart data for revenue trend
-  const revenueChartData = useMemo(() => {
-    const data = fillDailyFinancialStats(kpis7Days?.daily_stats || [], {
-      from: last7Days,
-      to: now,
-    });
-    if (data.length === 0) return [];
-
-    return data.map((item) => ({
-      date: new Date(item.date).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      }),
-      sales: item.net_sales,
-    }));
-
-  }, [kpis7Days, last7Days, now]);
-
-  // Chart configuration
-  const chartConfig = {
-    sales: {
-      label: "Revenue",
-      color: "#3b82f6",
-    },
-  } satisfies ChartConfig;
+  }, [kpis30Days]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -279,83 +203,191 @@ export default function MerchantDashboardPage() {
     catering: "Catering",
   };
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Header with Location Context */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-muted-foreground flex items-center gap-2">
-            {isAllLocations ? (
-              <>
-                <Building2 className="h-4 w-4" />
-                Viewing all {locations.length} location
-                {locations.length !== 1 ? "s" : ""}
-              </>
-            ) : (
-              <>
-                <MapPin className="h-4 w-4" />
-                Viewing {selectedLocation?.name || "Unknown Location"}
-              </>
-            )}
-          </p>
-        </div>
-        {selectedLocation && (
-          <div className="flex items-center gap-2">
-            <Badge
-              variant={selectedLocation.is_active ? "default" : "secondary"}
-            >
-              {selectedLocation.is_active ? "Active" : "Inactive"}
-            </Badge>
-            <Badge
-              variant={
-                selectedLocation.is_accepting_orders ? "default" : "outline"
-              }
-              className={
-                selectedLocation.is_accepting_orders ? "bg-green-600" : ""
-              }
-            >
-              {selectedLocation.is_accepting_orders
-                ? "Accepting Orders"
-                : "Not Accepting"}
-            </Badge>
-          </div>
-        )}
-      </div>
+  // ---- Overview derived data (all keyed off the shared `range`) ----
 
-      {/* Location Quick Info (when viewing specific location) */}
-      {/* {selectedLocation && (
-                <Card className="border-primary/30 bg-gradient-to-r from-primary/5 to-transparent animate-in fade-in slide-in-from-top-2 duration-300">
-                    <CardContent className="py-4">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="flex items-center gap-4">
-                                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                                    <MapPin className="h-6 w-6 text-primary" />
-                                </div>
-                                <div>
-                                    <h3 className="font-semibold text-lg">{selectedLocation.name}</h3>
-                                    <p className="text-sm text-muted-foreground">
-                                        {selectedLocation.city}, {selectedLocation.state}
-                                    </p>
-                                </div>
-                            </div>
-                            <Button variant="outline" asChild>
-                                <Link href="/dashboard/locations">
-                                    Manage Location
-                                    <ArrowRight className="h-4 w-4 ml-2" />
-                                </Link>
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            )} */}
+  const rangeChartData = useMemo(() => {
+    const data = fillDailyFinancialStats(rangeKpis?.daily_stats || [], {
+      from: rangeFrom,
+      to: rangeTo,
+    });
+    return data.map((item) => ({
+      date: new Date(item.date).toLocaleDateString("en-US", {
+        month: "short",
+        day: "2-digit",
+      }),
+      sales: item.net_sales,
+    }));
+  }, [rangeKpis, rangeFrom, rangeTo]);
+
+  // Palette for the order-type proportion bar. Fixed hues so a type keeps its
+  // colour as counts change between ranges.
+  const ORDER_TYPE_COLORS: Record<string, string> = {
+    dine_in: "#1e40af",
+    qr_dine_in: "#0C4FD1",
+    takeout: "#3b82f6",
+    delivery: "#60a5fa",
+    online: "#93c5fd",
+    catering: "#bfdbfe",
+  };
+
+  const orderTypeItems = useMemo(() => {
+    const breakdown = rangeAnalytics?.orderTypeBreakdown;
+    if (!breakdown) return [];
+    return Object.entries(breakdown)
+      .filter(([, count]) => count > 0)
+      .map(([type, count]) => ({
+        label: orderTypeLabels[type] || type,
+        value: count,
+        color: ORDER_TYPE_COLORS[type] || "#94a3b8",
+      }));
+  }, [rangeAnalytics]);
+
+  // bestSellingItems arrives sorted by revenue desc. "Least selling" is the
+  // tail of the same list reversed — only meaningful once there's enough data
+  // that the two ends don't overlap.
+  const bestSelling = useMemo(
+    () => (rangeAnalytics?.bestSellingItems || []).slice(0, 5),
+    [rangeAnalytics]
+  );
+
+  const leastSelling = useMemo(() => {
+    const all = rangeAnalytics?.bestSellingItems || [];
+    if (all.length < 10) return [];
+    return all.slice(-5).reverse();
+  }, [rangeAnalytics]);
+
+  const outOfStockCount = useMemo(
+    () => itemsList.filter((i: any) => i.availability === false).length,
+    [itemsList]
+  );
+
+  // No entrance animation on the root wrapper: `animate-in` applies an
+  // animation whose keyframes touch `transform`, which makes the element a
+  // containing block for fixed/sticky descendants. That silently breaks the
+  // `sticky` range bars in the Overview and Financial reports containers —
+  // they'd resolve against this div instead of the page's scroll container and
+  // never stick. The fade lives on the greeting hero instead.
+  return (
+    <div className="dashboard-flat space-y-6">
+      {/*
+        The dashboard used to stack ~18 bordered, shadowed Cards in one column.
+        It now reads as: a greeting hero, then a single "Overview" container
+        whose sections are separated by hairlines instead of each being its own
+        box. Several of the extracted report cards below don't accept a
+        className, so they're de-chromed here via the data-slot the shared Card
+        already emits — scoped to this page, leaving the shared Card untouched
+        (it's used across dashboard, manage and storefront).
+      */}
+      <style>{`
+        /* --- Report cards as flat sections -------------------------------
+           Each card below was built as a standalone box. Inside the shared
+           container they must read as sections instead. These rules use
+           !important because the card components hardcode Tailwind utilities
+           (text-base, border shadow-sm) that otherwise win on specificity —
+           and several don't accept a className to override from the parent. */
+        .dashboard-flat .overview-shell [data-slot="card"] {
+          border: 0 !important;
+          box-shadow: none !important;
+          background: transparent !important;
+          border-radius: 0 !important;
+          font-variant-numeric: tabular-nums;
+          /* Each report Card IS a direct child of the sections wrapper, so the
+             Card's own py-6 lands on the same element as anything the wrapper
+             sets — equal specificity, order-dependent. Own the section rhythm
+             here instead. An earlier revision zeroed padding here, which is
+             what removed the space above the first section. */
+          padding-top: 2rem !important;
+          padding-bottom: 2rem !important;
+        }
+        .dashboard-flat .overview-shell [data-slot="card-header"],
+        .dashboard-flat .overview-shell [data-slot="card-content"],
+        .dashboard-flat .overview-shell [data-slot="card-footer"] {
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+        }
+
+        /* Headings: quiet label, so the figures carry the emphasis. Covers both
+           CardTitle and the raw <h3> that TransactionVolumeCard uses. */
+        .dashboard-flat .overview-shell [data-slot="card-title"],
+        .dashboard-flat .overview-shell [data-slot="card-header"] h3 {
+          font-size: 0.9375rem !important;
+          font-weight: 600 !important;
+          letter-spacing: -0.01em !important;
+          color: var(--foreground);
+        }
+        .dashboard-flat .overview-shell [data-slot="card-description"],
+        .dashboard-flat .overview-shell [data-slot="card-header"] p {
+          font-size: 0.8125rem !important;
+        }
+
+        /* Controls: unify the mixed bag of selects, icon buttons, badges and
+           toggles across these cards into one quiet, rounded style. */
+        .dashboard-flat .overview-shell button[data-slot="select-trigger"],
+        .dashboard-flat .overview-shell [data-slot="card-header"] button {
+          border-radius: 9999px;
+          font-size: 0.8125rem;
+        }
+        .dashboard-flat .overview-shell [data-slot="badge"] {
+          border-radius: 9999px;
+          font-weight: 500;
+        }
+
+        /* Callout / note strips (Top channel, Discrepancy, Balanced, Note:):
+           keep the coloured icon + text, drop the box around it. */
+        .dashboard-flat .overview-shell [class*="bg-blue-50"][class*="border-blue"],
+        .dashboard-flat .overview-shell [class*="bg-amber-50"][class*="border-amber"],
+        .dashboard-flat .overview-shell [class*="bg-emerald-50"][class*="border-emerald"] {
+          background: transparent !important;
+          border: 0 !important;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+        }
+
+        /* Waterfall total rows (Net Collected / Net Revenue): the tinted
+           gradient pill with a border reads as yet another box. Keep the row,
+           lose the chrome — weight alone marks it as a total. */
+        .dashboard-flat .overview-shell [class*="from-primary/5"] {
+          background: transparent !important;
+          background-image: none !important;
+          border: 0 !important;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+        }
+        /* Non-total rows align to the same left edge now that the pill is gone. */
+        .dashboard-flat .overview-shell [data-slot="collapsible-trigger"] {
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+        }
+
+        /* Breathing room between a section's header and its body — the legend
+           row was sitting flush under "Net Revenue by Category". The cards set
+           their own pb-* on the header; neutralise it and let the card's flex
+           gap (set above) own the spacing so it's consistent everywhere. */
+        .dashboard-flat .overview-shell [data-slot="card-header"] {
+          padding-bottom: 0 !important;
+        }
+        .dashboard-flat .overview-shell [data-slot="card"] {
+          gap: 1.5rem;
+        }
+      `}</style>
+
+      {/* Greeting hero. The page's entrance fade lives here rather than on the
+          root wrapper — see the note there on sticky containing blocks. */}
+      <div className="animate-in fade-in duration-500">
+        <DashboardGreeting
+          name={userInfo?.name}
+          weekRevenue={kpis7Days?.summary?.net_sales || 0}
+          isLoading={kpisLoading7Days}
+          outOfStockCount={outOfStockCount}
+        />
+      </div>
 
       {/* PIN setup banner — shown when user has POS assignments but no PIN yet */}
       {!pinBannerDismissed &&
         pinStatus &&
         pinStatus.locationCount > 0 &&
         !pinStatus.hasPinSet && (
-          <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+          <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
             <Lock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
             <div className="flex-1">
               <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
@@ -370,87 +402,107 @@ export default function MerchantDashboardPage() {
             <Button variant="outline" size="sm" asChild>
               <Link href="/dashboard/staff">Set PIN</Link>
             </Button>
+            {/* Close: same filled, borderless material as the search fields,
+                circled rather than pilled. Tinted amber to sit inside the
+                banner rather than reading as a foreign control. */}
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 text-amber-600 hover:text-amber-800 dark:text-amber-400"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border-0 bg-amber-500/15 text-amber-700 shadow-none transition-colors hover:bg-amber-500/25 hover:text-amber-900 dark:text-amber-400 dark:hover:text-amber-200"
               onClick={() => setPinBannerDismissed(true)}
             >
               <X className="h-4 w-4" />
+              <span className="sr-only">Dismiss</span>
             </Button>
           </div>
         )}
 
-      {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card
-          className="relative overflow-hidden border-none shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
-          style={{ animationDelay: "0ms" }}
-        >
-          <div className="absolute inset-0  from-blue-600/10 via-transparent to-transparent opacity-50" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              Total Revenue
-            </CardTitle>
-            <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-              <DollarSign className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            {kpisLoading7Days ? (
-              <Skeleton className="h-8 w-24" />
+      {/* ================= OVERVIEW ================= */}
+      <div>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-xl font-semibold tracking-tight">Overview</h2>
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            {isAllLocations ? (
+              <>
+                <Building2 className="h-4 w-4" />
+                All {locations.length} location
+                {locations.length !== 1 ? "s" : ""}
+              </>
             ) : (
-              <div className="text-3xl font-bold tracking-tight">
-                {formatCurrency(kpis7Days?.summary?.net_sales || 0)}
-              </div>
+              <>
+                <MapPin className="h-4 w-4" />
+                {selectedLocation?.name || "Unknown Location"}
+              </>
             )}
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-xs text-muted-foreground">Last 7 days</p>
-              {growth !== 0 && (
-                <Badge
-                  variant={growth > 0 ? "default" : "destructive"}
-                  className={cn(
-                    "text-[10px] h-4 px-1 leading-none",
-                    growth > 0 && "bg-emerald-500 hover:bg-emerald-600"
-                  )}
-                >
-                  {growth > 0 ? "+" : ""}
-                  {growth.toFixed(1)}%
-                </Badge>
-              )}
-            </div>
+          </p>
+        </div>
 
-            {revenueChartData.length > 0 && (
-              <div className="mt-4  w-full overflow-hidden">
+        {/* `overflow-clip` preserves sticky positioning while keeping the
+            range bar's background inside the shell's rounded border. */}
+        <div className="overflow-clip rounded-3xl border bg-card">
+          {/* Sticky within this container only: the bar rides down as the
+              Overview scrolls, then releases once the section ends. */}
+          {/* Translucent + blurred so content dissolves as it scrolls under,
+              rather than cutting off at a hard edge. The `after` strip hangs a
+              short fade below the bar to soften the transition further. */}
+          <div className="sticky -top-4 sm:-top-6 z-20 rounded-t-3xl bg-card/80 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-6 after:bg-gradient-to-b after:from-card/80 after:to-transparent">
+            <OverviewRangeTabs value={range} onChange={setRange} />
+          </div>
+
+          {/* Net sales + trend */}
+          <OverviewSection
+            icon={CircleDollarSign}
+            label="Net sales"
+            value={
+              <span className="flex flex-wrap items-baseline gap-x-3">
+                {formatCurrency(rangeKpis?.summary?.net_sales || 0)}
+                {growth !== 0 && (
+                  <span
+                    className={cn(
+                      "text-sm font-medium",
+                      growth > 0 ? "text-emerald-600" : "text-rose-600"
+                    )}
+                  >
+                    {growth > 0 ? "+" : ""}
+                    {growth.toFixed(1)}%
+                    <span className="ml-1 font-normal text-muted-foreground">
+                      vs. previous 7 days
+                    </span>
+                  </span>
+                )}
+              </span>
+            }
+            isLoading={rangeKpisLoading}
+            href="/dashboard/reports"
+            divider
+          >
+            {rangeChartData.length > 0 ? (
+              <div className="h-[220px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart
-                    data={revenueChartData}
-                    margin={{ left: 0, right: 0, top: 5, bottom: 0 }}
+                    data={rangeChartData}
+                    margin={{ left: 0, right: 0, top: 8, bottom: 0 }}
                   >
                     <defs>
-                      <linearGradient
-                        id="colorSales"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#3b82f6"
-                          stopOpacity={0.3}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#3b82f6"
-                          stopOpacity={0}
-                        />
+                      <linearGradient id="overviewSales" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <YAxis
-                      hide
-                      domain={[0, "auto"]}
-                      padding={{ top: 10, bottom: 10 }}
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={10}
+                      tick={{ fontSize: 12 }}
+                      interval="preserveStartEnd"
+                      minTickGap={24}
+                    />
+                    <YAxis hide domain={[0, "auto"]} />
+                    <Tooltip
+                      formatter={(v) => formatCurrency(Number(v))}
+                      labelStyle={{ fontSize: 12 }}
+                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
                     />
                     <Area
                       type="monotone"
@@ -458,494 +510,220 @@ export default function MerchantDashboardPage() {
                       stroke="#3b82f6"
                       strokeWidth={2}
                       fillOpacity={1}
-                      fill="url(#colorSales)"
+                      fill="url(#overviewSales)"
                       baseValue={0}
                       isAnimationActive={false}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card
-          className="relative overflow-hidden border-none shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
-          style={{ animationDelay: "50ms" }}
-        >
-          <div className="absolute inset-0  from-emerald-600/10 via-transparent to-transparent opacity-50" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              Orders Today
-            </CardTitle>
-            <div className="h-8 w-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <ShoppingCart className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            {ordersLoading ? (
-              <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-3xl font-bold tracking-tight">
-                {todayStats.orders}
-              </div>
+              <p className="text-sm text-muted-foreground">
+                No sales in this period
+              </p>
             )}
-            <p className="text-xs text-muted-foreground mt-1">
-              <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                {todayStats.completed}
-              </span>{" "}
-              completed
-            </p>
-          </CardContent>
-        </Card>
-        <Card
-          className="relative overflow-hidden border-none shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
-          style={{ animationDelay: "100ms" }}
-        >
-          <div className="absolute inset-0  from-purple-600/10 via-transparent to-transparent opacity-50" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              {isAllLocations ? "Active Locations" : "Team Members"}
-            </CardTitle>
-            <div className="h-8 w-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-              {isAllLocations ? (
-                <MapPin className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-              ) : (
-                <Users className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            {staffLoading ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <div className="text-3xl font-bold tracking-tight">
-                {isAllLocations ? activeLocations : staffMembers?.length}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">
-              {isAllLocations
-                ? `${acceptingOrdersCount} accepting orders`
-                : staffMembers?.length
-                ? "At this location"
-                : "No team members"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card
-          className="relative overflow-hidden border-none shadow-lg transition-all hover:shadow-xl animate-in fade-in slide-in-from-bottom-4 duration-300"
-          style={{ animationDelay: "150ms" }}
-        >
-          <div className="absolute inset-0  from-orange-600/10 via-transparent to-transparent opacity-50" />
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              Growth
-            </CardTitle>
-            <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-              <TrendingUp className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-            </div>
-          </CardHeader>
-          <CardContent className="relative z-10">
-            {kpisLoading7Days ? (
-              <Skeleton className="h-8 w-16" />
-            ) : (
-              <div
-                className={cn(
-                  "text-3xl font-bold tracking-tight",
-                  growth > 0
-                    ? "text-emerald-600"
-                    : growth < 0
-                    ? "text-rose-600"
-                    : "text-muted-foreground"
-                )}
-              >
-                {growth > 0 ? "+" : ""}
-                {growth.toFixed(1)}%
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">
-              Last 7 days vs previous
-            </p>
-          </CardContent>
-        </Card>
-      </div>
 
-      {/* Quick Actions / Summaries */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {/* Menus Summary */}
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between">
+            {orderTypeItems.length > 0 && (
+              <div className="mt-6">
+                <OverviewSubLabel>By order type</OverviewSubLabel>
+                <OverviewBreakdown items={orderTypeItems} />
+              </div>
+            )}
+          </OverviewSection>
+
+          {/* Total orders */}
+          <OverviewSection
+            icon={ShoppingCart}
+            label="Total orders"
+            value={
+              <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                {rangeAnalytics?.totalOrders ?? 0}
+                <span className="text-sm font-normal tracking-normal text-muted-foreground">
+                  {formatCurrency(rangeAnalytics?.avgOrderValue || 0)} avg
+                </span>
+              </span>
+            }
+            isLoading={rangeAnalyticsLoading}
+            href="/dashboard/orders"
+          >
             <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Utensils className="h-4 w-4" />
-                Menus
-              </CardTitle>
-              <CardDescription>Your active menus</CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/dashboard/menu">
-                View All
-                <ArrowRight className="h-4 w-4 ml-1" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {menusLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-3 w-32" />
-              </div>
-            ) : menusList.length === 0 ? (
-              <div className="text-sm text-muted-foreground">
-                <p>No menus created yet</p>
-                <Button variant="link" className="p-0 h-auto" asChild>
-                  <Link href="/dashboard/menu">Create your first menu</Link>
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">{activeMenus}</span>
-                  <span className="text-sm text-muted-foreground">
-                    active menus
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Badge variant="outline">{menusList.length} total</Badge>
-                  <Badge variant="outline">{itemsList.length} items</Badge>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Schedules Summary */}
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Schedules
-              </CardTitle>
-              <CardDescription>Menu availability schedules</CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/dashboard/schedules">
-                View All
-                <ArrowRight className="h-4 w-4 ml-1" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {schedulesLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-3 w-32" />
-              </div>
-            ) : schedulesList.length === 0 ? (
-              <div className="text-sm text-muted-foreground">
-                <p>No schedules created yet</p>
-                <Button variant="link" className="p-0 h-auto" asChild>
-                  <Link href="/dashboard/schedules">Create a schedule</Link>
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">
-                    {schedulesList.length}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    schedules
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Controlling menu availability
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Locations Summary (only in all-locations view) */}
-        {isAllLocations ? (
-          <Card className="transition-all hover:shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  Locations
-                </CardTitle>
-                <CardDescription>Your business locations</CardDescription>
-              </div>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard/locations">
-                  Manage
-                  <ArrowRight className="h-4 w-4 ml-1" />
-                </Link>
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {locations.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  <p>No locations added yet</p>
-                  <Button variant="link" className="p-0 h-auto" asChild>
-                    <Link href="/dashboard/locations/new">
-                      Add your first location
-                    </Link>
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">
-                      {locations.length}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      locations
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1 text-sm">
-                      <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-                      <span>{activeLocations} active</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      <span>{locations.length - activeLocations} inactive</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          /* Staff Summary (when viewing specific location) */
-          <Card className="transition-all hover:shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Team
-                </CardTitle>
-                <CardDescription>Staff at this location</CardDescription>
-              </div>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard/staff">
-                  Manage
-                  <ArrowRight className="h-4 w-4 ml-1" />
-                </Link>
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {staffLoading ? (
-                <Skeleton className="h-8 w-16" />
-              ) : staffMembers?.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  <p>No team members</p>
-                  <Button variant="link" className="p-0 h-auto" asChild>
-                    <Link href="/dashboard/staff">Add a team member</Link>
-                  </Button>
-                </div>
-              ) : (
+              <OverviewSubLabel>Recent orders</OverviewSubLabel>
+              {ordersLoading ? (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">
-                      {staffMembers?.length}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      team members
-                    </span>
-                  </div>
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                </div>
+              ) : ordersList.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No orders yet</p>
+              ) : (
+                <div>
+                  {ordersList.slice(0, 5).map((order) => (
+                    <OverviewListRow
+                      key={order.id}
+                      href="/dashboard/orders"
+                      title={
+                        <span className="flex items-center gap-2">
+                          #{order.display_number || order.order_number}
+                          {order.order_type === "qr_dine_in" && (
+                            <QrCode className="h-3.5 w-3.5 shrink-0 text-[#0C4FD1]" />
+                          )}
+                          <span className="text-muted-foreground capitalize">
+                            {order.status}
+                          </span>
+                        </span>
+                      }
+                      meta={
+                        orderTypeLabels[order.order_type] ||
+                        order.order_type.replace("_", " ")
+                      }
+                      trailing={formatCurrency(order.total_amount)}
+                    />
+                  ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          </OverviewSection>
+
+          {/* Items */}
+          <OverviewSection
+            icon={Tag}
+            label="Items"
+            href="/dashboard/menu"
+            linkLabel="View menu"
+          >
+            <OverviewSplit>
+              <div>
+                <OverviewSubLabel>Best selling items</OverviewSubLabel>
+                {bestSelling.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No sales in this period
+                  </p>
+                ) : (
+                  <div>
+                    {bestSelling.map((item) => (
+                      <OverviewListRow
+                        key={item.item_name}
+                        title={item.item_name}
+                        meta={`${item.quantity} sold`}
+                        trailing={formatCurrency(item.revenue)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <OverviewSubLabel>Least selling items</OverviewSubLabel>
+                {leastSelling.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Not enough data
+                  </p>
+                ) : (
+                  <div>
+                    {leastSelling.map((item) => (
+                      <OverviewListRow
+                        key={item.item_name}
+                        title={item.item_name}
+                        meta={`${item.quantity} sold`}
+                        trailing={formatCurrency(item.revenue)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </OverviewSplit>
+          </OverviewSection>
+
+          {/* Menus & schedules */}
+          <OverviewSection
+            icon={Utensils}
+            label="Menus & schedules"
+            value={activeMenus}
+            isLoading={menusLoading}
+            href="/dashboard/menu"
+            linkLabel="View all"
+          >
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <span>{menusList.length} total menus</span>
+              <span aria-hidden="true">·</span>
+              <span>{itemsList.length} items</span>
+              <span aria-hidden="true">·</span>
+              <span>{schedulesList.length} schedules</span>
+            </div>
+          </OverviewSection>
+
+          {/* Locations or team */}
+          {isAllLocations ? (
+            <OverviewSection
+              icon={MapPin}
+              label="Locations"
+              value={locations.length}
+              href="/dashboard/locations"
+              linkLabel="Manage"
+            >
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+                  {activeLocations} active
+                </span>
+                <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-500">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  {locations.length - activeLocations} inactive
+                </span>
+                <span className="text-muted-foreground">
+                  {acceptingOrdersCount} accepting orders
+                </span>
+              </div>
+            </OverviewSection>
+          ) : (
+            <OverviewSection
+              icon={Users}
+              label="Team members"
+              value={staffMembers?.length ?? 0}
+              isLoading={staffLoading}
+              href="/dashboard/staff"
+              linkLabel="Manage"
+            >
+              <p className="text-sm text-muted-foreground">
+                {staffMembers?.length
+                  ? "At this location"
+                  : "No team members yet"}
+              </p>
+            </OverviewSection>
+          )}
+        </div>
       </div>
 
-      {/* Sales Analytics Section */}
-      {analytics7Days && (
-        <div className="grid gap-4 md:grid-cols-2">
-          {/* Revenue Trend */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Revenue Trend</CardTitle>
-              <CardDescription>Last 7 days sales performance</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {analyticsLoading7Days ? (
-                <Skeleton className=" w-full" />
-              ) : revenueChartData.length > 0 ? (
-                <div className="">
-                  <ChartContainer config={chartConfig}>
-                    <LineChart
-                      accessibilityLayer
-                      data={revenueChartData}
-                      margin={{
-                        left: 12,
-                        right: 12,
-                        top: 12,
-                        bottom: 12,
-                      }}
-                    >
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="date"
-                        tickLine={false}
-                        axisLine={false}
-                        tickMargin={8}
-                        tick={{ fontSize: 12 }}
-                      />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tickMargin={8}
-                        tick={{ fontSize: 12 }}
-                        tickFormatter={(value) => `$${value.toFixed(0)}`}
-                        domain={[0, "auto"]}
-                      />
-                      <ChartTooltip
-                        cursor={false}
-                        content={<ChartTooltipContent hideLabel />}
-                      />
-                      <Line
-                        dataKey="sales"
-                        type="monotone"
-                        stroke="var(--color-sales)"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ChartContainer>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    No sales data available
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+      {/* ================= FINANCIAL REPORTS ================= */}
+      <div>
+        <h2 className="mb-3 text-xl font-semibold tracking-tight">
+          Financial reports
+        </h2>
 
-          {/* Order Type Breakdown */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Order Types</CardTitle>
-              <CardDescription>Distribution by order type</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {analyticsLoading7Days ? (
-                <Skeleton className=" w-full" />
-              ) : analytics7Days.orderTypeBreakdown ? (
-                <div className="space-y-3">
-                  {Object.entries(analytics7Days.orderTypeBreakdown).map(
-                    ([type, count]) => {
-                      if (count === 0) return null;
-                      const total = Object.values(
-                        analytics7Days.orderTypeBreakdown
-                      ).reduce((sum, c) => sum + c, 0);
-                      const percentage = total > 0 ? (count / total) * 100 : 0;
-                      const typeLabels: Record<string, string> = {
-                        dine_in: "Dine In",
-                        qr_dine_in: "QR Table",
-                        takeout: "Takeout",
-                        delivery: "Delivery",
-                        online: "Online",
-                        catering: "Catering",
-                      };
-                      return (
-                        <div key={type} className="space-y-1">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="font-medium">
-                              {typeLabels[type] || type}
-                            </span>
-                            <span className="text-muted-foreground">
-                              {count} ({percentage.toFixed(0)}%)
-                            </span>
-                          </div>
-                          <div className="h-2 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-primary rounded-full transition-all"
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    }
-                  )}
-                  {Object.values(analytics7Days.orderTypeBreakdown).every(
-                    (c) => c === 0
-                  ) && (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No orders in this period
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    No order data available
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
+        {/* One container, sections divided by hairlines — same treatment as
+            Overview. Each child card is de-chromed by the .overview-shell
+            rules so its own border/shadow doesn't nest inside this one.
+            `overflow-clip` keeps the sticky range bar working while clipping
+            its background to the shell's rounded corners. */}
+        <div className="overview-shell overflow-clip rounded-3xl border bg-card">
+          {/* Sticks to the top of the viewport while the section scrolls past,
+              so the active range stays visible and changeable throughout. */}
+          {/* Translucent + blurred so content dissolves as it scrolls under,
+              rather than cutting off at a hard edge. The `after` strip hangs a
+              short fade below the bar to soften the transition further. */}
+          <div className="sticky -top-4 sm:-top-6 z-20 rounded-t-3xl bg-card/80 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-6 after:bg-gradient-to-b after:from-card/80 after:to-transparent">
+            <OverviewRangeTabs
+              value={financialRange}
+              onChange={setFinancialRange}
+            />
+          </div>
+
+          <div className="[&>*]:border-t [&>*]:border-border/60 [&>*:first-child]:border-t-0 [&>*]:px-6">
 
       {/* Net Revenue by Category Tree Map */}
       <NetRevenueByCategoryCard
         report={revenueByCategoryReport}
         isLoading={revenueByCategoryLoading}
-        dateRange={categoryDateRange}
-        onDateRangeChange={setCategoryDateRange}
       />
-
-      {/* Best Selling Items */}
-      {analytics7Days?.bestSellingItems &&
-        analytics7Days.bestSellingItems.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Best Selling Items</CardTitle>
-              <CardDescription>
-                Top items by revenue (last 7 days)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {analytics7Days.bestSellingItems
-                  .slice(0, 5)
-                  .map((item, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between gap-3 p-2 rounded-lg border"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Badge
-                          variant="outline"
-                          className="w-6 h-6 flex items-center justify-center p-0 shrink-0"
-                        >
-                          {index + 1}
-                        </Badge>
-                        <span className="font-medium text-sm truncate">
-                          {item.item_name}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4 shrink-0">
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          {item.quantity} sold
-                        </span>
-                        <span className="font-semibold text-sm whitespace-nowrap">
-                          {formatCurrency(item.revenue)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
       {/* Transaction Volume Analysis (Credits vs Debits) */}
       <TransactionVolumeCard
@@ -965,114 +743,14 @@ export default function MerchantDashboardPage() {
         isLoading={taxableRevenueByTenderLoading}
       />
 
-      {/* Recent Orders */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Recent Orders</CardTitle>
-          <CardDescription>
-            {isAllLocations
-              ? "Latest orders across all locations"
-              : `Latest orders at ${selectedLocation?.name}`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {ordersLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-16 w-full" />
-            </div>
-          ) : ordersList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
-                <Clock className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <p className="text-sm text-muted-foreground">No orders yet</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Orders will appear here as you process them
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {ordersList.slice(0, 5).map((order) => (
-                <div
-                  key={order.id}
-                  className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
-                        Order #{order.display_number || order.order_number}
-                      </span>
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {order.status}
-                      </Badge>
-                      {order.order_type === "qr_dine_in" && (
-                        <Badge
-                          className="text-xs"
-                          style={{ backgroundColor: "#0C4FD1", color: "#FFFFFF" }}
-                        >
-                          <QrCode className="mr-1 h-3 w-3" />
-                          QR Table
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(order.created_at).toLocaleString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                    {order.order_type === "qr_dine_in" && order.table_number ? (
-                      <div className="mt-2 flex items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className="border-blue-200 bg-blue-50 text-blue-700"
-                        >
-                          Table {order.table_number}
-                        </Badge>
-                        <Link
-                          href="/dashboard/tables"
-                          className="text-xs font-medium"
-                          style={{ color: "#0C4FD1" }}
-                        >
-                          View on floor plan
-                        </Link>
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold">
-                      {formatCurrency(order.total_amount)}
-                    </p>
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {orderTypeLabels[order.order_type] || order.order_type.replace("_", " ")}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {ordersList.length > 5 && (
-                <div className="pt-2">
-                  <Button variant="outline" className="w-full" asChild>
-                    <Link href="/dashboard/orders">
-                      View All Orders
-                      <ArrowRight className="h-4 w-4 ml-2" />
-                    </Link>
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Waterfall Report / Net Collect Statement */}
       <DashboardWaterfallCard
         report={waterfallReport}
         isLoading={waterfallLoading}
       />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
-// 

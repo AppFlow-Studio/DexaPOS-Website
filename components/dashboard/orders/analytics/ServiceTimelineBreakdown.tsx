@@ -1,6 +1,7 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
+import { AnalyticsSubLabel, CHART_CURSOR_FILL, CHART_TICK, ChartTooltipPanel } from './AnalyticsPrimitives'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, YAxis, Cell, Legend } from 'recharts'
 import { Workflow } from 'lucide-react'
@@ -64,37 +65,40 @@ export function ServiceTimelineBreakdown({ phases, isLoading }: ServiceTimelineB
     >
       {!isEmpty && (
         <div className="space-y-6">
-          {/* Stacked Bar Chart */}
-          <div className="w-full h-[120px]">
+          {/* Stacked Bar Chart. The legend wraps to two rows at narrow widths
+              and the bar itself needs ~60px, so 120px clipped both the legend
+              and the tooltip. */}
+          <div className="w-full h-[200px]">
             <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                 <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 10, top: 10, bottom: 10 }}>
-                  <XAxis type="number" tickFormatter={(value) => `${value.toFixed(0)}m`} />
-                  <YAxis dataKey="name" type="category" width={90} />
+                  <XAxis type="number" tick={CHART_TICK} tickFormatter={(value) => `${value.toFixed(0)}m`} />
+                  <YAxis dataKey="name" type="category" width={90} tick={CHART_TICK} />
                   <ChartTooltip
-                    cursor={{ fill: 'rgba(0, 0, 0, 0.1)' }}
+                    shared={false}
+                    cursor={{ fill: CHART_CURSOR_FILL }}
+                    /* Only the hovered segment: listing all five phases made
+                       the panel taller than the chart, so it overflowed the
+                       section and covered the legend. The full list already
+                       lives in "Phase details" below. */
                     content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-white dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-700 shadow-lg">
-                            <div className="space-y-1">
-                              {payload.map((item, index) => (
-                                <div key={index} className="flex items-center justify-between gap-2">
-                                  <span className="text-xs text-slate-700 dark:text-slate-300">
-                                    {PHASE_LABELS[item.dataKey as string]}:
-                                  </span>
-                                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                                    {Number(item.value).toFixed(1)}m
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )
-                      }
-                      return null
+                      if (!active || !payload?.length) return null
+
+                      const item = payload[0]
+
+                      return (
+                        <ChartTooltipPanel
+                          items={[
+                            {
+                              name: PHASE_LABELS[item.dataKey as string],
+                              color: PHASE_COLORS[item.dataKey as string],
+                              value: `${Number(item.value).toFixed(1)}m`,
+                            },
+                          ]}
+                        />
+                      )
                     }}
                   />
-                  <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                  <Legend iconType="circle" wrapperStyle={{ paddingTop: '10px', fontSize: 13, color: 'var(--muted-foreground)' }} />
                   {phases?.map((phase) => (
                     <Bar
                       key={phase.phase}
@@ -111,31 +115,34 @@ export function ServiceTimelineBreakdown({ phases, isLoading }: ServiceTimelineB
 
           {/* Phase Breakdown Table */}
           <div>
-            <p className="text-xs font-semibold mb-3 text-muted-foreground">Phase Details</p>
-            <div className="space-y-2">
+            <AnalyticsSubLabel>Phase details</AnalyticsSubLabel>
+            <div>
               {phases?.map((phase) => {
                 const percentage = totalMinutes > 0 ? (phase.avg_minutes / totalMinutes) * 100 : 0
                 return (
-                  <div key={phase.phase} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
-                    <div className="flex items-center gap-3 flex-1">
-                      <div
-                        className="w-3 h-3 rounded-full"
+                  <div
+                    key={phase.phase}
+                    className="flex items-center justify-between gap-3 border-b border-border/60 py-2.5 last:border-0"
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
                         style={{ backgroundColor: PHASE_COLORS[phase.phase] }}
                       />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm">
                           {PHASE_LABELS[phase.phase]}
                         </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                        <p className="text-[0.8125rem] text-muted-foreground">
                           {phase.sessions} sessions
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm tabular-nums">
                         {phase.avg_minutes.toFixed(1)}m
                       </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                      <p className="text-[0.8125rem] tabular-nums text-muted-foreground">
                         {percentage.toFixed(1)}%
                       </p>
                     </div>

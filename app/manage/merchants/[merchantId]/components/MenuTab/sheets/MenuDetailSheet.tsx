@@ -46,7 +46,6 @@ import {
   ChevronRight,
   Zap,
 } from 'lucide-react'
-import { toast } from 'sonner'
 import Link from 'next/link'
 
 import {
@@ -174,14 +173,11 @@ export function MenuDetailSheet({
       const result = await updateAdminNotes(merchantId, 'menu', menu.id, adminNotes || null)
 
       if (!result.success) {
-        toast.error('Failed to save notes', { description: result.error || undefined })
         return
       }
 
       setOriginalNotes(adminNotes)
-      toast.success('Notes saved')
     } catch (error) {
-      toast.error('An unexpected error occurred')
       console.error(error)
     } finally {
       setIsSavingNotes(false)
@@ -196,15 +192,12 @@ export function MenuDetailSheet({
       const result = await deleteAdminMenu(merchantId, menu.id)
 
       if (!result.success) {
-        toast.error('Failed to delete menu', { description: result.error || undefined })
         return
       }
 
-      toast.success('Menu deleted')
       onSuccess()
       onClose()
     } catch (error) {
-      toast.error('An unexpected error occurred')
       console.error(error)
     } finally {
       setIsDeleting(false)

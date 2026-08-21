@@ -1,9 +1,13 @@
 "use client";
 
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -21,43 +25,14 @@ import {
   Loader2,
 } from "lucide-react";
 import { useProgramAnalytics } from "../hooks/useLoyaltyProgram";
-import type { ProgramAnalytics } from "../../../actions/loyalty-programs";
 import { formatPhoneForDisplay } from "@/lib/phone";
+import { Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 
 interface ProgramAnalyticsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   clerkOrgId: string | undefined;
   programId: string | undefined;
-}
-
-function KPICard({
-  label,
-  value,
-  subtitle,
-  icon: Icon,
-}: {
-  label: string;
-  value: string | number;
-  subtitle?: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <Card className="border-none shadow-sm bg-white dark:bg-card">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {label}
-        </CardTitle>
-        <div className="text-muted-foreground">{Icon}</div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {subtitle && (
-          <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
-        )}
-      </CardContent>
-    </Card>
-  );
 }
 
 export function ProgramAnalyticsSheet({
@@ -69,14 +44,21 @@ export function ProgramAnalyticsSheet({
   const { data: analytics, isLoading, error } = useProgramAnalytics(clerkOrgId, programId);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <SheetHeader className="mb-6">
-          <SheetTitle>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* The dialog owns the rounded corner, so it clips and never scrolls —
+          a scrollbar on a rounded element renders outside its own corner. The
+          body below is the only scroller. */}
+      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-hidden rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-4xl sm:rounded-3xl">
+        <DialogHeader className="shrink-0">
+          <DialogTitle>
             {analytics?.program_name || "Program Analytics"}
-          </SheetTitle>
-        </SheetHeader>
+          </DialogTitle>
+          <DialogDescription>
+            Membership, reward activity, and customer value for this program.
+          </DialogDescription>
+        </DialogHeader>
 
+        <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -90,55 +72,57 @@ export function ProgramAnalyticsSheet({
           </Alert>
         ) : (
           <div className="space-y-6">
-            {/* KPI Cards */}
-            <div className="grid gap-3 grid-cols-2">
-              <KPICard
-                label="Total Members"
-                value={analytics.total_members}
-                subtitle={`${analytics.active_this_month} active`}
-                icon={<Users className="h-5 w-5" />}
-              />
-              <KPICard
-                label="Active Rate"
-                value={`${analytics.active_rate.toFixed(1)}%`}
-                subtitle="this month"
-                icon={<TrendingUp className="h-5 w-5" />}
-              />
-              <KPICard
-                label="Rewards Given"
-                value={analytics.rewards_given}
-                subtitle={`$${analytics.total_savings.toFixed(2)}`}
-                icon={<Gift className="h-5 w-5" />}
-              />
-              <KPICard
-                label="Total Savings"
-                value={`$${analytics.total_savings.toFixed(2)}`}
-                subtitle="customer value"
-                icon={<DollarSign className="h-5 w-5" />}
-              />
-            </div>
+            <Panel padded>
+              <StatRow columns={4}>
+                <StatTile
+                  label="Total members"
+                  value={analytics.total_members}
+                  meta={`${analytics.active_this_month} active`}
+                  icon={<Users />}
+                />
+                <StatTile
+                  label="Active rate"
+                  value={`${analytics.active_rate.toFixed(1)}%`}
+                  meta="This month"
+                  icon={<TrendingUp />}
+                />
+                <StatTile
+                  label="Rewards given"
+                  value={analytics.rewards_given}
+                  meta={`$${analytics.total_savings.toFixed(2)} saved`}
+                  icon={<Gift />}
+                />
+                <StatTile
+                  label="Total savings"
+                  value={`$${analytics.total_savings.toFixed(2)}`}
+                  meta="Customer value"
+                  icon={<DollarSign />}
+                />
+              </StatRow>
+            </Panel>
 
-            {/* Alerts */}
+            {/* Alerts — neutral wells, not amber (§4.6b): these report a
+                count, and the sentence already carries the urgency. */}
             {(analytics.alerts.rewards_expiring_week > 0 || analytics.alerts.inactive_customers > 0) && (
               <div className="space-y-2">
                 {analytics.alerts.rewards_expiring_week > 0 && (
-                  <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                    <AlertDescription className="text-amber-800 dark:text-amber-200">
-                      ⚠️ {analytics.alerts.rewards_expiring_week} reward
+                  <div className="flex min-w-0 items-start gap-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <p className="min-w-0 text-sm">
+                      <span className="tabular-nums">{analytics.alerts.rewards_expiring_week}</span> reward
                       {analytics.alerts.rewards_expiring_week !== 1 ? "s" : ""} expire this
                       week
-                    </AlertDescription>
-                  </Alert>
+                    </p>
+                  </div>
                 )}
                 {analytics.alerts.inactive_customers > 0 && (
-                  <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                    <AlertDescription className="text-amber-800 dark:text-amber-200">
-                      ⚠️ {analytics.alerts.inactive_customers} member
+                  <div className="flex min-w-0 items-start gap-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <p className="min-w-0 text-sm">
+                      <span className="tabular-nums">{analytics.alerts.inactive_customers}</span> member
                       {analytics.alerts.inactive_customers !== 1 ? "s" : ""} inactive 30+ days
-                    </AlertDescription>
-                  </Alert>
+                    </p>
+                  </div>
                 )}
               </div>
             )}
@@ -147,44 +131,46 @@ export function ProgramAnalyticsSheet({
             {analytics.top_customers && analytics.top_customers.length > 0 && (
               <div className="space-y-3">
                 <h4 className="text-sm font-semibold">Top Customers</h4>
-                <div className="border rounded-lg overflow-hidden">
-                  <Table className="text-xs">
-                    <TableHeader className="bg-muted/30">
-                      <TableRow>
-                        <TableHead className="text-xs">Customer</TableHead>
-                        <TableHead className="text-right text-xs">
-                          Value
-                        </TableHead>
-                        <TableHead className="text-right text-xs">
-                          Rewards
-                        </TableHead>
+                {/* `variant="data"` is the surface — a tinted rounded well with
+                    borderless rows. Wrapping it in a bordered box would be a
+                    box inside a box (§5.2). */}
+                <Table variant="data" className="text-xs">
+                  <TableHeader className="[&_tr]:border-0">
+                    <TableRow>
+                      <TableHead className="text-xs font-normal text-muted-foreground">Customer</TableHead>
+                      <TableHead className="text-right text-xs font-normal text-muted-foreground">
+                        Value
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-normal text-muted-foreground">
+                        Rewards
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {analytics.top_customers.map((customer) => (
+                      <TableRow key={customer.customer_id}>
+                        <TableCell className="text-xs font-medium">
+                          <div>{customer.customer_name}</div>
+                          <div className="text-xs tabular-nums text-muted-foreground">
+                            {formatPhoneForDisplay(customer.phone)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right text-xs font-medium tabular-nums">
+                          ${customer.lifetime_value.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right text-xs tabular-nums">
+                          {customer.rewards_earned}
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {analytics.top_customers.map((customer) => (
-                        <TableRow key={customer.customer_id}>
-                          <TableCell className="text-xs font-medium">
-                            <div>{customer.customer_name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {formatPhoneForDisplay(customer.phone)}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right text-xs font-medium">
-                            ${customer.lifetime_value.toFixed(2)}
-                          </TableCell>
-                          <TableCell className="text-right text-xs">
-                            {customer.rewards_earned}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -16,14 +16,8 @@
 // Once a webhook arrives it takes visual precedence for that platform.
 // ============================================================================
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { useMemo, useState } from "react";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -115,11 +109,6 @@ export function ChannelSelfConfirmCard({
   // Local draft state (what the user has ticked but not yet saved)
   const [draft, setDraft] = useState<Set<string>>(() => new Set(serverSet));
 
-  // Re-sync local state whenever the server list changes (e.g. after a save)
-  useEffect(() => {
-    setDraft(new Set(serverSet));
-  }, [serverSet]);
-
   const isDirty = useMemo(() => {
     if (draft.size !== serverSet.size) return true;
     for (const c of draft) if (!serverSet.has(c)) return true;
@@ -144,29 +133,21 @@ export function ChannelSelfConfirmCard({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Confirm your delivery channels
-            </CardTitle>
-            <CardDescription>
-              After connecting UberEats, DoorDash, or GrubHub inside the
-              OrderOut dashboard, tick the ones you&apos;ve connected so we can
-              push menus to them.
-            </CardDescription>
-          </div>
-          <Button variant="outline" size="sm" asChild className="shrink-0 self-start">
+    <Panel>
+      <PanelSection
+        icon={CheckCircle2}
+        label="Confirm your delivery channels"
+        caption="After connecting channels in OrderOut, select them here so DexaPOS can push menus to those platforms."
+        action={
+          <Button variant="outline" size="sm" asChild>
             <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
               Open OrderOut
-              <ExternalLink className="h-3 w-3 ml-1" />
+              <ExternalLink className="ml-1 h-3 w-3" />
             </a>
           </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        }
+      >
+        <div className="space-y-4">
         <div className="space-y-2">
           {KNOWN_DELIVERY_CHANNELS.map((channel) => {
             const checked = draft.has(channel);
@@ -179,7 +160,7 @@ export function ChannelSelfConfirmCard({
               <label
                 key={channel}
                 htmlFor={inputId}
-                className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border p-3 cursor-pointer transition-colors ${
+                className={`flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl p-3 transition-colors ${
                   checked ? style.bg : "bg-muted/20 hover:bg-muted/30"
                 }`}
               >
@@ -238,7 +219,8 @@ export function ChannelSelfConfirmCard({
             )}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+        </div>
+      </PanelSection>
+    </Panel>
   );
 }

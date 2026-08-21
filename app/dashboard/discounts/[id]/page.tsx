@@ -2,17 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Pencil, Trash2, Settings2, ArrowLeft } from "lucide-react";
+import { Pencil, Trash2, Settings2, SlidersHorizontal, ShieldCheck } from "lucide-react";
 import { DiscountCard } from "@/components/discounts/discount-card";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -28,6 +20,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
+  PageShell,
+  PageHeader,
+  Panel,
+  PanelSection,
+  StatRow,
+  StatTile,
+} from "@/components/dashboard/shell";
+import {
   useDeleteDiscount,
   useDiscount,
   useDiscountUsage,
@@ -35,14 +35,29 @@ import {
   useDiscountMenuItems,
   useUpdateDiscount,
 } from "@/hooks/use-discounts";
-import { Discount, DiscountFormInput } from "@/types/discount";
+import { Discount } from "@/types/discount";
 import { DiscountFormValues } from "@/lib/validations/discount";
 import { TargetingSheet } from "@/components/discounts/targeting-sheet";
-import Link from "next/link";
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useIsSingleLocation } from "@/stores/location-store";
+import { cn } from "@/lib/utils";
+
+/** DS-CTL-01 — the canonical pill control. */
+const PILL_CONTROL = "h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm";
+
+/** A label/value row inside a detail panel — spacing alone separates rows. */
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2">
+      <span className="min-w-0 text-sm text-muted-foreground">{label}</span>
+      <span className="min-w-0 truncate text-right text-sm font-medium tabular-nums">
+        {value}
+      </span>
+    </div>
+  );
+}
 
 export default function DiscountDetailPage() {
   const params = useParams();
@@ -97,23 +112,39 @@ export default function DiscountDetailPage() {
   const usageCount = usageData?.success ? usageData.data?.usage_count ?? 0 : 0;
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const formattedDays = discount?.applicable_days?.length
-    ? discount.applicable_days.map((d) => dayNames[d] ?? String(d)).join(", ")
-    : "All";
-  const formatTime = (value?: string | null) =>
-    value ? value.slice(0, 5) : "";
+    ? discount.applicable_days.length === 7
+      ? "Every day"
+      : discount.applicable_days.map((d) => dayNames[d] ?? String(d)).join(", ")
+    : "None";
+  const formatTime = (value?: string | null) => (value ? value.slice(0, 5) : "");
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-32 w-full" />
-      </div>
+      <PageShell>
+        <div className="animate-in fade-in duration-500">
+          <Skeleton className="h-8 w-28 rounded-full" />
+          <Skeleton className="mt-3 h-9 w-64" />
+          <Skeleton className="mt-2 h-4 w-80" />
+        </div>
+        <Skeleton className="h-48 w-full rounded-3xl" />
+        <div className="grid gap-6 md:grid-cols-2">
+          <Skeleton className="h-72 w-full rounded-2xl" />
+          <Skeleton className="h-72 w-full rounded-2xl" />
+        </div>
+      </PageShell>
     );
   }
 
   if (!discountId || !discount) {
     return (
-      <div className="text-sm text-muted-foreground">Discount not found.</div>
+      <PageShell>
+        <PageHeader
+          title="Discount not found"
+          subtitle="This discount may have been deleted, or you may not have access to it."
+          backHref="/dashboard/discounts"
+          backLabel="Back to Discounts"
+        />
+      </PageShell>
     );
   }
 
@@ -128,200 +159,253 @@ export default function DiscountDetailPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Link href="/dashboard/discounts">
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-semibold">{discount.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            View discount configuration and usage.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() =>
-              router.push(`/dashboard/discounts/${discountId}/edit`)
-            }
-          >
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete {discount.name}?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Deleting may impact active orders. Choose soft delete to
-                  simply disable the discount or hard delete to remove it
-                  entirely.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <div className="space-y-3">
-                <Label>Delete mode</Label>
+    <PageShell>
+      <PageHeader
+        title={discount.name}
+        subtitle="View discount configuration and usage."
+        backHref="/dashboard/discounts"
+        backLabel="Back to Discounts"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              className={cn(PILL_CONTROL, "gap-1.5")}
+              onClick={() => router.push(`/dashboard/discounts/${discountId}/edit`)}
+            >
+              <Pencil className="h-4 w-4" />
+              Edit
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    PILL_CONTROL,
+                    "gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  )}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              {/* The primitive ships `sm:rounded-lg`; the `sm:` prefix outranks a
+                  bare `rounded-*`, so the override needs the breakpoint too. */}
+              <AlertDialogContent className="rounded-3xl sm:rounded-3xl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete {discount.name}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Deleting may impact active orders. Choose soft delete to
+                    simply disable the discount, or hard delete to remove it
+                    entirely.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+
                 <RadioGroup
                   value={deleteMode}
                   onValueChange={(val) => setDeleteMode(val as "soft" | "hard")}
+                  className="gap-0 rounded-3xl border-0 bg-muted/60 p-1 shadow-none"
                 >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="soft" id="delete-soft" />
-                    <Label htmlFor="delete-soft">
-                      Soft delete (set inactive)
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="hard" id="delete-hard" />
-                    <Label htmlFor="delete-hard">
-                      Hard delete (remove record)
-                    </Label>
-                  </div>
+                  <Label
+                    htmlFor="delete-soft"
+                    className="flex cursor-pointer items-start gap-3 rounded-2xl px-3 py-3 transition-colors hover:bg-background/60"
+                  >
+                    <RadioGroupItem value="soft" id="delete-soft" className="mt-0.5" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">
+                        Soft delete
+                      </span>
+                      <span className="mt-0.5 block text-[0.8125rem] text-muted-foreground">
+                        Sets the discount inactive. It stays on past orders and
+                        can be re-enabled later.
+                      </span>
+                    </span>
+                  </Label>
+                  <Label
+                    htmlFor="delete-hard"
+                    className="flex cursor-pointer items-start gap-3 rounded-2xl px-3 py-3 transition-colors hover:bg-background/60"
+                  >
+                    <RadioGroupItem value="hard" id="delete-hard" className="mt-0.5" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">
+                        Hard delete
+                      </span>
+                      <span className="mt-0.5 block text-[0.8125rem] text-muted-foreground">
+                        Removes the record permanently. This cannot be undone.
+                      </span>
+                    </span>
+                  </Label>
                 </RadioGroup>
-              </div>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDelete}
-                  disabled={deleteMutation.isPending}
-                >
-                  Confirm
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </div>
 
-      <DiscountCard discount={discount} locationName={locationName} isSingleLocation={isSingleLocation} />
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="h-9 rounded-full px-4 text-[0.8125rem] font-medium">
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    disabled={deleteMutation.isPending}
+                    className={cn(
+                      PILL_CONTROL,
+                      "bg-destructive text-white hover:bg-destructive/90"
+                    )}
+                  >
+                    {deleteMutation.isPending ? "Deleting…" : "Confirm"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        }
+      />
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Constraints</CardTitle>
-            <CardDescription>Usage limits and thresholds</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span>Min purchase</span>
-              <span>
-                {discount.min_purchase_amount
-                  ? `$${discount.min_purchase_amount}`
-                  : "None"}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Max discount amount</span>
-              <span>
-                {discount.max_discount_amount
-                  ? `$${discount.max_discount_amount}`
-                  : "Not limited"}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Max uses per day</span>
-              <span>{discount.max_uses_per_day ?? "Unlimited"}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Max uses per order</span>
-              <span>{discount.max_uses_per_order}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Stackable</span>
-              <span>{discount.stackable ? "Yes" : "No"}</span>
-            </div>
-          </CardContent>
-        </Card>
+      <DiscountCard
+        discount={discount}
+        locationName={locationName}
+        isSingleLocation={isSingleLocation}
+      />
 
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Targeting</CardTitle>
-                <CardDescription>Scope, categories, and items</CardDescription>
-              </div>
+      <div className="grid min-w-0 gap-6 md:grid-cols-2">
+        <Panel nested>
+          <PanelSection
+            icon={SlidersHorizontal}
+            label="Constraints"
+            caption="Usage limits and thresholds"
+          >
+            <div className="min-w-0">
+              <DetailRow
+                label="Min purchase"
+                value={
+                  discount.min_purchase_amount
+                    ? `$${discount.min_purchase_amount}`
+                    : "None"
+                }
+              />
+              <DetailRow
+                label="Max discount amount"
+                value={
+                  discount.max_discount_amount
+                    ? `$${discount.max_discount_amount}`
+                    : "Not limited"
+                }
+              />
+              <DetailRow
+                label="Max uses per day"
+                value={discount.max_uses_per_day ?? "Unlimited"}
+              />
+              <DetailRow
+                label="Max uses per order"
+                value={discount.max_uses_per_order}
+              />
+              <DetailRow
+                label="Stackable"
+                value={discount.stackable ? "Yes" : "No"}
+              />
+            </div>
+          </PanelSection>
+        </Panel>
+
+        <Panel nested>
+          <PanelSection
+            icon={Settings2}
+            label="Targeting"
+            caption="Scope, categories, and items"
+            action={
               <Button
                 variant="outline"
-                size="sm"
                 onClick={() => setTargetingSheetOpen(true)}
-                className="gap-2"
+                className={cn(PILL_CONTROL, "gap-1.5")}
               >
                 <Settings2 className="h-4 w-4" />
                 Edit
               </Button>
+            }
+          >
+            <div className="min-w-0">
+              <DetailRow
+                label="Order type"
+                value={
+                  <span className="capitalize">
+                    {discount.scope.replace("_", " ")}
+                  </span>
+                }
+              />
+              <DetailRow label="Applicable days" value={formattedDays} />
+              <DetailRow
+                label="Time window"
+                value={
+                  discount.applicable_hours_start && discount.applicable_hours_end
+                    ? `${formatTime(discount.applicable_hours_start)} – ${formatTime(
+                        discount.applicable_hours_end
+                      )}`
+                    : "All day"
+                }
+              />
+              <DetailRow
+                label="Exclude alcohol"
+                value={discount.exclude_alcohol ? "Yes" : "No"}
+              />
+              <DetailRow
+                label="Applies to categories"
+                value={
+                  discount.applies_to_categories?.length
+                    ? `${discount.applies_to_categories.length} selected`
+                    : "All"
+                }
+              />
+              <DetailRow
+                label="Exclude categories"
+                value={
+                  discount.exclude_categories?.length
+                    ? `${discount.exclude_categories.length} selected`
+                    : "None"
+                }
+              />
+              <DetailRow
+                label="Menu items"
+                value={
+                  discount.menu_item_ids?.length
+                    ? `${discount.menu_item_ids.length} selected`
+                    : "All"
+                }
+              />
             </div>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span>Scope</span>
-              <span className="capitalize">
-                {discount.scope.replace("_", " ")}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Applicable days</span>
-              <span>{formattedDays}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Time window</span>
-              <span>
-                {discount.applicable_hours_start &&
-                discount.applicable_hours_end
-                  ? `${formatTime(
-                      discount.applicable_hours_start
-                    )} - ${formatTime(discount.applicable_hours_end)}`
-                  : "All day"}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Exclude alcohol</span>
-              <span>{discount.exclude_alcohol ? "Yes" : "No"}</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Applies to categories</span>
-              <span>
-                {discount.applies_to_categories?.length ?? 0} selected
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Exclude categories</span>
-              <span>{discount.exclude_categories?.length ?? 0} selected</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Menu items</span>
-              <span>{discount.menu_item_ids?.length ?? 0} selected</span>
-            </div>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Approval & usage</CardTitle>
-          <CardDescription>Manager approval and usage data</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-4 text-sm">
-          <Badge variant="outline">
-            {discount.requires_manager_approval
-              ? "Requires manager approval"
-              : "No approval required"}
-          </Badge>
-          <Badge variant="outline">
-            Display order: {discount.display_order}
-          </Badge>
-          {usageLoading ? (
-            <Skeleton className="h-6 w-24" />
-          ) : (
-            <Badge variant="secondary">Usage count: {usageCount}</Badge>
-          )}
-        </CardContent>
-      </Card>
+      <Panel>
+        <PanelSection
+          icon={ShieldCheck}
+          label="Approval & usage"
+          caption="Manager approval and usage data"
+        >
+          <StatRow columns={3}>
+            <StatTile
+              label="Times used"
+              value={usageCount}
+              meta="Across all orders"
+              isLoading={usageLoading}
+            />
+            <StatTile
+              label="Manager approval"
+              value={
+                <span className="text-base">
+                  {discount.requires_manager_approval ? "Required" : "Not required"}
+                </span>
+              }
+              meta={
+                discount.requires_manager_approval
+                  ? "Staff need a manager PIN"
+                  : "Any staff member can apply"
+              }
+            />
+            <StatTile
+              label="Display order"
+              value={discount.display_order}
+              meta="Lower numbers appear first on POS"
+            />
+          </StatRow>
+        </PanelSection>
+      </Panel>
 
       {/* Targeting Bottom Sheet */}
       {discount && (
@@ -377,6 +461,6 @@ export default function DiscountDetailPage() {
           }}
         />
       )}
-    </div>
+    </PageShell>
   );
 }

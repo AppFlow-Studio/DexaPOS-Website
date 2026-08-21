@@ -22,7 +22,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Save, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { MenuCategory } from "@/types/menu";
@@ -193,49 +193,53 @@ export function SortableCategoryList({
   const isLocationScoped = locationId && locationId !== "all";
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <div>
-          <CardTitle className="text-base font-medium">
-            Category Order
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
+    <Panel>
+      <PanelSection
+        label="Category Order"
+        caption={
+          <>
             Drag categories to reorder them
             {isLocationScoped && (
-              <span className="ml-1 text-primary">(Location-specific)</span>
+              /* Brand accent literal — `text-primary` is violet (C5). */
+              <span className="ml-1 text-[#0C4FD1] dark:text-[#6CA0FF]">
+                (Location-specific)
+              </span>
             )}
-          </p>
-        </div>
-        {hasChanges && (
-          <div className="flex items-center gap-2">
-            {onReset && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onReset}
-                disabled={isSaving}
-              >
-                <RotateCcw className="h-4 w-4 mr-1" />
-                Reset
-              </Button>
-            )}
-            <Button size="sm" onClick={onSave} disabled={isSaving}>
-              {isSaving ? (
-                <>
-                  <span className="animate-spin mr-1">⏳</span>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-1" />
-                  Save Order
-                </>
+          </>
+        }
+        action={
+          hasChanges ? (
+            <div className="flex items-center gap-2">
+              {onReset && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onReset}
+                  disabled={isSaving}
+                  className="rounded-full"
+                >
+                  <RotateCcw className="h-4 w-4 mr-1" />
+                  Reset
+                </Button>
               )}
-            </Button>
-          </div>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-2">
+              <Button size="sm" onClick={onSave} disabled={isSaving} className="rounded-full">
+                {isSaving ? (
+                  <>
+                    <span className="animate-spin mr-1">⏳</span>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-1" />
+                    Save Order
+                  </>
+                )}
+              </Button>
+            </div>
+          ) : undefined
+        }
+        className="space-y-2"
+      >
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -270,7 +274,7 @@ export function SortableCategoryList({
             No categories to reorder
           </div>
         )}
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   );
 }

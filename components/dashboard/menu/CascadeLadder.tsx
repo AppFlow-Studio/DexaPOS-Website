@@ -60,45 +60,45 @@ export function CascadeLadder({
       label: "Global",
       price: matrix.globalPrice,
     };
-    // L2 — location_item_overrides at locationId
-    const l2Row =
-      locationId != null
-        ? matrix.levels.find(
-            (r) => r.level === 2 && r.locationId === locationId,
-          ) ?? null
-        : null;
+    // L2 — global category (category_items, no menu/location scope)
+    const l2Row = context.categoryName
+      ? matrix.levels.find(
+          (r) => r.level === 2 && r.categoryName === context.categoryName,
+        ) ?? null
+      : matrix.levels.find((r) => r.level === 2) ?? null;
     const l2: Rung = {
       level: 2,
-      label: l2Row?.locationName
-        ? `${l2Row.locationName}`
-        : context.locationName || "Location",
+      label: l2Row?.categoryName ?? context.categoryName ?? "Category",
       price: l2Row?.price ?? null,
     };
-    // L3 — category_items for the matching category
-    const l3Row = context.categoryName
-      ? matrix.levels.find(
-          (r) => r.level === 3 && r.categoryName === context.categoryName,
-        ) ?? null
-      : matrix.levels.find((r) => r.level === 3) ?? null;
-    const l3: Rung = {
-      level: 3,
-      label: l3Row?.categoryName ?? context.categoryName ?? "Category",
-      price: l3Row?.price ?? null,
-    };
-    // L4 — location_category_item_overrides
-    const l4Row =
+    // L3 — local category (location_category_item_overrides)
+    const l3Row =
       locationId != null
         ? matrix.levels.find(
             (r) =>
-              r.level === 4 &&
+              r.level === 3 &&
               r.locationId === locationId &&
               (!context.categoryName ||
                 r.categoryName === context.categoryName),
           ) ?? null
         : null;
+    const l3: Rung = {
+      level: 3,
+      label: context.locationName
+        ? `Cat @ ${context.locationName}`
+        : "Cat @ Loc",
+      price: l3Row?.price ?? null,
+    };
+    // L4 — global menu (category_items scoped to a menu, all locations)
+    const l4Row = matrix.levels.find(
+      (r) =>
+        r.level === 4 &&
+        (!context.menuName || r.menuName === context.menuName) &&
+        (!context.categoryName || r.categoryName === context.categoryName),
+    ) ?? null;
     const l4: Rung = {
       level: 4,
-      label: "Cat @ Loc",
+      label: context.menuName ? `${context.menuName} menu` : "Menu",
       price: l4Row?.price ?? null,
     };
     // L5 — location_menu_item_overrides

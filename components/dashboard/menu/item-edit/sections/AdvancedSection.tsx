@@ -8,7 +8,7 @@ export function AdvancedSection({ item, globalScope }: SectionRenderCtx) {
   return (
     <div className="space-y-4">
       <SectionHeader title="Advanced" scope={globalScope} />
-      <div className="space-y-2 rounded-lg border bg-card p-4">
+      <div className="space-y-2 rounded-2xl border bg-card p-6">
         <p className="text-xs text-muted-foreground">
           Tax category, prep station, card background and recipe details are
           managed in the full editor sheet today. This section is a

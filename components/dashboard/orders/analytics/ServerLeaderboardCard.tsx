@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
+import { CHART_TICK } from './AnalyticsPrimitives'
 import { DataTable } from '@/components/ui/data-table'
 import { ColumnDef } from '@tanstack/react-table'
 import {
@@ -13,7 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 import { Users } from 'lucide-react'
 import type { StaffPerformanceStats, ServerLeaderboardRow } from '@/types/analytics'
 
@@ -79,7 +79,7 @@ export function ServerLeaderboardCard({
       accessorKey: 'role',
       header: 'Role',
       cell: ({ row }) => (
-        <Badge variant="outline">{row.getValue('role')}</Badge>
+        <span className="text-muted-foreground">{row.getValue('role') as string}</span>
       ),
     },
     {
@@ -168,7 +168,7 @@ export function ServerLeaderboardCard({
               >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" />
-                <YAxis dataKey="name" type="category" width={90} tick={{ fontSize: 12 }} />
+                <YAxis dataKey="name" type="category" width={90} tick={CHART_TICK} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Bar dataKey="value" fill="#3b82f6" radius={[0, 8, 8, 0]}>
                   {chartData.map((entry, index) => (

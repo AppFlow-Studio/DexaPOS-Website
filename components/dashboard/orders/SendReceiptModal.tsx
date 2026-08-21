@@ -149,7 +149,7 @@ export function SendReceiptModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" elevation="high">
+      <DialogContent className="rounded-3xl sm:max-w-md" elevation="high">
         <DialogHeader>
           <DialogTitle>Send Receipt</DialogTitle>
         </DialogHeader>
@@ -161,7 +161,7 @@ export function SendReceiptModal({
                 type="button"
                 variant={method === "email" ? "default" : "outline"}
                 size="sm"
-                className="flex-1"
+                className="flex-1 rounded-full"
                 onClick={() => {
                   setMethod("email");
                   if (customerEmail) setRecipient(customerEmail);
@@ -174,7 +174,7 @@ export function SendReceiptModal({
                 type="button"
                 variant={method === "sms" ? "default" : "outline"}
                 size="sm"
-                className="flex-1"
+                className="flex-1 rounded-full"
                 onClick={() => {
                   setMethod("sms");
                   setRecipient(
@@ -201,6 +201,7 @@ export function SendReceiptModal({
                   value={recipient}
                   onChange={(e) => setRecipient(e.target.value)}
                   className={cn(
+                    "h-11 rounded-full px-4",
                     !recipient
                       ? ""
                       : isValid
@@ -218,9 +219,12 @@ export function SendReceiptModal({
               </>
             ) : (
               <>
+                {/* Digit cells are square-ish by default; round them here only,
+                    so the shared component keeps its own look elsewhere. */}
                 <PhoneDigitsInput
                   value={recipient.replace(/\D/g, "")}
                   onChange={setRecipient}
+                  className="[&_input]:rounded-2xl"
                 />
                 <p className="text-xs text-muted-foreground">
                   US numbers only · we&apos;ll add the +1 for you
@@ -232,7 +236,7 @@ export function SendReceiptModal({
           <div className="space-y-2">
             <Label>Receipt type</Label>
             <Select value={receiptType} onValueChange={setReceiptType}>
-              <SelectTrigger>
+              <SelectTrigger className="h-11 rounded-full px-4">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -248,7 +252,7 @@ export function SendReceiptModal({
           {previewHtml && (
             <div className="space-y-2">
               <Label>Preview</Label>
-              <div className="border rounded-lg overflow-hidden bg-white max-h-[280px] overflow-y-auto">
+              <div className="rounded-2xl overflow-hidden bg-white max-h-[280px] overflow-y-auto">
                 <iframe
                   srcDoc={previewHtml}
                   title="Receipt preview"
@@ -263,6 +267,7 @@ export function SendReceiptModal({
             <Button
               variant="outline"
               size="sm"
+              className="rounded-full border-0 bg-muted/60 shadow-none hover:bg-muted"
               onClick={handlePreview}
               disabled={isPreviewLoading}
             >
@@ -275,6 +280,7 @@ export function SendReceiptModal({
             </Button>
             <Button
               size="sm"
+              className="rounded-full"
               onClick={handleSend}
               disabled={!isValid || isSending}
             >

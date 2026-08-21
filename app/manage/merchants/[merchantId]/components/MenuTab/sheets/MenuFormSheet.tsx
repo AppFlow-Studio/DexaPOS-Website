@@ -24,9 +24,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import { Loader2, Globe, MapPin, Info } from 'lucide-react'
-import { toast } from 'sonner'
 import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
 import { cn } from '@/lib/utils'
 
@@ -130,11 +128,8 @@ export function MenuFormSheet({
           if (uploadedAsset) {
             await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
           }
-          toast.error('Failed to update menu', { description: result.error })
           return
         }
-
-        toast.success('Menu updated successfully')
       } else {
         const result = await createAdminMenu(merchantId, {
           name: values.name,
@@ -148,11 +143,8 @@ export function MenuFormSheet({
           if (uploadedAsset) {
             await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
           }
-          toast.error('Failed to create menu', { description: result.error })
           return
         }
-
-        toast.success('Menu created successfully')
       }
 
       onSuccess()
@@ -161,7 +153,6 @@ export function MenuFormSheet({
       if (uploadedAsset) {
         await imageUpload.cleanupUploadedAsset(uploadedAsset.storagePath).catch(console.error)
       }
-      toast.error('An unexpected error occurred')
       console.error(error)
     }
   }
@@ -237,30 +228,6 @@ export function MenuFormSheet({
                           value={field.value || ''}
                         />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="image"
-                  render={() => (
-                    <FormItem>
-                      <FormLabel>Menu Image</FormLabel>
-                      <FormControl>
-                        <CdnImageUploadField
-                          disabled={isSubmitting}
-                          helperText="Uploads to Bunny CDN when you save the menu."
-                          onClear={imageUpload.clear}
-                          onFileSelect={imageUpload.selectFile}
-                          previewUrl={imageUpload.previewUrl}
-                          selectedFileName={imageUpload.selectedFileName}
-                          uploadLabel="Upload menu image"
-                          uploading={imageUpload.isUploading}
-                        />
-                      </FormControl>
-                      <FormDescription>Optional image for this menu</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

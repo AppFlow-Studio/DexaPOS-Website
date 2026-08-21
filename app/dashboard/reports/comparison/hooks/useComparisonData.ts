@@ -82,6 +82,13 @@ export function transformToLineChartData(
 ): LineChartDataPoint[] {
   const dateMap = new Map<string, LineChartDataPoint>();
 
+  // Every location that appears anywhere in the range. A location with no row
+  // for a given date must still be plotted as 0 on that date — leaving the key
+  // undefined makes Recharts drop the point, so a sparse location renders as a
+  // broken line (or nothing), which reads as "no sales" when it may just be
+  // "no row". Zero-fill keeps absence and zero visually distinguishable.
+  const locationNames = new Set(data.map((item) => item.location_name));
+
   data.forEach((item) => {
     const dateKey = item.business_date;
     if (!dateMap.has(dateKey)) {
@@ -89,6 +96,12 @@ export function transformToLineChartData(
     }
     const point = dateMap.get(dateKey)!;
     point[item.location_name] = Number(item[metric]) || 0;
+  });
+
+  dateMap.forEach((point) => {
+    locationNames.forEach((name) => {
+      if (point[name] === undefined) point[name] = 0;
+    });
   });
 
   return Array.from(dateMap.values()).sort(

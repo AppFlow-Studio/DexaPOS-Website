@@ -7,14 +7,18 @@ import { useClerkOrgId } from "../../hooks/useLocationScoped";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DetailCard,
+  DetailHeader,
+  DetailBody,
+  DetailRow,
+} from "@/components/dashboard/orders/OrderDetailPrimitives";
+import { ReceiptModal } from "@/components/dashboard/orders/ReceiptModal";
+import { useLocationStore } from "@/stores/location-store";
 import { GetOrderDetails, RefundOrder, VoidOrder } from "../../actions/order";
 import { GetOrderFullHistory } from "../../actions/order-full-history";
 import { OrderStatusBadge } from "@/components/dashboard/orders/OrderStatusBadge";
@@ -46,6 +50,10 @@ import {
   Hash,
   Store,
   Loader2,
+  CreditCard,
+  CheckCircle,
+  Tag,
+  AlertCircle,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -57,7 +65,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Order,
@@ -71,6 +78,15 @@ import {
 } from "@/types/order-management";
 import { OrderFullHistory } from "@/types/order-full-history";
 import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
+
+/**
+ * Confirm dialogs on this page rise from below and drop straight back down,
+ * instead of the primitive's default diagonal zoom-from-top. Defined as a real
+ * animation in globals.css (`.alert-rise`) because the primitive hardcodes
+ * slide-in-from-top-[48%], which utility classes can't reliably override — see
+ * the note there. Shared with RefundVoidDialog.
+ */
+const RISE_FROM_BOTTOM = "alert-rise";
 
 // Format currency
 function formatCurrency(amount: number): string {
@@ -136,12 +152,12 @@ function PaymentCard({ payment }: { payment: OrderPayment }) {
   const paymentAmount = Number(payment.total_amount) || 0;
 
   return (
-    <div className="rounded-lg border overflow-hidden">
+    <div className="overflow-hidden rounded-lg">
       {/* Payment Header */}
       <div
         className={cn(
-          "flex items-center justify-between p-4",
-          hasItems && "cursor-pointer hover:bg-muted/50 transition-colors"
+          "flex items-center justify-between rounded-lg px-2 py-3 transition-colors",
+          hasItems && "cursor-pointer hover:bg-muted/50"
         )}
         onClick={() => hasItems && setIsExpanded(!isExpanded)}
       >
@@ -162,13 +178,15 @@ function PaymentCard({ payment }: { payment: OrderPayment }) {
         </div>
         <div className="text-right">
           {payment.status && <PaymentStatusBadge status={payment.status} />}
-          <p className="font-semibold mt-1">{formatCurrency(paymentAmount)}</p>
+          <p className="mt-1 text-base font-medium tabular-nums">
+            {formatCurrency(paymentAmount)}
+          </p>
         </div>
       </div>
 
       {/* Collapsible Item Attribution */}
       {isExpanded && (
-        <div className="border-t bg-muted/30 px-4 py-3">
+        <div className="mx-2 mb-1 rounded-lg bg-muted/40 px-3 py-3">
           <p className="text-xs font-medium text-muted-foreground mb-2">
             This payment covered:
           </p>
@@ -222,8 +240,10 @@ export default function OrderDetailPage() {
   const queryClient = useQueryClient();
   const orderId = params.orderId as string;
   const clerkOrgId = useClerkOrgId();
+  const { locations } = useLocationStore();
   const [confirmRefundOpen, setConfirmRefundOpen] = React.useState(false);
   const [confirmVoidOpen, setConfirmVoidOpen] = React.useState(false);
+  const [receiptOpen, setReceiptOpen] = React.useState(false);
   const [isRefunding, setIsRefunding] = React.useState(false);
   const [isVoiding, setIsVoiding] = React.useState(false);
 
@@ -233,15 +253,10 @@ export default function OrderDetailPage() {
     try {
       const result = await RefundOrder(clerkOrgId, orderId);
       if (result.success) {
-        toast.success("Order refunded successfully");
         queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
         queryClient.invalidateQueries({ queryKey: ["orders"] });
         setConfirmRefundOpen(false);
-      } else {
-        toast.error(result.error || "Failed to refund order");
       }
-    } catch {
-      toast.error("An unexpected error occurred");
     } finally {
       setIsRefunding(false);
     }
@@ -253,15 +268,10 @@ export default function OrderDetailPage() {
     try {
       const result = await VoidOrder(clerkOrgId, orderId);
       if (result.success) {
-        toast.success("Order voided successfully");
         queryClient.invalidateQueries({ queryKey: ["order-details", orderId] });
         queryClient.invalidateQueries({ queryKey: ["orders"] });
         setConfirmVoidOpen(false);
-      } else {
-        toast.error(result.error || "Failed to void order");
       }
-    } catch {
-      toast.error("An unexpected error occurred");
     } finally {
       setIsVoiding(false);
     }
@@ -312,6 +322,12 @@ export default function OrderDetailPage() {
     orderDetails?.order_status_history || [];
   const tableSessions: TableSessionWithEvents[] =
     orderDetails?.table_sessions || [];
+
+  // Resolve the receipt's location from the order itself, not the selected
+  // location — under "All locations" the selection is 'all', and the receipt
+  // header needs this order's own address/phone/timezone.
+  const receiptLocation =
+    locations.find((l) => l.id === order?.location_id) ?? null;
 
   // Show the skeleton while the query is fetching OR while the merchant org is
   // still resolving (clerkOrgId is "" until useUserInfo loads, which keeps the
@@ -395,13 +411,13 @@ export default function OrderDetailPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em] tabular-nums">
                 Order #{order.display_number || order.order_number}
               </h1>
               <OrderStatusBadge status={order.status} />
             </div>
-            <div className="flex items-center gap-3 text-muted-foreground mt-1 flex-wrap text-sm">
+            <div className="flex items-center gap-3 text-muted-foreground mt-1.5 flex-wrap text-sm">
               <span className="flex items-center gap-1.5">
                 <Calendar className="h-4 w-4 shrink-0" />
                 {formatDate(order.created_at)}
@@ -416,7 +432,12 @@ export default function OrderDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap shrink-0 pl-12 sm:pl-0">
-          <Button variant="outline" size="sm">
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full px-3.5 shadow-sm"
+            onClick={() => setReceiptOpen(true)}
+          >
             <Printer className="h-4 w-4 mr-1.5" />
             Print Receipt
           </Button>
@@ -425,6 +446,7 @@ export default function OrderDetailPage() {
               <Button
                 variant="outline"
                 size="sm"
+                className="rounded-full px-3.5 shadow-sm"
                 onClick={() => setConfirmRefundOpen(true)}
                 disabled={isRefunding || isVoiding}
               >
@@ -434,6 +456,7 @@ export default function OrderDetailPage() {
               <Button
                 variant="destructive"
                 size="sm"
+                className="rounded-full px-3.5 shadow-sm"
                 onClick={() => setConfirmVoidOpen(true)}
                 disabled={isRefunding || isVoiding}
               >
@@ -449,62 +472,58 @@ export default function OrderDetailPage() {
         {/* Main Content */}
         <div className="md:col-span-2 space-y-6">
           {/* Order Type & Quick Info */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={cn(
-                      "p-2.5 rounded-lg",
-                      getOrderTypeColor(order.order_type)
-                    )}
-                  >
-                    {getOrderTypeIcon(order.order_type)}
-                  </div>
-                  <div>
-                    <p className="font-semibold">
-                      {orderTypeLabel(order.order_type)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Order Type</p>
-                  </div>
+          <DetailCard>
+            <div className="flex items-center justify-between flex-wrap gap-4 px-6 py-6">
+              <div className="flex items-center gap-3">
+                <div
+                  className={cn(
+                    "p-2.5 rounded-xl",
+                    getOrderTypeColor(order.order_type)
+                  )}
+                >
+                  {getOrderTypeIcon(order.order_type)}
                 </div>
-                {order.table_number && (
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-lg bg-muted">
-                      <Utensils className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <p className="font-semibold">
-                        Table {order.table_number}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Table Number
-                      </p>
-                    </div>
-                  </div>
-                )}
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-lg bg-muted">
-                    <Hash className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="font-semibold">{items.length}</p>
-                    <p className="text-sm text-muted-foreground">Items</p>
-                  </div>
+                <div>
+                  <p className="text-lg font-medium leading-tight tracking-[-0.01em]">
+                    {orderTypeLabel(order.order_type)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Order Type</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+              {order.table_number && (
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-muted">
+                    <Utensils className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-medium leading-tight tracking-[-0.01em] tabular-nums">
+                      Table {order.table_number}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Table Number
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-muted">
+                  <Hash className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-lg font-medium leading-tight tracking-[-0.01em] tabular-nums">
+                    {items.length}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Items</p>
+                </div>
+              </div>
+            </div>
+          </DetailCard>
 
           {/* Customer Information */}
           {(order.customer_name || order.customer_phone) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  Customer Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+            <DetailCard>
+              <DetailHeader icon={User} label="Customer" />
+              <DetailBody>
                 <div className="flex items-start gap-6 flex-wrap">
                   {order.customer_name && (
                     <div className="flex items-center gap-2">
@@ -513,29 +532,32 @@ export default function OrderDetailPage() {
                     </div>
                   )}
                   {order.customer_phone && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 tabular-nums">
                       <Phone className="h-4 w-4 text-muted-foreground" />
                       <span>{order.customer_phone}</span>
                     </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
+              </DetailBody>
+            </DetailCard>
           )}
 
           {/* Order Items */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Order Items</CardTitle>
-              <CardDescription>
-                {items.filter((i) => !i.is_voided).length} active items •{" "}
-                {items.filter((i) => i.is_voided).length > 0 &&
-                  `${items.filter((i) => i.is_voided).length} voided`}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          <DetailCard>
+            <DetailHeader
+              icon={ShoppingBag}
+              label="Order Items"
+              caption={
+                <>
+                  {items.filter((i) => !i.is_voided).length} active items
+                  {items.filter((i) => i.is_voided).length > 0 &&
+                    ` • ${items.filter((i) => i.is_voided).length} voided`}
+                </>
+              }
+            />
+            <DetailBody>
               {items.length > 0 ? (
-                <div className="space-y-3">
+                <div className="-mx-2">
                   {items.map((item) => {
                     const discountAmount = Number(item.discount_amount) || 0;
                     const hasDiscount = discountAmount > 0;
@@ -551,8 +573,8 @@ export default function OrderDetailPage() {
                       <div
                         key={item.id}
                         className={cn(
-                          "flex items-start justify-between rounded-lg border p-4",
-                          isVoided && "bg-muted/50 border-muted"
+                          "flex items-start justify-between rounded-lg px-2 py-3 transition-colors hover:bg-muted/50",
+                          isVoided && "opacity-60"
                         )}
                       >
                         <div className="flex-1">
@@ -697,7 +719,7 @@ export default function OrderDetailPage() {
                         </div>
 
                         {/* Item Total */}
-                        <div className="text-right ml-4">
+                        <div className="text-right ml-4 tabular-nums">
                           {hasDiscount &&
                           !isVoided &&
                           safePreDiscountSubtotal > 0 ? (
@@ -705,14 +727,14 @@ export default function OrderDetailPage() {
                               <p className="text-sm text-muted-foreground line-through">
                                 {formatCurrency(safePreDiscountSubtotal)}
                               </p>
-                              <p className="font-semibold text-green-600 dark:text-green-400">
+                              <p className="text-base font-medium text-green-600 dark:text-green-400">
                                 {formatCurrency(safeSubtotal)}
                               </p>
                             </div>
                           ) : (
                             <p
                               className={cn(
-                                "font-semibold",
+                                "text-base font-medium",
                                 isVoided && "text-muted-foreground line-through"
                               )}
                             >
@@ -727,8 +749,8 @@ export default function OrderDetailPage() {
               ) : (
                 <p className="text-sm text-muted-foreground">No items found</p>
               )}
-            </CardContent>
-          </Card>
+            </DetailBody>
+          </DetailCard>
 
           {/* Kitchen Activity - per-item KDS lifecycle */}
           {orderFullHistory && (
@@ -740,33 +762,32 @@ export default function OrderDetailPage() {
 
           {/* Payment History */}
           {payments.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Payment History</CardTitle>
-                <CardDescription>
-                  {payments.length} payment{payments.length > 1 ? "s" : ""} •
-                  Click to see item attribution
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
+            <DetailCard>
+              <DetailHeader
+                icon={CreditCard}
+                label="Payment History"
+                caption={`${payments.length} payment${
+                  payments.length > 1 ? "s" : ""
+                } • Click to see item attribution`}
+              />
+              <DetailBody>
+                <div className="-mx-2">
                   {payments.map((payment) => (
                     <PaymentCard key={payment.id} payment={payment} />
                   ))}
                 </div>
-              </CardContent>
-            </Card>
+              </DetailBody>
+            </DetailCard>
           )}
 
           {/* Complete Order Timeline - TICKET DM-011-01 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Complete Timeline</CardTitle>
-              <CardDescription>
-                Full order history including items, payments, refunds, and more
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          <DetailCard>
+            <DetailHeader
+              icon={Clock}
+              label="Complete Timeline"
+              caption="Full order history including items, payments, refunds, and more"
+            />
+            <DetailBody>
               {isLoadingFullHistory ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Skeleton className="h-64 w-full" />
@@ -778,21 +799,22 @@ export default function OrderDetailPage() {
                   Unable to load timeline
                 </p>
               )}
-            </CardContent>
-          </Card>
+            </DetailBody>
+          </DetailCard>
 
           {/* Refunds Section - TICKET DM-011-01 */}
           {orderFullHistory && orderFullHistory.reversals && orderFullHistory.reversals.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Refunds & Reversals</CardTitle>
-                <CardDescription>
-                  {orderFullHistory.reversals.length} reversal{orderFullHistory.reversals.length > 1 ? "s" : ""}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            <DetailCard>
+              <DetailHeader
+                icon={RotateCcw}
+                label="Refunds & Reversals"
+                caption={`${orderFullHistory.reversals.length} reversal${
+                  orderFullHistory.reversals.length > 1 ? "s" : ""
+                }`}
+              />
+              <DetailBody className="-mx-2">
                 {orderFullHistory.reversals.map((reversal) => (
-                  <div key={reversal.id} className="rounded-lg border p-3 space-y-2">
+                  <div key={reversal.id} className="rounded-lg px-2 py-3 space-y-2 transition-colors hover:bg-muted/50">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="font-medium text-sm capitalize">
@@ -826,22 +848,23 @@ export default function OrderDetailPage() {
                     )}
                   </div>
                 ))}
-              </CardContent>
-            </Card>
+              </DetailBody>
+            </DetailCard>
           )}
 
           {/* Discounts Section - TICKET DM-011-01 */}
           {orderFullHistory && orderFullHistory.discounts && orderFullHistory.discounts.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Discounts Applied</CardTitle>
-                <CardDescription>
-                  {orderFullHistory.discounts.length} discount{orderFullHistory.discounts.length > 1 ? "s" : ""}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            <DetailCard>
+              <DetailHeader
+                icon={Tag}
+                label="Discounts Applied"
+                caption={`${orderFullHistory.discounts.length} discount${
+                  orderFullHistory.discounts.length > 1 ? "s" : ""
+                }`}
+              />
+              <DetailBody className="-mx-2">
                 {orderFullHistory.discounts.map((discount, idx) => (
-                  <div key={idx} className="flex items-start justify-between rounded-lg border p-3">
+                  <div key={idx} className="flex items-start justify-between rounded-lg px-2 py-3 transition-colors hover:bg-muted/50">
                     <div className="flex-1">
                       <p className="font-medium text-sm">{discount.discount_name}</p>
                       <p className="text-xs text-muted-foreground">
@@ -862,7 +885,7 @@ export default function OrderDetailPage() {
                     </div>
                     <div className="text-right">
                       <p className={cn(
-                        "font-semibold text-sm",
+                        "text-sm font-medium tabular-nums",
                         discount.voided ? "line-through text-muted-foreground" : "text-green-600"
                       )}>
                         -{formatCurrency(discount.discount_amount)}
@@ -870,22 +893,24 @@ export default function OrderDetailPage() {
                     </div>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
+              </DetailBody>
+            </DetailCard>
           )}
 
           {/* Chargebacks Section - TICKET DM-011-01 */}
           {orderFullHistory && orderFullHistory.chargebacks && orderFullHistory.chargebacks.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base text-red-600">Chargebacks</CardTitle>
-                <CardDescription>
-                  {orderFullHistory.chargebacks.length} chargeback{orderFullHistory.chargebacks.length > 1 ? "s" : ""}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            <DetailCard>
+              <DetailHeader
+                icon={AlertCircle}
+                label="Chargebacks"
+                caption={`${orderFullHistory.chargebacks.length} chargeback${
+                  orderFullHistory.chargebacks.length > 1 ? "s" : ""
+                }`}
+                className="[&>div>div:first-child]:text-red-600 dark:[&>div>div:first-child]:text-red-400"
+              />
+              <DetailBody className="space-y-4">
                 {orderFullHistory.chargebacks.map((chargeback) => (
-                  <div key={chargeback.id} className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/30 p-3 space-y-2">
+                  <div key={chargeback.id} className="rounded-xl border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30 p-3 space-y-2">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="font-medium text-sm text-red-900 dark:text-red-100">
@@ -918,111 +943,101 @@ export default function OrderDetailPage() {
                     )}
                   </div>
                 ))}
-              </CardContent>
-            </Card>
+              </DetailBody>
+            </DetailCard>
           )}
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Payment Status */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Payment Status</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <DetailCard>
+            <DetailHeader icon={CheckCircle} label="Payment Status" />
+            <DetailBody>
               <PaymentStatusBadge status={order.payment_status} />
-              <Separator />
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Total</span>
-                  <span className="font-semibold text-lg">
-                    {formatCurrency(primaryLane.total)}
-                  </span>
-                </div>
+              {/* The total is the card's headline figure — sized like the
+                  dashboard Overview values so it reads first. */}
+              <div className="mt-5 flex items-baseline justify-between gap-4">
+                <span className="text-sm text-muted-foreground">Total</span>
+                <span className="text-[1.75rem] font-medium leading-none tracking-[-0.02em] tabular-nums">
+                  {formatCurrency(primaryLane.total)}
+                </span>
+              </div>
+              <div className="mt-2">
                 {totalPaid > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Amount Paid</span>
-                    <span className="text-green-600 font-medium">
-                      {formatCurrency(totalPaid)}
-                    </span>
-                  </div>
+                  <DetailRow
+                    label="Amount Paid"
+                    value={formatCurrency(totalPaid)}
+                    valueClassName="text-green-600 dark:text-green-400 font-medium"
+                  />
                 )}
                 {Number(order.amount_due) > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Amount Due</span>
-                    <span className="text-amber-600 font-medium">
-                      {formatCurrency(Number(order.amount_due))}
-                    </span>
-                  </div>
+                  <DetailRow
+                    label="Amount Due"
+                    value={formatCurrency(Number(order.amount_due))}
+                    valueClassName="text-amber-600 dark:text-amber-400 font-medium"
+                  />
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </DetailBody>
+          </DetailCard>
 
           {/* Pricing Breakdown */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Pricing Breakdown</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
+          <DetailCard>
+            <DetailHeader icon={DollarSign} label="Pricing Breakdown" />
+            <DetailBody className="text-sm">
               {/* Single source of truth: every line below comes from the same
                   pricing track (the lane actually charged), so the visible
                   lines always sum to the displayed Total. */}
               {isMixedPayment && (
-                <div className="flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800">
-                  <DollarSign className="h-4 w-4 text-amber-600" />
+                <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5 dark:border-amber-800 dark:bg-amber-950/30">
+                  <DollarSign className="h-4 w-4 shrink-0 text-amber-600" />
                   <span className="text-xs text-amber-700 dark:text-amber-400">
                     Mixed Payment: Paid with both cash and card
                   </span>
                 </div>
               )}
 
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatCurrency(primaryLane.subtotal)}</span>
-              </div>
+              <DetailRow
+                label="Subtotal"
+                value={formatCurrency(primaryLane.subtotal)}
+              />
               {primaryLane.discount > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Discount</span>
-                  <span className="text-green-600">
-                    -{formatCurrency(primaryLane.discount)}
-                  </span>
-                </div>
+                <DetailRow
+                  label="Discount"
+                  value={`-${formatCurrency(primaryLane.discount)}`}
+                  valueClassName="text-green-600 dark:text-green-400"
+                />
               )}
               {primaryLane.serviceCharge > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Service Charge</span>
-                  <span>{formatCurrency(primaryLane.serviceCharge)}</span>
-                </div>
+                <DetailRow
+                  label="Service Charge"
+                  value={formatCurrency(primaryLane.serviceCharge)}
+                />
               )}
               {primaryLane.tax > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tax</span>
-                  <span>{formatCurrency(primaryLane.tax)}</span>
-                </div>
+                <DetailRow label="Tax" value={formatCurrency(primaryLane.tax)} />
               )}
               {primaryLane.tip > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tip</span>
-                  <span>{formatCurrency(primaryLane.tip)}</span>
-                </div>
+                <DetailRow label="Tip" value={formatCurrency(primaryLane.tip)} />
               )}
 
               {breakdown.mixedCashDiscount > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-green-600 dark:text-green-400 font-medium">
-                    Cash Discount
-                  </span>
-                  <span className="text-green-600 dark:text-green-400 font-medium">
-                    -{formatCurrency(breakdown.mixedCashDiscount)}
-                  </span>
-                </div>
+                <DetailRow
+                  label={
+                    <span className="font-medium text-green-600 dark:text-green-400">
+                      Cash Discount
+                    </span>
+                  }
+                  value={`-${formatCurrency(breakdown.mixedCashDiscount)}`}
+                  valueClassName="text-green-600 dark:text-green-400 font-medium"
+                />
               )}
 
-              <Separator />
-              <div className="flex justify-between font-semibold text-base">
-                <span>
+              {/* The charged total is this card's headline — brand blue on the
+                  card lane, matching the Overview section values. */}
+              <div className="mt-4 flex items-baseline justify-between gap-4">
+                <span className="text-sm font-medium">
                   {isMixedPayment
                     ? "Total"
                     : breakdown.dual
@@ -1030,11 +1045,12 @@ export default function OrderDetailPage() {
                     : "Total"}
                 </span>
                 <span
-                  className={
-                    !isMixedPayment && breakdown.display === "card"
-                      ? "text-[#0C4FD1]"
-                      : undefined
-                  }
+                  className={cn(
+                    "text-[1.5rem] font-medium leading-none tracking-[-0.02em] tabular-nums",
+                    !isMixedPayment &&
+                      breakdown.display === "card" &&
+                      "text-[#0C4FD1] dark:text-[#6CA0FF]"
+                  )}
                 >
                   {formatCurrency(
                     isMixedPayment && primaryLane.amountPaid > 0
@@ -1044,113 +1060,108 @@ export default function OrderDetailPage() {
                 </span>
               </div>
 
-              {breakdown.dual && !isMixedPayment && cashSavings > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-green-600 dark:text-green-400 font-medium">
-                    Cash savings
-                  </span>
-                  <span className="text-green-600 dark:text-green-400 font-medium">
-                    -{formatCurrency(cashSavings)}
-                  </span>
-                </div>
-              )}
+              <div className="mt-2">
+                {breakdown.dual && !isMixedPayment && cashSavings > 0 && (
+                  <DetailRow
+                    label={
+                      <span className="font-medium text-green-600 dark:text-green-400">
+                        Cash savings
+                      </span>
+                    }
+                    value={`-${formatCurrency(cashSavings)}`}
+                    valueClassName="text-green-600 dark:text-green-400 font-medium"
+                  />
+                )}
 
-              {isMixedPayment && (
-                <>
-                  <Separator />
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-muted-foreground">
+                {isMixedPayment && (
+                  <>
+                    <p className="pt-3 pb-1 text-xs font-medium text-muted-foreground">
                       Tendered
                     </p>
                     {cashPayments > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Cash</span>
-                        <span className="text-green-600 dark:text-green-400 font-medium">
-                          {formatCurrency(cashPayments)}
-                        </span>
-                      </div>
+                      <DetailRow
+                        label="Cash"
+                        value={formatCurrency(cashPayments)}
+                        valueClassName="text-green-600 dark:text-green-400 font-medium"
+                      />
                     )}
                     {cardPayments > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Card</span>
-                        <span>{formatCurrency(cardPayments)}</span>
-                      </div>
+                      <DetailRow
+                        label="Card"
+                        value={formatCurrency(cardPayments)}
+                      />
                     )}
-                  </div>
-                </>
-              )}
+                  </>
+                )}
 
-              {!isMixedPayment && primaryLane.amountPaid > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Amount Paid</span>
-                  <span className="text-green-600">
-                    {formatCurrency(primaryLane.amountPaid)}
-                  </span>
-                </div>
-              )}
-              {primaryLane.amountDue > 0 && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Amount Due</span>
-                  <span className="text-amber-600">
-                    {formatCurrency(primaryLane.amountDue)}
-                  </span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                {!isMixedPayment && primaryLane.amountPaid > 0 && (
+                  <DetailRow
+                    label="Amount Paid"
+                    value={formatCurrency(primaryLane.amountPaid)}
+                    valueClassName="text-green-600 dark:text-green-400"
+                  />
+                )}
+                {primaryLane.amountDue > 0 && (
+                  <DetailRow
+                    label="Amount Due"
+                    value={formatCurrency(primaryLane.amountDue)}
+                    valueClassName="text-amber-600 dark:text-amber-400"
+                  />
+                )}
+              </div>
+            </DetailBody>
+          </DetailCard>
 
           {/* Special Instructions */}
           {order.special_instructions && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  Special Instructions
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
+            <DetailCard>
+              <DetailHeader icon={AlertCircle} label="Special Instructions" />
+              <DetailBody>
                 <p className="text-sm text-muted-foreground">
                   {order.special_instructions}
                 </p>
-              </CardContent>
-            </Card>
+              </DetailBody>
+            </DetailCard>
           )}
 
           {/* Order Meta Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Order Info</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Order ID</span>
-                <span className="font-mono text-xs">
-                  {order.id.slice(0, 8)}...
-                </span>
-              </div>
+          <DetailCard>
+            <DetailHeader icon={Hash} label="Order Info" />
+            <DetailBody>
+              <DetailRow
+                label="Order ID"
+                value={`${order.id.slice(0, 8)}...`}
+                valueClassName="font-mono text-xs"
+              />
               {order.order_number && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Order #</span>
-                  <span>{order.order_number}</span>
-                </div>
+                <DetailRow label="Order #" value={order.order_number} />
               )}
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Created</span>
-                <span>{formatDate(order.created_at)}</span>
-              </div>
+              <DetailRow label="Created" value={formatDate(order.created_at)} />
               {order.updated_at && order.updated_at !== order.created_at && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Last Updated</span>
-                  <span>{formatDate(order.updated_at)}</span>
-                </div>
+                <DetailRow
+                  label="Last Updated"
+                  value={formatDate(order.updated_at)}
+                />
               )}
-            </CardContent>
-          </Card>
+            </DetailBody>
+          </DetailCard>
         </div>
       </div>
 
+      {/* Receipt preview — the modal owns printing (window.print with a print
+          stylesheet that isolates the receipt paper). */}
+      <ReceiptModal
+        order={order}
+        location={receiptLocation}
+        open={receiptOpen}
+        onOpenChange={setReceiptOpen}
+      />
+
       {/* Refund Confirmation */}
       <AlertDialog open={confirmRefundOpen} onOpenChange={setConfirmRefundOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent
+          className={cn("rounded-[2rem] sm:rounded-[2rem]", RISE_FROM_BOTTOM)}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Refund this order?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1169,7 +1180,9 @@ export default function OrderDetailPage() {
 
       {/* Void Confirmation */}
       <AlertDialog open={confirmVoidOpen} onOpenChange={setConfirmVoidOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent
+          className={cn("rounded-[2rem] sm:rounded-[2rem]", RISE_FROM_BOTTOM)}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Void this order?</AlertDialogTitle>
             <AlertDialogDescription>

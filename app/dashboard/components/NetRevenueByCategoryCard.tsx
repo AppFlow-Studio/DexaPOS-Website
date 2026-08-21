@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import Link from "next/link";
 import {
-  ArrowRight,
   ChevronDown,
   ChevronRight,
   Download,
@@ -18,14 +16,8 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { OverviewLinkButton } from "./OverviewSection";
 import type {
   RevenueByCategoryReport,
   RevenueCategoryNode,
@@ -462,20 +454,14 @@ function TreemapSkeleton() {
 // Main Component
 // ============================================================================
 
-export type DateRangeOption = "7d" | "30d" | "90d";
-
 interface NetRevenueByCategoryCardProps {
   report: RevenueByCategoryReport | null | undefined;
   isLoading?: boolean;
-  dateRange?: DateRangeOption;
-  onDateRangeChange?: (range: DateRangeOption) => void;
 }
 
 export function NetRevenueByCategoryCard({
   report,
   isLoading,
-  dateRange = "7d",
-  onDateRangeChange,
 }: NetRevenueByCategoryCardProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
@@ -550,16 +536,10 @@ export function NetRevenueByCategoryCard({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `revenue-by-category-${dateRange}.csv`;
+    a.download = `revenue-by-category.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [report, dateRange]);
-
-  const dateRangeLabel: Record<DateRangeOption, string> = {
-    "7d": "Last 7 Days",
-    "30d": "Last 30 Days",
-    "90d": "Last 90 Days",
-  };
+  }, [report]);
 
   if (isLoading) return <TreemapSkeleton />;
   if (!report || report.categories.length === 0) return null;
@@ -569,8 +549,8 @@ export function NetRevenueByCategoryCard({
       <CardHeader className="pb-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3 className="h-4 w-4" />
+            <CardTitle className="text-[1.0625rem]! font-semibold text-[#0C4FD1]! dark:text-[#6CA0FF]! flex items-center gap-2">
+              <BarChart3 className="h-[1.125rem] w-[1.125rem] shrink-0" />
               Net Revenue by Category
             </CardTitle>
             <CardDescription>
@@ -578,23 +558,6 @@ export function NetRevenueByCategoryCard({
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            {onDateRangeChange && (
-              <Select
-                value={dateRange}
-                onValueChange={(v) =>
-                  onDateRangeChange(v as DateRangeOption)
-                }
-              >
-                <SelectTrigger className="w-35 h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7d">Last 7 Days</SelectItem>
-                  <SelectItem value="30d">Last 30 Days</SelectItem>
-                  <SelectItem value="90d">Last 90 Days</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
             <Button
               variant="outline"
               size="icon"
@@ -709,12 +672,9 @@ export function NetRevenueByCategoryCard({
             <span className="text-xs text-muted-foreground">
               Showing all {report.categories.length} categories
             </span>
-            <Button variant="link" size="sm" className="h-auto p-0" asChild>
-              <Link href="/dashboard/orders/analytics">
-                View full audit report
-                <ArrowRight className="h-3.5 w-3.5 ml-1" />
-              </Link>
-            </Button>
+            <OverviewLinkButton href="/dashboard/orders/analytics">
+              View full audit report
+            </OverviewLinkButton>
           </div>
         </div>
       </CardContent>
