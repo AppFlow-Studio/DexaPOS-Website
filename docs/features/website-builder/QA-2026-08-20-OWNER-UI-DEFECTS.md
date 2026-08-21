@@ -415,3 +415,35 @@ banner, marks the row `⚠ Not published · /career` — status first, so the dr
 the warning — and **Remove this link** drops it, taking the count `3/8 → 2/8` and flipping the footer to *Save
 navigation* ([fix-03](qa-2026-08-20/fix-03-nav-row.png), [fix-04](qa-2026-08-20/fix-04-nav-repaired.png)).
 Left unsaved: it is the merchant's live data, and per the decision above the repair is theirs to commit.
+
+### C · P2-1 — Hero "Overlay opacity" slider is inert in the `bistro` variant
+
+Found 2026-08-21 while answering a question about hero carousel width. The width was correct;
+the slider next to it was not.
+
+| # | Item | State |
+|---|---|---|
+| C1 | `hero.hiddenFields` drops `overlayOpacity` when `variant === "bistro"` | ✅ |
+| C2 | Tests — 2 new, in `capabilities.test.ts` | ✅ |
+
+`HeroSection` renders the darkening scrim — and so reads `overlayOpacity` — only in the
+`classic`/`spotlight` branch (`HeroSection.tsx:101`). `bistro` sets the copy *beside* the photo in a
+`md:grid-cols-2` split, so it has no text over the image to protect and draws no scrim. The drawer is
+generated from the Zod schema, so it showed the slider for every variant regardless: a merchant on
+`bistro` could drag it to 51 and watch the preview not move.
+
+**Hidden, not disabled,** matching the `content` section's background/media controls and the gutter
+principle already recorded above. The stored value is deliberately left intact, so switching back to
+`classic` restores the merchant's setting rather than silently resetting it to the 35 default.
+
+Fixed with the `hiddenFields` hook that already existed for `content` and `video` — the drawer's
+consumption path (`SectionDrawer.tsx:127-130`) recomputes on every prop change, so the slider
+appears and disappears in the same interaction as the variant switch, no new wiring.
+
+**Not browser-verified.** The registry contract is covered by a test proven to fail without the fix;
+the drawer half of the path is shared, already-QA'd code exercised by the `content` section.
+
+**Also noted, not fixed:** with `Image` empty and `Carousel` populated, `hasPrimary` falls back to
+`ctx.site.heroImageUrl` (`HeroSection.tsx:150`), so frame 1 of the rotation is the storefront's
+legacy hero and the merchant's chosen photos are frames 2–n. Defensible as the never-blank
+guarantee, but likely surprising. Needs a product call before changing.

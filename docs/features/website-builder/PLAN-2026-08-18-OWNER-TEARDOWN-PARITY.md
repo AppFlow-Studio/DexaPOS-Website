@@ -18,12 +18,12 @@ which we are now skipping).
 | 0 — Close the two live holes (nav, masthead move) | ✅ **Built 2026-08-19**, unit-tested, not yet QA'd on a real merchant |
 | 1 — Capability flags and Owner's caps | ✅ **Built 2026-08-19**, unit-tested |
 | 2 — Reshape `content` (schema v2) | ✅ **Built 2026-08-19**, unit-tested |
-| 3 — Assets and the real logo | 🟡 **Code-complete 2026-08-19** — migration applied to staging, NOT to production |
+| 3 — Assets and the real logo | ✅ **Migration applied to staging** (re-verified 2026-08-21), NOT to production |
 | 4 — Complete the catalogue | 🟡 **8 of 9 kinds built** — Reservations is the only remaining kind |
-| 5 — Brand toggles + site settings | 🟡 **Built 2026-08-20**, unit-tested — migration NOT applied anywhere |
-| 6 — Tracking | 🟡 **Built 2026-08-20**, unit-tested — migration NOT applied anywhere |
-| 7 — Forms | 🟡 **Built 2026-08-20**, unit-tested — migration NOT applied anywhere |
-| 8 — Events | 🟡 **Built 2026-08-20**, unit-tested — migration NOT applied anywhere |
+| 5 — Brand toggles + site settings | ✅ **Migration applied to staging** (verified 2026-08-21), NOT to production |
+| 6 — Tracking | ✅ **Migration applied to staging** (verified 2026-08-21), NOT to production |
+| 7 — Forms | ✅ **Migration applied to staging** (verified 2026-08-21), NOT to production |
+| 8 — Events | ✅ **Migration applied to staging** (verified 2026-08-21), NOT to production |
 | 9 — Careers | ⬜ next |
 | 10–12 | ⬜ |
 
@@ -41,6 +41,24 @@ which we are now skipping).
 >
 > **Not yet exercised in a browser:** photo upload, the Add Section catalogue's five new kinds, and the public
 > page render. The MCP browser session dropped before those.
+
+> ### ✅ Staging migration state, measured 2026-08-21 (do not trust the table above without re-measuring)
+>
+> The rows for phases 5-8 said "migration NOT applied anywhere" for three days while all four were in fact
+> **already on staging**. Corrected above. Measured against `dfwqakoyittmrwbqvxgw` over PostgREST, not read off
+> a plan:
+>
+> - `get_public_site_page` returns `site_logo_url`, `site_features`, `site_brand`, `site_integrations`
+>   — so the phase 3, 5 and 6 migrations have all run.
+> - `site_assets` (14 cols), `site_forms` (14), `site_events` (17) and `site_form_submissions` (20) each match
+>   their `CREATE TABLE` exactly, with no missing columns.
+> - `get_public_site_events`, `get_public_site_form` and `site_asset_bytes_used` all execute.
+>
+> **The only unapplied website migration on staging is `20260824120000_website_brand_name.sql`**, confirmed by
+> the absence of `merchant_name` from the deployed `get_public_site_page`. Its four dependencies
+> (`logo_asset_id`, `features`, `brand`, `integrations`) are all present, so it runs standalone there.
+>
+> Production remains unmeasured — the token in `.env` reaches staging only.
 
 > ### 🔴 Phase 3 is not usable until its migration runs
 >
