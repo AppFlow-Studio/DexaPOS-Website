@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import {
     Table,
     TableBody,
@@ -10,22 +11,72 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
-import { GripVertical, ChevronUp, ChevronDown, Eye, EyeOff, Globe, MapPin, Trash2 } from 'lucide-react'
-import { MenuCategory } from '@/types/menu'
-import { LocationBadge } from '@/components/dashboard/menu/MenuListView'
+import { Globe, GripVertical, MapPin, Trash2 } from 'lucide-react'
+import { MenuCategory, MenuCategoryItem } from '@/types/menu'
+import { useState, type MouseEventHandler, type ReactNode } from 'react'
+import { DndContext, closestCenter, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { CategoryItemsSheet } from './CategoryItemsSheet'
+import { cn } from '@/lib/utils'
 import { useIsSingleLocation } from '@/stores/location-store'
+
+function SortableCategoryRow({
+    id,
+    showHandle,
+    className,
+    onClick,
+    children,
+}: {
+    id: string
+    showHandle: boolean
+    className?: string
+    onClick?: MouseEventHandler<HTMLTableRowElement>
+    children: ReactNode
+}) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+
+    return (
+        <TableRow
+            ref={setNodeRef}
+            style={{ transform: CSS.Transform.toString(transform), transition }}
+            className={`${className ?? ''} ${isDragging ? 'relative z-20 bg-card shadow-lg' : ''}`}
+            onClick={onClick}
+        >
+            {showHandle && (
+                <TableCell onClick={(event) => event.stopPropagation()}>
+                    <button
+                        type="button"
+                        className="flex h-8 w-8 cursor-grab items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:cursor-grabbing"
+                        aria-label="Drag to reorder category"
+                        {...attributes}
+                        {...listeners}
+                    >
+                        <GripVertical className="h-4 w-4" />
+                    </button>
+                </TableCell>
+            )}
+            {children}
+        </TableRow>
+    )
+}
 
 interface CategoryTableProps {
     categories: MenuCategory[]
     menuId: string
     selectedLocationId: string | null
     isMenuLocationOwned?: boolean
-    onMoveUp?: (index: number) => void
-    onMoveDown?: (index: number) => void
     onToggleVisibility: (categoryId: string, isActive: boolean) => Promise<void>
     onResetOverride?: (categoryId: string) => Promise<void>
     onRemoveCategory?: (categoryId: string) => void
+    onEditItem?: (
+        item: MenuCategoryItem,
+        category: MenuCategory,
+        menuId: string,
+    ) => void
     hasOrderChanges?: boolean
+    isReorderMode?: boolean
+    onCategoryOrderChange?: (categories: MenuCategory[]) => void
 }
 
 export function CategoryTable({
@@ -33,140 +84,117 @@ export function CategoryTable({
     menuId,
     selectedLocationId,
     isMenuLocationOwned,
-    onMoveUp,
-    onMoveDown,
     onToggleVisibility,
     onResetOverride,
     onRemoveCategory,
+    onEditItem,
     hasOrderChanges = false,
+    isReorderMode = false,
+    onCategoryOrderChange,
 }: CategoryTableProps) {
     const isSingleLocation = useIsSingleLocation()
     const isAllLocations = !selectedLocationId || selectedLocationId === 'all'
     const canModifyCategories = isAllLocations || isMenuLocationOwned
+    // Which category's item list is open, if any.
+    const [itemsForCategory, setItemsForCategory] =
+        useState<MenuCategory | null>(null)
+    const sensors = useSensors(useSensor(PointerSensor, {
+        activationConstraint: { distance: 5 },
+    }))
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        if (event.active.id === event.over?.id) return
+        const oldIndex = categories.findIndex((category) => category.id === event.active.id)
+        const newIndex = categories.findIndex((category) => category.id === event.over?.id)
+        if (oldIndex < 0 || newIndex < 0) return
+        onCategoryOrderChange?.(arrayMove(categories, oldIndex, newIndex))
+    }
 
     return (
         <div className="space-y-4">
-            <div className="rounded-md border overflow-x-auto">
-                <Table className="min-w-[750px]">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <Table variant="data" className="min-w-[640px]">
                     <TableHeader>
-                        <TableRow className="bg-muted/50">
-                            <TableHead className="w-[60px]">Order</TableHead>
-                            <TableHead className="w-[250px]">Category Name</TableHead>
-                            <TableHead>Description</TableHead>
-                            <TableHead className="w-[100px]">Display Order</TableHead>
-                            <TableHead className="w-[100px]">Status</TableHead>
-                            <TableHead className="w-[100px]">Item Count</TableHead>
-                            {!isSingleLocation && <TableHead className="w-[150px]">Location</TableHead>}
-                            <TableHead className="w-[120px] text-right">Actions</TableHead>
+                        <TableRow>
+                            {isReorderMode && <TableHead className="w-10" />}
+                            <TableHead className="w-[300px]">Category</TableHead>
+                            <TableHead className="w-[150px]">Status</TableHead>
+                            {/* Location has no meaning when there is only one. */}
+                            {!isSingleLocation && <TableHead className="w-[180px]">Location</TableHead>}
+                            <TableHead className="w-[80px] text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {categories.map((category, index) => {
-                            const itemCount = category.items?.length || 0
+                        <SortableContext items={categories.map((category) => category.id)} strategy={verticalListSortingStrategy}>
+                        {categories.map((category) => {
                             const categoryLocationId = category.category?.location_id
                             const isGlobal = !categoryLocationId
+                            const customTitle = (category as MenuCategory & { custom_title?: string | null }).custom_title
 
                             return (
-                                <TableRow key={category.id} className="group">
-                                    {!isSingleLocation && <TableCell>
-                                        <div className="flex items-center gap-1">
-                                            <GripVertical className="h-4 w-4 text-muted-foreground" />
-                                            <div className="flex flex-col gap-0.5">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-5 w-5"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        onMoveUp?.(index)
-                                                    }}
-                                                    disabled={index === 0 || !onMoveUp}
-                                                    title="Move up"
-                                                >
-                                                    <ChevronUp className="h-3 w-3" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-5 w-5"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        onMoveDown?.(index)
-                                                    }}
-                                                    disabled={index === categories.length - 1 || !onMoveDown}
-                                                    title="Move down"
-                                                >
-                                                    <ChevronDown className="h-3 w-3" />
-                                                </Button>
-                                            </div>
-                                            <span className="text-xs text-muted-foreground ml-1">
-                                                {category.display_order ?? '—'}
+                                <SortableCategoryRow
+                                    key={category.id}
+                                    id={category.id}
+                                    showHandle={isReorderMode}
+                                    className="group cursor-pointer"
+                                    onClick={() => setItemsForCategory(category)}
+                                >
+                                    <TableCell className="font-medium">
+                                        <div className="flex min-w-0 flex-col gap-0.5">
+                                            <span>{category.category?.name || 'Unknown'}</span>
+                                            {customTitle && (
+                                                <span className="truncate text-xs font-normal text-muted-foreground">
+                                                    Displayed as {customTitle}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center gap-2">
+                                            <Switch
+                                                checked={category.is_active}
+                                                onCheckedChange={(checked) =>
+                                                    void onToggleVisibility(category.category_id, checked)
+                                                }
+                                                aria-label={`${category.is_active ? 'Hide' : 'Show'} ${category.category?.name || 'category'}`}
+                                            />
+                                            <span
+                                                className={cn(
+                                                    'text-sm font-medium',
+                                                    category.is_active
+                                                        ? 'text-green-600'
+                                                        : 'text-muted-foreground',
+                                                )}
+                                            >
+                                                {category.is_active ? 'Active' : 'Hidden'}
                                             </span>
                                         </div>
-                                    </TableCell>}
-                                    <TableCell className="font-medium">
-                                        <div className="flex items-center gap-2">
-                                            <span>{category.category?.name || 'Unknown'}</span>
-                                            {category.custom_title && (
-                                                <Badge variant="outline" className="text-xs">
-                                                    Custom: {category.custom_title}
+                                    </TableCell>
+                                    {!isSingleLocation && (
+                                        <TableCell>
+                                            {isGlobal ? (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="gap-1 rounded-full border-0 bg-emerald-50 text-emerald-700"
+                                                >
+                                                    <Globe className="h-3 w-3" />
+                                                    Global
+                                                </Badge>
+                                            ) : (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="gap-1 rounded-full border-0 bg-blue-50 text-blue-700"
+                                                >
+                                                    <MapPin className="h-3 w-3" />
+                                                    {category.category?.location_name || 'Location'}
                                                 </Badge>
                                             )}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <span className="text-muted-foreground line-clamp-1 max-w-[300px]">
-                                            {category.category?.description || '—'}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell>
-                                        <span className="text-sm text-muted-foreground">
-                                            {category.display_order ?? '—'}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="h-7 gap-1"
-                                            onClick={() => onToggleVisibility(category.category_id, !category.is_active)}
-                                        >
-                                            {category.is_active ? (
-                                                <>
-                                                    <Eye className="h-3 w-3" />
-                                                    <span className="text-xs">Active</span>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <EyeOff className="h-3 w-3" />
-                                                    <span className="text-xs">Hidden</span>
-                                                </>
-                                            )}
-                                        </Button>
-                                    </TableCell>
-                                    <TableCell>
-                                        <span className="text-sm font-medium">{itemCount}</span>
-                                    </TableCell>
-                                    <TableCell>
-                                        {isGlobal ? (
-                                            <Badge
-                                                variant="outline"
-                                                className="gap-1 bg-emerald-50 text-emerald-700 border-emerald-200"
-                                            >
-                                                <Globe className="h-3 w-3" />
-                                                Global
-                                            </Badge>
-                                        ) : (
-                                            <Badge
-                                                variant="outline"
-                                                className="gap-1 bg-blue-50 text-blue-700 border-blue-200"
-                                            >
-                                                <MapPin className="h-3 w-3" />
-                                                {category.category?.location_name || 'Location'}
-                                            </Badge>
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="text-right">
+                                        </TableCell>
+                                    )}
+                                    <TableCell
+                                        className="text-right"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
                                         <div className="flex items-center justify-end gap-1">
                                             {!isAllLocations && category.category?.location_id === null && onResetOverride && (
                                                 <Button
@@ -174,7 +202,6 @@ export function CategoryTable({
                                                     size="sm"
                                                     className="h-7 text-xs"
                                                     onClick={() => onResetOverride(category.category_id)}
-                                                    title="Reset to global"
                                                 >
                                                     Reset
                                                 </Button>
@@ -182,22 +209,35 @@ export function CategoryTable({
                                             {canModifyCategories && onRemoveCategory && (
                                                 <Button
                                                     variant="ghost"
-                                                    size="sm"
-                                                    className="h-7 text-xs text-destructive hover:text-destructive"
+                                                    size="icon"
+                                                    className="h-8 w-8 rounded-full text-destructive hover:bg-destructive/10 hover:text-destructive"
                                                     onClick={() => onRemoveCategory(category.category_id)}
-                                                    title="Remove category from menu"
+                                                    aria-label={`Remove ${category.category?.name || 'category'}`}
                                                 >
-                                                    <Trash2 className="h-3 w-3" />
+                                                    <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             )}
                                         </div>
                                     </TableCell>
-                                </TableRow>
+                                </SortableCategoryRow>
                             )
                         })}
+                        </SortableContext>
                     </TableBody>
                 </Table>
-            </div>
+            </DndContext>
+
+            <CategoryItemsSheet
+                category={itemsForCategory}
+                open={!!itemsForCategory}
+                onOpenChange={(open) => !open && setItemsForCategory(null)}
+                onEditItem={(item, category) => {
+                    // Close this panel before the editor so the two overlays
+                    // never stack.
+                    setItemsForCategory(null)
+                    onEditItem?.(item, category, menuId)
+                }}
+            />
         </div>
     )
 }

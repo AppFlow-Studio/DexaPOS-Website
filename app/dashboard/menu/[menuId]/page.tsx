@@ -1,9 +1,8 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useMenuWithCategories } from "../../hooks/useMenu";
-import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import { useUserInfo } from "../../../manage/hooks/useUserInfo.";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -105,6 +104,16 @@ import {
   useRestoreItemsBatch,
   type SnoozeDuration,
 } from "@/lib/queries/use-snoozes";
+import { PageShell } from "@/components/dashboard/shell";
+import { cn } from "@/lib/utils";
+
+/**
+ * Pill-rail tab trigger. Written out literally here rather than imported from
+ * `tokens.ts` — Tailwind does not scan `.ts` files, so a class sourced only
+ * from there would reach the DOM with no rule behind it (C7).
+ */
+const TAB_PILL =
+  "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border";
 
 export default function MenuDetailPage() {
   const params = useParams();
@@ -206,6 +215,33 @@ export default function MenuDetailPage() {
   // Preview modal state
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
+  // Tab rail scrolls horizontally on narrow screens; keep the active pill in
+  // view so selecting a tab near either edge brings it fully on-screen.
+  const [activeTab, setActiveTab] = useState("overview");
+  const tabRailRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    // Run after browser scroll restoration and Radix's active-state update.
+    // This prevents a refreshed rail from retaining an old horizontal offset
+    // that leaves the restored active tab outside the viewport.
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const rail = tabRailRef.current;
+        const active = rail?.querySelector<HTMLElement>('[data-state="active"]');
+        if (!rail || !active) return;
+        const target =
+          active.offsetLeft - (rail.clientWidth - active.offsetWidth) / 2;
+        rail.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [activeTab]);
+
   // Bulk selection state (categories tab only)
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -250,6 +286,19 @@ export default function MenuDetailPage() {
   // guidance even before they've connected OrderOut. Single-location accounts
   // resolve to their one location; multi-location on 'all' stays hidden.
   const showOrderOutTab = !!orderOutLocationId;
+
+  useEffect(() => {
+    const savedTab = window.sessionStorage.getItem(`menu:${menuId}:active-tab`);
+    const canRestore =
+      savedTab &&
+      ["overview", "categories", "schedules", "settings", "orderout"].includes(savedTab) &&
+      (savedTab !== "orderout" || showOrderOutTab);
+    if (canRestore && savedTab) {
+      // Session storage is external state; hydrate the last explicit tab choice.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveTab(savedTab);
+    }
+  }, [menuId, showOrderOutTab]);
 
   // Surface out-of-band delivery-app sync failures (86 propagates async now).
   useOrderOutSyncAlerts(clerkOrgId, orderOutLocationId);
@@ -519,15 +568,6 @@ export default function MenuDetailPage() {
       }
       return next;
     });
-  };
-
-  const expandAllCategories = () => {
-    const allIds = new Set(menu?.categories?.map((c) => c.id) || []);
-    setExpandedCategories(allIds);
-  };
-
-  const collapseAllCategories = () => {
-    setExpandedCategories(new Set());
   };
 
   const handleEditMenuItem = (
@@ -1188,16 +1228,18 @@ export default function MenuDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 animate-in fade-in duration-500">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-96 w-full" />
-      </div>
+      <PageShell>
+        <div className="animate-in fade-in duration-500">
+          <Skeleton className="h-10 w-64" />
+        </div>
+        <Skeleton className="h-96 w-full rounded-3xl" />
+      </PageShell>
     );
   }
 
   if (!menu) {
     return (
-      <div className="space-y-6">
+      <PageShell>
         <Empty
           icon={Utensils}
           title="Menu not found"
@@ -1209,7 +1251,7 @@ export default function MenuDetailPage() {
             </Button>
           }
         />
-      </div>
+      </PageShell>
     );
   }
 
@@ -1218,8 +1260,7 @@ export default function MenuDetailPage() {
   //TODO: Handle switching between location to location should send you back to menu
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <ScopeContextStrip menuName={menu?.name ?? null} />
+    <PageShell className="space-y-3">
       <MenuHeader
         menu={menu}
         locationName={menu.location_id ? locations?.find(l => l.id === menu.location_id)?.name : null}
@@ -1228,19 +1269,30 @@ export default function MenuDetailPage() {
         onPreview={() => setIsPreviewOpen(true)}
       />
 
-      <Tabs defaultValue="overview" className="space-y-4">
-        <div className="overflow-x-auto">
-        <TabsList className="w-max">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="categories" className="flex items-center gap-1.5">
-            Categories & Items
+      <Tabs
+        value={activeTab}
+        onValueChange={(tab) => {
+          setActiveTab(tab);
+          window.sessionStorage.setItem(`menu:${menuId}:active-tab`, tab);
+        }}
+        className="space-y-4"
+      >
+        {/* Pill rail, not underline tabs. Classes are literal, not {TOKEN} — see C7. */}
+        <div
+          ref={tabRailRef}
+          className="scrollbar-none w-full min-w-0 overflow-x-auto scroll-smooth"
+        >
+        <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+          <TabsTrigger value="overview" className={TAB_PILL}>Overview</TabsTrigger>
+          <TabsTrigger value="categories" className={cn(TAB_PILL, "gap-1.5")}>
+            Categories &amp; Items
             {enrichedCategories.length > 0 && (
               <Badge variant="secondary" className="h-5 px-1.5 text-xs">
                 {enrichedCategories.length}
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="schedules" className="flex items-center gap-1.5">
+          <TabsTrigger value="schedules" className={cn(TAB_PILL, "gap-1.5")}>
             Schedules
             {menuSchedules.length > 0 && (
               <Badge
@@ -1251,9 +1303,9 @@ export default function MenuDetailPage() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
+          <TabsTrigger value="settings" className={TAB_PILL}>Settings</TabsTrigger>
           {showOrderOutTab && (
-            <TabsTrigger value="orderout" className="flex items-center gap-1.5">
+            <TabsTrigger value="orderout" className={cn(TAB_PILL, "gap-1.5")}>
               OrderOut
               {orderOutTabDot && (
                 <span
@@ -1279,14 +1331,14 @@ export default function MenuDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="categories" className="space-y-4">
-          {/* Sticky selection bar — matches items-page pattern */}
+        <TabsContent value="categories" className="flex flex-col gap-4">
+          {/* Selection bar stays in the page flow with the category content. */}
           {isSelectionMode && (
-            <div className="sticky top-0 z-20 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 backdrop-blur mb-4">
-              <Badge variant="secondary" className="text-xs">
+            <div className="order-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-0 bg-primary/5 px-4 py-2.5">
+              <Badge variant="secondary" className="shrink-0 text-xs">
                 {selectedItemIds.size} of {totalSelectableItems} selected
               </Badge>
-              <div className="w-px h-4 bg-border" />
+              <div className="hidden h-4 w-px bg-border sm:block" />
               <Button
                 size="sm"
                 variant="ghost"
@@ -1309,12 +1361,12 @@ export default function MenuDetailPage() {
               >
                 Clear
               </Button>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2 sm:ml-auto">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       size="sm"
-                      className="h-8 gap-1"
+                      className="h-8 gap-1 rounded-full"
                       disabled={selectedItemIds.size === 0}
                     >
                       Bulk edit
@@ -1392,8 +1444,6 @@ export default function MenuDetailPage() {
             menuId={menuId}
             isMenuLocationOwned={menu?.is_location_owned}
             onToggleCategory={toggleCategory}
-            onExpandAll={expandAllCategories}
-            onCollapseAll={collapseAllCategories}
             onItemClick={(itemId) =>
               router.push(`/dashboard/menu/items/${itemId}`)
             }
@@ -1456,15 +1506,10 @@ export default function MenuDetailPage() {
             editedDescription={editedDescription}
             editedLocationId={editedLocationId}
             hasSettingsChanges={hasSettingsChanges}
-            imagePreviewUrl={imageUpload.previewUrl}
-            isImageUploading={imageUpload.isUploading}
             isTogglingActive={isTogglingActive}
             isSavingSettings={isSavingSettings}
-            selectedImageFileName={imageUpload.selectedFileName}
             selectedLocationId={selectedLocationId}
             locations={locations ?? []}
-            onClearImage={imageUpload.clear}
-            onImageSelect={imageUpload.selectFile}
             onNameChange={setEditedName}
             onDescriptionChange={setEditedDescription}
             onLocationChange={setEditedLocationId}
@@ -1708,11 +1753,7 @@ export default function MenuDetailPage() {
           }))}
         onSuccess={() => {
           exitSelectionMode();
-          queryClient.invalidateQueries({
-            queryKey: ["menu-with-categories", menuId],
-          });
           invalidateOrderOutSync(queryClient);
-          refetchMenu();
         }}
       />
 
@@ -1737,14 +1778,10 @@ export default function MenuDetailPage() {
           }))}
         onSuccess={() => {
           exitSelectionMode();
-          queryClient.invalidateQueries({
-            queryKey: ["menu-with-categories", menuId],
-          });
           invalidateOrderOutSync(queryClient);
-          refetchMenu();
         }}
       />
 
-    </div>
+    </PageShell>
   );
 }

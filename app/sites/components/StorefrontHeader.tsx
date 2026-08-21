@@ -35,10 +35,20 @@ export function StorefrontHeader({
   const { isAuthenticated, customer } = useSession();
   const [showAuth, setShowAuth] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const itemCount = getTotalItems();
   const displayCount = mounted ? itemCount : 0;
 
   useEffect(() => setMounted(true), []);
+
+  // Frosted-glass header once the page scrolls, so content passing underneath
+  // doesn't butt straight against it. At the top it stays flat and borderless.
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const initials = customer?.name
     ? customer.name
@@ -63,8 +73,11 @@ export function StorefrontHeader({
         id="storefront-header"
         className="sticky top-0 z-50 w-full"
         style={{
-          backgroundColor: "#FFFFFF",
-          borderBottom: "1px solid #E5E7EB",
+          backgroundColor: isScrolled ? "rgba(255, 255, 255, 0.72)" : "#FFFFFF",
+          backdropFilter: isScrolled ? "blur(12px) saturate(180%)" : undefined,
+          WebkitBackdropFilter: isScrolled ? "blur(12px) saturate(180%)" : undefined,
+          boxShadow: isScrolled ? "0 1px 12px rgba(0, 0, 0, 0.06)" : undefined,
+          transition: "background-color .25s ease, box-shadow .25s ease",
           fontFamily: "var(--font)",
         }}
       >
@@ -75,16 +88,14 @@ export function StorefrontHeader({
               <img
                 src={site.logo_url}
                 alt={site?.title || "Store"}
-                className="h-9 w-9 rounded-lg object-cover"
-                style={{ border: "1px solid #E5E7EB" }}
+                className="h-14 w-14 rounded-lg object-contain"
               />
             ) : (
               <div
-                className="h-9 w-9 flex items-center justify-center rounded-lg font-bold text-sm"
+                className="h-14 w-14 flex items-center justify-center rounded-lg font-bold text-lg"
                 style={{
                   backgroundColor: "color-mix(in srgb, var(--primary) 10%, #FFFFFF)",
                   color: "var(--primary)",
-                  border: "1px solid #E5E7EB",
                 }}
               >
                 {(site?.title || "S").charAt(0).toUpperCase()}

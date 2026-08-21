@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,12 +20,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { FileText, Loader2 } from 'lucide-react'
+import { FileText, Loader2, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { UpdateLocation } from '@/app/dashboard/actions/locations'
 import type { Location } from '@/types/merchant_locations'
+import { roundedFields, roundedSelectContent } from './LocationPanelSection'
 
 interface LocationTaxComplianceCardProps {
   location: Location
@@ -34,6 +34,7 @@ interface LocationTaxComplianceCardProps {
 }
 
 type TaxRegistrationStatus = 'pending' | 'verified' | 'expired'
+
 
 export function LocationTaxComplianceCard({ location, onUpdated }: LocationTaxComplianceCardProps) {
   const queryClient = useQueryClient()
@@ -130,53 +131,59 @@ export function LocationTaxComplianceCard({ location, onUpdated }: LocationTaxCo
 
   return (
     <>
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Tax & Compliance
-          </CardTitle>
-          <CardDescription>
-            Manage location EIN, tax registration, and sales tax rate.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">EIN</p>
-              <p className="font-medium">{maskedEin}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">State Tax ID</p>
-              <p className="font-medium">{viewLocation.tax_id || 'Not set'}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Sales Tax Rate</p>
-              <p className="font-medium">{salesTaxRateDisplay}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Registration Status</p>
-              <Badge
-                variant={viewLocation.tax_registration_status ? 'default' : 'secondary'}
-                className={cn(taxStatusClass)}
-              >
-                {viewLocation.tax_registration_status || 'pending'}
-              </Badge>
-            </div>
-          </div>
+      {/* Matches the dashboard Overview shell: one rounded-2xl container with
+          a brand-blue section heading and label/value rows, no inner boxes. */}
+      <div className="overflow-hidden rounded-2xl bg-card px-6 py-8 ring-1 ring-border/50">
+        <div className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+          <FileText className="h-[1.125rem] w-[1.125rem] shrink-0" />
+          <span>Tax &amp; Compliance</span>
+        </div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage location EIN, tax registration, and sales tax rate.
+        </p>
 
-          <div className="flex justify-end">
-            <Button variant="outline" onClick={() => setShowTaxDialog(true)}>
-              Edit Tax Settings
-            </Button>
+        <div className="mt-5">
+          <div className="flex items-center justify-between gap-4 py-2.5">
+            <span className="text-[0.9375rem] text-muted-foreground">EIN</span>
+            <span className="text-sm font-mono tabular-nums">{maskedEin}</span>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex items-center justify-between gap-4 py-2.5">
+            <span className="text-[0.9375rem] text-muted-foreground">State Tax ID</span>
+            <span className="text-sm truncate">{viewLocation.tax_id || 'Not set'}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4 py-2.5">
+            <span className="text-[0.9375rem] text-muted-foreground">Sales Tax Rate</span>
+            <span className="text-sm tabular-nums">{salesTaxRateDisplay}</span>
+          </div>
+          <div className="flex items-center justify-between gap-4 py-2.5">
+            <span className="text-[0.9375rem] text-muted-foreground">Registration Status</span>
+            <Badge
+              variant={viewLocation.tax_registration_status ? 'default' : 'secondary'}
+              className={cn('rounded-full text-xs font-medium px-2.5 py-0.5 capitalize', taxStatusClass)}
+            >
+              {viewLocation.tax_registration_status || 'pending'}
+            </Badge>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Button size="sm" className="gap-2 rounded-full px-4" onClick={() => setShowTaxDialog(true)}>
+            <Pencil className="h-4 w-4" />
+            Edit tax settings
+          </Button>
+        </div>
+      </div>
 
       <Dialog open={showTaxDialog} onOpenChange={setShowTaxDialog}>
-        <DialogContent elevation="above-sheet">
+        {/* Softer corners to match the rounded-2xl cards on the page; the
+            field overrides ride on the dialog so the shared Input/Select
+            primitives stay untouched elsewhere. */}
+        <DialogContent
+          elevation="above-sheet"
+          className={cn('sm:rounded-2xl border-0 shadow-xl', roundedFields)}
+        >
           <DialogHeader>
-            <DialogTitle>Edit Tax & Compliance</DialogTitle>
+            <DialogTitle>Edit Tax &amp; Compliance</DialogTitle>
             <DialogDescription>
               Update EIN, tax registration details, and sales tax rate for this location.
             </DialogDescription>
@@ -231,7 +238,7 @@ export function LocationTaxComplianceCard({ location, onUpdated }: LocationTaxCo
                 <SelectTrigger>
                   <SelectValue placeholder="Select tax status" />
                 </SelectTrigger>
-                <SelectContent className="z-[220]">
+                <SelectContent className={cn('z-[220]', roundedSelectContent)}>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="verified">Verified</SelectItem>
                   <SelectItem value="expired">Expired</SelectItem>
@@ -241,10 +248,19 @@ export function LocationTaxComplianceCard({ location, onUpdated }: LocationTaxCo
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowTaxDialog(false)} disabled={isSavingTax}>
+            <Button
+              variant="outline"
+              className="rounded-full px-4"
+              onClick={() => setShowTaxDialog(false)}
+              disabled={isSavingTax}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSaveTaxCompliance} disabled={isSavingTax}>
+            <Button
+              className="rounded-full px-4"
+              onClick={handleSaveTaxCompliance}
+              disabled={isSavingTax}
+            >
               {isSavingTax ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />

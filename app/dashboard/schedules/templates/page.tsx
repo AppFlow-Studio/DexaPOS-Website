@@ -31,9 +31,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { toast } from "sonner";
 import { useScheduleTemplateStore } from "@/stores/useScheduleTemplateStore";
 import { TemplateVisualPreview } from "@/components/scheduling/templates/TemplateVisualPreview";
+import { DeleteConfirmDialog } from "@/app/dashboard/inventory/components/DeleteConfirmDialog";
 
 export default function TemplateLibraryPage() {
   const router = useRouter();
@@ -65,18 +65,18 @@ export default function TemplateLibraryPage() {
 
   const handleDuplicate = (id: string) => {
     actions.duplicateTemplate(id);
-    toast("Template Duplicated", {
-      description: "A copy of the template has been created.",
-    });
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this template?")) {
-      actions.deleteTemplate(id);
-      toast("Template Deleted", {
-        description: "The template has been removed.",
-      });
-    }
+  // Holds the template queued for deletion; the native confirm() it replaces
+  // was an unstyled browser dialog that also blocked the main thread.
+  const [templateToDelete, setTemplateToDelete] = useState<
+    (typeof templates)[number] | null
+  >(null);
+
+  const handleConfirmDelete = () => {
+    if (!templateToDelete) return;
+    actions.deleteTemplate(templateToDelete.id);
+    setTemplateToDelete(null);
   };
 
   // Active Template Selection Logic
@@ -85,9 +85,6 @@ export default function TemplateLibraryPage() {
       setSelectedActiveIds((prev) => prev.filter((pid) => pid !== id));
     } else {
       if (selectedActiveIds.length >= 3) {
-        toast("Limit Reached", {
-          description: "You can only select up to 3 active templates.",
-        });
         return;
       }
       setSelectedActiveIds((prev) => [...prev, id]);
@@ -97,10 +94,6 @@ export default function TemplateLibraryPage() {
   const handleSaveSelection = () => {
     actions.setActiveTemplateIds(selectedActiveIds);
     setSelectionMode(false);
-    toast("Active Templates Updated", {
-      description:
-        "Your active templates list for quick access has been saved.",
-    });
   };
 
   const handleCancelSelection = () => {
@@ -109,7 +102,7 @@ export default function TemplateLibraryPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)] p-4 sm:p-8 space-y-6 sm:space-y-8 bg-background overflow-y-auto w-full">
+    <div className="flex min-h-[calc(100vh-6rem)] w-full flex-col space-y-6 bg-white p-4 sm:space-y-8 sm:p-8">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
@@ -191,7 +184,7 @@ export default function TemplateLibraryPage() {
           placeholder="Search templates..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9 bg-background"
+          className="bg-white pl-9"
         />
       </div>
 
@@ -220,7 +213,7 @@ export default function TemplateLibraryPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
           {filteredTemplates.map((template) => {
             const isActive = activeTemplateIds.includes(template.id);
             const isSelected = selectedActiveIds.includes(template.id);
@@ -228,8 +221,10 @@ export default function TemplateLibraryPage() {
             return (
               <Card
                 key={template.id}
-                className={`transition-all ${
-                  isSelectionMode ? "cursor-pointer hover:border-primary" : ""
+                className={`flex h-full flex-col gap-4 py-4 transition-all sm:gap-6 sm:py-6 ${
+                  isSelectionMode
+                    ? "cursor-pointer hover:border-primary"
+                    : "cursor-pointer hover:border-primary/40 hover:shadow-md"
                 } ${
                   isSelectionMode && isSelected
                     ? "ring-2 ring-primary border-primary bg-primary/5"
@@ -243,37 +238,91 @@ export default function TemplateLibraryPage() {
                   }
                 }}
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <CardTitle className="text-lg font-semibold text-foreground">
-                        {template.name}
-                      </CardTitle>
-                      <div className="flex flex-wrap gap-1">
-                        {isActive && !isSelectionMode && (
-                          <Badge variant="secondary" className="text-xs">
-                            Active
-                          </Badge>
-                        )}
-                        {template.tags?.slice(0, 2).map((tag) => (
-                          <Badge
-                            key={tag}
-                            variant="outline"
-                            className="text-xs"
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
+                {/* The menu button is absolute at top-3/right-4, so it only
+                    ever overlaps the title line. pr-12 keeps the title clear
+                    of it; the badge row sits below the button and needs the
+                    full width, otherwise its trailing "+N" ends up under the
+                    button's hover background and looks like it vanishes. */}
+                <CardHeader className="relative gap-1 px-4 sm:px-6">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      {(() => {
+                        const tags = template.tags ?? [];
+                        const showActive = isActive && !isSelectionMode;
+                        // "Active" shares the title's row, so it no longer
+                        // competes with the tags for a slot below.
+                        const shownTags = tags.slice(0, 2);
+                        const overflow = tags.length - shownTags.length;
+
+                        return (
+                          <>
+                            {/* flex-wrap puts "Active" beside the name when the
+                                row has room and drops it to its own line when
+                                it doesn't. The title uses `break-words` rather
+                                than `truncate`: a truncating title never
+                                overflows, so the badge would never be pushed
+                                to a second line and the wrap could not trigger.
+                                pr-8 keeps the first line clear of the menu
+                                button. */}
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pr-8">
+                              <CardTitle
+                                title={template.name}
+                                className="min-w-0 break-words text-lg font-semibold text-foreground"
+                              >
+                                {template.name}
+                              </CardTitle>
+                              {showActive && (
+                                <Badge
+                                  variant="secondary"
+                                  className="shrink-0 text-xs"
+                                >
+                                  Active
+                                </Badge>
+                              )}
+                            </div>
+
+                            {/* Tags stay sm:-only to keep the mobile card
+                                compact; the row disappears entirely when the
+                                template has none. */}
+                            {tags.length > 0 && (
+                              <div className="hidden min-w-0 items-center gap-1 sm:flex">
+                                {shownTags.map((tag) => (
+                                  <Badge
+                                    key={tag}
+                                    variant="outline"
+                                    className="min-w-0 truncate text-xs"
+                                  >
+                                    {tag}
+                                  </Badge>
+                                ))}
+                                {overflow > 0 && (
+                                  <span className="shrink-0 text-xs text-muted-foreground">
+                                    +{overflow}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
 
                     {!isSelectionMode && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
+                          {/* Absolute, not a flex sibling: as a sibling it sat
+                              at the top of its own content box, so its
+                              position drifted between cards that have badges
+                              and cards that don't. Anchored to the header it
+                              lands identically on every card. */}
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            // The title is text-lg (1.75rem line box) and the
+                            // button is 2rem, so -top-0.5 against the header's
+                            // content box centres the button on the title's
+                            // first line. right-6 matches the header's px-6.
+                            className="absolute -top-0.5 right-6 h-8 w-8 text-muted-foreground hover:text-foreground"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <MoreVertical className="w-4 h-4" />
@@ -302,7 +351,7 @@ export default function TemplateLibraryPage() {
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDelete(template.id);
+                              setTemplateToDelete(template);
                             }}
                             className="cursor-pointer text-destructive focus:text-destructive"
                           >
@@ -314,7 +363,7 @@ export default function TemplateLibraryPage() {
 
                     {isSelectionMode && (
                       <div
-                        className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                        className={`absolute right-6 top-1 flex h-5 w-5 items-center justify-center rounded-full border ${
                           isSelected
                             ? "bg-primary border-primary"
                             : "border-muted-foreground"
@@ -327,17 +376,34 @@ export default function TemplateLibraryPage() {
                     )}
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <CardDescription className="line-clamp-2 min-h-[40px] mb-4">
-                    {template.description || "No description provided."}
-                  </CardDescription>
+                {/* flex-1 + mt-auto on the footer pins the meta row to the
+                    bottom of every card, so the coverage charts and footers
+                    line up across a row even though descriptions and tags are
+                    optional and cards therefore differ in natural height. */}
+                <CardContent className="flex flex-1 flex-col px-4 sm:px-6">
+                  {/* `line-clamp-2` sets display:-webkit-box, which beat the
+                      `hidden` utility and kept this visible on mobile. Both the
+                      clamp and the display are sm:-only so nothing competes
+                      with `hidden` below the breakpoint. */}
+                  {template.description && (
+                    <CardDescription className="mb-4 hidden sm:line-clamp-2">
+                      {template.description}
+                    </CardDescription>
+                  )}
 
-                  <TemplateVisualPreview shifts={template.shifts} />
+                  <div className="mt-auto space-y-1.5 pt-2">
+                    <span className="hidden text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground sm:block">
+                      Weekly coverage
+                    </span>
+                    <TemplateVisualPreview shifts={template.shifts} />
+                  </div>
 
-                  <div className="mt-4 pt-4 border-t flex justify-between text-xs text-muted-foreground">
-                    <span>{template.shifts.length} shifts</span>
-                    <span>
-                      Created{" "}
+                  <div className="mt-4 flex items-center justify-between gap-2 border-t pt-4 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {template.shifts.length}{" "}
+                      {template.shifts.length === 1 ? "shift" : "shifts"}
+                    </span>
+                    <span className="truncate">
                       {format(new Date(template.created_at), "MMM d, yyyy")}
                     </span>
                   </div>
@@ -347,6 +413,23 @@ export default function TemplateLibraryPage() {
           })}
         </div>
       )}
+
+      <DeleteConfirmDialog
+        open={!!templateToDelete}
+        onOpenChange={(open) => !open && setTemplateToDelete(null)}
+        title="Delete template?"
+        description={
+          <>
+            <span className="font-medium text-foreground">
+              {templateToDelete?.name}
+            </span>{" "}
+            and its {templateToDelete?.shifts.length ?? 0}{" "}
+            {templateToDelete?.shifts.length === 1 ? "shift" : "shifts"} will be
+            permanently deleted. This cannot be undone.
+          </>
+        }
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

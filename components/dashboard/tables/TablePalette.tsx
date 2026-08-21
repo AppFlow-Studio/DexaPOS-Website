@@ -73,7 +73,7 @@ export function TablePalette({ onTableSelect, onAddMultiple }: TablePaletteProps
                             {groupedShapes.table.map((shape) => (
                                 <div
                                     key={shape.id}
-                                    className="p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                                    className="cursor-pointer rounded-2xl border p-3 transition-colors hover:bg-accent"
                                     onClick={() => onTableSelect(shape.id as keyof typeof TABLE_SHAPES)}
                                     draggable
                                     onDragStart={(e) => {
@@ -105,7 +105,7 @@ export function TablePalette({ onTableSelect, onAddMultiple }: TablePaletteProps
                             {groupedShapes.booth.map((shape) => (
                                 <div
                                     key={shape.id}
-                                    className="p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                                    className="cursor-pointer rounded-2xl border p-3 transition-colors hover:bg-accent"
                                     onClick={() => onTableSelect(shape.id as keyof typeof TABLE_SHAPES)}
                                     draggable
                                     onDragStart={(e) => {
@@ -145,7 +145,7 @@ export function TablePalette({ onTableSelect, onAddMultiple }: TablePaletteProps
                                     {groupedShapes[category as keyof typeof groupedShapes].map((shape) => (
                                         <div
                                             key={shape.id}
-                                            className="p-3 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                                            className="cursor-pointer rounded-2xl border p-3 transition-colors hover:bg-accent"
                                             onClick={() => onTableSelect(shape.id as keyof typeof TABLE_SHAPES)}
                                             draggable
                                             onDragStart={(e) => {

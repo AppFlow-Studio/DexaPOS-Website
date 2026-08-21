@@ -13,23 +13,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, ClipboardList, MapPin, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   useInventoryCounts,
   useCreateInventoryCount,
 } from "../hooks/useWasteAndCounts";
 import { CreateCountDialog, CountPickItem } from "./CreateCountDialog";
 import { CountDetailSheet } from "./CountDetailSheet";
-import { CountStatus } from "../../actions/inventory-counts";
-
-const STATUS_BADGE: Record<CountStatus, string> = {
-  draft: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  in_progress:
-    "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
-  completed: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",
-  approved:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
-};
 
 interface CountsTabProps {
   items: CountPickItem[];
@@ -65,8 +54,8 @@ export function CountsTab({ items, isAllLocations }: CountsTabProps) {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 px-4 py-6 sm:px-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">
             {counts.length} count {counts.length === 1 ? "session" : "sessions"}
@@ -95,10 +84,15 @@ export function CountsTab({ items, isAllLocations }: CountsTabProps) {
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
+        <>
+          {/* Wide-screen table */}
+          <Table
+            variant="data"
+            containerClassName="hidden lg:block"
+            className="min-w-[760px]"
+          >
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Name</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Items</TableHead>
@@ -120,18 +114,18 @@ export function CountsTab({ items, isAllLocations }: CountsTabProps) {
                   <TableCell>
                     <Badge
                       variant="secondary"
-                      className={cn("capitalize", STATUS_BADGE[count.status])}
+                      className="w-fit rounded-full border-0 px-2.5 text-xs font-medium capitalize"
                     >
                       {count.status.replace("_", " ")}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right tabular-nums">
                     {count.items_count ?? 0}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {count.assigned_to_name ?? "—"}
                   </TableCell>
-                  <TableCell className="text-muted-foreground whitespace-nowrap">
+                  <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
                     {new Date(count.created_at).toLocaleDateString()}
                   </TableCell>
                   <TableCell>
@@ -141,7 +135,55 @@ export function CountsTab({ items, isAllLocations }: CountsTabProps) {
               ))}
             </TableBody>
           </Table>
-        </div>
+
+          {/* Phones and tablets use cards instead of a horizontally scrolling table. */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+            {counts.map((count) => (
+              <button
+                key={count.id}
+                type="button"
+                onClick={() => openCount(count.id)}
+                className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4 text-left transition-colors hover:bg-muted/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">
+                      {count.count_name}
+                    </p>
+                    <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                      {new Date(count.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className="shrink-0 rounded-full border-0 px-2.5 text-xs font-medium capitalize"
+                  >
+                    {count.status.replace("_", " ")}
+                  </Badge>
+                </div>
+
+                <div className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-4">
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Items
+                    </p>
+                    <p className="mt-0.5 text-sm font-medium tabular-nums">
+                      {count.items_count ?? 0}
+                    </p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Assigned To
+                    </p>
+                    <p className="mt-0.5 break-words text-sm font-medium leading-snug">
+                      {count.assigned_to_name ?? "—"}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       <CreateCountDialog

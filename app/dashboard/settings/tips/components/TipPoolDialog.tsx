@@ -35,7 +35,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -53,8 +52,9 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { DatePopover } from "./DatePopover";
+import { DatePopover } from "@/components/ui/date-popover";
 import type { TipPoolConfigWithShares, Role } from "@/app/dashboard/actions/tips";
+import { getLocalDateKey } from "@/lib/dates/local-date-key";
 
 interface TipPoolDialogProps {
   open: boolean;
@@ -62,6 +62,7 @@ interface TipPoolDialogProps {
   pool?: TipPoolConfigWithShares | null;
   roles: Role[];
   poolCount: number;
+  timeZone?: string | null;
   isLoading?: boolean;
   onSubmit: (data: TipPoolFormData) => void;
 }
@@ -86,20 +87,22 @@ export interface TipPoolFormData {
   }[];
 }
 
-const defaultFormData: TipPoolFormData = {
-  name: "",
-  description: "",
-  distribution_method: "percentage",
-  tip_source: "charged_tips",
-  source_percentage: 100,
-  contributing_role_codes: [],
-  is_active: true,
-  effective_date: new Date().toISOString().split("T")[0],
-  end_date: null,
-  priority: 100,
-  policy_interval: "full_workday",
-  role_shares: [],
-};
+function createDefaultFormData(timeZone?: string | null): TipPoolFormData {
+  return {
+    name: "",
+    description: "",
+    distribution_method: "percentage",
+    tip_source: "charged_tips",
+    source_percentage: 100,
+    contributing_role_codes: [],
+    is_active: true,
+    effective_date: getLocalDateKey(new Date(), timeZone),
+    end_date: null,
+    priority: 100,
+    policy_interval: "full_workday",
+    role_shares: [],
+  };
+}
 
 export function TipPoolDialog({
   open,
@@ -107,10 +110,13 @@ export function TipPoolDialog({
   pool,
   roles,
   poolCount,
+  timeZone,
   isLoading,
   onSubmit,
 }: TipPoolDialogProps) {
-  const [formData, setFormData] = useState<TipPoolFormData>({ ...defaultFormData });
+  const [formData, setFormData] = useState<TipPoolFormData>(() =>
+    createDefaultFormData(timeZone),
+  );
   const [showUnderWarning, setShowUnderWarning] = useState(false);
 
   useEffect(() => {
@@ -144,13 +150,10 @@ export function TipPoolDialog({
         })),
       });
     } else {
-      setFormData({
-        ...defaultFormData,
-        effective_date: new Date().toISOString().split("T")[0],
-      });
+      setFormData(createDefaultFormData(timeZone));
     }
     setShowUnderWarning(false);
-  }, [pool, open]);
+  }, [pool, open, timeZone]);
 
   const set = <K extends keyof TipPoolFormData>(field: K, value: TipPoolFormData[K]) =>
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -279,18 +282,18 @@ export function TipPoolDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[90vh] grid-cols-[minmax(0,1fr)] overflow-x-hidden overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="thin-scrollbar flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-y-auto rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-2xl sm:rounded-3xl">
+          <DialogHeader className="shrink-0">
             <DialogTitle>{pool ? "Edit Tip Pool" : "Create Tip Pool"}</DialogTitle>
             <DialogDescription>
               Configure how tips are collected and distributed among staff roles
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-2">
+          <div className="min-w-0 space-y-6 py-2">
             {/* ────── SECTION 1: BASICS ────── */}
             <section className="space-y-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                 Basics
               </h3>
 
@@ -301,10 +304,13 @@ export function TipPoolDialog({
                   value={formData.name}
                   onChange={(e) => set("name", e.target.value)}
                   placeholder="e.g., Front of House Pool, Bar Pool"
-                  className={cn("mt-1", validationErrors.name && "border-red-500")}
+                  className={cn(
+                    "mt-1 border-0 bg-muted/60 shadow-none",
+                    validationErrors.name && "border border-red-500"
+                  )}
                 />
                 {validationErrors.name && (
-                  <p className="text-xs text-red-500 mt-1">{validationErrors.name}</p>
+                  <p className="mt-1 text-xs text-destructive">{validationErrors.name}</p>
                 )}
               </div>
 
@@ -315,7 +321,7 @@ export function TipPoolDialog({
                   value={formData.description}
                   onChange={(e) => set("description", e.target.value)}
                   placeholder="Optional description"
-                  className="mt-1"
+                  className="mt-1 border-0 bg-muted/60 shadow-none"
                   rows={2}
                 />
               </div>
@@ -340,6 +346,7 @@ export function TipPoolDialog({
                   <div className="mt-1">
                     <DatePopover
                       id="pool-eff-date"
+                      className="border-0 bg-muted/60 shadow-none"
                       value={formData.effective_date}
                       onChange={(v) => {
                         set("effective_date", v ?? "");
@@ -355,6 +362,8 @@ export function TipPoolDialog({
                   <div className="mt-1">
                     <DatePopover
                       id="pool-end-date"
+                      className="border-0 bg-muted/60 shadow-none"
+                      align="end"
                       value={formData.end_date || ""}
                       min={formData.effective_date}
                       placeholder="No end date"
@@ -377,7 +386,7 @@ export function TipPoolDialog({
                     onChange={(e) =>
                       set("priority", parseInt(e.target.value) || 100)
                     }
-                    className="mt-1 w-28"
+                    className="mt-1 w-28 border-0 bg-muted/60 shadow-none"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
                     Lower runs first. Default 100. Pools with the same priority run in creation order.
@@ -386,11 +395,9 @@ export function TipPoolDialog({
               )}
             </section>
 
-            <Separator />
-
             {/* ────── SECTION 2: POLICY INTERVAL ────── */}
             <section className="space-y-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                 Policy Interval
               </h3>
               <p className="text-sm text-muted-foreground">
@@ -404,41 +411,39 @@ export function TipPoolDialog({
                     type="button"
                     onClick={() => set("policy_interval", "full_workday")}
                     className={cn(
-                      "relative rounded-lg border-2 p-4 text-left transition-all",
+                      "relative min-w-0 rounded-2xl p-4 text-left transition-colors",
                       formData.policy_interval === "full_workday"
-                        ? "border-teal-500 bg-teal-500/5"
-                        : "border-border hover:border-muted-foreground/30"
+                        ? "bg-[#0C4FD1]/10 ring-1 ring-[#0C4FD1]/40 dark:bg-[#6CA0FF]/10 dark:ring-[#6CA0FF]/40"
+                        : "bg-muted/60 hover:bg-muted"
                     )}
                   >
-                    <div className="flex items-center gap-2 mb-2">
-                      <CalendarDays className="w-4 h-4 text-teal-500" />
-                      <span className="text-sm font-semibold">Full Workday</span>
+                    <div className="mb-2 flex min-w-0 items-center gap-2">
+                      <CalendarDays className="h-4 w-4 shrink-0 text-[#0C4FD1] dark:text-[#6CA0FF]" />
+                      <span className="min-w-0 text-sm font-semibold">Full Workday</span>
                     </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
+                    <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">
                       Tips are pooled between employees that work the same day.
                     </p>
-                    <Badge className="mt-2 bg-teal-500/10 text-teal-600 border-teal-500/30 text-[10px]">
+                    <span className="mt-2 inline-flex items-center rounded-full bg-[#0C4FD1]/10 px-2.5 py-0.5 text-[10px] font-medium text-[#0C4FD1] dark:bg-[#6CA0FF]/10 dark:text-[#6CA0FF]">
                       Most common setup
-                    </Badge>
+                    </span>
                   </button>
 
                   {/* By Shift — disabled */}
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div
-                        className="relative rounded-lg border-2 border-border p-4 text-left opacity-50 cursor-not-allowed"
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          <Clock className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm font-semibold text-muted-foreground">By Shift</span>
-                          <Lock className="w-3.5 h-3.5 text-muted-foreground ml-auto" />
+                      <div className="relative min-w-0 cursor-not-allowed rounded-2xl bg-muted/60 p-4 text-left opacity-60">
+                        <div className="mb-2 flex min-w-0 items-center gap-2">
+                          <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 text-sm font-semibold text-muted-foreground">By Shift</span>
+                          <Lock className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
+                        <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">
                           Tips are pooled by employees that work the same service (i.e. breakfast, lunch, dinner).
                         </p>
-                        <Badge variant="outline" className="mt-2 text-[10px]">
+                        <span className="mt-2 inline-flex items-center rounded-full bg-background px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                           Coming soon
-                        </Badge>
+                        </span>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -449,20 +454,18 @@ export function TipPoolDialog({
                   {/* Order — disabled */}
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div
-                        className="relative rounded-lg border-2 border-border p-4 text-left opacity-50 cursor-not-allowed"
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          <ShoppingCart className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm font-semibold text-muted-foreground">Order</span>
-                          <Lock className="w-3.5 h-3.5 text-muted-foreground ml-auto" />
+                      <div className="relative min-w-0 cursor-not-allowed rounded-2xl bg-muted/60 p-4 text-left opacity-60">
+                        <div className="mb-2 flex min-w-0 items-center gap-2">
+                          <ShoppingCart className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 text-sm font-semibold text-muted-foreground">Order</span>
+                          <Lock className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
+                        <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">
                           Uses the exact time a check is opened.
                         </p>
-                        <Badge variant="outline" className="mt-2 text-[10px]">
+                        <span className="mt-2 inline-flex items-center rounded-full bg-background px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                           Coming soon
-                        </Badge>
+                        </span>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -473,11 +476,9 @@ export function TipPoolDialog({
               </TooltipProvider>
             </section>
 
-            <Separator />
-
             {/* ────── SECTION 3: TIP SOURCE ────── */}
             <section className="space-y-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                 Tip Source
               </h3>
 
@@ -522,23 +523,21 @@ export function TipPoolDialog({
                     onChange={(e) =>
                       set("source_percentage", Math.min(100, Math.max(1, parseInt(e.target.value) || 1)))
                     }
-                    className="w-20"
+                    className="w-20 border-0 bg-muted/60 shadow-none"
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
                   % of this source going into the pool. 100 = all tips from the selected source.
                 </p>
                 {validationErrors.source_percentage && (
-                  <p className="text-xs text-red-500">{validationErrors.source_percentage}</p>
+                  <p className="text-xs text-destructive">{validationErrors.source_percentage}</p>
                 )}
               </div>
             </section>
 
-            <Separator />
-
             {/* ────── SECTION 4: DISTRIBUTION & ROLE SHARES ────── */}
             <section className="space-y-4">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                 Distribution & Role Shares
               </h3>
 
@@ -549,7 +548,7 @@ export function TipPoolDialog({
                   value={formData.distribution_method}
                   onValueChange={(v) => handleMethodChange(v as TipPoolFormData["distribution_method"])}
                 >
-                  <SelectTrigger className="mt-1 w-full min-w-0">
+                  <SelectTrigger className="mt-1 w-full min-w-0 border-0 bg-muted/60 shadow-none">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -599,7 +598,7 @@ export function TipPoolDialog({
                 {/* Add contributing role dropdown */}
                 {roles.filter((r) => !formData.contributing_role_codes.includes(r.code)).length > 0 && (
                   <Select onValueChange={(v) => toggleContributing(v)}>
-                    <SelectTrigger className="w-full min-w-0">
+                    <SelectTrigger className="w-full min-w-0 border-0 bg-muted/60 shadow-none">
                       <SelectValue placeholder="Add contributing role..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -615,7 +614,7 @@ export function TipPoolDialog({
                 )}
 
                 {validationErrors.contributing && (
-                  <p className="text-xs text-red-500 mt-1">{validationErrors.contributing}</p>
+                  <p className="mt-1 text-xs text-destructive">{validationErrors.contributing}</p>
                 )}
               </div>
 
@@ -623,7 +622,7 @@ export function TipPoolDialog({
               <div>
                 <Label>Receiving Roles & Shares *</Label>
                 <p className="text-xs text-muted-foreground mb-2">
-                  Roles that <strong>receive</strong> from this pool and how it's split
+                  Roles that <strong>receive</strong> from this pool and how it is split
                 </p>
 
                 {validationErrors.role_shares && (
@@ -634,7 +633,7 @@ export function TipPoolDialog({
                 )}
 
                 {formData.role_shares.length > 0 && (
-                  <div className="rounded-lg border divide-y">
+                  <div className="min-w-0 space-y-1 rounded-2xl border-0 bg-muted/60 p-1 shadow-none">
                     {formData.role_shares.map((share) => (
                       <div
                         key={share.role_code}
@@ -663,7 +662,7 @@ export function TipPoolDialog({
                                   parseFloat(e.target.value) || 0
                                 )
                               }
-                              className="w-20 h-8 text-sm"
+                              className="w-20 h-8 border-0 bg-muted/60 text-sm shadow-none"
                             />
                             <span className="text-sm text-muted-foreground">%</span>
                           </div>
@@ -685,7 +684,7 @@ export function TipPoolDialog({
                                 )
                               }
                               className={cn(
-                                "w-20 h-8 text-sm",
+                                "w-20 h-8 border-0 bg-muted/60 text-sm shadow-none",
                                 validationErrors.points &&
                                   share.is_eligible &&
                                   (!share.points_per_hour || share.points_per_hour <= 0) &&
@@ -718,16 +717,16 @@ export function TipPoolDialog({
 
                     {/* Percentage total footer */}
                     {formData.distribution_method === "percentage" && (
-                      <div className="flex items-center justify-between px-3 py-2 bg-muted/30">
+                      <div className="flex min-w-0 items-center justify-between gap-3 rounded-full px-3 py-2">
                         <span className="text-sm font-medium">Total</span>
+                        {/* Over 100% is a genuine validation error and keeps
+                            `text-destructive` (§4.2). Under and exact are both
+                            valid states, so neither carries a hue — the
+                            "unallocated" sentence beside the figure says it. */}
                         <span
                           className={cn(
                             "text-sm font-bold tabular-nums",
-                            totalPercentage > 100.01
-                              ? "text-red-500"
-                              : totalPercentage < 99.99
-                              ? "text-amber-500"
-                              : "text-green-600"
+                            totalPercentage > 100.01 && "text-destructive"
                           )}
                         >
                           {totalPercentage.toFixed(1)}%
@@ -748,18 +747,18 @@ export function TipPoolDialog({
                 )}
 
                 {validationErrors.share_total && (
-                  <p className="text-xs text-red-500 mt-1">{validationErrors.share_total}</p>
+                  <p className="mt-1 text-xs text-destructive">{validationErrors.share_total}</p>
                 )}
 
                 {validationErrors.points && (
-                  <p className="text-xs text-red-500 mt-1">{validationErrors.points}</p>
+                  <p className="mt-1 text-xs text-destructive">{validationErrors.points}</p>
                 )}
 
                 {/* Add receiving role */}
                 {availableReceivingRoles.length > 0 && (
                   <div className="mt-2">
                     <Select onValueChange={(v) => addRoleShare(v)}>
-                      <SelectTrigger className="w-full min-w-0">
+                      <SelectTrigger className="w-full min-w-0 border-0 bg-muted/60 shadow-none">
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           <Plus className="w-3.5 h-3.5" />
                           <span>Add receiving role...</span>
@@ -779,14 +778,13 @@ export function TipPoolDialog({
             </section>
           </div>
 
-          <DialogFooter className="pt-4 border-t">
+          <DialogFooter className="shrink-0 justify-center pt-4 sm:justify-center">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
               Cancel
             </Button>
             <Button
               onClick={handleSubmit}
               disabled={!isValid || isLoading}
-              className="bg-teal-500 hover:bg-teal-600 text-white"
             >
               {isLoading ? "Saving..." : pool ? "Update Pool" : "Create Pool"}
             </Button>
@@ -808,7 +806,6 @@ export function TipPoolDialog({
             <AlertDialogCancel>Go Back</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmUnderWarning}
-              className="bg-teal-500 hover:bg-teal-600 text-white"
             >
               Save Anyway
             </AlertDialogAction>

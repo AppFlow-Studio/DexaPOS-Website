@@ -123,9 +123,9 @@ export function CreateCampaignDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden border-0 bg-white p-0 dark:bg-background max-sm:h-dvh max-sm:max-h-none max-sm:w-screen max-sm:max-w-none max-sm:overflow-hidden max-sm:rounded-none sm:max-w-2xl">
         {/* Header */}
-        <div className="px-4 sm:px-7 pt-6 sm:pt-7 pb-5 border-b border-border/60">
+        <div className="shrink-0 px-4 pb-5 pt-6 sm:px-7 sm:pt-7">
           <DialogHeader className="space-y-1">
             <DialogTitle className="text-xl font-bold">Create Campaign</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
@@ -134,7 +134,7 @@ export function CreateCampaignDialog({
           </DialogHeader>
         </div>
 
-        <div className="px-4 sm:px-7 py-6 space-y-7">
+        <div className="thin-scrollbar min-h-0 flex-1 space-y-7 overflow-y-auto px-4 py-6 sm:px-7">
 
           {/* Campaign Name */}
           <div className="space-y-1.5">
@@ -144,7 +144,7 @@ export function CreateCampaignDialog({
               placeholder="e.g., Holiday Sale 2024"
               value={campaignName}
               onChange={(e) => setCampaignName(e.target.value)}
-              className="h-10"
+              className="h-10 border-0 bg-muted/60 shadow-none focus-visible:ring-1"
             />
           </div>
 
@@ -156,10 +156,10 @@ export function CreateCampaignDialog({
                 type="button"
                 onClick={() => setCampaignType("sms")}
                 className={cn(
-                  "flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                  "flex items-center gap-3 rounded-xl border-0 p-4 text-left transition-colors",
                   campaignType === "sms"
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-border/80 hover:bg-muted/40"
+                    ? "bg-primary/10"
+                    : "bg-muted/60 hover:bg-muted"
                 )}
               >
                 <div className={cn(
@@ -179,10 +179,10 @@ export function CreateCampaignDialog({
                 type="button"
                 onClick={() => setCampaignType("email")}
                 className={cn(
-                  "flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                  "flex items-center gap-3 rounded-xl border-0 p-4 text-left transition-colors",
                   campaignType === "email"
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-border/80 hover:bg-muted/40"
+                    ? "bg-primary/10"
+                    : "bg-muted/60 hover:bg-muted"
                 )}
               >
                 <div className={cn(
@@ -201,7 +201,7 @@ export function CreateCampaignDialog({
           </div>
 
           {/* Message Content */}
-          <div className="space-y-3 border-t border-border/50 pt-6">
+          <div className="space-y-3">
             <p className="text-sm font-semibold">Message Content</p>
 
             {campaignType === "email" && (
@@ -212,7 +212,7 @@ export function CreateCampaignDialog({
                   placeholder="Enter email subject"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="h-10"
+                  className="h-10 border-0 bg-muted/60 shadow-none focus-visible:ring-1"
                 />
               </div>
             )}
@@ -232,7 +232,7 @@ export function CreateCampaignDialog({
                 onChange={(e) => setBody(e.target.value)}
                 rows={4}
                 maxLength={campaignType === "sms" ? 160 : undefined}
-                className="resize-none"
+                className="resize-none border-0 bg-muted/60 shadow-none focus-visible:ring-1"
               />
               {campaignType === "sms" && (
                 <div className="flex justify-end">
@@ -248,17 +248,17 @@ export function CreateCampaignDialog({
           </div>
 
           {/* Audience */}
-          <div className="space-y-3 border-t border-border/50 pt-6">
+          <div className="space-y-3">
             <p className="text-sm font-semibold">Audience</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setAudienceType("all")}
                 className={cn(
-                  "flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                  "flex items-center gap-3 rounded-xl border-0 p-4 text-left transition-colors",
                   audienceType === "all"
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-border/80 hover:bg-muted/40"
+                    ? "bg-primary/10"
+                    : "bg-muted/60 hover:bg-muted"
                 )}
               >
                 <div className={cn(
@@ -278,10 +278,10 @@ export function CreateCampaignDialog({
                 type="button"
                 onClick={() => setAudienceType("tag")}
                 className={cn(
-                  "flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                  "flex items-center gap-3 rounded-xl border-0 p-4 text-left transition-colors",
                   audienceType === "tag"
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-border/80 hover:bg-muted/40"
+                    ? "bg-primary/10"
+                    : "bg-muted/60 hover:bg-muted"
                 )}
               >
                 <div className={cn(
@@ -309,10 +309,10 @@ export function CreateCampaignDialog({
                         type="button"
                         onClick={() => toggleTag(tag)}
                         className={cn(
-                          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                          "inline-flex items-center gap-1.5 rounded-full border-0 px-3 py-1.5 text-xs font-medium transition-colors",
                           selected
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-muted/50 text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
                         )}
                       >
                         {selected && <CheckCircle2 className="h-3 w-3" />}
@@ -329,17 +329,17 @@ export function CreateCampaignDialog({
           </div>
 
           {/* Scheduling */}
-          <div className="space-y-3 border-t border-border/50 pt-6">
+          <div className="space-y-3">
             <p className="text-sm font-semibold">When to Send</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setScheduleType("now")}
                 className={cn(
-                  "flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                  "flex items-center gap-3 rounded-xl border-0 p-4 text-left transition-colors",
                   scheduleType === "now"
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-border/80 hover:bg-muted/40"
+                    ? "bg-primary/10"
+                    : "bg-muted/60 hover:bg-muted"
                 )}
               >
                 <div className={cn(
@@ -359,10 +359,10 @@ export function CreateCampaignDialog({
                 type="button"
                 onClick={() => setScheduleType("later")}
                 className={cn(
-                  "flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left",
+                  "flex items-center gap-3 rounded-xl border-0 p-4 text-left transition-colors",
                   scheduleType === "later"
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-border/80 hover:bg-muted/40"
+                    ? "bg-primary/10"
+                    : "bg-muted/60 hover:bg-muted"
                 )}
               >
                 <div className={cn(
@@ -387,7 +387,7 @@ export function CreateCampaignDialog({
                   type="datetime-local"
                   value={scheduledFor}
                   onChange={(e) => setScheduledFor(e.target.value)}
-                  className="h-10"
+                  className="h-10 border-0 bg-muted/60 shadow-none focus-visible:ring-1"
                 />
               </div>
             )}
@@ -395,7 +395,7 @@ export function CreateCampaignDialog({
         </div>
 
         {/* Footer */}
-        <div className="px-4 sm:px-7 py-5 border-t border-border/60 flex items-center justify-between gap-3 bg-muted/20">
+        <div className="flex shrink-0 items-center justify-between gap-3 bg-white px-4 py-5 dark:bg-background sm:px-7">
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isLoading}>
             Cancel
           </Button>

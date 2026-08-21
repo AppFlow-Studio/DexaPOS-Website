@@ -202,11 +202,11 @@ export function CreateExpenseDialog({
   if (isAllLocations) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="bg-card sm:max-w-[450px]">
           <DialogHeader>
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/10">
-                <AlertCircle className="h-5 w-5 text-amber-500" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60">
+                <AlertCircle className="h-4 w-4 text-muted-foreground" />
               </div>
               <div>
                 <DialogTitle>Select a Location</DialogTitle>
@@ -223,7 +223,7 @@ export function CreateExpenseDialog({
               location from the header dropdown before logging an expense.
             </AlertDescription>
           </Alert>
-          <DialogFooter className="pt-4">
+          <DialogFooter className="pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
             <Button onClick={() => onOpenChange(false)}>Got it</Button>
           </DialogFooter>
         </DialogContent>
@@ -233,13 +233,13 @@ export function CreateExpenseDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/10">
-              <Receipt className="h-5 w-5 text-emerald-500" />
+      <DialogContent className="flex max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden max-sm:overflow-hidden rounded-none bg-card p-0 max-sm:h-auto max-sm:top-auto max-sm:translate-y-0 sm:h-[min(760px,calc(100dvh-1rem))] sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-[600px] sm:rounded-3xl">
+        <DialogHeader className="shrink-0 bg-card px-5 pb-4 pt-5 pr-14 sm:px-6 sm:pt-6 sm:pr-16">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
+              <Receipt className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div>
+            <div className="min-w-0">
               <DialogTitle>Log Expense</DialogTitle>
               <DialogDescription>
                 Record a purchase made outside of vendors (e.g., grocery store
@@ -251,8 +251,9 @@ export function CreateExpenseDialog({
 
         <form
           onSubmit={form.handleSubmit(handleSubmit)}
-          className="space-y-5 mt-4"
+          className="flex min-h-0 flex-1 flex-col"
         >
+          <div className="thin-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto bg-card px-5 py-4 sm:px-6">
           {/* Store/Vendor Name */}
           <div className="space-y-2">
             <Label htmlFor="expense_vendor_name">
@@ -340,7 +341,7 @@ export function CreateExpenseDialog({
           )}
 
           {/* Add Item Section */}
-          <div className="space-y-3 pt-2 border-t">
+          <div className="space-y-3 pt-2">
             <Label>Add Items</Label>
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
               <div className="sm:col-span-6 min-w-0">
@@ -366,8 +367,8 @@ export function CreateExpenseDialog({
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[min(400px,calc(100vw-2rem))] p-0 z-[100]">
-                    <Command>
+                  <PopoverContent className="z-[100] w-[min(400px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0">
+                    <Command className="rounded-2xl">
                       <CommandInput placeholder="Search items..." />
                       <CommandList>
                         <CommandEmpty>
@@ -404,10 +405,10 @@ export function CreateExpenseDialog({
                                 )}
                               />
                               <div className="flex items-center gap-2 flex-1">
-                                <span className="font-medium text-gray-700 dark:text-gray-200">
+                                <span className="font-medium text-foreground">
                                   {item.name}
                                 </span>
-                                <span className="text-xs text-gray-500">
+                                <span className="text-xs text-muted-foreground">
                                   (${item.cost_per_unit?.toFixed(2)}/
                                   {item.unit_type})
                                 </span>
@@ -459,16 +460,16 @@ export function CreateExpenseDialog({
           {/* Line Items List */}
           <div className="space-y-2">
             {lineItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-6 rounded-lg border border-dashed text-center">
+              <div className="flex flex-col items-center justify-center rounded-2xl border-0 bg-muted/40 py-6 text-center">
                 <Receipt className="h-6 w-6 text-muted-foreground mb-2" />
                 <p className="text-sm text-muted-foreground">
                   No items added yet. Add items purchased above.
                 </p>
               </div>
             ) : (
-              <div className="rounded-lg border divide-y">
+              <div className="overflow-hidden rounded-2xl border-0 bg-muted/35 p-2">
                 {/* Header */}
-                <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/50 text-sm font-medium text-muted-foreground">
+                <div className="grid grid-cols-12 gap-2 rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground">
                   <div className="col-span-5">Item</div>
                   <div className="col-span-2 text-right">Qty</div>
                   <div className="col-span-2 text-right">Cost</div>
@@ -479,7 +480,7 @@ export function CreateExpenseDialog({
                 {lineItems.map((item) => (
                   <div
                     key={item.id}
-                    className="grid grid-cols-12 gap-2 px-3 py-2 items-center"
+                    className="grid grid-cols-12 items-center gap-2 rounded-xl bg-background px-3 py-2"
                   >
                     <div className="col-span-5 flex items-center gap-2 min-w-0">
                       <span className="text-sm font-medium truncate">
@@ -540,7 +541,9 @@ export function CreateExpenseDialog({
             />
           </div>
 
-          <DialogFooter className="pt-4">
+          </div>
+
+          <DialogFooter className="shrink-0 bg-card px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>

@@ -1,6 +1,5 @@
 "use client";
 
-import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import {
   Card,
   CardContent,
@@ -19,7 +18,7 @@ import {
   Sparkles,
   Utensils,
   ChevronDown,
-  ChevronUp,
+  ChevronRight,
   X,
   Globe,
   MapPin,
@@ -35,12 +34,14 @@ import {
   Check,
   CheckSquare,
   Truck,
+  MoreHorizontal,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { BulkPriceAdjustDialog } from "@/components/dashboard/menu/items/BulkPriceAdjustDialog";
@@ -58,6 +59,7 @@ import { CategoryFormSheet } from "@/components/dashboard/menu/CategoryFormSheet
 import {
   DeleteCategory,
   RemoveItemFromCategory,
+  UpdateCategory,
   UpdateLocationCategoryOverride,
   RemoveLocationCategoryOverride,
 } from "../../actions/categories";
@@ -80,11 +82,6 @@ import {
 import { cn, isValidImageUrl } from "@/lib/utils";
 import { CategoryWithItems, CategoryMenuItem } from "@/types/menu";
 import { useRouter } from "next/navigation";
-import {
-  LevelIndicator,
-  getEditingLevel,
-  EditingContextBanner,
-} from "@/components/dashboard/menu/LevelIndicator";
 import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
@@ -210,6 +207,11 @@ export default function CategoriesPage() {
     null,
   );
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Which category is in item-ordering mode. Drag handles only appear for that
+  // category, and its "Add Item" button becomes "Done".
+  const [orderingCategoryId, setOrderingCategoryId] = useState<string | null>(
+    null,
+  );
 
   // Bulk selection state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -283,14 +285,6 @@ export default function CategoriesPage() {
   const categoriesWithOverrides = categoriesList.filter(
     (c) => c.location_override !== null,
   ).length;
-
-  // Get current editing level
-  const editingLevel = getEditingLevel({
-    isAllLocations,
-    menuId: null,
-    categoryId: null,
-    isMenuLocationOwned: false,
-  });
 
   // Helper to get items for a category from RPC data
   const getItemsForCategory = (categoryId: string): CategoryMenuItem[] => {
@@ -373,6 +367,45 @@ export default function CategoriesPage() {
         description: isActive
           ? "This category is now visible at this location."
           : "This category is now hidden at this location.",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
+      invalidateOrderOutSync(queryClient);
+      refetch();
+    } catch {
+      toast.error("Update Failed", {
+        description: "Unable to update category. Please try again.",
+      });
+    } finally {
+      setTogglingCategories((prev) => {
+        const next = new Set(prev);
+        next.delete(categoryId);
+        return next;
+      });
+    }
+  };
+
+  // Toggle the category's global (merchant-wide) active flag. Used when viewing
+  // "All Locations", where there is no per-location override to write.
+  const handleToggleCategoryGlobally = async (
+    categoryId: string,
+    isActive: boolean,
+  ) => {
+    setTogglingCategories((prev) => new Set(prev).add(categoryId));
+
+    try {
+      const result = await UpdateCategory(categoryId, { is_active: isActive });
+
+      if (result.error) {
+        toast.error("Update Failed", { description: result.error });
+        return;
+      }
+
+      toast.success(isActive ? "Category Enabled" : "Category Disabled", {
+        description: isActive
+          ? "This category is now visible across all locations."
+          : "This category is now hidden across all locations.",
       });
 
       queryClient.invalidateQueries({ queryKey: ["categories"] });
@@ -492,11 +525,22 @@ export default function CategoriesPage() {
     }
   };
 
+  // Who can open the Edit Category dialog.
+  //
+  // UpdateCategory writes the `categories` row itself, so edits to name /
+  // description / order / active always apply merchant-wide. That is why the
+  // all-locations view is the general entry point. A location-specific category
+  // is the safe exception: it exists only at its own location, so editing it
+  // while scoped there affects nothing else. Same shape as `canDelete`.
+  const canEditCategory = (category: CategoryWithItems) =>
+    isAllLocations ||
+    (!category.is_global && category.location_id === selectedLocationId);
+
   const handleEditCategory = (
     category: CategoryWithItems,
-    e: React.MouseEvent,
+    e?: React.MouseEvent,
   ) => {
-    e.stopPropagation();
+    e?.stopPropagation();
     setEditingCategory(category);
   };
 
@@ -507,9 +551,9 @@ export default function CategoriesPage() {
   const handleRemoveItemFromCategory = async (
     categoryId: string,
     menuItemId: string,
-    e: React.MouseEvent,
+    e?: React.MouseEvent,
   ) => {
-    e.stopPropagation();
+    e?.stopPropagation();
     try {
       const result = await RemoveItemFromCategory(
         categoryId,
@@ -538,9 +582,9 @@ export default function CategoriesPage() {
   const handleEditItem = (
     item: CategoryMenuItem,
     category: CategoryWithItems,
-    e: React.MouseEvent,
+    e?: React.MouseEvent,
   ) => {
-    e.stopPropagation();
+    e?.stopPropagation();
     setEditingCategoryContext({ id: category.id, name: category.name });
     setEditingItem(mapCategoryItemToEditItem(item, category.id, category.name));
     setIsItemSheetOpen(true);
@@ -613,9 +657,7 @@ export default function CategoriesPage() {
 
       toast.success("Order Saved", {
         description:
-          isSingleLocation
-            ? "Item display order has been updated."
-            : selectedLocationId && selectedLocationId !== "all"
+          selectedLocationId && selectedLocationId !== "all"
             ? "Item display order has been updated for this location."
             : "Item display order has been updated globally.",
       });
@@ -661,7 +703,6 @@ export default function CategoriesPage() {
   // console.log('categoriesList', categoriesList)
   return (
     <div className="space-y-6 animate-in fade-in duration-500 w-full min-w-0">
-      <ScopeContextStrip />
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -669,18 +710,9 @@ export default function CategoriesPage() {
             {/* Location scope indicator — hidden for single-location accounts */}
             {!isSingleLocation && (
               <Badge
-                variant={isAllLocations ? "secondary" : "default"}
-                className={cn(
-                  "gap-1.5 animate-in fade-in slide-in-from-left-2 duration-300",
-                  !isAllLocations &&
-                    "bg-blue-500/10 text-blue-600 border-blue-200",
-                )}
+                variant="secondary"
+                className="animate-in fade-in slide-in-from-left-2 gap-1.5 border-0 bg-muted/60 font-medium text-muted-foreground duration-300"
               >
-                {isAllLocations ? (
-                  <Globe className="h-3 w-3" />
-                ) : (
-                  <MapPin className="h-3 w-3" />
-                )}
                 {isAllLocations
                   ? "All Locations"
                   : currentLocation?.name || "Location"}
@@ -731,18 +763,9 @@ export default function CategoriesPage() {
         </div>
       </div>
 
-      {/* Context Banner - only show when viewing a specific location */}
-      {!isAllLocations && (
-        <EditingContextBanner
-          level={2}
-          locationName={currentLocation?.name}
-          className="animate-in fade-in slide-in-from-top-2 duration-300"
-        />
-      )}
-
       {/* Stats Overview */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="transition-all hover:shadow-md">
+        <Card className="rounded-3xl transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               Total Categories
@@ -754,54 +777,39 @@ export default function CategoriesPage() {
             <p className="text-xs text-muted-foreground">All categories</p>
           </CardContent>
         </Card>
-        <Card className="transition-all hover:shadow-md">
+        <Card className="rounded-3xl transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Items</CardTitle>
-            <Utensils className="h-4 w-4 text-blue-500" />
+            <Utensils className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{totalItems}</div>
+            <div className="text-2xl font-bold">{totalItems}</div>
             <p className="text-xs text-muted-foreground">
               Items across categories
             </p>
           </CardContent>
         </Card>
-        <Card className="transition-all hover:shadow-md">
+        <Card className="rounded-3xl transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active</CardTitle>
-            <Eye className="h-4 w-4 text-green-500" />
+            <Eye className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {activeCategories}
-            </div>
+            <div className="text-2xl font-bold">{activeCategories}</div>
             <p className="text-xs text-muted-foreground">
-              {isSingleLocation
-                ? "Active categories"
-                : isAllLocations
-                  ? "Globally active"
-                  : "Active at location"}
+              {isAllLocations ? "Globally active" : "Active at location"}
             </p>
           </CardContent>
         </Card>
-        <Card className="transition-all hover:shadow-md">
+        <Card className="rounded-3xl transition-all hover:shadow-md">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               {isAllLocations ? "In Menus" : "With Overrides"}
             </CardTitle>
-            {isAllLocations ? (
-              <Sparkles className="h-4 w-4 text-purple-500" />
-            ) : (
-              <Settings2 className="h-4 w-4 text-amber-500" />
-            )}
+            <Settings2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div
-              className={cn(
-                "text-2xl font-bold",
-                isAllLocations ? "text-purple-600" : "text-amber-600",
-              )}
-            >
+            <div className="text-2xl font-bold">
               {isAllLocations
                 ? categoriesList.reduce(
                     (acc, c) => acc + (c.menu_count || 0),
@@ -817,7 +825,7 @@ export default function CategoriesPage() {
       </div>
 
       {/* Categories List */}
-      <Card>
+      <Card className="rounded-3xl">
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -870,11 +878,13 @@ export default function CategoriesPage() {
         <CardContent>
           {/* Sticky selection bar */}
           {isSelectionMode && (
-            <div className="sticky top-0 z-20 flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5 backdrop-blur mb-4">
-              <Badge variant="secondary" className="text-xs">
-                {selectedItemIds.size} of {totalSelectableItems} selected
+            <div className="sticky top-0 z-20 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border-0 bg-muted/60 px-4 py-2.5 backdrop-blur mb-4">
+              <Badge variant="secondary" className="min-w-0 shrink text-xs">
+                <span className="truncate tabular-nums">
+                  {selectedItemIds.size} of {totalSelectableItems} selected
+                </span>
               </Badge>
-              <div className="w-px h-4 bg-border" />
+              <div className="hidden w-px h-4 bg-border sm:block" />
               <Button
                 size="sm"
                 variant="ghost"
@@ -897,7 +907,7 @@ export default function CategoriesPage() {
               >
                 Clear
               </Button>
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex shrink-0 items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -964,11 +974,98 @@ export default function CategoriesPage() {
               {filteredCategories.map((category, index) => {
                 const isExpanded = expandedCategoryId === category.id;
 
+                // Mobile More-actions menu. Defined here so it can render on
+                // the name row rather than in the control cluster below it.
+                const canDeleteCategory = isAllLocations
+                  ? true
+                  : !category.is_global &&
+                    category.location_id === selectedLocationId;
+                const canAddCategoryItems = isAllLocations
+                  ? category.is_global
+                  : category.location_id === selectedLocationId;
+                const isOrderingThis = orderingCategoryId === category.id;
+                const mobileActionsMenu = isSelectionMode ? null : (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-full"
+                          aria-label={`Actions for ${category.name}`}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="center"
+                        collisionPadding={12}
+                        className="w-44 p-0.5"
+                      >
+                        {canEditCategory(category) && (
+                          <DropdownMenuItem
+                            className="gap-2 px-2 py-1.5"
+                            onSelect={() => handleEditCategory(category)}
+                          >
+                            <Edit3 className="h-4 w-4" />
+                            Edit category
+                          </DropdownMenuItem>
+                        )}
+                        {canAddCategoryItems && (
+                          <DropdownMenuItem
+                            className="gap-2 px-2 py-1.5"
+                            onSelect={() => {
+                              setAddItemCategoryContext({
+                                id: category.id,
+                                name: category.name,
+                                existingItemIds: (category.items || []).map(
+                                  (i) => i.menu_item_id,
+                                ),
+                              });
+                              setIsAddItemWizardOpen(true);
+                            }}
+                          >
+                            <Plus className="h-4 w-4" />
+                            Add item
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          className="gap-2 px-2 py-1.5"
+                          onSelect={() => {
+                            setExpandedCategoryId(category.id);
+                            setOrderingCategoryId(
+                              isOrderingThis ? null : category.id,
+                            );
+                          }}
+                        >
+                          <GripVertical className="h-4 w-4" />
+                          {isOrderingThis ? "Stop ordering" : "Order items"}
+                        </DropdownMenuItem>
+                        {canDeleteCategory && (
+                          <>
+                            <DropdownMenuSeparator className="my-0.5" />
+                            <DropdownMenuItem
+                              className="gap-2 px-2 py-1.5 text-destructive focus:text-destructive"
+                              onSelect={() => setDeletingCategory(category)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete category
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                );
+
                 return (
                   <Card
                     key={category.id}
                     className={cn(
-                      "transition-all animate-in fade-in slide-in-from-bottom-4 overflow-hidden",
+                      "rounded-3xl transition-all animate-in fade-in slide-in-from-bottom-4 overflow-hidden",
+                      !(isAllLocations
+                        ? category.is_active
+                        : category.effective_is_active) && "opacity-60",
                       isExpanded
                         ? "ring-2 ring-primary shadow-lg"
                         : "hover:shadow-md hover:border-primary/30 cursor-pointer",
@@ -977,13 +1074,10 @@ export default function CategoriesPage() {
                   >
                     {/* Category Header */}
                     <div
-                      className={cn(
-                        "p-4 cursor-pointer transition-colors",
-                        isExpanded && "bg-muted/30",
-                      )}
+                      className="cursor-pointer px-3 py-3 transition-colors hover:bg-muted/50 sm:px-6"
                       onClick={() => handleCategoryClick(category)}
                     >
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-start gap-2 sm:gap-3">
                         {/* Category-level checkbox in selection mode */}
                         {isSelectionMode && (() => {
                           const catItemIds = (category.items ?? []).map((i) => i.menu_item_id);
@@ -1016,86 +1110,126 @@ export default function CategoriesPage() {
                             </div>
                           );
                         })()}
-                        {/* Icon/Image */}
-                        {isValidImageUrl(category.image) ? (
-                          <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0">
-                            <img
-                              src={category.image}
-                              alt={category.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
+                        {/* Expand/collapse affordance — leads the row, matching
+                            the menu detail page's category sections. */}
+                        {isExpanded ? (
+                          <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
                         ) : (
-                          <div
-                            className={cn(
-                              "h-16 w-16 rounded-lg flex items-center justify-center shrink-0 transition-colors",
-                              isExpanded
-                                ? "bg-primary/20"
-                                : "bg-primary/10 group-hover:bg-primary/20",
-                            )}
-                          >
-                            <Tag className="h-8 w-8 text-primary" />
-                          </div>
+                          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                         )}
 
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="min-w-0">
-                              <h3
-                                className={cn(
-                                  "font-semibold transition-colors truncate",
-                                  isExpanded && "text-primary",
-                                )}
-                              >
-                                {category.name}
-                              </h3>
+                            <div className="flex min-w-0 flex-col justify-center">
+                              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                <h3
+                                  className={cn(
+                                    "min-w-0 flex-1 truncate text-base font-semibold transition-colors sm:flex-none sm:text-lg",
+                                    isExpanded && "text-primary",
+                                  )}
+                                >
+                                  {category.name}
+                                </h3>
+                                {/* Mobile: More-actions sits on the name row. */}
+                                <span className="shrink-0 sm:hidden">
+                                  {mobileActionsMenu}
+                                </span>
+                                {/* Scope badges sit next to the name on desktop
+                                    only; on phones they move into the expanded
+                                    body, where a long location name has room. */}
+                                <span className="hidden min-w-0 flex-wrap items-center gap-2 sm:flex">
+                                  {category.location_id === null ? (
+                                    <Badge
+                                      variant="secondary"
+                                      className="border-0 bg-muted/60 text-xs font-medium text-muted-foreground"
+                                    >
+                                      Global
+                                    </Badge>
+                                  ) : (
+                                    <Badge
+                                      variant="secondary"
+                                      className="min-w-0 border-0 bg-muted/60 text-xs font-medium text-muted-foreground"
+                                    >
+                                      <span className="min-w-0 truncate">
+                                        {category.location_name}
+                                      </span>
+                                    </Badge>
+                                  )}
+                                  {!isAllLocations && category.location_override && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="border-0 bg-muted/60 text-xs font-medium text-muted-foreground"
+                                    >
+                                      Override
+                                    </Badge>
+                                  )}
+                                </span>
+                              </div>
                               {category.description && (
-                                <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                                <p className="mt-1 hidden text-sm text-muted-foreground line-clamp-2 sm:block">
                                   {category.description}
                                 </p>
                               )}
                             </div>
                             <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                              {/* Location visibility toggle */}
-                              {!isAllLocations && (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div
-                                        className="flex items-center gap-2"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <Switch
-                                          checked={category.effective_is_active}
-                                          onCheckedChange={(checked) =>
-                                            handleToggleCategoryAtLocation(
+                              {/* Visibility toggle — writes a location override
+                                  when scoped to a location, otherwise flips the
+                                  category's global active flag. */}
+                              {(() => {
+                                const visibilityActive = isAllLocations
+                                  ? category.is_active
+                                  : category.effective_is_active;
+                                return (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div
+                                          className="flex items-center gap-2"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <Switch
+                                            checked={visibilityActive}
+                                            onCheckedChange={(checked) =>
+                                              isAllLocations
+                                                ? handleToggleCategoryGlobally(
+                                                    category.id,
+                                                    checked,
+                                                  )
+                                                : handleToggleCategoryAtLocation(
+                                                    category.id,
+                                                    checked,
+                                                  )
+                                            }
+                                            disabled={togglingCategories.has(
                                               category.id,
-                                              checked,
-                                            )
-                                          }
-                                          disabled={togglingCategories.has(
-                                            category.id,
+                                            )}
+                                          />
+                                          {/* Icon is redundant next to the
+                                              switch on phones. */}
+                                          {visibilityActive ? (
+                                            <Eye className="hidden h-4 w-4 text-green-500 sm:block" />
+                                          ) : (
+                                            <EyeOff className="hidden h-4 w-4 text-muted-foreground sm:block" />
                                           )}
-                                        />
-                                        {category.effective_is_active ? (
-                                          <Eye className="h-4 w-4 text-green-500" />
-                                        ) : (
-                                          <EyeOff className="h-4 w-4 text-muted-foreground" />
-                                        )}
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>
-                                        {category.effective_is_active
-                                          ? "Hide"
-                                          : "Show"}{" "}
-                                        at this location
-                                      </p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              )}
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>
+                                          {visibilityActive ? "Hide" : "Show"}{" "}
+                                          this category{" "}
+                                          {isAllLocations
+                                            ? "globally"
+                                            : "at this location"}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                );
+                              })()}
 
+                              {/* Icon-button cluster: desktop only. Phones get
+                                  the consolidated "More actions" menu below. */}
+                              <div className="hidden items-center gap-2 sm:flex">
                               {/* Prep station quick-assign button — shown whenever
                                   a concrete location resolves (specific location
                                   OR single-location account locked to 'all'). */}
@@ -1234,8 +1368,14 @@ export default function CategoriesPage() {
                                 );
                               })()}
 
-                              {/* Edit button - only for global view */}
-                              {isAllLocations && (
+                              {/* Edit button — available in the all-locations
+                                  view, and for a category this location owns.
+                                  Editing writes the category's core fields
+                                  globally, but a location-specific category
+                                  exists only at this location, so there is no
+                                  cross-location surprise. Mirrors `canDelete`
+                                  below. */}
+                              {canEditCategory(category) && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1310,47 +1450,14 @@ export default function CategoriesPage() {
                                     </Tooltip>
                                   </TooltipProvider>
                                 )}
-
-                              <div
-                                className={cn(
-                                  "p-1 rounded-full transition-colors",
-                                  isExpanded
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-muted",
-                                )}
-                              >
-                                {isExpanded ? (
-                                  <ChevronUp className="h-4 w-4" />
-                                ) : (
-                                  <ChevronDown className="h-4 w-4" />
-                                )}
                               </div>
+
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2 mt-3 flex-wrap">
-                            {/* Active status - use effective value when viewing location */}
-                            <Badge
-                              variant={
-                                (
-                                  isAllLocations
-                                    ? category.is_active
-                                    : category.effective_is_active
-                                )
-                                  ? "default"
-                                  : "secondary"
-                              }
-                              className="text-xs"
-                            >
-                              {(
-                                isAllLocations
-                                  ? category.is_active
-                                  : category.effective_is_active
-                              )
-                                ? "Active"
-                                : "Inactive"}
-                            </Badge>
-
+                          {/* Count flags are desktop-only — on phones the row
+                              keeps just the name and its scope badge. */}
+                          <div className="mt-2 hidden flex-wrap items-center gap-2 sm:flex">
                             {/* Item count from RPC */}
                             <Badge variant="outline" className="text-xs">
                               {category.item_count || 0} item
@@ -1367,35 +1474,6 @@ export default function CategoriesPage() {
                                 {category.menu_count !== 1 ? "s" : ""}
                               </Badge>
                             )}
-
-                            {/* Location override indicator */}
-                            {!isAllLocations && category.location_override && (
-                              <Badge
-                                variant="outline"
-                                className="text-xs bg-amber-50 text-amber-600 border-amber-200"
-                              >
-                                <Settings2 className="h-3 w-3 mr-1" />
-                                Customized
-                              </Badge>
-                            )}
-                            {!isSingleLocation && category.location_id === null && (
-                              <Badge
-                                variant="outline"
-                                className="text-xs bg-green-50 text-green-600 border-green-200"
-                              >
-                                <Globe className="h-3 w-3 mr-1" />
-                                Global
-                              </Badge>
-                            )}
-                            {!isSingleLocation && category.location_id !== null && (
-                              <Badge
-                                variant="outline"
-                                className="text-xs bg-purple-50 text-purple-600 border-purple-200"
-                              >
-                                <MapPin className="h-3 w-3 mr-1" />
-                                {category.location_name}
-                              </Badge>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -1403,10 +1481,43 @@ export default function CategoriesPage() {
 
                     {/* Expanded Items Section */}
                     {isExpanded && (
-                      <div className="border-t bg-muted/10 animate-in slide-in-from-top-2 overflow-hidden">
-                        <div className="p-3 sm:p-4">
+                      <div className="animate-in slide-in-from-top-2 overflow-hidden">
+                        <div className="px-3 pb-4 pt-0 sm:px-6">
+                          {/* Scope badges live here on mobile, where a long
+                              location name has the full card width to wrap
+                              into instead of squeezing the name row. */}
+                          <div className="mb-3 flex min-w-0 flex-wrap items-center gap-2 sm:hidden">
+                            {category.location_id === null ? (
+                              <Badge
+                                variant="secondary"
+                                className="border-0 bg-muted/60 text-xs font-medium text-muted-foreground"
+                              >
+                                Global
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="secondary"
+                                className="min-w-0 max-w-full border-0 bg-muted/60 text-xs font-medium text-muted-foreground"
+                              >
+                                <span className="min-w-0 truncate">
+                                  {category.location_name}
+                                </span>
+                              </Badge>
+                            )}
+                            {!isAllLocations && category.location_override && (
+                              <Badge
+                                variant="secondary"
+                                className="border-0 bg-muted/60 text-xs font-medium text-muted-foreground"
+                              >
+                                Override
+                              </Badge>
+                            )}
+                          </div>
+
                           <div className="flex flex-wrap items-center justify-between gap-2 mb-3 min-w-0">
-                            <h4 className="text-sm font-medium flex flex-wrap items-center gap-1.5 min-w-0">
+                            {/* Heading is desktop-only — the expanded card is
+                                self-evidently the category's item list. */}
+                            <h4 className="hidden min-w-0 flex-wrap items-center gap-1.5 text-sm font-medium sm:flex">
                               <Utensils className="h-4 w-4 shrink-0" />
                               <span className="min-w-0 break-words">Items in this category</span>
                               {!isAllLocations && (
@@ -1418,12 +1529,32 @@ export default function CategoriesPage() {
                             <div className="flex items-center gap-2 shrink-0">
                               {/* Add Item Button - Only when scoping allows */}
                               {(() => {
+                                // While ordering, this slot becomes the exit
+                                // affordance for reorder mode instead.
+                                if (orderingCategoryId === category.id) {
+                                  return (
+                                    <Button
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOrderingCategoryId(null);
+                                      }}
+                                      className="gap-1"
+                                    >
+                                      <Check className="h-3 w-3" />
+                                      Done
+                                    </Button>
+                                  );
+                                }
+
                                 // Global categories: can only add when viewing all locations
                                 // Location categories: can only add when viewing that location
                                 const canAddItems = isAllLocations
                                   ? category.is_global
                                   : category.location_id === selectedLocationId;
 
+                                // "Add Item" is desktop-only — on phones it lives
+                                // in the category's More-actions menu.
                                 if (canAddItems) {
                                   return (
                                     <Button
@@ -1440,7 +1571,7 @@ export default function CategoriesPage() {
                                         });
                                         setIsAddItemWizardOpen(true);
                                       }}
-                                      className="gap-1"
+                                      className="hidden gap-1 sm:inline-flex"
                                     >
                                       <Plus className="h-3 w-3" />
                                       Add Item
@@ -1457,7 +1588,7 @@ export default function CategoriesPage() {
                                           variant="outline"
                                           size="sm"
                                           disabled
-                                          className="gap-1 opacity-50"
+                                          className="hidden gap-1 opacity-50 sm:inline-flex"
                                         >
                                           <Plus className="h-3 w-3" />
                                           Add Item
@@ -1614,7 +1745,7 @@ export default function CategoriesPage() {
                                       ).map((i) => i.menu_item_id)}
                                       strategy={verticalListSortingStrategy}
                                     >
-                                      <div className="max-h-[500px] min-w-0 overflow-y-auto">
+                                      <div className="max-h-[500px] min-w-0 divide-y overflow-y-auto">
                                         {(
                                           reorderedItemsMap.get(category.id) ||
                                           categoryItems
@@ -1639,6 +1770,10 @@ export default function CategoriesPage() {
                                               isSelectionMode={isSelectionMode}
                                               isSelected={selectedItemIds.has(item.menu_item_id)}
                                               onToggleSelect={() => handleToggleItem(item.menu_item_id)}
+                                              isOrdering={
+                                                orderingCategoryId ===
+                                                category.id
+                                              }
                                             />
                                           ),
                                         )}
@@ -1866,16 +2001,7 @@ export default function CategoriesPage() {
               Delete Category
             </DialogTitle>
             <DialogDescription>
-              {isSingleLocation ? (
-                <>
-                  Are you sure you want to delete &quot;
-                  {deletingCategory?.name}&quot;? This will unlink all items from
-                  this category.
-                  <span className="block mt-2 font-medium text-foreground">
-                    This action cannot be undone.
-                  </span>
-                </>
-              ) : deletingCategory?.is_global ? (
+              {deletingCategory?.is_global ? (
                 <>
                   Are you sure you want to delete the global category &quot;
                   {deletingCategory?.name}&quot;? This will remove it from all
@@ -1922,16 +2048,17 @@ interface SortableCategoryItemRowProps {
   handleEditItem: (
     item: CategoryMenuItem,
     category: CategoryWithItems,
-    e: React.MouseEvent,
+    e?: React.MouseEvent,
   ) => void;
   handleRemoveItemFromCategory: (
     categoryId: string,
     menuItemId: string,
-    e: React.MouseEvent,
+    e?: React.MouseEvent,
   ) => void;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: () => void;
+  isOrdering?: boolean;
 }
 
 function SortableCategoryItemRow({
@@ -1945,6 +2072,7 @@ function SortableCategoryItemRow({
   isSelectionMode = false,
   isSelected = false,
   onToggleSelect,
+  isOrdering = false,
 }: SortableCategoryItemRowProps) {
   const {
     attributes,
@@ -1965,10 +2093,12 @@ function SortableCategoryItemRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex items-center gap-1.5 sm:gap-3 p-2 sm:p-3 my-1 rounded-lg bg-background border transition-all overflow-hidden",
+        // Flat divided rows on the card surface, matching the menu detail
+        // page's item list — no per-row fill, border, or rounding.
+        "flex min-w-0 items-center gap-1.5 overflow-hidden px-1 py-3 transition-colors sm:gap-3 sm:px-2",
         isDragging
-          ? "opacity-30 shadow-lg z-50 ring-2 ring-primary"
-          : "hover:shadow-sm hover:border-primary/30",
+          ? "z-50 rounded-lg opacity-30 shadow-lg ring-2 ring-primary"
+          : "hover:bg-muted/50",
         !item.menu_item.effective_availability && "opacity-60",
         isSelectionMode && isSelected && "bg-primary/5",
       )}
@@ -1986,12 +2116,17 @@ function SortableCategoryItemRow({
           <Checkbox checked={isSelected} />
         </div>
       )}
-      {/* Drag Handle — hidden in selection mode */}
+      {/* Drag handle — hidden in selection mode. On phones it only appears once
+          "Order items" is chosen, and disappears again on "Done"; desktop keeps
+          it always available. */}
       {!isSelectionMode && (
         <button
           {...attributes}
           {...listeners}
-          className="flex items-center justify-center w-5 h-5 sm:w-7 sm:h-7 rounded hover:bg-muted cursor-grab active:cursor-grabbing touch-none shrink-0"
+          className={cn(
+            "items-center justify-center w-5 h-5 sm:w-7 sm:h-7 rounded hover:bg-muted cursor-grab active:cursor-grabbing touch-none shrink-0",
+            isOrdering ? "flex" : "hidden sm:flex",
+          )}
           onClick={(e) => e.stopPropagation()}
           aria-label="Drag to reorder"
         >
@@ -2004,8 +2139,8 @@ function SortableCategoryItemRow({
         {index + 1}
       </span>
 
-      {/* Item Image */}
-      <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-lg overflow-hidden bg-muted/30 shrink-0">
+      {/* Item Image — desktop only */}
+      <div className="hidden h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-muted/30 sm:block sm:h-12 sm:w-12">
         {isValidImageUrl(item.menu_item.image) ? (
           <img
             src={item.menu_item.image}
@@ -2019,23 +2154,23 @@ function SortableCategoryItemRow({
         )}
       </div>
 
-      {/* Item Details */}
+      {/* Item Details — description is desktop only */}
       <div className="flex-1 min-w-0">
         <h5 className="font-medium text-sm truncate flex items-center gap-1">
           {item.menu_item.name}
           {item.is_featured && <Sparkles className="h-3 w-3 text-yellow-500" />}
         </h5>
         {item.menu_item.description && (
-          <p className="text-xs text-muted-foreground truncate">
+          <p className="hidden truncate text-xs text-muted-foreground sm:block">
             {item.menu_item.description}
           </p>
         )}
       </div>
 
-      {/* Price with source indicator — hidden on mobile */}
-      <div className="hidden sm:flex text-right shrink-0 items-center gap-2">
+      {/* Price with source indicator — desktop only */}
+      <div className="hidden shrink-0 items-center gap-2 text-right sm:flex">
         <div className="flex flex-col items-end">
-          <span className="font-semibold text-sm text-primary">
+          <span className="font-semibold text-sm tabular-nums">
             ${item.menu_item.effective_price.toFixed(2)}
           </span>
           {item.menu_item.price_source !== "base" && (
@@ -2100,7 +2235,7 @@ function SortableCategoryItemRow({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="hidden sm:flex h-8 w-8 text-muted-foreground hover:text-destructive"
+                  className="hidden h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive sm:flex"
                   onClick={(e) =>
                     handleRemoveItemFromCategory(
                       category.id,
@@ -2119,6 +2254,77 @@ function SortableCategoryItemRow({
           </TooltipProvider>
         );
       })()}
+
+      {/* Mobile item actions — replaces the inline edit/remove icons. Hidden
+          while ordering so the row stays focused on dragging. */}
+      {!isSelectionMode && !isOrdering && (
+        <div
+          className="shrink-0 sm:hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                aria-label={`Actions for ${item.menu_item.name}`}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="center"
+              collisionPadding={12}
+              className="w-40 p-0.5"
+            >
+              <DropdownMenuItem
+                className="gap-2 px-2 py-1.5"
+                onSelect={() => handleEditItem(item, category)}
+              >
+                <Edit2 className="h-4 w-4" />
+                Edit item
+              </DropdownMenuItem>
+              {/* Opens the same item sheet as Edit — its Pricing tab is where
+                  price lives. The sheet's tabs are uncontrolled, so it cannot
+                  yet be deep-linked to that section. */}
+              <DropdownMenuItem
+                className="gap-2 px-2 py-1.5"
+                onSelect={() => handleEditItem(item, category)}
+              >
+                <DollarSign className="h-4 w-4" />
+                <span className="flex-1">Price</span>
+                <span className="font-semibold tabular-nums">
+                  ${item.menu_item.effective_price.toFixed(2)}
+                </span>
+              </DropdownMenuItem>
+              {(() => {
+                const canRemove = isAllLocations
+                  ? category.is_global
+                  : category.location_id === selectedLocationId;
+                if (!canRemove) return null;
+                return (
+                  <>
+                    <DropdownMenuSeparator className="my-0.5" />
+                    <DropdownMenuItem
+                      className="gap-2 px-2 py-1.5 text-destructive focus:text-destructive"
+                      onSelect={() =>
+                        handleRemoveItemFromCategory(
+                          category.id,
+                          item.menu_item_id,
+                        )
+                      }
+                    >
+                      <X className="h-4 w-4" />
+                      Remove item
+                    </DropdownMenuItem>
+                  </>
+                );
+              })()}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
     </div>
   );
 }
@@ -2138,7 +2344,10 @@ function DragOverlayCategoryItemContent({
       <span className="flex items-center justify-center w-5 h-5 rounded-full bg-muted text-muted-foreground text-[10px] font-medium shrink-0">
         {index + 1}
       </span>
-      <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted/30 shrink-0">
+      {/* Image and price mirror the row's own breakpoints — the overlay is a
+          separate component, so it needs the same sm: gating or they reappear
+          mid-drag on mobile. */}
+      <div className="hidden h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-muted/30 sm:block">
         {isValidImageUrl(item.menu_item.image) ? (
           <img
             src={item.menu_item.image}
@@ -2153,7 +2362,7 @@ function DragOverlayCategoryItemContent({
       </div>
       <div className="flex-1 min-w-0">
         <h5 className="font-medium text-sm truncate">{item.menu_item.name}</h5>
-        <span className="font-semibold text-sm text-primary">
+        <span className="hidden text-sm font-semibold text-primary sm:inline">
           ${item.menu_item.effective_price.toFixed(2)}
         </span>
       </div>

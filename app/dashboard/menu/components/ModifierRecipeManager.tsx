@@ -292,9 +292,9 @@ export function ModifierRecipeManager({
             {isEditable && (
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                className="h-8"
+                className="h-8 rounded-full border-0 bg-muted/60 shadow-none hover:bg-muted"
                 onClick={() => setIsAddDialogOpen(true)}
               >
                 <Plus className="h-3.5 w-3.5 mr-1" />
@@ -305,7 +305,7 @@ export function ModifierRecipeManager({
         </CardHeader>
         <CardContent className="pt-0">
           {ingredients.length === 0 ? (
-            <div className="text-center py-6 bg-muted/20 rounded-lg border border-dashed">
+            <div className="rounded-2xl border-0 bg-muted/60 py-6 text-center">
               <Package className="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
               <p className="text-sm font-medium mb-1">No ingredients</p>
               <p className="text-xs text-muted-foreground">
@@ -322,11 +322,11 @@ export function ModifierRecipeManager({
                 return (
                   <div
                     key={ing.id}
-                    className="flex items-center justify-between p-2.5 rounded-lg border bg-card text-card-foreground shadow-sm group"
+                    className="group flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-3 shadow-none"
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex-shrink-0">
-                        <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-background">
                           <Package className="h-4 w-4 text-muted-foreground" />
                         </div>
                       </div>
@@ -393,7 +393,10 @@ export function ModifierRecipeManager({
 
       {/* Add Ingredient Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent
+          elevation="above-sheet"
+          className="sm:max-w-[425px]"
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus className="h-5 w-5 text-primary" />
@@ -429,10 +432,10 @@ export function ModifierRecipeManager({
                   >
                     <PopoverTrigger asChild>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         role="combobox"
                         aria-expanded={openCombobox}
-                        className="w-full justify-between"
+                        className="w-full justify-between rounded-full border-0 bg-muted/60 font-normal shadow-none hover:bg-muted data-[state=open]:bg-muted"
                       >
                         {selectedInventoryId
                           ? unaddedItems.find(
@@ -442,10 +445,18 @@ export function ModifierRecipeManager({
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0 z-[100]">
-                      <Command>
-                        <CommandInput placeholder="Search ingredient..." />
-                        <CommandList>
+                    <PopoverContent
+                      align="start"
+                      sideOffset={6}
+                      collisionPadding={12}
+                      className="w-[--radix-popover-trigger-width] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl p-0 z-[220]"
+                    >
+                      <Command className="[&_[cmdk-input-wrapper]]:m-2 [&_[cmdk-input-wrapper]]:rounded-full [&_[cmdk-input-wrapper]]:border-0 [&_[cmdk-input-wrapper]]:bg-muted/60">
+                        <CommandInput
+                          placeholder="Search ingredient..."
+                          className="h-9 text-[0.8125rem]"
+                        />
+                        <CommandList className="max-h-[220px]">
                           <CommandEmpty>No ingredient found.</CommandEmpty>
                           <CommandGroup>
                             {unaddedItems.map((item) => (
@@ -506,7 +517,7 @@ export function ModifierRecipeManager({
                     {selectedInventoryId && (
                       <Badge
                         variant="outline"
-                        className="shrink-0 h-10 px-3 flex items-center"
+                        className="flex h-10 shrink-0 items-center rounded-full border-0 bg-muted/60 px-3"
                       >
                         {unaddedItems.find((i) => i.id === selectedInventoryId)
                           ?.unit_type || "units"}
@@ -522,12 +533,14 @@ export function ModifierRecipeManager({
             <Button
               type="button"
               variant="outline"
+              className="rounded-full"
               onClick={() => setIsAddDialogOpen(false)}
             >
               Cancel
             </Button>
             <Button
               type="button"
+              className="rounded-full"
               onClick={handleAdd}
               disabled={
                 addMutation.isPending || !selectedInventoryId || !quantity
@@ -547,7 +560,7 @@ export function ModifierRecipeManager({
         open={!!editingIngredient}
         onOpenChange={(open) => !open && setEditingIngredient(null)}
       >
-        <DialogContent className="sm:max-w-[350px]">
+        <DialogContent elevation="above-sheet" className="sm:max-w-[350px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Edit2 className="h-5 w-5 text-primary" />
@@ -572,7 +585,7 @@ export function ModifierRecipeManager({
                 />
                 <Badge
                   variant="outline"
-                  className="shrink-0 h-10 px-3 flex items-center"
+                  className="flex h-10 shrink-0 items-center rounded-full border-0 bg-muted/60 px-3"
                 >
                   {editingIngredient?.inventory_item?.unit_type || "units"}
                 </Badge>
@@ -584,12 +597,14 @@ export function ModifierRecipeManager({
             <Button
               type="button"
               variant="outline"
+              className="rounded-full"
               onClick={() => setEditingIngredient(null)}
             >
               Cancel
             </Button>
             <Button
               type="button"
+              className="rounded-full"
               onClick={handleUpdate}
               disabled={updateMutation.isPending || !quantity}
             >

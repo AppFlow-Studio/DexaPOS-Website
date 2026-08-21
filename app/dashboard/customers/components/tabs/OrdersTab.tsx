@@ -164,8 +164,8 @@ export function OrdersTab({ customer }: OrdersTabProps) {
   return (
     <div className="space-y-6 py-6">
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Card className="rounded-2xl border-0 bg-muted/60 shadow-none">
           <CardContent className="pt-4">
             <div className="flex justify-between items-start">
               <div>
@@ -179,7 +179,7 @@ export function OrdersTab({ customer }: OrdersTabProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
+        <Card className="rounded-2xl border-0 bg-muted/60 shadow-none">
           <CardContent className="pt-4">
             <div className="flex justify-between items-start">
               <div>
@@ -194,7 +194,7 @@ export function OrdersTab({ customer }: OrdersTabProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
+        <Card className="rounded-2xl border-0 bg-muted/60 shadow-none">
           <CardContent className="pt-4">
             <div className="flex justify-between items-start">
               <div>
@@ -209,7 +209,7 @@ export function OrdersTab({ customer }: OrdersTabProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
+        <Card className="rounded-2xl border-0 bg-muted/60 shadow-none">
           <CardContent className="pt-4">
             <div className="flex justify-between items-start">
               <div>
@@ -226,12 +226,12 @@ export function OrdersTab({ customer }: OrdersTabProps) {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <Select value={dateRange} onValueChange={(val) => setDateRange(val as DateRangeFilter)}>
-          <SelectTrigger className="w-36 h-9 text-sm">
+          <SelectTrigger className="h-9 w-36 border-0 bg-muted/60 text-sm shadow-none">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="border-0">
             <SelectItem value="30d">Last 30 days</SelectItem>
             <SelectItem value="90d">Last 90 days</SelectItem>
             <SelectItem value="6mo">Last 6 months</SelectItem>
@@ -241,10 +241,10 @@ export function OrdersTab({ customer }: OrdersTabProps) {
         </Select>
 
         <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val as StatusFilter)}>
-          <SelectTrigger className="w-40 h-9 text-sm">
+          <SelectTrigger className="h-9 w-40 border-0 bg-muted/60 text-sm shadow-none">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="border-0">
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="void">Voided</SelectItem>
@@ -254,7 +254,7 @@ export function OrdersTab({ customer }: OrdersTabProps) {
       </div>
 
       {/* Orders Table */}
-      <div className="border rounded-lg bg-white dark:bg-card">
+      <div className="overflow-x-auto rounded-2xl border-0 bg-muted/35">
         {isLoading ? (
           <div className="flex items-center justify-center h-40">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -265,8 +265,8 @@ export function OrdersTab({ customer }: OrdersTabProps) {
             <p className="text-sm">No orders found</p>
           </div>
         ) : (
-          <Table>
-            <TableHeader className="bg-muted/30 border-b">
+          <Table className="min-w-[760px]">
+            <TableHeader className="bg-muted/50 [&_tr]:border-0">
               <TableRow>
                 <TableHead className="w-24">
                   <button
@@ -331,7 +331,7 @@ export function OrdersTab({ customer }: OrdersTabProps) {
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className="[&_tr]:border-0">
               {sortedOrders.map((order) => (
                 <TableRow key={order.id} className="hover:bg-muted/50">
                   <TableCell className="text-sm">

@@ -20,7 +20,7 @@ interface ColorSwatchPickerProps {
 
 export function ColorSwatchPicker({ value, onChange }: ColorSwatchPickerProps) {
   return (
-    <div className="flex gap-2 flex-wrap">
+    <div className="flex flex-wrap gap-2">
       {PRESET_COLORS.map((color) => (
         <button
           key={color.value}
@@ -28,10 +28,13 @@ export function ColorSwatchPicker({ value, onChange }: ColorSwatchPickerProps) {
           title={color.label}
           onClick={() => onChange(color.value)}
           className={cn(
-            "h-8 w-8 rounded-full transition-all border-2",
+            // Selection is a neutral ring, not the violet `--primary` (C5).
+            // A ring reads on every swatch hue; a border would vanish on the
+            // ones that happen to match it.
+            "h-8 w-8 rounded-full border-0 transition-all",
             value === color.value
-              ? "ring-2 ring-offset-2 ring-primary border-primary"
-              : "border-transparent hover:scale-110"
+              ? "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+              : "hover:scale-110"
           )}
           style={{ backgroundColor: color.value }}
         />

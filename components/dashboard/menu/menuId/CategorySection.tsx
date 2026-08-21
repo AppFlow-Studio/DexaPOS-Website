@@ -1,13 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Panel } from "@/components/dashboard/shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -44,7 +38,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MenuCategory, MenuCategoryItem } from "@/types/menu";
-import { LevelIndicator, getEditingLevel } from "../LevelIndicator";
 import { DraggableItemsList } from "./DraggableItemsList";
 import { RemoveCategoryFromMenu } from "@/app/dashboard/actions/categories";
 import { toast } from "sonner";
@@ -142,14 +135,6 @@ export function CategorySection({
   const hasLocationOverride =
     category.category?.has_menu_category_override || false;
 
-  // Get editing level for this context
-  const editingLevel = getEditingLevel({
-    isAllLocations,
-    menuId,
-    categoryId: category.category_id,
-    isMenuLocationOwned,
-  });
-
   const handleToggleVisibility = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsToggling(true);
@@ -208,13 +193,15 @@ export function CategorySection({
 
   return (
     <Collapsible open={isExpanded} onOpenChange={onToggle}>
-      <Card
+      {/* A repeating list row, not a page section — tier 2 (`nested`). */}
+      <Panel
+        nested
         className={cn(
-          "overflow-hidden transition-all",
+          "overflow-hidden rounded-3xl transition-all",
           !category.is_active && "opacity-60",
         )}
       >
-        <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3 px-3 sm:px-6">
+        <div className="min-h-20 cursor-pointer px-3 py-3 transition-colors hover:bg-muted/50 sm:min-h-0 sm:px-6">
           <div className="flex items-center justify-between gap-2">
             {/* Category-level selection checkbox */}
             {isSelectionMode && categoryItemIds.length > 0 && (
@@ -232,11 +219,14 @@ export function CategorySection({
                 ) : (
                   <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                 )}
-                <div className="min-w-0">
+                {/* Fixed height: the name/badge row wraps at narrow widths while
+                    the description sits below, so without a floor the two
+                    combinations produce different row heights. */}
+                <div className="flex min-w-0 flex-col justify-center min-h-[3.25rem] sm:min-h-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <CardTitle className="truncate text-base sm:text-lg">
+                    <h3 className="truncate text-base font-semibold sm:text-lg">
                       {category.category?.name || "Unnamed Category"}
-                    </CardTitle>
+                    </h3>
                     {/* Location-scoped category badge */}
                     {category.category?.location_id &&
                       category.category?.location_name && (
@@ -301,24 +291,12 @@ export function CategorySection({
                       </TooltipProvider>
                     )}
                   </div>
-                  {category.category?.description && (
-                    <CardDescription className="mt-1">
-                      {category.category.description}
-                    </CardDescription>
-                  )}
                 </div>
               </div>
             </CollapsibleTrigger>
 
             {/* Controls */}
             <div className="flex flex-shrink-0 items-center gap-2 sm:gap-3">
-              {/* Level indicator */}
-              {showLocationPricing && (
-                <span className="hidden sm:inline-flex">
-                  <LevelIndicator level={editingLevel} variant="inline" />
-                </span>
-              )}
-
               {/* Reset override button */}
               {hasLocationOverride && !isAllLocations && (
                 <TooltipProvider>
@@ -372,14 +350,11 @@ export function CategorySection({
                 </Tooltip>
               </TooltipProvider>
 
-              <Badge variant="outline" className="hidden whitespace-nowrap sm:inline-flex">
-                {itemCount} item{itemCount !== 1 ? "s" : ""}
-              </Badge>
             </div>
           </div>
-        </CardHeader>
+        </div>
         <CollapsibleContent>
-          <CardContent className="pt-0 px-2 sm:px-6">
+          <div className="px-2 pb-4 pt-0 sm:px-6">
             {itemCount === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 No items in this category
@@ -414,23 +389,23 @@ export function CategorySection({
             )}
 
             {canModifyCategories && (
-              <div className="flex flex-row items-center justify-end mt-2">
+              <div className="mt-2 flex flex-row items-center justify-center sm:justify-end">
                 <Button
-                  variant="destructive"
-                  className="text-xs"
+                  variant="ghost"
+                  className="text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsDeleteDialogOpen(true);
                   }}
                 >
                   <Trash2 className="h-4 w-4" />
-                  Remove Category From Menu
+                  Remove category
                 </Button>
               </div>
             )}
-          </CardContent>
+          </div>
         </CollapsibleContent>
-      </Card>
+      </Panel>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

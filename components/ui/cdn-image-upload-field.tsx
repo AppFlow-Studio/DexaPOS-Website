@@ -75,7 +75,6 @@ export function CdnImageUploadField({
       const file = await urlToFile(previewUrl, fileName)
 
       if (!CROPPABLE_MIME_TYPES.has(file.type)) {
-        toast.error('This image format cannot be adjusted (GIF/SVG). Replace with a JPEG, PNG, or WebP to crop.')
         return
       }
 
@@ -83,8 +82,6 @@ export function CdnImageUploadField({
       setCropOpen(true)
     } catch (error) {
       console.error('Failed to load image for adjustment', { previewUrl, error })
-      const detail = error instanceof Error ? error.message : 'Unknown error'
-      toast.error(`Could not load image: ${detail}`)
     } finally {
       setIsLoadingForAdjust(false)
     }
@@ -126,10 +123,8 @@ export function CdnImageUploadField({
     onDropRejected: (rejections) => {
       const firstError = rejections[0]?.errors?.[0]
       if (firstError?.code === 'file-too-large') {
-        toast.error('Image must be 5 MB or smaller.')
         return
       }
-      toast.error('Please drop a single JPG, PNG, WEBP, GIF, or SVG image.')
     },
   })
 

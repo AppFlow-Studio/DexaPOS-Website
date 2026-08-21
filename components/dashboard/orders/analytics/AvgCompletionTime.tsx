@@ -3,6 +3,7 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
+import { CHART_GRID } from './AnalyticsPrimitives'
 import { DataTable } from '@/components/ui/data-table'
 import { ColumnDef } from '@tanstack/react-table'
 import { Clock, InfoIcon } from 'lucide-react'
@@ -91,7 +92,7 @@ export function AvgCompletionTime({ data, isLoading }: AvgCompletionTimeProps) {
         {chartData.length > 0 && (
           <ChartContainer config={chartConfig} className="aspect-auto h-[300px] w-full">
               <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid {...CHART_GRID} />
                 <XAxis dataKey="name" />
                 <YAxis
                   label={{ value: 'Minutes', angle: -90, position: 'insideLeft' }}
@@ -101,16 +102,16 @@ export function AvgCompletionTime({ data, isLoading }: AvgCompletionTimeProps) {
                   content={({ active, payload, label }) => {
                     if (active && payload && payload.length) {
                       return (
-                        <div className="bg-white dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-700 shadow-lg">
-                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+                        <div className="rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg">
+                          <p className="mb-2 text-[0.8125rem] font-medium text-muted-foreground">
                             {label}
                           </p>
                           {payload.map((item, index) => (
                             <div key={index} className="flex items-center justify-between gap-2">
-                              <span className="text-xs text-slate-700 dark:text-slate-300">
+                              <span className="text-[0.8125rem] text-muted-foreground">
                                 {item.name}:
                               </span>
-                              <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                              <span className="text-[0.8125rem] tabular-nums">
                                 {Number(item.value).toFixed(1)} min
                               </span>
                             </div>

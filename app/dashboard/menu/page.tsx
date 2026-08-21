@@ -1,15 +1,16 @@
 'use client'
 
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle
-} from '@/components/ui/card'
+  PageShell,
+  PageHeader,
+  Panel,
+  PanelSection,
+  StatRow,
+  StatTile,
+  LocationIndicator
+} from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { CdnImageUploadField } from '@/components/ui/cdn-image-upload-field'
 import {
   Utensils,
   Plus,
@@ -23,7 +24,6 @@ import {
 } from 'lucide-react'
 import * as React from "react";
 import { useMenus } from "../hooks/useMenus";
-import { ScopeContextStrip } from "@/components/dashboard/menu/ScopeContextStrip";
 import { useUserInfo } from "../../manage/hooks/useUserInfo.";
 import {
   Dialog,
@@ -43,8 +43,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
-  FormDescription
+  FormMessage
 } from '@/components/ui/form'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
@@ -62,7 +61,6 @@ import {
 } from '@/components/dashboard/menu/MenuListView'
 import { useLocationStore, useSelectedLocation, useIsSingleLocation, useGatedLocationId } from '@/stores/location-store'
 import { useLocationOnlineMenu, useSetPrimaryOnlineMenu } from '@/app/dashboard/online-ordering/hooks/useOrderOutStatus'
-import { Badge } from '@/components/ui/badge'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -178,7 +176,6 @@ export default function MenuPage () {
   }, [form, imageUpload.reset, isAllLocations])
 
   const menuType = form.watch('menu_type')
-  const watchedMenuValues = form.watch()
 
   const onSubmit = async (values: MenuFormValues) => {
     let uploadedAsset: { cdnUrl: string; storagePath: string } | undefined
@@ -380,40 +377,6 @@ export default function MenuPage () {
   }, [sortedMenus, reorderedMenus.length, hasOrderChanges])
 
   // Reorder handlers
-  const handleMoveMenuUp = (index: number) => {
-    if (index === 0) return
-
-    const newOrder = [...reorderedMenus]
-    const temp = newOrder[index]
-    newOrder[index] = newOrder[index - 1]
-    newOrder[index - 1] = temp
-
-    // Update display_order values
-    newOrder.forEach((menu, idx) => {
-      menu.display_order = idx + 1
-    })
-
-    setReorderedMenus(newOrder)
-    setHasOrderChanges(true)
-  }
-
-  const handleMoveMenuDown = (index: number) => {
-    if (index === reorderedMenus.length - 1) return
-
-    const newOrder = [...reorderedMenus]
-    const temp = newOrder[index]
-    newOrder[index] = newOrder[index + 1]
-    newOrder[index + 1] = temp
-
-    // Update display_order values
-    newOrder.forEach((menu, idx) => {
-      menu.display_order = idx + 1
-    })
-
-    setReorderedMenus(newOrder)
-    setHasOrderChanges(true)
-  }
-
   const handleSaveOrder = async () => {
     setIsSavingOrder(true)
     try {
@@ -460,7 +423,6 @@ export default function MenuPage () {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <ScopeContextStrip />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className='text-2xl font-bold tracking-tight'>Menus</h2>
@@ -488,21 +450,21 @@ export default function MenuPage () {
           }}
         >
           <DialogTrigger asChild>
-            <Button className='gap-2'>
+            <Button className='h-9 gap-2 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm'>
               <Plus className='h-4 w-4' />
               Create Menu
             </Button>
           </DialogTrigger>
           <DialogContent
             overlayClassName='bg-slate-950/40 backdrop-blur-md'
-            className='w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-4xl'
+            className='w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border bg-background p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-xl'
           >
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
                 className='flex max-h-[min(92vh,860px)] flex-col'
               >
-                <DialogHeader className='border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left'>
+                <DialogHeader className='bg-background px-6 py-5 pr-14 text-left sm:text-left'>
                   <DialogTitle className='text-[1.625rem] font-semibold tracking-tight'>
                     Create New Menu
                   </DialogTitle>
@@ -511,7 +473,7 @@ export default function MenuPage () {
                   </DialogDescription>
                 </DialogHeader>
 
-                <div className='min-h-0 flex flex-1 flex-col overflow-hidden lg:flex-row'>
+                <div className='min-h-0 flex flex-1 flex-col overflow-hidden'>
                   <div className='min-h-0 flex-1 overflow-y-auto px-6 py-5 space-y-4'>
                     {/* Menu Type Selection - Only show when viewing all locations.
                         Single-location accounts have one menu plane, so there is
@@ -587,10 +549,10 @@ export default function MenuPage () {
                     {/* Context Banner */}
                     <div
                       className={cn(
-                        'flex items-center gap-3 px-4 py-3 rounded-lg border text-sm',
+                        'flex items-center gap-3 px-4 py-3 rounded-2xl border-0 text-sm',
                         isAllLocations && menuType === 'global'
-                          ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950 dark:border-emerald-800'
-                          : 'bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800'
+                          ? 'bg-emerald-50 dark:bg-emerald-950/30'
+                          : 'bg-blue-50 dark:bg-blue-950/30'
                       )}
                     >
                       <Info
@@ -641,99 +603,11 @@ export default function MenuPage () {
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name='image'
-                      render={() => (
-                        <FormItem>
-                          <FormLabel>Menu Image</FormLabel>
-                          <FormControl>
-                            <CdnImageUploadField
-                              disabled={form.formState.isSubmitting}
-                              helperText='Uploads to Bunny CDN when you create the menu.'
-                              onClear={imageUpload.clear}
-                              onFileSelect={imageUpload.selectFile}
-                              previewUrl={imageUpload.previewUrl}
-                              selectedFileName={imageUpload.selectedFileName}
-                              uploadLabel='Upload menu image'
-                              uploading={imageUpload.isUploading}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Optional image for this menu
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                   </div>
 
-                  <div className='hidden min-h-0 w-[340px] shrink-0 overflow-y-auto border-l border-border/70 bg-muted/10 px-6 py-5 lg:block'>
-                    <div className='space-y-6 pb-4'>
-                      <div className='text-sm font-medium text-muted-foreground'>
-                        Menu Preview
-                      </div>
-
-                      <div className='overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm'>
-                        <div className='aspect-[4/3] bg-muted/40'>
-                          {imageUpload.previewUrl ? (
-                            <img
-                              src={imageUpload.previewUrl}
-                              alt='Menu preview'
-                              className='h-full w-full object-cover'
-                            />
-                          ) : (
-                            <div className='flex h-full items-center justify-center'>
-                              <Utensils className='h-12 w-12 text-muted-foreground/30' />
-                            </div>
-                          )}
-                        </div>
-                        <div className='space-y-3 p-4'>
-                          <div>
-                            <h3 className='text-lg font-semibold'>
-                              {watchedMenuValues.name || 'Menu Name'}
-                            </h3>
-                            <p className='mt-1 text-sm text-muted-foreground'>
-                              {watchedMenuValues.description ||
-                                'Add a short description for this menu.'}
-                            </p>
-                          </div>
-                          <div className='flex flex-wrap gap-2'>
-                            {!isSingleLocation && (
-                              <Badge variant='outline'>
-                                {isAllLocations &&
-                                watchedMenuValues.menu_type === 'global' ? (
-                                  <>
-                                    <Globe className='mr-1 h-3 w-3' />
-                                    Global
-                                  </>
-                                ) : (
-                                  <>
-                                    <MapPin className='mr-1 h-3 w-3' />
-                                    Location
-                                  </>
-                                )}
-                              </Badge>
-                            )}
-                            <Badge
-                              variant={
-                                watchedMenuValues.is_active
-                                  ? 'default'
-                                  : 'secondary'
-                              }
-                            >
-                              {watchedMenuValues.is_active
-                                ? 'Active'
-                                : 'Inactive'}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
 
-                <DialogFooter className='shrink-0 border-t border-border/70 bg-background/95 px-6 py-4 sm:justify-end'>
+                <DialogFooter className='shrink-0 bg-background px-6 py-4 sm:justify-end'>
                   <Button
                     type='button'
                     variant='outline'
@@ -765,72 +639,52 @@ export default function MenuPage () {
       </div>
 
       {/* Stats Overview */}
-      <div className='grid gap-4 grid-cols-2 md:grid-cols-4'>
-        <Card className='transition-all hover:shadow-md'>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Total Menus</CardTitle>
-            <Utensils className='h-4 w-4 text-muted-foreground' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold'>{menusList.length}</div>
-            <p className='text-xs text-muted-foreground'>All menus</p>
-          </CardContent>
-        </Card>
-        <Card className='transition-all hover:shadow-md'>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-            <CardTitle className='text-sm font-medium'>Active</CardTitle>
-            <Utensils className='h-4 w-4 text-green-500' />
-          </CardHeader>
-          <CardContent>
-            <div className='text-2xl font-bold text-green-600'>
-              {activeMenus}
-            </div>
-            <p className='text-xs text-muted-foreground'>Currently active</p>
-          </CardContent>
-        </Card>
-        {/* Global vs Location-Specific split is meaningless for single-location
-            accounts (all menus are simply "your menus") — hide both cards. */}
-        {!isSingleLocation && (
-          <>
-            <Card className='transition-all hover:shadow-md'>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>Global</CardTitle>
-                <Utensils className='h-4 w-4 text-emerald-500' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold text-emerald-600'>
-                  {globalMenus}
-                </div>
-                <p className='text-xs text-muted-foreground'>Merchant-wide menus</p>
-              </CardContent>
-            </Card>
-            <Card className='transition-all hover:shadow-md'>
-              <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>
-                  Location-Specific
-                </CardTitle>
-                <Utensils className='h-4 w-4 text-blue-500' />
-              </CardHeader>
-              <CardContent>
-                <div className='text-2xl font-bold text-blue-600'>
-                  {locationMenus}
-                </div>
-                <p className='text-xs text-muted-foreground'>Location menus</p>
-              </CardContent>
-            </Card>
-          </>
-        )}
-      </div>
+      <Panel padded>
+        <StatRow columns={isSingleLocation ? 2 : 4}>
+          <StatTile
+            label='Total Menus'
+            value={menusList.length}
+            meta='All menus'
+            icon={<Utensils />}
+            isLoading={isLoading}
+          />
+          <StatTile
+            label='Active'
+            value={activeMenus}
+            meta='Currently active'
+            icon={<Utensils />}
+            isLoading={isLoading}
+          />
+          {/* Global vs Location-Specific split is meaningless for single-location
+              accounts (all menus are simply "your menus") — hide both tiles. */}
+          {!isSingleLocation && (
+            <>
+              <StatTile
+                label='Global'
+                value={globalMenus}
+                meta='Merchant-wide menus'
+                icon={<Utensils />}
+                isLoading={isLoading}
+              />
+              <StatTile
+                label='Location-Specific'
+                value={locationMenus}
+                meta='Location menus'
+                icon={<Utensils />}
+                isLoading={isLoading}
+              />
+            </>
+          )}
+        </StatRow>
+      </Panel>
 
       {/* Menus List */}
-      <Card>
-        <CardHeader>
-          <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
-            <div>
-              <CardTitle>All Menus</CardTitle>
-              <CardDescription>View and manage all your menus</CardDescription>
-            </div>
-            <div className='flex items-center gap-2 flex-wrap'>
+      <Panel>
+        <PanelSection
+          label='All Menus'
+          caption='View and manage all your menus'
+          action={
+            <div className='flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:justify-end'>
               {hasOrderChanges && (
                 <Button
                   variant='default'
@@ -843,37 +697,47 @@ export default function MenuPage () {
                   {isSavingOrder ? 'Saving...' : 'Save Order'}
                 </Button>
               )}
-              <div className='relative flex-1 min-w-[160px]'>
-                <Search className='absolute left-2 top-2.5 h-4 w-4 text-muted-foreground' />
+              {/* Filled borderless search (D-09). Classes literal, not
+                  {FILLED_INPUT} — Tailwind does not scan tokens.ts (C7). */}
+              <div className='relative min-w-0 flex-1 basis-32'>
+                <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50' />
                 <Input
                   placeholder='Search menus...'
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className='pl-8 w-full md:w-64'
+                  className='h-9 w-full pl-9 text-[0.8125rem] md:w-64'
                 />
               </div>
-              <div className='flex items-center border rounded-md'>
+              {/* View toggle: one pill rail, matching the tab rail. */}
+              <div className='flex shrink-0 items-center gap-0.5 rounded-full bg-muted/70 p-1'>
                 <Button
-                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                  variant='ghost'
                   size='sm'
-                  className='rounded-r-none'
+                  className={cn(
+                    'h-7 rounded-full px-3 text-muted-foreground shadow-none hover:text-foreground',
+                    viewMode === 'grid' &&
+                      'bg-background text-foreground shadow-sm ring-1 ring-border'
+                  )}
                   onClick={() => setViewMode('grid')}
                 >
                   <Grid3x3 className='h-4 w-4' />
                 </Button>
                 <Button
-                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  variant='ghost'
                   size='sm'
-                  className='rounded-l-none'
+                  className={cn(
+                    'h-7 rounded-full px-3 text-muted-foreground shadow-none hover:text-foreground',
+                    viewMode === 'list' &&
+                      'bg-background text-foreground shadow-sm ring-1 ring-border'
+                  )}
                   onClick={() => setViewMode('list')}
                 >
                   <List className='h-4 w-4' />
                 </Button>
               </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+          }
+        >
           <MenuListView
             menus={filteredMenus}
             isLoading={isLoading}
@@ -890,14 +754,13 @@ export default function MenuPage () {
                 ? 'Get started by creating your first menu'
                 : 'Try adjusting your search terms'
             }
-            onMoveUp={handleMoveMenuUp}
-            onMoveDown={handleMoveMenuDown}
             hasOrderChanges={hasOrderChanges}
             onReorder={handleReorder}
             isFiltered={searchTerm.length > 0}
             onlineMenuId={onlineMenu?.primaryMenuId ?? null}
             linkedMenuIds={onlineMenu?.linkedMenuIds ?? []}
             onSetOnlineMenu={handleSetOnlineMenu}
+            showLocations={isAllLocations && !isSingleLocation}
           />
           {filteredMenus.length > 0 && (
             <div className='flex items-center gap-2 mt-4 text-sm text-muted-foreground'>
@@ -907,8 +770,8 @@ export default function MenuPage () {
               </span>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
     </div>
   )
 }

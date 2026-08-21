@@ -62,13 +62,13 @@ export function ScopeContextStrip({
     return (
       <div
         className={cn(
-          "flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-2.5",
+          "flex items-center gap-3 rounded-2xl border-0 bg-muted/60 px-4 py-2.5 shadow-none",
           className,
         )}
         role="region"
         aria-label="Editing scope"
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/60 dark:bg-black/20">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background/70">
           <Store className="h-4 w-4 text-muted-foreground" />
         </div>
         <div className="min-w-0 flex-1">
@@ -90,20 +90,19 @@ export function ScopeContextStrip({
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 rounded-lg border px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col gap-2 rounded-2xl border-0 px-4 py-2.5 shadow-none sm:flex-row sm:items-center sm:justify-between",
         colors.bg,
-        colors.border,
         colors.text,
         className,
       )}
       role="region"
       aria-label="Editing scope"
     >
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex min-w-0 items-center gap-3">
         <div
           className={cn(
             "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-            "bg-white/60 dark:bg-black/20",
+            "bg-background/70",
           )}
         >
           <Icon className="h-4 w-4" />

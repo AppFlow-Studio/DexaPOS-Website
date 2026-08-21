@@ -262,7 +262,7 @@ export function RecipeManager({
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className="rounded-3xl">
         <CardHeader>
           <Skeleton className="h-6 w-32" />
           <Skeleton className="h-4 w-48" />
@@ -279,7 +279,7 @@ export function RecipeManager({
 
   return (
     <>
-      <Card>
+      <Card className="rounded-3xl">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -325,12 +325,9 @@ export function RecipeManager({
                 return (
                   <div
                     key={ing.id}
-                    className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 group"
+                    className="group flex items-center justify-between rounded-2xl border-0 bg-muted/40 p-3"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-background border">
-                        <Package className="h-4 w-4 text-muted-foreground" />
-                      </div>
+                    <div className="flex min-w-0 items-center">
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-sm">
@@ -351,7 +348,7 @@ export function RecipeManager({
                             </Badge>
                           ))}
                         </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div className="hidden text-xs text-muted-foreground sm:block">
                           {ing.quantity_used} {item?.unit_type} × $
                           {item?.cost_per_unit?.toFixed(2) || "0.00"}/
                           {item?.unit_type}

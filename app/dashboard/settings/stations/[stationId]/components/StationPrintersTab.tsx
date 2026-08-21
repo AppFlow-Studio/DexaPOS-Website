@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+  StationPanel,
+  StationPanelContent,
+  StationPanelDescription,
+  StationPanelHeader,
+  StationPanelTitle,
+} from "./StationPanel";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -115,13 +115,13 @@ export function StationPrintersTab({ station }: StationPrintersTabProps) {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="py-12">
+      <StationPanel>
+        <StationPanelContent className="py-12">
           <div className="flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
     );
   }
 
@@ -129,22 +129,22 @@ export function StationPrintersTab({ station }: StationPrintersTabProps) {
 
   return (
     <>
-      <Card>
-        <CardHeader>
+      <StationPanel>
+        <StationPanelHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg">Printers</CardTitle>
-              <CardDescription>
+              <StationPanelTitle className="text-lg">Printers</StationPanelTitle>
+              <StationPanelDescription>
                 Dedicated printers configured for this station
-              </CardDescription>
+              </StationPanelDescription>
             </div>
             <Button onClick={() => setIsAddDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Add Printer
             </Button>
           </div>
-        </CardHeader>
-        <CardContent>
+        </StationPanelHeader>
+        <StationPanelContent>
           {!hasPrinters ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted mb-4">
@@ -180,7 +180,7 @@ export function StationPrintersTab({ station }: StationPrintersTabProps) {
                   <TableRow key={printer.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-xl">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60 text-xl">
                           {getPrinterRoleIcon(
                             printer.printer_role as PrinterRole,
                           )}
@@ -224,16 +224,16 @@ export function StationPrintersTab({ station }: StationPrintersTabProps) {
                         variant="outline"
                         className={cn(
                           printer.is_connected
-                            ? "border-green-500/50 bg-green-500/10 text-green-600"
-                            : "border-gray-400/50 bg-gray-100 text-gray-600",
+                            ? ""
+                            : "",
                         )}
                       >
                         <Circle
                           className={cn(
                             "mr-1 h-2 w-2",
                             printer.is_connected
-                              ? "fill-green-500 text-green-500"
-                              : "fill-gray-400 text-gray-400",
+                              ? "fill-current"
+                              : "fill-transparent",
                           )}
                         />
                         {printer.is_connected ? "Connected" : "Disconnected"}
@@ -244,7 +244,7 @@ export function StationPrintersTab({ station }: StationPrintersTabProps) {
                         {printer.is_default_receipt && (
                           <Badge
                             variant="outline"
-                            className="border-blue-500/50 bg-blue-500/10 text-blue-600 text-xs"
+                            className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground"
                           >
                             Receipt
                           </Badge>
@@ -252,7 +252,7 @@ export function StationPrintersTab({ station }: StationPrintersTabProps) {
                         {printer.is_default_kitchen && (
                           <Badge
                             variant="outline"
-                            className="border-orange-500/50 bg-orange-500/10 text-orange-600 text-xs"
+                            className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground"
                           >
                             Kitchen
                           </Badge>
@@ -304,8 +304,8 @@ export function StationPrintersTab({ station }: StationPrintersTabProps) {
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
 
       {/* Add/Edit Printer Dialog */}
       <AddPrinterDialog
@@ -337,7 +337,7 @@ export function StationPrintersTab({ station }: StationPrintersTabProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {printerToDelete && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+            <div className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
               <span className="text-2xl">
                 {getPrinterRoleIcon(
                   printerToDelete.printer_role as PrinterRole,

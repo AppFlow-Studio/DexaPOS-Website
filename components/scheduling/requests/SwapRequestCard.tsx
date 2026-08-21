@@ -42,7 +42,7 @@ export function SwapRequestCard({
   );
 
   return (
-    <Card className="bg-card border">
+    <Card className="rounded-2xl border bg-card">
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -88,7 +88,7 @@ export function SwapRequestCard({
           </Button>
           <Button
             size="sm"
-            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+            className="flex-1"
             onClick={onApprove}
           >
             <Check className="h-4 w-4 mr-1" />

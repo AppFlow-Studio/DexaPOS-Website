@@ -60,7 +60,7 @@ export function ModifierStockToggle({
   if (!gatedLocationId) {
     return (
       <span className={cn("text-[11px] text-muted-foreground", className)}>
-        Select a location to 86
+        Select a location to manage stock
       </span>
     );
   }

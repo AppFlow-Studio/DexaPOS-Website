@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Loader2, CheckCircle2, Globe, MapPin, Info } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GetMenuItems } from "@/app/dashboard/actions/menu-items";
 import {
@@ -169,9 +169,9 @@ export function AssignModifierToItemsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1rem)] sm:max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>
+      <DialogContent className="flex h-dvh max-h-dvh min-h-0 w-full max-w-none flex-col overflow-hidden sm:h-auto sm:max-h-[90vh] sm:max-w-xl">
+        <DialogHeader className="shrink-0 pr-10 text-left">
+          <DialogTitle className="text-left">
             Add &quot;{modifierGroup.name}&quot; to Items
           </DialogTitle>
           <DialogDescription>
@@ -179,40 +179,44 @@ export function AssignModifierToItemsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Scope context banner */}
-        {isSingleLocation ? (
-          <div className="flex items-start gap-2 rounded-lg border bg-muted/40 p-2.5 text-xs text-muted-foreground">
-            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span>Assignments update the items in your menu.</span>
-          </div>
-        ) : !isAllLocations ? (
-          <div className="flex items-start gap-2 p-2.5 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-100">
-            <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span>
-              Assignments from this view apply <strong>only to this location</strong>.
-              Items assigned globally will show at all locations.
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-start gap-2 p-2.5 bg-emerald-50 text-emerald-800 rounded-lg text-xs border border-emerald-100">
-            <Globe className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span>
-              Assignments from this view apply <strong>to all locations</strong>.
-            </span>
-          </div>
-        )}
+        {/* Scope context banner. One neutral panel for every scope — the
+            sentence already says which one applies, so a blue/emerald split
+            only colour-coded text that reads fine on its own. */}
+        <div className="flex shrink-0 items-start gap-2 rounded-2xl border-0 bg-muted/60 p-3 text-xs text-muted-foreground">
+          <span>
+            {isSingleLocation ? (
+              <>Assignments update the items in your menu.</>
+            ) : !isAllLocations ? (
+              <>
+                Assignments from this view apply{" "}
+                <strong className="font-medium text-foreground">
+                  only to this location
+                </strong>
+                . Items assigned globally will show at all locations.
+              </>
+            ) : (
+              <>
+                Assignments from this view apply{" "}
+                <strong className="font-medium text-foreground">
+                  to all locations
+                </strong>
+                .
+              </>
+            )}
+          </span>
+        </div>
 
-        <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <div className="relative shrink-0">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
           <Input
             placeholder="Search items..."
-            className="pl-9"
+            className="h-9 pl-9 text-[0.8125rem]"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0 max-h-[400px] space-y-1 pr-1">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-2 sm:max-h-[400px]">
           {isLoading ? (
             <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -233,12 +237,12 @@ export function AssignModifierToItemsDialog({
                 <div
                   key={item.id}
                   className={cn(
-                    "flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors",
+                    "flex cursor-pointer items-center gap-3 rounded-2xl border-0 p-3 shadow-none transition-colors",
                     isAssigned
-                      ? "bg-muted/50 opacity-60 cursor-default"
+                      ? "cursor-default bg-muted/60 opacity-60"
                       : isSelected
-                        ? "border-primary bg-primary/5"
-                        : "hover:bg-muted/30",
+                        ? "bg-primary/10"
+                        : "bg-muted/60 hover:bg-muted",
                   )}
                   onClick={() => toggleItem(item.id)}
                 >
@@ -270,19 +274,17 @@ export function AssignModifierToItemsDialog({
                     )}
                     {!isSingleLocation && isGlobalAssigned && (
                       <Badge
-                        variant="outline"
-                        className="text-[10px] gap-1 bg-emerald-50 text-emerald-700 border-emerald-200"
+                        variant="secondary"
+                        className="gap-1 border-0 bg-muted/60 text-[10px] font-medium text-muted-foreground"
                       >
-                        <Globe className="h-2.5 w-2.5" />
                         Global
                       </Badge>
                     )}
                     {!isSingleLocation && isLocationAssigned && !isGlobalAssigned && (
                       <Badge
-                        variant="outline"
-                        className="text-[10px] gap-1 bg-blue-50 text-blue-700 border-blue-200"
+                        variant="secondary"
+                        className="gap-1 border-0 bg-muted/60 text-[10px] font-medium text-muted-foreground"
                       >
-                        <MapPin className="h-2.5 w-2.5" />
                         Location
                       </Badge>
                     )}
@@ -293,8 +295,8 @@ export function AssignModifierToItemsDialog({
           )}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
-          <div className="flex-1 text-sm text-muted-foreground">
+        <DialogFooter className="shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-0">
+          <div className="min-w-0 flex-1 text-sm text-muted-foreground">
             {selectedIds.size > 0
               ? `${selectedIds.size} item(s) selected`
               : `${allAssignedIds.size} already assigned`}
@@ -303,13 +305,14 @@ export function AssignModifierToItemsDialog({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isSaving}
+            className="rounded-full"
           >
             Cancel
           </Button>
           <Button
             onClick={handleAssign}
             disabled={isSaving || selectedIds.size === 0}
-            className="gap-2"
+            className="gap-2 rounded-full"
           >
             {isSaving ? (
               <>

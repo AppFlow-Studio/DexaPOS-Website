@@ -335,10 +335,12 @@ export function AddCategoryToMenuWizard({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 overlayClassName="bg-slate-950/40 backdrop-blur-md"
-                className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] max-sm:max-w-none sm:max-w-4xl"
+                className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border-0 bg-white p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] max-sm:max-w-none dark:bg-card sm:max-w-4xl"
             >
-                <div className="flex max-h-[min(92vh,920px)] flex-col">
-                <DialogHeader className="border-b border-border/70 bg-background/95 px-4 py-5 pr-14 text-left sm:px-6 sm:text-left">
+                {/* `min-w-0` keeps this from sizing to its widest descendant
+                    and overflowing the dialog on a phone. */}
+                <div className="flex min-w-0 max-h-[min(92vh,920px)] flex-col">
+                <DialogHeader className="bg-white px-4 py-5 pr-14 text-left dark:bg-card sm:px-6 sm:text-left">
                     <DialogTitle className="flex items-center gap-2 text-xl font-semibold tracking-tight sm:text-[1.625rem]">
                         <Tag className="h-5 w-5 shrink-0 text-primary" />
                         Add Categories to Menu
@@ -350,14 +352,14 @@ export function AddCategoryToMenuWizard({
 
                     <div className="min-h-0 flex flex-1 flex-col overflow-hidden">
                         {/* Search */}
-                        <div className="border-b border-border/70 px-4 pb-4 pt-4 sm:px-6">
+                        <div className="bg-white px-4 pb-4 pt-4 dark:bg-card sm:px-6">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search categories..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-9"
+                                    className="rounded-full border-0 bg-muted/60 pl-9 shadow-none"
                                 />
                             </div>
                             {selectedCategories.size > 0 && (
@@ -385,7 +387,7 @@ export function AddCategoryToMenuWizard({
                         </div>
 
                         {/* Categories List */}
-                        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 space-y-6 sm:px-6">
+                        <div className="thin-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto bg-white px-4 py-5 dark:bg-card sm:px-6">
                             {/* Global Categories */}
                             {globalCategories.length > 0 && (
                                 <div className="space-y-3">
@@ -435,23 +437,23 @@ export function AddCategoryToMenuWizard({
                                                 <div
                                                     key={category.id}
                                                     className={cn(
-                                                        "border rounded-lg p-4 transition-all",
+                                                        "rounded-2xl border-0 p-4 shadow-none transition-colors",
                                                         canAddRemoveCategories ? "cursor-pointer" : "cursor-not-allowed opacity-60",
                                                         isSelected
-                                                            ? "border-primary bg-primary/5 shadow-sm"
-                                                            : "border-muted hover:border-primary/50"
+                                                            ? "bg-primary/10"
+                                                            : "bg-muted/50 hover:bg-muted/70"
                                                     )}
                                                     onClick={() => canAddRemoveCategories && handleToggleCategory(category.id)}
                                                 >
-                                                    <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex min-w-0 items-start justify-between gap-3">
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 mb-1">
+                                                            <div className="flex flex-wrap items-center gap-2 mb-1 min-w-0">
                                                                 {isSelected ? (
                                                                     <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
                                                                 ) : (
                                                                     <div className="h-5 w-5 rounded-full border-2 border-muted-foreground shrink-0" />
                                                                 )}
-                                                                <span className="font-medium">{category.name}</span>
+                                                                <span className="min-w-0 font-medium break-words">{category.name}</span>
                                                             </div>
                                                             {category.description && (
                                                                 <p className="text-sm text-muted-foreground ml-7">
@@ -459,11 +461,11 @@ export function AddCategoryToMenuWizard({
                                                                 </p>
                                                             )}
                                                             <div className="flex items-center gap-2 mt-2 ml-7">
-                                                                <Badge variant="outline" className="text-xs">
+                                                                <Badge variant="secondary" className="border-0 text-xs">
                                                                     {category.item_count || 0} items
                                                                 </Badge>
                                                                 {category.menu_count > 0 && (
-                                                                    <Badge variant="outline" className="text-xs">
+                                                                    <Badge variant="secondary" className="border-0 text-xs">
                                                                         Used in {category.menu_count} menu{category.menu_count !== 1 ? 's' : ''}
                                                                     </Badge>
                                                                 )}
@@ -581,24 +583,29 @@ export function AddCategoryToMenuWizard({
                                                 <div
                                                     key={category.id}
                                                     className={cn(
-                                                        "border rounded-lg p-4 transition-all",
+                                                        "rounded-2xl border-0 p-4 shadow-none transition-colors",
                                                         canAddRemoveCategories ? "cursor-pointer" : "cursor-not-allowed opacity-60",
                                                         isSelected
-                                                            ? "border-primary bg-primary/5 shadow-sm"
-                                                            : "border-muted hover:border-primary/50"
+                                                            ? "bg-primary/10"
+                                                            : "bg-muted/50 hover:bg-muted/70"
                                                     )}
                                                     onClick={() => canAddRemoveCategories && handleToggleCategory(category.id)}
                                                 >
-                                                    <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex min-w-0 items-start justify-between gap-3">
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 mb-1">
+                                                            <div className="flex flex-wrap items-center gap-2 mb-1 min-w-0">
                                                                 {isSelected ? (
                                                                     <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
                                                                 ) : (
                                                                     <div className="h-5 w-5 rounded-full border-2 border-muted-foreground shrink-0" />
                                                                 )}
-                                                                <span className="font-medium">{category.name}</span>
-                                                                <Badge variant="outline" className="text-xs bg-purple-50 text-purple-600 border-purple-200">
+                                                                <span className="min-w-0 font-medium break-words">{category.name}</span>
+                                                                {/* Long location names must wrap rather than run past the
+                                                                    card edge, so the Badge's nowrap/shrink-0 are overridden. */}
+                                                                <Badge
+                                                                    variant="secondary"
+                                                                    className="min-w-0 max-w-full shrink whitespace-normal break-words border-0 bg-primary/10 text-left text-xs text-primary"
+                                                                >
                                                                     {category.location_name}
                                                                 </Badge>
                                                             </div>
@@ -608,7 +615,7 @@ export function AddCategoryToMenuWizard({
                                                                 </p>
                                                             )}
                                                             <div className="flex items-center gap-2 mt-2 ml-7">
-                                                                <Badge variant="outline" className="text-xs">
+                                                                <Badge variant="secondary" className="border-0 text-xs">
                                                                     {category.item_count || 0} items
                                                                 </Badge>
                                                             </div>
@@ -699,7 +706,7 @@ export function AddCategoryToMenuWizard({
                         </div>
                     </div>
 
-                <DialogFooter className="border-t border-border/70 bg-background/95 px-4 py-4 sm:px-6">
+                <DialogFooter className="bg-white px-4 py-4 dark:bg-card sm:px-6">
                     <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <Button
                             type="button"

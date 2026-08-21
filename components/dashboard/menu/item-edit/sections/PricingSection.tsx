@@ -64,7 +64,6 @@ export function PricingSection({ itemId, item, scope }: SectionRenderCtx) {
       return res;
     },
     onSuccess: () => {
-      toast.success("Pricing saved");
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items-flat"] });
@@ -81,7 +80,7 @@ export function PricingSection({ itemId, item, scope }: SectionRenderCtx) {
   return (
     <div className="space-y-4">
       <SectionHeader title="Pricing" scope={scope} />
-      <div className="space-y-4 rounded-lg border bg-card p-4">
+      <div className="space-y-4 rounded-2xl border bg-card p-6">
         {!isSingleLocation && (
           <div className="space-y-2">
             <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

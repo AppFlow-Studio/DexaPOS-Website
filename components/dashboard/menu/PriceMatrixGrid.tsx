@@ -5,16 +5,22 @@ import { Loader2, Globe, MapPin, Pencil, RotateCcw, BookOpen } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useItemPriceMatrix } from "@/app/dashboard/hooks/useLocationScoped";
 import { useLocationStore } from "@/stores/location-store";
 import { InlinePriceEditor } from "./InlinePriceEditor";
 import { scopeColor, type CascadeLevel } from "@/lib/menu/cascade-labels";
+import {
+  resolveEffectivePrice,
+  listPricedMenus,
+  type ResolvedPrice,
+} from "@/lib/menu/resolve-effective-price";
 import { resetItemToLevel } from "@/app/dashboard/actions/menu-items-rpc";
 import type { PriceMatrixRow } from "@/app/dashboard/actions/menu-items";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
@@ -37,62 +43,88 @@ interface L5Context {
   categoryName: string;
 }
 
+/**
+ * The 5 pricing levels, least → most specific. Mirrors the DB cascade in
+ * get_menu_with_categories (lmio > ci_menu > lcio > ci > mi) and the wording
+ * in lib/menu/cascade-labels.ts.
+ */
 const ROW_DEFS: RowDef[] = [
   {
     level: 1,
-    rowLabel: "Global",
+    rowLabel: "Item",
     rowHint: "Base price (applies by default)",
   },
   {
     level: 2,
-    rowLabel: "Location only",
-    rowHint: "Per-location override",
-  },
-  {
-    level: 3,
-    rowLabel: "Category (global)",
+    rowLabel: "Global category",
     rowHint: "Per-category default, all locations",
   },
   {
-    level: 4,
-    rowLabel: "Category at location",
+    level: 3,
+    rowLabel: "Local category",
     rowHint: "Per-category at one location",
   },
   {
+    level: 4,
+    rowLabel: "Global menu",
+    rowHint: "Per-menu default, all locations",
+  },
+  {
     level: 5,
-    rowLabel: "Menu at location",
+    rowLabel: "Local menu",
     rowHint: "Per-menu at one location",
   },
 ];
+
+/**
+ * Merchant-facing name for each rung, matching the Scope column's row labels so
+ * a price in the effective row or a reset button points at a row they can see.
+ * (Deliberately not scopeShortName(), whose "Branch …" wording predates these
+ * rows and would name a rung that isn't on screen.)
+ */
+const SOURCE_LABEL: Record<CascadeLevel, string> = {
+  1: "item",
+  2: "global category",
+  3: "local category",
+  4: "global menu",
+  5: "local menu",
+};
 
 function formatPrice(n: number | null | undefined): string {
   if (n == null) return "";
   return `$${n.toFixed(2)}`;
 }
 
+/**
+ * First override row for a (level, location) cell. L2/L3 rows carry a category
+ * and an item can sit in several, so the grid shows the first — the per-menu
+ * detail lives in the L4/L5 sub-rows below.
+ */
+function findRow(
+  rows: PriceMatrixRow[],
+  level: CascadeLevel,
+  locationId: string | null,
+): PriceMatrixRow | null {
+  return (
+    rows.find(
+      (row) => row.level === level && (row.locationId ?? null) === locationId,
+    ) ?? null
+  );
+}
+
 export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
   const { data: matrix, isLoading } = useItemPriceMatrix(itemId);
   const { locations } = useLocationStore();
 
-  const cellMap = React.useMemo(() => {
-    const map = new Map<string, PriceMatrixRow>();
-    if (!matrix) return map;
-    for (const row of matrix.levels) {
-      // Key by level + locationId (or "global" for global rows) + categoryName + menuName
-      const key = `${row.level}|${row.locationId ?? "global"}|${row.categoryName ?? ""}|${row.menuName ?? ""}`;
-      // For rows that may have multiple entries per (level, location), we show
-      // the first one. Users can open the kebab to pick specific category/menu contexts.
-      if (!map.has(key)) map.set(key, row);
-    }
-    return map;
-  }, [matrix]);
-
-  // Extract unique L5 override contexts (menu + category combos)
-  const l5Contexts = React.useMemo(() => {
+  // Menu + category combos that carry a local-menu (L5) override. Each becomes
+  // one L5 sub-row, since a price can differ per location within each menu.
+  // L4 is not included: it renders as a single non-location-scoped row above.
+  const menuContexts = React.useMemo(() => {
     if (!matrix) return [];
     const seen = new Map<string, L5Context>();
     for (const row of matrix.levels) {
-      if (row.level !== 5 || !row.menuId || !row.categoryId) continue;
+      if (row.level !== 5) continue;
+      if (!row.menuId || !row.categoryId) continue;
       const key = `${row.menuId}|${row.categoryId}`;
       if (!seen.has(key)) {
         seen.set(key, {
@@ -105,6 +137,13 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
     }
     return Array.from(seen.values());
   }, [matrix]);
+
+  // Menus that carry a price at any level. Each gets its own effective row,
+  // because what a customer pays depends on the menu they order from.
+  const pricedMenus = React.useMemo(
+    () => (matrix ? listPricedMenus(matrix.levels) : []),
+    [matrix],
+  );
 
   if (isLoading || !matrix) {
     return (
@@ -120,15 +159,16 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
       <div className="min-w-0">
         <h1 className="text-2xl font-bold tracking-tight truncate">{matrix.itemName}</h1>
         <p className="text-sm text-muted-foreground">
-          Pricing Matrix — global default + every override for every location
+          Pricing Matrix — item base, then category and menu prices, globally
+          and per location. The most specific price wins.
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="overflow-x-auto overflow-y-hidden rounded-3xl border">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-muted/50">
+          <thead className="sticky top-0 z-30 bg-muted">
             <tr>
-              <th className="sticky left-0 z-10 w-[220px] border-r bg-muted/50 px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
+              <th className="sticky left-0 z-40 w-[220px] border-r bg-muted px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
                 Scope
               </th>
               <th className="min-w-[100px] border-r px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
@@ -156,9 +196,63 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
             {ROW_DEFS.map((rowDef) => {
               const colors = scopeColor(rowDef.level);
 
+              // L4 (global menu): a single row. The price is not location-scoped,
+              // so it lives in the "All" column and every location inherits it.
+              // An item can carry one global-menu price per (menu, category); the
+              // priced one wins, and the sub-label names which menu it came from.
+              if (rowDef.level === 4) {
+                const l4Row =
+                  matrix.levels.find(
+                    (row) => row.level === 4 && row.price != null,
+                  ) ?? null;
+
+                return (
+                  <tr key={rowDef.level} className="border-t">
+                    <td className="sticky left-0 z-10 border-r bg-background px-3 py-2">
+                      <div className="flex flex-col gap-0.5">
+                        <span className={cn("text-xs font-semibold", colors.text)}>
+                          <BookOpen className="mr-1 inline h-3 w-3" />
+                          {rowDef.rowLabel}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground leading-tight">
+                          {l4Row
+                            ? `${l4Row.menuName ?? "Menu"}${l4Row.categoryName ? ` — ${l4Row.categoryName}` : ""}, all locations`
+                            : rowDef.rowHint}
+                        </span>
+                      </div>
+                    </td>
+                    {/* Global menu price lives in the "All" column */}
+                    <td className="border-r px-3 py-2 text-center">
+                      {l4Row?.price != null ? (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="text-sm font-semibold tabular-nums">
+                            {formatPrice(l4Row.price)}
+                          </span>
+                          <span className="text-[9px] text-muted-foreground">
+                            {SOURCE_LABEL[4]}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="inline-block text-xs text-muted-foreground/50">
+                          ↓
+                        </span>
+                      )}
+                    </td>
+                    {locations.map((loc) => (
+                      <td
+                        key={loc.id}
+                        className="border-r px-3 py-2 text-center text-xs text-muted-foreground/50"
+                      >
+                        ↓
+                      </td>
+                    ))}
+                  </tr>
+                );
+              }
+
               // L5: render dynamic sub-rows from actual data
               if (rowDef.level === 5) {
-                if (l5Contexts.length === 0) {
+                if (menuContexts.length === 0) {
                   // No L5 overrides exist — show a placeholder row
                   return (
                     <tr key="l5-empty" className="border-t">
@@ -185,7 +279,7 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
                   );
                 }
 
-                return l5Contexts.map((ctx) => (
+                return menuContexts.map((ctx) => (
                   <tr key={`l5-${ctx.menuId}-${ctx.categoryId}`} className="border-t">
                     <td className="sticky left-0 z-10 border-r bg-background px-3 py-2">
                       <div className="flex flex-col gap-0.5">
@@ -212,9 +306,39 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
                         menuName={ctx.menuName}
                         categoryId={ctx.categoryId}
                         categoryName={ctx.categoryName}
+                        fallback={resolveEffectivePrice({
+                          globalPrice: matrix.globalPrice,
+                          // Exclude this cell's own L5 row: the button offers
+                          // the price this cell would fall back to.
+                          rows: matrix.levels.filter((row) => row.level !== 5),
+                          locationId: loc.id,
+                          categoryId: ctx.categoryId,
+                          menuId: ctx.menuId,
+                        })}
+                        // Cash follows the same cascade, on cash values only.
+                        inheritedCashPrice={
+                          matrix.globalCashPrice == null
+                            ? null
+                            : resolveEffectivePrice({
+                                globalPrice: matrix.globalCashPrice,
+                                rows: matrix.levels
+                                  .filter((row) => row.level !== 5)
+                                  .map((row) => ({
+                                    ...row,
+                                    price: row.cashPrice,
+                                  })),
+                                locationId: loc.id,
+                                categoryId: ctx.categoryId,
+                                menuId: ctx.menuId,
+                              }).price
+                        }
                         row={
-                          cellMap.get(
-                            `5|${loc.id}|${ctx.categoryName}|${ctx.menuName}`,
+                          matrix.levels.find(
+                            (row) =>
+                              row.level === 5 &&
+                              row.locationId === loc.id &&
+                              row.menuId === ctx.menuId &&
+                              row.categoryId === ctx.categoryId,
                           ) ?? null
                         }
                       />
@@ -245,11 +369,7 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
                     itemId={itemId}
                     level={rowDef.level}
                     locationId={null}
-                    row={
-                      cellMap.get(
-                        `${rowDef.level}|global||`,
-                      ) ?? null
-                    }
+                    row={findRow(matrix.levels, rowDef.level, null)}
                     globalBasePrice={matrix.globalPrice}
                   />
                   {locations.map((loc) => (
@@ -259,11 +379,7 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
                       level={rowDef.level}
                       locationId={loc.id}
                       locationName={loc.name}
-                      row={
-                        cellMap.get(
-                          `${rowDef.level}|${loc.id}||`,
-                        ) ?? null
-                      }
+                      row={findRow(matrix.levels, rowDef.level, loc.id)}
                       globalBasePrice={matrix.globalPrice}
                     />
                   ))}
@@ -271,37 +387,80 @@ export function PriceMatrixGrid({ itemId, className }: PriceMatrixGridProps) {
               );
             })}
           </tbody>
-          <tfoot className="bg-muted/30">
-            <tr className="border-t">
-              <td className="sticky left-0 z-10 border-r bg-muted/30 px-3 py-2 text-xs font-semibold">
-                Effective (what customers pay)
-              </td>
-              <EffectiveCell
-                globalPrice={matrix.globalPrice}
-                overrides={matrix.levels}
-                locationId={null}
-              />
-              {locations.map((loc) => (
+          {/*
+            Effective price is only defined inside a menu: the POS resolves it
+            via get_menu_with_categories, which joins the local-menu override on
+            `menu_id = m.id`. A location with prices in several menus therefore
+            charges several prices at once, so we render one row per menu rather
+            than collapsing them into a single arbitrary number.
+          */}
+          <tfoot className="sticky bottom-0 z-30 bg-muted">
+            {pricedMenus.length === 0 ? (
+              <tr className="border-t">
+                <td className="sticky left-0 z-40 border-r bg-muted px-3 py-2 text-xs font-semibold">
+                  Effective (what customers pay)
+                </td>
                 <EffectiveCell
-                  key={loc.id}
                   globalPrice={matrix.globalPrice}
                   overrides={matrix.levels}
-                  locationId={loc.id}
+                  locationId={null}
                 />
-              ))}
-            </tr>
+                {locations.map((loc) => (
+                  <EffectiveCell
+                    key={loc.id}
+                    globalPrice={matrix.globalPrice}
+                    overrides={matrix.levels}
+                    locationId={loc.id}
+                  />
+                ))}
+              </tr>
+            ) : (
+              pricedMenus.map((menu) => (
+                <tr key={menu.menuId} className="border-t">
+                  <td className="sticky left-0 z-40 border-r bg-muted px-3 py-2">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs font-semibold">Effective</span>
+                      <span className="flex items-center gap-1 text-[10px] leading-tight text-muted-foreground">
+                        <BookOpen className="h-3 w-3 shrink-0" />
+                        <span className="min-w-0 break-words">
+                          on {menu.menuName}
+                        </span>
+                      </span>
+                    </div>
+                  </td>
+                  <EffectiveCell
+                    globalPrice={matrix.globalPrice}
+                    overrides={matrix.levels}
+                    locationId={null}
+                    menuId={menu.menuId}
+                  />
+                  {locations.map((loc) => (
+                    <EffectiveCell
+                      key={loc.id}
+                      globalPrice={matrix.globalPrice}
+                      overrides={matrix.levels}
+                      locationId={loc.id}
+                      menuId={menu.menuId}
+                    />
+                  ))}
+                </tr>
+              ))
+            )}
           </tfoot>
         </table>
       </div>
 
-      <div className="rounded-md border bg-muted/20 p-3 text-[11px] text-muted-foreground">
-        <span className="mr-3">
+      {/* Legend: stacks vertically on mobile, spreads onto one row from sm up. */}
+      <div className="flex flex-col gap-2 rounded-2xl border bg-muted/20 p-3 text-[11px] text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-2">
+        <span className="flex items-center gap-1.5">
           <span className="font-mono">↓</span> inherits from above
         </span>
-        <span className="mr-3">
-          <Pencil className="inline h-3 w-3" /> override exists — click to edit
+        <span className="flex items-center gap-1.5">
+          <Pencil className="h-3 w-3 shrink-0" /> override exists: click to edit
         </span>
-        <span>— not applicable</span>
+        <span className="flex items-center gap-1.5">
+          <span className="font-mono">—</span> not applicable
+        </span>
       </div>
     </div>
   );
@@ -324,12 +483,13 @@ function MatrixCell({
 }) {
   const [open, setOpen] = React.useState(false);
 
-  // Non-applicable combos
+  // Non-applicable combos. L1/L2/L4 are global (they have no per-location
+  // value); L3/L5 are location-scoped (they have no "All" value).
   const isNA =
     (level === 1 && locationId !== null) ||
-    (level === 2 && locationId === null) ||
-    (level === 3 && locationId !== null) ||
-    (level === 4 && locationId === null) ||
+    (level === 2 && locationId !== null) ||
+    (level === 3 && locationId === null) ||
+    (level === 4 && locationId !== null) ||
     (level === 5 && locationId === null);
 
   if (isNA) {
@@ -356,16 +516,20 @@ function MatrixCell({
 
   const hasOverride = row && row.price != null;
 
-  // Only L1 (global) + L2 (location override) are fully editable inline today.
-  // L3/L4/L5 still require opening the form (click routes there via item link).
-  const supportsInlineEdit = level === 1 || level === 2;
+  // Only L1 has a correct inline write path here: InlinePriceEditor's non-L5
+  // branch routes to UpdateMenuItem, which writes menu_items /
+  // location_item_overrides — NOT the category tables backing L2/L3/L4. Making
+  // those rows editable would silently write the price to the wrong table, so
+  // they stay read-only until dedicated upserts exist. (L5 has its own action
+  // and is handled by L5MatrixCell.)
+  const supportsInlineEdit = level === 1;
 
   return (
     <td className="border-r px-1 py-1 text-center">
       {hasOverride ? (
         supportsInlineEdit ? (
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
               <button
                 type="button"
                 className="flex w-full flex-col items-center gap-0.5 rounded px-2 py-1 text-sm font-semibold tabular-nums hover:bg-muted"
@@ -375,8 +539,12 @@ function MatrixCell({
                   <Pencil className="h-2 w-2" /> override
                 </span>
               </button>
-            </PopoverTrigger>
-            <PopoverContent align="center" className="w-[260px] p-3">
+            </DialogTrigger>
+            <DialogContent
+              showCloseButton={false}
+              className="w-[340px] max-w-[calc(100%-2rem)] gap-0 rounded-3xl p-4 max-sm:bottom-auto max-sm:left-1/2 max-sm:right-auto max-sm:top-1/2 max-sm:h-auto max-sm:w-[260px] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl max-sm:p-3"
+            >
+              <DialogTitle className="sr-only">Edit price</DialogTitle>
               <InlinePriceEditor
                 itemId={itemId}
                 scope={{
@@ -388,12 +556,14 @@ function MatrixCell({
                 initialCashPrice={row!.cashPrice ?? null}
                 onClose={() => setOpen(false)}
               />
-            </PopoverContent>
-          </Popover>
+            </DialogContent>
+          </Dialog>
         ) : (
           <div className="flex w-full flex-col items-center gap-0.5 px-2 py-1 text-sm font-semibold tabular-nums">
             {formatPrice(row!.price)}
-            <span className="text-[9px] text-muted-foreground">L{level}</span>
+            <span className="text-[9px] text-muted-foreground">
+              {SOURCE_LABEL[level]}
+            </span>
           </div>
         )
       ) : (
@@ -415,6 +585,8 @@ function L5MatrixCell({
   menuName,
   categoryId,
   categoryName,
+  fallback,
+  inheritedCashPrice,
   row,
 }: {
   itemId: string;
@@ -424,6 +596,10 @@ function L5MatrixCell({
   menuName: string;
   categoryId: string;
   categoryName: string;
+  /** Price this cell reverts to, and which level supplies it. */
+  fallback: ResolvedPrice;
+  /** Cash price inherited when this cell's cash field is left blank. */
+  inheritedCashPrice: number | null;
   row: PriceMatrixRow | null;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -441,7 +617,9 @@ function L5MatrixCell({
     },
     onSuccess: () => {
       toast.success("Override removed", {
-        description: `Reverted to category-level pricing for ${menuName} at ${locationName}.`,
+        description: `${menuName} at ${locationName} now uses the ${
+          SOURCE_LABEL[fallback.level]
+        } price (${formatPrice(fallback.price)}).`,
       });
       queryClient.invalidateQueries({ queryKey: ["item-price-matrix", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
@@ -462,8 +640,8 @@ function L5MatrixCell({
 
   return (
     <td className="border-r px-1 py-1 text-center">
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
           <button
             type="button"
             className={cn(
@@ -482,13 +660,19 @@ function L5MatrixCell({
               <span className="text-xs">↓ set</span>
             )}
           </button>
-        </PopoverTrigger>
-        <PopoverContent align="center" className="w-[280px] p-3">
-          <div className="mb-2 rounded border bg-rose-50 px-2 py-1.5">
-            <p className="text-[10px] font-semibold text-rose-700">
+        </DialogTrigger>
+        <DialogContent
+          showCloseButton={false}
+          className="w-[360px] max-w-[calc(100%-2rem)] gap-0 overflow-hidden rounded-3xl p-4 [&>*]:min-w-0 max-sm:bottom-auto max-sm:left-1/2 max-sm:right-auto max-sm:top-1/2 max-sm:h-auto max-sm:w-[280px] max-sm:max-w-[calc(100%-2rem)] max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-3xl max-sm:p-3"
+        >
+          <DialogTitle className="sr-only">Edit menu price override</DialogTitle>
+          {/* Names here are merchant-supplied and can be long; break them
+              rather than letting them widen the fixed-width dialog. */}
+          <div className="mb-3 min-w-0 rounded-2xl bg-muted/60 px-3 py-2 max-sm:mb-2">
+            <p className="break-words text-xs font-semibold max-sm:text-[10px]">
               {menuName} menu at {locationName}
             </p>
-            <p className="text-[10px] text-rose-600">
+            <p className="break-words text-xs text-muted-foreground max-sm:text-[10px]">
               {categoryName} category
             </p>
           </div>
@@ -505,6 +689,7 @@ function L5MatrixCell({
             categoryId={categoryId}
             initialPrice={row?.price ?? null}
             initialCashPrice={row?.cashPrice ?? null}
+            inheritedCashPrice={inheritedCashPrice}
             onClose={() => setOpen(false)}
           />
           {hasOverride && (
@@ -512,63 +697,59 @@ function L5MatrixCell({
               type="button"
               size="sm"
               variant="ghost"
-              className="mt-2 h-7 w-full justify-start gap-2 text-xs text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+              className="mt-2 h-auto w-full justify-center gap-2 whitespace-normal py-1.5 text-center text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
               onClick={() => resetMutation.mutate()}
               disabled={resetMutation.isPending}
             >
               {resetMutation.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
               ) : (
-                <RotateCcw className="h-3.5 w-3.5" />
+                <RotateCcw className="h-3.5 w-3.5 shrink-0" />
               )}
-              Remove override (revert to L4)
+              Return to {SOURCE_LABEL[fallback.level]} price (
+              {formatPrice(fallback.price)})
             </Button>
           )}
-        </PopoverContent>
-      </Popover>
+        </DialogContent>
+      </Dialog>
     </td>
   );
 }
 
 /**
- * Computes what a customer actually pays at a given location given the full
- * set of override rows. "Most specific wins" — L5 > L4 > L3 > L2 > L1.
- * The matrix row effective-summary is intentionally simplified: it doesn't
- * resolve per-category/per-menu cascades (the merchant sees those in the grid)
- * — it returns the single most-specific override that is not scoped to a
- * specific category/menu combo.
+ * Computes what a customer actually pays at a given location, walking the full
+ * cascade: L5 > L4 > L3 > L2 > L1 ("most specific wins"). Resolution lives in
+ * lib/menu/resolve-effective-price.ts so it stays in lockstep with the DB and
+ * is unit-tested independently of this grid.
  */
 function EffectiveCell({
   globalPrice,
   overrides,
   locationId,
+  menuId,
 }: {
   globalPrice: number;
   overrides: PriceMatrixRow[];
   locationId: string | null;
+  /** Resolve within this menu — how the POS prices an order. */
+  menuId?: string | null;
 }) {
-  if (locationId === null) {
-    return (
-      <td className="border-r bg-muted/10 px-3 py-2 text-center text-sm font-semibold tabular-nums">
-        {formatPrice(globalPrice)}
-      </td>
-    );
-  }
-
-  // Prefer L2 override (location-only) as the "what customers see by default"
-  const l2 = overrides.find(
-    (o) => o.level === 2 && o.locationId === locationId,
-  );
-  const effective = l2?.price ?? globalPrice;
-  const source = l2 ? "override" : "global";
+  const { price, level } = resolveEffectivePrice({
+    globalPrice,
+    rows: overrides,
+    locationId,
+    menuId,
+  });
 
   return (
-    <td className="border-r bg-muted/10 px-3 py-2 text-center">
+    <td className="border-r bg-muted px-3 py-2 text-center">
       <div className="flex flex-col items-center">
         <span className="text-sm font-semibold tabular-nums">
-          {formatPrice(effective)}
+          {formatPrice(price)}
         </span>
-        <span className="text-[9px] text-muted-foreground">{source}</span>
+        <span className="text-[9px] text-muted-foreground">
+          {SOURCE_LABEL[level]}
+        </span>
       </div>
     </td>
   );

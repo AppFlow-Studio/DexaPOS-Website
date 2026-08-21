@@ -1,30 +1,40 @@
 'use client'
 
-import { Card, CardContent } from '@/components/ui/card'
+/**
+ * Report summary tiles.
+ *
+ * These are now the shared shell primitives — a report's headline figures and
+ * an analytics page's stat tiles were the same element styled two ways, which
+ * is exactly the drift the shell exists to stop.
+ *
+ * Prefer importing `StatTile` / `StatRow` / `InsetTile` from
+ * `@/components/dashboard/shell` directly in new code.
+ */
 
-interface SummaryCardProps {
-  label: string
-  value: string | number
-  icon?: React.ReactNode
-  description?: string
-  className?: string
-}
+import {
+  BRAND_ACCENT,
+  InsetTile,
+  StatRow,
+  StatTile,
+} from '@/components/dashboard/shell'
 
-export function SummaryCard({ label, value, icon, description, className }: SummaryCardProps) {
-  return (
-    <Card className={`bg-gray-50 dark:bg-slate-900/50 border border-gray-200 dark:border-gray-700 shadow-none ${className}`}>
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{label}</p>
-            <p className="text-2xl font-bold text-[#0A5C9E] dark:text-[#0A7AB8]">{value}</p>
-            {description && (
-              <p className="text-xs text-muted-foreground">{description}</p>
-            )}
-          </div>
-          {icon && <div className="text-gray-400 dark:text-gray-500">{icon}</div>}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
+/**
+ * @deprecated Import `BRAND_ACCENT` from `@/components/dashboard/shell`.
+ * Both resolve to the `--brand` token.
+ */
+export const REPORT_ACCENT = BRAND_ACCENT
+
+/**
+ * @deprecated Use `StatTile`.
+ *
+ * The label is now `text-muted-foreground` rather than brand blue (D-03):
+ * blue marks a section heading, and when every tile label carried it too the
+ * accent stopped signalling anything.
+ */
+export const SummaryCard = StatTile
+
+/** @deprecated Use `StatRow`. */
+export const SummaryCardRow = StatRow
+
+/** @deprecated Use `InsetTile`. */
+export const ChannelCard = InsetTile

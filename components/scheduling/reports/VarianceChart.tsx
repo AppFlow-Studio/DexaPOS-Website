@@ -14,12 +14,14 @@ import {
 interface VarianceChartProps {
   data: {
     day: string;
-    sales: number;
+    sales?: number;
     labor: number;
   }[];
 }
 
 export function VarianceChart({ data }: VarianceChartProps) {
+  const includesSales = data.some((entry) => entry.sales !== undefined);
+
   return (
     <ResponsiveContainer width="100%" height={200}>
       <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -44,18 +46,23 @@ export function VarianceChart({ data }: VarianceChartProps) {
             fontSize: "12px",
           }}
           labelStyle={{ color: "hsl(var(--popover-foreground))" }}
-          formatter={(value: number) => [`$${value.toLocaleString()}`, ""]}
+          formatter={(value) => [
+            `$${Number(value ?? 0).toLocaleString()}`,
+            "",
+          ]}
         />
         <Legend
           iconType="square"
           wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }}
         />
-        <Bar
-          dataKey="sales"
-          name="Sales Revenue"
-          fill="hsl(var(--primary) / 0.3)"
-          radius={[4, 4, 0, 0]}
-        />
+        {includesSales && (
+          <Bar
+            dataKey="sales"
+            name="Sales Revenue"
+            fill="hsl(var(--primary) / 0.3)"
+            radius={[4, 4, 0, 0]}
+          />
+        )}
         <Bar
           dataKey="labor"
           name="Labor Cost"

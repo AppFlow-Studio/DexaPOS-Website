@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useRef, useState, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Paperclip, X, Loader2, CheckCircle2, AlertCircle, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AttachmentInput } from "@/types/support-ticket";
@@ -29,6 +30,18 @@ interface FileUploadInputProps {
   disabled?: boolean;
   className?: string;
   onUploadStateChange?: (isUploading: boolean) => void;
+  /**
+   * `dropzone` (default) is the full dashed drag-and-drop area used by the new
+   * ticket form. `compact` is a single paperclip button for the chat composer,
+   * where a full-width dropzone would dominate the reply row.
+   */
+  variant?: "dropzone" | "compact";
+  /**
+   * Renders the selected-file chips into this element instead of inline, so the
+   * chat composer can show them above the thread while the picker sits by the
+   * send button. Chips stay inline when omitted.
+   */
+  chipsContainer?: HTMLElement | null;
 }
 
 export default function FileUploadInput({
@@ -38,6 +51,8 @@ export default function FileUploadInput({
   disabled,
   className,
   onUploadStateChange,
+  variant = "dropzone",
+  chipsContainer,
 }: FileUploadInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<UploadedFileState[]>([]);
@@ -183,40 +198,85 @@ export default function FileUploadInput({
 
   const canAddMore = files.length < MAX_FILES;
 
+  const fileInput = (
+    <input
+      ref={inputRef}
+      type="file"
+      accept={ALLOWED_TYPES.join(",")}
+      multiple
+      className="hidden"
+      onChange={handleFileChange}
+      disabled={disabled}
+    />
+  );
+
+  const chips = files.length > 0 && (
+    <div className="flex flex-wrap gap-2">
+      {files.map((f) => (
+        <FileChip key={f.id} fileState={f} onRemove={removeFile} disabled={disabled} />
+      ))}
+    </div>
+  );
+
+  if (variant === "compact") {
+    return (
+      <>
+        {chipsContainer && chips
+          ? createPortal(chips, chipsContainer)
+          : null}
+
+        <div className={cn("shrink-0", className)}>
+          {fileInput}
+          <button
+            type="button"
+            onClick={() => !disabled && canAddMore && inputRef.current?.click()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            disabled={disabled || !canAddMore}
+            title={
+              canAddMore
+                ? `Attach a file (${files.length}/${MAX_FILES} used)`
+                : `Attachment limit reached (${MAX_FILES})`
+            }
+            className={cn(
+              "inline-flex size-9 shrink-0 items-center justify-center rounded-full border-0 bg-muted/60 text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground",
+              isDragging && "bg-muted text-foreground",
+              (disabled || !canAddMore) && "opacity-40 cursor-not-allowed"
+            )}
+          >
+            <Paperclip className="h-4 w-4" />
+          </button>
+        </div>
+
+        {!chipsContainer && chips ? (
+          <div className="w-full">{chips}</div>
+        ) : null}
+      </>
+    );
+  }
+
   return (
     <div className={cn("space-y-2", className)}>
       {/* Drop zone */}
       {canAddMore && (
         <>
-          <input
-            ref={inputRef}
-            type="file"
-            accept={ALLOWED_TYPES.join(",")}
-            multiple
-            className="hidden"
-            onChange={handleFileChange}
-            disabled={disabled}
-          />
+          {fileInput}
           <div
             onClick={() => !disabled && inputRef.current?.click()}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             className={cn(
-              "border-2 border-dashed rounded-lg px-4 py-3 flex flex-col items-center gap-1.5 transition-colors select-none",
+              "border-2 border-dashed rounded-2xl px-4 py-3 flex flex-col items-center gap-1.5 transition-colors select-none",
               isDragging
-                ? "border-indigo-400 bg-indigo-50 cursor-copy"
+                ? "border-muted-foreground/60 bg-muted/60 cursor-copy"
                 : "border-border bg-muted/20 hover:border-muted-foreground/40 hover:bg-muted/40 cursor-pointer",
               disabled && "opacity-50 cursor-not-allowed pointer-events-none"
             )}
           >
-            <Paperclip
-              className={cn(
-                "h-4 w-4 transition-colors",
-                isDragging ? "text-indigo-500" : "text-muted-foreground"
-              )}
-            />
-            <p className={cn("text-xs text-center", isDragging ? "text-indigo-600" : "text-muted-foreground")}>
+            <Paperclip className="h-4 w-4 text-muted-foreground transition-colors" />
+            <p className="text-xs text-center text-muted-foreground">
               Drag files here or click to browse ({files.length}/{MAX_FILES} used)
             </p>
           </div>
@@ -224,13 +284,7 @@ export default function FileUploadInput({
       )}
 
       {/* File chips */}
-      {files.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {files.map((f) => (
-            <FileChip key={f.id} fileState={f} onRemove={removeFile} disabled={disabled} />
-          ))}
-        </div>
-      )}
+      {chips}
     </div>
   );
 }
@@ -250,11 +304,10 @@ function FileChip({
   return (
     <div
       className={cn(
-        "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs max-w-[180px]",
-        status === "error" && "border-destructive/50 bg-destructive/5 text-destructive",
-        status === "done" && "border-green-200 bg-green-50 text-green-800",
-        (status === "uploading" || status === "pending") &&
-          "border-border bg-muted/50 text-muted-foreground"
+        "flex items-center gap-1.5 rounded-full border-0 px-2.5 py-1 text-xs max-w-[180px]",
+        status === "error"
+          ? "bg-destructive/10 text-destructive"
+          : "bg-muted/60 text-muted-foreground"
       )}
       title={errorMessage}
     >
@@ -267,7 +320,7 @@ function FileChip({
       <span className="truncate max-w-[100px]">{file.name}</span>
 
       {status === "uploading" && <Loader2 className="h-3 w-3 animate-spin shrink-0" />}
-      {status === "done" && <CheckCircle2 className="h-3 w-3 shrink-0 text-green-600" />}
+      {status === "done" && <CheckCircle2 className="h-3 w-3 shrink-0" />}
       {status === "error" && <AlertCircle className="h-3 w-3 shrink-0" />}
 
       {!disabled && (

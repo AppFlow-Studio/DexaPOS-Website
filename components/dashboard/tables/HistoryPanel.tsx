@@ -57,7 +57,7 @@ export function HistoryPanel({ sessions, onViewDetails }: HistoryPanelProps) {
     return (
         <div className="space-y-2">
             {sessions.map((session) => (
-                <Card key={session.id} className="hover:shadow-md transition-shadow">
+                <Card key={session.id} className="rounded-2xl shadow-none transition-colors hover:border-primary/30">
                     <CardHeader className="pb-3">
                         <div className="flex items-start justify-between">
                             <div className="flex-1">

@@ -31,8 +31,9 @@ export function DaySelector({ value, onChange }: DaySelectorProps) {
     const noneSelected = value.length === 0
 
     return (
-        <div className="space-y-3">
-            <div className="flex gap-1.5">
+        <div className="min-w-0 space-y-3">
+            {/* A segmented pill rail: one track, seven round toggles inside it. */}
+            <div className="flex w-full min-w-0 gap-0.5 rounded-full bg-muted/70 p-1">
                 {dayOptions.map((day) => {
                     const selected = value.includes(day.value)
                     return (
@@ -40,12 +41,13 @@ export function DaySelector({ value, onChange }: DaySelectorProps) {
                             key={day.value}
                             type="button"
                             title={day.label}
+                            aria-pressed={selected}
                             onClick={() => handleToggle(day.value)}
                             className={cn(
-                                'flex h-9 flex-1 items-center justify-center rounded-md text-xs font-semibold transition-colors select-none',
+                                'flex h-8 min-w-0 flex-1 select-none items-center justify-center rounded-full text-xs font-medium transition-colors',
                                 selected
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'bg-muted text-muted-foreground hover:bg-muted/70 hover:text-foreground'
+                                    ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                                    : 'text-muted-foreground hover:text-foreground'
                             )}
                         >
                             {day.short}
@@ -54,32 +56,30 @@ export function DaySelector({ value, onChange }: DaySelectorProps) {
                 })}
             </div>
 
-            <div className="flex items-center gap-3">
-                <div className="h-px flex-1 bg-border" />
+            <div className="flex items-center justify-center gap-3">
                 <div className="flex gap-2">
                     {!allSelected && (
                         <button
                             type="button"
                             onClick={() => onChange([...defaultApplicableDays])}
-                            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            className="text-[0.8125rem] text-muted-foreground transition-colors hover:text-foreground"
                         >
                             Select all
                         </button>
                     )}
                     {!allSelected && !noneSelected && (
-                        <span className="text-xs text-border">·</span>
+                        <span className="text-[0.8125rem] text-border">·</span>
                     )}
                     {!noneSelected && (
                         <button
                             type="button"
                             onClick={() => onChange([])}
-                            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            className="text-[0.8125rem] text-muted-foreground transition-colors hover:text-foreground"
                         >
                             Clear
                         </button>
                     )}
                 </div>
-                <div className="h-px flex-1 bg-border" />
             </div>
         </div>
     )

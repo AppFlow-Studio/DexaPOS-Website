@@ -8,7 +8,7 @@ import {
   discountFormSchema,
   DiscountFormValues,
 } from "@/lib/validations/discount";
-import { DiscountFormInput, defaultApplicableDays } from "@/types/discount";
+import { defaultApplicableDays } from "@/types/discount";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -28,9 +28,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { DaySelector } from "./day-selector";
 import { TimeWindowPicker } from "./time-window-picker";
 import { CategoryOption } from "./category-picker";
@@ -42,11 +46,11 @@ import {
   Settings2,
   CalendarDays,
   ChevronDown,
-  ChevronUp,
   X,
   MapPin,
   ShieldCheck,
-  Layers,
+  Tag,
+  SlidersHorizontal,
   ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -73,9 +77,77 @@ interface DiscountFormProps {
   onCancel?: () => void;
 }
 
+/** DS-CTL-01 — the canonical pill control. */
+const PILL_CONTROL = "h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm";
+
+/** A quiet caption above a group inside a section. */
+const GROUP_LABEL = "text-sm text-muted-foreground";
+
+/** Hint text under a field. */
+const FIELD_HINT = "text-[0.8125rem] text-muted-foreground";
+
 function toDate(value?: Date | string | null) {
   if (!value) return undefined;
   return value instanceof Date ? value : new Date(value);
+}
+
+/**
+ * A pill-shaped date field.
+ *
+ * `<input type="date">` renders the browser's own calendar, which is a square
+ * OS panel we cannot style — so the popup ignored the design system entirely.
+ * This mirrors the hardened `DatePopover` from the tips page: `w-auto` beats
+ * the primitive's fixed `w-72` (which clipped the trailing columns) and
+ * `collisionPadding` keeps the panel off the viewport edge.
+ */
+function DateField({
+  value,
+  onChange,
+  placeholder = "Pick a date",
+}: {
+  /** The schema allows `null` for a cleared date, so accept it alongside `undefined`. */
+  value?: Date | null;
+  onChange: (date: Date | undefined) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = value ?? undefined;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "h-9 w-full min-w-0 justify-start rounded-full border-0 bg-muted/60 px-4 text-[0.8125rem] font-normal shadow-none hover:bg-muted",
+            !selected && "text-muted-foreground"
+          )}
+        >
+          <CalendarDays className="mr-2 h-4 w-4 shrink-0 text-muted-foreground/70" />
+          <span className="truncate tabular-nums">
+            {selected ? format(selected, "MMM d, yyyy") : placeholder}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-auto max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl p-0"
+        align="start"
+        collisionPadding={16}
+        avoidCollisions
+      >
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(date) => {
+            onChange(date);
+            setOpen(false);
+          }}
+          autoFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export function DiscountForm({
@@ -134,6 +206,8 @@ export function DiscountForm({
   const watchExcludeCategories = form.watch("exclude_categories");
   const watchMenuItems = form.watch("menu_item_ids");
   const watchExcludeAlcohol = form.watch("exclude_alcohol");
+  const watchStartDate = form.watch("start_date");
+  const watchEndDate = form.watch("end_date");
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -168,226 +242,218 @@ export function DiscountForm({
       ? "Takeout only"
       : "Dine-in & Takeout";
 
+  const scheduleSummary = (() => {
+    if (watchStartDate && watchEndDate)
+      return `${format(watchStartDate, "MMM d")} – ${format(watchEndDate, "MMM d, yyyy")}`;
+    if (watchStartDate) return `From ${format(watchStartDate, "MMM d, yyyy")}`;
+    if (watchEndDate) return `Until ${format(watchEndDate, "MMM d, yyyy")}`;
+    return "Always running — date range, days, and hours are optional";
+  })();
+
   return (
     <Form {...form}>
-      <form onSubmit={handleSubmit} className="space-y-6 w-full min-w-0">
-        <div className="grid gap-6 lg:grid-cols-3 min-w-0">
+      <form onSubmit={handleSubmit} className="w-full min-w-0 space-y-6">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-3">
           {/* ── Main column ── */}
-          <div className="space-y-6 lg:col-span-2">
+          <div className="min-w-0 space-y-6 lg:col-span-2">
 
             {/* ── Section 1: Discount details ── */}
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base">Discount details</CardTitle>
-                <CardDescription>Name, type, and value.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                {/* Name */}
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Name <span className="text-destructive">*</span></FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g. Happy Hour 10%" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Discount type toggle */}
-                <FormField
-                  control={form.control}
-                  name="discount_type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Discount type <span className="text-destructive">*</span></FormLabel>
-                      <FormControl>
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <button
-                            type="button"
-                            onClick={() => field.onChange("percentage")}
-                            className={cn(
-                              "flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-medium transition-colors",
-                              field.value === "percentage"
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground"
-                            )}
-                          >
-                            <Percent className="h-4 w-4" />
-                            Percentage
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => field.onChange("fixed_amount")}
-                            className={cn(
-                              "flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-sm font-medium transition-colors",
-                              field.value === "fixed_amount"
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground"
-                            )}
-                          >
-                            <DollarSign className="h-4 w-4" />
-                            Fixed amount
-                          </button>
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Value */}
-                <FormField
-                  control={form.control}
-                  name="discount_value"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Value <span className="text-destructive">*</span></FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground text-sm">
-                            {watchType === "percentage" ? "%" : "$"}
-                          </span>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min={0}
-                            className="pl-8"
-                            {...field}
-                            value={field.value}
-                            onChange={(e) =>
-                              field.onChange(Number(e.target.value))
-                            }
-                            placeholder={watchType === "percentage" ? "10" : "5.00"}
-                          />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Description */}
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description <span className="text-muted-foreground font-normal text-xs">(optional)</span></FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Staff-facing notes about this discount…"
-                          rows={2}
-                          {...field}
-                          value={field.value ?? ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Location scope — hidden for single-location accounts
-                    (silently defaults to global; location_id stays null). */}
-                {!isSingleLocation && (
-                <FormField
-                  control={form.control}
-                  name="location_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                        Location scope
-                      </FormLabel>
-                      <Select
-                        value={field.value ?? "__global__"}
-                        onValueChange={(val) =>
-                          field.onChange(val === "__global__" ? null : val)
-                        }
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select scope" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="__global__">
-                            Global — all locations
-                          </SelectItem>
-                          {locations.map((loc) => (
-                            <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Global discounts apply to every location. Location-scoped discounts are only available at the selected location.
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                )}
-              </CardContent>
-            </Card>
-
-            {/* ── Section 2: Usage limits ── */}
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base">Usage limits</CardTitle>
-                <CardDescription>Control when and how often this discount can be applied.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="grid gap-4 sm:grid-cols-2">
+            <Panel>
+              <PanelSection
+                icon={Tag}
+                label="Discount details"
+                caption="Name, type, and value."
+              >
+                <div className="space-y-5">
+                  {/* Name */}
                   <FormField
                     control={form.control}
-                    name="min_purchase_amount"
+                    name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Min. purchase amount</FormLabel>
+                        <FormLabel>
+                          Name <span className="text-destructive">*</span>
+                        </FormLabel>
                         <FormControl>
-                          <div className="relative">
-                            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground text-sm">$</span>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min={0}
-                              className="pl-8"
-                              placeholder="0.00"
-                              value={field.value ?? ""}
-                              onChange={(e) =>
-                                field.onChange(
-                                  e.target.value ? Number(e.target.value) : undefined
-                                )
-                              }
-                            />
-                          </div>
+                          <Input
+                            placeholder="e.g. Happy Hour 10%"
+                            className="h-9 rounded-full border-0 bg-muted/60 px-4 text-[0.8125rem] shadow-none focus-visible:bg-background"
+                            {...field}
+                          />
                         </FormControl>
-                        <p className="text-xs text-muted-foreground">Leave blank for no minimum.</p>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  {watchType === "percentage" && (
+
+                  {/* Discount type — a segmented pill rail (DS-CTL-05). */}
+                  <FormField
+                    control={form.control}
+                    name="discount_type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          Discount type <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <FormControl>
+                          <div className="inline-flex h-auto w-full max-w-sm flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                            {[
+                              { value: "percentage", label: "Percentage", Icon: Percent },
+                              { value: "fixed_amount", label: "Fixed amount", Icon: DollarSign },
+                            ].map(({ value, label, Icon }) => (
+                              <button
+                                key={value}
+                                type="button"
+                                onClick={() => field.onChange(value)}
+                                className={cn(
+                                  "flex flex-1 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium transition-colors",
+                                  field.value === value
+                                    ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                                    : "text-muted-foreground hover:text-foreground"
+                                )}
+                              >
+                                <Icon className="h-4 w-4" />
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Value */}
+                  <FormField
+                    control={form.control}
+                    name="discount_value"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          Value <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <FormControl>
+                          <div className="relative max-w-[220px]">
+                            <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-[0.8125rem] text-muted-foreground/70">
+                              {watchType === "percentage" ? "%" : "$"}
+                            </span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min={0}
+                              className="h-9 rounded-full border-0 bg-muted/60 pl-9 pr-4 text-[0.8125rem] tabular-nums shadow-none focus-visible:bg-background"
+                              {...field}
+                              value={field.value}
+                              onChange={(e) => field.onChange(Number(e.target.value))}
+                              placeholder={watchType === "percentage" ? "10" : "5.00"}
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Description */}
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          Description{" "}
+                          <span className="text-xs font-normal text-muted-foreground">
+                            (optional)
+                          </span>
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Staff-facing notes about this discount…"
+                            rows={2}
+                            className="rounded-2xl border-0 bg-muted/60 px-4 py-3 text-[0.8125rem] shadow-none focus-visible:bg-background"
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Location scope — hidden for single-location accounts
+                      (silently defaults to global; location_id stays null). */}
+                  {!isSingleLocation && (
                     <FormField
                       control={form.control}
-                      name="max_discount_amount"
+                      name="location_id"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Max. discount cap</FormLabel>
+                          <FormLabel className="flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                            Location scope
+                          </FormLabel>
+                          <Select
+                            value={field.value ?? "__global__"}
+                            onValueChange={(val) =>
+                              field.onChange(val === "__global__" ? null : val)
+                            }
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-9 w-full max-w-sm rounded-full border-0 bg-muted/60 px-4 text-[0.8125rem] shadow-none">
+                                <SelectValue placeholder="Select scope" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="__global__">
+                                Global — all locations
+                              </SelectItem>
+                              {locations.map((loc) => (
+                                <SelectItem key={loc.id} value={loc.id}>
+                                  {loc.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className={FIELD_HINT}>
+                            Global discounts apply to every location.
+                            Location-scoped discounts are only available at the
+                            selected location.
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+              </PanelSection>
+            </Panel>
+
+            {/* ── Section 2: Usage limits ── */}
+            <Panel>
+              <PanelSection
+                icon={SlidersHorizontal}
+                label="Usage limits"
+                caption="Control when and how often this discount can be applied."
+              >
+                <div className="space-y-6">
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="min_purchase_amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Min. purchase amount</FormLabel>
                           <FormControl>
                             <div className="relative">
-                              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-muted-foreground text-sm">$</span>
+                              <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-[0.8125rem] text-muted-foreground/70">
+                                $
+                              </span>
                               <Input
                                 type="number"
                                 step="0.01"
                                 min={0}
-                                className="pl-8"
-                                placeholder="No cap"
+                                className="h-9 rounded-full border-0 bg-muted/60 pl-9 pr-4 text-[0.8125rem] tabular-nums shadow-none focus-visible:bg-background"
+                                placeholder="0.00"
                                 value={field.value ?? ""}
                                 onChange={(e) =>
                                   field.onChange(
@@ -397,227 +463,197 @@ export function DiscountForm({
                               />
                             </div>
                           </FormControl>
-                          <p className="text-xs text-muted-foreground">Maximum $ off regardless of percentage.</p>
+                          <p className={FIELD_HINT}>Leave blank for no minimum.</p>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                  )}
-                  <FormField
-                    control={form.control}
-                    name="max_uses_per_day"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Max uses per day</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min={1}
-                            placeholder="Unlimited"
-                            value={field.value ?? ""}
-                            onChange={(e) =>
-                              field.onChange(
-                                e.target.value ? Number(e.target.value) : undefined
-                              )
-                            }
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                    {watchType === "percentage" && (
+                      <FormField
+                        control={form.control}
+                        name="max_discount_amount"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Max. discount cap</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-[0.8125rem] text-muted-foreground/70">
+                                  $
+                                </span>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min={0}
+                                  className="h-9 rounded-full border-0 bg-muted/60 pl-9 pr-4 text-[0.8125rem] tabular-nums shadow-none focus-visible:bg-background"
+                                  placeholder="No cap"
+                                  value={field.value ?? ""}
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      e.target.value ? Number(e.target.value) : undefined
+                                    )
+                                  }
+                                />
+                              </div>
+                            </FormControl>
+                            <p className={FIELD_HINT}>
+                              Maximum $ off regardless of percentage.
+                            </p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     )}
-                  />
+                    <FormField
+                      control={form.control}
+                      name="max_uses_per_day"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Max uses per day</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={1}
+                              placeholder="Unlimited"
+                              className="h-9 rounded-full border-0 bg-muted/60 px-4 text-[0.8125rem] tabular-nums shadow-none focus-visible:bg-background"
+                              value={field.value ?? ""}
+                              onChange={(e) =>
+                                field.onChange(
+                                  e.target.value ? Number(e.target.value) : undefined
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="max_uses_per_order"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Max uses per order</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={1}
+                              className="h-9 rounded-full border-0 bg-muted/60 px-4 text-[0.8125rem] tabular-nums shadow-none focus-visible:bg-background"
+                              value={field.value}
+                              onChange={(e) => field.onChange(Number(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
                   <FormField
                     control={form.control}
-                    name="max_uses_per_order"
+                    name="stackable"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Max uses per order</FormLabel>
+                      <FormItem className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <FormLabel className="flex items-center gap-1.5">
+                            Stackable
+                          </FormLabel>
+                          <p className={cn(FIELD_HINT, "mt-0.5")}>
+                            Allow this discount to be combined with others on the
+                            same order.
+                          </p>
+                        </div>
                         <FormControl>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={field.value}
-                            onChange={(e) =>
-                              field.onChange(Number(e.target.value))
-                            }
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
                           />
                         </FormControl>
-                        <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
-
-                <Separator />
-
-                <FormField
-                  control={form.control}
-                  name="stackable"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between gap-4">
-                      <div>
-                        <FormLabel className="flex items-center gap-1.5">
-                          <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-                          Stackable
-                        </FormLabel>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Allow this discount to be combined with others on the same order.
-                        </p>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
+              </PanelSection>
+            </Panel>
 
             {/* ── Section 3: Schedule (collapsible) ── */}
-            <Card>
+            <Panel>
               <button
                 type="button"
                 onClick={() => setScheduleOpen((v) => !v)}
-                className="flex w-full items-center justify-between px-6 py-4 text-left"
+                aria-expanded={scheduleOpen}
+                className="flex w-full items-center justify-between gap-4 px-6 py-6 text-left"
               >
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Schedule</p>
-                    <p className="text-xs text-muted-foreground">Date range, days, and hours — optional</p>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+                    <CalendarDays className="h-[1.125rem] w-[1.125rem] shrink-0" />
+                    <span className="min-w-0">Schedule</span>
                   </div>
+                  <p className="mt-1 truncate text-sm text-muted-foreground">
+                    {scheduleSummary}
+                  </p>
                 </div>
-                {scheduleOpen ? (
-                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                )}
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                    scheduleOpen && "rotate-180"
+                  )}
+                />
               </button>
 
               {scheduleOpen && (
-                <>
-                  <Separator />
-                  <CardContent className="pt-5 space-y-0">
-
-                    {/* ── Date range ── */}
-                    <div className="space-y-3 pb-5">
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date range</p>
-                        {(form.watch("start_date") || form.watch("end_date")) && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              form.setValue("start_date", undefined);
-                              form.setValue("end_date", undefined);
-                            }}
-                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            <X className="h-3 w-3" />
-                            Clear
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <FormField
-                          control={form.control}
-                          name="start_date"
-                          render={({ field }) => (
-                            <FormItem className="flex-1 space-y-1">
-                              <FormLabel className="text-xs text-muted-foreground font-normal">From</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="date"
-                                  className="text-sm"
-                                  value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
-                                  onChange={(e) =>
-                                    field.onChange(
-                                      e.target.value ? new Date(e.target.value) : undefined
-                                    )
-                                  }
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <ArrowRight className="mt-5 h-4 w-4 shrink-0 text-muted-foreground" />
-                        <FormField
-                          control={form.control}
-                          name="end_date"
-                          render={({ field }) => (
-                            <FormItem className="flex-1 space-y-1">
-                              <FormLabel className="text-xs text-muted-foreground font-normal">To</FormLabel>
-                              <FormControl>
-                                <Input
-                                  type="date"
-                                  className="text-sm"
-                                  value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
-                                  onChange={(e) =>
-                                    field.onChange(
-                                      e.target.value ? new Date(e.target.value) : undefined
-                                    )
-                                  }
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      {form.watch("start_date") && form.watch("end_date") && (
-                        <p className="text-xs text-muted-foreground">
-                          Active from{" "}
-                          <span className="font-medium text-foreground">
-                            {format(form.watch("start_date")!, "MMM d, yyyy")}
-                          </span>{" "}
-                          to{" "}
-                          <span className="font-medium text-foreground">
-                            {format(form.watch("end_date")!, "MMM d, yyyy")}
-                          </span>.
-                        </p>
+                <div className="px-6 pb-6">
+                  {/* ── Date range ── */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className={GROUP_LABEL}>Date range</p>
+                      {(watchStartDate || watchEndDate) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            form.setValue("start_date", undefined, { shouldDirty: true });
+                            form.setValue("end_date", undefined, { shouldDirty: true });
+                          }}
+                          className="flex items-center gap-1 text-[0.8125rem] text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <X className="h-3 w-3" />
+                          Clear
+                        </button>
                       )}
                     </div>
-
-                    <Separator />
-
-                    {/* ── Active days ── */}
-                    <div className="space-y-3 py-5">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Active days</p>
+                    <div className="flex items-end gap-2">
                       <FormField
                         control={form.control}
-                        name="applicable_days"
+                        name="start_date"
                         render={({ field }) => (
-                          <FormItem>
+                          <FormItem className="min-w-0 flex-1 space-y-1">
+                            <FormLabel className="text-[0.8125rem] font-normal text-muted-foreground">
+                              From
+                            </FormLabel>
                             <FormControl>
-                              <DaySelector value={field.value} onChange={field.onChange} />
+                              <DateField
+                                value={field.value}
+                                onChange={field.onChange}
+                                placeholder="Start date"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    </div>
-
-                    <Separator />
-
-                    {/* ── Time window ── */}
-                    <div className="space-y-3 pt-5">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Time window</p>
+                      <ArrowRight className="mb-2.5 h-4 w-4 shrink-0 text-muted-foreground" />
                       <FormField
                         control={form.control}
-                        name="applicable_hours_start"
-                        render={() => (
-                          <FormItem>
+                        name="end_date"
+                        render={({ field }) => (
+                          <FormItem className="min-w-0 flex-1 space-y-1">
+                            <FormLabel className="text-[0.8125rem] font-normal text-muted-foreground">
+                              To
+                            </FormLabel>
                             <FormControl>
-                              <TimeWindowPicker
-                                start={form.watch("applicable_hours_start")}
-                                end={form.watch("applicable_hours_end")}
-                                onChange={(start, end) => {
-                                  form.setValue("applicable_hours_start", start);
-                                  form.setValue("applicable_hours_end", end);
-                                }}
+                              <DateField
+                                value={field.value}
+                                onChange={field.onChange}
+                                placeholder="End date"
                               />
                             </FormControl>
                             <FormMessage />
@@ -625,150 +661,224 @@ export function DiscountForm({
                         )}
                       />
                     </div>
+                    {watchStartDate && watchEndDate && (
+                      <p className={FIELD_HINT}>
+                        Active from{" "}
+                        <span className="font-medium text-foreground tabular-nums">
+                          {format(watchStartDate, "MMM d, yyyy")}
+                        </span>{" "}
+                        to{" "}
+                        <span className="font-medium text-foreground tabular-nums">
+                          {format(watchEndDate, "MMM d, yyyy")}
+                        </span>
+                        .
+                      </p>
+                    )}
+                  </div>
 
-                  </CardContent>
-                </>
+                  {/* ── Active days ── */}
+                  <div className="mt-8 space-y-3">
+                    <p className={GROUP_LABEL}>Active days</p>
+                    <FormField
+                      control={form.control}
+                      name="applicable_days"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <DaySelector value={field.value} onChange={field.onChange} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {/* ── Time window ── */}
+                  <div className="mt-8 space-y-3">
+                    <p className={GROUP_LABEL}>Time window</p>
+                    <FormField
+                      control={form.control}
+                      name="applicable_hours_start"
+                      render={() => (
+                        <FormItem>
+                          <FormControl>
+                            <TimeWindowPicker
+                              start={form.watch("applicable_hours_start")}
+                              end={form.watch("applicable_hours_end")}
+                              onChange={(start, end) => {
+                                form.setValue("applicable_hours_start", start, {
+                                  shouldDirty: true,
+                                });
+                                form.setValue("applicable_hours_end", end, {
+                                  shouldDirty: true,
+                                });
+                              }}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
               )}
-            </Card>
+            </Panel>
           </div>
 
           {/* ── Sidebar column ── */}
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-6">
 
-            {/* Status card */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Status</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="is_active"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between gap-4">
-                      <div>
-                        <FormLabel>Active on POS</FormLabel>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Staff can apply this discount.
+            {/* Status */}
+            <Panel nested>
+              <PanelSection icon={ShieldCheck} label="Status">
+                <div className="space-y-5">
+                  <FormField
+                    control={form.control}
+                    name="is_active"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <FormLabel>Active on POS</FormLabel>
+                          <p className={cn(FIELD_HINT, "mt-0.5")}>
+                            Staff can apply this discount.
+                          </p>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="requires_manager_approval"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <FormLabel>Manager approval</FormLabel>
+                          <p className={cn(FIELD_HINT, "mt-0.5")}>
+                            Requires manager PIN on POS.
+                          </p>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="display_order"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Display order</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            className="h-9 max-w-[120px] rounded-full border-0 bg-muted/60 px-4 text-[0.8125rem] tabular-nums shadow-none focus-visible:bg-background"
+                            value={field.value}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <p className={FIELD_HINT}>
+                          Lower numbers appear first on POS.
                         </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </PanelSection>
+            </Panel>
+
+            {/* Targeting */}
+            <Panel nested>
+              <PanelSection
+                icon={Settings2}
+                label="Targeting"
+                caption="Items, categories & order type"
+                action={
+                  targetingCount > 0 ? (
+                    <span className="inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
+                      {targetingCount} rule{targetingCount !== 1 ? "s" : ""}
+                    </span>
+                  ) : undefined
+                }
+              >
+                <div className="space-y-4">
+                  <div className="min-w-0">
+                    {[
+                      { label: "Order type", value: scopeLabel },
+                      {
+                        label: "Include categories",
+                        value: watchAppliesTo?.length
+                          ? `${watchAppliesTo.length} selected`
+                          : "All",
+                      },
+                      {
+                        label: "Exclude categories",
+                        value: watchExcludeCategories?.length
+                          ? `${watchExcludeCategories.length} selected`
+                          : "None",
+                      },
+                      {
+                        label: "Menu items",
+                        value: watchMenuItems?.length
+                          ? `${watchMenuItems.length} selected`
+                          : "All",
+                      },
+                      { label: "Exclude alcohol", value: watchExcludeAlcohol ? "Yes" : "No" },
+                    ].map(({ label, value }) => (
+                      <div
+                        key={label}
+                        className="flex items-center justify-between gap-3 py-2"
+                      >
+                        <span className="shrink-0 text-sm text-muted-foreground">
+                          {label}
+                        </span>
+                        <span className="min-w-0 truncate text-right text-sm font-medium tabular-nums">
+                          {value}
+                        </span>
                       </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <Separator />
-
-                <FormField
-                  control={form.control}
-                  name="requires_manager_approval"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between gap-4">
-                      <div>
-                        <FormLabel className="flex items-center gap-1.5">
-                          <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
-                          Manager approval
-                        </FormLabel>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Requires manager PIN on POS.
-                        </p>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <Separator />
-
-                <FormField
-                  control={form.control}
-                  name="display_order"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Display order</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={field.value}
-                          onChange={(e) =>
-                            field.onChange(Number(e.target.value))
-                          }
-                        />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground">
-                        Lower numbers appear first on POS.
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Targeting card */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base">Targeting</CardTitle>
-                    <CardDescription className="mt-0.5 text-xs">
-                      Items, categories & order type
-                    </CardDescription>
+                    ))}
                   </div>
-                  {targetingCount > 0 && (
-                    <Badge variant="secondary">{targetingCount} rule{targetingCount !== 1 ? "s" : ""}</Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="rounded-md bg-muted/50 divide-y divide-border text-sm">
-                  {[
-                    { label: "Order type", value: scopeLabel },
-                    { label: "Include cats", value: watchAppliesTo?.length ? `${watchAppliesTo.length} selected` : "All" },
-                    { label: "Exclude cats", value: watchExcludeCategories?.length ? `${watchExcludeCategories.length} selected` : "None" },
-                    { label: "Menu items", value: watchMenuItems?.length ? `${watchMenuItems.length} selected` : "All" },
-                    { label: "Excl. alcohol", value: watchExcludeAlcohol ? "Yes" : "No" },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex items-center justify-between gap-2 px-3 py-2">
-                      <span className="text-muted-foreground shrink-0">{label}</span>
-                      <span className="font-medium truncate text-right">{value}</span>
-                    </div>
-                  ))}
-                </div>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full gap-2"
-                  onClick={() => setTargetingSheetOpen(true)}
-                >
-                  <Settings2 className="h-4 w-4" />
-                  Configure targeting
-                </Button>
-              </CardContent>
-            </Card>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(PILL_CONTROL, "w-full gap-2")}
+                    onClick={() => setTargetingSheetOpen(true)}
+                  >
+                    <Settings2 className="h-4 w-4" />
+                    Configure targeting
+                  </Button>
+                </div>
+              </PanelSection>
+            </Panel>
 
             {/* Actions — sticky on desktop */}
             <div className="space-y-2 lg:sticky lg:top-4">
-              <Button type="submit" className="w-full" disabled={submitting}>
+              <Button
+                type="submit"
+                className="h-9 w-full rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                disabled={submitting}
+              >
                 {submitting ? "Saving…" : submitLabel}
               </Button>
               {onCancel && (
                 <Button
                   variant="ghost"
                   type="button"
-                  className="w-full"
+                  className="h-9 w-full rounded-full px-4 text-[0.8125rem] font-medium text-muted-foreground hover:text-foreground"
                   onClick={onCancel}
                 >
                   Cancel
@@ -793,7 +903,7 @@ export function DiscountForm({
         }}
         onChange={(updates) => {
           Object.entries(updates).forEach(([key, value]) => {
-            form.setValue(key as any, value as any);
+            form.setValue(key as any, value as any, { shouldDirty: true });
           });
         }}
       />
