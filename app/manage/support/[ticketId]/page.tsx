@@ -232,7 +232,17 @@ export default function AdminTicketDetailPage() {
     mutationFn: ({ msg, internal, atts }: { msg: string; internal: boolean; atts: AttachmentInput[] }) =>
       AdminAddMessage(ticketId, msg, internal, atts),
     onSuccess: (res) => {
-      if (res.error) { return; }
+      if (res.error) { toast.error(res.error); return; }
+      toast.success(
+        isInternal
+          ? "Internal note added"
+          : ticket?.ticket_scope === "hq_internal"
+            ? "Developer update added"
+            : "Reply sent",
+      );
+      if (res.notificationWarning) {
+        toast.warning(res.notificationWarning);
+      }
       setReply("");
       setAttachments([]);
       setUploadKey((k) => k + 1);

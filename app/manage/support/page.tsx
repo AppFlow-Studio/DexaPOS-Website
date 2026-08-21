@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import {
   GetAllTickets,
   GetSupportStats,
+  GetUnreadTicketCounts,
 } from "../actions/support";
 import {
   SupportTicket,
@@ -79,7 +80,15 @@ function StatCard({
   );
 }
 
-function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
+function TicketRow({
+  ticket,
+  unreadCount,
+  onOpen,
+}: {
+  ticket: any;
+  unreadCount: number;
+  onOpen: () => void;
+}) {
   const isUrgent = ticket.priority === "urgent" || ticket.priority === "high";
   const isHQInternal = ticket.ticket_scope === "hq_internal";
   const emailAssignees = Array.isArray(ticket.assigned_to_emails)
@@ -105,6 +114,11 @@ function TicketRow({ ticket, onOpen }: { ticket: any; onOpen: () => void }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xs font-mono text-muted-foreground">{ticket.ticket_number}</span>
+          {unreadCount > 0 && (
+            <Badge className="rounded-full border-0 bg-red-600 text-xs font-semibold text-white hover:bg-red-600">
+              {unreadCount} unread
+            </Badge>
+          )}
           <Badge
             className={cn(
               "text-xs rounded-full border font-medium",
@@ -183,6 +197,12 @@ export default function AdminSupportPage() {
     queryKey: ["admin-support-stats"],
     queryFn: () => GetSupportStats(),
     refetchInterval: 60_000,
+  });
+
+  const { data: unreadCounts } = useQuery({
+    queryKey: ["hq-unread-ticket-counts"],
+    queryFn: GetUnreadTicketCounts,
+    staleTime: 30_000,
   });
 
   const stats = statsResult?.data;
@@ -385,6 +405,11 @@ export default function AdminSupportPage() {
                 <TicketRow
                   key={ticket.id}
                   ticket={ticket}
+                  unreadCount={
+                    unreadCounts?.perTicket.find(
+                      (entry) => entry.ticket_id === ticket.id,
+                    )?.count ?? 0
+                  }
                   onOpen={() => router.push(`/manage/support/${ticket.id}`)}
                 />
               ))}
