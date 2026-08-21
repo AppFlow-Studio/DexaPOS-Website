@@ -125,6 +125,32 @@ describe("font catalogue", () => {
     }
   });
 
+  /**
+   * Catches the copy-paste slip that bulk-adding a catalogue invites: a new
+   * entry whose `google` parameter still names the font it was copied from, so
+   * the picker shows a specimen in one face and the live page loads another.
+   * Neither the uniqueness check nor the stack check can see that.
+   */
+  it("loads the same family it claims to render", () => {
+    for (const font of SITE_FONTS) {
+      if (!font.google) continue;
+
+      const requested = font.google.split(":")[0].replace(/\+/g, " ");
+      const firstInStack = font.stack.match(/^"([^"]+)"/)?.[1];
+
+      expect(firstInStack, `${font.id} stack must open with a quoted family`).toBeDefined();
+      expect(requested, font.id).toBe(firstInStack);
+    }
+  });
+
+  it("offers a display or handwritten face for headings only", () => {
+    for (const font of SITE_FONTS) {
+      if (font.category === "Display" || font.category === "Handwritten") {
+        expect(font.roles, font.id).not.toContain("body");
+      }
+    }
+  });
+
   it("only pairs fonts that exist and are allowed in their slot", () => {
     for (const pairing of FONT_PAIRINGS) {
       const heading = SITE_FONTS.find((f) => f.id === pairing.headingId);

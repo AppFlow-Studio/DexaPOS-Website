@@ -7,9 +7,24 @@ import { toast } from "sonner";
 import { SetSiteLogo, UpdateSiteSettings } from "@/app/dashboard/website/actions/site";
 import AssetPicker from "../builder/AssetPicker";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { isHexColor } from "@/lib/site-builder/color";
 import type { MerchantSiteRow } from "@/lib/site-builder/db-types";
-import { catalogFontsHref, findFontByStack, stackFor } from "@/lib/site-builder/fonts";
+import {
+  catalogFontsHref,
+  findFontByStack,
+  fontsForRole,
+  stackFor,
+  type SiteFont,
+} from "@/lib/site-builder/fonts";
 import { resolveTheme, type ThemeTokens } from "@/lib/site-builder/render-context";
 import {
   composeTheme,
@@ -24,6 +39,23 @@ import { cn } from "@/lib/utils";
 import { websiteRoutes } from "../routes";
 import OverlayChrome, { OverlayRail, OverlayStage } from "../shell/OverlayChrome";
 import ThemePreview from "./design/ThemePreview";
+
+/**
+ * Every heading-capable face, grouped by category for the picker.
+ *
+ * Built once at module scope rather than per render: the catalogue is a
+ * constant, and regrouping twenty faces on every keystroke of the colour field
+ * would be work done for nothing.
+ */
+const HEADING_FONT_GROUPS: { category: string; fonts: SiteFont[] }[] = (() => {
+  const groups = new Map<string, SiteFont[]>();
+  for (const font of fontsForRole("heading")) {
+    const bucket = groups.get(font.category);
+    if (bucket) bucket.push(font);
+    else groups.set(font.category, [font]);
+  }
+  return [...groups].map(([category, fonts]) => ({ category, fonts }));
+})();
 
 /**
  * The whole design system, in five controls.
@@ -114,6 +146,14 @@ export default function StyleOverlay({
   };
 
   const custom = isCustomTitleFont(draft.headingFont);
+  /**
+   * The catalogue entry the theme currently holds, if it is one we know.
+   *
+   * A theme can carry a stack from before this catalogue existed, in which case
+   * there is nothing to select and the trigger shows its placeholder — the
+   * merchant's stored font still renders, it simply is not one of ours.
+   */
+  const selectedHeadingFont = findFontByStack(draft.headingFont);
 
   return (
     <OverlayChrome
@@ -269,17 +309,47 @@ export default function StyleOverlay({
                   );
                 })}
 
-                {/* Present only when it applies. A merchant who has never had a
-                    custom face does not need a row telling them so. */}
-                {custom && (
-                  <div className="flex w-full items-center gap-2 rounded-md border border-primary/40 bg-accent px-3 py-2 text-sm font-medium">
-                    <span className="min-w-0 flex-1 truncate">Custom</span>
-                    <span className="shrink-0 truncate text-[11px] text-muted-foreground">
-                      {findFontByStack(draft.headingFont)?.name ?? "Custom font"}
-                    </span>
-                    <CircleCheck className="size-4 shrink-0 text-primary" />
-                  </div>
-                )}
+                {/*
+                  The rest of the catalogue, for merchants who want something
+                  the three shortcuts do not cover.
+
+                  It lists every heading-capable face **including** the three
+                  above rather than only the others. Hiding them would mean the
+                  control could sit on "More fonts…" while Inter was in fact
+                  selected, and a picker that does not show the current value is
+                  worse than a slightly redundant one.
+
+                  Nothing has to be done to make a choice here work publicly:
+                  `PageRenderer` builds its Google Fonts href from whatever two
+                  stacks the theme holds, so any catalogue face loads on the
+                  live page the moment it is saved.
+                */}
+                <Select
+                  value={selectedHeadingFont?.id ?? ""}
+                  onValueChange={(id) => patch({ headingFont: stackFor(id) })}
+                >
+                  <SelectTrigger
+                    aria-label="More title fonts"
+                    className={cn("w-full", custom && "border-primary/40 bg-accent font-medium")}
+                  >
+                    <SelectValue placeholder="More fonts…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HEADING_FONT_GROUPS.map((group) => (
+                      <SelectGroup key={group.category}>
+                        <SelectLabel>{group.category}</SelectLabel>
+                        {group.fonts.map((font) => (
+                          <SelectItem key={font.id} value={font.id}>
+                            {/* The name in its own face — a type picker that
+                                shows every option in the same font is asking a
+                                merchant to choose blind. */}
+                            <span style={{ fontFamily: font.stack }}>{font.name}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </Field>
           </div>
