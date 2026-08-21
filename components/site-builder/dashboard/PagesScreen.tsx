@@ -1,18 +1,20 @@
 "use client";
 
-import { CloudOff, FileText, Home, Palette, Plus, Rocket } from "lucide-react";
+import { CloudOff, FileText, Palette, Plus, Rocket, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { DeletePage } from "@/app/dashboard/website/actions/pages";
 import { PublishPage, UnpublishPage } from "@/app/dashboard/website/actions/publish";
 import { Button } from "@/components/ui/button";
 import type { MerchantSiteRow, SitePageSummary } from "@/lib/site-builder/db-types";
 import { websiteRoutes } from "../routes";
 import DataCard from "../shell/DataCard";
+import ConfirmByTyping from "../shell/ConfirmByTyping";
 import ListHeader from "../shell/ListHeader";
-import StatusPill from "../shell/StatusPill";
+import StatusPill, { type StatusAction } from "../shell/StatusPill";
 import WebAddressCard from "./WebAddressCard";
 
 /**
@@ -25,11 +27,14 @@ import WebAddressCard from "./WebAddressCard";
  * and the checklist's real content survives where it belongs: the one genuinely
  * blocking step, claiming a web address, is the card beneath the list.
  *
- * **Rows carry no edit button and no overflow menu.** Renaming and deleting a
- * page live in the editor's page settings, one click away through the title.
- * Two routes to the same operation is exactly the duplication this rebuild is
- * removing, and the list is the wrong home for it: the address a page lives at
- * is only meaningful next to the page it addresses.
+ * **Rows carry no edit button and no overflow menu.** Renaming lives in the
+ * editor's page settings, one click away through the title — the address a page
+ * lives at is only meaningful next to the page it addresses.
+ *
+ * Deleting is the exception, and it is deliberate: it now sits in the status
+ * menu here as well as in page settings, because a merchant clearing out a page
+ * they never finished should not have to open it first. It is guarded by a
+ * typed confirmation rather than a yes/no, since there is no undo.
  */
 export default function PagesScreen({
   clerkOrgId,
@@ -46,6 +51,8 @@ export default function PagesScreen({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  /** The page the delete dialog is asking about, or null when it is closed. */
+  const [deleting, setDeleting] = useState<SitePageSummary | null>(null);
 
   const isPublished = pages.some((page) => page.published_version_id);
 
@@ -88,6 +95,59 @@ export default function PagesScreen({
     });
   };
 
+  const remove = (page: SitePageSummary) => {
+    startTransition(async () => {
+      const result = await DeletePage(clerkOrgId, page.id);
+      if (!result.data) {
+        toast.error(result.error ?? `Could not delete “${page.title}”.`);
+        return;
+      }
+      setDeleting(null);
+      toast.success(`“${page.title}” was deleted.`);
+      router.refresh();
+    });
+  };
+
+  /**
+   * What a row's status menu offers.
+   *
+   * The home page is the site's root, so neither destructive option is offered
+   * for it: `UnpublishPage` would take it down like any other page and break
+   * every link the merchant has ever shared, and `DeletePage` refuses `is_home`
+   * server-side anyway. A published home page therefore has no menu at all —
+   * which is why `StatusPill` reserves the chevron's space rather than shrinking.
+   */
+  const buildActions = (page: SitePageSummary): StatusAction[] | undefined => {
+    const actions: StatusAction[] = [];
+
+    if (page.published_version_id) {
+      if (!page.is_home) {
+        actions.push({
+          label: "Unpublish",
+          icon: <CloudOff />,
+          destructive: true,
+          onSelect: () => unpublish(page),
+        });
+      }
+    } else {
+      actions.push({ label: "Publish", icon: <Rocket />, onSelect: () => publish(page) });
+    }
+
+    if (!page.is_home) {
+      actions.push({
+        label: "Delete",
+        icon: <Trash2 />,
+        destructive: true,
+        // Opens the dialog rather than deleting. Radix closes the menu on
+        // select, so the dialog is rendered outside it — nesting one inside a
+        // menu item unmounts it as the menu goes.
+        onSelect: () => setDeleting(page),
+      });
+    }
+
+    return actions.length ? actions : undefined;
+  };
+
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
       <ListHeader
@@ -123,14 +183,9 @@ export default function PagesScreen({
           <>
             <Link
               href={websiteRoutes.editor(locationId, page.id)}
-              className="flex min-w-0 items-center gap-2 text-sm font-medium hover:underline"
+              className="min-w-0 truncate text-sm font-medium hover:underline"
             >
-              {page.is_home ? (
-                <Home className="size-3.5 shrink-0 text-muted-foreground" />
-              ) : (
-                <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-              )}
-              <span className="truncate">{page.title}</span>
+              {page.title}
             </Link>
 
             <span className="truncate text-xs text-muted-foreground">
@@ -142,30 +197,7 @@ export default function PagesScreen({
                 tone={page.published_version_id ? "published" : "draft"}
                 label={page.published_version_id ? "Published" : "Unpublished"}
                 disabled={pending}
-                // The home page is the site's root. `UnpublishPage` will take it
-                // down like any other, but offering that here would let a
-                // merchant break every link they have ever shared from a list
-                // where the consequence is invisible.
-                actions={
-                  page.is_home && page.published_version_id
-                    ? undefined
-                    : page.published_version_id
-                      ? [
-                          {
-                            label: "Unpublish",
-                            icon: <CloudOff />,
-                            destructive: true,
-                            onSelect: () => unpublish(page),
-                          },
-                        ]
-                      : [
-                          {
-                            label: "Publish",
-                            icon: <Rocket />,
-                            onSelect: () => publish(page),
-                          },
-                        ]
-                }
+                actions={buildActions(page)}
               />
             </span>
           </>
@@ -181,6 +213,23 @@ export default function PagesScreen({
           isPublished={isPublished}
         />
       )}
+
+      <ConfirmByTyping
+        open={deleting !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+        title={`Delete “${deleting?.title ?? ""}”?`}
+        description={
+          deleting?.published_version_id
+            ? "This page is live. Deleting it takes it off your website immediately, and anyone following a link to it will find nothing there. This cannot be undone."
+            : "This page has never been published, so no guest has seen it. This cannot be undone."
+        }
+        actionLabel="Delete page"
+        cancelLabel="Keep it"
+        pending={pending}
+        onConfirm={() => deleting && remove(deleting)}
+      />
     </div>
   );
 }

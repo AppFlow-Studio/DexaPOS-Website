@@ -34,8 +34,15 @@ export interface StatusAction {
  * to enter.
  *
  * **Without `actions` it renders as a plain pill, not a dead button.** The home
- * page cannot be unpublished — the server refuses it — so it gets no chevron
- * and no hover affordance rather than a control that always fails.
+ * page cannot be unpublished — the server refuses it — so it gets no hover
+ * affordance and no menu rather than a control that always fails.
+ *
+ * **Every pill is the same size either way.** The chevron's space is reserved
+ * whether or not there is a menu, and the box has a floor width, so a column of
+ * these lines up regardless of which rows can be acted on and whether the word
+ * is "Published" or the longer "Unpublished". Letting the geometry vary made
+ * the home row read as a different kind of thing from its neighbours when the
+ * only real difference is that one menu is missing.
  */
 export default function StatusPill({
   tone,
@@ -48,10 +55,17 @@ export default function StatusPill({
   actions?: StatusAction[];
   disabled?: boolean;
 }) {
-  const base = "inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-xs font-medium";
+  const base =
+    "inline-flex h-7 w-[7.25rem] items-center justify-between gap-1 rounded-md px-2.5 text-xs font-medium";
 
   if (!actions?.length) {
-    return <span className={cn(base, TONES[tone])}>{label}</span>;
+    return (
+      <span className={cn(base, TONES[tone])}>
+        {label}
+        {/* Holds the chevron's place so an actionless pill is the same box. */}
+        <ChevronDown aria-hidden className="invisible size-3" />
+      </span>
+    );
   }
 
   return (
