@@ -126,3 +126,24 @@ describe("humanize", () => {
     expect(humanize(input)).toBe(expected);
   });
 });
+
+/**
+ * `pdf.file` and `hero.image` are the same `AssetRef` shape, so nothing
+ * structural separates them. Until `DOCUMENT_FIELDS` existed the drawer routed
+ * both to the photo picker, which is why the PDF section could never be filled
+ * in: a merchant was shown "Your photos", an image-only `accept`, and a gate
+ * that refused every PDF.
+ */
+describe("documents are not photographs", () => {
+  it("gives the PDF section's file field a file control", () => {
+    expect(controlsFor("pdf").file).toMatchObject({ kind: "file" });
+  });
+
+  it("leaves every genuine photo field on the image control", () => {
+    expect(controlsFor("hero").image).toMatchObject({ kind: "image" });
+    expect(controlsFor("hero").carousel).toMatchObject({ kind: "image" });
+    expect(controlsFor("gallery").images).toMatchObject({ kind: "image" });
+    expect(controlsFor("content").mediaImage).toMatchObject({ kind: "image" });
+    expect(controlsFor("content").backgroundImage).toMatchObject({ kind: "image" });
+  });
+});

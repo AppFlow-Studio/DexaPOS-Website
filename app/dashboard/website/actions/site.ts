@@ -182,6 +182,12 @@ export async function UpdateSiteSettings(
     },
   });
 
+  // The canvas renders from this row, so it has to be re-read after a write —
+  // the same reason every other mutation in this file does it. Without it a
+  // merchant saves a theme and watches the editor behind the overlay keep the
+  // old one until a hard reload.
+  revalidatePath("/dashboard/website", "layout");
+
   return { data: data as MerchantSiteRow };
 }
 
@@ -432,6 +438,8 @@ export async function SetSiteLogo(
     resourceName: "Website logo",
     changes: { after: { logoAssetId: assetId } },
   });
+
+  revalidatePath("/dashboard/website", "layout");
 
   return { data: data as MerchantSiteRow };
 }

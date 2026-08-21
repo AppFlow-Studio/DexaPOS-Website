@@ -499,6 +499,19 @@ function Control({
         />
       );
 
+    case "file":
+      // The PDF section's document. Same control, a different library and a
+      // different gate — see `AssetPicker`'s `KIND_COPY`.
+      return (
+        <AssetPicker
+          label={control.label}
+          clerkOrgId={clerkOrgId}
+          kind="document"
+          value={value as { assetId: string; alt?: string } | undefined}
+          onChange={onChange}
+        />
+      );
+
     case "repeater": {
       const rows = Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
       const atMax = control.maxItems != null && rows.length >= control.maxItems;

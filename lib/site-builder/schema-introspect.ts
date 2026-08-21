@@ -22,6 +22,7 @@ export type ControlKind =
   | "number"
   | "select"
   | "image"
+  | "file"
   | "binding-list"
   | "form"
   | "video"
@@ -77,6 +78,19 @@ const MULTILINE_FIELDS = new Set([
   "question",
 ]);
 const RICHTEXT_FIELDS = new Set(["body", "answer"]);
+
+/**
+ * Asset fields holding a document rather than a photograph.
+ *
+ * `pdf.file` and `hero.image` are the same `AssetRef` shape, so nothing
+ * structural tells them apart — and until this existed the PDF section was
+ * handed a photo picker, which meant it could never be filled in at all.
+ *
+ * A name list for the same reason `formId` and `videoId` are: the alternative
+ * is a parallel Zod type whose only job is to be a different Zod type, and the
+ * section schemas are meant to stay plain data.
+ */
+const DOCUMENT_FIELDS = new Set(["file"]);
 
 interface ZodDef {
   type?: string;
@@ -256,7 +270,9 @@ export function describeField(name: string, field: unknown): FieldControl {
 
     case "object": {
       const shape = (inner as { shape?: Record<string, unknown> }).shape ?? {};
-      if ("assetId" in shape) return { ...base, kind: "image" };
+      if ("assetId" in shape) {
+        return { ...base, kind: DOCUMENT_FIELDS.has(name) ? "file" : "image" };
+      }
       // A CTA — `{ label, target }` — or a bare binding.
       if ("label" in shape && "target" in shape) return { ...base, kind: "link" };
       if ("type" in shape && "id" in shape) {

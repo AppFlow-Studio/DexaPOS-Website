@@ -160,6 +160,36 @@ export const fetchMerchantSite = cache(
 );
 
 /**
+ * The website's own logo, resolved from the asset library.
+ *
+ * The public renderer gets this for free — `get_public_site_page` joins
+ * `site_assets` on `logo_asset_id` and hands back `site_logo_url`. The editor
+ * has no such join, so without this it fell through to the ordering
+ * storefront's `logo_url` and showed a merchant their *old* logo in the canvas
+ * while the live site showed the new one.
+ *
+ * Soft-deleted assets resolve to null on purpose, so an editor preview degrades
+ * exactly the way the published page does.
+ */
+async function fetchSiteLogoUrl(assetId: string | null): Promise<string | null> {
+  if (!assetId) return null;
+
+  const { data, error } = await getRequestSupabase()
+    .from("site_assets")
+    .select("cdn_url")
+    .eq("id", assetId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (error) {
+    console.warn(`[site-builder] logo asset lookup failed for ${assetId}`, error.message);
+    return null;
+  }
+
+  return (data as { cdn_url: string } | null)?.cdn_url ?? null;
+}
+
+/**
  * Everything the editor needs off `merchant_sites`, from the one memoised read.
  *
  * A merchant who has never opened the builder has no row at all, so every field
@@ -171,6 +201,7 @@ async function fetchWebsiteSettings(merchantId: string): Promise<{
   features: SiteFeatures;
   brand: SiteBrand;
   nav: unknown;
+  logoUrl: string | null;
 }> {
   const site = await fetchMerchantSite(merchantId);
   const { features, brand } = readSiteSettings({
@@ -183,6 +214,7 @@ async function fetchWebsiteSettings(merchantId: string): Promise<{
       site?.theme && typeof site.theme === "object"
         ? pickThemeTokens(site.theme as Record<string, unknown>)
         : {},
+    logoUrl: await fetchSiteLogoUrl(site?.logo_asset_id ?? null),
     features,
     brand,
     nav: site?.nav ?? null,
@@ -227,7 +259,10 @@ export async function loadSiteContext(
       storefrontName: nullableString(config.store_name),
       fallback: "Your restaurant",
     }),
-    logoUrl: nullableString(config.logo_url),
+    // The website's own logo wins; a merchant who has never chosen one keeps
+    // borrowing their ordering storefront's. Identical precedence to
+    // `public-context.ts`, so the canvas and the live page cannot disagree.
+    logoUrl: website.logoUrl ?? nullableString(config.logo_url),
     heroImageUrl: nullableString(config.hero_image_url),
     phone: nullableString(config.phone),
     pricingDisclosureText: nullableString(config.pricing_disclosure_text),

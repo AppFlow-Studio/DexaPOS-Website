@@ -149,4 +149,25 @@ describe("hiddenFields", () => {
       for (const name of hidden(props)) expect(shape, `${name} is not a content field`).toContain(name);
     }
   });
+
+  /**
+   * Only the variants that overlay copy on the photo draw a scrim, so only they
+   * have anything for the opacity slider to change. See HeroSection.
+   */
+  it("offers hero overlay opacity only to the variants that render a scrim", () => {
+    const heroHidden = (variant: string) =>
+      new Set(SECTION_REGISTRY.hero.hiddenFields?.({ variant }) ?? []);
+
+    expect(heroHidden("bistro").has("overlayOpacity")).toBe(true);
+    expect(heroHidden("classic").has("overlayOpacity")).toBe(false);
+    expect(heroHidden("spotlight").has("overlayOpacity")).toBe(false);
+  });
+
+  it("never hides a hero field that is not in the schema", () => {
+    const shape = Object.keys(SECTION_REGISTRY.hero.schema.shape);
+    for (const variant of ["classic", "bistro", "spotlight"]) {
+      for (const name of SECTION_REGISTRY.hero.hiddenFields?.({ variant }) ?? [])
+        expect(shape, `${name} is not a hero field`).toContain(name);
+    }
+  });
 });

@@ -32,6 +32,33 @@ export const ALLOWED_ASSET_TYPES = [
 export type AllowedAssetType = (typeof ALLOWED_ASSET_TYPES)[number];
 
 /**
+ * The document types a merchant website may carry.
+ *
+ * Exactly one, and deliberately so. The PDF section exists because merchants
+ * have a designed menu they paid for; it does not exist to become a file host,
+ * and every format added here is another thing served from our origin.
+ *
+ * The CDN's `documents` category already permits `application/pdf` at a 10 MB
+ * ceiling, which is where `MAX_DOCUMENT_BYTES` comes from — the two numbers
+ * have to agree or an upload passes here and fails there.
+ */
+export const ALLOWED_DOCUMENT_TYPES = ["application/pdf"] as const;
+
+export type AllowedDocumentType = (typeof ALLOWED_DOCUMENT_TYPES)[number];
+
+/** 10 MB. Matches the CDN edge function's ceiling for the `documents` category. */
+export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Which gate an upload goes through, and which CDN category it lands in.
+ *
+ * A photo field must never be offered a PDF and the PDF field must never be
+ * offered a photo, so the kind travels with the request rather than being
+ * guessed from the file.
+ */
+export type AssetKind = "image" | "document";
+
+/**
  * The first bytes of each format we accept.
  *
  * **The declared MIME type is a claim by the uploader, not a fact.** A browser
@@ -56,6 +83,19 @@ export function isAllowedAssetType(value: string): value is AllowedAssetType {
   return (ALLOWED_ASSET_TYPES as readonly string[]).includes(value);
 }
 
+export function isAllowedDocumentType(value: string): value is AllowedDocumentType {
+  return (ALLOWED_DOCUMENT_TYPES as readonly string[]).includes(value);
+}
+
+/** `%PDF-`. Same reasoning as the image magic numbers: the label is a claim. */
+const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46, 0x2d];
+
+export function looksLikePdf(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= PDF_MAGIC.length && PDF_MAGIC.every((byte, i) => bytes[i] === byte)
+  );
+}
+
 /**
  * The type the file's own bytes claim to be, or `null` if we do not recognise
  * them. A `null` is a rejection, not a shrug: an image we cannot identify is
@@ -71,6 +111,10 @@ export function sniffImageType(bytes: Uint8Array): AllowedAssetType | null {
 
 export type AssetRejection =
   | { ok: true; type: AllowedAssetType }
+  | { ok: false; code: "asset_type_rejected" | "asset_too_large"; message: string };
+
+export type DocumentRejection =
+  | { ok: true; type: AllowedDocumentType }
   | { ok: false; code: "asset_type_rejected" | "asset_too_large"; message: string };
 
 /**
@@ -126,6 +170,46 @@ export function checkAssetUpload(
 }
 
 /**
+ * The document gate.
+ *
+ * Deliberately the same shape as `checkAssetUpload` — size, emptiness, declared
+ * type, sniffed contents, agreement — because a PDF arriving from a merchant is
+ * exactly as untrusted as a photograph, and the only reason it is a separate
+ * function is that it is a separate allowlist and a separate ceiling.
+ */
+export function checkDocumentUpload(
+  declaredType: string,
+  sizeBytes: number,
+  head: Uint8Array,
+): DocumentRejection {
+  if (sizeBytes > MAX_DOCUMENT_BYTES) {
+    return {
+      ok: false,
+      code: "asset_too_large",
+      message: `That document is ${formatBytes(sizeBytes)}. The limit is ${formatBytes(MAX_DOCUMENT_BYTES)}.`,
+    };
+  }
+
+  if (sizeBytes === 0) {
+    return { ok: false, code: "asset_type_rejected", message: "That file is empty." };
+  }
+
+  if (!isAllowedDocumentType(declaredType)) {
+    return { ok: false, code: "asset_type_rejected", message: "Use a PDF." };
+  }
+
+  if (!looksLikePdf(head)) {
+    return {
+      ok: false,
+      code: "asset_type_rejected",
+      message: "That file does not look like a PDF.",
+    };
+  }
+
+  return { ok: true, type: "application/pdf" };
+}
+
+/**
  * A storage-safe filename.
  *
  * The merchant's own name is kept only as a readable prefix — the uniqueness
@@ -133,7 +217,11 @@ export function checkAssetUpload(
  * separators, dots and everything non-alphanumeric go, so nothing a merchant
  * can name a file can climb out of its directory.
  */
-export function safeFileName(originalName: string, unique: string, type: AllowedAssetType): string {
+export function safeFileName(
+  originalName: string,
+  unique: string,
+  type: AllowedAssetType | AllowedDocumentType,
+): string {
   const stem = originalName
     .replace(/\.[^.]*$/, "")
     .toLowerCase()
@@ -144,12 +232,13 @@ export function safeFileName(originalName: string, unique: string, type: Allowed
   return `${stem || "image"}-${unique}.${EXTENSIONS[type]}`;
 }
 
-const EXTENSIONS: Record<AllowedAssetType, string> = {
+const EXTENSIONS: Record<AllowedAssetType | AllowedDocumentType, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
   "image/webp": "webp",
   "image/gif": "gif",
   "image/avif": "avif",
+  "application/pdf": "pdf",
 };
 
 export function formatBytes(bytes: number): string {

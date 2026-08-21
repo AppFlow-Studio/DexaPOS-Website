@@ -1,6 +1,6 @@
 "use client";
 
-import { ImagePlus, Loader2, Trash2, Upload } from "lucide-react";
+import { FileText, ImagePlus, Loader2, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -18,9 +18,65 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ALLOWED_ASSET_TYPES, MAX_ASSET_BYTES, formatBytes } from "@/lib/site-builder/assets";
+import {
+  ALLOWED_ASSET_TYPES,
+  ALLOWED_DOCUMENT_TYPES,
+  MAX_ASSET_BYTES,
+  MAX_DOCUMENT_BYTES,
+  formatBytes,
+  type AssetKind,
+} from "@/lib/site-builder/assets";
 import type { SiteAssetSummary } from "@/lib/site-builder/db-types";
 import { cn } from "@/lib/utils";
+
+/**
+ * How each kind of asset presents itself.
+ *
+ * Collected here so adding a kind is a row in this table rather than a dozen
+ * `kind === "document"` ternaries scattered through three components — and so
+ * the copy a merchant reads can never say "photo" while the file input accepts
+ * a PDF.
+ */
+const KIND_COPY: Record<
+  AssetKind,
+  {
+    accept: string;
+    maxBytes: number;
+    dialogTitle: string;
+    formats: string;
+    empty: string;
+    emptyLibrary: string;
+    uploadIdle: string;
+    addedOne: string;
+    addedMany: (n: number) => string;
+    missing: string;
+  }
+> = {
+  image: {
+    accept: ALLOWED_ASSET_TYPES.join(","),
+    maxBytes: MAX_ASSET_BYTES,
+    dialogTitle: "Your photos",
+    formats: "JPG, PNG, WebP, GIF or AVIF",
+    empty: "Choose a photo",
+    emptyLibrary: "No photos yet. Upload one to get started.",
+    uploadIdle: "Upload photos",
+    addedOne: "Photo added.",
+    addedMany: (n) => `${n} photos added.`,
+    missing: "This photo is no longer in your library",
+  },
+  document: {
+    accept: ALLOWED_DOCUMENT_TYPES.join(","),
+    maxBytes: MAX_DOCUMENT_BYTES,
+    dialogTitle: "Your documents",
+    formats: "PDF",
+    empty: "Choose a document",
+    emptyLibrary: "No documents yet. Upload one to get started.",
+    uploadIdle: "Upload a document",
+    addedOne: "Document added.",
+    addedMany: (n) => `${n} documents added.`,
+    missing: "This document is no longer in your library",
+  },
+};
 
 /**
  * The photo control, and the library behind it.
@@ -45,23 +101,35 @@ export default function AssetPicker({
   onChange,
   label,
   clerkOrgId,
+  kind = "image",
 }: {
   value: { assetId: string; alt?: string } | undefined;
   onChange: (value: { assetId: string; alt?: string } | undefined) => void;
   label: string;
   clerkOrgId: string;
+  /** `document` gives the PDF section a picker that accepts a PDF. */
+  kind?: AssetKind;
 }) {
   const [open, setOpen] = useState(false);
   const [assets, setAssets] = useState<SiteAssetSummary[] | null>(null);
   const chosen = value ? assets?.find((a) => a.id === value.assetId) : undefined;
+  const copy = KIND_COPY[kind];
 
-  // Loaded once the picker is first opened rather than on mount: most sections
-  // never touch an image field, and the library is a round trip.
+  /*
+    Loaded when the dialog opens *or* when there is already a photo to draw.
+    It used to be `open` alone, which meant a field that was already filled had
+    no library to resolve its own thumbnail against: `chosen` stayed undefined
+    and the control rendered the word "Loading…" indefinitely — until the
+    merchant happened to open the picker, which is the one action the thumbnail
+    exists to make unnecessary. Sections with no image field still cost nothing.
+  */
+  const needsLibrary = open || value !== undefined;
+
   useEffect(() => {
-    if (!open || assets !== null) return;
+    if (!needsLibrary || assets !== null) return;
     let cancelled = false;
 
-    ListSiteAssets(clerkOrgId)
+    ListSiteAssets(clerkOrgId, kind)
       .then((result) => {
         if (cancelled) return;
         if (result.error) {
@@ -78,7 +146,7 @@ export default function AssetPicker({
     return () => {
       cancelled = true;
     };
-  }, [open, assets, clerkOrgId]);
+  }, [needsLibrary, assets, clerkOrgId, kind]);
 
   return (
     <div>
@@ -91,16 +159,24 @@ export default function AssetPicker({
             onClick={() => setOpen(true)}
             className="block w-full overflow-hidden rounded-md border bg-muted/30 transition-colors hover:border-foreground/25"
           >
-            {chosen ? (
+            {chosen && kind === "image" ? (
               // eslint-disable-next-line @next/next/no-img-element -- merchant CDN host
               <img
                 src={chosen.cdnUrl}
                 alt={value.alt ?? chosen.altText ?? ""}
                 className="h-28 w-full object-cover"
               />
+            ) : chosen ? (
+              // A PDF has no thumbnail worth rendering, so it says what it is.
+              <span className="flex h-28 flex-col items-center justify-center gap-1.5 px-3 text-[11px] text-muted-foreground">
+                <FileText className="size-5" />
+                <span className="max-w-full truncate">
+                  {chosen.originalFilename ?? "Document"}
+                </span>
+              </span>
             ) : (
               <span className="flex h-28 items-center justify-center text-[11px] text-muted-foreground">
-                {assets === null ? "Loading…" : "This photo is no longer in your library"}
+                {assets === null ? "Loading…" : copy.missing}
               </span>
             )}
           </button>
@@ -132,8 +208,8 @@ export default function AssetPicker({
           onClick={() => setOpen(true)}
           className="flex h-24 w-full flex-col items-center justify-center gap-1.5 rounded-md border border-dashed text-[11px] text-muted-foreground transition-colors hover:border-foreground/25 hover:text-foreground"
         >
-          <ImagePlus className="size-5" />
-          Choose a photo
+          {kind === "document" ? <FileText className="size-5" /> : <ImagePlus className="size-5" />}
+          {copy.empty}
         </button>
       )}
 
@@ -141,6 +217,7 @@ export default function AssetPicker({
         open={open}
         onOpenChange={setOpen}
         clerkOrgId={clerkOrgId}
+        kind={kind}
         assets={assets}
         setAssets={setAssets}
         selectedId={value?.assetId}
@@ -157,6 +234,7 @@ function AssetLibraryDialog({
   open,
   onOpenChange,
   clerkOrgId,
+  kind,
   assets,
   setAssets,
   selectedId,
@@ -165,6 +243,7 @@ function AssetLibraryDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   clerkOrgId: string;
+  kind: AssetKind;
   assets: SiteAssetSummary[] | null;
   setAssets: (assets: SiteAssetSummary[]) => void;
   selectedId?: string;
@@ -172,6 +251,7 @@ function AssetLibraryDialog({
 }) {
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const copy = KIND_COPY[kind];
 
   const upload = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -185,7 +265,7 @@ function AssetLibraryDialog({
       for (const file of Array.from(files)) {
         const form = new FormData();
         form.append("file", file);
-        const result = await UploadSiteAsset(clerkOrgId, form);
+        const result = await UploadSiteAsset(clerkOrgId, form, kind);
         if (result.error) {
           toast.error(`${file.name}: ${result.error}`);
           continue;
@@ -195,7 +275,7 @@ function AssetLibraryDialog({
 
       if (added.length > 0) {
         setAssets([...added, ...(assets ?? [])]);
-        toast.success(added.length === 1 ? "Photo added." : `${added.length} photos added.`);
+        toast.success(added.length === 1 ? copy.addedOne : copy.addedMany(added.length));
       }
     } finally {
       setUploading(false);
@@ -207,9 +287,9 @@ function AssetLibraryDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Your photos</DialogTitle>
+          <DialogTitle>{copy.dialogTitle}</DialogTitle>
           <DialogDescription>
-            JPG, PNG, WebP, GIF or AVIF, up to {formatBytes(MAX_ASSET_BYTES)} each.
+            {copy.formats}, up to {formatBytes(copy.maxBytes)} each.
           </DialogDescription>
         </DialogHeader>
 
@@ -218,7 +298,7 @@ function AssetLibraryDialog({
             <input
               ref={inputRef}
               type="file"
-              accept={ALLOWED_ASSET_TYPES.join(",")}
+              accept={copy.accept}
               multiple
               className="hidden"
               onChange={(e) => void upload(e.target.files)}
@@ -231,22 +311,21 @@ function AssetLibraryDialog({
               onClick={() => inputRef.current?.click()}
             >
               {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-              {uploading ? "Uploading…" : "Upload photos"}
+              {uploading ? "Uploading…" : copy.uploadIdle}
             </Button>
           </div>
 
           {assets === null ? (
-            <p className="py-8 text-center text-xs text-muted-foreground">Loading your photos…</p>
+            <p className="py-8 text-center text-xs text-muted-foreground">Loading…</p>
           ) : assets.length === 0 ? (
-            <p className="py-8 text-center text-xs text-muted-foreground">
-              No photos yet. Upload one to get started.
-            </p>
+            <p className="py-8 text-center text-xs text-muted-foreground">{copy.emptyLibrary}</p>
           ) : (
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <ul className={kind === "document" ? "space-y-2" : "grid grid-cols-2 gap-3 sm:grid-cols-3"}>
               {assets.map((asset) => (
                 <AssetTile
                   key={asset.id}
                   asset={asset}
+                  kind={kind}
                   clerkOrgId={clerkOrgId}
                   selected={asset.id === selectedId}
                   onPick={() => onPick(asset)}
@@ -268,6 +347,7 @@ function AssetLibraryDialog({
 
 function AssetTile({
   asset,
+  kind,
   clerkOrgId,
   selected,
   onPick,
@@ -275,6 +355,7 @@ function AssetTile({
   onDeleted,
 }: {
   asset: SiteAssetSummary;
+  kind: AssetKind;
   clerkOrgId: string;
   selected: boolean;
   onPick: () => void;
@@ -282,6 +363,47 @@ function AssetTile({
   onDeleted: () => void;
 }) {
   const [alt, setAlt] = useState(asset.altText ?? "");
+
+  /*
+    A document row rather than a photo tile. There is no thumbnail to show and
+    no alt text to ask for — alt text describes a picture, and a link to a PDF
+    is described by `linkLabel` on the section itself.
+  */
+  if (kind === "document") {
+    return (
+      <li
+        className={cn(
+          "flex items-center gap-2 rounded-md border p-2 transition-colors",
+          selected ? "border-foreground/40 ring-1 ring-foreground/20" : "hover:border-foreground/25",
+        )}
+      >
+        <FileText className="size-4 shrink-0 text-muted-foreground" />
+        <button type="button" onClick={onPick} className="min-w-0 flex-1 text-left">
+          <span className="block truncate text-[11px] font-medium">
+            {asset.originalFilename ?? "Document"}
+          </span>
+          <span className="block text-[10px] text-muted-foreground">
+            {formatBytes(asset.bytes)}
+          </span>
+        </button>
+        <button
+          type="button"
+          aria-label="Remove from your documents"
+          className="text-muted-foreground transition-colors hover:text-destructive"
+          onClick={async () => {
+            const result = await DeleteSiteAsset(clerkOrgId, asset.id);
+            if (result.error) {
+              toast.error(result.error);
+              return;
+            }
+            onDeleted();
+          }}
+        >
+          <Trash2 className="size-3" />
+        </button>
+      </li>
+    );
+  }
 
   return (
     <li
@@ -364,11 +486,16 @@ export function AssetListPicker({
   const [assets, setAssets] = useState<SiteAssetSummary[] | null>(null);
   const full = value.length >= maxItems;
 
+  // Same reason as the single picker: rows already in the list have to resolve
+  // their own thumbnails, and before this they drew an empty grey square
+  // labelled "Photo" until the dialog had been opened once.
+  const needsLibrary = open || value.length > 0;
+
   useEffect(() => {
-    if (!open || assets !== null) return;
+    if (!needsLibrary || assets !== null) return;
     let cancelled = false;
 
-    ListSiteAssets(clerkOrgId)
+    ListSiteAssets(clerkOrgId, "image")
       .then((result) => {
         if (!cancelled) setAssets(result.data ?? []);
       })
@@ -379,7 +506,7 @@ export function AssetListPicker({
     return () => {
       cancelled = true;
     };
-  }, [open, assets, clerkOrgId]);
+  }, [needsLibrary, assets, clerkOrgId]);
 
   const move = (index: number, delta: -1 | 1) => {
     const to = index + delta;
@@ -463,6 +590,8 @@ export function AssetListPicker({
         open={open}
         onOpenChange={setOpen}
         clerkOrgId={clerkOrgId}
+        // Galleries and the hero carousel are photographs by definition.
+        kind="image"
         assets={assets}
         setAssets={setAssets}
         onPick={(asset) => {

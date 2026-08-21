@@ -221,6 +221,10 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: false,
     movable: false,
+    // `bistro` sets the copy *beside* the photo rather than on top of it, so it
+    // renders no scrim and never reads `overlayOpacity`. Leaving the slider on
+    // screen let a merchant drag it and watch nothing happen.
+    hiddenFields: (props) => (props.variant === "bistro" ? ["overlayOpacity"] : []),
     schema: heroSchema,
     defaults: () => heroDefaults(),
     bindingTypes: [],

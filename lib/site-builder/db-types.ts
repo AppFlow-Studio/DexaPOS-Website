@@ -139,6 +139,12 @@ export interface SiteAssetSummary {
   originalFilename: string | null;
   bytes: number;
   createdAt: string;
+  /**
+   * What the library holds for this row. One library, two kinds — a photo field
+   * must never be offered a PDF, and the PDF field must never be offered a
+   * photo, so the picker filters on this.
+   */
+  mimeType: string;
 }
 
 /** Uniform action result, matching the repo's `{ data?, error? }` convention. */

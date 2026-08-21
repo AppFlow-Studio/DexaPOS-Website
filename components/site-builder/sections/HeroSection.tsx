@@ -75,7 +75,7 @@ export default function HeroSection({ section, ctx }: SectionRenderProps<"hero">
             image={image}
             carousel={carousel}
             ctx={ctx}
-            className="aspect-[4/3] w-full rounded-[var(--site-radius)]"
+            className="relative aspect-[4/3] w-full rounded-[var(--site-radius)]"
           />
         </Container>
       </section>
@@ -129,6 +129,20 @@ export default function HeroSection({ section, ctx }: SectionRenderProps<"hero">
  * A zero-JavaScript carousel keeps the public renderer server-only while still
  * making every selected Hero photograph visible. The first resolved frame is
  * eager/LCP; later frames stay lazy. Reduced-motion visitors see only frame 1.
+ *
+ * **`className` owns the positioning, and must establish a containing block.**
+ * The frames are `absolute inset-0`, so the wrapper has to be a positioned
+ * ancestor — but it must not *decide* which position, because the variants
+ * disagree: the full-bleed heroes want `absolute inset-0`, the split hero wants
+ * `relative` over an aspect box.
+ *
+ * This appended `relative` unconditionally, which silently broke the full-bleed
+ * variants: Tailwind emits `.relative` after `.absolute`, so with both classes
+ * present `relative` wins no matter what order they sit in the attribute. The
+ * wrapper stopped being absolutely positioned, `h-full` had no definite parent
+ * height left to resolve against, the box collapsed to zero, and every frame
+ * inside it went with it. Only the carousel was affected — a lone image never
+ * passes through this wrapper at all.
  */
 function HeroMedia({
   sectionId,
@@ -173,7 +187,7 @@ function HeroMedia({
   const scope = `hero-carousel-${sectionId.replace(/[^A-Za-z0-9_-]/g, "")}`;
 
   return (
-    <div className={`${scope} ${className} relative overflow-hidden`} data-hero-carousel="true">
+    <div className={`${scope} ${className} overflow-hidden`} data-hero-carousel="true">
       <style>{`
         @keyframes ${animationName} {
           0%, ${fadeFrom}% { opacity: 1; }

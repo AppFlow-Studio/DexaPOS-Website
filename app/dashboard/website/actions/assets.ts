@@ -5,9 +5,11 @@ import { randomUUID } from "node:crypto";
 import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
 import {
   checkAssetUpload,
+  checkDocumentUpload,
   formatBytes,
   readImageSize,
   safeFileName,
+  type AssetKind,
 } from "@/lib/site-builder/assets";
 import type {
   ActionResult,
@@ -45,6 +47,7 @@ function toSummary(row: SiteAssetRow): SiteAssetSummary {
     originalFilename: row.original_filename,
     bytes: row.bytes,
     createdAt: row.created_at,
+    mimeType: row.mime_type,
   };
 }
 
@@ -64,12 +67,23 @@ function toSummary(row: SiteAssetRow): SiteAssetSummary {
 export async function UploadSiteAsset(
   clerkOrgId: string,
   formData: FormData,
+  /**
+   * Which gate to apply, and which CDN category to land in.
+   *
+   * Explicit rather than sniffed from the file: a photo field must never accept
+   * a PDF and the PDF field must never accept a photo, and that is a fact about
+   * the field the merchant is filling in, not about the bytes they chose.
+   */
+  kind: AssetKind = "image",
 ): Promise<ActionResult<SiteAssetSummary>> {
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const file = formData.get("file");
   if (!(file instanceof File)) {
-    return { error: "No image was provided", code: "asset_type_rejected" };
+    return {
+      error: kind === "document" ? "No document was provided" : "No image was provided",
+      code: "asset_type_rejected",
+    };
   }
 
   const merchantId = await fetchMerchantId(clerkOrgId);
@@ -78,9 +92,13 @@ export async function UploadSiteAsset(
   const buffer = Buffer.from(await file.arrayBuffer());
 
   // Declared type, real type, and size — all three, before anything leaves this
-  // process. `checkAssetUpload` requires the declared and sniffed types to
-  // agree, which is what stops a filter keyed on the declaration being fooled.
-  const check = checkAssetUpload(file.type, buffer.byteLength, new Uint8Array(buffer.subarray(0, 32)));
+  // process. Both gates require the declared and sniffed types to agree, which
+  // is what stops a filter keyed on the declaration being fooled.
+  const head = new Uint8Array(buffer.subarray(0, 32));
+  const check =
+    kind === "document"
+      ? checkDocumentUpload(file.type, buffer.byteLength, head)
+      : checkAssetUpload(file.type, buffer.byteLength, head);
   if (!check.ok) return { error: check.message, code: check.code };
 
   const supabase = createServerSupabaseClient();
@@ -97,7 +115,9 @@ export async function UploadSiteAsset(
     body: {
       scope: "merchant",
       merchantId,
-      category: "website",
+      // `documents` is what unlocks `application/pdf` and the 10 MB ceiling on
+      // the function's side; `website` is images only.
+      category: kind === "document" ? "documents" : "website",
       fileName,
       fileBase64: buffer.toString("base64"),
       contentType: check.type,
@@ -109,10 +129,19 @@ export async function UploadSiteAsset(
       uploadError?.message ??
       (typeof uploaded?.error === "string" ? uploaded.error : "The upload did not complete");
     console.error("[site-builder] asset upload failed:", detail);
-    return { error: "That image could not be uploaded. Try again.", code: "upload_failed" };
+    return {
+      error:
+        kind === "document"
+          ? "That document could not be uploaded. Try again."
+          : "That image could not be uploaded. Try again.",
+      code: "upload_failed",
+    };
   }
 
-  const size = readImageSize(new Uint8Array(buffer), check.type);
+  // Documents have no intrinsic pixel size; `readImageSize` is image-only and
+  // a PDF simply stores null dimensions, which is what the column is for.
+  const size =
+    check.type === "application/pdf" ? null : readImageSize(new Uint8Array(buffer), check.type);
 
   const { data, error } = await supabase
     .from("site_assets")
@@ -150,9 +179,16 @@ export async function UploadSiteAsset(
   return { data: toSummary(row) };
 }
 
-/** A merchant's library, newest first. Excludes soft-deleted rows. */
+/**
+ * A merchant's library, newest first. Excludes soft-deleted rows.
+ *
+ * Filtered by kind at the database rather than in the picker: the PDF field and
+ * the photo fields share one table, and a merchant choosing a hero image should
+ * not have to scroll past their catering pack to find it.
+ */
 export async function ListSiteAssets(
   clerkOrgId: string,
+  kind: AssetKind = "image",
 ): Promise<ActionResult<SiteAssetSummary[]>> {
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
@@ -160,13 +196,20 @@ export async function ListSiteAssets(
   if (!merchantId) return { error: "Merchant not found", code: "merchant_not_found" };
 
   const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase
+  const query = supabase
     .from("site_assets")
     .select("*")
     .eq("merchant_id", merchantId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(200);
+    .is("deleted_at", null);
+
+  // Rows predating the document lane are all images and all carry an `image/*`
+  // type, so the prefix match needs no backfill.
+  const scoped =
+    kind === "document"
+      ? query.eq("mime_type", "application/pdf")
+      : query.like("mime_type", "image/%");
+
+  const { data, error } = await scoped.order("created_at", { ascending: false }).limit(200);
 
   if (error) return { error: error.message, code: "db_error" };
   return { data: ((data as SiteAssetRow[] | null) ?? []).map(toSummary) };

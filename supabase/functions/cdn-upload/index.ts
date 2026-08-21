@@ -72,6 +72,12 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/webp",
   "image/svg+xml",
   "image/gif",
+  // The website builder has advertised AVIF since it shipped — in its upload
+  // dialog, its `accept` attribute and its own rejection message — while this
+  // set did not carry it, so every AVIF cleared the app's gate and was refused
+  // here. `lib/site-builder/assets.ts` is the stricter list and a test now
+  // asserts it stays a subset of this one.
+  "image/avif",
 ]);
 
 const ALLOWED_DOCUMENT_TYPES = new Set([

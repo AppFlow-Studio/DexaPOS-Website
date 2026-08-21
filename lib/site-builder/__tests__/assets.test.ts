@@ -1,10 +1,14 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { assetResolver, EMPTY_ASSET_MAP, type AssetMap } from "../asset-map";
 import {
   ALLOWED_ASSET_TYPES,
   MAX_ASSET_BYTES,
+  MAX_DOCUMENT_BYTES,
   checkAssetUpload,
+  checkDocumentUpload,
   formatBytes,
   isAllowedAssetType,
   readImageSize,
@@ -246,5 +250,110 @@ describe("assetResolver", () => {
   it("returns null for anything it does not hold", () => {
     expect(assetResolver(map)("deleted")).toBeNull();
     expect(assetResolver(EMPTY_ASSET_MAP)("a_1")).toBeNull();
+  });
+});
+
+/**
+ * The app's gate and the CDN function's gate are two separate allowlists in two
+ * separate deployables, and an image has to clear both.
+ *
+ * They drifted: the app accepted `image/avif` and the edge function did not, so
+ * every AVIF passed validation, travelled to the CDN, and came back as "That
+ * image could not be uploaded. Try again." — a retry message for something that
+ * could never succeed. Reading the function's list here is what makes the drift
+ * a failing test rather than a support ticket.
+ */
+describe("the app's allowlist and the CDN function's cannot drift", () => {
+  const edgeFunctionImageTypes = () => {
+    const source = readFileSync(
+      join(process.cwd(), "supabase/functions/cdn-upload/index.ts"),
+      "utf8",
+    );
+    const block = source.match(/const ALLOWED_IMAGE_TYPES = new Set\(\[([\s\S]*?)\]\);/);
+    if (!block) throw new Error("ALLOWED_IMAGE_TYPES not found in cdn-upload");
+    return new Set(Array.from(block[1].matchAll(/"([^"]+)"/g), (m) => m[1]));
+  };
+
+  it("accepts every type the app will send it", () => {
+    const allowed = edgeFunctionImageTypes();
+    for (const type of ALLOWED_ASSET_TYPES) {
+      expect(allowed, `cdn-upload rejects ${type}, which the app accepts`).toContain(type);
+    }
+  });
+
+  /**
+   * Not a mistake — the app is deliberately stricter. An SVG is a document that
+   * can carry script, and the function still permits it for the organisation
+   * logos that predate the website builder.
+   */
+  it("lets the app stay stricter than the function", () => {
+    expect(edgeFunctionImageTypes()).toContain("image/svg+xml");
+    expect(ALLOWED_ASSET_TYPES as readonly string[]).not.toContain("image/svg+xml");
+  });
+});
+
+/**
+ * The document lane.
+ *
+ * The PDF section shipped with `file` as an `AssetRef`, which meant it could
+ * only be filled by an upload — and every upload was refused, because the only
+ * gate was the image one. The section rendered "Upload a document to link to it
+ * here." permanently. These assert the lane that fixes it.
+ */
+describe("document uploads", () => {
+  const pdf = (extra: number[] = []) =>
+    new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, ...extra]);
+
+  it("accepts a real PDF", () => {
+    const result = checkDocumentUpload("application/pdf", 2048, pdf());
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.type).toBe("application/pdf");
+  });
+
+  it("refuses a file whose contents are not a PDF", () => {
+    // A PNG renamed to .pdf and declared as one — the exact trick the image
+    // gate's magic-number check exists to stop, applied to the document lane.
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const result = checkDocumentUpload("application/pdf", 2048, png);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("asset_type_rejected");
+  });
+
+  it("refuses an image even when its bytes are honest", () => {
+    expect(checkDocumentUpload("image/png", 2048, pdf()).ok).toBe(false);
+  });
+
+  it("allows a larger ceiling than images, and still has one", () => {
+    expect(MAX_DOCUMENT_BYTES).toBeGreaterThan(MAX_ASSET_BYTES);
+    expect(checkDocumentUpload("application/pdf", MAX_DOCUMENT_BYTES, pdf()).ok).toBe(true);
+
+    const tooBig = checkDocumentUpload("application/pdf", MAX_DOCUMENT_BYTES + 1, pdf());
+    expect(tooBig.ok).toBe(false);
+    if (!tooBig.ok) expect(tooBig.code).toBe("asset_too_large");
+  });
+
+  it("refuses an empty file rather than calling it a bad PDF", () => {
+    const result = checkDocumentUpload("application/pdf", 0, new Uint8Array());
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("empty");
+  });
+
+  it("names a PDF .pdf", () => {
+    expect(safeFileName("Catering Pack.pdf", "ab12cd34", "application/pdf")).toBe(
+      "catering-pack-ab12cd34.pdf",
+    );
+  });
+
+  /** The ceiling has to match the CDN function's `documents` limit exactly. */
+  it("agrees with the edge function about the document ceiling and type", () => {
+    const source = readFileSync(
+      join(process.cwd(), "supabase/functions/cdn-upload/index.ts"),
+      "utf8",
+    );
+    expect(source).toContain("const MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024;");
+    expect(MAX_DOCUMENT_BYTES).toBe(10 * 1024 * 1024);
+
+    const block = source.match(/const ALLOWED_DOCUMENT_TYPES = new Set\(\[([\s\S]*?)\]\);/);
+    expect(block?.[1]).toContain('"application/pdf"');
   });
 });
