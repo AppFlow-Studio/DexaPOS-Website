@@ -557,5 +557,14 @@ Single index for active ticket streams and their source trackers.
 - `docs/features/billing/HANDOFF-2026-07-13-HQ-BILLING-CONTROL-FINAL.md`
 - `docs/features/billing/HANDOFF-2026-07-13-BILLING-CONTROL-REMAINING-POS-ITEMS.md`
 
-7. Next 16 upgrade handoff:
+7. Merchant plan request and notification flow:
+- `docs/features/billing/FEATURE-2026-08-21-MERCHANT-PLAN-REQUEST-NOTIFICATIONS.md`
+- Merchant plan cards are selectable and submit a merchant-scoped billing
+  support request without granting merchant-side activation rights.
+- HQ assignment replies to the request, creates a merchant-visible update when
+  no request exists, and attempts email delivery to the billing/owner address.
+- Code is complete; authenticated staging QA and notification delivery proof
+  remain required.
+
+8. Next 16 upgrade handoff:
 - `docs/engineering/framework-upgrades/HANDOFF-2026-07-13-NEXT-16-UPGRADE.md`

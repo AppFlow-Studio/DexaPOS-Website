@@ -1,9 +1,11 @@
 'use server'
 
 import { auth } from '@clerk/nextjs/server'
+import { revalidatePath } from 'next/cache'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getEffectiveMerchantContext } from '@/lib/admin/merchant-context'
+import { CreateTicket } from '@/app/dashboard/actions/support'
 import {
   formatLongDate,
   formatShortDateRange,
@@ -197,6 +199,7 @@ async function resolveMerchantForCurrentOrg() {
   return {
     merchantId: merchant.id as string,
     merchantName: merchant.name as string,
+    clerkOrgId: merchant.clerk_org_id as string,
     serviceRole,
   }
 }
@@ -555,6 +558,146 @@ export async function getMerchantTierPlansForCurrentMerchant(): Promise<Merchant
       display_order: number | null
     }>,
   )
+}
+
+export async function RequestMerchantTierPlan(
+  planId: string,
+): Promise<{
+  success: boolean
+  ticketId?: string
+  ticketNumber?: string
+  alreadyRequested?: boolean
+  notificationWarning?: string
+  error?: string
+}> {
+  try {
+    if (!planId?.trim()) {
+      return { success: false, error: 'Select a subscription plan first.' }
+    }
+
+    const { userId } = await auth()
+    if (!userId) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    const { merchantId, merchantName, clerkOrgId, serviceRole } =
+      await resolveMerchantForCurrentOrg()
+
+    const [{ data: requestedPlan, error: planError }, { data: planStatus, error: statusError }] =
+      await Promise.all([
+        serviceRole
+          .from('subscription_plans')
+          .select('id, plan_code, display_name, monthly_price_cents, plan_scope, is_active')
+          .eq('id', planId)
+          .eq('plan_scope', 'merchant_tier')
+          .eq('is_active', true)
+          .maybeSingle(),
+        serviceRole.rpc('get_merchant_subscription_status', {
+          p_merchant_id: merchantId,
+        }),
+      ])
+
+    if (planError || !requestedPlan) {
+      console.error('[RequestMerchantTierPlan] plan lookup error:', planError)
+      return { success: false, error: 'The selected plan is not available.' }
+    }
+
+    if (statusError) {
+      console.error('[RequestMerchantTierPlan] status lookup error:', statusError)
+      return { success: false, error: 'Failed to load the current subscription.' }
+    }
+
+    const status = (planStatus ?? {}) as Record<string, any>
+    const currentPlan = status.plan as Record<string, any> | null | undefined
+
+    if (
+      String(currentPlan?.id ?? '') === requestedPlan.id ||
+      String(currentPlan?.code ?? '') === requestedPlan.plan_code
+    ) {
+      return { success: false, error: 'This is already your current subscription plan.' }
+    }
+
+    const requestMetadata = {
+      source: 'merchant_subscription_plan_request',
+      request_type: 'merchant_tier_plan',
+      requested_plan_id: requestedPlan.id,
+      requested_plan_code: requestedPlan.plan_code,
+    }
+
+    const { data: existingRequest, error: existingRequestError } = await serviceRole
+      .from('support_tickets')
+      .select('id, ticket_number')
+      .eq('merchant_id', merchantId)
+      .eq('ticket_scope', 'merchant')
+      .eq('category', 'billing')
+      .in('status', ['open', 'in_progress', 'waiting_on_merchant'])
+      .contains('metadata', requestMetadata)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (existingRequestError) {
+      console.error('[RequestMerchantTierPlan] duplicate lookup error:', existingRequestError)
+      return { success: false, error: 'Failed to check existing plan requests.' }
+    }
+
+    if (existingRequest) {
+      return {
+        success: true,
+        ticketId: existingRequest.id,
+        ticketNumber: existingRequest.ticket_number,
+        alreadyRequested: true,
+      }
+    }
+
+    const monthlyPrice = Number(requestedPlan.monthly_price_cents ?? 0) / 100
+    const currentPlanName = String(currentPlan?.name ?? currentPlan?.display_name ?? 'No active plan')
+    const description = [
+      `${merchantName} requested a subscription plan change.`,
+      '',
+      `Current plan: ${currentPlanName}`,
+      `Requested plan: ${requestedPlan.display_name}`,
+      `Requested monthly price: ${monthlyPrice > 0 ? `$${monthlyPrice.toFixed(2)}` : 'Contact for pricing'}`,
+      `Active locations: ${Number(status.active_location_count ?? 0)}`,
+      '',
+      'Please review and apply the plan from the HQ subscription workspace.',
+    ].join('\n')
+
+    const result = await CreateTicket(clerkOrgId, {
+      subject: `Subscription request: ${requestedPlan.display_name}`,
+      description,
+      category: 'billing',
+      metadata: {
+        ...requestMetadata,
+        requested_plan_name: requestedPlan.display_name,
+        requested_monthly_price_cents: Number(requestedPlan.monthly_price_cents ?? 0),
+        current_plan_id: currentPlan?.id ?? null,
+        current_plan_code: currentPlan?.code ?? null,
+        current_plan_name: currentPlanName,
+        active_location_count: Number(status.active_location_count ?? 0),
+      },
+    })
+
+    if (result.error || !result.data) {
+      return { success: false, error: result.error || 'Failed to submit the plan request.' }
+    }
+
+    revalidatePath('/dashboard/subscriptions')
+    revalidatePath('/dashboard/support')
+
+    return {
+      success: true,
+      ticketId: result.data.ticket_id,
+      ticketNumber: result.data.ticket_number,
+      notificationWarning: result.notificationWarning,
+    }
+  } catch (error) {
+    console.error('[RequestMerchantTierPlan] exception:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to submit the plan request.',
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

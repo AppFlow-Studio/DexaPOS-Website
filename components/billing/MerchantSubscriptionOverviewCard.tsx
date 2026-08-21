@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import {
   AlertTriangle,
   Building2,
+  Check,
   ChevronDown,
   CreditCard,
   Download,
@@ -45,6 +46,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { PageHeader, PageShell, Panel, PanelSection } from '@/components/dashboard/shell'
 import {
   getMerchantSubscriptionInvoiceDocument,
+  RequestMerchantTierPlan,
   type MerchantBillingLocationViewRecord,
   type MerchantPlanStatusView,
   type MerchantProvisionedDeviceViewRecord,
@@ -90,6 +92,7 @@ const EMPTY_LOCATIONS: MerchantBillingLocationViewRecord[] = []
 const EMPTY_DEVICES_BY_LOCATION: Record<string, MerchantProvisionedDeviceViewRecord[]> = {}
 const EMPTY_INVOICES: MerchantSubscriptionInvoiceViewRecord[] = []
 const EMPTY_BILLING_PROFILES: Record<string, MerchantSubscriptionBillingProfileViewRecord> = {}
+const EMPTY_TIER_PLANS: MerchantTierPlanViewRecord[] = []
 
 const SUBSCRIPTION_SECTIONS: Array<{
   id: SubscriptionSection
@@ -252,6 +255,8 @@ export function MerchantSubscriptionOverviewCard({
   const [isInvoicePreviewLoading, setIsInvoicePreviewLoading] = useState(false)
   const [invoiceActionId, setInvoiceActionId] = useState<string | null>(null)
   const [contactModalMode, setContactModalMode] = useState<'plan' | 'hardware' | null>(null)
+  const [selectedRequestedPlanId, setSelectedRequestedPlanId] = useState('')
+  const [isSubmittingPlanRequest, setIsSubmittingPlanRequest] = useState(false)
   const [activeSection, setActiveSection] = useState<SubscriptionSection>('plan')
   const [locationPage, setLocationPage] = useState(1)
   const [openLocationIds, setOpenLocationIds] = useState<string[]>([])
@@ -261,8 +266,13 @@ export function MerchantSubscriptionOverviewCard({
   const isLoading = overviewQuery.isLoading
   const merchantPlanStatus = overviewQuery.data?.merchantPlanStatus ?? EMPTY_PLAN_STATUS
   const locations = overviewQuery.data?.locations ?? EMPTY_LOCATIONS
-  const merchantTierPlans: MerchantTierPlanViewRecord[] =
-    merchantTierPlansQuery.data ?? overviewQuery.data?.merchantTierPlans ?? []
+  const merchantTierPlans = useMemo(
+    () =>
+      merchantTierPlansQuery.data ??
+      overviewQuery.data?.merchantTierPlans ??
+      EMPTY_TIER_PLANS,
+    [merchantTierPlansQuery.data, overviewQuery.data?.merchantTierPlans],
+  )
   const devicesByLocationId = overviewQuery.data?.devicesByLocationId ?? EMPTY_DEVICES_BY_LOCATION
   const invoices = overviewQuery.data?.invoices ?? EMPTY_INVOICES
   const billingProfilesByLocationId =
@@ -289,6 +299,25 @@ export function MerchantSubscriptionOverviewCard({
   )
 
   const usage = useMemo(() => usageLabel(merchantPlanStatus), [merchantPlanStatus])
+
+  const selectedRequestedPlan = useMemo(() => {
+    const currentPlanCode = merchantPlanStatus.plan?.code ?? null
+    const preferredPlan = merchantPlanStatus.required_plan_code
+      ? merchantTierPlans.find(
+          (plan) => plan.plan_code === merchantPlanStatus.required_plan_code,
+        )
+      : null
+    const fallbackPlan =
+      merchantTierPlans.find((plan) => plan.plan_code !== currentPlanCode) ??
+      merchantTierPlans[0] ??
+      null
+    const defaultPlan = preferredPlan ?? fallbackPlan
+
+    return (
+      merchantTierPlans.find((plan) => plan.id === selectedRequestedPlanId) ??
+      defaultPlan
+    )
+  }, [merchantPlanStatus.plan?.code, merchantPlanStatus.required_plan_code, merchantTierPlans, selectedRequestedPlanId])
 
   const transactionSummary = useMemo(() => {
     const collected = selectedInvoices
@@ -422,6 +451,41 @@ export function MerchantSubscriptionOverviewCard({
     }
   }
 
+  const handleRequestPlan = async () => {
+    if (!selectedRequestedPlan) {
+      toast.error('Select a subscription plan first.')
+      return
+    }
+
+    if (selectedRequestedPlan.plan_code === merchantPlanStatus.plan?.code) {
+      toast.error('This is already your current subscription plan.')
+      return
+    }
+
+    setIsSubmittingPlanRequest(true)
+    const result = await RequestMerchantTierPlan(selectedRequestedPlan.id)
+    setIsSubmittingPlanRequest(false)
+
+    if (!result.success) {
+      toast.error(result.error || 'Failed to submit the plan request.')
+      return
+    }
+
+    if (result.alreadyRequested) {
+      toast.info(`Request ${result.ticketNumber || ''} is already awaiting review.`.trim())
+    } else {
+      toast.success(
+        `Plan request submitted${result.ticketNumber ? ` as ${result.ticketNumber}` : ''}.`,
+      )
+    }
+
+    if (result.notificationWarning) {
+      toast.warning(result.notificationWarning)
+    }
+
+    setContactModalMode(null)
+  }
+
   const contactRepHref = useMemo(() => {
     const reason = contactModalMode === 'hardware' ? 'hardware request' : 'plan assistance'
     const planName = merchantPlanStatus.plan?.name || 'No active plan'
@@ -529,7 +593,7 @@ export function MerchantSubscriptionOverviewCard({
             <div className="min-w-0">
       <PanelSection
         label="Current Plan"
-        caption="Read-only visibility into your merchant-wide subscription tier and plan capacity."
+        caption="Review your current coverage or request a different merchant-wide subscription tier."
         action={
           <Button type="button" className="rounded-full" onClick={() => setContactModalMode('plan')}>
             Manage plan
@@ -538,40 +602,10 @@ export function MerchantSubscriptionOverviewCard({
       >
         <div className="space-y-5">
           {!merchantPlanStatus.plan ? (
-            <div className="space-y-4">
-              <div className="rounded-2xl bg-muted/45 p-4 text-sm text-muted-foreground">
-                <div className="font-medium text-foreground">No active plan</div>
-                <div className="mt-1">Choose a tier below, then contact Dexa to activate billing coverage for your merchant.</div>
-              </div>
-              <div className="grid gap-4 xl:grid-cols-3">
-                {merchantTierPlans.map((plan) => (
-                  <div
-                    key={plan.id}
-                    className="flex min-h-[340px] flex-col rounded-2xl bg-muted/45 p-6"
-                  >
-                    <div className="text-xl font-semibold">{plan.display_name}</div>
-                    <div className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{formatTierPrice(plan.monthly_price_cents)}</div>
-                    <div className="mt-3 text-sm text-muted-foreground">
-                      {plan.description || formatTierBillingUnit(plan)}
-                    </div>
-                    <div className="mt-6 rounded-xl bg-background/80 px-3 py-2 text-sm font-medium text-foreground">
-                      {formatTierBillingUnit(plan)}
-                    </div>
-                    <div className="mt-6 space-y-3 text-sm text-muted-foreground">
-                      {merchantTierHighlights(plan).map((line) => (
-                        <div key={`${plan.id}-${line}`} className="flex items-start gap-2">
-                          <div className="mt-1 h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
-                          <span>{line}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-auto pt-8">
-                      <Button type="button" className="w-full" onClick={() => setContactModalMode('plan')}>
-                        Contact Dexa
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+            <div className="rounded-2xl bg-muted/45 p-4 text-sm text-muted-foreground">
+              <div className="font-medium text-foreground">No active plan</div>
+              <div className="mt-1">
+                Select a tier below and submit it to DEXA for approval.
               </div>
             </div>
           ) : (
@@ -627,6 +661,91 @@ export function MerchantSubscriptionOverviewCard({
             </>
           )}
 
+          <div className="space-y-3">
+            <div>
+              <div className="font-medium">Available plans</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                Select one plan, review it, and send a request to DEXA Billing.
+              </div>
+            </div>
+            {merchantTierPlans.length === 0 ? (
+              <div className="rounded-2xl bg-muted/45 p-4 text-sm text-muted-foreground">
+                No subscription plans are currently available.
+              </div>
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-3">
+                {merchantTierPlans.map((plan) => {
+                  const isSelected = selectedRequestedPlan?.id === plan.id
+                  const isCurrent = merchantPlanStatus.plan?.code === plan.plan_code
+
+                  return (
+                    <button
+                      key={plan.id}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => setSelectedRequestedPlanId(plan.id)}
+                      className={cn(
+                        'relative flex min-h-[320px] flex-col rounded-2xl bg-muted/45 p-6 text-left transition-all',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+                        'hover:bg-muted/65',
+                        isSelected && 'bg-primary/5 ring-2 ring-primary',
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="text-xl font-semibold">{plan.display_name}</div>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {isCurrent ? <Badge variant="secondary">Current</Badge> : null}
+                          {isSelected ? (
+                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                              <Check className="h-4 w-4" />
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">
+                        {formatTierPrice(plan.monthly_price_cents)}
+                      </div>
+                      <div className="mt-3 text-sm text-muted-foreground">
+                        {plan.description || formatTierBillingUnit(plan)}
+                      </div>
+                      <div className="mt-6 rounded-xl bg-background/80 px-3 py-2 text-sm font-medium text-foreground">
+                        {formatTierBillingUnit(plan)}
+                      </div>
+                      <div className="mt-6 space-y-3 text-sm text-muted-foreground">
+                        {merchantTierHighlights(plan).map((line) => (
+                          <div key={`${plan.id}-${line}`} className="flex items-start gap-2">
+                            <div className="mt-1.5 h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+                            <span>{line}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-auto pt-8 text-sm font-medium text-primary">
+                        {isCurrent
+                          ? 'Your current plan'
+                          : isSelected
+                            ? 'Selected for request'
+                            : 'Select this plan'}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                className="rounded-full"
+                disabled={
+                  !selectedRequestedPlan ||
+                  selectedRequestedPlan.plan_code === merchantPlanStatus.plan?.code
+                }
+                onClick={() => setContactModalMode('plan')}
+              >
+                Review plan request
+              </Button>
+            </div>
+          </div>
+
           {merchantPlanStatus.is_over_limit &&
           merchantPlanStatus.plan &&
           merchantPlanStatus.plan.max_locations !== null ? (
@@ -637,9 +756,9 @@ export function MerchantSubscriptionOverviewCard({
                   <div className="font-medium">
                     You are over your plan limit ({merchantPlanStatus.active_location_count}/{merchantPlanStatus.plan.max_locations} locations).
                   </div>
-                  <div>Contact us to upgrade{requiredPlanLabel ? ` to ${requiredPlanLabel}` : ''}.</div>
+                  <div>Request an upgrade{requiredPlanLabel ? ` to ${requiredPlanLabel}` : ''}.</div>
                   <Button type="button" size="sm" onClick={() => setContactModalMode('plan')}>
-                    Contact your DEXA rep
+                    Request upgrade
                   </Button>
                 </div>
               </div>
@@ -1033,7 +1152,9 @@ export function MerchantSubscriptionOverviewCard({
               {contactModalMode === 'hardware' ? 'Request hardware' : 'Manage plan'}
             </DialogTitle>
             <DialogDescription>
-              V1 is informational only. Plan changes and hardware requests are handled by your Dexa representative.
+              {contactModalMode === 'hardware'
+                ? 'Hardware requests are handled by your DEXA representative.'
+                : 'Review the selected plan before sending it to DEXA Billing for approval.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 rounded-2xl bg-muted/45 p-4 text-sm">
@@ -1042,8 +1163,16 @@ export function MerchantSubscriptionOverviewCard({
               <div className="text-muted-foreground">{merchantName}</div>
             </div>
             <div>
-              <div className="font-medium">Selected location</div>
-              <div className="text-muted-foreground">{selectedLocation?.name || 'No location selected'}</div>
+              <div className="font-medium">
+                {contactModalMode === 'hardware' ? 'Selected location' : 'Requested plan'}
+              </div>
+              <div className="text-muted-foreground">
+                {contactModalMode === 'hardware'
+                  ? selectedLocation?.name || 'No location selected'
+                  : selectedRequestedPlan
+                    ? `${selectedRequestedPlan.display_name} - ${formatTierPrice(selectedRequestedPlan.monthly_price_cents)}`
+                    : 'No plan selected'}
+              </div>
             </div>
             <div>
               <div className="font-medium">Current plan</div>
@@ -1054,26 +1183,43 @@ export function MerchantSubscriptionOverviewCard({
               <div className="text-muted-foreground">
                 {contactModalMode === 'hardware'
                   ? 'Ask your Dexa rep to provision or assign additional hardware to the selected location.'
-                  : merchantPlanStatus.is_over_limit && requiredPlanLabel
-                    ? `Ask your Dexa rep about upgrading to ${requiredPlanLabel}.`
-                    : 'Ask your Dexa rep to review plan pricing, coverage, or billing updates.'}
+                  : 'Submitting creates a Billing & Account request. DEXA staff will be notified and you will receive an update when the plan is applied.'}
               </div>
             </div>
           </div>
           <DialogFooter className="sm:justify-between">
             <div className="text-xs text-muted-foreground">
-              We prefill the email with your merchant and selected location details.
+              {contactModalMode === 'hardware'
+                ? 'We prefill the email with your merchant and selected location details.'
+                : 'Plan activation remains controlled by DEXA Billing.'}
             </div>
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={() => setContactModalMode(null)}>
                 Close
               </Button>
-              <Button asChild className="bg-[#0C4FD1] hover:bg-[#0A45BA]">
-                <a href={contactRepHref}>
-                  <Mail className="mr-2 h-4 w-4" />
-                  Contact your DEXA rep
-                </a>
-              </Button>
+              {contactModalMode === 'hardware' ? (
+                <Button asChild className="bg-[#0C4FD1] hover:bg-[#0A45BA]">
+                  <a href={contactRepHref}>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Contact your DEXA rep
+                  </a>
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  disabled={
+                    isSubmittingPlanRequest ||
+                    !selectedRequestedPlan ||
+                    selectedRequestedPlan.plan_code === merchantPlanStatus.plan?.code
+                  }
+                  onClick={handleRequestPlan}
+                >
+                  {isSubmittingPlanRequest ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Submit request
+                </Button>
+              )}
             </div>
           </DialogFooter>
         </DialogContent>

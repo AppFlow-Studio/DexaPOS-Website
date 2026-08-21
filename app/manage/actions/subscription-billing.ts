@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { sendEmail } from '@/lib/messaging/resend'
+import { buildEmailTemplate, sendEmail } from '@/lib/messaging/resend'
 import {
   formatLongDate,
   formatShortDateRange,
@@ -247,6 +247,208 @@ export interface UpsertMerchantTierSubscriptionParams {
   currentPeriodStart: string
   currentPeriodEnd?: string | null
   trialEndsAt?: string | null
+}
+
+function escapeEmailText(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+async function notifyMerchantOfTierAssignment(params: {
+  merchantId: string
+  planId: string
+  status: UpsertMerchantTierSubscriptionParams['status']
+  adminUserId: string | null
+}): Promise<string | undefined> {
+  const serviceRole = createServiceRoleClient()
+  const [merchantResult, planResult, billingProfileResult, requestResult] = await Promise.all([
+    serviceRole
+      .from('merchants')
+      .select('id, name, owner_email')
+      .eq('id', params.merchantId)
+      .maybeSingle(),
+    serviceRole
+      .from('subscription_plans')
+      .select('id, plan_code, display_name, monthly_price_cents')
+      .eq('id', params.planId)
+      .maybeSingle(),
+    serviceRole
+      .from('merchant_billing_profiles')
+      .select('billing_email')
+      .eq('merchant_id', params.merchantId)
+      .eq('is_primary', true)
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    serviceRole
+      .from('support_tickets')
+      .select('id, ticket_number')
+      .eq('merchant_id', params.merchantId)
+      .eq('ticket_scope', 'merchant')
+      .eq('category', 'billing')
+      .in('status', ['open', 'in_progress', 'waiting_on_merchant'])
+      .contains('metadata', {
+        source: 'merchant_subscription_plan_request',
+        requested_plan_id: params.planId,
+      })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  if (merchantResult.error || !merchantResult.data || planResult.error || !planResult.data) {
+    console.error('[notifyMerchantOfTierAssignment] context lookup failed:', {
+      merchantError: merchantResult.error,
+      planError: planResult.error,
+    })
+    return 'Plan saved, but the merchant notification could not be prepared.'
+  }
+
+  if (requestResult.error) {
+    console.error('[notifyMerchantOfTierAssignment] request lookup failed:', requestResult.error)
+  }
+
+  const merchant = merchantResult.data
+  const plan = planResult.data
+  const statusLabel = params.status.replace(/_/g, ' ')
+  const message =
+    `DEXA updated your merchant subscription to ${plan.display_name}. ` +
+    `The subscription status is now ${statusLabel}.`
+  let threadError: string | undefined
+
+  if (requestResult.data) {
+    const { error: messageError } = await (serviceRole as any).rpc(
+      'add_ticket_message_with_attachments',
+      {
+        p_ticket_id: requestResult.data.id,
+        p_sender_id: params.adminUserId || 'dexa-billing',
+        p_sender_name: 'DEXA Billing',
+        p_sender_role: 'admin',
+        p_message: message,
+        p_is_internal: false,
+        p_attachments: [],
+      },
+    )
+
+    if (messageError) {
+      console.error('[notifyMerchantOfTierAssignment] request message failed:', messageError)
+      threadError = messageError.message
+    } else {
+      const { error: ticketUpdateError } = await serviceRole
+        .from('support_tickets')
+        .update({
+          status: 'resolved',
+          resolved_at: new Date().toISOString(),
+          resolved_by: params.adminUserId || 'dexa-billing',
+          resolution_notes: message,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', requestResult.data.id)
+
+      if (ticketUpdateError) {
+        console.error('[notifyMerchantOfTierAssignment] request resolution failed:', ticketUpdateError)
+      }
+    }
+  } else {
+    const { data: createdTicket, error: createTicketError } = await (serviceRole as any).rpc(
+      'create_support_ticket',
+      {
+        p_merchant_id: params.merchantId,
+        p_location_id: null,
+        p_subject: `Subscription updated: ${plan.display_name}`,
+        p_description: message,
+        p_category: 'billing',
+        p_submitted_by: params.adminUserId || 'dexa-billing',
+        p_submitted_by_name: 'DEXA Billing',
+        p_submitted_by_email: null,
+        p_carrier_id: null,
+        p_metadata: {
+          source: 'hq_subscription_assignment',
+          assigned_plan_id: plan.id,
+          assigned_plan_code: plan.plan_code,
+          subscription_status: params.status,
+        },
+        p_attachments: [],
+      },
+    )
+
+    if (createTicketError || !createdTicket?.ticket_id) {
+      console.error('[notifyMerchantOfTierAssignment] notification ticket failed:', createTicketError)
+      threadError = createTicketError?.message || 'Failed to create merchant notification thread.'
+    } else {
+      const now = new Date().toISOString()
+      const [{ error: ticketUpdateError }, { error: messageUpdateError }] = await Promise.all([
+        serviceRole
+          .from('support_tickets')
+          .update({
+            status: 'resolved',
+            resolved_at: now,
+            resolved_by: params.adminUserId || 'dexa-billing',
+            resolution_notes: message,
+            updated_at: now,
+          })
+          .eq('id', createdTicket.ticket_id),
+        serviceRole
+          .from('support_ticket_messages')
+          .update({
+            sender_role: 'admin',
+            read_by_admin: true,
+            read_by_merchant: false,
+          })
+          .eq('ticket_id', createdTicket.ticket_id)
+          .eq('message', message),
+      ])
+
+      if (ticketUpdateError || messageUpdateError) {
+        console.error('[notifyMerchantOfTierAssignment] notification thread finalization failed:', {
+          ticketUpdateError,
+          messageUpdateError,
+        })
+        threadError = ticketUpdateError?.message || messageUpdateError?.message
+      }
+    }
+  }
+
+  const recipient =
+    billingProfileResult.data?.billing_email?.trim() || merchant.owner_email?.trim() || ''
+  let emailError: string | undefined
+
+  if (recipient) {
+    const emailResult = await sendEmail(
+      recipient,
+      `DEXA subscription updated - ${plan.display_name}`,
+      buildEmailTemplate(
+        'DEXA POS',
+        'Subscription updated',
+        `${escapeEmailText(merchant.name)},\n\n${escapeEmailText(message)}\n\nYou can review the update in your DEXA dashboard support inbox.`,
+      ),
+    )
+
+    if ('error' in emailResult) {
+      emailError = emailResult.error
+      console.error('[notifyMerchantOfTierAssignment] email failed:', emailResult.error)
+    }
+  }
+
+  if (threadError && emailError) {
+    return 'Plan saved, but neither the in-app nor email notification could be confirmed.'
+  }
+  if (threadError) {
+    return 'Plan saved and email sent, but the in-app notification could not be confirmed.'
+  }
+  if (emailError) {
+    return 'Plan saved and the in-app notification was created, but email delivery could not be confirmed.'
+  }
+  if (!recipient) {
+    return 'Plan saved and the in-app notification was created; no merchant billing email is configured.'
+  }
+
+  return undefined
 }
 
 function addOneMonthPeriod(startDate: string, endDate: string): {
@@ -820,9 +1022,10 @@ export async function upsertMerchantTierSubscription(
   subscriptionId?: string
   invoiceId?: string | null
   anchorLocationId?: string
+  notificationWarning?: string
   error?: string
 }> {
-  await assertHQPermission('system.billing.manage')
+  const { userId } = await assertHQPermission('system.billing.manage')
 
   if (!params.merchantId || !params.planId) {
     return { success: false, error: 'merchantId and planId are required.' }
@@ -844,7 +1047,7 @@ export async function upsertMerchantTierSubscription(
   const serviceRole = createServiceRoleClient()
   const { data: existing, error: existingError } = await serviceRole
     .from('merchant_plan_subscriptions')
-    .select('id, status')
+    .select('id, plan_id, status')
     .eq('merchant_id', params.merchantId)
     .order('updated_at', { ascending: false })
     .order('created_at', { ascending: false })
@@ -896,9 +1099,22 @@ export async function upsertMerchantTierSubscription(
     return { success: false, error: synced.error }
   }
 
+  const subscriptionChanged =
+    !existing || existing.plan_id !== params.planId || existing.status !== params.status
+  const notificationWarning = subscriptionChanged
+    ? await notifyMerchantOfTierAssignment({
+        merchantId: params.merchantId,
+        planId: params.planId,
+        status: params.status,
+        adminUserId: userId,
+      })
+    : undefined
+
   revalidatePath('/manage/subscriptions')
   revalidatePath(`/manage/subscriptions/${params.merchantId}`)
   revalidatePath('/dashboard/subscriptions')
+  revalidatePath('/dashboard/support')
+  revalidatePath('/manage/support')
   revalidatePath(`/manage/merchants/${params.merchantId}`)
   revalidatePath(`/manage/merchants/${params.merchantId}/billing`)
 
@@ -907,6 +1123,7 @@ export async function upsertMerchantTierSubscription(
     subscriptionId: result.data.id as string,
     invoiceId: synced.invoiceId,
     anchorLocationId: synced.anchorLocationId,
+    notificationWarning,
   }
 }
 

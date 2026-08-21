@@ -1079,6 +1079,9 @@ export function HqSubscriptionsWorkspace({
           ? 'Merchant tier updated and invoice generated.'
           : 'Merchant tier updated.',
       )
+      if (result.notificationWarning) {
+        toast.warning(result.notificationWarning)
+      }
       refresh()
     })
   }
