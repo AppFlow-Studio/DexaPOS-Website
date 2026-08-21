@@ -11,9 +11,15 @@ export type PreviewDevice = "desktop" | "mobile";
  * A miniature restaurant page painted entirely from theme tokens.
  *
  * Deliberately exercises *every* token, not just the four a merchant picks:
- * the muted band, the border colour, and the dark footer all appear, so a
- * palette whose supporting colours are wrong is visible here rather than after
- * publishing. Nothing in this component hardcodes a colour.
+ * the dark hero band, the muted band, the border colour and the muted footer all
+ * appear, so a palette whose supporting colours are wrong is visible here rather
+ * than after publishing. Nothing in this component hardcodes a colour.
+ *
+ * **Each band must use the token the real section uses.** This drifted once: the
+ * footer was painted with `surfaceDark`, which is dark in light *and* dark mode,
+ * so toggling the mode appeared to leave the footer unchanged — while the real
+ * `FooterSection`, on `surfaceMuted`, had been inverting correctly all along.
+ * A preview that disagrees with the renderer is worse than no preview.
  */
 export default function ThemePreview({
   theme,
@@ -70,8 +76,8 @@ export default function ThemePreview({
         )}
       </div>
 
-      {/* Hero */}
-      <div className="px-5 py-6" style={{ background: theme.brand, color: theme.brandContrast }}>
+      {/* Hero — the dark band, as `classic`/`spotlight` render it */}
+      <div className="px-5 py-6" style={{ background: theme.surfaceDark, color: theme.textOnDark }}>
         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] opacity-80">Made fresh daily</p>
         <p className={cn("mt-2 font-bold leading-tight", mobile ? "text-xl" : "text-2xl")} style={heading}>
           Food worth coming back for.
@@ -80,15 +86,16 @@ export default function ThemePreview({
           A short line that tells guests what makes your restaurant worth the trip.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
+          {/* `CtaButton`, primary and secondary. */}
           <span
             className="px-3.5 py-2 text-xs font-semibold"
-            style={{ background: theme.card, color: theme.text, borderRadius: theme.radius }}
+            style={{ background: theme.brand, color: theme.brandContrast, borderRadius: theme.radius }}
           >
             Order Online
           </span>
           <span
             className="border px-3.5 py-2 text-xs font-semibold"
-            style={{ borderColor: theme.brandContrast, color: theme.brandContrast, borderRadius: theme.radius }}
+            style={{ borderColor: "currentColor", borderRadius: theme.radius }}
           >
             View Menu
           </span>
@@ -138,10 +145,10 @@ export default function ThemePreview({
         </p>
       </div>
 
-      {/* Footer on the dark band */}
+      {/* Footer — muted band over a top border, exactly as `FooterSection` paints it */}
       <div
-        className="px-5 py-4"
-        style={{ background: theme.surfaceDark, color: theme.textOnDark }}
+        className="border-t px-5 py-4"
+        style={{ background: theme.surfaceMuted, color: theme.text, borderColor: theme.border }}
       >
         <p className="text-[11px] font-bold" style={heading}>
           {restaurantName}

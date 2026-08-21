@@ -17,6 +17,10 @@ import { updateSectionProps } from "../mutations";
 import { normalizePage, type PageDocument } from "../index";
 import { createRenderContext, type RenderMode } from "../render-context";
 import { SECTION_KINDS } from "../sections/kinds";
+import HeroSection from "@/components/site-builder/sections/HeroSection";
+import ThemePreview from "@/components/site-builder/dashboard/design/ThemePreview";
+import { composeTheme, type StyleMode } from "../style-inputs";
+import { isLight } from "../color";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // fixtures
@@ -565,5 +569,183 @@ describe("prices are location-scoped", () => {
 
     expect(withPrices).toContain("Prices reflect online rates.");
     expect(brandPage).not.toContain("Prices reflect online rates.");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// the style preview must agree with the renderer
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `ThemePreview` is the only picture a merchant sees while choosing a theme, so
+ * every band in it has to be painted with the token the real section uses.
+ *
+ * It drifted once, on the footer: the preview used `surfaceDark` — dark in light
+ * mode *and* dark mode — so flipping Light/Dark appeared to leave the footer
+ * alone, while the real footer on `surfaceMuted` had been inverting all along.
+ */
+describe("ThemePreview agrees with the sections it previews", () => {
+  const preview = (mode: StyleMode) =>
+    renderToStaticMarkup(
+      <ThemePreview
+        theme={composeTheme({
+          brand: "#D62828",
+          mode,
+          corner: "rounded",
+          headingFont: "Inter, sans-serif",
+          fontFamily: "Inter, sans-serif",
+        })}
+        device="desktop"
+        restaurantName="Joes Coffee Shop"
+      />,
+    );
+
+  /** The style attribute of the preview's footer band, lower-cased for comparison. */
+  const footerStyle = (html: string) => {
+    const match = html.match(/class="border-t px-5 py-4"\s+style="([^"]*)"/);
+    if (!match) throw new Error("preview footer band not found");
+    return match[1].replace(/&quot;/g, '"').toLowerCase();
+  };
+
+  const tokens = (mode: StyleMode) =>
+    composeTheme({
+      brand: "#D62828",
+      mode,
+      corner: "rounded",
+      headingFont: "Inter, sans-serif",
+      fontFamily: "Inter, sans-serif",
+    });
+
+  it("paints the preview footer with the tokens FooterSection uses", () => {
+    // FooterSection: background surfaceMuted, color text, borderColor border.
+    for (const mode of ["light", "dark"] as const) {
+      const theme = tokens(mode);
+      const style = footerStyle(preview(mode));
+
+      expect(style).toContain(theme.surfaceMuted.toLowerCase());
+      expect(style).toContain(theme.text.toLowerCase());
+      expect(style).not.toContain(theme.surfaceDark.toLowerCase());
+    }
+  });
+
+  it("inverts the preview footer between light and dark", () => {
+    // The reported bug, stated as the merchant experienced it: toggling the mode
+    // must visibly change the footer band.
+    const light = tokens("light");
+    const dark = tokens("dark");
+
+    expect(isLight(light.surfaceMuted)).toBe(true);
+    expect(isLight(dark.surfaceMuted)).toBe(false);
+    expect(footerStyle(preview("light"))).not.toBe(footerStyle(preview("dark")));
+  });
+
+  it("keeps surfaceDark on the band that is dark in both modes", () => {
+    // Not a bug, and the reason the drift went unnoticed: the hero band is meant
+    // to stay dark either way, so `surfaceDark` must never be a mode indicator.
+    expect(isLight(tokens("light").surfaceDark)).toBe(false);
+    expect(isLight(tokens("dark").surfaceDark)).toBe(false);
+
+    // It is still exercised somewhere in the preview, or a broken supporting
+    // colour would ship unseen.
+    expect(preview("light").toLowerCase()).toContain(tokens("light").surfaceDark.toLowerCase());
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// the hero carousel must actually be visible
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Every hero frame is `absolute inset-0`, so the wrapper around them has to be
+ * a positioned ancestor with a real height. It carried a hardcoded `relative`
+ * on top of whatever the variant passed, and Tailwind emits `.relative` after
+ * `.absolute` — so on the full-bleed variants `relative` won, `h-full` lost the
+ * definite parent height it needed, the wrapper collapsed to zero height, and
+ * all three photographs vanished. The hero rendered as a flat colour.
+ *
+ * A merchant saw an empty hero with three photos listed in the panel beside it.
+ */
+describe("hero carousel positioning", () => {
+  const POSITION_UTILITIES = ["static", "fixed", "absolute", "relative", "sticky"];
+
+  const heroHtml = (variant: string, assetIds: string[]) => {
+    const ids = new Set(assetIds);
+    const ctx = createRenderContext({
+      mode: "public",
+      // No storefront hero to fall back on: this is about the carousel alone.
+      site: {
+        siteId: "site_1",
+        locationId: LOCATION_ID,
+        slug: "tonys",
+        name: "Tony's Pizza",
+        logoUrl: null,
+        heroImageUrl: null,
+        phone: null,
+        basePath: "/sites/tonys",
+        orderUrl: "/sites/tonys",
+        menuUrl: "/sites/tonys",
+        nav: [],
+        pricingDisclosureText: null,
+      },
+      resolveAsset: (id: string) =>
+        ids.has(id) ? { url: `https://cdn.test/${id}.jpg`, alt: null, width: 1600, height: 900 } : null,
+    });
+
+    const section = {
+      id: "sec_hero",
+      kind: "hero" as const,
+      props: {
+        variant,
+        heading: "Great coffee",
+        carousel: assetIds.map((assetId) => ({ assetId })),
+        overlayOpacity: 51,
+      },
+    };
+
+    return renderToStaticMarkup(
+      <HeroSection section={section as never} resolved={emptyResolvedMap()} ctx={ctx} />,
+    );
+  };
+
+  /** The wrapper's class list, for the carousel container. */
+  const wrapperClasses = (html: string) => {
+    const match = html.match(/<div class="([^"]*)" data-hero-carousel="true"/);
+    if (!match) throw new Error("carousel wrapper not found");
+    return match[1].split(/\s+/);
+  };
+
+  it.each(["classic", "spotlight", "bistro"])(
+    "gives the %s carousel exactly one position utility",
+    (variant) => {
+      const classes = wrapperClasses(heroHtml(variant, ["a", "b", "c"]));
+      const positions = classes.filter((c) => POSITION_UTILITIES.includes(c));
+
+      // Two would mean the stylesheet's order decides, not this file.
+      expect(positions, `${variant}: ${classes.join(" ")}`).toHaveLength(1);
+    },
+  );
+
+  it("keeps the full-bleed variants absolutely positioned", () => {
+    for (const variant of ["classic", "spotlight"]) {
+      const classes = wrapperClasses(heroHtml(variant, ["a", "b", "c"]));
+      expect(classes, variant).toContain("absolute");
+      expect(classes, variant).toContain("inset-0");
+      expect(classes, variant).not.toContain("relative");
+    }
+  });
+
+  it("keeps the split variant a positioned aspect box", () => {
+    const classes = wrapperClasses(heroHtml("bistro", ["a", "b", "c"]));
+    expect(classes).toContain("relative");
+    expect(classes).not.toContain("absolute");
+    expect(classes.some((c) => c.startsWith("aspect-"))).toBe(true);
+  });
+
+  it("still renders one frame per resolvable photo", () => {
+    const html = heroHtml("classic", ["a", "b", "c"]);
+    // `<img>` elements, not mentions of the class — the <style> block names it
+    // twice more in the reduced-motion rules.
+    expect(html.split("<img ").length - 1).toBe(3);
+    for (const id of ["a", "b", "c"]) expect(html).toContain(`https://cdn.test/${id}.jpg`);
   });
 });

@@ -447,3 +447,35 @@ the drawer half of the path is shared, already-QA'd code exercised by the `conte
 `ctx.site.heroImageUrl` (`HeroSection.tsx:150`), so frame 1 of the rotation is the storefront's
 legacy hero and the merchant's chosen photos are frames 2–n. Defensible as the never-blank
 guarantee, but likely surprising. Needs a product call before changing.
+
+### D · P1-2 — Style preview's footer does not change with Light/Dark
+
+Reported 2026-08-21: *"the footer color is not changing when I'm changing the theme."*
+
+| # | Item | State |
+|---|---|---|
+| D1 | `ThemePreview` footer repainted with `surfaceMuted`/`text` + `border`, matching `FooterSection` | ✅ |
+| D2 | `ThemePreview` hero repainted with `surfaceDark`/`textOnDark`, matching the `classic` hero | ✅ |
+| D3 | Preview CTAs matched to `CtaButton` (brand primary, `currentColor` outline secondary) | ✅ |
+| D4 | Stale "the footer band" comments on `surfaceDark` corrected in `color.ts` | ✅ |
+| D5 | Tests — 3 new, in `render.test.tsx` | ✅ |
+
+**The real footer was never broken.** `FooterSection` paints `--site-surface-muted` over `--site-text`,
+which inverts correctly: `#F3F3F4` on near-black in light mode, `#1C1E22` on near-white in dark. The bug
+was in the *picture* — `ThemePreview` painted its footer band with `surfaceDark`, and `surfaceDark` is
+**deliberately dark in both modes** (`#0F1522` light → `#08090C` dark; it is the `classic`/`spotlight`
+hero band, the scrolling banner, and the `dark` section background). Toggling Light/Dark moved it by an
+imperceptible amount, so the only footer the merchant could see while choosing a theme appeared frozen.
+
+The drift was seeded by a comment: `deriveThemeColors` still described `surfaceDark` as "the footer band",
+which is what the footer used before it moved to the muted band. The comment outlived the code and the
+preview was written against it. Both comments now say what the token is actually for.
+
+Fixing the footer alone would have left `surfaceDark`/`textOnDark` unexercised by the preview, defeating
+its stated purpose of showing every derived colour before publish. So the hero band took over that job —
+which is also *more* truthful, since the starter page ships a `classic` hero and that is exactly the
+token it renders.
+
+**Not browser-verified** (no dev server this session). Verified by rendering `ThemePreview` through
+`renderToStaticMarkup` in both modes and asserting the footer band carries `FooterSection`'s tokens and
+differs between modes; confirmed the test fails against the pre-fix component.

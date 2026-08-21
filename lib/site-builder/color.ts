@@ -126,7 +126,7 @@ export type ThemeColors = Record<ThemeColorKey, string>;
  * Fills in the six supporting colours from the three a merchant actually picks.
  *
  * The design workspace only ever asks for brand, page background, and text.
- * Everything else — muted panels, borders, the dark footer, muted copy — is
+ * Everything else — muted panels, borders, the dark hero band, muted copy — is
  * derived here so a merchant who chooses a near-black page background cannot end
  * up with the light-grey borders and near-white muted panels the old preset list
  * left behind.
@@ -146,8 +146,11 @@ export function deriveThemeColors(core: {
     // A panel that sits *on* the page: nudged toward the text colour so it
     // separates on a light page and lifts on a dark one.
     surfaceMuted: lightSurface ? mix(surface, text, 0.05) : mix(surface, "#FFFFFF", 0.055),
-    // The footer band. On a light page it is a deep tint of the text colour; on
-    // an already-dark page it goes deeper still rather than inverting.
+    // The dark section band — the `classic`/`spotlight` hero, the scrolling
+    // banner, and any section set to the `dark` background. Deliberately dark in
+    // *both* modes: on a light page it is a deep tint of the text colour; on an
+    // already-dark page it goes deeper still rather than inverting.
+    // Not the footer — that is a muted band. See `FooterSection`.
     surfaceDark: lightSurface ? mix(text, "#000000", 0.12) : mix(surface, "#000000", 0.45),
     text,
     // Pulled only 36% toward the background. Anything looser reads as "dimmer"
