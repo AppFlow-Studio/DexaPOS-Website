@@ -6,6 +6,12 @@ import type {
   CustomerProfile,
   CustomerListItem,
 } from "@/types/customer";
+import type { PaginatedResult, PaginationParams } from "@/types/pagination";
+import {
+  buildPaginationMeta,
+  emptyPaginatedResult,
+  normalizePagination,
+} from "@/lib/pagination";
 import { LogAuditEvent } from "./audit-logs";
 
 // =============================================================================
@@ -41,29 +47,28 @@ async function getMerchantId(clerkOrgId: string): Promise<string | null> {
  */
 export async function GetCustomers(
   clerkOrgId: string,
-  options?: {
-    limit?: number;
-    offset?: number;
+  options?: PaginationParams & {
     orderBy?: "last_order_date" | "lifetime_spend" | "visits" | "created_at";
     ascending?: boolean;
     locationId?: string;
+    search?: string;
   },
-): Promise<CustomerListItem[]> {
+): Promise<PaginatedResult<CustomerListItem>> {
   if (!clerkOrgId) {
-    return [];
+    return emptyPaginatedResult(options);
   }
 
   const merchantId = await getMerchantId(clerkOrgId);
   if (!merchantId) {
-    return [];
+    return emptyPaginatedResult(options);
   }
 
   const supabase = createServerSupabaseClient();
-  const limit = options?.limit ?? 100;
-  const offset = options?.offset ?? 0;
+  const { page, pageSize, offset } = normalizePagination(options);
   const orderBy = options?.orderBy ?? "last_order_date";
   const ascending = options?.ascending ?? false;
   const locationId = options?.locationId;
+  const search = options?.search?.trim().toLowerCase() ?? "";
 
   // If a specific location is selected, filter customers via orders at that location
   // and compute location-specific spend/visits instead of using merchant-wide totals
@@ -77,7 +82,7 @@ export async function GetCustomers(
 
     if (orderError) {
       console.error("[GetCustomers] Error fetching location orders:", orderError);
-      return [];
+      return emptyPaginatedResult(options);
     }
 
     // Aggregate per-customer stats from orders at this location
@@ -99,7 +104,7 @@ export async function GetCustomers(
 
     const uniqueIds = [...customerStats.keys()];
     if (uniqueIds.length === 0) {
-      return [];
+      return emptyPaginatedResult(options);
     }
 
     const { data, error } = await supabase
@@ -119,11 +124,11 @@ export async function GetCustomers(
 
     if (error) {
       console.error("[GetCustomers] Error fetching customers:", error);
-      return [];
+      return emptyPaginatedResult(options);
     }
 
     // Merge customer data with location-specific stats
-    const results: CustomerListItem[] = (data || []).map((c) => {
+    let results: CustomerListItem[] = (data || []).map((c) => {
       const stats = customerStats.get(c.id)!;
       return {
         ...c,
@@ -135,6 +140,14 @@ export async function GetCustomers(
       };
     });
 
+    if (search) {
+      results = results.filter((customer) =>
+        [customer.name, customer.email, customer.phone].some((value) =>
+          value?.toLowerCase().includes(search),
+        ),
+      );
+    }
+
     // Sort in JS since we computed the values client-side
     const sortKey = orderBy === "last_order_date" ? "last_visit" : orderBy;
     results.sort((a, b) => {
@@ -145,11 +158,14 @@ export async function GetCustomers(
       return 0;
     });
 
-    return results.slice(offset, offset + limit);
+    return {
+      data: results.slice(offset, offset + pageSize),
+      pagination: buildPaginationMeta(results.length, { page, pageSize }),
+    };
   }
 
   // Default: all customers for the merchant
-  const { data, error } = await supabase
+  let query = supabase
     .from("customers")
     .select(
       `
@@ -162,20 +178,36 @@ export async function GetCustomers(
       last_visit,
       total_orders,
       avg_spend,
-      tags
-    `,
+        tags
+      `,
+      { count: "exact" },
     )
     .eq("merchant_id", merchantId)
-    .eq("is_active", true)
+    .eq("is_active", true);
+
+  if (search) {
+    const safeSearch = search.replace(/[,%()]/g, " ").trim();
+    if (safeSearch) {
+      query = query.or(
+        `name.ilike.%${safeSearch}%,email.ilike.%${safeSearch}%,phone.ilike.%${safeSearch}%`,
+      );
+    }
+  }
+
+  const { data, error, count } = await query
     .order(orderBy, { ascending, nullsFirst: false })
-    .range(offset, offset + limit - 1);
+    .order("id", { ascending: true })
+    .range(offset, offset + pageSize - 1);
 
   if (error) {
     console.error("[GetCustomers] Error fetching customers:", error);
-    return [];
+    return emptyPaginatedResult(options);
   }
 
-  return (data as CustomerListItem[]) || [];
+  return {
+    data: (data as CustomerListItem[]) || [],
+    pagination: buildPaginationMeta(count ?? 0, { page, pageSize }),
+  };
 }
 
 /**

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Plus,
   FileText,
@@ -55,6 +55,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { buildPaginationMeta } from "@/lib/pagination";
 
 const STATUS_TABS: Array<{ label: string; value: InvoiceStatus | "all" }> = [
   { label: "All", value: "all" },
@@ -170,6 +172,7 @@ function InvoiceRowMenu({
 
 export default function InvoicesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<InvoiceStatus | "all">("all");
 
   // Keep the active status pill visible in the rail on narrow screens (§13.2).
@@ -184,9 +187,45 @@ export default function InvoicesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null);
   const [sendTarget, setSendTarget] = useState<Invoice | null>(null);
 
-  const { data: invoices = [], isLoading } = useInvoices(
-    activeTab === "all" ? null : activeTab
+  const requestedPage = Number(searchParams.get("page"));
+  const page = Number.isFinite(requestedPage)
+    ? Math.max(1, Math.floor(requestedPage))
+    : 1;
+  const pageSize = 25;
+
+  const {
+    data: invoiceResult,
+    isLoading,
+    isFetching,
+  } = useInvoices(
+    activeTab === "all" ? null : activeTab,
+    { page, pageSize },
   );
+  const invoices = invoiceResult?.data ?? [];
+  const pagination =
+    invoiceResult?.pagination ?? buildPaginationMeta(0, { page, pageSize });
+
+  const setPage = useCallback(
+    (nextPage: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (nextPage <= 1) params.delete("page");
+      else params.set("page", String(nextPage));
+
+      const query = params.toString();
+      router.replace(
+        query ? `/dashboard/invoices?${query}` : "/dashboard/invoices",
+        { scroll: false },
+      );
+    },
+    [router, searchParams],
+  );
+
+  useEffect(() => {
+    if (invoiceResult && page > invoiceResult.pagination.totalPages) {
+      setPage(invoiceResult.pagination.totalPages);
+    }
+  }, [invoiceResult, page, setPage]);
+
   const updateStatus = useUpdateInvoiceStatus();
   const deleteInvoice = useDeleteInvoice();
 
@@ -251,7 +290,10 @@ export default function InvoicesPage() {
       <div className="min-w-0 space-y-4">
         <Tabs
           value={activeTab}
-          onValueChange={(v) => setActiveTab(v as InvoiceStatus | "all")}
+          onValueChange={(v) => {
+            setActiveTab(v as InvoiceStatus | "all");
+            setPage(1);
+          }}
         >
           <div
             ref={tabRailRef}
@@ -419,6 +461,12 @@ export default function InvoicesPage() {
               </>
             )}
           </div>
+          <PaginationBar
+            pagination={pagination}
+            onPageChange={setPage}
+            isLoading={isFetching}
+            itemLabel="invoices"
+          />
         </Tabs>
       </div>
 

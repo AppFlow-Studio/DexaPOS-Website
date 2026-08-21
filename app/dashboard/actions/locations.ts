@@ -7,6 +7,10 @@ import {
   UpdateLocationInput,
 } from "@/types/merchant_locations";
 import { LogAuditEvent } from "./audit-logs";
+import {
+  getEffectiveMerchantContext,
+  UnauthorizedOrgError,
+} from "@/lib/admin/merchant-context";
 import { isValidEmail, normalizeEmail } from "@/lib/utils/email";
 import { findEmailConflict } from "@/app/manage/actions/email-duplicates";
 import { emailConflictMessage } from "@/lib/utils/email";
@@ -458,16 +462,21 @@ export async function UpdateBatchSummaryEmailSettings(
 
   const supabase = createServerSupabaseClient();
 
-  // Scope the location to the caller's merchant.
-  const { data: merchant, error: merchantError } = await supabase
-    .from("merchants")
-    .select("id")
-    .eq("clerk_org_id", clerkOrgId)
-    .single();
-
-  if (merchantError || !merchant) {
-    console.error("[UpdateBatchSummaryEmailSettings] merchant lookup:", merchantError);
-    return { success: false, error: "Merchant not found" };
+  // Resolve the target merchant through the impersonation-aware chokepoint.
+  // A raw `clerk_org_id = clerkOrgId` lookup breaks while an HQ admin is
+  // impersonating a merchant: the page passes the HQ org, so the merchant is
+  // never found ("Merchant not found"). getEffectiveMerchantContext honors the
+  // active impersonation session (from secure cookies) and returns the
+  // impersonated merchant.
+  let merchantId: string;
+  try {
+    ({ merchantId } = await getEffectiveMerchantContext(clerkOrgId || null));
+  } catch (err) {
+    console.error("[UpdateBatchSummaryEmailSettings] merchant context:", err);
+    return {
+      success: false,
+      error: err instanceof UnauthorizedOrgError ? err.message : "Merchant not found",
+    };
   }
 
   const { data: current, error: fetchError } = await supabase
@@ -476,7 +485,7 @@ export async function UpdateBatchSummaryEmailSettings(
       "name, email, merchant_id, batch_summary_email_enabled, batch_summary_email_recipient"
     )
     .eq("id", locationId)
-    .eq("merchant_id", merchant.id)
+    .eq("merchant_id", merchantId)
     .single();
 
   if (fetchError || !current) {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { DiscountFilters } from "@/components/discounts/discount-filters";
 import { DiscountTable } from "@/components/discounts/discount-table";
@@ -10,6 +10,7 @@ import {
     useBulkStatusUpdate,
     useDeleteDiscount,
     useDiscounts,
+    useDiscountStats,
     useToggleDiscount,
 } from "@/hooks/use-discounts";
 import { DiscountListFilters } from "@/types/discount";
@@ -22,14 +23,17 @@ import {
     StatRow,
     StatTile,
 } from "@/components/dashboard/shell";
-import { discountStatus } from "@/lib/constants/discount-status";
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useSelectedLocation, useIsAllLocations, useIsSingleLocation } from "@/stores/location-store";
+import { PaginationBar } from "@/components/dashboard/PaginationBar";
+import { buildPaginationMeta } from "@/lib/pagination";
+import { useDebounce } from "@/lib/hooks/useDebounce";
 
 export default function DiscountsPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [filters, setFilters] = useState<DiscountListFilters>({
         search: "",
         isActive: "all",
@@ -37,8 +41,22 @@ export default function DiscountsPage() {
         sortDir: "asc",
         hideExpired: false,
     });
+    const debouncedSearch = useDebounce(filters.search ?? "", 300);
+    const requestedPage = Number(searchParams.get("page"));
+    const page = Number.isFinite(requestedPage)
+        ? Math.max(1, Math.floor(requestedPage))
+        : 1;
+    const pageSize = 25;
 
-    const { data, isLoading } = useDiscounts(filters);
+    const {
+        data,
+        isLoading,
+        isFetching,
+    } = useDiscounts(
+        { ...filters, search: debouncedSearch },
+        { page, pageSize },
+    );
+    const { data: statsResult, isLoading: isLoadingStats } = useDiscountStats();
     const toggleStatus = useToggleDiscount();
     const bulkStatus = useBulkStatusUpdate();
     const bulkDelete = useBulkDelete();
@@ -59,23 +77,38 @@ export default function DiscountsPage() {
         return map;
     }, [locations]);
 
-    const discounts = useMemo(
-        () => (data?.success && Array.isArray(data.data) ? data.data : []),
-        [data?.data, data?.success]
-    );
+    const discounts =
+        data?.success && Array.isArray(data.data) ? data.data : [];
+    const pagination =
+        data?.pagination ?? buildPaginationMeta(0, { page, pageSize });
 
-    const stats = useMemo(() => {
-        let active = 0;
-        let scheduled = 0;
-        let expired = 0;
-        discounts.forEach((discount) => {
-            const status = discountStatus(discount);
-            if (status === "active") active += 1;
-            else if (status === "scheduled") scheduled += 1;
-            else if (status === "expired") expired += 1;
+    const stats = statsResult?.data ?? {
+        total: 0,
+        active: 0,
+        scheduled: 0,
+        expired: 0,
+    };
+
+    const setPage = useCallback((nextPage: number) => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (nextPage <= 1) params.delete("page");
+        else params.set("page", String(nextPage));
+        const query = params.toString();
+        router.replace(query ? `/dashboard/discounts?${query}` : "/dashboard/discounts", {
+            scroll: false,
         });
-        return { total: discounts.length, active, scheduled, expired };
-    }, [discounts]);
+    }, [router, searchParams]);
+
+    useEffect(() => {
+        if (data?.pagination && page > data.pagination.totalPages) {
+            setPage(data.pagination.totalPages);
+        }
+    }, [data, page, setPage]);
+
+    const handleFiltersChange = useCallback((nextFilters: DiscountListFilters) => {
+        setFilters(nextFilters);
+        if (page !== 1) setPage(1);
+    }, [page, setPage]);
 
     const handleCreate = () => router.push("/dashboard/discounts/new");
     const handleView = (id: string) => router.push(`/dashboard/discounts/${id}`);
@@ -87,7 +120,7 @@ export default function DiscountsPage() {
         (filters.sortDir ?? "asc") !== "asc" ||
         !!filters.hideExpired;
     const resetFilters = () =>
-        setFilters({
+        handleFiltersChange({
             search: "",
             isActive: "all",
             sortBy: "display_order",
@@ -130,32 +163,36 @@ export default function DiscountsPage() {
                                     ? `${selectedLocation.name} + global`
                                     : "All discounts"
                             }
-                            isLoading={isLoading}
+                            isLoading={isLoadingStats}
                         />
                         <StatTile
                             label="Active"
                             value={stats.active}
                             meta="Available on POS now"
-                            isLoading={isLoading}
+                            isLoading={isLoadingStats}
                         />
                         <StatTile
                             label="Scheduled"
                             value={stats.scheduled}
                             meta="Starts on a future date"
-                            isLoading={isLoading}
+                            isLoading={isLoadingStats}
                         />
                         <StatTile
                             label="Expired"
                             value={stats.expired}
                             meta="Past their end date"
-                            isLoading={isLoading}
+                            isLoading={isLoadingStats}
                         />
                     </StatRow>
                 </div>
             </Panel>
 
             <Panel padded>
-                <DiscountFilters value={filters} onChange={setFilters} onCreate={handleCreate} />
+                <DiscountFilters
+                    value={filters}
+                    onChange={handleFiltersChange}
+                    onCreate={handleCreate}
+                />
 
                 <div className="mt-6">
                     <DiscountTable
@@ -172,6 +209,12 @@ export default function DiscountsPage() {
                         onEdit={handleEdit}
                         showMobileReset={filtersAreDirty}
                         onResetFilters={resetFilters}
+                    />
+                    <PaginationBar
+                        pagination={pagination}
+                        onPageChange={setPage}
+                        isLoading={isFetching}
+                        itemLabel="discounts"
                     />
                 </div>
             </Panel>

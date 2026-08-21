@@ -1,8 +1,14 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   listDiscounts,
+  getDiscountStats,
   getDiscountById,
   createDiscount,
   updateDiscount,
@@ -19,6 +25,7 @@ import {
   DiscountFormInput,
   DiscountListFilters,
 } from "@/types/discount";
+import type { PaginationMeta, PaginationParams } from "@/types/pagination";
 import { toast } from "sonner";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useMerchantId } from "@/app/dashboard/hooks/useLocationScopedModifiers";
@@ -33,15 +40,34 @@ function useEffectiveLocationId() {
   return isAllLocations ? "all" : selectedLocationId;
 }
 
-export function useDiscounts(filters: DiscountListFilters) {
+export function useDiscounts(
+  filters: DiscountListFilters,
+  pagination?: PaginationParams,
+) {
   const locationId = useEffectiveLocationId();
   const scopedFilters: DiscountListFilters = {
     ...filters,
     locationId: locationId || "all",
   };
   return useQuery({
-    queryKey: ["discounts", locationId, scopedFilters, "scoped"],
-    queryFn: () => listDiscounts(scopedFilters),
+    queryKey: [
+      "discounts",
+      "list",
+      locationId,
+      scopedFilters,
+      pagination,
+      "scoped",
+    ],
+    queryFn: () => listDiscounts(scopedFilters, pagination),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useDiscountStats() {
+  const locationId = useEffectiveLocationId();
+  return useQuery({
+    queryKey: ["discounts", "stats", locationId, "scoped"],
+    queryFn: () => getDiscountStats(locationId),
   });
 }
 
@@ -127,9 +153,14 @@ export function useToggleDiscount() {
       const snapshots = queryClient.getQueriesData<{
         success: boolean;
         data?: Discount[];
-      }>({ queryKey: ["discounts"] });
-      queryClient.setQueriesData<{ success: boolean; data?: Discount[] }>(
-        { queryKey: ["discounts"] },
+        pagination?: PaginationMeta;
+      }>({ queryKey: ["discounts", "list"] });
+      queryClient.setQueriesData<{
+        success: boolean;
+        data?: Discount[];
+        pagination?: PaginationMeta;
+      }>(
+        { queryKey: ["discounts", "list"] },
         (current) => {
           if (!current?.data) return current;
           return {
