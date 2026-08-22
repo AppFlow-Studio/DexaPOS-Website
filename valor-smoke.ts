@@ -1,8 +1,11 @@
 /**
- * Throwaway diagnostic: Valor SANDBOX GetClientToken.
+ * Throwaway diagnostic: Valor SANDBOX credential + host verification.
  *   npx tsx valor-smoke.ts
- * Prints the exact creds parsed from env and the exact JSON body sent, so we can
- * confirm parsing + wire-passing, and see the full raw response (not just error_no).
+ *
+ * Exercises the two credential-independent legs of the Valor rail:
+ *   1. GetClientToken — securelink host, BODY creds (appid/appkey/epi)
+ *   2. Add Customer   — vault host, HEADER creds (Valor-App-ID/-Key, no epi)
+ * The actual card SALE needs a Passage.js browser token and is not covered here.
  */
 import { loadEnvConfig } from "@next/env";
 loadEnvConfig(process.cwd(), true, {
@@ -16,14 +19,19 @@ import {
   resolveValorEndpoints,
 } from "./lib/payments/valor/config";
 
-async function tryPost(label: string, url: string, body: object) {
+async function tryPost(
+  label: string,
+  url: string,
+  body: object,
+  headers: Record<string, string> = {}
+) {
   console.log(`\n── ${label} ──`);
   console.log("POST", url);
   console.log("body:", JSON.stringify(body));
   try {
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(15_000),
       cache: "no-store",
@@ -40,23 +48,35 @@ async function main() {
   const c = readTestMerchantCredentials();
   const ep = resolveValorEndpoints();
 
-  // Full values — user is rotating this key afterward.
   console.log("PARSED FROM ENV:");
   console.log("  appId :", JSON.stringify(c.appId), "len", c.appId.length);
   console.log("  appKey:", JSON.stringify(c.appKey), "len", c.appKey.length);
-  console.log("  epi   :", JSON.stringify(c.epi));
+  console.log("  epi   :", JSON.stringify(c.epi), "valid:", /^2\d{9}$/.test(c.epi));
 
-  const body = {
+  // ── Leg 1: GetClientToken (securelink, body creds) ──────────────────────
+  const gpBody = {
     appid: c.appId,
     appkey: c.appKey,
     epi: c.epi,
     txn_type: "clientToken",
   };
+  await tryPost(
+    "GetClientToken @ :443 (documented)",
+    `${ep.transactionBaseUrl}/?gptoken`,
+    gpBody
+  );
 
-  // Documented host is :443 (create-page-token). Passage.js sandbox docs mention
-  // :4430. Try both so we can see which the securelink service accepts.
-  await tryPost("gptoken @ :443 (documented)", `${ep.transactionBaseUrl}/?gptoken`, body);
-  await tryPost("gptoken @ :4430 (passage host)", `${ep.clientTokenBaseUrl}/?gptoken`, body);
+  // ── Leg 2: Add Customer (vault, HEADER creds, no epi) ───────────────────
+  const custBody = {
+    customer_name: "Dexa Smoke Test",
+    address_details: [{ address_label: "primary" }],
+  };
+  await tryPost(
+    "Add Customer @ vault (header creds)",
+    `${ep.vaultBaseUrl}/api/valor-vault/addcustomer`,
+    custBody,
+    { "Valor-App-ID": c.appId, "Valor-App-Key": c.appKey }
+  );
 }
 
 main();
