@@ -6,6 +6,7 @@ import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { DateTimePopover } from "@/components/dashboard/menu/DateTimePopover";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -221,33 +221,35 @@ export function ShiftAdjustmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
+      <DialogContent className="flex h-dvh max-h-dvh min-h-0 w-full max-w-none flex-col overflow-hidden border-0 bg-white max-sm:rounded-none sm:h-auto sm:max-h-[90vh] sm:max-w-3xl">
+        <DialogHeader className="shrink-0 text-left">
           <DialogTitle>Adjust shift</DialogTitle>
           <DialogDescription>
             Correct clock times and breaks for {staffName}. Saved corrections are marked verified and audited.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-5">
+        <div className="grid min-h-0 flex-1 gap-5 overflow-x-hidden overflow-y-auto overscroll-contain pr-2">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="shift-clock-in">Clock in</Label>
-              <Input
+              <DateTimePopover
                 id="shift-clock-in"
-                type="datetime-local"
                 value={clockIn}
-                onChange={(event) => setClockIn(event.target.value)}
+                onChange={setClockIn}
+                placeholder="Select clock-in time"
+                className="h-10 rounded-xl border-0 bg-muted/40 shadow-none"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="shift-clock-out">Clock out</Label>
-              <Input
+              <DateTimePopover
                 id="shift-clock-out"
-                type="datetime-local"
                 value={clockOut}
-                onChange={(event) => setClockOut(event.target.value)}
+                onChange={setClockOut}
+                min={clockIn}
                 placeholder="Leave empty for active shift"
+                className="h-10 rounded-xl border-0 bg-muted/40 shadow-none"
               />
               <p className="text-xs text-muted-foreground">
                 Leave empty only if the shift should remain active.
@@ -255,15 +257,21 @@ export function ShiftAdjustmentDialog({
             </div>
           </div>
 
-          <div className="rounded-lg border bg-muted/30 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
+          <div className="rounded-xl border-0 bg-muted/40 p-4">
+            <div className="grid min-w-0 gap-3 sm:flex sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <h3 className="text-sm font-semibold">Breaks</h3>
                 <p className="text-xs text-muted-foreground">
                   Unpaid breaks reduce total hours. Paid breaks stay visible but do not reduce pay.
                 </p>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={addBreak}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-fit"
+                onClick={addBreak}
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 Add break
               </Button>
@@ -278,7 +286,7 @@ export function ShiftAdjustmentDialog({
                 breakRows.map((row, index) => (
                   <div
                     key={row.id}
-                    className="grid gap-3 rounded-md border bg-background p-3 sm:grid-cols-[110px_1fr_1fr_auto]"
+                    className="grid min-w-0 gap-3 rounded-xl border-0 bg-white p-3 sm:grid-cols-[110px_minmax(0,1fr)_minmax(0,1fr)_auto]"
                   >
                     <div className="space-y-2">
                       <Label>Type</Label>
@@ -299,24 +307,28 @@ export function ShiftAdjustmentDialog({
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={`break-${index}-start`}>Start</Label>
-                      <Input
+                      <DateTimePopover
                         id={`break-${index}-start`}
-                        type="datetime-local"
                         value={row.startAt}
-                        onChange={(event) =>
-                          updateBreak(row.id, { startAt: event.target.value })
+                        onChange={(value) =>
+                          updateBreak(row.id, { startAt: value })
                         }
+                        min={clockIn}
+                        placeholder="Select start time"
+                        className="h-10 rounded-xl border-0 bg-muted/40 shadow-none"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={`break-${index}-end`}>End</Label>
-                      <Input
+                      <DateTimePopover
                         id={`break-${index}-end`}
-                        type="datetime-local"
                         value={row.endAt}
-                        onChange={(event) =>
-                          updateBreak(row.id, { endAt: event.target.value })
+                        onChange={(value) =>
+                          updateBreak(row.id, { endAt: value })
                         }
+                        min={row.startAt}
+                        placeholder="Select end time"
+                        className="h-10 rounded-xl border-0 bg-muted/40 shadow-none"
                       />
                     </div>
                     <div className="flex items-end">
@@ -389,7 +401,7 @@ export function ShiftAdjustmentDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 pt-4">
           <Button
             type="button"
             variant="outline"

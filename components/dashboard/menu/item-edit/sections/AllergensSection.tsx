@@ -58,7 +58,7 @@ export function AllergensSection({ itemId, item, globalScope }: SectionRenderCtx
   return (
     <div className="space-y-4">
       <SectionHeader title="Allergens" scope={globalScope} />
-      <div className="space-y-3 rounded-lg border bg-card p-4">
+      <div className="space-y-3 rounded-2xl border bg-card p-6">
         <div className="flex flex-wrap gap-1.5">
           {allergens.length === 0 && (
             <span className="text-xs text-muted-foreground">

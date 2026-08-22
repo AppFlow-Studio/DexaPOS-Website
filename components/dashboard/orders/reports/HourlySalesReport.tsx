@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useHourlySalesReport } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
-import { SummaryCard } from './SummaryCard'
+import { SummaryCard, SummaryCardRow } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
@@ -96,25 +96,9 @@ export function HourlySalesReport({ dateFrom, dateTo, merchantName, locationName
   ]
 
   return (
-    <div className="space-y-4">
-      <ReportToolbar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        filteredCount={filteredData.length}
-        totalCount={data.length}
-        data={filteredData}
-        exportColumns={exportColumns}
-        filename={`Hourly Sales - ${formatReportDateRange(dateFrom, dateTo)}`}
-        searchPlaceholder="Search by hour..."
-        merchantName={merchantName}
-        locationName={locationName}
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        summaryCards={summaryCardsData}
-      />
-
+    <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <SummaryCardRow>
         <SummaryCard
           label="Peak Hour"
           value={peakHour}
@@ -130,7 +114,23 @@ export function HourlySalesReport({ dateFrom, dateTo, merchantName, locationName
           value={formatCurrency(avgOrderValue)}
           icon={<DollarSign className="h-5 w-5" />}
         />
-      </div>
+      </SummaryCardRow>
+
+      <ReportToolbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        filteredCount={filteredData.length}
+        totalCount={data.length}
+        data={filteredData}
+        exportColumns={exportColumns}
+        filename={`Hourly Sales - ${formatReportDateRange(dateFrom, dateTo)}`}
+        searchPlaceholder="Search by hour..."
+        merchantName={merchantName}
+        locationName={locationName}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        summaryCards={summaryCardsData}
+      />
 
       <ReportDataTable columns={columns} data={filteredData} />
     </div>

@@ -135,13 +135,19 @@ export function LinkLocationDialog({
                   value={selectedLocationId}
                   onValueChange={setSelectedLocationId}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full min-w-0 [&>span]:min-w-0 [&>span]:truncate">
                     <SelectValue placeholder="Choose a location..." />
                   </SelectTrigger>
-                  <SelectContent className="z-[220]">
+                  <SelectContent
+                    avoidCollisions
+                    collisionPadding={16}
+                    className="z-[220] max-h-[min(15rem,var(--radix-select-content-available-height))] w-(--radix-select-trigger-width)"
+                  >
                     {availableLocations.map((loc) => (
                       <SelectItem key={loc.id} value={loc.id}>
-                        {loc.name}
+                        <span className="min-w-0 flex-1 truncate">
+                          {loc.name}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>

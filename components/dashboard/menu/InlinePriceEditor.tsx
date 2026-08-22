@@ -26,6 +26,11 @@ interface InlinePriceEditorProps {
   categoryId?: string | null;
   initialPrice: number | null;
   initialCashPrice?: number | null;
+  /**
+   * Cash price this scope inherits when the field is left blank. Shown in the
+   * placeholder so an empty box reads as "inherits $X" rather than just "empty".
+   */
+  inheritedCashPrice?: number | null;
   onClose?: () => void;
   onSaved?: () => void;
   className?: string;
@@ -51,6 +56,7 @@ export function InlinePriceEditor({
   categoryId,
   initialPrice,
   initialCashPrice,
+  inheritedCashPrice,
   onClose,
   onSaved,
   className,
@@ -107,6 +113,10 @@ export function InlinePriceEditor({
       queryClient.invalidateQueries({ queryKey: ["categories-with-items"] });
       queryClient.invalidateQueries({ queryKey: ["item-price-matrix", itemId] });
       queryClient.invalidateQueries({ queryKey: ["menu-item", itemId] });
+      // The menu detail page (/dashboard/menu/[menuId]) reads its rows from
+      // these; without them an edited price only appeared after a manual reload.
+      queryClient.invalidateQueries({ queryKey: ["menu-with-categories"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-basic"] });
       invalidateOrderOutSync(queryClient);
       onSaved?.();
       onClose?.();
@@ -157,10 +167,14 @@ export function InlinePriceEditor({
           value={cashPrice}
           onChange={(e) => setCashPrice(e.target.value)}
           className="h-8 text-sm"
-          placeholder="Leave blank for default"
+          placeholder={
+            inheritedCashPrice != null
+              ? `Inherits $${inheritedCashPrice.toFixed(2)}`
+              : "Leave blank for default"
+          }
         />
       </div>
-      <div className="flex items-center justify-between gap-2 pt-1">
+      <div className="flex flex-col items-center gap-2 pt-1">
         <AffectsTag ctx={scope} variant="inline" />
         <div className="flex items-center gap-2">
           {onClose && (

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Pencil, RotateCcw, Grid3x3, ArrowRight, Loader2 } from "lucide-react";
+import { RotateCcw, Grid3x3, ArrowRight, Loader2 } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -27,6 +27,8 @@ interface PriceSourcePopoverProps {
   itemId: string;
   /** The price currently displayed next to this popover */
   currentPrice: number;
+  /** Effective cash price, so the edit pane prefills instead of looking unset */
+  currentCashPrice?: number | null;
   /** Scope that produced currentPrice (from effective_price_source) */
   sourceLevel: CascadeLevel;
   /** Optional location id of the displayed price (for removing an L2 override) */
@@ -37,6 +39,11 @@ interface PriceSourcePopoverProps {
   canRemoveOverride?: boolean;
   children: React.ReactNode;
   className?: string;
+  /** Controlled open state, for opening this from an external menu item. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Which pane to show when it opens — "edit" jumps straight to Adjust price. */
+  initialMode?: "view" | "edit";
 }
 
 function formatPrice(n: number | null | undefined): string {
@@ -52,15 +59,39 @@ function formatPrice(n: number | null | undefined): string {
 export function PriceSourcePopover({
   itemId,
   currentPrice,
+  currentCashPrice,
   sourceLevel,
   locationId,
   editScope,
   canRemoveOverride = false,
   children,
   className,
+  open: openProp,
+  onOpenChange,
+  initialMode = "view",
 }: PriceSourcePopoverProps) {
-  const [open, setOpen] = React.useState(false);
-  const [mode, setMode] = React.useState<"view" | "edit">("view");
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+  // Controlled when a parent passes `open`, otherwise self-managed.
+  const open = openProp ?? uncontrolledOpen;
+  const setOpen = React.useCallback(
+    (next: boolean) => {
+      setUncontrolledOpen(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange],
+  );
+  const [mode, setMode] = React.useState<"view" | "edit">(initialMode);
+
+  // Reset to the caller's pane on each open. Keyed off the open transition only
+  // — `initialMode` is deliberately not a dependency, because the caller sets it
+  // in the same tick as `open`, and re-running here would fight the user if they
+  // switch panes while it is open.
+  const wasOpenRef = React.useRef(false);
+  React.useEffect(() => {
+    if (open && !wasOpenRef.current) setMode(initialMode);
+    wasOpenRef.current = open;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
   const queryClient = useQueryClient();
 
   const matrixQuery = useItemPriceMatrix(open ? itemId : null);
@@ -97,30 +128,39 @@ export function PriceSourcePopover({
   const matrix = matrixQuery.data;
   const globalPrice = matrix?.globalPrice ?? null;
 
-  // Resolve L2 override (if any) for the displayed locationId
+  // Resolve the L2 rung (global category default) for the displayed context.
+  // L2 is not location-scoped — it applies across every location.
   const l2Override = React.useMemo(() => {
-    if (!matrix || !locationId) return null;
+    if (!matrix) return null;
     return (
       matrix.levels.find(
-        (r) => r.level === 2 && r.locationId === locationId,
+        (r) =>
+          r.level === 2 &&
+          (!editScope.categoryName || r.categoryName === editScope.categoryName),
       ) ?? null
     );
-  }, [matrix, locationId]);
+  }, [matrix, editScope.categoryName]);
 
   const sourceLabel = (() => {
     switch (sourceLevel) {
       case 1:
         return "Global";
       case 2:
-        return editScope.locationName
-          ? `${editScope.locationName} override`
-          : "Location override";
-      case 3:
         return editScope.categoryName
           ? `${editScope.categoryName} category`
           : "Category default";
-      case 4:
+      case 3:
+        if (editScope.categoryName && editScope.locationName) {
+          return `${editScope.categoryName} at ${editScope.locationName}`;
+        }
         return "Category at location";
+      case 4:
+        if (editScope.menuName && editScope.categoryName) {
+          return `${editScope.menuName} menu – ${editScope.categoryName}`;
+        }
+        return editScope.menuName
+          ? `${editScope.menuName} menu`
+          : "Menu category";
       case 5:
         if (editScope.menuName && editScope.locationName) {
           return `${editScope.menuName} menu at ${editScope.locationName}`;
@@ -133,17 +173,20 @@ export function PriceSourcePopover({
 
   return (
     <Popover
+      // Modal when driven from an external menu: the dismiss layer then ignores
+      // the click that is still in flight from that menu, instead of racing it.
+      modal={openProp !== undefined}
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next) setMode("view");
+        if (!next) setMode(initialMode);
       }}
     >
       <PopoverTrigger asChild>
         <button
           type="button"
           className={cn(
-            "inline-flex items-center gap-1 rounded hover:bg-muted/50 px-1 -mx-1 transition-colors text-left",
+            "-mx-1 inline-flex items-center gap-1 rounded-full px-1 text-left transition-colors hover:bg-muted/50",
             className,
           )}
           aria-label={`Price source: ${sourceLabel}`}
@@ -151,16 +194,27 @@ export function PriceSourcePopover({
           {children}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[320px] p-0">
-        <div className="border-b px-4 py-3">
+      <PopoverContent
+        align="end"
+        collisionPadding={12}
+        className="w-[268px] overflow-hidden rounded-2xl p-0"
+        // Radix restores focus to the dropdown item that opened this popover,
+        // which its dismiss layer then reads as a focus-out and closes on. The
+        // popover manages its own focus, so suppress that restore.
+        onOpenAutoFocus={(event) => {
+          if (openProp !== undefined) event.preventDefault();
+        }}
+      >
+        <div className="border-b border-border/60 px-3 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-sm font-semibold">{formatPrice(currentPrice)}</p>
+              <p className="text-sm font-semibold tabular-nums">
+                {formatPrice(currentPrice)}
+              </p>
               <p
                 className={cn(
-                  "mt-0.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                  "mt-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
                   sourceColors.bg,
-                  sourceColors.border,
                   sourceColors.text,
                 )}
               >
@@ -173,8 +227,8 @@ export function PriceSourcePopover({
 
         {mode === "view" ? (
           <>
-            <div className="px-4 py-3">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="px-3 py-2.5">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Cascade
               </p>
               {matrixQuery.isLoading ? (
@@ -191,9 +245,9 @@ export function PriceSourcePopover({
                   />
                   <CascadeRow
                     label={
-                      editScope.locationName
-                        ? `${editScope.locationName} override`
-                        : "Location override"
+                      l2Override?.categoryName ??
+                      editScope.categoryName ??
+                      "Category default"
                     }
                     price={l2Override?.price ?? null}
                     isWinner={sourceLevel === 2}
@@ -210,20 +264,12 @@ export function PriceSourcePopover({
                 </div>
               )}
             </div>
-            <div className="flex flex-col gap-1 border-t bg-muted/20 p-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 justify-start gap-2 text-xs"
-                onClick={() => setMode("edit")}
-              >
-                <Pencil className="h-3.5 w-3.5" /> Edit this override
-              </Button>
+            <div className="flex flex-col gap-1 border-t border-border/60 bg-muted/60 p-2">
               {canRemoveOverride && locationId && (
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-7 justify-start gap-2 text-xs text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                  className="h-7 justify-start gap-2 rounded-full text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
                   onClick={() => removeMutation.mutate()}
                   disabled={removeMutation.isPending}
                 >
@@ -239,7 +285,7 @@ export function PriceSourcePopover({
                 asChild
                 size="sm"
                 variant="ghost"
-                className="h-7 justify-start gap-2 text-xs"
+                className="h-7 justify-start gap-2 rounded-full text-xs"
               >
                 <Link
                   href={`/dashboard/menu/items/${itemId}/pricing`}
@@ -259,6 +305,7 @@ export function PriceSourcePopover({
               scope={editScope}
               locationId={locationId ?? null}
               initialPrice={currentPrice}
+              initialCashPrice={currentCashPrice ?? null}
               onClose={() => setMode("view")}
               onSaved={() => setOpen(false)}
             />
@@ -284,7 +331,7 @@ function CascadeRow({
   return (
     <div
       className={cn(
-        "flex items-center justify-between rounded px-2 py-1 text-xs",
+        "flex items-center justify-between rounded-full px-2.5 py-1 text-xs",
         isWinner
           ? cn(colors.bg, "font-semibold", colors.text)
           : "text-muted-foreground",

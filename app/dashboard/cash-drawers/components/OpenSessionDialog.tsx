@@ -66,8 +66,9 @@ export function OpenSessionDialog({ open, onOpenChange, clerkOrgId, drawer }: Pr
 
   return (
     <Dialog open={open} onOpenChange={(o) => !isPending && onOpenChange(o)}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      {/* Header/footer fixed, body the only scroller — see the form dialog. */}
+      <DialogContent className="flex flex-col overflow-hidden max-sm:overflow-hidden sm:max-h-[85dvh] sm:max-w-md">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Open Cash Drawer Session</DialogTitle>
           <DialogDescription>
             {drawer ? `Start a session on "${drawer.name}".` : 'Start a session.'} Operations
@@ -75,7 +76,7 @@ export function OpenSessionDialog({ open, onOpenChange, clerkOrgId, drawer }: Pr
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto">
           <div className="space-y-2">
             <Label htmlFor="open-amount">Opening Amount (USD)</Label>
             <Input
@@ -99,7 +100,8 @@ export function OpenSessionDialog({ open, onOpenChange, clerkOrgId, drawer }: Pr
               onChange={(e) => setBusinessDate(e.target.value)}
             />
           </div>
-          <div className="flex items-center justify-between rounded-md border p-3">
+          {/* Tier-3 inset (§3.1) rather than a bordered box inside the dialog. */}
+          <div className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
             <div>
               <Label htmlFor="open-blind" className="font-medium">
                 Blind count at close
@@ -116,7 +118,7 @@ export function OpenSessionDialog({ open, onOpenChange, clerkOrgId, drawer }: Pr
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>

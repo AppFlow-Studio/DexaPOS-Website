@@ -1,0 +1,890 @@
+# Merchant Dashboard — UI Design System
+
+## §0 Read me first
+
+- This is the standard for converting merchant-dashboard pages. Keep it open while you work.
+- **If this doc and a shipped page disagree, the doc wins.** Seven pages follow the design language; ~60 do not. Copying a neighbour is the most likely way to go wrong — check the adoption table below first.
+- The language in one line: flat surfaces, one rounded container per page section, **no dividing lines at all**, muted borderless controls, **no status colour-coding**, centred rounded pop-ups, brand-blue section headings, and large `tabular-nums` figures carrying the emphasis.
+
+**Shell adoption — copy the ✅ pages when converting.**
+
+| Page | Layout components | Tokens |
+|------|-------------------|--------|
+| [`orders/reports`](../app/dashboard/orders/reports/page.tsx) | ✅ `PageShell` `PageHeader` `LocationIndicator` `Panel` | ✅ |
+| [`orders/analytics`](../app/dashboard/orders/analytics/page.tsx) | ✅ `PageShell` `PageHeader` `LocationIndicator` | ✅ |
+| [`locations/[id]/settings`](../app/dashboard/locations/[locationId]/settings/page.tsx) | ✅ `PageShell` `PageHeader` (server component) | ✅ |
+| [`tables`](../app/dashboard/tables/page.tsx) | ✅ `PageShell` `PageHeader` `Panel` | ✅ |
+| [`dashboard`](../app/dashboard/page.tsx) (home) | ❌ hand-rolled | ✅ |
+| [`locations`](../app/dashboard/locations/page.tsx) | ❌ hand-rolled | ✅ |
+| [`orders`](../app/dashboard/orders/page.tsx) | ❌ hand-rolled | ✅ |
+| [`orders/[orderId]`](../app/dashboard/orders/[orderId]/page.tsx) | ❌ hand-rolled | ✅ |
+
+The four ❌ pages conform on **tokens** (h1, accent, radii, muted stat labels) but still hand-write their layout, so a change to `PageHeader` will not reach them. Each carries header furniture that needs its own conversion PR rather than a mechanical swap:
+
+- **`orders`** — sparkline KPI tiles, preset range pills, two `OverviewLinkButton`s
+- **`orders/[orderId]`** — 1,214 lines; back control is the icon-only D-04 exception, not the default pill
+- **`dashboard`** (home) — no `h1` at all (greeting hero), and a sticky range bar that D-05 exists to protect
+- **`locations`** — separate single-location and multi-location header branches
+
+`orders/reports` and `orders/analytics` were safe to convert because their headers were already an exact structural match for `PageHeader`.
+
+> ⚠️ **Not yet verified in a browser.** The three ✅ pages are confirmed by compiled-CSS inspection, HTTP 200, and `tsc` — not by looking at them. The local dev Clerk user is an HQ admin, so `/dashboard/*` redirects to `/manage`. Give them a visual check in both themes before merging.
+
+**Prefer components over class strings.** `import { PageShell, PageHeader, Panel, PanelSection, StatTile, StatRow } from '@/components/dashboard/shell'`. A copy-pasted class string in 60 files makes the next design change a 60-file edit; an import makes it one.
+
+---
+
+## §1 Hard constraints
+
+These fail **silently**. Nothing in review or CI catches them.
+
+### C1 — There is no `tailwind.config.js`
+Tailwind v4, CSS-first. All tokens live in [`app/globals.css`](../app/globals.css) under `:root`, `.dark`, and `@theme inline`. Creating a config file does nothing at all.
+
+### C2 — Never wrap a token in `hsl()`
+Tokens are `oklch()` and hex. `hsl(var(--border))` is invalid CSS, and Recharts **silently falls back to its own defaults** rather than erroring — this is what once made axis labels render dark red.
+
+```diff
+- stroke: "hsl(var(--border))"
++ stroke: "var(--border)"
+```
+
+**Detect:** `grep -rn "hsl(var(--" app components lib`
+
+*Currently **90 occurrences across 21 files** — every one is a chart rendering in a fallback colour rather than the intended token.* Worst offenders: `manage/cash-drawers/components/CashDrawerAnalytics.tsx` (11), `dashboard/reports/cash-drawers/page.tsx` (11), `manage/analytics/page.tsx` (10). Also live in [`lib/orderout/platform.ts`](../lib/orderout/platform.ts) (`SLUG_COLORS.other`, `PLATFORM_COLORS.default`).
+
+Fix these as you convert each page — the replacement is always just dropping the `hsl(...)` wrapper.
+
+### C3 — `useTheme()` does not work
+`next-themes` is installed but not wired. Theme is class-based, set by an inline anti-FOUC script in [`app/layout.tsx`](../app/layout.tsx) reading `localStorage.theme`. Read the `dark` class on `<html>`; never `useTheme()`.
+
+### C4 — `bg-card` resolves differently inside the dashboard — in dark mode only
+`.dashboard-sidebar-theme` (on `SidebarProvider` in both the dashboard and manage layouts) overrides `--background` and `--card` under `.dark`, producing a three-surface ladder:
+
+| Surface | Dark value |
+|---------|-----------|
+| Sidebar rail | `#0f1115` |
+| Content canvas | `#16181d` |
+| Card | `#1c1f26` |
+
+In **light** mode it only sets sidebar tokens, so the divergence doesn't exist there. **An engineer testing in light mode will never reproduce this class of bug.** Always check dark mode inside a real dashboard route.
+
+### C5 — `--primary` is violet; the brand is blue
+Never use `text-primary` expecting the brand blue. The accent is `text-[#0C4FD1] dark:text-[#6CA0FF]` — dark blue in light mode, lightened in dark mode because `#0C4FD1` fails contrast on the dark card. A matching `--brand` token exists in `globals.css` for CSS-level use, but the utility class must be written literally in a `.tsx` (see C7).
+
+### C6 — `<Card>` is a coexistence rule, not a ban
+`@/components/ui/card` is imported in **277 files** (159 under dashboard). New and converted pages use `Panel` instead. This is **not** a mandate to migrate 277 files — leave unconverted pages alone.
+
+Related: the `.analytics-flat` / `.dashboard-flat` `<style>` blocks de-chrome Cards with `!important`. They are a workaround for pages that predate `Panel`. **Do not add new ones.**
+
+### C7 — Tailwind does not scan `.ts` files — write classes as literals in `.tsx`
+A class name that exists **only** inside a `.ts` file (a constants module, a helper) never gets a CSS rule generated. The class still lands in the DOM; nothing defines it; the element silently inherits. A blue heading renders black.
+
+```diff
+- // tokens.ts
+- export const SECTION_HEADING = 'text-[#0C4FD1] dark:text-[#6CA0FF]'
+- // PanelSection.tsx
+- <div className={SECTION_HEADING}>
+
++ // PanelSection.tsx — literal, in the .tsx
++ <div className="text-[#0C4FD1] dark:text-[#6CA0FF]">
+```
+
+[`tokens.ts`](../components/dashboard/shell/tokens.ts) is therefore a **reference sheet, not a rendering mechanism** — look up the canonical value there and copy it into your `.tsx`. Referencing a token programmatically is only safe when some `.tsx` also spells the class out literally.
+
+This is also why the brand accent stays as the literal pair `text-[#0C4FD1] dark:text-[#6CA0FF]` rather than a `text-brand` utility: the `--brand` token exists in `globals.css` and is available for CSS-level use, but the class must be written out to be generated.
+
+**Symptom to recognise:** an element that should be styled renders with inherited defaults, and the class is visible in DevTools with no matching rule.
+
+---
+
+## §2 Page skeletons
+
+Four archetypes. Bending one into the wrong shape is how the current drift started.
+
+### A — List + filters + table
+
+```tsx
+import { PageShell, PageHeader, Panel, StatRow, StatTile, LocationIndicator }
+  from '@/components/dashboard/shell'
+
+<PageShell>
+  <PageHeader
+    title="Orders"
+    subtitle="Track and manage every order across your locations"
+    indicator={<LocationIndicator isAllLocations={isAllLocations} locationName={location?.name} />}
+  />
+
+  <Panel>
+    <div className="px-6 py-6">
+      <StatRow columns={4}>
+        <StatTile label="Net Sales" value={formatCurrency(net)} meta="vs last week" />
+        {/* … */}
+      </StatRow>
+    </div>
+  </Panel>
+
+  <Panel padded>
+    {/* toolbar + table */}
+  </Panel>
+</PageShell>
+```
+
+### B — Metrics / report (tabbed)
+
+```tsx
+<PageShell>
+  <PageHeader title="Reports" subtitle="…" backHref="/dashboard/orders" backLabel="Back to Orders" />
+
+  <Tabs value={tab} onValueChange={setTab}>
+    {/* Classes are literal, not {TOKEN} — see C7. */}
+    <div className="w-full min-w-0 overflow-x-auto pb-1">
+      <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+        {TABS.map(t => (
+          <TabsTrigger
+            key={t.value}
+            value={t.value}
+            className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+          >
+            {t.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </div>
+
+    {/* one control row governing every tab */}
+    <div className="mt-4 flex flex-wrap items-center gap-3">
+      <DateRangePicker
+        triggerClassName="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+        /* … */
+      />
+    </div>
+
+    <TabsContent value="…" className="mt-6">
+      <Panel padded><SomeReport /></Panel>
+    </TabsContent>
+  </Tabs>
+</PageShell>
+```
+
+### C — Detail record
+
+```tsx
+<PageShell>
+  <PageHeader title={`Order #${order.number}`} backHref="/dashboard/orders"
+              backLabel="Back to Orders" actions={<>…</>} />
+
+  <div className="grid gap-6 md:grid-cols-3">
+    <div className="space-y-6 md:col-span-2">
+      <Panel nested>{/* tier 2 — nested in the grid */}</Panel>
+    </div>
+    <div className="space-y-6">
+      <Panel nested>{/* … */}</Panel>
+    </div>
+  </div>
+</PageShell>
+```
+
+### D — Settings / form
+
+```tsx
+<PageShell width="narrow">
+  <PageHeader title="Location Tax & Banking" subtitle={location.name}
+              backHref="/dashboard/locations" backLabel="Back to Locations" />
+  {/* stacked cards */}
+</PageShell>
+```
+
+Live example: [`app/dashboard/locations/[locationId]/settings/page.tsx`](../app/dashboard/locations/[locationId]/settings/page.tsx).
+
+---
+
+## §3 Token reference
+
+⚠️ **Copy these values into your `.tsx` as literal strings.** Do not `className={SOME_TOKEN}` — Tailwind does not scan `.ts` files, so a class sourced only from [`tokens.ts`](../components/dashboard/shell/tokens.ts) generates no CSS rule and the element renders unstyled (C7). The constants exist so there is one place to look up the canonical value, not to be referenced at runtime.
+
+Better still: use the shell **components**, which already have these baked in as literals.
+
+### 3.1 Surfaces — the radius scale (closed set) <sup>D-02</sup>
+
+| Tier | Use | Token | Class |
+|------|-----|-------|-------|
+| 1 | Top-level page panel | `PANEL` | `rounded-3xl border bg-card` |
+| 2 | Nested / detail card | `PANEL_NESTED` | `rounded-2xl border bg-card` |
+| 2 | Overlay (dropdown, select, popover) | `OVERLAY` | `rounded-2xl` |
+| 3 | Inset well inside a panel | `INSET` | `rounded-2xl border-0 bg-muted/60 shadow-none` |
+| — | ~~Section separator~~ | ~~`HAIRLINE`~~ | **Retired — see §5.5** |
+
+The tier-1/tier-2 difference is the nesting cue. A card inside a panel must be smaller than the panel containing it.
+
+> **`HAIRLINE` is no longer a separator.** §5.5 bans horizontal dividers outright. Sections are
+> separated by spacing and a change of surface. `border-border/60` survives only as the edge of
+> an element that genuinely has a border (a tier-1/tier-2 panel), never as a line drawn between
+> two things.
+
+### 3.2 Typography
+
+| Role | Class |
+|------|-------|
+| Page `h1` <sup>D-01</sup> | `text-[1.75rem] font-semibold tracking-[-0.02em]` |
+| Subtitle | `mt-1 text-sm text-muted-foreground` |
+| Section heading | `flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]` |
+| Section figure | `mt-1 text-[2rem] font-medium leading-tight tracking-[-0.02em] tabular-nums` |
+| Stat label <sup>D-03</sup> | `text-sm text-muted-foreground` |
+| Stat figure | `mt-1 text-[1.75rem] font-medium leading-tight tracking-[-0.02em] tabular-nums` |
+| Stat meta | `mt-0.5 text-[0.8125rem] text-muted-foreground` |
+| Sub-label | `mb-3 text-sm text-muted-foreground` |
+
+### 3.3 Numerals
+
+**Any figure that can change, or that aligns in a column, gets `tabular-nums`.** Without it, digits jitter as values update and columns fail to line up. This includes currency, counts, percentages, durations, and order numbers.
+
+### 3.4 Spacing
+
+| Role | Value |
+|------|-------|
+| Between top-level blocks | `space-y-6` |
+| Section inside a panel | `px-6 py-8` (`SECTION_PADDING`) |
+| Panel with free-form content | `px-6 py-6` (`<Panel padded>`) |
+| Narrow page cap | `mx-auto max-w-5xl` (`<PageShell width="narrow">`) |
+
+---
+
+## §4 Component recipes
+
+### 4.1 Pill control — `DS-CTL-01`
+**Canonical:** `h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm`
+**Use when:** date trigger, export button, select trigger, pagination. Pair with `variant="outline"`.
+**Never:** a squared `rounded-md` button in a converted page.
+
+### 4.2 Inputs — `DS-CTL-02`
+
+**Every input is muted, rounded, and borderless.** Not just search — text, number, email,
+password, date, select triggers, textareas, and combobox triggers all share one material:
+
+**Canonical:** `rounded-full border-0 bg-muted/60 shadow-none focus-visible:bg-background`
+
+**This is already the default** in `components/ui/input.tsx` and on the `SelectTrigger`, so a
+plain `<Input />` or `<SelectTrigger>` is correct as written — do **not** re-declare the
+classes at the call site.
+
+| Field | Shape |
+|-------|-------|
+| Single-line input, select trigger | `rounded-full` |
+| Textarea | `rounded-2xl` — a pill reads wrong on a multi-line box |
+| Toolbar-height field | add `h-9 text-[0.8125rem]` (or `h-10` for a primary search) |
+| Search | add `pl-9`/`pl-10` for the icon |
+
+**Never:** a bordered input (`border`, `border-input`, `variant="outline"` chrome on a
+field), a squared `rounded-md` field, a white/`bg-background` field at rest, or a raw
+`<input>` for a text/number/date field (see §11.1). Focus is signalled by the fill turning
+`bg-background`, not by a border appearing.
+
+**The one exception is the error state:** an invalid field re-gains a destructive border via
+`aria-invalid:border aria-invalid:border-destructive`. The fill alone cannot carry it.
+
+**Grep (redundant classes):** `grep -rn '<Input' <file> | grep -E 'border-0|bg-muted/60|shadow-none'`
+**Grep (violations):** `rg -n '<Input[^>]*(border-input|rounded-md|bg-background)' <file>`
+
+#### 4.2a Search field specifics
+
+**Canonical (search only):** `pl-9` for the icon, plus `h-9 text-[0.8125rem]` if the
+field sits in a toolbar. Everything else comes from the base.
+**Icon:** `pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50` — note `text-muted-foreground/50`, not `/100`.
+
+### 4.3 Filter chip — `DS-CTL-03`
+**Canonical:** `rounded-full border-0 bg-muted/60 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground` — tinted, borderless, quieter than a pill control.
+**Why:** outlined or dashed chips add a second competing set of boxes beside the panel edge.
+
+### 4.4 Back control — `DS-CTL-04` <sup>D-04</sup>
+Decision tree:
+
+| Situation | Control |
+|-----------|---------|
+| There is a parent list page | Ghost pill with label — `<PageHeader backHref=… />` |
+| Detail header is crowded with actions | Icon-only ghost `variant="ghost" size="icon"` |
+| — | **Never bordered.** |
+
+### 4.5 Tabs — `DS-CTL-05`
+**Rail:** `TAB_SCROLLER` wrapping `TAB_RAIL`. **Pill:** `TAB_PILL` (Radix) or `TAB_PILL_BUTTON` + `TAB_PILL_ACTIVE`/`TAB_PILL_INACTIVE` (plain buttons).
+**Never:** the underline style (`border-b-4`). It is fully retired — zero occurrences remain.
+
+### 4.6 Overlay content — `DS-CTL-06`
+**Canonical:** `rounded-2xl` on `DropdownMenuContent` / `SelectContent` / `PopoverContent`.
+
+**Already applied centrally for Select and DropdownMenu.** Radix portals overlay content to `<body>`, so no ancestor class can reach it — [`app/globals.css`](../app/globals.css) targets the slots directly:
+
+```css
+[data-slot="select-content"],
+[data-slot="dropdown-menu-content"] { border-radius: 1rem; }
+
+[data-slot="select-content"] [data-slot="select-item"],
+[data-slot="dropdown-menu-content"] [data-slot="dropdown-menu-item"] { border-radius: 9999px; }
+```
+
+You no longer need `className="rounded-2xl"` on a `SelectContent` or `DropdownMenuContent` — existing ones are harmless, just redundant.
+
+> ⚠️ **`popover.tsx` is not covered.** It ships `rounded-md` and carries **no `data-slot` attribute**, so there is nothing to target. Popover content still needs `rounded-2xl` at the call site until the primitive gains a slot — tracked in §11.
+
+### 4.5b Scoped pill controls — `DS-CTL-10`
+For a **dense toolbar app** (the floor-plan editor) built from dozens of small shadcn `Button`s and `Select`s, appending `rounded-full` to every call site is error-prone and always misses some. Apply the shape once with a scoped class instead:
+
+```tsx
+<div className="tables-pill-controls …">   {/* editor root, dialog root */}
+```
+
+The rule lives in [`app/globals.css`](../app/globals.css) and is **scoped to the class**, so it cannot leak into the rest of the app. Children opt out with `rounded-none`, and containers keep their tier radius via `:not([class*="rounded-2xl"]):not([class*="rounded-3xl"])` guards.
+
+**Use this only when a whole subtree needs it.** For one or two buttons, write `rounded-full` on the button — a scoped class for two elements is indirection without benefit. Never add a page-level `<style>` block for this (C6): the rule belongs in `globals.css` where it is shared and greppable.
+
+### 4.6b Status badge — `DS-CTL-09` <sup>D-11, D-12</sup>
+**Canonical:** `inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium` — one neutral badge, for every state.
+
+**Status is never colour-coded.** No green for active/paid/online, no red for
+inactive/failed/critical, no amber for pending/warning, no per-location colour. Every status
+badge is the same muted pill; the **word** carries the meaning.
+
+This applies wherever a state is displayed, not only to badges — status text in a table cell,
+an icon beside a toggle, a row highlight, a dropdown item, a card label. `text-green-600`
+next to an "Active" switch is the same violation as a green badge.
+
+```diff
+- <span className={cn('text-sm font-medium', isActive ? 'text-green-600' : 'text-muted-foreground')}>
+-   {isActive ? 'Active' : 'Inactive'}
+- </span>
++ <span className="text-sm text-muted-foreground">
++   {isActive ? 'Active' : 'Inactive'}
++ </span>
+```
+
+**Why:** a dashboard where paid, pending, active, inactive, warning, and each location all
+carry their own hue turns every screen into a colour key the user has to learn. Flat surfaces
+plus one accent (§C5) means colour still means something when it does appear.
+
+**Grep:** `rg -n 'text-(green|red|amber|orange|yellow|emerald|rose)-[0-9]|bg-(green|red|amber|orange|yellow|emerald|rose)-[0-9]' <your-file>`
+
+**Two exceptions, both narrow:**
+
+1. **Destructive actions** — a delete/deactivate item in a menu or a `variant="destructive"`
+   button keeps `text-destructive`. That is an *action's* consequence, not a record's state.
+2. **Functional colour encoding** — a floor-plan canvas, a heatmap, or a chart series legend.
+   Those must read at a glance across a dense layout, and the colour *is* the data. The rule
+   governs status display, not data visualisation.
+
+> The per-domain `BadgeStyle` modules ([`lib/constants/payment-status.ts`](../lib/constants/payment-status.ts),
+> [`lib/constants/table-status.ts`](../lib/constants/table-status.ts),
+> [`lib/constants/menu-item-badges.ts`](../lib/constants/menu-item-badges.ts)) predate this rule.
+> Their `dot`/`text`/`bg` triples still exist; converted pages should stop reading the colour
+> fields and render the neutral pill. Retiring the modules is a §11 backlog item, not a
+> per-page job.
+
+### 4.7 Close button — `DS-CTL-08` <sup>D-10</sup>
+**Canonical:** `inline-flex size-8 shrink-0 items-center justify-center rounded-full border-0 bg-muted/60 text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground`
+
+**Use when:** the ✕ that dismisses a dialog, sheet, or banner.
+
+The same material as the search field (§4.2) — borderless `bg-muted/60`, no shadow — but **circular rather than pill**, because the content is a single square glyph. Visible at rest, not on hover: a close affordance you have to discover by hovering is one users may never find. `size-8` gives a 32px hit target around a 16px icon.
+
+**Already applied centrally.** [`dialog.tsx`](../components/ui/dialog.tsx) and [`sheet.tsx`](../components/ui/sheet.tsx) carry it, so every modal and slide-over in the app already has it — do not restyle their close buttons per page.
+
+**Never:** the old `rounded-xs opacity-70` treatment, or a dismiss that only appears on `group-hover`.
+
+**Exception:** a labelled `✕ Close` button in a footer action row is a regular button, not this recipe (see `ReceiptModal`). Tinted banners may swap `bg-muted/60` for their own tint at the same opacity — see the amber PIN banner in [`app/dashboard/page.tsx`](../app/dashboard/page.tsx).
+
+### 4.8 Stat tile — `DS-CTL-07` <sup>D-03</sup>
+**Canonical:** `<StatTile label value meta />` inside `<StatRow columns={n}>`.
+**Label is muted, never brand blue.** Blue marks a section heading; if every tile label carries it, the accent stops signalling anything.
+
+---
+
+## §5 Tables
+
+**The staff table is the reference.** [`components/dashboard/staff/StaffDataTable.tsx`](../components/dashboard/staff/StaffDataTable.tsx) is what every dashboard table should look like. It is built on `<Table variant="data">` — the variant already carries the whole treatment, so **you get it by passing the prop, not by copying class strings**.
+
+```tsx
+<Table variant="data" containerClassName="hidden xl:block" className="min-w-[900px]">
+```
+
+| Path | Status | Action |
+|------|--------|--------|
+| [`staff/StaffDataTable.tsx`](../components/dashboard/staff/StaffDataTable.tsx) | **Canonical** | Copy this structure |
+| [`reports/ReportDataTable.tsx`](../components/dashboard/orders/reports/ReportDataTable.tsx) | Superseded | Hairline-row era; convert to `variant="data"` when touched |
+| [`orders/OrdersDataTable.tsx`](../components/dashboard/orders/OrdersDataTable.tsx) | Superseded | Feature-rich; tokens drift |
+| [`components/ui/data-table.tsx`](../components/ui/data-table.tsx) | **Deprecated** | Legacy boxed frame — do not use |
+
+### 5.1 What `variant="data"` gives you
+
+Defined in [`components/ui/table.tsx`](../components/ui/table.tsx) and applied through context — do not restate these at the call site:
+
+| Part | Treatment |
+|------|-----------|
+| Container | `overflow-x-auto overflow-y-hidden rounded-2xl bg-muted/20` — a rounded tinted well, **no border and no frame** |
+| Header | `bg-muted/50` band |
+| Body rows | `[&_tr]:border-0 [&_tr]:bg-card/70 [&_tr:hover]:bg-muted/40` — **borderless**; separation comes from the card tint against the well, not from lines |
+| Cells | `[&_td]:px-3 [&_td]:py-3 [&_th]:px-3` |
+
+The one thing the call site still adds is `<TableHeader className="[&_tr]:border-0">` — the base `TableHeader` ships `[&_tr]:border-b`, which the variant does not currently strip.
+
+### 5.2 Table rules
+
+- **No horizontal lines.** No `border-b` on rows, no rule under the header, no divider between the header and the body. Rows are separated by the `bg-card/70` fill sitting on the `bg-muted/20` well. See §5.5.
+- **The table is not wrapped in a `Panel`.** The `rounded-2xl bg-muted/20` container *is* the surface. Nesting it in a panel produces a box inside a box.
+- **Sortable headers are ghost pills**, not bare text: `variant="ghost"` + `h-8 rounded-full px-2` with `<ArrowUpDown className="ml-2 h-3 w-3" />`.
+- **Row actions are a `rounded-full` ghost icon button** — `h-8 w-8 rounded-full p-0` with `MoreHorizontal` — opening a `DropdownMenu align="end"`.
+- **Cell badges are borderless pills**: `w-fit rounded-full border-0 px-2.5 text-xs font-medium` on `variant="secondary"`. Never a bordered or outlined badge in a cell.
+- **Numeric cells** get `text-right tabular-nums`.
+- **Toolbar above the table**: search `<Input>` on the left (`h-10 w-full rounded-full pl-10` with the `text-muted-foreground/50` icon), filter `Select`s on the right as borderless muted pills — `h-9 rounded-full border-0 bg-muted/60 px-3 shadow-none`. A "Clear filters" ghost pill appears only when a filter is off its default.
+- **Bulk-action bar** (when rows are selected): `rounded-2xl border-0 bg-muted/60 px-3 py-3`, ghost pill buttons inside, count rendered `tabular-nums`.
+- **Row count line** below the table: `text-xs text-muted-foreground sm:text-sm`. Pagination <sup>D-08</sup>, where present, is labelled outline pills, hidden when `pageCount <= 1`.
+
+### 5.3 Mobile: cards, never a scrolling table
+
+The staff table renders **two trees** off one `useReactTable` instance:
+
+- the `<Table variant="data">` at `hidden xl:block`
+- a card grid at `grid grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden`, iterating `table.getRowModel().rows`
+
+Each card is `rounded-2xl border-0 bg-muted/45 p-4`, with the selected state as `bg-muted ring-1 ring-border` — a ring, not a border. Secondary fields sit in a `grid-cols-2` block; the row's primary action is a ghost pill in the footer of the card.
+
+Do not solve mobile with a horizontally scrolling table. Below `xl`, build the card grid.
+
+### 5.4 Loading and empty states
+
+- **Loading (table):** a single full-width `TableCell colSpan={columns.length}` at `h-24 text-center`.
+- **Loading (cards):** `Skeleton` blocks inside the same `rounded-2xl bg-muted/45 p-4` shell, so the skeleton has the card's shape.
+- **Empty:** centred icon + message in `text-muted-foreground`; on mobile, `rounded-2xl bg-muted/30` filling the grid via `col-span-full`.
+
+### 5.5 No horizontal lines — anywhere
+
+This is a table rule and a component rule. **Do not use horizontal rules to divide content.** That means no `border-b` / `border-t` dividers, no `<Separator />` used as a section break, no `divide-y`, and no hairline under a heading, panel header, dialog header, or dialog footer.
+
+Separation is carried by **surface and spacing**: a change of fill (`bg-card/70` on `bg-muted/20`, `bg-muted/60` inset), a radius change, or simply `space-y-*`. A line drawn across a flat surface reads as a seam.
+
+This supersedes the earlier hairline table tokens and the `HAIRLINE` separator use in §3.1 — `border-border/60` remains valid only as the edge of an element that genuinely has a border, never as a divider. It is also why the overlay scroll structure (see "Overlay scroll structure") drops `border-b`/`border-t` from dialog headers and footers.
+
+**Grep for regressions in the file you converted:**
+
+```bash
+rg -n 'border-b|border-t|divide-y|<Separator' <your-file>
+```
+
+---
+
+## §6 Charts (Recharts)
+
+```ts
+import { CHART_GRID, CHART_TICK, CHART_CURSOR_FILL, ChartTooltipPanel }
+  from '@/components/dashboard/shell'
+```
+
+- `CHART_GRID` — `{ stroke: "var(--border)", strokeDasharray: "3 3" }`
+- `CHART_TICK` — `{ fontSize: 12, fill: "var(--muted-foreground)" }`
+- `ChartTooltipPanel` — the one themed tooltip. Do not hand-roll another from slate/gray pairs.
+
+> ⚠️ **C2 again, because this is where it bites.** These read raw `oklch()`/hex custom properties. Wrapping any of them in `hsl(...)` yields invalid CSS and Recharts silently reverts to its defaults. If your axis labels render an unexpected colour, this is why.
+
+There are only `--chart-1` … `--chart-5`. A series needing more than five colours must supply its own palette.
+
+---
+
+## §7 Motion
+
+| Element | Class |
+|---------|-------|
+| Page entrance <sup>D-05</sup> | `animate-in fade-in duration-500` — **on the header block only** |
+| Hover / colour | `transition-colors` |
+| Opacity | `transition-opacity` |
+
+> **Why the header block and not the page root:** `animate-in` animates `transform`, which makes the element a containing block and **breaks every `sticky` descendant**. The dashboard Overview's sticky range bar is the casualty. `PageHeader` already scopes this correctly — use it and the problem cannot occur.
+
+Dialogs and sheets animate via real `@keyframes` (`panel-in`, `overlay-in`) in `globals.css`, not utility classes. **This is deliberate** — tailwind-merge cannot resolve the primitive's hardcoded `slide-in-from-top-[48%]`. Do not "fix" it by adding `data-[state=open]:animate-in`.
+
+---
+
+## §8 Legacy blocklist
+
+> **This applies to the page you are currently converting — not repo-wide.**
+
+| Banned | Replacement | Note |
+|--------|-------------|------|
+| `bg-gray-50`, `bg-slate-*` | `bg-muted/60` — or delete | Flat design often removes the well entirely |
+| `bg-white dark:bg-slate-900` | `bg-card` | |
+| `border-blue-200`, `border-gray-*` | `border-border/60` | |
+| `shadow-lg`, `shadow-md` on cards | *(remove)* | Panels have no shadow |
+| `text-gray-*`, `text-slate-*` | `text-muted-foreground` | |
+| `#0A5C9E`, `#0A7AB8` | `text-[#0C4FD1] dark:text-[#6CA0FF]` | Old Dexa blue |
+| `hsl(var(--*))` | `var(--*)` | **C2 — silently breaks charts** |
+| `rounded-lg` on a panel | `rounded-3xl` / `rounded-2xl` | §3.1 |
+
+Audit the file you just converted:
+
+```bash
+rg -n 'bg-gray-|bg-slate-|dark:bg-slate-|bg-white dark:|border-blue-|border-gray-|shadow-lg|shadow-md|text-gray-|text-slate-|#0A5C9E|#0A7AB8|hsl\(var\(' <your-file>
+```
+
+Baseline when this doc was written: `bg-slate-*` 68 files · `bg-white` 69 · `border-blue-200` 67 · `shadow-lg` 55 · `bg-gray-50` 28 · `hsl(var(` 21.
+
+**No lint rule, deliberately.** `next.config.ts` sets `ignoreDuringBuilds: true`, so lint gates nothing today; and `bg-white` is legitimate in `app/(marketing)`, `app/sites`, and receipt/print views, so a global rule would fire ~69 false positives on day one and be disabled within a week.
+
+---
+
+## §9 Per-page migration checklist
+
+Paste into your PR.
+
+```markdown
+**Structure**
+- [ ] Uses a §2 skeleton (`PageShell` + `PageHeader`)
+- [ ] No `@/components/ui/card` import
+- [ ] One `Panel` per page section
+- [ ] No new `.*-flat` `<style>` block
+
+**No lines** (§5.5)
+- [ ] No `border-b` / `border-t` / `divide-y` / `<Separator>` used as a divider
+- [ ] Dialog header and footer carry no rule
+- [ ] `rg -n 'border-b|border-t|divide-y|<Separator' <file>` reviewed
+
+**Tables** (§5)
+- [ ] `<Table variant="data">`, not hand-rolled hairline rows
+- [ ] Not wrapped in a `Panel`
+- [ ] Card grid below `xl` — no horizontally scrolling table on mobile
+
+**Controls**
+- [ ] Every input muted, rounded, borderless — no bordered or `rounded-md` field (§4.2)
+- [ ] Textareas `rounded-2xl`, everything else `rounded-full`
+- [ ] Controls use `PILL_CONTROL`
+
+**No status colour** (§4.6b)
+- [ ] `rg -n 'text-(green|red|amber|orange|yellow|emerald|rose)-[0-9]|bg-(green|red|amber|orange|yellow|emerald|rose)-[0-9]' <file>` — clean, or destructive-action/chart only
+
+**Panels** (§12)
+- [ ] Centred `Dialog`, not a `Sheet` or bottom drawer
+- [ ] `rounded-3xl`; no `slide-in-from-*`
+- [ ] Dialog clips, inner element scrolls
+
+**Tokens**
+- [ ] `h1` comes from `PageHeader` (not hand-written)
+- [ ] Section headings use the literal `text-[#0C4FD1] dark:text-[#6CA0FF]` in the `.tsx` (C7)
+- [ ] Every figure has `tabular-nums`
+- [ ] Radii come from §3.1
+- [ ] All colours are tokens (no raw hex except documented brand)
+- [ ] No `hsl(var(...))`
+- [ ] §8 grep is clean for this file
+
+**Verify**
+- [ ] Light mode
+- [ ] **Dark mode inside the dashboard route** (C4)
+- [ ] Data-heavy state and empty state
+- [ ] 375px wide — no horizontal body scroll
+- [ ] Panels full-screen on mobile; confirmations still centred cards (§13.1)
+- [ ] Section rail scrolls the active pill into view (§13.2)
+- [ ] Charts render with correct axis colours
+```
+
+---
+
+## §10 Decision log
+
+| ID | Question | Decision | Rejected | Non-conforming (now fixed) |
+|----|----------|----------|----------|---------------------------|
+| **D-01** | Page `h1` | `text-[1.75rem] font-semibold tracking-[-0.02em]` | `font-medium` + `md:text-[2rem]`; `text-xl tracking-tight` | orders, orders/[orderId], locations ×2, locations settings |
+| **D-02** | Panel radius | Two-tier: `rounded-3xl` page / `rounded-2xl` nested | One radius everywhere | — (tier assignment confirmed) |
+| **D-03** | Stat-tile label | `text-muted-foreground`; blue = headings only | Blue on every tile | reports `SummaryCard` |
+| **D-04** | Back control | Ghost pill, or icon-only when crowded. Never bordered | Bordered pill | locations settings |
+| **D-05** | Entrance animation scope | Header block only | Page root | Constraint, not preference — root `animate-in` breaks `sticky` |
+| **D-06** | Table implementation | ~~`ReportDataTable` tokens canonical~~ — **superseded by D-16** | `components/ui/data-table.tsx` | §5 status table |
+| **D-07** | Brand accent | One accent pair, literal in `.tsx` (C7) | `text-brand` utility — not generated | tokens.ts is reference-only |
+| **D-08** | Pagination | Labelled outline pills | Ghost icon squares | `OrdersDataTable` (pending) |
+| **D-09** | Search field | `FILLED_INPUT` everywhere | Bordered `<Input>` | locations |
+| **D-10** | Close (✕) button | Search-field material, circular, visible at rest | `rounded-xs opacity-70`; hover-only reveal | `dialog.tsx`, `sheet.tsx`, PIN banner, deposit banner |
+| **D-11** | Status badge | ~~Soft tint + dot~~ — **superseded by D-12** | Solid saturated fill (`bg-green-500 text-white`) | `TableStatusBadge`; new `lib/constants/table-status.ts` |
+| **D-12** | Status colour-coding | **None.** One neutral `bg-muted/60` pill; the word carries the meaning | Per-status hues (green/red/amber), incl. the D-11 soft tints | Staff table `text-green-600`; payment/table/menu badge modules |
+| **D-13** | Panel presentation | Centred rounded pop-up (`Dialog`) for every panel | Bottom sheets, side drawers (`Sheet side=…`) | Every `Sheet`-based panel (`StaffDetailSheet`, `LocationAssignmentSheet`, …) |
+| **D-14** | Mobile panels | Full-screen below `sm` — **except confirmations**, which stay centred cards | Full-screen everything (makes a 2-line confirm a destination) | — |
+| **D-15** | Section rail on mobile | Bar stays visible; active pill `scrollIntoView({inline:'center'})` | `overflow-x-hidden` (truncates), wrapping to two lines, collapsing to a dropdown | — |
+| **D-16** | Table implementation | `<Table variant="data">` — staff table canonical; borderless rows on a tinted well | Hairline `border-b` rows (the former D-06 answer) | `ReportDataTable`, `OrdersDataTable` |
+
+**Retracted during implementation.** Two findings from the initial audit did not survive verification:
+
+1. *"`dialog.tsx` has no open/close animation."* False — it animates via `@keyframes panel-in`/`overlay-in` in `globals.css`, which a grep of the component file cannot see. See §7.
+2. *"The Orders date popover is missing `overflow: hidden`."* False — `DateRangePicker` ships `rounded-2xl overflow-hidden` on its own content, so every caller gets the clip.
+
+---
+
+## §11 Central fixes backlog
+
+Fix-once items. **Do not** re-solve these per page.
+
+| Item | Files | Status |
+|------|-------|--------|
+| Strip `[&_tr]:border-b` from `TableHeader` under `variant="data"` so call sites stop re-declaring `[&_tr]:border-0` (§5.1) | `table.tsx` | Open |
+| Retire status colour from the `BadgeStyle` modules — drop the `dot`/`text`/`bg` hues, keep the labels (D-12) | `payment-status.ts`, `table-status.ts`, `menu-item-badges.ts`, `cascade-labels.ts` | Open |
+| Convert `Sheet`-based panels to centred `Dialog`s (D-13) | `StaffDetailSheet`, `LocationAssignmentSheet`, `NewEditItemFormSheet`, + others | Open |
+| Add the mobile full-screen sizing to `DialogContent` as a variant, so it isn't retyped per call site (§13.1) | `dialog.tsx` | Open |
+| Extract the section-rail auto-scroll (§13.2) into one component rather than an effect per page | new — `components/dashboard/shell` | Open |
+| Add `data-slot="popover-content"` to `popover.tsx` so the global overlay-radius rule can reach it | `popover.tsx` | Open — select/dropdown already done in `globals.css` |
+| Table consolidation | 3 implementations | Open |
+| `hsl(var(...))` bug | `lib/orderout/platform.ts` | Open |
+| Move day-cell pill radius into `DateRangePicker`; delete both page `<style>` blocks | `DateRangePicker.tsx`, reports + analytics pages | Open |
+| `FILTER_TRIGGER` inlined instead of imported | `OrdersDataTable.tsx:625` | Open |
+| Three currency formatters | `lib/utils.ts` (canonical), `tips/lib/constants.ts`, `device-registry/presentation.ts` | Open |
+| `STATUS_CONFIG` has no dark variants | `tips/lib/constants.ts` | Open |
+| Raw `<input>` elements bypass `ui/input` — see §11.1 | 12 text/number/date fields | Open |
+| `--brand` token + accent dedupe | `globals.css` + 10 files | ✅ Done |
+| Delete dead 160-line token block | `globals.css` | ✅ Done |
+| `DS-CTL-02` fill moved into base `input.tsx`; 41 redundant call-site classNames stripped | `input.tsx` + 25 files | ✅ Done |
+
+### §11.1 Raw `<input>` elements that bypass the primitive
+
+`DS-CTL-02` now lives in the base `components/ui/input.tsx` (muted fill, borderless,
+`rounded-full`), so anything rendering a bare `<input>` **no longer matches the rest of
+the dashboard** — it falls back to browser-default chrome.
+
+34 raw `<input>` elements remain under `app/dashboard` + `components/dashboard`. Most are
+**legitimate and must stay** — the primitive cannot style them:
+
+- `type="color"` (7), `type="checkbox"` (5), `type="file"` (4), `type="radio"` (1)
+- `type="datetime-local"` (2) in the snooze controls
+
+These are the **real gaps** — plain fields that should be `<Input>`:
+
+| File | Field |
+|------|-------|
+| `app/dashboard/payments/page.tsx:228,238` | `date` ×2 |
+| `app/dashboard/payments/disputes/page.tsx:469,479` | `date` ×2 |
+| `app/dashboard/invoices/components/InvoiceForm.tsx:588` | `number` |
+| `app/dashboard/orders/analytics/page.tsx:371` | text/date |
+| `app/dashboard/customers/components/tabs/DetailsTab.tsx:455` | text |
+| `app/dashboard/customers/components/tabs/MarketingTab.tsx:161,188,208,218` | text ×4 |
+| `app/dashboard/online-ordering/page.tsx:743,758,776,792,807` | mixed |
+| `app/dashboard/kiosk/[locationId]/KioskEditor.tsx:211,219,323,417,519` | mixed |
+
+**Why this was not swept with the className cleanup:** converting a raw `<input>` to
+`<Input>` is a behaviour change, not a styling one. Several are `type="date"`, and the
+primitive applies `isNativeDateLike` → `[color-scheme:light]`/`dark:[color-scheme:dark]`,
+which changes how the native picker renders. Each needs an eyeball, so treat this as a
+per-file pass rather than a codemod.
+
+**Grep:** `grep -rn '<input' --include=*.tsx app/dashboard components/dashboard | grep -v 'type="\(checkbox\|color\|file\|radio\)"'`
+
+---
+
+## §12 Panels are centred pop-ups — `DS-CTL-11` <sup>D-13</sup>
+
+**Every panel opens as a centred, rounded modal.** Not a drawer sliding up from the bottom,
+not a sheet sliding in from the left or right. Detail views, editors, wizards, filters,
+assignment pickers, confirmations — all of them are a `Dialog` centred in the viewport.
+
+```tsx
+<Dialog open={open} onOpenChange={setOpen}>
+  <DialogContent className="…">   {/* rounded-3xl is the default — see below */}
+```
+
+**Never:** `<Sheet side="right">` / `side="left"` / `side="bottom"`, a hand-rolled
+`fixed inset-x-0 bottom-0` bottom sheet, or a `slide-in-from-*` animation on a panel. If a
+file imports `@/components/ui/sheet` for a panel, that is the thing to convert.
+
+**Shape:** `rounded-3xl` — already the `DialogContent` default (see "Base control radius is
+now set globally"). Nested panels inside a dialog are `rounded-2xl` per §3.1.
+
+**Motion:** the centred fade/scale from the `panel-in` / `overlay-in` `@keyframes` in
+`globals.css` (§7). Do not add `slide-in-from-bottom` or `data-[state=open]:animate-in`.
+
+**Structure:** the dialog clips, an inner element scrolls. See "Overlay scroll structure"
+below — and remember §5.5: the header and footer take **no** `border-b`/`border-t`.
+
+**Grep:** `rg -n 'from "@/components/ui/sheet"|<Sheet|side="(bottom|left|right)"|slide-in-from' <your-file>`
+
+---
+
+## §13 Mobile — `DS-RESP-01` <sup>D-14</sup>
+
+### 13.1 Panels go full-screen
+
+Below the `sm` breakpoint a panel fills the viewport **horizontally and vertically** — no
+margin, no visible overlay gutter, and no rounded corners against the screen edge:
+
+```tsx
+<DialogContent className="h-dvh max-h-dvh w-screen max-w-none rounded-none
+                          sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-lg sm:rounded-3xl">
+```
+
+Use `h-dvh`, not `h-screen` — `100vh` on mobile browsers sits behind the address bar and the
+footer ends up below the fold.
+
+**The exception is confirmation dialogs.** A short confirm/cancel prompt stays a small centred
+card on mobile: blowing a two-line question up to full screen makes a trivial decision look
+like a destination. Keep those at their `sm:max-w-[425px]`-class sizing at every width, and
+keep the `rounded-3xl`.
+
+The dividing line is content, not component: **does the panel contain fields or a list the
+user works through?** Full screen. **Is it a question with two buttons?** Centred card.
+
+| Panel | Mobile |
+|-------|--------|
+| Detail sheet, editor, wizard, filter panel, results table | Full screen |
+| "Deactivate 3 staff?", "Discard changes?", "Delete this item?" | Centred card |
+
+### 13.2 The section selector bar auto-scrolls
+
+A horizontal tab/section rail (§4.5) must never hide the active section off-screen.
+
+- **The bar itself stays visible** — it scrolls horizontally within its own
+  `overflow-x-auto` container; it does not wrap to two lines, collapse into a dropdown, or
+  scroll out of the page on mobile. If the page scrolls under it, the rail is `sticky top-0`
+  with a `bg-background` so content does not show through.
+- **The selected pill scrolls itself into view**, on mount and on every change, so the
+  active section is always the one you can see:
+
+```tsx
+const railRef = React.useRef<HTMLDivElement>(null)
+
+React.useEffect(() => {
+  railRef.current
+    ?.querySelector('[data-state="active"]')
+    ?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" })
+}, [activeTab])
+```
+
+`inline: "center"` keeps the active pill centred, which also reveals the sections either side
+of it — the affordance that tells the user the rail scrolls at all. `block: "nearest"` is
+required: without it the browser scrolls the **page** vertically to the rail as well.
+
+- **Never** hide the overflow. `overflow-x-hidden` on a rail silently truncates the section
+  list, and the sections past the cut become unreachable.
+- Scrollbar itself stays hidden (`.thin-scrollbar` or `scrollbar-none`) — the peeking pill is
+  the affordance, not a scrollbar.
+
+### 13.3 Everything else
+
+- Tables become card grids below `xl` (§5.3).
+- 375px wide, no horizontal body scroll — already on the §9 checklist.
+- Grid tracks need `min-w-0`, or a wide child forces the whole row past the viewport.
+
+---
+
+## Out of scope
+
+- ~~**`app/dashboard/menu/**`** — separate epic.~~ **No longer out of scope.** This
+  document is the standard for *every* merchant-dashboard page, menu included. The
+  menu tree is being converted like any other; see the slice table below.
+- **`app/manage/*`** — shares `.dashboard-sidebar-theme`; the shell will apply later.
+- **The 277-file `<Card>` migration** — see C6.
+
+### Base control radius is now set globally
+
+`components/ui/button.tsx` and `components/ui/input.tsx` were `rounded-md`, which is
+why call sites all over the app hand-wrote `rounded-full` to get the pill shape this
+document asks for. The radius now lives in the base components:
+
+- **Button** — `rounded-full` in the base `cva` string. The `sm` and `lg` size variants
+  previously re-declared `rounded-md`; a size-level radius **wins over the base string**,
+  so those declarations were removed. Don't reintroduce a `rounded-*` in a size variant.
+- **Input** — `rounded-full`, horizontal padding bumped `px-3` → `px-4` so text isn't
+  crowded by the round ends. Grouped/affixed fields still override locally (see the
+  store-slug field in `OnlineStoreTab.tsx`, which pairs `rounded-l-full` on the affix
+  with `rounded-l-none` on the input).
+- **Select** — trigger matches Input (`rounded-full`, `px-4`); the dropdown panel is
+  `rounded-2xl` and its items `rounded-full`.
+- **Badge** — `rounded-full` **and `border-0`**. The `outline` variant lost its border,
+  so it now carries `bg-muted/60` instead — without that it would have become invisible
+  text. Call sites that pass their own `bg-*` (there are ~400) override the tint and are
+  unaffected; any `border-*` they also pass is now inert but harmless.
+
+- **Textarea** — `rounded-2xl` (not `full`; a pill reads wrong on a multi-line box).
+- **Alert** — `rounded-2xl`.
+- **Dialog** — `rounded-3xl`, matching the large overlay panels.
+
+> Only **Badge** dropped its border. `variant="outline"` on **Button** still has one —
+> that's the intended outline-button look.
+
+### Overlay scroll structure
+
+A `DialogContent` that owns the rounded corner **must not be the scroll container**.
+A scrollbar renders inside the element's padding box, so on a rounded element it
+appears to sit outside the corner — the bug visible on the New Menu Item sheet.
+
+The correct structure, used by `CreateItemWizard` and `NewEditItemFormSheet`:
+
+```
+DialogContent   flex flex-col overflow-hidden rounded-3xl   ← clips, never scrolls
+├─ DialogHeader shrink-0                                     ← no `sticky` needed
+├─ body         thin-scrollbar flex-1 min-h-0 overflow-y-auto ← the only scroller
+└─ DialogFooter shrink-0
+```
+
+Because header and footer are flex-fixed siblings of the scroll area, they no longer
+need `sticky` + `border-b`/`border-t` to separate themselves from scrolling content —
+which is how those hairlines got there in the first place. Don't reintroduce them.
+
+This means **new code does not need `rounded-full` on buttons or inputs** — it is the
+default. Existing per-call-site overrides are redundant but harmless.
+
+### Converted: the Item Library slice
+
+These files are done and conform to this document. Treat them as reference examples
+rather than pending work — and keep them conforming if you edit them:
+
+| File | Notes |
+|---|---|
+| `app/dashboard/menu/items/page.tsx` | `PageShell`/`PageHeader`/`Panel`/`StatRow`; 4 stat cards → one panel |
+| `components/dashboard/menu/NewEditItemFormSheet.tsx` | Retired underline tabs → pill rail |
+| `components/dashboard/menu/items/CreateItemWizard.tsx` | Retired underline tabs → pill rail |
+| `components/dashboard/menu/items/BulkPriceAdjustDialog.tsx` | Segmented controls → pill rails |
+| `components/dashboard/menu/items/BulkDeliveryPriceAdjustDialog.tsx` | Same |
+| `components/dashboard/menu/PriceSourcePopover.tsx` | Popover `rounded-2xl` per §4.6 |
+| `components/dashboard/menu/ScopeContextStrip.tsx` | Tier-3 inset treatment |
+| `app/dashboard/menu/items/[itemId]/page.tsx` | Item detail — 11 `<Card>` → `Panel`; `border-b`/`border-t` dividers removed |
+| `app/dashboard/menu/items/[itemId]/edit/**` | Edit panel shell + section nav |
+| `components/dashboard/menu/item-edit/**` (11 files) | All 8 section panels → `rounded-2xl … p-6` |
+
+### Converted: `ReceiptModal`
+
+`components/dashboard/orders/ReceiptModal.tsx` — shared by 5 call sites (order detail,
+transactions, financials report, HQ merchant transactions, orders table), so all five
+inherit the fix. Three deviations closed; no call-site changes were needed.
+
+- **Hand-rolled scrollbar → `.thin-scrollbar`.** It carried eight chained
+  `[&::-webkit-scrollbar-*]` arbitrary variants — one of the three drifted copies the
+  utility in `globals.css` was written to replace. It is now the last of those three.
+- **Scroll container split from padding.** The scroller previously owned the horizontal
+  padding around floating paper, so the bar ran the full modal width with dead space
+  either side of the receipt. Padding moved to an inner wrapper; the scroller is now a
+  bare `flex-1 min-h-0 overflow-y-auto` and the bar tracks the panel edge.
+- **`bg-transparent border-none shadow-none` → a real panel.** The paper floated on the
+  overlay and the action row floated below it as bare white pills. The dialog now owns
+  the surface per §"Overlay scroll structure": visible header (title + mono order
+  number), one scroller, `shrink-0` footer. The footer buttons dropped their
+  `bg-white dark:bg-zinc-800` — that override only existed to fake a surface under a
+  floating button.
+
+> **This panel is deliberately not `bg-background`.** It carries the paper's own
+> `bg-[#faf9f6] dark:bg-zinc-900`, so panel and receipt are one continuous surface and
+> the modal reads as a single sheet rather than a card containing a card. Two
+> consequences: the footer takes **no `border-t` and no `bg-muted/30`** — on one surface a
+> divider or tinted band reads as a seam — and the paper's `shadow-lg` plus its torn
+> edges become the only things separating receipt from panel, so don't remove them. The
+> receipt is the one place in the dashboard where a modal opts out of the neutral panel
+> colour; it is not a precedent for other dialogs.
+
+> **The print stylesheet is coupled to this DOM.** `@media print` in that file collapses
+> everything outside the dialog portal and un-clips `.receipt-scroll` so the paper prints
+> at natural height. Because the panel is now opaque, the `dialog-content` print rule also
+> has to strip `background`/`border`/`box-shadow`/`border-radius` and restore
+> `display: block`, or the card chrome prints as a grey box around the receipt. Anything
+> added to the panel that is not the paper needs `no-print`.
+
+Two shared modules came out of this slice — prefer them over new inline colour triples:
+
+- **`lib/constants/menu-item-badges.ts`** — badge styles (price source, category scope,
+  availability, tax) in the `BadgeStyle` `{dot,text,bg}` shape used by `table-status.ts`.
+- **`lib/menu/cascade-labels.ts` → `scopeColor()`** — now carries `dark:` variants for all
+  5 cascade levels. It previously returned light-only tints, so every consumer
+  (`CascadeLadder`, `AffectsTag`, `PriceMatrixGrid`, …) rendered near-white blocks on dark
+  cards. Fixing it at the source fixed all of them.
+
+> ⚠️ **Both files are `.ts`, which Tailwind does not scan (C7).** Their classes generate CSS
+> only because each one is *also* written literally in some `.tsx`. Before adding a new class
+> to either, grep the `.tsx` files for it — an unmatched class reaches the DOM with no rule
+> behind it and the element silently falls back to inherited styling.
+- **`lib/messaging/notification-shared.ts` `COLORS`** — email-template palette, deliberately different from the UI accent. Do not unify.

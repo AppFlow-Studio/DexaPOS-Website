@@ -8,6 +8,11 @@ import {
   OverrideData,
 } from "./location-menu-overrides";
 import { LocationLibraryItem } from "@/types/menu";
+import {
+  AVAILABLE_CHANNELS,
+  type AvailableChannel,
+} from "@/types/inventory";
+import { TAX_CATEGORIES, type TaxCategory } from "@/types/tax";
 import { LogAuditEvent } from "./audit-logs";
 import { getCurrentUserMerchantRole } from "./role-check";
 import { assertNameAvailable } from "./_name-uniqueness";
@@ -17,6 +22,31 @@ import { assertNameAvailable } from "./_name-uniqueness";
 // ============================================================================
 
 export type EffectivePriceSource = 1 | 2 | 3 | 4 | 5;
+
+const DEFAULT_ITEM_CHANNELS: AvailableChannel[] = ["pos", "online"];
+
+function normalizeTaxCategory(
+  value: unknown,
+  fallback: TaxCategory,
+): TaxCategory {
+  return typeof value === "string" &&
+    (TAX_CATEGORIES as readonly string[]).includes(value)
+    ? (value as TaxCategory)
+    : fallback;
+}
+
+function normalizeAvailableChannels(
+  value: unknown,
+  fallback: AvailableChannel[],
+): AvailableChannel[] {
+  if (!Array.isArray(value)) return fallback;
+
+  return value.filter(
+    (channel): channel is AvailableChannel =>
+      typeof channel === "string" &&
+      (AVAILABLE_CHANNELS as readonly string[]).includes(channel),
+  );
+}
 
 export interface MenuItemWithLocationContext extends MenuItemsModel {
   // Location override data
@@ -182,8 +212,67 @@ export async function GetMenuItem(
 
   if (!data) return null;
 
-  // Use explicit casting to ensure type safety with your updated interfaces
-  return data as LocationLibraryItem;
+  // The detail RPC predates tax/channel controls, so enrich its payload from
+  // the source tables. Location controls are nullable and inherit from L1.
+  const rpcItem = data as LocationLibraryItem;
+  const [baseControlsResult, locationControlsResult] = await Promise.all([
+    supabase
+      .from("menu_items")
+      .select("tax_category, is_tax_exempt, available_channels")
+      .eq("id", itemId)
+      .maybeSingle(),
+    Location_Id
+      ? supabase
+          .from("location_item_overrides")
+          .select("tax_category, is_tax_exempt, available_channels")
+          .eq("menu_item_id", itemId)
+          .eq("location_id", Location_Id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+
+  if (baseControlsResult.error) {
+    console.error(
+      "Error getting menu item tax/channel controls:",
+      baseControlsResult.error,
+    );
+  }
+  if (locationControlsResult.error) {
+    console.error(
+      "Error getting location item tax/channel controls:",
+      locationControlsResult.error,
+    );
+  }
+
+  const baseControls = baseControlsResult.data;
+  const locationControls = locationControlsResult.data;
+  const taxCategory = normalizeTaxCategory(
+    baseControls?.tax_category ?? rpcItem.tax_category,
+    "standard",
+  );
+  const isTaxExempt =
+    baseControls?.is_tax_exempt ?? rpcItem.is_tax_exempt ?? false;
+  const availableChannels = normalizeAvailableChannels(
+    baseControls?.available_channels ?? rpcItem.available_channels,
+    DEFAULT_ITEM_CHANNELS,
+  );
+
+  return {
+    ...rpcItem,
+    tax_category: taxCategory,
+    is_tax_exempt: isTaxExempt,
+    available_channels: availableChannels,
+    effective_tax_category: normalizeTaxCategory(
+      locationControls?.tax_category,
+      taxCategory,
+    ),
+    effective_is_tax_exempt:
+      locationControls?.is_tax_exempt ?? isTaxExempt,
+    effective_available_channels: normalizeAvailableChannels(
+      locationControls?.available_channels,
+      availableChannels,
+    ),
+  } satisfies LocationLibraryItem;
 }
 
 /**
@@ -1264,16 +1353,23 @@ export async function GetItemPriceMatrix(
     return { error: "Item not found" };
   }
 
-  // Fetch all 4 override tables in parallel
-  const [l2Res, l3Res, l4Res, l5Res, locsRes] = await Promise.all([
-    supabase
-      .from("location_item_overrides")
-      .select("id, location_id, custom_price, custom_cash_price")
-      .eq("menu_item_id", itemId),
+  // Fetch every override source in parallel.
+  //
+  // The cascade (see lib/menu/cascade-labels.ts and the DB's
+  // get_menu_with_categories) is:
+  //   L1 Item            — menu_items.price (already loaded above)
+  //   L2 Global category — category_items WHERE menu_id IS NULL
+  //   L3 Local category  — location_category_item_overrides
+  //   L4 Global menu     — category_items WHERE menu_id IS NOT NULL
+  //   L5 Local menu      — location_menu_item_overrides
+  //
+  // `category_items` backs BOTH L2 and L4; `menu_id` is what separates them,
+  // so it must be selected and split below.
+  const [catItemsRes, l3Res, l5Res, locsRes] = await Promise.all([
     supabase
       .from("category_items")
       .select(
-        "id, category_id, custom_price, custom_cash_price, category:categories(id, name)",
+        "id, category_id, menu_id, custom_price, custom_cash_price, category:categories(id, name), menu:menus(id, name)",
       )
       .eq("menu_item_id", itemId)
       .eq("merchant_id", merchant.id),
@@ -1301,46 +1397,34 @@ export async function GetItemPriceMatrix(
 
   const levels: PriceMatrixRow[] = [];
 
-  // L2 — location_item_overrides
-  for (const row of l2Res.data || []) {
-    levels.push({
-      level: 2,
-      tableName: "location_item_overrides",
-      locationId: row.location_id,
-      locationName: locationNameById.get(row.location_id) ?? null,
-      categoryId: null,
-      categoryName: null,
-      menuId: null,
-      menuName: null,
-      price: row.custom_price,
-      cashPrice: row.custom_cash_price,
-      overrideId: row.id,
-    });
-  }
-
-  // L3 — category_items (global)
-  for (const row of l3Res.data || []) {
+  // L2 (global category) and L4 (global menu) both live in category_items.
+  // Rows carrying a menu_id are menu-scoped (L4); the rest are the plain
+  // per-category default (L2).
+  for (const row of catItemsRes.data || []) {
     const cat = Array.isArray(row.category) ? row.category[0] : row.category;
+    const menu = Array.isArray(row.menu) ? row.menu[0] : row.menu;
+    const isMenuScoped = row.menu_id != null;
+
     levels.push({
-      level: 3,
+      level: isMenuScoped ? 4 : 2,
       tableName: "category_items",
       locationId: null,
       locationName: null,
       categoryId: row.category_id,
       categoryName: cat?.name ?? null,
-      menuId: null,
-      menuName: null,
+      menuId: row.menu_id ?? null,
+      menuName: isMenuScoped ? (menu?.name ?? null) : null,
       price: row.custom_price,
       cashPrice: row.custom_cash_price,
       overrideId: row.id,
     });
   }
 
-  // L4 — location_category_item_overrides
-  for (const row of l4Res.data || []) {
+  // L3 — location_category_item_overrides (category at one location)
+  for (const row of l3Res.data || []) {
     const cat = Array.isArray(row.category) ? row.category[0] : row.category;
     levels.push({
-      level: 4,
+      level: 3,
       tableName: "location_category_item_overrides",
       locationId: row.location_id,
       locationName: locationNameById.get(row.location_id) ?? null,

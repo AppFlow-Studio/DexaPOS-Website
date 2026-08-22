@@ -2,22 +2,22 @@
 
 import { useState, useEffect } from 'react'
 import {
-    BottomSheet,
-    BottomSheetContent,
-    BottomSheetHeader,
-    BottomSheetTitle,
-    BottomSheetBody,
-    BottomSheetFooter,
-} from '@/components/ui/bottom-sheet'
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CategoryPicker, CategoryOption } from './category-picker'
 import { MenuItemPicker, MenuItemOption } from './menu-item-picker'
 import { DiscountFormInput } from '@/types/discount'
+import { cn } from '@/lib/utils'
 
 interface TargetingSheetProps {
     open: boolean
@@ -41,6 +41,20 @@ interface TargetingSheetProps {
         | 'menu_item_ids'
     >>) => void
 }
+
+/** DS-CTL-05 — one tab pill on the segmented rail. */
+const TAB_PILL =
+    'shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border'
+
+/** A brand-blue section heading inside the sheet. */
+const SECTION_HEADING =
+    'text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]'
+
+const SCOPE_OPTIONS = [
+    { value: 'dine_in', label: 'Dine-in only', hint: 'Only on orders eaten in the restaurant' },
+    { value: 'takeout', label: 'Takeout only', hint: 'Only on orders taken away' },
+    { value: 'both', label: 'Both dine-in and takeout', hint: 'Available on every order type' },
+] as const
 
 export function TargetingSheet({
     open,
@@ -73,70 +87,81 @@ export function TargetingSheet({
     }
 
     return (
-        <BottomSheet open={open} onOpenChange={onOpenChange}>
-            <BottomSheetContent height="95" className="flex flex-col">
-                <BottomSheetHeader>
-                    <BottomSheetTitle>Configure Targeting</BottomSheetTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        Set which items, categories, and order types this discount applies to
-                    </p>
-                </BottomSheetHeader>
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent
+                overlayClassName="bg-slate-950/40 backdrop-blur-md"
+                className="flex max-h-[min(90dvh,760px)] w-full max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-[28px] border bg-background p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-2xl max-sm:top-1/2 max-sm:left-1/2 max-sm:right-auto max-sm:bottom-auto max-sm:h-auto max-sm:w-[calc(100%-1rem)] max-sm:max-w-2xl max-sm:-translate-x-1/2 max-sm:-translate-y-1/2 max-sm:rounded-[28px] max-sm:overflow-hidden"
+            >
+                <DialogHeader className="shrink-0 px-6 py-5 pr-14 text-left sm:text-left">
+                    <DialogTitle className="text-[1.625rem] font-semibold tracking-tight">
+                        Configure targeting
+                    </DialogTitle>
+                    <DialogDescription className="max-w-[60ch] leading-6">
+                        Set which items, categories, and order types this discount applies to.
+                    </DialogDescription>
+                </DialogHeader>
 
-                <BottomSheetBody className="flex-1 overflow-y-auto">
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
                     <Tabs defaultValue="categories" className="w-full">
-                        <TabsList className="grid w-full grid-cols-3 mb-6">
-                            <TabsTrigger value="categories">Categories</TabsTrigger>
-                            <TabsTrigger value="items">Menu Items</TabsTrigger>
-                            <TabsTrigger value="exclusions">Exclusions</TabsTrigger>
-                        </TabsList>
+                        <div className="w-full min-w-0 overflow-x-auto pb-1">
+                            <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                                <TabsTrigger value="categories" className={TAB_PILL}>
+                                    Categories
+                                </TabsTrigger>
+                                <TabsTrigger value="items" className={TAB_PILL}>
+                                    Menu items
+                                </TabsTrigger>
+                                <TabsTrigger value="exclusions" className={TAB_PILL}>
+                                    Exclusions
+                                </TabsTrigger>
+                            </TabsList>
+                        </div>
 
                         {/* Categories Tab */}
-                        <TabsContent value="categories" className="space-y-6 mt-0">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-base">Order Scope</CardTitle>
-                                    <CardDescription>
-                                        Choose which order types this discount applies to
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <RadioGroup
-                                        value={localValues.scope || 'both'}
-                                        onValueChange={(value) =>
-                                            handleChange({ scope: value as 'dine_in' | 'takeout' | 'both' })
-                                        }
-                                        className="space-y-3"
-                                    >
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="dine_in" id="scope-dine-in" />
-                                            <Label htmlFor="scope-dine-in" className="cursor-pointer">
-                                                Dine-in only
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="takeout" id="scope-takeout" />
-                                            <Label htmlFor="scope-takeout" className="cursor-pointer">
-                                                Takeout only
-                                            </Label>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="both" id="scope-both" />
-                                            <Label htmlFor="scope-both" className="cursor-pointer">
-                                                Both dine-in and takeout
-                                            </Label>
-                                        </div>
-                                    </RadioGroup>
-                                </CardContent>
-                            </Card>
+                        <TabsContent value="categories" className="mt-6 space-y-8">
+                            <section className="min-w-0">
+                                <h3 className={SECTION_HEADING}>Order scope</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Choose which order types this discount applies to.
+                                </p>
+                                <RadioGroup
+                                    value={localValues.scope || 'both'}
+                                    onValueChange={(value) =>
+                                        handleChange({ scope: value as 'dine_in' | 'takeout' | 'both' })
+                                    }
+                                    className="mt-4 gap-0 rounded-2xl border-0 bg-muted/60 p-1 shadow-none"
+                                >
+                                    {SCOPE_OPTIONS.map(({ value, label, hint }) => (
+                                        <Label
+                                            key={value}
+                                            htmlFor={`scope-${value}`}
+                                            className={cn(
+                                                'flex cursor-pointer items-start gap-3 rounded-2xl px-3 py-3',
+                                                'transition-colors hover:bg-background/60',
+                                            )}
+                                        >
+                                            <RadioGroupItem
+                                                value={value}
+                                                id={`scope-${value}`}
+                                                className="mt-0.5"
+                                            />
+                                            <span className="min-w-0">
+                                                <span className="block text-sm font-medium">{label}</span>
+                                                <span className="mt-0.5 block text-[0.8125rem] text-muted-foreground">
+                                                    {hint}
+                                                </span>
+                                            </span>
+                                        </Label>
+                                    ))}
+                                </RadioGroup>
+                            </section>
 
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-base">Include Categories</CardTitle>
-                                    <CardDescription>
-                                        Select categories to include. Leave empty to apply to all categories.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
+                            <section className="min-w-0">
+                                <h3 className={SECTION_HEADING}>Include categories</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Select categories to include. Leave empty to apply to all categories.
+                                </p>
+                                <div className="mt-4">
                                     <CategoryPicker
                                         options={categories}
                                         value={localValues.applies_to_categories || []}
@@ -144,20 +169,19 @@ export function TargetingSheet({
                                         placeholder="Select categories to include"
                                         emptyLabel="No categories available"
                                     />
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </section>
                         </TabsContent>
 
                         {/* Menu Items Tab */}
-                        <TabsContent value="items" className="space-y-6 mt-0">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-base">Item-Specific Targeting</CardTitle>
-                                    <CardDescription>
-                                        Select specific menu items this discount applies to. Leave empty to apply to all items.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
+                        <TabsContent value="items" className="mt-6">
+                            <section className="min-w-0">
+                                <h3 className={SECTION_HEADING}>Item-specific targeting</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Select specific menu items this discount applies to. Leave empty to
+                                    apply to all items.
+                                </p>
+                                <div className="mt-4">
                                     <MenuItemPicker
                                         options={menuItems}
                                         value={localValues.menu_item_ids || []}
@@ -165,20 +189,18 @@ export function TargetingSheet({
                                         placeholder="Select menu items"
                                         emptyLabel="No menu items available"
                                     />
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </section>
                         </TabsContent>
 
                         {/* Exclusions Tab */}
-                        <TabsContent value="exclusions" className="space-y-6 mt-0">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-base">Exclude Categories</CardTitle>
-                                    <CardDescription>
-                                        Select categories to exclude from this discount
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
+                        <TabsContent value="exclusions" className="mt-6 space-y-8">
+                            <section className="min-w-0">
+                                <h3 className={SECTION_HEADING}>Exclude categories</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Select categories to exclude from this discount.
+                                </p>
+                                <div className="mt-4">
                                     <CategoryPicker
                                         options={categories}
                                         value={localValues.exclude_categories || []}
@@ -186,47 +208,52 @@ export function TargetingSheet({
                                         placeholder="Select categories to exclude"
                                         emptyLabel="No categories available"
                                     />
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </section>
 
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-base">Exclude Alcohol</CardTitle>
-                                    <CardDescription>
-                                        Automatically exclude items flagged as alcohol from this discount
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="flex items-center justify-between rounded-md border p-4">
-                                        <div className="space-y-0.5">
-                                            <Label>Exclude alcohol items</Label>
-                                            <p className="text-sm text-muted-foreground">
-                                                Skip items with alcohol tax category
-                                            </p>
-                                        </div>
-                                        <Switch
-                                            checked={localValues.exclude_alcohol || false}
-                                            onCheckedChange={(checked) =>
-                                                handleChange({ exclude_alcohol: checked })
-                                            }
-                                        />
+                            <section className="min-w-0">
+                                <h3 className={SECTION_HEADING}>Exclude alcohol</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Automatically exclude items flagged as alcohol from this discount.
+                                </p>
+                                <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl border-0 bg-muted/60 px-4 py-4 shadow-none">
+                                    <div className="min-w-0">
+                                        <Label htmlFor="exclude-alcohol" className="text-sm font-medium">
+                                            Exclude alcohol items
+                                        </Label>
+                                        <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">
+                                            Skip items with the alcohol tax category.
+                                        </p>
                                     </div>
-                                </CardContent>
-                            </Card>
+                                    <Switch
+                                        id="exclude-alcohol"
+                                        checked={localValues.exclude_alcohol || false}
+                                        onCheckedChange={(checked) =>
+                                            handleChange({ exclude_alcohol: checked })
+                                        }
+                                    />
+                                </div>
+                            </section>
                         </TabsContent>
                     </Tabs>
-                </BottomSheetBody>
+                </div>
 
-                <BottomSheetFooter className="flex gap-3">
-                    <Button variant="outline" onClick={handleCancel} className="flex-1">
+                <DialogFooter className="shrink-0 bg-background px-6 py-4 sm:justify-end">
+                    <Button
+                        variant="outline"
+                        onClick={handleCancel}
+                        className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                    >
                         Cancel
                     </Button>
-                    <Button onClick={handleSave} className="flex-1">
-                        Save Targeting
+                    <Button
+                        onClick={handleSave}
+                        className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                    >
+                        Save targeting
                     </Button>
-                </BottomSheetFooter>
-            </BottomSheetContent>
-        </BottomSheet>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     )
 }
-

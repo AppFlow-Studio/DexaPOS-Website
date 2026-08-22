@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { startOfMonth } from "date-fns";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollableTabsBar } from "@/components/dashboard/ScrollableTabsBar";
 import {
   DateRangePicker,
   DatePreset,
@@ -23,6 +24,8 @@ import { TaxCategoryChart } from "./components/TaxCategoryChart";
 import { TaxLocationTable } from "./components/TaxLocationTable";
 import { useSelectedLocation } from "@/stores/location-store";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
+import { ReportPageHeader } from "@/components/dashboard/reports/ReportPageHeader";
+import { PageShell } from "@/components/dashboard/shell";
 
 const PAGE_SIZE = 50;
 
@@ -90,54 +93,49 @@ export default function TaxReportPage() {
   );
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* ── Header ── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Tax Report</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {selectedLocation && !Array.isArray(selectedLocation)
-              ? selectedLocation.name
-              : "All Locations"}{" "}
-            · Tax collected, refunded & net liability
-          </p>
-        </div>
-        <DateRangePicker
-          dateFrom={dateRange.from}
-          dateTo={dateRange.to}
-          onDateRangeChange={handleDateRangeChange}
-          preset={preset}
-          onPresetChange={setPreset}
-        />
-      </div>
+    <PageShell className="pb-8">
+      <ReportPageHeader
+        title="Tax Report"
+        description="Tax collected, refunded and net liability"
+        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
+        actions={
+          <DateRangePicker
+            dateFrom={dateRange.from}
+            dateTo={dateRange.to}
+            onDateRangeChange={handleDateRangeChange}
+            preset={preset}
+            onPresetChange={setPreset}
+          />
+        }
+      />
 
       {/* ── KPI Cards ── */}
       <TaxSummaryCards summary={summaryResult?.data} isLoading={summaryLoading} isError={summaryError} />
 
       {/* ── Tabs ── */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <div className="overflow-x-auto">
-        <TabsList className="bg-muted p-1 h-auto rounded-xl w-full sm:w-fit">
+        <ScrollableTabsBar activeValue={activeTab}>
+        <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
           <TabsTrigger
             value="breakdown"
-            className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs font-medium px-4 py-2"
+            className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
           >
             Order Breakdown
           </TabsTrigger>
           <TabsTrigger
             value="category"
-            className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs font-medium px-4 py-2"
+            className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
           >
             By Category
           </TabsTrigger>
           <TabsTrigger
             value="location"
-            className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm text-xs font-medium px-4 py-2"
+            className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
           >
             By Location
           </TabsTrigger>
         </TabsList>
-        </div>
+        </ScrollableTabsBar>
 
         <TabsContent value="breakdown" className="mt-4">
           <TaxBreakdownTable
@@ -178,6 +176,6 @@ export default function TaxReportPage() {
           />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }

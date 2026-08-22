@@ -33,6 +33,7 @@ import {
   type BulkDeliveryRounding,
 } from "@/app/dashboard/actions/bulk-delivery-price-adjustment";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 type Operation = "markup_pct" | "markup_amt" | "set_fixed" | "reset";
 
@@ -110,6 +111,7 @@ export function BulkDeliveryPriceAdjustDialog({
   onSuccess,
 }: BulkDeliveryPriceAdjustDialogProps) {
   const queryClient = useQueryClient();
+  const isSingleLocation = useIsSingleLocation();
 
   const [operation, setOperation] = useState<Operation>("markup_pct");
   const [value, setValue] = useState<string>("");
@@ -151,7 +153,9 @@ export function BulkDeliveryPriceAdjustDialog({
     setIsSaving(true);
     try {
       const locationId =
-        scope === "override" && !isAllLocations ? currentLocationId : null;
+        !isSingleLocation && scope === "override" && !isAllLocations
+          ? currentLocationId
+          : null;
       const res = await BulkAdjustMenuItemDeliveryPrices({
         clerkOrgId,
         locationId,
@@ -248,22 +252,22 @@ export function BulkDeliveryPriceAdjustDialog({
                     type="button"
                     onClick={() => setOperation(opt.v)}
                     className={cn(
-                      "group relative flex items-center gap-3 rounded-lg border p-3 text-left transition-all",
+                      "group relative flex items-center gap-3 rounded-2xl border-0 p-3 text-left shadow-none transition-colors",
                       isActive
                         ? isResetOpt
-                          ? "border-destructive/60 bg-destructive/5 ring-2 ring-destructive/20 shadow-sm"
-                          : "border-primary/60 bg-primary/5 ring-2 ring-primary/20 shadow-sm"
-                        : "hover:border-primary/40 hover:bg-muted/40",
+                          ? "bg-destructive/10 ring-2 ring-destructive/30"
+                          : "bg-primary/10 ring-2 ring-primary/30"
+                        : "bg-muted/60 hover:bg-muted",
                     )}
                   >
                     <span
                       className={cn(
-                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors",
+                        "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors",
                         isActive
                           ? isResetOpt
                             ? "bg-destructive/15 text-destructive"
                             : "bg-primary/15 text-primary"
-                          : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
+                          : "bg-background text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary",
                       )}
                     >
                       <Icon className="h-4 w-4" />
@@ -322,11 +326,11 @@ export function BulkDeliveryPriceAdjustDialog({
               </Label>
               <div className="relative">
                 {operation === "markup_pct" ? (
-                  <span className="absolute right-0 top-0 bottom-0 flex items-center justify-center w-10 text-muted-foreground text-sm font-medium border-l bg-muted/40 rounded-r-md">
+                  <span className="pointer-events-none absolute bottom-0 right-0 top-0 flex w-10 items-center justify-center text-sm font-medium text-muted-foreground">
                     %
                   </span>
                 ) : (
-                  <span className="absolute left-0 top-0 bottom-0 flex items-center justify-center w-10 text-muted-foreground text-sm font-medium border-r bg-muted/40 rounded-l-md">
+                  <span className="pointer-events-none absolute bottom-0 left-0 top-0 flex w-10 items-center justify-center text-sm font-medium text-muted-foreground">
                     $
                   </span>
                 )}
@@ -346,7 +350,7 @@ export function BulkDeliveryPriceAdjustDialog({
                         : "2.00"
                   }
                   className={cn(
-                    "h-10 text-base tabular-nums",
+                    "h-10 rounded-full border-0 bg-muted/60 text-base shadow-none tabular-nums focus-visible:bg-background",
                     operation === "markup_pct" ? "pr-12" : "pl-12",
                   )}
                 />
@@ -368,15 +372,15 @@ export function BulkDeliveryPriceAdjustDialog({
                 onValueChange={(v) => setRounding(v as BulkDeliveryRounding)}
                 className="grid grid-cols-3 gap-2"
               >
-                <label className="flex items-center gap-2 rounded-md border p-2.5 cursor-pointer hover:bg-muted/50">
+                <label className="flex cursor-pointer items-center gap-2 rounded-2xl border-0 bg-muted/60 p-2.5 shadow-none transition-colors hover:bg-muted">
                   <RadioGroupItem value="cent" />
                   <span className="text-sm">Nearest cent</span>
                 </label>
-                <label className="flex items-center gap-2 rounded-md border p-2.5 cursor-pointer hover:bg-muted/50">
+                <label className="flex cursor-pointer items-center gap-2 rounded-2xl border-0 bg-muted/60 p-2.5 shadow-none transition-colors hover:bg-muted">
                   <RadioGroupItem value="nickel_up" />
                   <span className="text-sm">Round up to nickel</span>
                 </label>
-                <label className="flex items-center gap-2 rounded-md border p-2.5 cursor-pointer hover:bg-muted/50">
+                <label className="flex cursor-pointer items-center gap-2 rounded-2xl border-0 bg-muted/60 p-2.5 shadow-none transition-colors hover:bg-muted">
                   <RadioGroupItem value="ninety_nine_up" />
                   <span className="text-sm">Round up to .99</span>
                 </label>
@@ -385,7 +389,7 @@ export function BulkDeliveryPriceAdjustDialog({
           )}
 
           {/* Apply to — base vs override */}
-          <div className="space-y-2">
+          {!isSingleLocation && <div className="space-y-2">
             <Label>Apply to</Label>
             <RadioGroup
               value={scope}
@@ -394,10 +398,10 @@ export function BulkDeliveryPriceAdjustDialog({
             >
               <label
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md border p-3 cursor-pointer transition-colors",
+                  "flex cursor-pointer items-center gap-2.5 rounded-2xl border-0 p-3 shadow-none transition-colors",
                   scope === "base"
-                    ? "border-primary/60 bg-primary/5 ring-1 ring-primary/20"
-                    : "hover:bg-muted/50 hover:border-primary/30",
+                    ? "bg-primary/10 ring-2 ring-primary/30"
+                    : "bg-muted/60 hover:bg-muted",
                 )}
               >
                 <RadioGroupItem value="base" />
@@ -416,12 +420,12 @@ export function BulkDeliveryPriceAdjustDialog({
               </label>
               <label
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md border p-3 transition-colors",
+                  "flex items-center gap-2.5 rounded-2xl border-0 p-3 shadow-none transition-colors",
                   isAllLocations
-                    ? "opacity-50 cursor-not-allowed"
+                    ? "cursor-not-allowed bg-muted/60 opacity-50"
                     : scope === "override"
-                      ? "border-primary/60 bg-primary/5 ring-1 ring-primary/20 cursor-pointer"
-                      : "cursor-pointer hover:bg-muted/50 hover:border-primary/30",
+                      ? "cursor-pointer bg-primary/10 ring-2 ring-primary/30"
+                      : "cursor-pointer bg-muted/60 hover:bg-muted",
                 )}
               >
                 <RadioGroupItem value="override" disabled={isAllLocations} />
@@ -443,13 +447,13 @@ export function BulkDeliveryPriceAdjustDialog({
                 </span>
               </label>
             </RadioGroup>
-          </div>
+          </div>}
 
           {/* Reset warning */}
           {isReset && (
             <Alert
               variant="default"
-              className="border-destructive/30 bg-destructive/5 text-destructive"
+              className="rounded-2xl border-0 bg-destructive/10 text-destructive shadow-none"
             >
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>This clears the online price</AlertTitle>
@@ -463,11 +467,12 @@ export function BulkDeliveryPriceAdjustDialog({
 
           {/* Preview */}
           {previewRows.length > 0 && (
-            <div className="rounded-lg border overflow-hidden">
-              <div className="px-3 py-2 text-xs font-medium border-b bg-muted/40">
+            <div className="overflow-hidden rounded-2xl border-0 bg-muted/60 shadow-none">
+              <div className="border-b border-border/60 px-3 py-2 text-xs font-medium">
                 <div className="grid grid-cols-[1fr_70px_70px_90px] items-center gap-2">
                   <span className="text-muted-foreground">
-                    Preview ({previewRows.length} of {selectedItems.length})
+                    Preview (<span className="tabular-nums">{previewRows.length}</span> of{" "}
+                    <span className="tabular-nums">{selectedItems.length}</span>)
                   </span>
                   <span className="text-right text-muted-foreground/70 font-normal text-[11px] uppercase tracking-wide">
                     Card
@@ -480,11 +485,11 @@ export function BulkDeliveryPriceAdjustDialog({
                   </span>
                 </div>
               </div>
-              <div className="divide-y">
+              <div className="divide-y divide-border/60">
                 {previewRows.map((r) => (
                   <div
                     key={r.id}
-                    className="grid grid-cols-[1fr_70px_70px_90px] items-center gap-2 px-3 py-2 text-sm hover:bg-muted/30"
+                    className="grid grid-cols-[1fr_70px_70px_90px] items-center gap-2 px-3 py-2 text-sm transition-colors hover:bg-muted"
                   >
                     <span className="truncate text-foreground">{r.name}</span>
                     <span className="text-right tabular-nums text-muted-foreground text-xs">
@@ -499,8 +504,8 @@ export function BulkDeliveryPriceAdjustDialog({
                     </span>
                     <span
                       className={cn(
-                        "text-right tabular-nums font-medium",
-                        r.skipped && "text-amber-600",
+                        "text-right font-medium tabular-nums",
+                        r.skipped && "text-amber-600 dark:text-amber-400",
                         !r.skipped && r.next === null && "text-muted-foreground italic font-normal text-xs",
                         !r.skipped && r.next !== null && !isReset && "text-primary",
                       )}
@@ -523,6 +528,7 @@ export function BulkDeliveryPriceAdjustDialog({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isSaving}
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
           >
             Cancel
           </Button>
@@ -530,9 +536,11 @@ export function BulkDeliveryPriceAdjustDialog({
             onClick={handleApply}
             disabled={!canApply}
             variant={isReset ? "destructive" : "default"}
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium"
           >
             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isReset ? "Reset" : "Apply"} on {selectedItems.length}{" "}
+            {isReset ? "Reset" : "Apply"} on{" "}
+            <span className="tabular-nums">{selectedItems.length}</span>{" "}
             {selectedItems.length === 1 ? "item" : "items"}
           </Button>
         </DialogFooter>

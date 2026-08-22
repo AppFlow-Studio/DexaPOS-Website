@@ -9,7 +9,7 @@ import {
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
 import {
   Collapsible,
   CollapsibleContent,
@@ -53,7 +53,7 @@ function WaterfallRow({ item }: { item: WaterfallLineItem }) {
           hasTransactions && "hover:bg-muted/50 cursor-pointer",
           !hasTransactions && "cursor-default",
           isTotal &&
-            "bg-muted/60 rounded-lg border border-border/50 mt-2 py-4"
+            "mt-2 rounded-2xl border-0 bg-muted/60 py-4"
         )}
         disabled={!hasTransactions}
       >
@@ -84,7 +84,7 @@ function WaterfallRow({ item }: { item: WaterfallLineItem }) {
           className={cn(
             "font-mono tabular-nums text-sm",
             isTotal && "font-bold text-base",
-            isSubtract && item.amount > 0 && "text-red-500"
+            isSubtract && item.amount > 0 && "text-foreground"
           )}
         >
           {isSubtract && item.amount > 0 ? "-" : ""}
@@ -94,31 +94,29 @@ function WaterfallRow({ item }: { item: WaterfallLineItem }) {
 
       {hasTransactions && (
         <CollapsibleContent>
-          <div className="ml-6 mr-4 mb-2 border-l-2 border-muted pl-4">
+          <div className="ml-2 mr-2 mb-2 border-l-2 border-muted pl-3 sm:ml-6 sm:mr-4 sm:pl-4">
             <div className="max-h-[240px] overflow-y-auto space-y-1">
               {item.transactions.map((tx) => (
                 <div
                   key={tx.order_id}
-                  className="flex items-center justify-between py-1.5 text-xs text-muted-foreground"
+                  className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-1.5 text-xs text-muted-foreground"
                 >
-                  <div className="flex items-center gap-3">
-                    <Link
-                      href={`/dashboard/orders/${tx.order_id}`}
-                      className="text-primary hover:underline font-medium"
-                    >
-                      #{tx.order_number}
-                    </Link>
-                    <span>
-                      {format(new Date(tx.created_at), "MMM d, h:mm a")}
-                    </span>
-                  </div>
+                  <Link
+                    href={`/dashboard/orders/${tx.order_id}`}
+                    className="text-primary hover:underline font-medium"
+                  >
+                    #{tx.order_number}
+                  </Link>
+                  <span className="order-last w-full sm:order-none sm:mr-auto sm:w-auto">
+                    {format(new Date(tx.created_at), "MMM d, h:mm a")}
+                  </span>
                   <span className="font-mono tabular-nums">
                     {formatCurrency(tx.amount)}
                   </span>
                 </div>
               ))}
             </div>
-            <div className="text-xs text-muted-foreground pt-2 border-t border-muted mt-1">
+            <div className="mt-1 pt-2 text-xs text-muted-foreground">
               {item.transactions.length} transaction
               {item.transactions.length !== 1 ? "s" : ""}
             </div>
@@ -136,13 +134,13 @@ function ValidationBanner({
 }) {
   if (validation.is_balanced) {
     return (
-      <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border border-green-200 dark:bg-green-950/20 dark:border-green-900">
-        <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+      <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-muted/35 p-4">
+        <CheckCircle2 className="h-5 w-5 shrink-0 text-muted-foreground" />
         <div>
-          <p className="text-sm font-medium text-green-800 dark:text-green-400">
+          <p className="text-sm font-medium text-foreground">
             Balanced
           </p>
-          <p className="text-xs text-green-600 dark:text-green-500">
+          <p className="text-xs text-muted-foreground">
             Net Collected ({formatCurrency(validation.net_collected)}) matches
             Payments Total ({formatCurrency(validation.payments_total)})
           </p>
@@ -152,13 +150,13 @@ function ValidationBanner({
   }
 
   return (
-    <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/20 dark:border-amber-900">
-      <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+    <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-muted/35 p-4">
+      <AlertTriangle className="h-5 w-5 shrink-0 text-muted-foreground" />
       <div>
-        <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
+        <p className="text-sm font-medium text-foreground">
           Discrepancy Detected
         </p>
-        <p className="text-xs text-amber-600 dark:text-amber-500">
+        <p className="text-xs text-muted-foreground">
           Net Collected ({formatCurrency(validation.net_collected)}) vs Payments
           Total ({formatCurrency(validation.payments_total)}) — Difference:{" "}
           {formatCurrency(validation.discrepancy)}
@@ -175,7 +173,7 @@ function ValidationBanner({
 function WaterfallSkeleton() {
   return (
     <div className="space-y-6">
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur">
+      <Card>
         <CardHeader className="pb-2">
           <Skeleton className="h-5 w-32" />
         </CardHeader>
@@ -188,7 +186,7 @@ function WaterfallSkeleton() {
           ))}
         </CardContent>
       </Card>
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur">
+      <Card>
         <CardHeader className="pb-2">
           <Skeleton className="h-5 w-36" />
         </CardHeader>
@@ -233,7 +231,7 @@ export function WaterfallReportCard({
   return (
     <div className="space-y-4 animate-in fade-in-50 duration-300">
       {/* Section 1: Revenue Logic */}
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur hover:shadow-md transition-shadow">
+      <Card>
         <CardHeader className="pb-1">
           <CardTitle className="text-base font-bold tracking-tight">
             Revenue
@@ -252,7 +250,7 @@ export function WaterfallReportCard({
       </Card>
 
       {/* Section 2: Collection Logic */}
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur hover:shadow-md transition-shadow">
+      <Card>
         <CardHeader className="pb-1">
           <CardTitle className="text-base font-bold tracking-tight">
             Collections

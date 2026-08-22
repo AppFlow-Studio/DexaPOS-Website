@@ -15,7 +15,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Card } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -25,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Search, Clock, Cake, PartyPopper, RotateCcw, Share2, Calendar, Banknote, Package } from 'lucide-react';
 import { DateTimePicker } from '@/components/ui/date-time-picker';
+import { TimePickerTrigger } from '@/components/ui/time-picker';
 import type { Promotion, PromotionInsert } from '../../../actions/loyalty-programs';
 
 interface MenuItem {
@@ -121,15 +121,17 @@ const PROMO_TYPES: Array<{
   icon: React.ReactNode;
   description: string;
 }> = [
-  { value: 'happy_hour', label: 'Happy Hour', icon: <Clock className="h-5 w-5 text-orange-500" />, description: 'Time-based discounts' },
-  { value: 'birthday', label: 'Birthday', icon: <Cake className="h-5 w-5 text-pink-500" />, description: 'Birthday month rewards' },
-  { value: 'first_visit', label: 'First Visit', icon: <PartyPopper className="h-5 w-5 text-purple-500" />, description: 'New customer incentive' },
-  { value: 'comeback', label: 'Comeback', icon: <RotateCcw className="h-5 w-5 text-cyan-500" />, description: 'Win-back discount' },
-  { value: 'referral', label: 'Referral', icon: <Share2 className="h-5 w-5 text-emerald-500" />, description: 'Refer a friend' },
-  { value: 'seasonal', label: 'Seasonal', icon: <Calendar className="h-5 w-5 text-blue-400" />, description: 'Holiday/seasonal offer' },
-  { value: 'threshold', label: 'Spend Threshold', icon: <Banknote className="h-5 w-5 text-green-600" />, description: 'Reward for spending' },
-  { value: 'bogo', label: 'BOGO', icon: <Package className="h-5 w-5 text-rose-500" />, description: 'Buy one get one' },
-  { value: 'bundle', label: 'Bundle', icon: <Package className="h-5 w-5 text-indigo-500" />, description: 'Bundle discount' },
+  // Icons are neutral — nine per-type hues turn the picker into a colour key
+  // (§4.6b). The glyph plus its label carries the type.
+  { value: 'happy_hour', label: 'Happy Hour', icon: <Clock className="h-5 w-5" />, description: 'Time-based discounts' },
+  { value: 'birthday', label: 'Birthday', icon: <Cake className="h-5 w-5" />, description: 'Birthday month rewards' },
+  { value: 'first_visit', label: 'First Visit', icon: <PartyPopper className="h-5 w-5" />, description: 'New customer incentive' },
+  { value: 'comeback', label: 'Comeback', icon: <RotateCcw className="h-5 w-5" />, description: 'Win-back discount' },
+  { value: 'referral', label: 'Referral', icon: <Share2 className="h-5 w-5" />, description: 'Refer a friend' },
+  { value: 'seasonal', label: 'Seasonal', icon: <Calendar className="h-5 w-5" />, description: 'Holiday/seasonal offer' },
+  { value: 'threshold', label: 'Spend Threshold', icon: <Banknote className="h-5 w-5" />, description: 'Reward for spending' },
+  { value: 'bogo', label: 'BOGO', icon: <Package className="h-5 w-5" />, description: 'Buy one get one' },
+  { value: 'bundle', label: 'Bundle', icon: <Package className="h-5 w-5" />, description: 'Bundle discount' },
 ];
 
 export function PromotionDialog({
@@ -241,15 +243,17 @@ export function PromotionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
-        <DialogHeader>
+      {/* Editor — full screen below `sm` (§13.1); the dialog clips and the body
+          below is the only scroller. */}
+      <DialogContent className="thin-scrollbar flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-y-auto overscroll-contain rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-3xl sm:rounded-3xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{isEditing ? 'Edit Promotion' : 'Create Promotion'}</DialogTitle>
           <DialogDescription>
             Set up a marketing promotion to drive customer engagement and sales
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6 py-2 [&_input]:border-0 [&_input]:bg-muted/60 [&_input]:shadow-none [&_textarea]:border-0 [&_textarea]:bg-muted/60 [&_textarea]:shadow-none [&_[data-slot=select-trigger]]:border-0 [&_[data-slot=select-trigger]]:bg-muted/60 [&_[data-slot=select-trigger]]:shadow-none">
           {/* Basic Info Section */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Promotion Details</h3>
@@ -279,27 +283,31 @@ export function PromotionDialog({
           {/* Promo Type Selector Grid */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Promotion Type</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {/* Selected state is a ring on a muted tile, not a `--primary`
+                border — `--primary` is violet, not the brand blue (C5). */}
+            <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3">
               {PROMO_TYPES.map((type) => (
                 <button
                   key={type.value}
+                  type="button"
+                  aria-pressed={formData.promo_type === type.value}
                   onClick={() => setFormData({ ...formData, promo_type: type.value })}
-                  className={`p-3 rounded-lg border-2 text-center transition-all ${
+                  className={`min-w-0 rounded-2xl border-0 p-3 text-center shadow-none transition-colors ${
                     formData.promo_type === type.value
-                      ? 'border-primary bg-primary/5'
-                      : 'border-muted bg-muted/30 hover:border-muted-foreground'
+                      ? 'bg-muted ring-1 ring-border'
+                      : 'bg-muted/45 hover:bg-muted'
                   }`}
                 >
-                  <div className="flex justify-center mb-2">{type.icon}</div>
-                  <div className="font-medium text-sm">{type.label}</div>
-                  <div className="text-xs text-muted-foreground mt-1">{type.description}</div>
+                  <div className="mb-2 flex justify-center text-muted-foreground">{type.icon}</div>
+                  <div className="text-sm font-medium">{type.label}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{type.description}</div>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Type-Specific Fields */}
-          <div className="space-y-4 p-4 bg-muted/20 rounded-lg">
+          <div className="min-w-0 space-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
             <h3 className="font-semibold text-sm">Type-Specific Settings</h3>
 
             {/* Happy Hour - Time fields */}
@@ -308,20 +316,22 @@ export function PromotionDialog({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="time-start">Start time *</Label>
-                    <Input
+                    <TimePickerTrigger
                       id="time-start"
-                      type="time"
                       value={formData.active_time_start || ''}
-                      onChange={(e) => setFormData({ ...formData, active_time_start: e.target.value })}
+                      onChange={(value) => setFormData({ ...formData, active_time_start: value })}
+                      className="w-full rounded-full border-0 bg-muted/60 shadow-none"
+                      compact
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="time-end">End time *</Label>
-                    <Input
+                    <TimePickerTrigger
                       id="time-end"
-                      type="time"
                       value={formData.active_time_end || ''}
-                      onChange={(e) => setFormData({ ...formData, active_time_end: e.target.value })}
+                      onChange={(value) => setFormData({ ...formData, active_time_end: value })}
+                      className="w-full rounded-full border-0 bg-muted/60 shadow-none"
+                      compact
                     />
                   </div>
                 </div>
@@ -586,9 +596,11 @@ export function PromotionDialog({
                         className="pl-8"
                       />
                     </div>
-                    <div className="border rounded-lg bg-muted/30 max-h-48 overflow-y-auto">
+                    <div className="thin-scrollbar max-h-48 min-w-0 overflow-y-auto rounded-2xl border-0 bg-muted/60 shadow-none">
                       {filteredMenuItems.length > 0 ? (
-                        <div className="divide-y">
+                        // No `divide-y` (§5.5): rows separate by hover fill and
+                        // spacing, not by lines drawn across a flat surface.
+                        <div className="p-1">
                           {filteredMenuItems.map((item) => (
                             <button
                               key={item.id}
@@ -596,15 +608,16 @@ export function PromotionDialog({
                                 setFormData({ ...formData, free_item_id: item.id });
                                 setMenuSearchQuery('');
                               }}
-                              className={`w-full text-left px-4 py-3 text-sm hover:bg-muted transition-colors ${
+                              type="button"
+                              className={`w-full min-w-0 rounded-full px-4 py-3 text-left text-sm transition-colors hover:bg-muted ${
                                 formData.free_item_id === item.id
-                                  ? 'bg-primary/10 font-medium'
+                                  ? 'bg-muted font-medium ring-1 ring-border'
                                   : ''
                               }`}
                             >
-                              <div className="flex items-center justify-between">
-                                <span>{item.name}</span>
-                                <span className="text-xs text-muted-foreground">
+                              <div className="flex min-w-0 items-center justify-between gap-3">
+                                <span className="min-w-0 truncate">{item.name}</span>
+                                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                                   ${item.price.toFixed(2)}
                                 </span>
                               </div>
@@ -668,7 +681,7 @@ export function PromotionDialog({
                 application_mode: value as 'auto_apply' | 'promo_code' | 'manual_only',
               })
             }>
-              <div className="p-3 border rounded-lg space-y-2">
+              <div className="min-w-0 space-y-2 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="auto_apply" id="mode-auto" />
                   <Label htmlFor="mode-auto" className="cursor-pointer font-normal">
@@ -680,7 +693,7 @@ export function PromotionDialog({
                 </p>
               </div>
 
-              <div className="p-3 border rounded-lg space-y-2">
+              <div className="min-w-0 space-y-2 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="promo_code" id="mode-code" />
                   <Label htmlFor="mode-code" className="cursor-pointer font-normal">
@@ -703,7 +716,7 @@ export function PromotionDialog({
                 )}
               </div>
 
-              <div className="p-3 border rounded-lg space-y-2">
+              <div className="min-w-0 space-y-2 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="manual_only" id="mode-manual" />
                   <Label htmlFor="mode-manual" className="cursor-pointer font-normal">
@@ -813,6 +826,7 @@ export function PromotionDialog({
                     })
                   }
                   placeholder="No start date"
+                  className="border-0 bg-muted/60 shadow-none"
                 />
               </div>
               <div className="space-y-2">
@@ -828,6 +842,8 @@ export function PromotionDialog({
                     })
                   }
                   placeholder="No end date"
+                  className="border-0 bg-muted/60 shadow-none"
+                  align="end"
                 />
               </div>
             </div>
@@ -883,7 +899,7 @@ export function PromotionDialog({
           </div>
 
           {/* Active Status */}
-          <div className="flex items-center gap-2 p-3 bg-muted/20 rounded-lg">
+          <div className="flex min-w-0 items-center gap-2 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
             <Checkbox
               id="is-active"
               checked={formData.is_active}
@@ -897,7 +913,7 @@ export function PromotionDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 justify-center pt-4 sm:justify-center">
           <Button variant="outline" onClick={handleClose}>
             Cancel
           </Button>

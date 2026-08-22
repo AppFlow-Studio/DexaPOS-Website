@@ -10,10 +10,8 @@ import {
   BottomSheetTitle,
   BottomSheetDescription,
 } from "@/components/ui/bottom-sheet";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -44,12 +42,18 @@ import {
   DollarSign,
   ArrowUpCircle,
   Loader2,
-  ChevronRight,
   Shield,
   Star,
   MapPin,
+  MoreVertical,
 } from "lucide-react";
 import { CredentialToast } from "@/components/ui/credential-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { LocationAssignmentSheet } from "./LocationAssignmentSheet";
 import {
   useDeactivateStaff,
@@ -76,6 +80,11 @@ interface StaffDetailSheetProps {
   staff: UnifiedStaffMember | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Set when opened from inside a Sheet (e.g. the location detail sheet's Team
+   * tab) so it paints above it instead of behind the dimmed sheet.
+   */
+  elevated?: boolean;
 }
 
 type StaffDetailPanel =
@@ -90,6 +99,7 @@ export function StaffDetailSheet({
   staff,
   open,
   onOpenChange,
+  elevated,
 }: StaffDetailSheetProps) {
   // Ã¢â€â‚¬Ã¢â€â‚¬ All hooks MUST be called before any conditional return Ã¢â€â‚¬Ã¢â€â‚¬
   const deactivateStaff = useDeactivateStaff();
@@ -161,10 +171,6 @@ export function StaffDetailSheet({
       ) || null,
     [displayStaff?.location_assignments, selectedAssignmentLocationId]
   );
-
-  const initials = `${displayStaff?.first_name?.[0] || ""}${
-    displayStaff?.last_name?.[0] || ""
-  }`.toUpperCase();
 
   const activeLocations = displayStaff?.location_assignments?.filter(
     (a) => a.is_active
@@ -515,6 +521,26 @@ export function StaffDetailSheet({
     });
   };
 
+  // Per-location status, mirroring the "Status at this Location" switch in the
+  // assignment panel. Distinct from handleStatusToggle, which acts on the
+  // primary location and so represents the whole staff member.
+  const handleToggleLocationStatus = (
+    locationId: string,
+    isActive: boolean
+  ) => {
+    if (!staff.staff_profile_id) {
+      toast.error("No staff profile found");
+      return;
+    }
+    const staffProfileId = staff.staff_profile_id;
+
+    if (isActive) {
+      deactivateStaff.mutate({ staffProfileId, locationId });
+    } else {
+      reactivateStaff.mutate({ staffProfileId, locationId });
+    }
+  };
+
   const panelItems: Array<{
     id: StaffDetailPanel;
     label: string;
@@ -562,9 +588,8 @@ export function StaffDetailSheet({
   ];
 
   const profilePanel = (
-    <section className="rounded-3xl border bg-card p-6 shadow-sm">
+    <section className="rounded-3xl bg-muted/40 p-4">
       <SectionHeader
-        icon={Mail}
         title="Personal & Contact Info"
         description="Core profile details shown to the merchant team."
         action={
@@ -682,9 +707,9 @@ export function StaffDetailSheet({
   );
 
   const assignmentPanel = (
-    <section className="rounded-3xl border bg-card p-6 shadow-sm">
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <div>
+    <section className="rounded-3xl bg-muted/40 p-4">
+      <div className="mb-5 grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Permissions & Assignment
           </h3>
@@ -695,7 +720,7 @@ export function StaffDetailSheet({
         {primaryLocation && !isEditMode && (
           <Button
             variant="outline"
-            className="gap-2"
+            className="max-w-full gap-2 whitespace-normal"
             onClick={() => setIsEditMode(true)}
           >
             <Edit className="h-4 w-4" />
@@ -838,7 +863,7 @@ export function StaffDetailSheet({
           )}
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed p-6 text-sm text-muted-foreground">
+        <div className="rounded-2xl bg-muted/60 p-6 text-sm text-muted-foreground">
           No primary location is assigned to this staff member yet.
         </div>
       )}
@@ -846,7 +871,7 @@ export function StaffDetailSheet({
   );
 
   const posAccessPanel = (
-    <section className="rounded-3xl border bg-card p-6 shadow-sm">
+    <section className="rounded-3xl bg-muted/40 p-4">
       <SectionHeader
         icon={KeyRound}
         title="Employee Access Key"
@@ -908,8 +933,6 @@ export function StaffDetailSheet({
           </div>
         )}
 
-        <Separator />
-
         <div className="grid gap-3 sm:grid-cols-2">
           <StatusPill
             label="PIN Status"
@@ -932,7 +955,7 @@ export function StaffDetailSheet({
     <div className="space-y-6">
       {staff.is_clerk_user ? (
         <>
-          <section className="rounded-3xl border bg-card p-6 shadow-sm">
+          <section className="rounded-3xl bg-muted/40 p-4">
             <SectionHeader
               icon={Lock}
               title="Dashboard Access"
@@ -1013,7 +1036,7 @@ export function StaffDetailSheet({
           </section>
 
           {staff.user_id && (
-            <section className="rounded-3xl border border-orange-200 bg-orange-50/40 p-6 shadow-sm dark:bg-orange-950/10">
+            <section className="rounded-3xl bg-orange-50/40 p-4 dark:bg-orange-950/10">
               <SectionHeader
                 icon={Shield}
                 title="Demote To POS-Only"
@@ -1045,7 +1068,7 @@ export function StaffDetailSheet({
           )}
         </>
       ) : (
-        <section className="rounded-3xl border bg-card p-6 shadow-sm">
+        <section className="rounded-3xl bg-muted/40 p-4">
           <SectionHeader
             icon={ArrowUpCircle}
             title="Upgrade To Dashboard User"
@@ -1112,9 +1135,9 @@ export function StaffDetailSheet({
   );
 
   const locationsPanel = (
-    <section className="rounded-3xl border bg-card p-6 shadow-sm">
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <div>
+    <section className="rounded-3xl bg-muted/40 p-4">
+      <div className="mb-5 grid min-w-0 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Positions & Location Assignments
           </h3>
@@ -1122,13 +1145,13 @@ export function StaffDetailSheet({
             Open a location assignment to manage role, status, and PIN.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 md:justify-end">
           <Badge variant="outline">{activeLocations.length} active</Badge>
           {availableLocationsToAdd.length > 0 && (
             <Button
               variant="outline"
               size="sm"
-              className="gap-2"
+              className="max-w-full gap-2 whitespace-normal"
               onClick={() => {
                 setShowAddLocation(!showAddLocation);
                 if (primaryLocation) {
@@ -1143,7 +1166,7 @@ export function StaffDetailSheet({
       </div>
 
       {showAddLocation && (
-        <div className="mb-4 border-b border-border pb-4">
+        <div className="mb-4 pb-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
@@ -1203,28 +1226,17 @@ export function StaffDetailSheet({
         </div>
       )}
 
-      <div className="divide-y divide-border">
+      <div>
         {displayStaff.location_assignments.map((assignment) => (
           <div
             key={`${assignment.location_id}:${assignment.role_code}`}
             className={cn(
-              "group relative -mx-2 rounded-2xl px-2 py-4 transition-colors hover:bg-muted/40 focus-within:ring-2 focus-within:ring-[#0C4FD1] focus-within:ring-offset-2 focus-within:ring-offset-card",
+              "group relative -mx-2 rounded-2xl px-2 py-4",
               !assignment.is_active && "opacity-70"
             )}
           >
-            {/* Full-card click target sits behind the content so the action
-                buttons below remain siblings, not nested <button>s. */}
-            <button
-              type="button"
-              className="absolute inset-0 z-0 rounded-2xl focus:outline-none"
-              aria-label={`Open ${assignment.location_name} assignment`}
-              onClick={() => {
-                setSelectedAssignmentLocationId(assignment.location_id);
-                setIsLocationSheetOpen(true);
-              }}
-            />
-            <div className="pointer-events-none relative z-10 flex flex-wrap items-start justify-between gap-3">
-              <div>
+            <div className="relative z-10 flex items-start justify-between gap-3 sm:flex-wrap">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-medium">{assignment.location_name}</p>
                   {assignment.is_primary && <Badge>Primary</Badge>}
@@ -1232,7 +1244,7 @@ export function StaffDetailSheet({
                     <Badge variant="outline">Inactive</Badge>
                   )}
                   {assignment.has_pin && (
-                    <Badge variant="secondary" className="gap-1">
+                    <Badge variant="secondary" className="hidden gap-1 sm:inline-flex">
                       <Lock className="h-3 w-3" />
                       PIN
                     </Badge>
@@ -1243,7 +1255,9 @@ export function StaffDetailSheet({
                 </p>
               </div>
 
-              <div className="pointer-events-auto flex items-center gap-2">
+              {/* Desktop: actions inline. Mobile: collapsed into the menu
+                  below, so a narrow card keeps one control in the corner. */}
+              <div className="hidden items-center gap-2 sm:flex">
                 {assignment.is_active && !assignment.is_primary && (
                   <Button
                     variant="ghost"
@@ -1279,11 +1293,85 @@ export function StaffDetailSheet({
                     <UserX className="h-4 w-4" />
                   </Button>
                 )}
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-full"
+                  onClick={() => {
+                    setSelectedAssignmentLocationId(assignment.location_id);
+                    setIsLocationSheetOpen(true);
+                  }}
+                  title={`Edit ${assignment.location_name} assignment`}
+                  aria-label={`Edit ${assignment.location_name} assignment`}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
               </div>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 rounded-full sm:hidden"
+                    aria-label={`Actions for ${assignment.location_name}`}
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                {/* z-[210]: this card lives inside a z-[200] sheet, and the
+                    menu portals to the document root — the z-50 default would
+                    render it behind the sheet. */}
+                <DropdownMenuContent align="end" className="z-[210] w-52">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setSelectedAssignmentLocationId(assignment.location_id);
+                      setIsLocationSheetOpen(true);
+                    }}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit assignment
+                  </DropdownMenuItem>
+                  {!assignment.is_primary && assignment.is_active && (
+                    <DropdownMenuItem
+                      onClick={() => handleSetPrimary(assignment.location_id)}
+                      disabled={setPrimary.isPending}
+                    >
+                      <Star className="mr-2 h-4 w-4" />
+                      Set as primary
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    onClick={() =>
+                      handleToggleLocationStatus(
+                        assignment.location_id,
+                        assignment.is_active
+                      )
+                    }
+                    disabled={
+                      deactivateStaff.isPending || reactivateStaff.isPending
+                    }
+                  >
+                    <UserCheck className="mr-2 h-4 w-4" />
+                    {assignment.is_active ? "Deactivate here" : "Reactivate here"}
+                  </DropdownMenuItem>
+                  {!assignment.is_primary && (
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() =>
+                        handleRemoveFromLocation(assignment.location_id)
+                      }
+                      disabled={removeFromLocation.isPending}
+                    >
+                      <UserX className="mr-2 h-4 w-4" />
+                      Remove from location
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
-            <div className="pointer-events-none relative z-10 mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="relative z-10 mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <InfoRow
                 label="Role"
                 value={formatRoleLabel(
@@ -1327,8 +1415,8 @@ export function StaffDetailSheet({
   );
 
   const activityPanel = (
-    <section className="rounded-3xl border bg-card shadow-sm">
-      <div className="border-b px-6 py-5">
+    <section className="rounded-3xl bg-muted/40">
+      <div className="px-6 py-5">
         <SectionHeader
           icon={Activity}
           title="Activity Log"
@@ -1356,12 +1444,13 @@ export function StaffDetailSheet({
 
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange}>
+    <BottomSheet open={open} onOpenChange={onOpenChange} elevated={elevated}>
       <BottomSheetContent
-        className="mx-auto w-full max-w-6xl bottom-[2.5dvh] h-[95dvh] overflow-hidden rounded-b-[20px] border-b data-[state=closed]:duration-[400ms] data-[state=closed]:ease-[cubic-bezier(0.32,0.72,0,1)]"
+        className="staff-detail-dialog-motion mx-auto bottom-[2.5dvh] h-[95dvh] w-full max-w-6xl overflow-hidden rounded-b-[20px] border-0 bg-white max-sm:inset-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:max-w-none max-sm:rounded-none"
+        overlayClassName="staff-detail-dialog-overlay-motion"
         height="95"
       >
-        <BottomSheetHeader className="flex flex-col gap-2">
+        <BottomSheetHeader className="flex flex-col gap-2 border-b-0 bg-white">
           <BottomSheetTitle>
             {displayStaff.first_name} {displayStaff.last_name}
           </BottomSheetTitle>
@@ -1370,20 +1459,11 @@ export function StaffDetailSheet({
             dashboard.
           </BottomSheetDescription>
         </BottomSheetHeader>
-        <BottomSheetBody className="flex-1 overflow-y-auto">
-          <div className="space-y-6 p-1">
-            <section className="rounded-[28px] border bg-gradient-to-br from-slate-50 via-white to-slate-50/70 p-6 shadow-sm dark:from-card dark:via-card dark:to-card">
-              <div className="flex items-start gap-4">
-                <Avatar className="h-20 w-20 border border-slate-200 shadow-sm dark:border-border">
-                  <AvatarImage
-                    src={displayStaff.avatar_url || undefined}
-                    alt={displayStaff.display_name}
-                  />
-                  <AvatarFallback className="text-lg font-semibold text-foreground">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-
+        <div className="relative min-h-0 flex-1">
+          <BottomSheetBody className="h-full overflow-x-hidden overflow-y-auto bg-white px-4 sm:px-6">
+            <div className="min-w-0 space-y-6 p-1">
+            <section className="rounded-[28px] bg-muted/40 p-4">
+              <div className="flex items-start">
                 <div className="min-w-0 flex-1 space-y-3">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -1423,8 +1503,8 @@ export function StaffDetailSheet({
 
             <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
               <aside className="space-y-4 xl:sticky xl:top-0 xl:self-start">
-                <div className="rounded-3xl border bg-card p-3 shadow-sm">
-                  <div className="mb-3 border-b border-border px-2 pb-4 pt-2">
+                <div className="rounded-3xl bg-muted/40 p-3">
+                  <div className="mb-3 px-2 pb-4 pt-2">
                     <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
                       Staff Overview
                     </p>
@@ -1481,35 +1561,36 @@ export function StaffDetailSheet({
                 currentUserRoleLevel={currentUserLevel}
               />
             )}
-          </div>
-        </BottomSheetBody>
-        <BottomSheetFooter>
-          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Close
-              </Button>
-              {staff.overall_is_active ? (
-                <Button
-                  variant="destructive"
-                  className="gap-2"
-                  onClick={handleStatusToggle}
-                  disabled={!primaryLocation}
-                >
-                  <UserX className="h-4 w-4" />
-                  Deactivate
-                </Button>
-              ) : (
-                <Button
-                  className="gap-2"
-                  onClick={handleStatusToggle}
-                  disabled={!primaryLocation}
-                >
-                  <UserCheck className="h-4 w-4" />
-                  Reactivate
-                </Button>
-              )}
             </div>
+          </BottomSheetBody>
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 z-10 h-7 bg-gradient-to-b from-white via-white/85 to-transparent backdrop-blur-sm" />
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-7 bg-gradient-to-t from-white via-white/85 to-transparent backdrop-blur-sm" />
+        </div>
+        <BottomSheetFooter className="border-t-0 bg-white">
+          <div className="flex w-full items-center justify-between gap-2 sm:justify-end">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+            {staff.overall_is_active ? (
+              <Button
+                variant="destructive"
+                className="gap-2"
+                onClick={handleStatusToggle}
+                disabled={!primaryLocation}
+              >
+                <UserX className="h-4 w-4" />
+                Deactivate
+              </Button>
+            ) : (
+              <Button
+                className="gap-2"
+                onClick={handleStatusToggle}
+                disabled={!primaryLocation}
+              >
+                <UserCheck className="h-4 w-4" />
+                Reactivate
+              </Button>
+            )}
           </div>
         </BottomSheetFooter>
       </BottomSheetContent>
@@ -1524,26 +1605,33 @@ function SectionHeader({
   action,
   className,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon?: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
   action?: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div className={cn("mb-5 flex items-start justify-between gap-3", className)}>
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 rounded-full bg-slate-100 p-2 text-slate-600">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div>
+    <div
+      className={cn(
+        "mb-5 flex items-start justify-between gap-3 max-sm:flex-col max-sm:items-stretch",
+        className,
+      )}
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        {Icon ? (
+          <div className="mt-0.5 shrink-0 rounded-full bg-slate-100 p-2 text-slate-600">
+            <Icon className="h-4 w-4" />
+          </div>
+        ) : null}
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             {title}
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="shrink-0 max-sm:w-full">{action}</div> : null}
     </div>
   );
 }

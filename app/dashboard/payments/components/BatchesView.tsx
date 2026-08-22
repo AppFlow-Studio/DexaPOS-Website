@@ -1,11 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Empty } from "@/components/ui/empty";
 import {
@@ -33,6 +28,21 @@ import { useSettlementBatches, useBatchPayments } from "../../hooks/useSettlemen
 import { usePayments } from "../../hooks/usePayments";
 import { PaymentFilters } from "@/types/payment";
 import { CardBrandIcon } from "./CardBrandIcon";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { Panel, StatRow, StatTile } from "@/components/dashboard/shell";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  getPaymentStatusLabel,
+  getPaymentStatusStyle,
+} from "@/lib/constants/payment-status";
 
 // ============================================================================
 // Helpers
@@ -80,44 +90,100 @@ function formatBatchLabel(
   return batch.batch_id;
 }
 
+/**
+ * Soft-tint badges for settlement-batch status (open/closed/submitted/settled/
+ * funded) — a distinct domain from `payment_status`, so it isn't covered by
+ * `lib/constants/payment-status.ts`. Follows the same `{dot,text,bg}` shape
+ * (DS-CTL-09).
+ */
+const BATCH_STATUS_STYLES: Record<
+  string,
+  { label: string; dot: string; text: string; bg: string }
+> = {
+  open: {
+    label: "Open",
+    dot: "bg-amber-500",
+    text: "text-amber-700 dark:text-amber-400",
+    bg: "bg-amber-50 dark:bg-amber-900/20",
+  },
+  closed: {
+    label: "Closed",
+    dot: "bg-blue-500",
+    text: "text-blue-700 dark:text-blue-400",
+    bg: "bg-blue-50 dark:bg-blue-900/20",
+  },
+  submitted: {
+    label: "Submitted",
+    dot: "bg-violet-500",
+    text: "text-violet-700 dark:text-violet-400",
+    bg: "bg-violet-50 dark:bg-violet-900/20",
+  },
+  settled: {
+    label: "Settled",
+    dot: "bg-muted-foreground",
+    text: "text-muted-foreground",
+    bg: "bg-muted/60",
+  },
+  funded: {
+    label: "Funded",
+    dot: "bg-muted-foreground",
+    text: "text-muted-foreground",
+    bg: "bg-muted/60",
+  },
+};
+
 function getStatusBadge(status: string) {
   const normalized = status.toLowerCase();
-  if (normalized === "open") {
-    return (
-      <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-800">
-        Open
-      </Badge>
-    );
+  const style = BATCH_STATUS_STYLES[normalized];
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+        style ? style.bg : "bg-muted/60",
+        style ? style.text : "text-muted-foreground"
+      )}
+    >
+      <span
+        className={cn(
+          "h-1.5 w-1.5 shrink-0 rounded-full",
+          style ? style.dot : "bg-muted-foreground"
+        )}
+      />
+      {style ? style.label : status}
+    </span>
+  );
+}
+
+// How the batch was settled — distinguishes an automatic settle from a manual one.
+function getOriginBadge(origin?: string | null) {
+  switch (origin) {
+    case "valor_webhook":
+      return (
+        <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700">
+          Auto · Webhook
+        </Badge>
+      );
+    case "pos_auto":
+      return (
+        <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700">
+          Auto
+        </Badge>
+      );
+    case "hq_manual":
+      return (
+        <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-600">
+          Manual · HQ
+        </Badge>
+      );
+    case "pos_manual":
+      return (
+        <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-600">
+          Manual
+        </Badge>
+      );
+    default:
+      return null;
   }
-  if (normalized === "closed") {
-    return (
-      <Badge variant="outline" className="border-blue-300 bg-blue-100 text-blue-800">
-        Closed
-      </Badge>
-    );
-  }
-  if (normalized === "submitted") {
-    return (
-      <Badge variant="outline" className="border-purple-300 bg-purple-100 text-purple-800">
-        Submitted
-      </Badge>
-    );
-  }
-  if (normalized === "settled") {
-    return (
-      <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800">
-        Settled
-      </Badge>
-    );
-  }
-  if (normalized === "funded") {
-    return (
-      <Badge variant="outline" className="border-green-300 bg-green-100 text-green-800">
-        Funded
-      </Badge>
-    );
-  }
-  return <Badge variant="outline">{status}</Badge>;
 }
 
 // ============================================================================
@@ -194,35 +260,35 @@ function BatchSummaryStats({
   batches: { count: number; settled: number; pending: number; avgSize: number };
   isLoading: boolean;
 }) {
-  const stats = [
-    { label: "Total Batches", value: batches.count, icon: Layers },
-    { label: "Settled Amount", value: formatCurrency(batches.settled), icon: CheckCircle2 },
-    { label: "Pending", value: formatCurrency(batches.pending), icon: Clock },
-    { label: "Avg Batch Size", value: formatCurrency(batches.avgSize), icon: DollarSign },
-  ];
-
   return (
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-      {stats.map((stat) => (
-        <Card key={stat.label}>
-          <CardContent className="pt-4 pb-4">
-            {isLoading ? (
-              <Skeleton className="h-12 w-full" />
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="rounded-md bg-muted p-2">
-                  <stat.icon className="h-4 w-4 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  <p className="text-lg font-bold">{stat.value}</p>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+    <Panel className="px-4 py-6 sm:px-6">
+      <StatRow columns={4}>
+        <StatTile
+          icon={<Layers />}
+          label="Total Batches"
+          value={batches.count}
+          isLoading={isLoading}
+        />
+        <StatTile
+          icon={<CheckCircle2 />}
+          label="Settled Amount"
+          value={formatCurrency(batches.settled)}
+          isLoading={isLoading}
+        />
+        <StatTile
+          icon={<Clock />}
+          label="Pending"
+          value={formatCurrency(batches.pending)}
+          isLoading={isLoading}
+        />
+        <StatTile
+          icon={<DollarSign />}
+          label="Avg Batch Size"
+          value={formatCurrency(batches.avgSize)}
+          isLoading={isLoading}
+        />
+      </StatRow>
+    </Panel>
   );
 }
 
@@ -271,8 +337,7 @@ function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card>
-        <CardContent className="p-4">
+      <Panel nested className="p-4">
           {/* Header row */}
           <CollapsibleTrigger asChild>
             <button className="w-full text-left cursor-pointer">
@@ -289,6 +354,7 @@ function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
                         Batch {formatBatchLabel(batch)}
                       </span>
                       {getStatusBadge(batch.status)}
+                      {getOriginBadge(batch.origin)}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
                       <span>{formatDate(batch.business_date)}</span>
@@ -314,18 +380,18 @@ function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
                 </div>
 
                 {/* Financial summary */}
-                <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-1 pl-7 text-sm sm:pl-0">
-                  <div className="flex items-center gap-1 text-green-700">
-                    <ArrowDownLeft className="h-3.5 w-3.5" />
+                <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-1 pl-7 text-sm text-foreground sm:pl-0">
+                  <div className="flex items-center gap-1">
+                    <ArrowDownLeft className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>{formatCurrency(batch.gross_amount)}</span>
                   </div>
                   {batch.refund_amount > 0 && (
-                    <div className="flex items-center gap-1 text-red-600">
-                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    <div className="flex items-center gap-1">
+                      <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
                       <span>{formatCurrency(batch.refund_amount)}</span>
                     </div>
                   )}
-                  <div className="font-bold">
+                  <div className="font-semibold">
                     {formatCurrency(batch.net_deposit)}
                   </div>
                 </div>
@@ -398,8 +464,7 @@ function DbBatchCard({ batch }: { batch: SettlementBatchRecord }) {
               />
             </div>
           </CollapsibleContent>
-        </CardContent>
-      </Card>
+      </Panel>
     </Collapsible>
   );
 }
@@ -413,8 +478,7 @@ function ComputedBatchCard({ batch }: { batch: ComputedBatch }) {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card>
-        <CardContent className="p-4">
+      <Panel nested className="p-4">
           <CollapsibleTrigger asChild>
             <button className="w-full text-left cursor-pointer">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -437,18 +501,18 @@ function ComputedBatchCard({ batch }: { batch: ComputedBatch }) {
                   </div>
                 </div>
 
-                <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-1 pl-7 text-sm sm:pl-0">
-                  <div className="flex items-center gap-1 text-green-700">
-                    <ArrowDownLeft className="h-3.5 w-3.5" />
+                <div className="flex flex-shrink-0 flex-wrap items-center gap-x-6 gap-y-1 pl-7 text-sm text-foreground sm:pl-0">
+                  <div className="flex items-center gap-1">
+                    <ArrowDownLeft className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>{formatCurrency(batch.gross_amount)}</span>
                   </div>
                   {batch.refund_amount > 0 && (
-                    <div className="flex items-center gap-1 text-red-600">
-                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    <div className="flex items-center gap-1">
+                      <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
                       <span>{formatCurrency(batch.refund_amount)}</span>
                     </div>
                   )}
-                  <div className="font-bold">{formatCurrency(batch.net_amount)}</div>
+                  <div className="font-semibold">{formatCurrency(batch.net_amount)}</div>
                 </div>
               </div>
             </button>
@@ -467,8 +531,7 @@ function ComputedBatchCard({ batch }: { batch: ComputedBatch }) {
               />
             </div>
           </CollapsibleContent>
-        </CardContent>
-      </Card>
+      </Panel>
     </Collapsible>
   );
 }
@@ -501,67 +564,65 @@ function BatchPaymentsTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded border text-xs">
-      <table className="w-full min-w-[480px]">
-        <thead>
-          <tr className="border-b text-muted-foreground">
-            <th className="p-2 text-left font-medium">Order #</th>
-            <th className="p-2 text-left font-medium">Method</th>
-            <th className="p-2 text-left font-medium">Card</th>
-            <th className="p-2 text-right font-medium">Amount</th>
-            <th className="p-2 text-right font-medium">Tip</th>
-            <th className="p-2 text-right font-medium">Total</th>
-            <th className="p-2 text-left font-medium">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {payments.map((p) => (
-            <tr key={p.id} className="border-b last:border-0">
-              <td className="p-2 font-mono">
-                {p.orders?.order_number || p.orders?.display_number || "—"}
-              </td>
-              <td className="p-2">{getMethodLabel(p.payment_method)}</td>
-              <td className="p-2">
-                {p.card_last_four ? (
-                  <div className="flex items-center gap-1">
-                    <CardBrandIcon brand={p.card_type} className="h-4 w-auto" />
-                    <span className="font-mono">****{p.card_last_four}</span>
-                  </div>
-                ) : (
-                  "—"
-                )}
-              </td>
-              <td className="p-2 text-right font-mono">{formatCurrency(p.amount)}</td>
-              <td className="p-2 text-right font-mono text-muted-foreground">
-                {p.tip_amount ? formatCurrency(p.tip_amount) : "—"}
-              </td>
-              <td className="p-2 text-right font-mono font-semibold">
-                {formatCurrency(p.total_amount)}
-              </td>
-              <td className="p-2">
-                <StatusBadgeMini status={p.status} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table variant="data" className="min-w-[480px] text-xs">
+      <TableHeader className="[&_tr]:border-0">
+        <TableRow className="border-0 hover:bg-transparent">
+          <TableHead className="text-xs font-medium text-muted-foreground">Order #</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground">Method</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground">Card</TableHead>
+          <TableHead className="text-right text-xs font-medium text-muted-foreground">Amount</TableHead>
+          <TableHead className="text-right text-xs font-medium text-muted-foreground">Tip</TableHead>
+          <TableHead className="text-right text-xs font-medium text-muted-foreground">Total</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground">Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {payments.map((p) => (
+          <TableRow key={p.id} className="border-0 bg-card/70 hover:bg-muted/40">
+            <TableCell className="font-mono text-xs">
+              {p.orders?.order_number || p.orders?.display_number || "—"}
+            </TableCell>
+            <TableCell className="text-xs">{getMethodLabel(p.payment_method)}</TableCell>
+            <TableCell className="text-xs">
+              {p.card_last_four ? (
+                <div className="flex items-center gap-1">
+                  <CardBrandIcon brand={p.card_type} className="h-4 w-auto" />
+                  <span className="font-mono">****{p.card_last_four}</span>
+                </div>
+              ) : (
+                "—"
+              )}
+            </TableCell>
+            <TableCell className="text-right font-mono text-xs">{formatCurrency(p.amount)}</TableCell>
+            <TableCell className="text-right font-mono text-xs text-muted-foreground">
+              {p.tip_amount ? formatCurrency(p.tip_amount) : "—"}
+            </TableCell>
+            <TableCell className="text-right font-mono text-xs font-semibold">
+              {formatCurrency(p.total_amount)}
+            </TableCell>
+            <TableCell className="text-xs">
+              <StatusBadgeMini status={p.status} />
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 
 function StatusBadgeMini({ status }: { status: string }) {
-  const configs: Record<string, { label: string; className: string }> = {
-    captured: { label: "Captured", className: "bg-green-100 text-green-800 border-green-300" },
-    paid: { label: "Paid", className: "bg-green-100 text-green-800 border-green-300" },
-    refunded: { label: "Refunded", className: "bg-red-100 text-red-800 border-red-300" },
-    partially_refunded: { label: "Partial Refund", className: "bg-amber-100 text-amber-800 border-amber-300" },
-    void: { label: "Void", className: "bg-gray-100 text-gray-800 border-gray-300" },
-  };
-  const config = configs[status] || { label: status, className: "" };
+  const style = getPaymentStatusStyle(status);
   return (
-    <Badge variant="outline" className={`text-[10px] ${config.className}`}>
-      {config.label}
-    </Badge>
+    <span
+      className={cn(
+        "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-medium",
+        style.bg,
+        style.text
+      )}
+    >
+      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", style.dot)} />
+      {getPaymentStatusLabel(status)}
+    </span>
   );
 }
 
@@ -643,15 +704,13 @@ export function BatchesView({ paymentFilters }: BatchesViewProps) {
           <Skeleton className="h-20 w-full" />
         </div>
       ) : !hasBatches ? (
-        <Card>
-          <CardContent className="py-12">
-            <Empty
-              icon={Layers}
-              title="No batches found"
-              description="No settlement batches found for the selected date range. Batches appear when card payments are processed through your terminal."
-            />
-          </CardContent>
-        </Card>
+        <Panel className="py-12">
+          <Empty
+            icon={Layers}
+            title="No batches found"
+            description="No settlement batches found for the selected date range. Batches appear when card payments are processed through your terminal."
+          />
+        </Panel>
       ) : (
         <div className="space-y-3">
           {hasDbBatches

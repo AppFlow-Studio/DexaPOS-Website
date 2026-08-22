@@ -82,30 +82,31 @@ export function TimelineItem({
   return (
     <div
       className={cn(
-        "flex items-start gap-4 group p-4 rounded-lg border border-border/50 bg-card/50 hover:bg-card transition-all",
-        item.is_clickable && "cursor-pointer hover:border-primary/50 hover:shadow-sm"
+        "group relative flex items-start gap-3 rounded-xl border-0 bg-background/80 p-3 transition-colors hover:bg-background sm:gap-4 sm:p-4",
+        item.is_clickable && "cursor-pointer pr-8"
       )}
       onClick={handleClick}
     >
       <TimelineActivityIcon type={item.activity_type} />
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="font-semibold text-foreground">{item.activity_label}</span>
-          {item.amount_value !== null && (
-            <span className="font-bold text-primary text-base">
-              ${item.amount_value.toFixed(2)}
-            </span>
-          )}
+        <div className="mb-2 flex min-w-0 flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-semibold text-foreground">{item.activity_label}</span>
+            {item.amount_value !== null && (
+              <span className="whitespace-nowrap text-base font-bold text-primary">
+                ${item.amount_value.toFixed(2)}
+              </span>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+            <span className="font-medium">{time}</span>
+            <span aria-hidden="true">·</span>
+            <span className="text-muted-foreground/70">{date}</span>
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground">{item.description}</p>
-      </div>
-      <div className="text-right flex items-center gap-3 text-xs text-muted-foreground shrink-0">
-        <div className="flex flex-col items-end gap-1">
-          <span className="font-medium">{time}</span>
-          <span className="text-muted-foreground/70">{date}</span>
-        </div>
+        <p className="break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{item.description}</p>
         {item.is_clickable && (
-          <ChevronRight className="h-5 w-5 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+          <ChevronRight className="absolute right-2 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground/50 transition-colors group-hover:text-foreground" />
         )}
       </div>
     </div>

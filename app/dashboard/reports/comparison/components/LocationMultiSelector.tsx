@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { toast } from "sonner";
 
 interface Location {
   id: string;
@@ -54,10 +53,6 @@ export function LocationMultiSelector({
       onChange(selectedIds.filter((i) => i !== id));
     } else {
       if (selectedIds.length >= maxSelections) {
-        toast.error("Maximum Selection Reached", {
-          description: `You can only compare up to ${maxSelections} locations at once for better visualization.`,
-          icon: <AlertCircle className="h-4 w-4 text-destructive" />,
-        });
         return;
       }
       onChange([...selectedIds, id]);
@@ -72,9 +67,6 @@ export function LocationMultiSelector({
       // Usually "Select All" should be available if total locations <= maxSelections
       // If > maxSelections, maybe just select the first N
       if (locations.length > maxSelections) {
-        toast.warning("Limited Selection", {
-          description: `Selected the first ${maxSelections} locations.`,
-        });
         onChange(locations.slice(0, maxSelections).map((l) => l.id));
       } else {
         onChange(locations.map((l) => l.id));
@@ -95,7 +87,7 @@ export function LocationMultiSelector({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between min-h-[44px] h-auto py-2 bg-background/50 backdrop-blur-sm border-muted-foreground/20 hover:border-primary/50 transition-all duration-200"
+            className="h-auto min-h-11 w-full justify-between border-0 bg-muted/60 py-2 shadow-none hover:bg-muted"
           >
             <div className="flex flex-wrap gap-1 items-center max-w-[90%]">
               {selectedIds.length === 0 ? (
@@ -112,7 +104,7 @@ export function LocationMultiSelector({
                 <>
                   <Badge
                     variant="secondary"
-                    className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                    className="text-muted-foreground"
                   >
                     {selectedIds.length} Selected
                   </Badge>
@@ -130,7 +122,7 @@ export function LocationMultiSelector({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0" align="start">
+        <PopoverContent className="w-[300px] overflow-hidden rounded-2xl p-0" align="start">
           <Command>
             <CommandInput placeholder="Search locations..." />
             <CommandList>

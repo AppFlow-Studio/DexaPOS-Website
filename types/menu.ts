@@ -1,3 +1,6 @@
+import type { AvailableChannel } from "./inventory";
+import type { TaxCategory } from "./tax";
+
 // ============================================================================
 // 1. SHARED ENUMS & UTILITY TYPES
 // ============================================================================
@@ -165,6 +168,9 @@ export interface LocationLibraryItem {
   base_cash_price: number | null;
   base_delivery_price: number | null;
   base_availability: boolean;
+  tax_category: TaxCategory;
+  is_tax_exempt: boolean;
+  available_channels: AvailableChannel[];
 
   // Level 2: Location Override (Nullable)
   location_override: LocationItemOverride | null;
@@ -174,6 +180,9 @@ export interface LocationLibraryItem {
   effective_cash_price: number | null;
   effective_delivery_price: number | null;
   effective_availability: boolean;
+  effective_tax_category: TaxCategory;
+  effective_is_tax_exempt: boolean;
+  effective_available_channels: AvailableChannel[];
 
   // UI Flags
   has_location_override: boolean;

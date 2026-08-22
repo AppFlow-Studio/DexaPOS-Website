@@ -87,13 +87,13 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/10">
-              <Truck className="h-5 w-5 text-blue-500" />
+      <DialogContent className="flex h-dvh max-h-dvh w-full max-w-none flex-col overflow-hidden max-sm:overflow-hidden rounded-none p-0 max-sm:top-auto max-sm:translate-y-0 sm:h-auto sm:max-h-[90dvh] sm:w-[calc(100%-1rem)] sm:max-w-[500px] sm:rounded-3xl sm:p-6">
+        <DialogHeader className="shrink-0 px-5 pb-4 pt-5 pr-14 sm:px-0 sm:pt-0 sm:pr-10">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
+              <Truck className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="flex-1">
+            <div className="min-w-0 flex-1 text-left">
               <DialogTitle>Add Vendor</DialogTitle>
               <DialogDescription>
                 Add a new supplier to your vendor list
@@ -104,27 +104,43 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
             {isSingleLocation ? null : isGlobalView ? (
               <Badge
                 variant="outline"
-                className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30"
+                className="hidden shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground sm:inline-flex"
               >
                 <Globe className="h-3 w-3" />
                 Global
               </Badge>
             ) : (
-              <Badge variant="outline" className="gap-1">
-                <MapPin className="h-3 w-3" />
-                {selectedLocation?.name || "Location"}
+              <Badge
+                variant="outline"
+                className="hidden min-w-0 shrink-0 gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground sm:inline-flex"
+              >
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate">
+                  {selectedLocation?.name || "Location"}
+                </span>
               </Badge>
             )}
           </div>
         </DialogHeader>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          {/* Fields scroll; the footer below stays pinned so Add Vendor is
+              always reachable on a short viewport.
+              The negative margin pulls this box out to the dialog's edges so
+              the scrollbar rides the border rather than floating inside the
+              content; the matching padding puts the fields back where they
+              were and leaves room for focus rings, which `overflow-y-auto`
+              would otherwise clip against the left edge. */}
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pt-4 sm:-mx-6 sm:px-6">
           {/* Info banner explaining scope — hidden for single-location accounts. */}
           {!isSingleLocation && (
-            <div className="p-3 rounded-lg bg-muted/50 border text-sm text-muted-foreground">
+            <div className="rounded-2xl border-0 bg-muted/60 p-3 text-sm text-muted-foreground">
               {isGlobalView ? (
                 <>
-                  <Globe className="h-4 w-4 inline mr-2 text-emerald-600" />
+                  <Globe className="mr-2 inline h-4 w-4" />
                   This vendor will be available to <strong>all locations</strong>.
                 </>
               ) : (
@@ -152,8 +168,9 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
             )}
           </div>
 
-          {/* Contact Row */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Contact Person and Phone each take a full row — the phone control
+              (country selector + number) is too wide to share one. */}
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="contact_name">Contact Person</Label>
               <Input
@@ -249,8 +266,9 @@ export function AddVendorDialog({ open, onOpenChange }: AddVendorDialogProps) {
               />
             </div>
           </div>
+          </div>
 
-          <DialogFooter className="pt-4">
+          <DialogFooter className="shrink-0 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-0 sm:pb-0">
             <Button
               type="button"
               variant="outline"

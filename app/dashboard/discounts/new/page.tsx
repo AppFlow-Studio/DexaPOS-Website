@@ -10,8 +10,7 @@ import {
 } from "@/hooks/use-discounts";
 import { DiscountFormInput } from "@/types/discount";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { PageShell, PageHeader } from "@/components/dashboard/shell";
 import { useLocations } from "@/app/dashboard/hooks/useLocations";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
@@ -54,34 +53,30 @@ export default function NewDiscountPage() {
     const loading = categoriesLoading || menuItemsLoading;
 
     return (
-        <div className="space-y-6 w-full min-w-0">
-            <div className="flex items-center gap-3">
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => router.back()}>
-                    <ArrowLeft className="h-4 w-4" />
-                    <span className="sr-only">Back</span>
-                </Button>
-                <div>
-                    <h1 className="text-xl font-semibold">New discount</h1>
-                    <p className="text-sm text-muted-foreground">Configure a discount for your POS.</p>
-                </div>
-            </div>
+        <PageShell>
+            <PageHeader
+                title="New discount"
+                subtitle="Configure a discount for your POS."
+                backHref="/dashboard/discounts"
+                backLabel="Back to Discounts"
+            />
 
             {loading ? (
-                <div className="grid gap-6 lg:grid-cols-3">
+                <div className="grid min-w-0 gap-6 lg:grid-cols-3">
                     <div className="space-y-6 lg:col-span-2">
-                        <div className="rounded-xl border p-6 space-y-4">
+                        <div className="space-y-4 rounded-3xl border bg-card px-6 py-6">
                             {Array.from({ length: 5 }).map((_, idx) => (
                                 <Skeleton key={idx} className="h-10 w-full" />
                             ))}
                         </div>
-                        <div className="rounded-xl border p-6 space-y-4">
+                        <div className="space-y-4 rounded-3xl border bg-card px-6 py-6">
                             {Array.from({ length: 3 }).map((_, idx) => (
                                 <Skeleton key={idx} className="h-10 w-full" />
                             ))}
                         </div>
                     </div>
-                    <div className="space-y-4">
-                        <div className="rounded-xl border p-6 space-y-4">
+                    <div className="space-y-6">
+                        <div className="space-y-4 rounded-3xl border bg-card px-6 py-6">
                             {Array.from({ length: 3 }).map((_, idx) => (
                                 <Skeleton key={idx} className="h-10 w-full" />
                             ))}
@@ -101,7 +96,6 @@ export default function NewDiscountPage() {
                     submitLabel="Create discount"
                 />
             )}
-        </div>
+        </PageShell>
     );
 }
-

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   AlertTriangle,
   Check,
@@ -15,6 +15,7 @@ import {
   Trash2,
   Upload,
   Video,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -45,12 +46,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader, PageShell, Panel } from "@/components/dashboard/shell";
 import { CROPPABLE_MIME_TYPES, ImageCropDialog } from "@/components/ui/image-crop-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -181,7 +181,7 @@ function formatRatio(value: number) {
 function contrastTone(value: number) {
   if (value < 3) return "border-destructive/30 bg-destructive/5 text-destructive";
   if (value < 4.5) return "border-amber-400/40 bg-amber-400/10 text-amber-700 dark:text-amber-400";
-  return "border-emerald-400/40 bg-emerald-400/10 text-emerald-700 dark:text-emerald-400";
+  return "border-border/60 bg-muted/40 text-foreground";
 }
 
 /** Section label used above each grouped field cluster inside a card. */
@@ -191,6 +191,32 @@ function FieldGroupLabel({ title, description }: { title: string; description?: 
       <h3 className="text-sm font-medium">{title}</h3>
       {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
     </div>
+  );
+}
+
+function KioskSection({
+  title,
+  description,
+  children,
+  className,
+}: {
+  title: string;
+  description: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Panel padded>
+      <div className="mb-6 space-y-1">
+        <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+          {title}
+        </h2>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          {description}
+        </p>
+      </div>
+      <div className={className}>{children}</div>
+    </Panel>
   );
 }
 
@@ -206,8 +232,8 @@ function ColorField({
   return (
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground">{label}</Label>
-      <div className="flex items-center gap-2 rounded-md border pl-1 pr-2.5 focus-within:ring-2 focus-within:ring-ring/50">
-        <label className="relative h-7 w-7 shrink-0 cursor-pointer overflow-hidden rounded-sm border">
+      <div className="relative">
+        <label className="absolute left-1.5 top-1/2 z-10 h-7 w-7 -translate-y-1/2 cursor-pointer overflow-hidden rounded-full border border-border/60">
           <input
             type="color"
             value={value}
@@ -216,10 +242,10 @@ function ColorField({
             aria-label={`${label} color picker`}
           />
         </label>
-        <input
+        <Input
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="h-9 w-full min-w-0 bg-transparent font-mono text-sm uppercase outline-none"
+          className="h-10 pl-11 font-mono text-sm uppercase"
           spellCheck={false}
         />
       </div>
@@ -239,7 +265,7 @@ function ToggleRow({
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex items-start justify-between gap-4 rounded-md border px-3.5 py-3 transition-colors hover:bg-muted/40">
+    <label className="flex items-start justify-between gap-4 rounded-2xl border-0 bg-muted/60 px-4 py-3.5 transition-colors hover:bg-muted">
       <div className="space-y-0.5">
         <p className="text-sm font-medium leading-none">{label}</p>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
@@ -255,18 +281,25 @@ function SlotHeader({
   title,
   helper,
   badge,
+  hideIconOnMobile = false,
 }: {
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   title: string;
   helper: string;
   badge?: React.ReactNode;
+  hideIconOnMobile?: boolean;
 }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="flex min-w-0 items-start gap-2.5">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          {icon}
-        </div>
+        {icon ? (
+          <div className={cn(
+            "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground",
+            hideIconOnMobile && "hidden md:flex",
+          )}>
+            {icon}
+          </div>
+        ) : null}
         <div className="min-w-0">
           <p className="text-sm font-medium leading-tight">{title}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{helper}</p>
@@ -312,7 +345,7 @@ function AssetUpload({
 
       <div className="flex shrink-0 items-center gap-4 sm:pl-3">
         {value ? (
-          <div className="h-12 w-12 overflow-hidden rounded-md border bg-[repeating-conic-gradient(var(--muted)_0%_25%,transparent_0%_50%)] bg-size-[10px_10px]">
+          <div className="h-12 w-12 overflow-hidden rounded-xl border border-border/60 bg-[repeating-conic-gradient(var(--muted)_0%_25%,transparent_0%_50%)] bg-size-[10px_10px]">
             <img src={value} alt={`${label} preview`} className="h-full w-full object-contain" />
           </div>
         ) : null}
@@ -375,6 +408,10 @@ function KioskGallerySlot({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
   const atLimit = images.length >= 5;
+  const tileWidth =
+    aspectRatio >= 1
+      ? "w-full sm:w-[calc((100%-0.5rem)/2)]"
+      : "w-[calc((100%-0.5rem)/2)] sm:w-[calc((100%-1.5rem)/4)]";
 
   function pickFile() {
     if (disabled || uploading || atLimit) return;
@@ -400,6 +437,7 @@ function KioskGallerySlot({
     <div className="space-y-3">
       <SlotHeader
         icon={<ImageIcon className="h-4 w-4" />}
+        hideIconOnMobile
         title={title}
         helper={helper}
         badge={
@@ -410,9 +448,20 @@ function KioskGallerySlot({
             <Badge variant="secondary" className="font-mono text-[10px] font-normal">
               {images.length}/5
             </Badge>
+            <Button type="button" variant="outline" size="sm" className="hidden md:inline-flex" onClick={pickFile} disabled={disabled || uploading || atLimit}>
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              Upload
+            </Button>
           </div>
         }
       />
+
+      <div className="flex justify-center md:hidden">
+        <Button type="button" variant="outline" size="sm" onClick={pickFile} disabled={disabled || uploading || atLimit}>
+          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          Upload
+        </Button>
+      </div>
 
       <input
         ref={inputRef}
@@ -426,9 +475,17 @@ function KioskGallerySlot({
         }}
       />
 
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+      {images.length > 0 ? (
+        <div className="flex flex-wrap justify-center gap-2">
         {images.map((url, index) => (
-          <div key={url} className="group relative overflow-hidden rounded-md border bg-muted/40" style={{ aspectRatio }}>
+          <div
+            key={url}
+            className={cn(
+              "group relative overflow-hidden rounded-xl border border-border/60 bg-muted/40",
+              tileWidth,
+            )}
+            style={{ aspectRatio }}
+          >
             <img src={url} alt={`${title} ${index + 1}`} className="h-full w-full object-cover" />
             <span className="absolute left-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-sm bg-background/90 px-1 text-[10px] font-medium tabular-nums">
               {index + 1}
@@ -438,25 +495,14 @@ function KioskGallerySlot({
               onClick={() => onRemove(url)}
               disabled={disabled}
               aria-label={`Remove image ${index + 1}`}
-              className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-sm bg-background/90 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 disabled:opacity-0"
+              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow-sm transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:opacity-50"
             >
-              <Trash2 className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         ))}
-
-        {!atLimit ? (
-          <button
-            type="button"
-            onClick={pickFile}
-            disabled={disabled || uploading}
-            className="flex items-center justify-center rounded-md border border-dashed text-muted-foreground transition-colors hover:border-muted-foreground/50 hover:bg-muted/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ aspectRatio }}
-          >
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <ImageCropDialog
         file={pendingFile}
@@ -551,6 +597,25 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
   const [isPending, startTransition] = useTransition();
   const [uploadingAsset, setUploadingAsset] = useState<KioskAssetType | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [activeSection, setActiveSection] = useState("design");
+  const sectionRailRef = useRef<HTMLDivElement>(null);
+  const sectionTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  useEffect(() => {
+    const rail = sectionRailRef.current;
+    const trigger = sectionTriggerRefs.current[activeSection];
+    if (!rail || !trigger) return;
+
+    const railRect = rail.getBoundingClientRect();
+    const triggerRect = trigger.getBoundingClientRect();
+    const centeredOffset =
+      triggerRect.left - railRect.left - (railRect.width - triggerRect.width) / 2;
+
+    rail.scrollTo({
+      left: Math.max(0, rail.scrollLeft + centeredOffset),
+      behavior: "smooth",
+    });
+  }, [activeSection]);
 
   const textContrast = useMemo(
     () => contrastRatio(draft.text_color, draft.background_color),
@@ -562,31 +627,6 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
   );
   const minimumContrast = Math.min(textContrast, headerContrast);
   const isExistingProfile = draft.id !== "draft";
-
-  // The dashboard shell's #main-content sets `overflow-y-auto overflow-x-hidden`,
-  // which makes it a scroll container per spec (a non-`visible` value on
-  // either axis forces the *other* axis to compute as `auto` too, even if
-  // set to `visible`). But its flex ancestor chain has no definite height
-  // (`min-h-svh`, not `h-svh`), so #main-content's box never actually grows
-  // taller than its content — there's nothing to scroll internally, so the
-  // real scrolling happens on <body>. That leaves #main-content as an inert
-  // scroll container that still wins as the `position: sticky` containing
-  // block, so the header never finds a scroll distance to stick against.
-  // Overriding both axes to `visible` here — scoped to this page only, not
-  // the shared layout — removes it from the containing-block chain so the
-  // sticky header binds to <body>'s real scroll instead.
-  useEffect(() => {
-    const mainContent = document.getElementById("main-content");
-    if (!mainContent) return;
-    const previousOverflowY = mainContent.style.overflowY;
-    const previousOverflowX = mainContent.style.overflowX;
-    mainContent.style.overflowY = "visible";
-    mainContent.style.overflowX = "visible";
-    return () => {
-      mainContent.style.overflowY = previousOverflowY;
-      mainContent.style.overflowX = previousOverflowX;
-    };
-  }, []);
 
   function updateDraft(updates: Partial<KioskProfile>) {
     setDraft((current) => ({ ...current, ...updates }));
@@ -723,7 +763,17 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
         toast.error(result.error);
         return null;
       }
-      toast.success("Asset uploaded");
+      toast.success("Asset uploaded", {
+        icon: <Check className="h-5 w-5 text-foreground" />,
+        style: {
+          background: "#e5e7eb",
+          borderColor: "#d1d5db",
+          color: "#111827",
+          "--success-bg": "#e5e7eb",
+          "--success-border": "#d1d5db",
+          "--success-text": "#111827",
+        } as CSSProperties,
+      });
       return result.data.url;
     } finally {
       setUploadingAsset(null);
@@ -774,31 +824,50 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
   const saveState: "clean" | "dirty" | "saving" = isPending ? "saving" : isDirty ? "dirty" : "clean";
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 pb-16">
-      <div className="sticky top-0 z-20 -mx-4 -mt-4 space-y-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-backdrop-filter:bg-background/85 sm:-mx-6 sm:-mt-6 sm:px-6">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold tracking-tight">Kiosk</h1>
-              <Badge variant={draft.is_active ? "default" : "secondary"}>{draft.is_active ? "Live" : "Draft"}</Badge>
-              {draft.published_at ? (
-                <span className="text-xs text-muted-foreground">
-                  Published {new Date(draft.published_at).toLocaleDateString()}
-                </span>
-              ) : null}
-            </div>
-            <p className="text-sm text-muted-foreground">{data.location.name}</p>
+    <PageShell width="narrow">
+      <PageHeader
+        title="Kiosk"
+        subtitle={data.location.name}
+        backHref="/dashboard/kiosk"
+        backLabel="Back to Kiosks"
+        stackActionsBelowIndicatorOnMobile
+        indicator={
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                draft.is_active
+                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  : "bg-muted/60 text-muted-foreground",
+              )}
+            >
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  draft.is_active ? "bg-emerald-500" : "bg-muted-foreground/60",
+                )}
+              />
+              {draft.is_active ? "Live" : "Draft"}
+            </span>
+            {draft.published_at ? (
+              <span className="text-xs text-muted-foreground">
+                Published {new Date(draft.published_at).toLocaleDateString()}
+              </span>
+            ) : null}
           </div>
-
-          <div className="flex items-center gap-2">
+        }
+        actions={
+          <>
             <Select value={selectedProfileId} onValueChange={selectProfile}>
-              <SelectTrigger className="w-full sm:w-56">
-                <SelectValue placeholder="Select profile" />
+              <SelectTrigger className="h-9 w-full shadow-sm sm:w-56">
+                <SelectValue placeholder="Select profile">
+                  {draft.profile_name?.trim() || "Untitled profile"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {data.profiles.map((profile) => (
                   <SelectItem key={profile.id} value={profile.id}>
-                    {profile.profile_name}
+                    {profile.profile_name?.trim() || "Untitled profile"}
                   </SelectItem>
                 ))}
                 <SelectItem value="new">Create new profile</SelectItem>
@@ -809,7 +878,7 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
               variant={saveState === "dirty" ? "default" : "outline"}
               onClick={requestSave}
               disabled={isPending}
-              className="gap-1.5"
+              className="h-9 gap-1.5 px-4 text-[0.8125rem] font-medium shadow-sm"
             >
               {saveState === "saving" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -826,7 +895,7 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                 variant="outline"
                 onClick={unpublishDraft}
                 disabled={isPending || !isExistingProfile}
-                className="gap-1.5"
+                className="h-9 gap-1.5 px-4 text-[0.8125rem] font-medium shadow-sm"
               >
                 <Send className="h-4 w-4" />
                 Unpublish
@@ -835,23 +904,23 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
               <Button
                 onClick={() => setPublishOpen(true)}
                 disabled={isPending || !isExistingProfile || isDirty}
-                className="gap-1.5"
+                className="h-9 gap-1.5 px-4 text-[0.8125rem] font-medium shadow-sm"
                 title={isDirty ? "Save your changes before publishing" : undefined}
               >
                 <Send className="h-4 w-4" />
                 Publish
               </Button>
             )}
-          </div>
-        </div>
+          </>
+        }
+      />
 
-        {isDirty ? (
-          <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            Unsaved changes — save before publishing so the live kiosk gets the latest version.
-          </div>
-        ) : null}
-      </div>
+      {isDirty ? (
+        <div className="flex items-center gap-2 rounded-2xl border-0 bg-muted/60 px-4 py-3 text-xs text-muted-foreground">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          Unsaved changes — save before publishing so the live kiosk gets the latest version.
+        </div>
+      ) : null}
 
       {draft.is_active ? (
         <Alert>
@@ -861,22 +930,36 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
         </Alert>
       ) : null}
 
-      <Tabs defaultValue="design" className="gap-6">
-        <TabsList className="w-full justify-start overflow-x-auto sm:w-fit">
-          <TabsTrigger value="design">Design</TabsTrigger>
-          <TabsTrigger value="assets">Assets</TabsTrigger>
-          <TabsTrigger value="behavior">Behavior</TabsTrigger>
-          <TabsTrigger value="stations">Stations</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-        </TabsList>
+      <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-6">
+        <div ref={sectionRailRef} className="no-scrollbar w-full min-w-0 overflow-x-auto pb-1">
+          <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+            {[
+              ["design", "Design"],
+              ["assets", "Assets"],
+              ["behavior", "Behavior"],
+              ["stations", "Stations"],
+              ["security", "Security"],
+            ].map(([value, label]) => (
+              <TabsTrigger
+                key={value}
+                ref={(node) => {
+                  sectionTriggerRefs.current[value] = node;
+                }}
+                value={value}
+                className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+              >
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
-        <TabsContent value="design" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Profile</CardTitle>
-              <CardDescription>Name and orientation for {data.location.name}.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
+        <TabsContent value="design" className="mt-0 space-y-6">
+          <KioskSection
+            title="Profile"
+            description={<>Name and orientation for {data.location.name}.</>}
+            className="grid gap-4 sm:grid-cols-2"
+          >
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Profile name</Label>
                 <Input value={draft.profile_name} onChange={(event) => updateDraft({ profile_name: event.target.value })} />
@@ -893,15 +976,13 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                   </SelectContent>
                 </Select>
               </div>
-            </CardContent>
-          </Card>
+          </KioskSection>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Template</CardTitle>
-              <CardDescription>Layout the kiosk uses for browsing and ordering.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-3">
+          <KioskSection
+            title="Template"
+            description="Layout the kiosk uses for browsing and ordering."
+            className="grid gap-3 sm:grid-cols-3"
+          >
               {templates.map((template) => {
                 const selected = draft.template_id === template.id;
                 return (
@@ -910,12 +991,12 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                     type="button"
                     onClick={() => updateDraft({ template_id: template.id })}
                     className={cn(
-                      "group rounded-lg border p-2.5 text-left transition-colors",
-                      selected ? "border-primary ring-1 ring-primary" : "hover:border-foreground/20",
+                      "group rounded-2xl border-0 bg-muted/60 p-3 text-left transition-colors hover:bg-muted",
+                      selected && "bg-[#0C4FD1]/10 ring-1 ring-[#0C4FD1] dark:bg-[#6CA0FF]/10 dark:ring-[#6CA0FF]",
                     )}
                   >
                     <div
-                      className="mb-2.5 h-24 overflow-hidden rounded-md"
+                      className="mb-3 h-24 overflow-hidden rounded-xl"
                       style={{ background: `linear-gradient(135deg, ${draft.primary_color} 0 38%, ${draft.background_color} 38% 100%)` }}
                     >
                       <div className="grid h-full grid-cols-3 gap-1 p-2.5">
@@ -935,7 +1016,7 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                         <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{template.description}</p>
                       </div>
                       {selected ? (
-                        <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                        <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#0C4FD1] text-white dark:bg-[#6CA0FF] dark:text-background">
                           <Check className="h-2.5 w-2.5" />
                         </div>
                       ) : null}
@@ -943,15 +1024,13 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                   </button>
                 );
               })}
-            </CardContent>
-          </Card>
+          </KioskSection>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Colors</CardTitle>
-              <CardDescription>Brand colors applied across the kiosk. Contrast is checked automatically.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
+          <KioskSection
+            title="Colors"
+            description="Brand colors applied across the kiosk. Contrast is checked automatically."
+            className="space-y-5"
+          >
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <ColorField label="Primary" value={draft.primary_color} onChange={(value) => updateDraft({ primary_color: value })} />
                 <ColorField label="Secondary" value={draft.secondary_color || "#E5E7EB"} onChange={(value) => updateDraft({ secondary_color: value })} />
@@ -962,26 +1041,23 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <div className={cn("flex items-center justify-between rounded-md border px-3 py-2 text-sm", contrastTone(textContrast))}>
+                <div className={cn("flex items-center justify-between rounded-2xl border px-4 py-3 text-sm", contrastTone(textContrast))}>
                   <span className="font-medium">Body contrast</span>
                   <span className="font-mono tabular-nums">{formatRatio(textContrast)}</span>
                 </div>
-                <div className={cn("flex items-center justify-between rounded-md border px-3 py-2 text-sm", contrastTone(headerContrast))}>
+                <div className={cn("flex items-center justify-between rounded-2xl border px-4 py-3 text-sm", contrastTone(headerContrast))}>
                   <span className="font-medium">Header contrast</span>
                   <span className="font-mono tabular-nums">{formatRatio(headerContrast)}</span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+          </KioskSection>
         </TabsContent>
 
-        <TabsContent value="assets" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Logo</CardTitle>
-              <CardDescription>Shown in the kiosk header and as the idle-screen fallback.</CardDescription>
-            </CardHeader>
-            <CardContent>
+        <TabsContent value="assets" className="mt-0 space-y-6">
+          <KioskSection
+            title="Logo"
+            description="Shown in the kiosk header and as the idle-screen fallback."
+          >
               <AssetUpload
                 label="Logo"
                 helper="SVG or PNG, up to 2MB"
@@ -991,18 +1067,18 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                 onClear={() => updateDraft({ logo_url: null })}
                 onUpload={uploadLogo}
               />
-            </CardContent>
-          </Card>
+          </KioskSection>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Idle screen</CardTitle>
-              <CardDescription>
+          <KioskSection
+            title="Idle screen"
+            description={
+              <>
                 Shown when no one is ordering. Vertical and horizontal kiosks need separate images for their screen
                 shape — video, when set, replaces the image carousel.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+              </>
+            }
+            className="space-y-6"
+          >
               <div className="grid gap-6 lg:grid-cols-2">
                 <KioskGallerySlot
                   title="Images — Vertical"
@@ -1060,33 +1136,20 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                   />
                 </div>
               */}
-            </CardContent>
-          </Card>
+          </KioskSection>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>In-order banner</CardTitle>
-              <CardDescription>
+          <KioskSection
+            title="In-order banner"
+            description={
+              <>
                 Shown inside the menu while browsing (Templates B and C) — a separate slot from the idle screen, framed
                 and cropped for its own placement. Image only, no video.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-6 lg:grid-cols-2">
+              </>
+            }
+            className="grid gap-6 lg:grid-cols-2"
+          >
               <KioskGallerySlot
                 title="Images — Vertical"
-                helper="Wide banner above the menu grid"
-                aspectRatio={21 / 9}
-                aspectLabel="21:9"
-                images={draft.order_banner_images_vertical}
-                disabled={isPending}
-                uploading={uploadingAsset === "order_banner_image_vertical"}
-                onAdd={(file) => uploadGalleryImage(file, "order_banner_image_vertical", "order_banner_images_vertical")}
-                onRemove={(url) =>
-                  updateDraft({ order_banner_images_vertical: draft.order_banner_images_vertical.filter((item) => item !== url) })
-                }
-              />
-              <KioskGallerySlot
-                title="Images — Horizontal"
                 helper="Tall sidebar next to the menu grid"
                 aspectRatio={3 / 4}
                 aspectLabel="3:4"
@@ -1098,21 +1161,33 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                   updateDraft({ order_banner_images_horizontal: draft.order_banner_images_horizontal.filter((item) => item !== url) })
                 }
               />
-            </CardContent>
-          </Card>
+              <KioskGallerySlot
+                title="Images — Horizontal"
+                helper="Wide banner above the menu grid"
+                aspectRatio={21 / 9}
+                aspectLabel="21:9"
+                images={draft.order_banner_images_vertical}
+                disabled={isPending}
+                uploading={uploadingAsset === "order_banner_image_vertical"}
+                onAdd={(file) => uploadGalleryImage(file, "order_banner_image_vertical", "order_banner_images_vertical")}
+                onRemove={(url) =>
+                  updateDraft({ order_banner_images_vertical: draft.order_banner_images_vertical.filter((item) => item !== url) })
+                }
+              />
+          </KioskSection>
         </TabsContent>
 
-        <TabsContent value="behavior" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Ordering flow</CardTitle>
-              <CardDescription>Welcome message, pickup numbers, and timing.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
+        <TabsContent value="behavior" className="mt-0 space-y-6">
+          <KioskSection
+            title="Ordering flow"
+            description="Welcome message, pickup numbers, and timing."
+            className="space-y-5"
+          >
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5 sm:col-span-2">
                   <Label className="text-xs text-muted-foreground">Welcome message</Label>
                   <Textarea
+                    className="border-0 bg-muted/60 shadow-none focus-visible:ring-1"
                     value={draft.welcome_message || ""}
                     onChange={(event) => updateDraft({ welcome_message: event.target.value })}
                     rows={2}
@@ -1144,50 +1219,74 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                   />
                 </div>
               </div>
-            </CardContent>
-          </Card>
+          </KioskSection>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Checkout</CardTitle>
-              <CardDescription>Tipping, receipts, and menu metadata shown to customers.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="space-y-1.5">
+          <KioskSection
+            title="Checkout"
+            description="Tipping, receipts, and menu metadata shown to customers."
+            className="space-y-5"
+          >
+              <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Tip presets (%)</Label>
-                <Input
-                  value={draft.tip_presets.join(", ")}
-                  onChange={(event) =>
-                    updateDraft({
-                      tip_presets: event.target.value
-                        .split(",")
-                        .map((item) => Number.parseInt(item.trim(), 10))
-                        .filter((item) => Number.isFinite(item)),
-                    })
-                  }
-                />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {draft.tip_presets.map((preset, index) => (
+                    <div key={index} className="relative">
+                      <Input
+                        className="border-0 bg-muted/60 pr-20 shadow-none focus-visible:ring-1"
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={preset}
+                        onChange={(event) => {
+                          const next = [...draft.tip_presets];
+                          next[index] = Number(event.target.value);
+                          updateDraft({ tip_presets: next });
+                        }}
+                        aria-label={`Tip preset ${index + 1}`}
+                      />
+                      <span className="pointer-events-none absolute right-11 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        %
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:bg-background/70 hover:text-destructive"
+                        onClick={() =>
+                          updateDraft({ tip_presets: draft.tip_presets.filter((_, i) => i !== index) })
+                        }
+                        aria-label={`Remove tip preset ${index + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 w-full border-dashed bg-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                    onClick={() => updateDraft({ tip_presets: [...draft.tip_presets, 0] })}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add preset
+                  </Button>
+                </div>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <ToggleRow label="Tip screen" checked={draft.tip_screen_enabled} onCheckedChange={(value) => updateDraft({ tip_screen_enabled: value })} />
                 <ToggleRow label="Loyalty enrollment" checked={draft.loyalty_enrollment_enabled} onCheckedChange={(value) => updateDraft({ loyalty_enrollment_enabled: value })} />
                 <ToggleRow label="Auto-print receipt" checked={draft.auto_print_receipt} onCheckedChange={(value) => updateDraft({ auto_print_receipt: value })} />
-                <ToggleRow label="Email receipt prompt" checked={draft.receipt_email_prompt} onCheckedChange={(value) => updateDraft({ receipt_email_prompt: value })} />
-                <ToggleRow label="SMS receipt prompt" checked={draft.receipt_sms_prompt} onCheckedChange={(value) => updateDraft({ receipt_sms_prompt: value })} />
-                <ToggleRow label="Show calories" checked={draft.show_calorie_info} onCheckedChange={(value) => updateDraft({ show_calorie_info: value })} />
-                <ToggleRow label="Show allergens" checked={draft.show_allergens} onCheckedChange={(value) => updateDraft({ show_allergens: value })} />
               </div>
-            </CardContent>
-          </Card>
+          </KioskSection>
         </TabsContent>
 
-        <TabsContent value="stations" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment terminal</CardTitle>
-              <CardDescription>Terminal this profile charges through.</CardDescription>
-            </CardHeader>
-            <CardContent>
+        <TabsContent value="stations" className="mt-0 space-y-6">
+          <KioskSection
+            title="Payment terminal"
+            description="Terminal this profile charges through."
+          >
               <Select
                 value={draft.payment_terminal_id || NONE_VALUE}
                 onValueChange={(value) => updateDraft({ payment_terminal_id: value === NONE_VALUE ? null : value })}
@@ -1204,17 +1303,14 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                   ))}
                 </SelectContent>
               </Select>
-            </CardContent>
-          </Card>
+          </KioskSection>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Stations</CardTitle>
-              <CardDescription>Physical kiosks at this location and which profile they run.</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <KioskSection
+            title="Stations"
+            description="Physical kiosks at this location and which profile they run."
+          >
               {data.stations.length === 0 ? (
-                <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+                <div className="rounded-2xl border-0 bg-muted/60 p-8 text-center text-sm text-muted-foreground">
                   No kiosk stations are registered for this location yet.
                 </div>
               ) : (
@@ -1222,7 +1318,7 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                   {data.stations.map((station) => (
                     <div
                       key={station.id}
-                      className="flex flex-col gap-3 rounded-md border px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
+                      className="flex flex-col gap-3 rounded-2xl border-0 bg-muted/60 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -1249,17 +1345,14 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+          </KioskSection>
         </TabsContent>
 
-        <TabsContent value="security" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Clone profile</CardTitle>
-              <CardDescription>Duplicate this profile's design and settings under a new name.</CardDescription>
-            </CardHeader>
-            <CardContent>
+        <TabsContent value="security" className="mt-0 space-y-6">
+          <KioskSection
+            title="Clone profile"
+            description="Duplicate this profile's design and settings under a new name."
+          >
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input
                   value={cloneName}
@@ -1272,16 +1365,17 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                   Clone
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+          </KioskSection>
         </TabsContent>
       </Tabs>
 
-      <div className="space-y-4 border-t pt-6">
+      <div className="hidden space-y-4 md:block">
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Preview</h2>
+          <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+            Preview
+          </h2>
           <p className="text-sm text-muted-foreground">
-            A live preview of what customers see on the kiosk, built from this profile's real menu and settings.
+            A live preview of what customers see on the kiosk, built from this profile&apos;s real menu and settings.
           </p>
         </div>
         <KioskPreview profile={draft} />
@@ -1319,7 +1413,7 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
               pick up the published settings within 3 minutes.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="rounded-md border px-3.5 py-3 text-sm">
+          <div className="rounded-2xl border-0 bg-muted/60 px-4 py-3.5 text-sm">
             <p className="font-medium">{draft.profile_name}</p>
             {!draft.logo_url ? (
               <p className="mt-1.5 text-amber-700 dark:text-amber-400">No logo is uploaded; the kiosk will show the placeholder brand mark.</p>
@@ -1331,6 +1425,6 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

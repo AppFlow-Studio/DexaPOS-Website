@@ -66,6 +66,17 @@ describe("effectiveScopeForRole", () => {
   });
 
   describe("manager", () => {
+    it("keeps a location-item override anchored to its branch", () => {
+      const scope: ScopeContext = {
+        level: 3,
+        scopeType: "location-item",
+        locationName: "Downtown",
+      };
+
+      expect(effectiveScopeForRole(scope, manager, "Downtown")).toEqual(scope);
+      expect(canEditAtScope(scope, manager)).toBe(true);
+    });
+
     it("L1 → L2 when a location anchor is provided", () => {
       expect(effectiveScopeForRole(ctxAt(1), manager, "Downtown")).toEqual({
         level: 2,

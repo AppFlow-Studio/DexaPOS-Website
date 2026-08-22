@@ -439,7 +439,7 @@ export function OrderTypeSection({
                 <SelectTrigger style={{ borderColor: "var(--border)" }}>
                   <SelectValue placeholder="Select time" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent position="popper" side="bottom" sideOffset={4} className="max-h-[280px]">
                   {(() => {
                     const slots = getTimeSlots(scheduledDate, operatingHours, prepTime);
                     if (slots.length === 0) {

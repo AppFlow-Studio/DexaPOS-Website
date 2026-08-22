@@ -11,7 +11,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Target } from "lucide-react";
 import {
@@ -35,12 +35,12 @@ export function PerformanceRadarChart({
 
   if (isLoading) {
     return (
-      <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
+      <Card>
         <CardHeader className="pb-2">
           <Skeleton className="h-6 w-48" />
         </CardHeader>
         <CardContent>
-          <Skeleton className="h-[300px] w-full rounded-xl" />
+          <Skeleton className="h-[300px] w-full rounded-2xl" />
         </CardContent>
       </Card>
     );
@@ -48,7 +48,7 @@ export function PerformanceRadarChart({
 
   if (data.length === 0 || chartData.length === 0) {
     return (
-      <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
+      <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Target className="h-4 w-4 text-primary" />
@@ -65,7 +65,7 @@ export function PerformanceRadarChart({
   }
 
   return (
-    <Card className="border-none shadow-sm bg-card/30 backdrop-blur-md ring-1 ring-white/5">
+    <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
           <Target className="h-4 w-4 text-primary" />
@@ -76,27 +76,27 @@ export function PerformanceRadarChart({
         <ResponsiveContainer width="100%" height={300}>
           <RadarChart cx="50%" cy="50%" outerRadius="70%" data={chartData}>
             <PolarGrid
-              stroke="hsl(var(--muted-foreground) / 0.2)"
+              stroke="var(--border)"
               strokeDasharray="3 3"
             />
             <PolarAngleAxis
               dataKey="metricLabel"
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
             />
             <PolarRadiusAxis
               angle={30}
               domain={[0, 100]}
-              tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
               tickCount={5}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "hsl(var(--card))",
-                border: "1px solid hsl(var(--border))",
+                backgroundColor: "var(--card)",
+                border: "1px solid var(--border)",
                 borderRadius: "12px",
                 boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
               }}
-              labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
+              labelStyle={{ color: "var(--foreground)", fontWeight: 600 }}
               formatter={(value: number) => [`${value}%`, ""]}
             />
             <Legend
@@ -104,7 +104,7 @@ export function PerformanceRadarChart({
               iconType="circle"
               iconSize={8}
               formatter={(value) => (
-                <span style={{ color: "hsl(var(--foreground))", fontSize: 12 }}>
+                <span style={{ color: "var(--foreground)", fontSize: 12 }}>
                   {value}
                 </span>
               )}

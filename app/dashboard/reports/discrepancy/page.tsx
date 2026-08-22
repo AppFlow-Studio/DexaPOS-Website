@@ -7,7 +7,9 @@ import {
   DatePreset,
 } from "@/components/dashboard/orders/DateRangePicker";
 import { subDays, format } from "date-fns";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
+import { ReportPageHeader } from "@/components/dashboard/reports/ReportPageHeader";
+import { PageShell, Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 import {
   Table,
   TableBody,
@@ -43,6 +45,23 @@ import { useSelectedLocation } from "@/stores/location-store";
 import { exportToCsv } from "@/utils/export";
 import { Download } from "lucide-react";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+/** Time, type and amount tell the story; the descriptive columns are optional. */
+const TABLE_COLUMNS: ReportColumn[] = [
+  { id: "timestamp", label: "Time", locked: true },
+  { id: "type", label: "Type" },
+  { id: "order_number", label: "Order #", defaultHidden: true },
+  { id: "description", label: "Description", defaultHidden: true },
+  { id: "reason", label: "Reason", defaultHidden: true },
+  { id: "staff", label: "Staff", defaultHidden: true },
+  { id: "amount", label: "Amount", locked: true },
+];
 
 // A "discrepancy" combines both void and refund events into one unified timeline
 type DiscrepancyType = "void" | "refund";
@@ -65,13 +84,13 @@ type SortDir = "asc" | "desc";
 function SortIcon({ col, active, dir }: { col: SortKey; active: SortKey; dir: SortDir }) {
   if (col !== active) return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1 shrink-0" />;
   return dir === "asc"
-    ? <ArrowUp className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
-    : <ArrowDown className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />;
+    ? <ArrowUp className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />
+    : <ArrowDown className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />;
 }
 
 const TYPE_CONFIG: Record<DiscrepancyType, { label: string; color: string; bg: string; icon: typeof AlertTriangle }> = {
-  void:   { label: "Void",   color: "text-rose-600",  bg: "bg-rose-50",  icon: AlertTriangle },
-  refund: { label: "Refund", color: "text-amber-600", bg: "bg-amber-50", icon: RefreshCcw },
+  void:   { label: "Void",   color: "text-foreground", bg: "bg-muted", icon: AlertTriangle },
+  refund: { label: "Refund", color: "text-foreground", bg: "bg-muted", icon: RefreshCcw },
 };
 
 const exportColumns = [
@@ -94,6 +113,14 @@ export default function DiscrepancyReportPage() {
   const [typeFilter, setTypeFilter] = useState<"all" | DiscrepancyType>("all");
   const [sortKey, setSortKey] = useState<SortKey>("timestamp");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [hiddenCols, setHiddenCols] = useState(() =>
+    initialHiddenColumns(TABLE_COLUMNS),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
+  const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
   const selectedLocation = useSelectedLocation();
   const queryDateRange = useReportingQueryRange(dateRange);
@@ -203,32 +230,24 @@ export default function DiscrepancyReportPage() {
       value: isLoading ? null : isError ? "—" : allRows.length.toLocaleString(),
       sub: isError ? "Failed to load" : `${discrepancyRate}% of all orders`,
       icon: ShieldAlert,
-      iconColor: "text-rose-500",
-      iconBg: "bg-rose-50",
     },
     {
       label: "Void Events",
       value: isLoading ? null : isError ? "—" : totalVoids.length.toLocaleString(),
       sub: isError ? "Failed to load" : `-$${totalVoidAmt.toFixed(2)} impact`,
       icon: AlertTriangle,
-      iconColor: "text-rose-500",
-      iconBg: "bg-rose-50",
     },
     {
       label: "Refund Events",
       value: isLoading ? null : isError ? "—" : totalRefunds.length.toLocaleString(),
       sub: isError ? "Failed to load" : `-$${totalRefundAmt.toFixed(2)} returned`,
       icon: RefreshCcw,
-      iconColor: "text-amber-500",
-      iconBg: "bg-amber-50",
     },
     {
       label: "Total Financial Impact",
       value: isLoading ? null : isError ? "—" : `-$${(totalVoidAmt + totalRefundAmt).toFixed(2)}`,
       sub: isError ? "Failed to load" : "Revenue lost to discrepancies",
       icon: DollarSign,
-      iconColor: "text-indigo-500",
-      iconBg: "bg-indigo-50",
     },
   ];
 
@@ -237,52 +256,42 @@ export default function DiscrepancyReportPage() {
   const maxReasonCount = topReasons[0]?.[1] ?? 1;
 
   return (
-    <div className="space-y-6 pb-8">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Discrepancy Report</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {selectedLocation && !Array.isArray(selectedLocation)
-              ? selectedLocation.name
-              : "All Locations"}{" "}
-            · Voids and refunds unified timeline
-          </p>
-        </div>
-        <DateRangePicker
-          dateFrom={dateRange.from}
-          dateTo={dateRange.to}
-          onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
-          preset={preset}
-          onPresetChange={setPreset}
-        />
-      </div>
+    <PageShell className="pb-8">
+      <ReportPageHeader
+        title="Discrepancy Report"
+        description="Voids and refunds unified timeline"
+        locationName={selectedLocation && !Array.isArray(selectedLocation) ? selectedLocation.name : null}
+        actions={
+          <DateRangePicker
+            dateFrom={dateRange.from}
+            dateTo={dateRange.to}
+            onDateRangeChange={(from, to) => { if (from && to) setDateRange({ from, to }); }}
+            preset={preset}
+            onPresetChange={setPreset}
+          />
+        }
+      />
 
       {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Panel padded>
+        <StatRow columns={4}>
         {kpiCards.map((kpi) => (
-          <Card key={kpi.label} className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className={cn("p-2 rounded-xl", kpi.iconBg)}>
-                  <kpi.icon className={cn("h-4 w-4", kpi.iconColor)} />
-                </div>
-              </div>
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{kpi.label}</p>
-              {kpi.value === null
-                ? <div className="h-7 w-24 bg-muted animate-pulse rounded mt-1.5" />
-                : <p className="text-2xl font-bold mt-1">{kpi.value}</p>
-              }
-              <p className="text-[11px] text-muted-foreground mt-1">{kpi.sub}</p>
-            </CardContent>
-          </Card>
+          <StatTile
+            key={kpi.label}
+            label={kpi.label}
+            value={kpi.value ?? ""}
+            meta={kpi.sub}
+            icon={<kpi.icon />}
+            isLoading={kpi.value === null}
+          />
         ))}
-      </div>
+        </StatRow>
+      </Panel>
 
       {/* Insights row */}
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Top Staff */}
-        <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
+        <Card>
           <CardHeader className="px-5 pt-5 pb-3">
             <CardTitle className="text-sm font-semibold">Top Staff by Discrepancies</CardTitle>
             <p className="text-xs text-muted-foreground">Most voids & refunds this period</p>
@@ -307,7 +316,7 @@ export default function DiscrepancyReportPage() {
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-rose-400"
+                      className="h-full rounded-full bg-foreground/35"
                       style={{ width: `${(stats.count / maxStaffCount) * 100}%` }}
                     />
                   </div>
@@ -319,7 +328,7 @@ export default function DiscrepancyReportPage() {
         </Card>
 
         {/* Top Reasons */}
-        <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl">
+        <Card>
           <CardHeader className="px-5 pt-5 pb-3">
             <CardTitle className="text-sm font-semibold">Top Void / Refund Reasons</CardTitle>
             <p className="text-xs text-muted-foreground">Most common reasons given</p>
@@ -339,7 +348,7 @@ export default function DiscrepancyReportPage() {
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-amber-400"
+                      className="h-full rounded-full bg-foreground/35"
                       style={{ width: `${(count / maxReasonCount) * 100}%` }}
                     />
                   </div>
@@ -352,21 +361,21 @@ export default function DiscrepancyReportPage() {
       </div>
 
       {/* Main Table */}
-      <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
+      <Card className="overflow-hidden">
         {/* Toolbar */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center justify-between px-5 pt-5 pb-4 border-b border-border/50">
+        <div className="flex flex-col justify-between gap-3 px-5 pb-4 pt-5 sm:flex-row sm:items-center">
           <div className="flex flex-wrap gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search description, reason, staff..."
-                className="pl-9 h-9 w-full sm:w-64 text-sm rounded-lg bg-muted/40 border-0 focus-visible:ring-1"
+                className="h-9 w-full pl-9 text-[0.8125rem] sm:w-64"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}>
-              <SelectTrigger className="h-9 w-36 text-sm rounded-lg bg-muted/40 border-0 focus:ring-1">
+              <SelectTrigger className="h-9 w-36 border-0 bg-muted/60 text-[0.8125rem] shadow-none">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -386,6 +395,11 @@ export default function DiscrepancyReportPage() {
             <span className="text-xs text-muted-foreground">
               {isLoading ? "Loading…" : `${processed.length} events`}
             </span>
+            <MobileColumnsButton
+              columns={TABLE_COLUMNS}
+              hidden={hiddenCols}
+              onChange={setHiddenCols}
+            />
             <Button
               variant="outline"
               size="sm"
@@ -398,23 +412,31 @@ export default function DiscrepancyReportPage() {
           </div>
         </div>
 
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent border-b border-border/50">
-                <TableHead className="pl-5 text-xs font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("timestamp")}>
+        <CardContent className="p-0">
+          <Table variant="data">
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("timestamp")}>
                   <div className="flex items-center">Time <SortIcon col="timestamp" active={sortKey} dir={sortDir} /></div>
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("type")}>
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("type")}>
                   <div className="flex items-center">Type <SortIcon col="type" active={sortKey} dir={sortDir} /></div>
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground">Order #</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground">Description</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground">Reason</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("staff")}>
-                  <div className="flex items-center">Staff <SortIcon col="staff" active={sortKey} dir={sortDir} /></div>
-                </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleSort("amount")}>
+                {isColVisible("order_number") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Order #</TableHead>
+                )}
+                {isColVisible("description") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Description</TableHead>
+                )}
+                {isColVisible("reason") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Reason</TableHead>
+                )}
+                {isColVisible("staff") && (
+                  <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none" onClick={() => handleSort("staff")}>
+                    <div className="flex items-center">Staff <SortIcon col="staff" active={sortKey} dir={sortDir} /></div>
+                  </TableHead>
+                )}
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5" onClick={() => handleSort("amount")}>
                   <div className="flex items-center justify-end">Amount <SortIcon col="amount" active={sortKey} dir={sortDir} /></div>
                 </TableHead>
               </TableRow>
@@ -422,15 +444,15 @@ export default function DiscrepancyReportPage() {
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
-                  <TableRow key={i} className="border-b border-border/30">
-                    {Array.from({ length: 7 }).map((_, j) => (
+                  <TableRow key={i} className="border-0">
+                    {Array.from({ length: visibleColCount }).map((_, j) => (
                       <TableCell key={j} className="py-3.5"><div className="h-4 bg-muted animate-pulse rounded" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : isError ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-40 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <AlertTriangle className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">Failed to load discrepancy data</p>
@@ -440,7 +462,7 @@ export default function DiscrepancyReportPage() {
                 </TableRow>
               ) : processed.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-40 text-center">
+                  <TableCell colSpan={visibleColCount} className="h-40 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <FileWarning className="h-8 w-8 opacity-30" />
                       <p className="text-sm font-medium">
@@ -460,7 +482,7 @@ export default function DiscrepancyReportPage() {
                   const cfg = TYPE_CONFIG[row.type];
                   const Icon = cfg.icon;
                   return (
-                    <TableRow key={row.id} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
+                    <TableRow key={row.id} className="border-0 bg-card/70 transition-colors hover:bg-muted/40">
                       <TableCell className="pl-5 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
                         {format(new Date(row.timestamp), "MMM d, h:mm a")}
                       </TableCell>
@@ -470,20 +492,28 @@ export default function DiscrepancyReportPage() {
                           {cfg.label}
                         </span>
                       </TableCell>
-                      <TableCell className="py-3.5">
-                        <Link href={`/dashboard/orders/${row.order_id}`} className="font-mono text-xs text-primary hover:underline">
-                          #{row.order_number}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="py-3.5 text-sm font-medium max-w-40 truncate" title={row.description}>
-                        {row.description}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-sm text-muted-foreground max-w-40 truncate" title={row.reason}>
-                        {row.reason}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-sm">{row.staff}</TableCell>
+                      {isColVisible("order_number") && (
+                        <TableCell className="py-3.5">
+                          <Link href={`/dashboard/orders/${row.order_id}`} className="font-mono text-xs text-primary hover:underline">
+                            #{row.order_number}
+                          </Link>
+                        </TableCell>
+                      )}
+                      {isColVisible("description") && (
+                        <TableCell className="py-3.5 text-sm font-medium max-w-40 truncate" title={row.description}>
+                          {row.description}
+                        </TableCell>
+                      )}
+                      {isColVisible("reason") && (
+                        <TableCell className="py-3.5 text-sm text-muted-foreground max-w-40 truncate" title={row.reason}>
+                          {row.reason}
+                        </TableCell>
+                      )}
+                      {isColVisible("staff") && (
+                        <TableCell className="py-3.5 text-sm">{row.staff}</TableCell>
+                      )}
                       <TableCell className="py-3.5 text-right pr-5">
-                        <span className={cn("text-sm font-bold", row.type === "void" ? "text-rose-500" : "text-amber-500")}>
+                        <span className="text-sm font-semibold text-foreground">
                           -${row.amount.toFixed(2)}
                         </span>
                       </TableCell>
@@ -495,6 +525,6 @@ export default function DiscrepancyReportPage() {
           </Table>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

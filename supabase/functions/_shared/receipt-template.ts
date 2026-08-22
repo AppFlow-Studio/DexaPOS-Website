@@ -528,25 +528,8 @@ export function renderReceiptText(
 
   const businessName = location?.name || "Receipt";
 
-  const settled = (order.order_payments ?? [])
-    .filter((p) => {
-      const s = (p.status ?? "").toLowerCase();
-      return (
-        s === "captured" ||
-        s === "paid" ||
-        s === "refunded" ||
-        s === "partially_refunded"
-      );
-    })
-    .map((p) => ({ p, net: num(p.total_amount) - num(p.refunded_amount) }))
-    .filter((x) => x.net > 0);
-
-  const collected = settled.reduce((s, x) => s + x.net, 0);
-  const total = fmtMoney(collected > 0 ? collected : order.total_amount);
-
-  const primary = settled.slice().sort((a, b) => b.net - a.net)[0]?.p;
-  const paidLine = primary ? paymentDisplay(primary, { dotChar: "****" }) : "";
-
-  const summary = paidLine ? `${total}, ${paidLine}` : total;
-  return `${businessName} — Order ${orderNumber} (${summary}). View receipt: ${receiptUrl}`;
+  // Concise confirmation — no card details, no price. Just the order, the
+  // location, and a link to the full hosted receipt (which carries the
+  // itemized breakdown). Mirrors the modern kiosk confirmation-SMS flow.
+  return `Order ${orderNumber} at ${businessName}\nReceipt: ${receiptUrl}`;
 }
