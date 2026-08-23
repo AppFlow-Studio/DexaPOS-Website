@@ -20,6 +20,24 @@ describe("section registry", () => {
     }
   });
 
+  /**
+   * The same assertion with **no context**, which is the case that actually
+   * broke: `normalizeSection` calls `def.defaults()` with no arguments, so a
+   * kind whose defaults are only valid once a location id is supplied emits a
+   * section that fails its own schema. That made `normalizePage` non-idempotent
+   * and froze the section against every edit — §C4.
+   *
+   * The context-ful version above passed throughout, which is exactly why it
+   * never caught this. Both are needed.
+   */
+  it("produces context-free defaults that satisfy its own schema", () => {
+    for (const kind of SECTION_KINDS) {
+      const def = SECTION_REGISTRY[kind];
+      const parsed = def.schema.safeParse(def.defaults());
+      expect(parsed.success, `${kind} context-free defaults failed its schema`).toBe(true);
+    }
+  });
+
   it("assigns every kind a real zone", () => {
     for (const kind of SECTION_KINDS) {
       expect(ZONE_ORDER[SECTION_REGISTRY[kind].zone]).toBeTypeOf("number");

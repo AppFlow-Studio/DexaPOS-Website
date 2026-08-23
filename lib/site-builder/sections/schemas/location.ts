@@ -28,6 +28,13 @@ export type LocationProps = z.infer<typeof locationSchema>;
 /**
  * Requires the site's own location id — there is no sensible generic default,
  * so `createSection` callers pass it in. `normalize` will not invent one.
+ *
+ * The `""` fallback is what a context-free `defaults()` gets, which is the case
+ * when `normalize` repairs a section it cannot salvage a binding from. That is
+ * *safe* rather than merely unavoidable: `bindingSchema` admits an empty id, so
+ * the repaired section still satisfies its own schema and stays editable, and
+ * the publish gate is what tells the merchant it is not linked yet. Making this
+ * value schema-invalid instead is what caused §C4.
  */
 export function locationDefaults(locationId = ""): LocationProps {
   return {

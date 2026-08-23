@@ -213,3 +213,46 @@ describe("validatePage", () => {
     expect(required).toEqual(["footer", "header", "hero"]);
   });
 });
+
+/**
+ * §U4 — a repeater row starts empty rather than holding the word "New".
+ *
+ * The two halves are inseparable and belong in one place: the schema has to
+ * *admit* the empty row (otherwise the section refuses every edit, §C4), and
+ * the publish gate has to *refuse* it (otherwise "" reaches a live page, which
+ * is the same accident "New" caused, only quieter).
+ */
+describe("an unfinished repeater row", () => {
+  function pageWithFaq(items: unknown[]): PageDocument {
+    const doc = starter();
+    const added = addSection(doc, "faq", { atIndex: 1 });
+    if (!added.ok) throw new Error("could not add the faq section");
+    const faq = added.doc.sections.find((s) => s.kind === "faq")!;
+    const updated = updateSectionProps(added.doc, faq.id, { items });
+    if (!updated.ok) throw new Error(`faq items refused: ${updated.message}`);
+    return updated.doc;
+  }
+
+  it("is storable, so the row stays editable while it is written", () => {
+    // Throws inside the helper if the schema refuses it.
+    expect(() => pageWithFaq([{ question: "", answer: "" }])).not.toThrow();
+  });
+
+  it("blocks publishing until it is filled in", () => {
+    const result = validatePage(pageWithFaq([{ question: "", answer: "" }]));
+    expect(result.ok).toBe(false);
+    expect(codes(result.errors)).toContain("incomplete_section");
+  });
+
+  it("stops blocking once the merchant writes it", () => {
+    const result = validatePage(
+      pageWithFaq([{ question: "Do you deliver?", answer: "Yes, within three miles." }]),
+    );
+    expect(codes(result.errors)).not.toContain("incomplete_section");
+  });
+
+  it("does not fire on a section whose optional fields are simply absent", () => {
+    const result = validatePage(pageWithFaq([{ question: "Parking?", answer: "Out back." }]));
+    expect(result.ok).toBe(true);
+  });
+});

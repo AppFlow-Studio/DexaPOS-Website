@@ -203,10 +203,26 @@ function useServerRender(
       setRendering(true);
       try {
         const node = await renderCanvas(snapshot, locationId);
-        if (token === latest.current) {
-          renderedDoc.current = snapshot;
-          setCanvas(node);
-        }
+        if (token !== latest.current) return;
+
+        /**
+         * `renderCanvas` *refuses* rather than throws when the session has
+         * lapsed or the site lookup fails — it returns `null`. Handing that
+         * straight to `setCanvas` read as "the page rendered, and it is empty",
+         * so the canvas fell back to its skeleton permanently and said nothing.
+         * A dropped session was indistinguishable from a bug in the merchant's
+         * own page. §I1.
+         *
+         * Routed into the `catch` below rather than handled here so there is
+         * one failure path with one message. Deliberately *before*
+         * `renderedDoc.current` advances: leaving it on the last tree that
+         * actually rendered means the next edit retries a full render instead
+         * of patching text into a canvas that was never replaced.
+         */
+        if (node === null) throw new Error("renderCanvas returned no tree");
+
+        renderedDoc.current = snapshot;
+        setCanvas(node);
       } catch (error) {
         console.error("[site-builder] canvas render failed:", error);
         toast.error("Could not update the preview.");
@@ -283,7 +299,7 @@ function useAutosave(store: ReturnType<typeof createBuilderStore>, adapter: Save
         revision,
         editGeneration,
         setSaveState,
-        replaceDoc,
+        adoptServerDoc,
         markSaved,
         setSaveError,
       } = store.getState();
@@ -303,7 +319,7 @@ function useAutosave(store: ReturnType<typeof createBuilderStore>, adapter: Save
           toast.warning("This page was changed in another window.", {
             action: {
               label: "Load theirs",
-              onClick: () => replaceDoc(outcome.serverDoc, outcome.revision),
+              onClick: () => adoptServerDoc(outcome.serverDoc, outcome.revision),
             },
           });
           return;

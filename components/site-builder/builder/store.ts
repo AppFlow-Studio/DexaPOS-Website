@@ -238,8 +238,13 @@ interface BuilderState {
   markPublished: (doc: PageDocument, publishedAt: string) => void;
   setPublishing: (publishing: boolean) => void;
 
-  /** Replaces the document wholesale — conflict resolution. */
-  replaceDoc: (doc: PageDocument, revision?: number) => void;
+  /**
+   * Adopts the stored document wholesale — conflict resolution's "Load theirs".
+   *
+   * `revision` is required rather than optional: keeping the stale one would
+   * guarantee the very next save conflicts again.
+   */
+  adoptServerDoc: (doc: PageDocument, revision: number) => void;
 
   /**
    * Records a rename the server has already accepted.
@@ -496,14 +501,31 @@ export function createBuilderStore(init: BuilderInit) {
 
       setPublishing: (publishing) => set({ publishing }),
 
-      replaceDoc: (doc, revision) =>
+      /**
+       * The adopted document *is* the stored one, so there is nothing to save.
+       *
+       * This used to set `saveState: "dirty"`, which wrote the server's own
+       * content straight back to the server and bumped the revision for
+       * nothing. Worse, it left `saveError` set — and `useSaveFailureToast`
+       * only re-arms on `"saved"`, so after one conflict a genuine later save
+       * failure went unannounced for the rest of the session. §C3.
+       *
+       * `past` still receives the merchant's version: "Load theirs" discards
+       * their work, and this is the only remaining trace of what it replaced.
+       *
+       * `editGeneration` still advances because the document genuinely changed
+       * — that is what makes `markSaved` decline to acknowledge a save that was
+       * already in flight against the document this just replaced.
+       */
+      adoptServerDoc: (doc, revision) =>
         set((state) => ({
           doc,
-          revision: revision ?? state.revision,
+          revision,
           past: [...state.past, state.doc].slice(-HISTORY_LIMIT),
           future: [],
           selectedId: null,
-          saveState: "dirty",
+          saveState: "saved",
+          saveError: null,
           editGeneration: state.editGeneration + 1,
           coalesceKey: null,
         })),

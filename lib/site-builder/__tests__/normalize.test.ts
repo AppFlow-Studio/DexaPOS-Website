@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { normalizePage, normalizePageWithReport } from "../normalize";
 import { CURRENT_SCHEMA_VERSION, createStarterPage } from "../page-document";
+import { updateSectionProps } from "../mutations";
+import { SECTION_REGISTRY } from "../sections/registry";
+import { validatePage } from "../validate";
 
 const validHeader = {
   id: "s_header",
@@ -134,5 +137,72 @@ describe("normalizePage", () => {
     expect(normalizePage({ schemaVersion: 99, sections: [] }).schemaVersion).toBe(
       CURRENT_SCHEMA_VERSION,
     );
+  });
+});
+
+/**
+ * §C4 — a section repaired without a location id must still be a *legal*
+ * section.
+ *
+ * The trigger is narrow and worth stating exactly, because a wrong reading of
+ * it sends you at the wrong fix: the whole-object parse must fail (here
+ * `showMap` is a string) **and** the `location` key must be missing or invalid.
+ * A valid `location` always survives via `pickValidFields`, so this path never
+ * destroys a good binding — it invents an unset one.
+ *
+ * What went wrong was not the empty id. It was that the empty id used to fail
+ * `bindingSchema`, so `normalize` emitted props its own schema rejected,
+ * breaking the contract in its header comment.
+ */
+describe("repairing a section that needs a location id it cannot know", () => {
+  const brokenLocationSection = {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    sections: [{ id: "s_loc", kind: "location", props: { heading: "Find us", showMap: "yes" } }],
+    seo: {},
+    settings: {},
+  };
+
+  it("repairs to a section that satisfies its own schema", () => {
+    const { doc, repairs } = normalizePageWithReport(brokenLocationSection);
+    expect(repairs.map((r) => r.kind)).toContain("invalid_props");
+
+    const section = doc.sections[0];
+    const def = SECTION_REGISTRY[section.kind];
+    expect(def.schema.safeParse(section.props).success).toBe(true);
+  });
+
+  it("still refuses to invent a location id", () => {
+    const { doc } = normalizePageWithReport(brokenLocationSection);
+    const props = doc.sections[0].props as { location: { id: string } };
+    expect(props.location.id).toBe("");
+  });
+
+  /**
+   * The repair used to re-run on every read — every `renderCanvas`, every draft
+   * load — because its own output failed the parse that triggered it.
+   */
+  it("is idempotent: a second pass finds nothing left to repair", () => {
+    const { doc: once } = normalizePageWithReport(brokenLocationSection);
+    const { doc: twice, repairs } = normalizePageWithReport(once);
+    expect(repairs).toEqual([]);
+    expect(JSON.stringify(twice)).toBe(JSON.stringify(once));
+  });
+
+  /**
+   * The symptom that actually reached merchants. `updateSectionProps` re-parses
+   * `{ ...props, ...patch }` in full, so an unrelated edit to a section holding
+   * an invalid binding was refused — the section appeared to stop responding.
+   */
+  it("leaves the section editable, so an unrelated change is not refused", () => {
+    const { doc } = normalizePageWithReport(brokenLocationSection);
+    const result = updateSectionProps(doc, "s_loc", { showMap: false });
+    expect(result.ok, result.ok ? "" : result.message).toBe(true);
+  });
+
+  /** Deliberately unchanged: an unlinked section must not reach a live site. */
+  it("still blocks publishing until a restaurant is linked", () => {
+    const { doc } = normalizePageWithReport(brokenLocationSection);
+    const { errors } = validatePage(doc);
+    expect(errors.map((e) => e.code)).toContain("unset_binding");
   });
 });

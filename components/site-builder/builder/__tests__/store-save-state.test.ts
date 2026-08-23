@@ -51,6 +51,54 @@ describe("builder save acknowledgement", () => {
   });
 });
 
+/**
+ * §C3 — "Load theirs" adopts the document the server already holds, so the
+ * editor is *in sync*, not behind. Marking it dirty wrote the server's own
+ * content back to itself and, worse, left the conflict message standing.
+ */
+describe("resolving a conflict with the server's document", () => {
+  const theirs = createDemoPage();
+
+  it("leaves nothing to save", () => {
+    const store = makeStore({ revision: 4 });
+    store.getState().updateProps("s_demo_hero", { heading: "Mine" });
+    store.getState().setSaveState("conflict");
+
+    store.getState().adoptServerDoc(theirs, 9);
+
+    expect(store.getState().saveState).toBe("saved");
+    expect(store.getState().revision).toBe(9);
+    expect(store.getState().doc).toBe(theirs);
+  });
+
+  /**
+   * `useSaveFailureToast` only re-arms its "already announced" latch on
+   * `"saved"`. A stale error here therefore silenced every later save failure
+   * for the rest of the session — a merchant typing into a document nothing
+   * was storing, told nothing.
+   */
+  it("clears the conflict message, so a later failure can still be announced", () => {
+    const store = makeStore();
+    store.getState().setSaveState("conflict");
+    store.getState().setSaveError("This page was changed in another window.");
+
+    store.getState().adoptServerDoc(theirs, 2);
+
+    expect(store.getState().saveError).toBeNull();
+  });
+
+  it("keeps the replaced version recoverable", () => {
+    const store = makeStore({ revision: 1 });
+    store.getState().updateProps("s_demo_hero", { heading: "Mine" });
+    const mine = store.getState().doc;
+
+    store.getState().adoptServerDoc(theirs, 2);
+    store.getState().undo();
+
+    expect(store.getState().doc).toBe(mine);
+  });
+});
+
 describe("deleting a section", () => {
   it("offers an undo that restores exactly what was removed", () => {
     const store = makeStore();

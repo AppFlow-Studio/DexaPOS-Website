@@ -23,9 +23,9 @@ export const reviewsSchema = z.object({
     .array(
       z.object({
         /** The review itself. Longer than a subtitle because people ramble. */
-        quote: z.string().min(1).max(600),
+        quote: z.string().max(600),
         /** How the guest is credited — "Zahara Z." rather than a full name. */
-        author: z.string().min(1).max(80),
+        author: z.string().max(80),
         /** Whole stars. Optional, because not every quote comes with one. */
         rating: z.number().int().min(1).max(5).optional(),
       }),

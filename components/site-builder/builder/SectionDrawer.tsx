@@ -42,6 +42,8 @@ import NavEditor, {
   type NavPageOption,
 } from "./NavEditor";
 import type { BuilderStore } from "./store";
+import { FieldLabel, countableMax, inputClass } from "./field-chrome";
+import { LinkControl } from "./LinkControl";
 
 /**
  * The drawer, generated from each section's Zod schema.
@@ -196,59 +198,6 @@ function DoneButton({ onClick }: { onClick: () => void }) {
       Done
     </Button>
   );
-}
-
-/**
- * A field's label row.
- *
- * The character counter sits here rather than under the input, which is where
- * Owner puts it and where it belongs: a merchant writing a headline wants to
- * know the budget *before* they run out of it, not after.
- */
-function FieldLabel({
-  control,
-  value,
-  className,
-}: {
-  control: FieldControl;
-  value?: unknown;
-  className?: string;
-}) {
-  const max = countableMax(control);
-  const length = typeof value === "string" ? value.length : 0;
-
-  return (
-    <span className={cn("mb-1.5 flex items-baseline gap-1", className)}>
-      <span className="text-xs font-medium">{control.label}</span>
-      {!control.optional && (
-        <span className="text-muted-foreground/60" title="Required">
-          *
-        </span>
-      )}
-      {max !== null && (
-        <span
-          className={cn(
-            "ml-auto text-[11px] tabular-nums",
-            length > max ? "text-destructive" : "text-muted-foreground",
-          )}
-        >
-          {length}/{max}
-        </span>
-      )}
-    </span>
-  );
-}
-
-/**
- * A counter is only honest when the limit is real.
- *
- * Rich text has no meaningful character budget — a merchant writing a paragraph
- * is not rationing characters — so it gets no counter even though its schema
- * carries a sanity cap.
- */
-function countableMax(control: FieldControl): number | null {
-  if (control.kind !== "text") return null;
-  return control.max ?? null;
 }
 
 /**
@@ -441,96 +390,8 @@ function Control({
       );
     }
 
-    case "link": {
-      const link = (value ?? {}) as { label?: string; target?: { kind?: string; value?: string } };
-      const pageOptions = pages.filter((page) => page.isPublished);
-      return (
-        <div>
-          <FieldLabel control={control} />
-          <div className="space-y-2 rounded-md border p-3">
-            <input
-              type="text"
-              placeholder="Button text"
-              aria-label={`${control.label} text`}
-              value={link.label ?? ""}
-              onChange={(e) =>
-                onChange(
-                  e.target.value
-                    ? { label: e.target.value, target: link.target ?? { kind: "order" } }
-                    : undefined,
-                )
-              }
-              className={inputClass}
-            />
-            <select
-              aria-label={`${control.label} destination`}
-              value={link.target?.kind ?? "order"}
-              onChange={(e) => {
-                const kind = e.target.value;
-                const keepsValue = kind === link.target?.kind;
-                const nextValue =
-                  kind === "page"
-                    ? keepsValue
-                      ? link.target?.value
-                      : pageOptions[0]?.path
-                    : kind === "url" || kind === "phone"
-                      ? keepsValue
-                        ? link.target?.value
-                        : ""
-                      : undefined;
-                onChange({
-                  label: link.label ?? "Order Now",
-                  target: { kind, ...(nextValue ? { value: nextValue } : {}) },
-                });
-              }}
-              className={inputClass}
-            >
-              <option value="order">Go to ordering</option>
-              <option value="menu">Go to the menu</option>
-              <option value="contact">Jump to contact</option>
-              <option value="page">Another page</option>
-              <option value="url">External link</option>
-              <option value="phone">Call us</option>
-            </select>
-            {link.target?.kind === "page" && (
-              <select
-                aria-label="Page destination"
-                value={link.target.value ?? ""}
-                onChange={(e) =>
-                  onChange({
-                    label: link.label ?? "Learn more",
-                    target: { kind: "page", value: e.target.value },
-                  })
-                }
-                className={inputClass}
-              >
-                {pageOptions.length === 0 && <option value="">No published pages</option>}
-                {pageOptions.map((page) => (
-                  <option key={page.path} value={page.path}>
-                    {page.title}
-                  </option>
-                ))}
-              </select>
-            )}
-            {(link.target?.kind === "url" || link.target?.kind === "phone") && (
-              <input
-                type="text"
-                placeholder={link.target.kind === "url" ? "https://…" : "+1 555 000 0000"}
-                aria-label={link.target.kind === "url" ? "Link URL" : "Phone number"}
-                value={link.target.value ?? ""}
-                onChange={(e) =>
-                  onChange({
-                    label: link.label ?? "Learn more",
-                    target: { kind: link.target?.kind, value: e.target.value },
-                  })
-                }
-                className={inputClass}
-              />
-            )}
-          </div>
-        </div>
-      );
-    }
+    case "link":
+      return <LinkControl control={control} value={value} pages={pages} onChange={onChange} />;
 
     case "embed":
       return (
@@ -1151,7 +1012,16 @@ function coerce(raw: string): string | number {
   return raw !== "" && !Number.isNaN(numeric) ? numeric : raw;
 }
 
-/** A new repeater row with every required sub-field present but empty. */
+/**
+ * A new repeater row with every required sub-field present but empty.
+ *
+ * Text starts **blank**, not as the literal `"New"`. That word was real content
+ * — an FAQ whose question and answer both read "New" is publishable, and reads
+ * as a mistake on a live site rather than as an empty slot. The sub-field
+ * schemas admit blank text so the row is still storable while it is being
+ * written, and `validate` refuses to publish a section that still holds one.
+ * §U4.
+ */
 function blankRow(control: FieldControl): Record<string, unknown> {
   const row: Record<string, unknown> = {};
   for (const field of control.fields ?? []) {
@@ -1160,7 +1030,7 @@ function blankRow(control: FieldControl): Record<string, unknown> {
     else if (field.kind === "number" || field.kind === "rating") row[field.name] = 0;
     else if (field.kind === "link") row[field.name] = { kind: "order" };
     else if (field.kind === "select") row[field.name] = field.options?.[0]?.value ?? "";
-    else row[field.name] = "New";
+    else row[field.name] = "";
   }
   return row;
 }
@@ -1429,5 +1299,3 @@ function PageSeoFields({ store, clerkOrgId }: { store: BuilderStore; clerkOrgId:
   );
 }
 
-const inputClass =
-  "w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";

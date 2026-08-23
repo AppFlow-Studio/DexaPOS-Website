@@ -17,7 +17,7 @@ export const featuresSchema = z.object({
     .array(
       z.object({
         icon: z.string().max(40).optional(),
-        title: z.string().min(1).max(80),
+        title: z.string().max(80),
         description: z.string().max(300).optional(),
       }),
     )

@@ -13,8 +13,12 @@ export const faqSchema = z.object({
   subheading: subtitleSchema.optional(),
   items: z
     .array(
+      // Blank text is storable on purpose: a row the merchant has just added
+      // has to be editable before it is complete, and a schema that refuses it
+      // makes the whole section refuse every other edit too. `validate` is what
+      // stops an unfinished row reaching a live page. §U4.
       z.object({
-        question: z.string().min(1).max(300),
+        question: z.string().max(300),
         answer: richTextSchema,
       }),
     )

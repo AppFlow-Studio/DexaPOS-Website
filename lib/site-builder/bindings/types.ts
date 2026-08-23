@@ -56,11 +56,28 @@ const bindingOverridesSchema = z
   })
   .optional();
 
-/** Builds a schema for a binding locked to one binding type. */
+/**
+ * Builds a schema for a binding locked to one binding type.
+ *
+ * **An empty `id` is deliberately legal here.** "Not linked to anything yet" is
+ * a normal state of a *draft* — a section added before its subject is chosen,
+ * or one `normalize` repaired from a document that never carried a valid id.
+ * It is not a legal state of a *published* page, and `validate.ts` is what
+ * refuses it there: `unset_binding` is a blocking error, raised for every
+ * binding type at any depth. Nothing publishable is lost by relaxing this.
+ *
+ * Enforcing non-empty *here* looked stricter and was actively harmful, because
+ * `updateSectionProps` re-parses the whole props object on every patch. A
+ * section holding `id: ""` therefore refused every unrelated edit — the
+ * heading, a toggle, the map style — and the merchant met a section that had
+ * silently stopped responding. It also made `normalizePage` non-idempotent: its
+ * own repaired output failed its own schema, so the repair re-ran on every
+ * read. See BUGS-2026-08-14-BUILDER-AUDIT.md §C4.
+ */
 export function bindingSchema<T extends BindingType>(type: T) {
   return z.object({
     type: z.literal(type),
-    id: z.string().min(1).max(64),
+    id: z.string().max(64),
     overrides: bindingOverridesSchema,
   });
 }

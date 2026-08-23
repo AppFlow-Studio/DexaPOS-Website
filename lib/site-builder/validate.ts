@@ -160,6 +160,24 @@ export function validatePage(
         });
       }
 
+      /**
+       * A repeater row that was added and never filled in.
+       *
+       * The sub-field schemas admit blank text so the row stays editable while
+       * the merchant is writing it — see §U4. That makes this the only thing
+       * standing between an empty FAQ answer and a live page, so it is an
+       * error rather than a warning.
+       *
+       * Empty string reliably means "added, not yet written": the text controls
+       * commit `undefined` for a cleared *optional* field, never `""`.
+       */
+      if (hasBlankRepeaterEntry(props)) {
+        err("incomplete_section", `${def.label} has an item that is still empty.`, {
+          sectionId: section.id,
+          kind: section.kind,
+        });
+      }
+
       for (const target of collectLinkTargets(props)) {
         if (
           (target.kind === "page" || target.kind === "url" || target.kind === "phone") &&
@@ -309,6 +327,28 @@ function collectSectionBindingIds(
   };
   visit(props);
   return out;
+}
+
+/**
+ * True when any row of any repeater on this section carries an empty string.
+ *
+ * Only *array* members are examined. A blank at the top level of a section is a
+ * different situation — an optional heading someone cleared — and has its own
+ * rules; this is specifically about the row `blankRow` seeds.
+ */
+function hasBlankRepeaterEntry(props: unknown): boolean {
+  if (typeof props !== "object" || props === null) return false;
+
+  for (const value of Object.values(props as Record<string, unknown>)) {
+    if (!Array.isArray(value)) continue;
+    for (const row of value) {
+      if (typeof row !== "object" || row === null) continue;
+      for (const field of Object.values(row as Record<string, unknown>)) {
+        if (typeof field === "string" && field.trim() === "") return true;
+      }
+    }
+  }
+  return false;
 }
 
 /** Walks props for `AssetRef` shapes, at any depth. */
