@@ -62,6 +62,81 @@ export function mix(from: string, to: string, amount: number): string {
   });
 }
 
+export interface Hsl {
+  /** Degrees, 0–360. */
+  h: number;
+  /** 0–1. */
+  s: number;
+  /** 0–1. */
+  l: number;
+}
+
+/**
+ * Hue/saturation/lightness, for controls a human can actually steer.
+ *
+ * Nothing is *stored* as HSL — the theme is hex throughout, and it stays that
+ * way. This exists because "make it a bit lighter" and "try the same colour but
+ * greener" are single-axis moves in HSL and three-axis moves in RGB, so a
+ * picker built on hex arithmetic ends up asking a restaurant owner to reason
+ * about red, green and blue channels separately. Round-tripping through hex is
+ * lossy at the last digit, which is why the picker keeps the hex string as the
+ * source of truth and derives HSL fresh each render rather than holding it in
+ * state.
+ */
+export function rgbToHsl({ r, g, b }: Rgb): Hsl {
+  const red = r / 255;
+  const green = g / 255;
+  const blue = b / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+  const l = (max + min) / 2;
+
+  if (delta === 0) return { h: 0, s: 0, l };
+
+  const s = delta / (1 - Math.abs(2 * l - 1));
+  let h: number;
+  if (max === red) h = ((green - blue) / delta) % 6;
+  else if (max === green) h = (blue - red) / delta + 2;
+  else h = (red - green) / delta + 4;
+
+  h *= 60;
+  return { h: h < 0 ? h + 360 : h, s, l };
+}
+
+export function hslToRgb({ h, s, l }: Hsl): Rgb {
+  const hue = ((h % 360) + 360) % 360;
+  const saturation = Math.min(1, Math.max(0, s));
+  const lightness = Math.min(1, Math.max(0, l));
+
+  const c = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = lightness - c / 2;
+
+  const [r, g, b] =
+    hue < 60
+      ? [c, x, 0]
+      : hue < 120
+        ? [x, c, 0]
+        : hue < 180
+          ? [0, c, x]
+          : hue < 240
+            ? [0, x, c]
+            : hue < 300
+              ? [x, 0, c]
+              : [c, 0, x];
+
+  return { r: (r + m) * 255, g: (g + m) * 255, b: (b + m) * 255 };
+}
+
+export function hexToHsl(hex: string): Hsl {
+  return rgbToHsl(hexToRgb(hex));
+}
+
+export function hslToHex(hsl: Hsl): string {
+  return rgbToHex(hslToRgb(hsl));
+}
+
 /** WCAG 2.1 relative luminance, 0 (black) to 1 (white). */
 export function relativeLuminance(hex: string): number {
   const { r, g, b } = hexToRgb(hex);

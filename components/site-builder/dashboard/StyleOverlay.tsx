@@ -16,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { isHexColor } from "@/lib/site-builder/color";
 import type { MerchantSiteRow } from "@/lib/site-builder/db-types";
 import {
   catalogFontsHref,
@@ -37,6 +36,7 @@ import {
 } from "@/lib/site-builder/style-inputs";
 import { cn } from "@/lib/utils";
 import { websiteRoutes } from "../routes";
+import ColorPicker from "../shell/ColorPicker";
 import OverlayChrome, { OverlayRail, OverlayStage } from "../shell/OverlayChrome";
 import ThemePreview from "./design/ThemePreview";
 
@@ -78,16 +78,12 @@ const HEADING_FONT_GROUPS: { category: string; fonts: SiteFont[] }[] = (() => {
  */
 
 /**
- * The five inputs, plus whatever is literally in the hex field.
- *
  * The theme maths lives in `lib/site-builder/style-inputs.ts` — pure, shared
  * with the test that asserts the readability invariant, and free of React. This
- * component owns only the half-typed hex value, which is a text-input concern
- * and nothing else's business.
+ * component holds nothing but the five inputs: the half-typed hex that used to
+ * live here now belongs to `ColorPicker`, which is the only thing that needs to
+ * know the difference between a colour and a colour someone is still typing.
  */
-interface StyleDraft extends StyleInputs {
-  brandDraft: string;
-}
 
 export default function StyleOverlay({
   clerkOrgId,
@@ -115,8 +111,8 @@ export default function StyleOverlay({
     [website.theme, fallbackTheme],
   );
 
-  const [saved, setSaved] = useState<StyleDraft>(() => withDraft(readStyleInputs(stored)));
-  const [draft, setDraft] = useState<StyleDraft>(saved);
+  const [saved, setSaved] = useState<StyleInputs>(() => readStyleInputs(stored));
+  const [draft, setDraft] = useState<StyleInputs>(saved);
   const [logoAsset, setLogoAsset] = useState<{ assetId: string; alt?: string } | undefined>(
     website.logo_asset_id ? { assetId: website.logo_asset_id } : undefined,
   );
@@ -124,14 +120,7 @@ export default function StyleOverlay({
   const theme = useMemo(() => composeTheme(draft), [draft]);
   const dirty = !same(draft, saved);
 
-  const patch = (next: Partial<StyleDraft>) => setDraft((current) => ({ ...current, ...next }));
-
-  const setBrand = (raw: string) => {
-    const typed = raw.toUpperCase();
-    // A half-typed value stays in the field but never reaches the theme, so the
-    // preview does not flash through black on the way to a colour.
-    patch(isHexColor(typed) ? { brand: typed, brandDraft: typed } : { brandDraft: typed });
-  };
+  const patch = (next: Partial<StyleInputs>) => setDraft((current) => ({ ...current, ...next }));
 
   const save = () => {
     startTransition(async () => {
@@ -226,34 +215,11 @@ export default function StyleOverlay({
             </Field>
 
             <Field label="Brand Color">
-              <div className="flex items-center gap-2">
-                <label
-                  className="relative flex h-9 w-10 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-md border focus-within:ring-[3px] focus-within:ring-ring/50"
-                  title="Choose your brand colour"
-                >
-                  <span className="absolute inset-1 rounded-sm" style={{ background: draft.brand }} />
-                  <input
-                    type="color"
-                    value={draft.brand}
-                    onChange={(event) => setBrand(event.target.value)}
-                    className="absolute inset-0 cursor-pointer opacity-0"
-                    aria-label="Choose your brand colour"
-                  />
-                </label>
-                <input
-                  value={draft.brandDraft}
-                  onChange={(event) => setBrand(event.target.value)}
-                  maxLength={7}
-                  spellCheck={false}
-                  autoComplete="off"
-                  aria-label="Brand colour"
-                  aria-invalid={!isHexColor(draft.brandDraft)}
-                  className={cn(
-                    "h-9 min-w-0 flex-1 rounded-md border bg-transparent px-3 font-mono text-sm uppercase outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                    !isHexColor(draft.brandDraft) && "border-destructive",
-                  )}
-                />
-              </div>
+              <ColorPicker
+                label="Brand colour"
+                value={draft.brand}
+                onChange={(brand) => patch({ brand })}
+              />
               <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
                 Buttons, links and the hero band. Everything else is calculated from it.
               </p>
@@ -406,11 +372,7 @@ function Segmented<T extends string>({
   );
 }
 
-function withDraft(inputs: StyleInputs): StyleDraft {
-  return { ...inputs, brandDraft: inputs.brand };
-}
-
-function same(a: StyleDraft, b: StyleDraft): boolean {
+function same(a: StyleInputs, b: StyleInputs): boolean {
   return (
     a.brand === b.brand &&
     a.mode === b.mode &&

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { contrastRatio } from "../color";
+import { contrastRatio, hslToHex as libHslToHex } from "../color";
+import { BRAND_SWATCHES } from "../palettes";
 import { DEFAULT_THEME, type ThemeTokens } from "../render-context";
 import {
   composeTheme,
@@ -150,3 +151,50 @@ function hslToHex(h: number, s: number, l: number): string {
   };
   return `#${f(0)}${f(8)}${f(4)}`;
 }
+
+describe("the brand colours the picker offers by name", () => {
+  // The hue sweep above proves *no* brand colour can produce an unreadable
+  // page. This is narrower and more pointed: these twenty-four are the ones a
+  // merchant reaches in a single click, so they are the ones most likely to
+  // actually ship, and a regression here would be visible on real websites.
+  for (const mode of ["light", "dark"] as StyleMode[]) {
+    it(`stays readable in ${mode} mode`, () => {
+      const failures: string[] = [];
+
+      for (const swatch of BRAND_SWATCHES) {
+        const theme = composeTheme(inputs(swatch.hex, mode));
+        for (const pair of PAIRS) {
+          const ratio = contrastRatio(
+            String(theme[pair.foreground]),
+            String(theme[pair.background]),
+          );
+          if (ratio < AA) failures.push(`${swatch.name} · ${pair.id} · ${ratio.toFixed(2)}:1`);
+        }
+      }
+
+      expect(failures).toEqual([]);
+    });
+  }
+});
+
+describe("the shared colour converter", () => {
+  it("agrees with the independent one this sweep is built on", () => {
+    // `hslToHex` below is deliberately test-local so the readability sweep does
+    // not depend on the code it is checking. That makes it a second opinion
+    // worth having: the picker uses the library version, and the two disagreeing
+    // would mean one of them is wrong.
+    const drift: string[] = [];
+    for (let hue = 0; hue < 360; hue += 7) {
+      for (const [s, l] of [
+        [0.85, 0.45],
+        [0.45, 0.72],
+        [0.2, 0.3],
+      ] as const) {
+        const mine = libHslToHex({ h: hue, s, l });
+        const reference = hslToHex(hue, s, l);
+        if (mine !== reference) drift.push(`${hue} ${s} ${l}: ${mine} vs ${reference}`);
+      }
+    }
+    expect(drift).toEqual([]);
+  });
+});

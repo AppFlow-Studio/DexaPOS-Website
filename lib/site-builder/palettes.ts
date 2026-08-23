@@ -154,3 +154,63 @@ export function matchPalette(colors: Partial<ThemeColors>): SitePalette | null {
 export function findPalette(id: string): SitePalette | undefined {
   return SITE_PALETTES.find((palette) => palette.id === id);
 }
+
+/**
+ * The brand colours offered as one-click choices in the Style screen.
+ *
+ * Separate from `SITE_PALETTES` on purpose. A palette is a whole theme — brand,
+ * page, and text together — and the five-control Style screen no longer lets a
+ * merchant choose a page or text colour at all. What it needs is a shortlist of
+ * *accent* colours, which is a different list: it can carry hues that would
+ * never make a coherent full palette, and it does not need a description,
+ * because a colour swatch describes itself.
+ *
+ * Chosen to read as restaurant branding rather than as a spectrum: every entry
+ * is a mid-to-deep tone that holds up as a button fill, and the near-greys at
+ * the end exist because "no colour at all" is a legitimate brand and the
+ * alternative was a merchant hunting for it in the fine-tune slider.
+ *
+ * Ordered warm → cool → neutral so the grid reads left to right, top to bottom.
+ * The names are shown on hover and to screen readers, so they should say what a
+ * person would call the colour, not what a designer would.
+ */
+export interface BrandSwatch {
+  name: string;
+  hex: string;
+}
+
+export const BRAND_SWATCHES: BrandSwatch[] = [
+  { name: "Crimson", hex: "#B42318" },
+  { name: "Vermilion", hex: "#DC2626" },
+  { name: "Ember", hex: "#EA580C" },
+  { name: "Terracotta", hex: "#C2410C" },
+  { name: "Espresso", hex: "#7C4A21" },
+  { name: "Amber", hex: "#D97706" },
+
+  { name: "Marigold", hex: "#F59E0B" },
+  { name: "Ochre", hex: "#A16207" },
+  { name: "Gold", hex: "#C9A227" },
+  { name: "Olive", hex: "#4D7C0F" },
+  { name: "Fern", hex: "#16A34A" },
+  { name: "Emerald", hex: "#059669" },
+
+  { name: "Jade", hex: "#0F766E" },
+  { name: "Lagoon", hex: "#0891B2" },
+  { name: "Ocean", hex: "#0369A1" },
+  { name: "Azure", hex: "#0C4FD1" },
+  { name: "Indigo", hex: "#4338CA" },
+  { name: "Violet", hex: "#7C3AED" },
+
+  { name: "Orchid", hex: "#9333EA" },
+  { name: "Fuchsia", hex: "#A21CAF" },
+  { name: "Plum", hex: "#9D174D" },
+  { name: "Rose", hex: "#E11D48" },
+  { name: "Graphite", hex: "#1F2937" },
+  { name: "Ink", hex: "#0B1120" },
+];
+
+/** The catalogue name for a colour, if it is one of ours. Case-insensitive. */
+export function brandSwatchName(hex: string): string | undefined {
+  const target = hex.trim().toUpperCase();
+  return BRAND_SWATCHES.find((swatch) => swatch.hex === target)?.name;
+}

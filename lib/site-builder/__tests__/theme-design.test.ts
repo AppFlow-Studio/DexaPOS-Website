@@ -5,8 +5,11 @@ import {
   deriveThemeColors,
   gradeContrast,
   isLight,
+  hexToHsl,
+  hslToHex,
   mix,
   normalizeHex,
+  rgbToHex,
   THEME_COLOR_KEYS,
 } from "@/lib/site-builder/color";
 import {
@@ -16,7 +19,13 @@ import {
   googleFontsHref,
   stackFor,
 } from "@/lib/site-builder/fonts";
-import { SITE_PALETTES, matchPalette, paletteColors } from "@/lib/site-builder/palettes";
+import {
+  BRAND_SWATCHES,
+  SITE_PALETTES,
+  brandSwatchName,
+  matchPalette,
+  paletteColors,
+} from "@/lib/site-builder/palettes";
 import { DEFAULT_THEME, resolveTheme, themeToCssVars } from "@/lib/site-builder/render-context";
 
 describe("contrast maths", () => {
@@ -223,5 +232,85 @@ describe("theme resolution", () => {
   it("emits a heading-font custom property", () => {
     const vars = themeToCssVars(resolveTheme({ headingFont: "Anton, sans-serif" }));
     expect(vars["--site-heading-font"]).toBe("Anton, sans-serif");
+  });
+});
+
+describe("hue, saturation and lightness", () => {
+  it("agrees with the reference values for the primaries", () => {
+    expect(hexToHsl("#FF0000")).toMatchObject({ h: 0 });
+    expect(hexToHsl("#FF0000").s).toBeCloseTo(1, 5);
+    expect(hexToHsl("#FF0000").l).toBeCloseTo(0.5, 5);
+
+    expect(hexToHsl("#00FF00").h).toBeCloseTo(120, 5);
+    expect(hexToHsl("#0000FF").h).toBeCloseTo(240, 5);
+  });
+
+  it("reports greys as having no hue and no saturation", () => {
+    for (const grey of ["#000000", "#808080", "#FFFFFF"]) {
+      expect(hexToHsl(grey).s, grey).toBeCloseTo(0, 5);
+      expect(hexToHsl(grey).h, grey).toBe(0);
+    }
+    expect(hexToHsl("#FFFFFF").l).toBeCloseTo(1, 5);
+    expect(hexToHsl("#000000").l).toBeCloseTo(0, 5);
+  });
+
+  it("round-trips every colour the picker can produce", () => {
+    // The picker derives HSL from the stored hex on every render rather than
+    // holding it in state, so a lossy round-trip would show up as a swatch that
+    // will not stay selected.
+    const drift: string[] = [];
+    for (const swatch of BRAND_SWATCHES) {
+      if (hslToHex(hexToHsl(swatch.hex)) !== swatch.hex) drift.push(swatch.name);
+    }
+    expect(drift).toEqual([]);
+  });
+
+  it("round-trips a broad sweep of colours, not just the shortlist", () => {
+    const drift: string[] = [];
+    for (let r = 0; r < 256; r += 17) {
+      for (let g = 0; g < 256; g += 51) {
+        for (let b = 0; b < 256; b += 85) {
+          const hex = rgbToHex({ r, g, b });
+          if (hslToHex(hexToHsl(hex)) !== hex) drift.push(hex);
+        }
+      }
+    }
+    expect(drift).toEqual([]);
+  });
+
+  it("wraps hue and clamps saturation and lightness", () => {
+    // The hue slider is a wheel with a seam in it, and the shade ramp is
+    // arithmetic on a value a caller could push past either end.
+    expect(hslToHex({ h: 360, s: 0.8, l: 0.5 })).toBe(hslToHex({ h: 0, s: 0.8, l: 0.5 }));
+    expect(hslToHex({ h: -30, s: 0.8, l: 0.5 })).toBe(hslToHex({ h: 330, s: 0.8, l: 0.5 }));
+    expect(hslToHex({ h: 200, s: 5, l: 2 })).toBe("#FFFFFF");
+    expect(hslToHex({ h: 200, s: 0.5, l: -1 })).toBe("#000000");
+  });
+});
+
+describe("the brand colour shortlist", () => {
+  it("stores every swatch as a normalised uppercase hex", () => {
+    for (const swatch of BRAND_SWATCHES) {
+      expect(normalizeHex(swatch.hex), swatch.name).toBe(swatch.hex);
+    }
+  });
+
+  it("offers no colour and no name twice", () => {
+    // A duplicate hex would render two swatches that both light up when either
+    // is clicked, and `brandSwatchName` would silently pick the first.
+    expect(new Set(BRAND_SWATCHES.map((s) => s.hex)).size).toBe(BRAND_SWATCHES.length);
+    expect(new Set(BRAND_SWATCHES.map((s) => s.name)).size).toBe(BRAND_SWATCHES.length);
+  });
+
+  it("fills the six-wide grid the picker lays out", () => {
+    expect(BRAND_SWATCHES.length % 6).toBe(0);
+  });
+
+  it("names a colour it knows and stays quiet about one it does not", () => {
+    expect(brandSwatchName("#0C4FD1")).toBe("Azure");
+    // The stored theme is uppercase, but a merchant pasting a hex is not.
+    expect(brandSwatchName("#0c4fd1")).toBe("Azure");
+    expect(brandSwatchName("  #0C4FD1  ")).toBe("Azure");
+    expect(brandSwatchName("#123456")).toBeUndefined();
   });
 });
