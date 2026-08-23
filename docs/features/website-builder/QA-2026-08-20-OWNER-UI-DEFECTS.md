@@ -13,6 +13,73 @@ public site at `/sites/joes-coffee-shop`.
 
 ---
 
+## 0a. Status re-check — 2026-08-23
+
+**Method:** code read against `HEAD` (`b0054f0b`). No browser, no dev server — so anything whose symptom is
+*visual* (z-order, responsive collapse, focus order) is reported as **code unchanged** rather than
+"still broken". The distinction matters: unchanged code means the defect almost certainly survives, but
+only a browser pass can close these.
+
+The fix log in §6 covers four items (A, B, C, D). This is a sweep of **everything else**.
+
+### Result
+
+| | P1 | P2 | P3 (sampled) |
+|---|---|---|---|
+| ✅ Fixed | 3 | 3 | 3 |
+| 🔴 Open | 4 | 8 | 5 |
+| ⚪ Decided / not a defect | — | — | 1 |
+
+### Fixed since filing
+
+| # | What closed it |
+|---|---|
+| P1-1 | `navLinkStatus` / `deadNavLinks` in `lib/site-builder/nav.ts` — §6B, browser-verified 2026-08-21 |
+| P1-2 | `siteDisplayName` in `site-settings.ts:316` — §6A. **Editor only, see the caveat below** |
+| P1-3 | `NewPageOverlay.tsx:68` now raises `toast.error(created.error ?? …)`; the swallowed server error is surfaced |
+| P2-1 | `AssetPicker.tsx:126` — `needsLibrary = open \|\| value !== undefined`, so a filled field resolves its own thumbnail without opening the picker. The code comment describes this exact finding |
+| P2-8 | `FormsScreen.tsx:126` — a real `UsagePill` with colour and a `title` explaining all three states |
+| P3-9 | Every section kind now has a distinct glyph: 18 `icon:` entries, 18 unique. `LayoutGrid` is used once |
+| P3-20 | `FieldLabel` no longer appends "optional"; it marks *required* with `*` instead — the inverse, and cleaner |
+| P3-36 | The full typeface catalogue is on the Style screen (41 stacks), not three options |
+
+🔴 **P1-2 is only half-closed.** Migration `20260824120000_website_brand_name.sql` is written but **still not
+applied** — confirmed against `supabase/migrations/`. The editor reads `merchants` directly and is correct;
+the public page cannot, so a visitor still sees the storefront name. This is the single highest-value
+outstanding item in either document, because it is the only one that reaches real visitors.
+
+### Still open
+
+| # | Verified at | Note |
+|---|---|---|
+| P1-4 | `StyleOverlay.tsx:149` | `closeHref` is a plain link. `dirty` is computed at :121 but only ever disables Save — closing still discards silently |
+| P1-5 | `Canvas.tsx:174` | Still `px-4 py-6 sm:px-16`. No mobile affordance for the gutter controls |
+| P1-6 | `PagesScreen.tsx:179` | `gridTemplate="minmax(0,1fr) 110px 130px"`, applied unconditionally by `DataCard.tsx:92`. Nothing collapses at narrow widths |
+| P1-7 | `EditorTopBar.tsx:185` | Still `absolute right-0 top-full z-10`, still no mode gate, still no dismiss control |
+| P2-2 | — | Hero's Image and Carousel still both render with nothing explaining which wins |
+| P2-3 | `OverlayChrome.tsx` | Zero occurrences of `inert`, `aria-hidden`, `role="dialog"` or a focus trap |
+| P2-4 | — | Follows from P2-3; no hotkey suppression found in `BuilderShell` or `OverlayChrome` |
+| P2-5 | `validate.ts:258` | Message is still singular and unqualified; it names no section |
+| P2-6 | `FormPicker.tsx:79` | Still a bare `" (not published)"` suffix — not a warning, not blocked |
+| P2-7 | `validate.ts` | No `popular-items` or `faq` case; only Form blocks. The rule is still inconsistent |
+| P2-9 | `ThemePreview.tsx:83` | Still "Food worth coming back for" / "Signature plate". §6D fixed the preview's *colours*, not its invented *content* |
+| P2-10 | — | Colours corrected by §6D; the missing frame that separates site from app is untouched |
+| P3-11 | `AddSectionModal.tsx:81` | `useState(firstAvailable)` still preselects |
+| P3-12 | `AddSectionModal.tsx:167` | **Partial** — `aria-checked` is set, but there is no `role="radiogroup"`, so it sits on a plain button and is invalid ARIA as it stands |
+| P3-13 | `AddSectionModal.tsx:168` | Still `Add a ${def.label} section` — "Add a Events section" |
+| P3-15 | `FormPicker.tsx:70` | Still a raw native `<select>` |
+| P3-18 | `schema-introspect.ts:94` | `heading` is absent from `MULTILINE_FIELDS`, so the 150-char hero heading is still a single-line input |
+
+### Not verified
+
+**P2-11** (Form editor preview ignores the site's style) — I could not locate the component that renders that
+preview, so its status is unknown rather than open.
+
+**P3 items 1, 3–8, 10, 14, 16–17, 19, 21–35, 37–38** were not individually checked. This sweep sampled the
+P3 list rather than exhausting it; the eight above are the ones confirmed either way.
+
+---
+
 ## 0. Summary
 
 | Severity | Count | What they are |
