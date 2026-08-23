@@ -1,7 +1,7 @@
 "use client";
 
-import { Plus, Trash2, Zap } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Plus, Star, Trash2, Zap } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DeletePage, RenamePage } from "@/app/dashboard/website/actions/pages";
 import {
@@ -21,12 +21,18 @@ import type { NavItem } from "@/lib/site-builder/nav";
 import { checkPagePath } from "@/lib/site-builder/reserved-paths";
 import { describeSchema, type FieldControl } from "@/lib/site-builder/schema-introspect";
 import { SECTION_REGISTRY, sectionTitle } from "@/lib/site-builder/sections/registry";
+import {
+  PROVIDER_SPECS,
+  resolveIntegrationEmbed,
+  type IntegrationProvider,
+} from "@/lib/site-builder/sections/schemas/integrations";
 import { parseVideoRef } from "@/lib/site-builder/sections/schemas/video";
 import type { Section } from "@/lib/site-builder/sections/types";
 import { cn } from "@/lib/utils";
 import { websiteRoutes } from "../routes";
 import { OverlayRail } from "../shell/OverlayChrome";
 import AssetPicker, { AssetListPicker } from "./AssetPicker";
+import EventPicker from "./EventPicker";
 import FormPicker from "./FormPicker";
 import MenuItemPicker from "./MenuItemPicker";
 import NavEditor, {
@@ -124,9 +130,13 @@ function SectionSettings({
   // Recomputed as the merchant chooses, so switching Background to Photo makes
   // the picker appear in the same interaction rather than the next one.
   const controls = useMemo(() => {
-    const all = describeSchema(def.schema);
+    const overrides = def.fieldOverrides?.(props) ?? {};
     const hidden = new Set(def.hiddenFields?.(props) ?? []);
-    return hidden.size === 0 ? all : all.filter((control) => !hidden.has(control.name));
+    return describeSchema(def.schema)
+      .filter((control) => !hidden.has(control.name))
+      .map((control) =>
+        overrides[control.name] ? { ...control, ...overrides[control.name] } : control,
+      );
   }, [def, props]);
 
   const isHeader = section.kind === "header";
@@ -167,7 +177,9 @@ function SectionSettings({
             pages={site.pages}
             sectionProps={props}
             onPatch={(patch) => updateProps(section.id, patch)}
-            onChange={(value) => updateProps(section.id, { [control.name]: value })}
+            onChange={(value, opts) =>
+              updateProps(section.id, { [control.name]: value }, opts)
+            }
           />
         ))}
         {controls.length === 0 && (
@@ -239,6 +251,27 @@ function countableMax(control: FieldControl): number | null {
   return control.max ?? null;
 }
 
+/**
+ * How long a field waits after the last keystroke before committing.
+ *
+ * Long enough that an ordinary run of typing produces one commit rather than
+ * one per character; short enough that the canvas still updates while the
+ * merchant is looking at it, on the natural pauses between words and phrases.
+ */
+const COMMIT_DELAY_MS = 250;
+
+/**
+ * How a control describes the edit it is making, rather than just its value.
+ *
+ * Only `TextControl` sets `coalesce`, and only the store reads it. It is what
+ * lets a run of typing be one undo step while a run of clicks through a
+ * segmented control stays one step per click — both of which arrive here as a
+ * sequence of single-key patches and are otherwise indistinguishable.
+ */
+export interface CommitOptions {
+  coalesce?: boolean;
+}
+
 function Control({
   control,
   value,
@@ -258,7 +291,7 @@ function Control({
   pages: NavPageOption[];
   sectionProps?: Record<string, unknown>;
   onPatch?: (patch: Record<string, unknown>) => void;
-  onChange: (value: unknown) => void;
+  onChange: (value: unknown, opts?: CommitOptions) => void;
 }) {
   switch (control.kind) {
     case "text":
@@ -297,8 +330,61 @@ function Control({
         </label>
       );
 
+    case "rating": {
+      const current = typeof value === "number" ? value : 0;
+      const minimum = control.min ?? 1;
+      const maximum = control.max ?? 5;
+
+      return (
+        <fieldset>
+          <legend className="mb-1.5 text-xs font-medium">{control.label}</legend>
+          <div className="flex items-center gap-1" role="radiogroup" aria-label={control.label}>
+            {Array.from({ length: maximum - minimum + 1 }, (_, index) => minimum + index).map(
+              (rating) => {
+                const selected = rating <= current;
+                return (
+                  <button
+                    key={rating}
+                    type="button"
+                    role="radio"
+                    aria-checked={rating === current}
+                    aria-label={`${rating} ${rating === 1 ? "star" : "stars"}`}
+                    onClick={() => onChange(rating)}
+                    className="flex size-9 items-center justify-center rounded-md transition-transform hover:scale-110 focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    style={{ color: selected ? "var(--primary)" : "var(--muted-foreground)" }}
+                  >
+                    <Star
+                      aria-hidden
+                      className={cn("size-6", selected && "fill-current")}
+                      strokeWidth={1.8}
+                    />
+                  </button>
+                );
+              },
+            )}
+          </div>
+        </fieldset>
+      );
+    }
+
     case "select": {
       const options = control.options ?? [];
+      /*
+        A choice that invalidates a sibling has to clear it in the *same* patch.
+        `updateSectionProps` re-parses the whole props object and refuses it
+        outright when the schema fails, so two patches would mean the first one
+        is rejected and the panel simply stops responding — which is exactly
+        what switching the integrations provider used to do.
+      */
+      const choose = (raw: string) => {
+        if (String(value ?? "") === raw) return;
+        const next = coerce(raw);
+        if (!control.clears?.length || !onPatch) return onChange(next);
+        onPatch({
+          [control.name]: next,
+          ...Object.fromEntries(control.clears.map((field) => [field, ""])),
+        });
+      };
       // Two or three choices read better as a segmented control than a dropdown:
       // every option is visible, and choosing is one click rather than two. It
       // is also the shape Owner uses for every small enum.
@@ -319,7 +405,7 @@ function Control({
                     type="button"
                     role="radio"
                     aria-checked={active}
-                    onClick={() => onChange(coerce(option.value))}
+                    onClick={() => choose(option.value)}
                     className={cn(
                       "flex-1 rounded-sm px-2 py-1.5 text-[11px] font-medium capitalize transition-colors",
                       active
@@ -341,7 +427,7 @@ function Control({
           <FieldLabel control={control} />
           <select
             value={String(value ?? "")}
-            onChange={(e) => onChange(coerce(e.target.value))}
+            onChange={(e) => choose(e.target.value)}
             className={inputClass}
           >
             {control.optional && <option value="">—</option>}
@@ -446,6 +532,16 @@ function Control({
       );
     }
 
+    case "embed":
+      return (
+        <EmbedControl
+          control={control}
+          value={value}
+          provider={(sectionProps?.provider as IntegrationProvider) ?? "google-maps"}
+          onChange={onChange}
+        />
+      );
+
     case "video":
       return (
         <VideoLinkControl
@@ -461,6 +557,16 @@ function Control({
     case "form":
       return (
         <FormPicker
+          value={typeof value === "string" ? value : ""}
+          onChange={onChange}
+          locationId={locationId}
+          clerkOrgId={clerkOrgId}
+        />
+      );
+
+    case "event":
+      return (
+        <EventPicker
           value={typeof value === "string" ? value : ""}
           onChange={onChange}
           locationId={locationId}
@@ -546,8 +652,13 @@ function Control({
                       clerkOrgId={clerkOrgId}
                       pages={pages}
                       sectionProps={row}
-                      onChange={(next) =>
-                        onChange(rows.map((r, i) => (i === index ? { ...r, [sub.name]: next } : r)))
+                      // Forwarded, so text typed into a repeater row coalesces
+                      // into one undo step exactly as a top-level field does.
+                      onChange={(next, opts) =>
+                        onChange(
+                          rows.map((r, i) => (i === index ? { ...r, [sub.name]: next } : r)),
+                          opts,
+                        )
                       }
                     />
                   ))}
@@ -658,12 +769,55 @@ function TextControl({
 }: {
   control: FieldControl;
   value: unknown;
-  onChange: (value: unknown) => void;
+  onChange: (value: unknown, opts?: CommitOptions) => void;
 }) {
   const savedValue = String(value ?? "");
   const [draft, setDraft] = useState(savedValue);
   const isLong = control.kind === "richtext" || control.multiline === true;
   const max = countableMax(control);
+
+  // Held in a ref so the debounce timer and the unmount flush always call the
+  // current handler without either being torn down on every render.
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
+
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** The value waiting to be committed, if any. `undefined` is a legal value. */
+  const pending = useRef<{ value: string | undefined } | null>(null);
+  /** What the document holds, so a discarded draft has somewhere true to go back to. */
+  const committed = useRef(savedValue);
+
+  const cancel = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    pending.current = null;
+  }, []);
+
+  const flush = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    const next = pending.current;
+    pending.current = null;
+    if (next) onChangeRef.current(next.value, { coalesce: true });
+  }, []);
+
+  /**
+   * Nothing is lost by waiting, because nothing may outlive the wait: leaving
+   * the field, closing the drawer and selecting another section all unmount or
+   * blur this control, and both paths commit first.
+   */
+  useEffect(() => flush, [flush]);
+
+  /**
+   * Adopt a value the document grew somewhere else — an undo, or a document
+   * replaced from the server — but never on top of keystrokes not yet committed.
+   */
+  useEffect(() => {
+    committed.current = savedValue;
+    if (!pending.current) setDraft(savedValue);
+  }, [savedValue]);
 
   /**
    * The cap is enforced here, on the way in.
@@ -674,11 +828,37 @@ function TextControl({
    * pasted 60 characters into a 50-character title would otherwise watch the
    * canvas stop updating with no explanation, because every keystroke after the
    * cap was being silently refused.
+   *
+   * **The keystroke stays local; only the pause reaches the document.** Every
+   * commit re-renders the canvas, and a text change that crosses the
+   * empty/non-empty boundary — the first character typed into a blank heading —
+   * cannot use the local patching fast path at all, so it costs a full server
+   * render of the page. Per keystroke that is what made typing lag and the
+   * preview rebuild under the cursor. `draft` is what the input shows, so
+   * waiting costs the typist nothing.
    */
   const update = (raw: string) => {
     const next = max !== null ? raw.slice(0, max) : raw;
     setDraft(next);
-    if (next || control.optional) onChange(next || undefined);
+    // Emptying a required field is not an edit; it is a draft on its way
+    // somewhere, and `onBlur` decides what to do with it.
+    if (!next && !control.optional) {
+      cancel();
+      return;
+    }
+
+    pending.current = { value: next || undefined };
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, COMMIT_DELAY_MS);
+  };
+
+  const onBlur = () => {
+    if (!draft && !control.optional) {
+      cancel();
+      setDraft(committed.current);
+      return;
+    }
+    flush();
   };
 
   return (
@@ -690,9 +870,7 @@ function TextControl({
           maxLength={max ?? undefined}
           value={draft}
           onChange={(e) => update(e.target.value)}
-          onBlur={() => {
-            if (!draft && !control.optional) setDraft(savedValue);
-          }}
+          onBlur={onBlur}
           className={cn(inputClass, "resize-y leading-relaxed")}
         />
       ) : (
@@ -701,13 +879,176 @@ function TextControl({
           maxLength={max ?? undefined}
           value={draft}
           onChange={(e) => update(e.target.value)}
-          onBlur={() => {
-            if (!draft && !control.optional) setDraft(savedValue);
-          }}
+          onBlur={onBlur}
           className={inputClass}
         />
       )}
     </label>
+  );
+}
+
+/**
+ * The integrations paste field.
+ *
+ * Alone among the text-ish controls, this one never commits what was typed. It
+ * commits what `resolveIntegrationEmbed` *rebuilt* from it, and only once that
+ * succeeds — which is the entire reason the field can invite a merchant to
+ * paste an `<iframe>` snippet without a byte of markup reaching the document.
+ * Owner says the same thing in one line under the box: only the verified ids
+ * are saved.
+ *
+ * Refusing to commit until it resolves is also the only workable behaviour
+ * here. `updateSectionProps` re-parses and *rejects* invalid props rather than
+ * repairing them, so committing a half-typed URL per keystroke would leave the
+ * canvas frozen with nothing on screen to explain why. A draft that does not
+ * resolve yet stays local, next to the reason it does not.
+ *
+ * The resolved ids underneath are read back out of the rebuilt URL rather than
+ * stored alongside it. There is no second copy, so there is nothing to drift.
+ */
+function EmbedControl({
+  control,
+  value,
+  provider,
+  onChange,
+}: {
+  control: FieldControl;
+  value: unknown;
+  provider: IntegrationProvider;
+  onChange: (value: unknown, opts?: CommitOptions) => void;
+}) {
+  const saved = String(value ?? "");
+  const [draft, setDraft] = useState(saved);
+
+  const focused = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pending = useRef<string | null>(null);
+  const onChangeRef = useRef(onChange);
+  const providerRef = useRef(provider);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+    providerRef.current = provider;
+  });
+
+  const commit = useCallback((raw: string) => {
+    pending.current = null;
+    const resolved = resolveIntegrationEmbed(providerRef.current, raw);
+    // Emptying the field is a real edit. Text on its way to being valid is not.
+    if (resolved) onChangeRef.current(resolved.src);
+    else if (!raw.trim()) onChangeRef.current("");
+  }, []);
+
+  const cancelTimer = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+
+  /** Nothing may outlive the debounce: closing the drawer unmounts this. */
+  useEffect(
+    () => () => {
+      cancelTimer();
+      if (pending.current !== null) commit(pending.current);
+    },
+    [commit],
+  );
+
+  /**
+   * Adopt a value the document grew elsewhere — an undo, or the provider
+   * selector clearing the stranded link — but never on top of a paste the
+   * merchant is still working on.
+   */
+  useEffect(() => {
+    if (!focused.current) setDraft(saved);
+  }, [saved]);
+
+  const spec = PROVIDER_SPECS[provider];
+  const embed = resolveIntegrationEmbed(provider, draft);
+  const unresolved = draft.trim().length > 0 && !embed;
+
+  const update = (raw: string) => {
+    setDraft(raw);
+    pending.current = raw;
+    cancelTimer();
+    timer.current = setTimeout(() => commit(raw), COMMIT_DELAY_MS);
+  };
+
+  const onBlur = () => {
+    focused.current = false;
+    cancelTimer();
+    const resolved = resolveIntegrationEmbed(provider, draft);
+    pending.current = null;
+
+    // Snap to the stored form, so what the merchant reads back is what was
+    // actually kept rather than the snippet it was extracted from. Text that
+    // has not resolved survives instead: it is their only copy of the mistake,
+    // and it is sitting directly above the sentence explaining it.
+    if (resolved) {
+      onChangeRef.current(resolved.src);
+      setDraft(resolved.src);
+    } else if (!draft.trim()) {
+      onChangeRef.current("");
+      setDraft("");
+    }
+  };
+
+  return (
+    <div>
+      <FieldLabel control={control} />
+      <textarea
+        rows={3}
+        value={draft}
+        placeholder={control.placeholder}
+        maxLength={control.max}
+        spellCheck={false}
+        aria-invalid={unresolved || undefined}
+        aria-describedby={`${control.name}-note`}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        onChange={(e) => update(e.target.value)}
+        onBlur={onBlur}
+        className={cn(
+          inputClass,
+          "resize-y break-all font-mono text-[11px] leading-relaxed",
+          unresolved && "border-destructive focus-visible:border-destructive",
+        )}
+      />
+
+      <p
+        id={`${control.name}-note`}
+        className={cn(
+          "mt-1.5 text-[11px] leading-relaxed",
+          unresolved ? "text-destructive" : "text-muted-foreground",
+        )}
+      >
+        {unresolved ? spec.error : control.help}
+      </p>
+
+      {/*
+        The read-back. Present only once something resolved, and only for
+        providers whose ids mean something to a person — Google Maps' `pb` blob
+        is not a thing a merchant can check, and showing it would be a
+        confirmation that confirms nothing.
+      */}
+      {embed && embed.identifiers.length > 0 && (
+        <dl className="mt-3 grid grid-cols-2 gap-2">
+          {embed.identifiers.map((identifier) => (
+            <div key={identifier.label}>
+              <dt className="mb-1.5 text-xs font-medium">{identifier.label}</dt>
+              <dd
+                className={cn(
+                  inputClass,
+                  "truncate bg-muted/40 font-mono text-[11px] text-muted-foreground",
+                )}
+                title={identifier.value}
+              >
+                {identifier.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </div>
   );
 }
 
@@ -816,7 +1157,7 @@ function blankRow(control: FieldControl): Record<string, unknown> {
   for (const field of control.fields ?? []) {
     if (field.optional) continue;
     if (field.kind === "boolean") row[field.name] = false;
-    else if (field.kind === "number") row[field.name] = 0;
+    else if (field.kind === "number" || field.kind === "rating") row[field.name] = 0;
     else if (field.kind === "link") row[field.name] = { kind: "order" };
     else if (field.kind === "select") row[field.name] = field.options?.[0]?.value ?? "";
     else row[field.name] = "New";

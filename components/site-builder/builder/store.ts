@@ -74,6 +74,19 @@ export type SelectionSource = "canvas" | "other";
 const HISTORY_LIMIT = 50;
 
 /**
+ * How long a run of edits to the same field keeps folding into one undo entry.
+ *
+ * Typing used to push a history entry per keystroke, so Ctrl+Z walked back one
+ * character at a time and a 50-character headline evicted every real edit from
+ * a 50-deep stack. Commits now arrive when the typist pauses (see
+ * `COMMIT_DELAY_MS` in `SectionDrawer`), so this only has to be comfortably
+ * longer than that pause to fold a burst of typing into a single step, and
+ * short enough that coming back to the same field after a think starts a new
+ * one.
+ */
+const COALESCE_WINDOW_MS = 1_500;
+
+/**
  * How the builder persists.
  *
  * An interface rather than a direct call so the editor can be driven by tests
@@ -161,6 +174,12 @@ interface BuilderState {
 
   past: PageDocument[];
   future: PageDocument[];
+  /**
+   * Which field the last edit belonged to, and when — the two facts undo
+   * coalescing needs. Internal: nothing renders them.
+   */
+  coalesceKey: string | null;
+  coalesceAt: number;
 
   /** The server-rendered canvas, held as a React node. */
   canvas: React.ReactNode;
@@ -183,7 +202,17 @@ interface BuilderState {
   /** Repairs a document that is missing a required header/hero/footer. */
   restoreRequiredSection: (kind: SectionKind, locationId?: string) => void;
   moveSectionBy: (id: string, delta: number) => void;
-  updateProps: (id: string, patch: Record<string, unknown>) => void;
+  /**
+   * `coalesce` marks an edit as part of a continuing run on one field — text
+   * being typed. Such edits replace the previous history entry rather than
+   * adding one, so undo steps back over the whole run. Every other mutation
+   * leaves it off and gets its own entry.
+   */
+  updateProps: (
+    id: string,
+    patch: Record<string, unknown>,
+    opts?: { coalesce?: boolean },
+  ) => void;
   updateSeo: (patch: Partial<PageDocument["seo"]>) => void;
 
   // history — internal only. Deletion offers an undo; there is no toolbar.
@@ -244,18 +273,37 @@ export function createBuilderStore(init: BuilderInit) {
      * stack. A refused mutation leaves state untouched and surfaces the reason
      * rather than failing silently.
      */
-    const apply = (result: MutationResult) => {
+    /**
+     * Commits a mutation and records one history step.
+     *
+     * `coalesceKey` names the field a run of edits belongs to. When consecutive
+     * edits share a key and land inside `COALESCE_WINDOW_MS`, the entry already
+     * on the stack is kept and no new one is pushed — so the state undo returns
+     * to is the one from *before* the run started, not one character back.
+     * Passing nothing ends any run in progress, which is what makes an edit of a
+     * different kind a hard boundary.
+     */
+    const apply = (result: MutationResult, coalesceKey: string | null = null) => {
       if (!result.ok) {
         set({ notice: result.message });
         return;
       }
-      const { doc, past } = get();
+      const state = get();
+      const now = Date.now();
+      const continuesRun =
+        coalesceKey !== null &&
+        coalesceKey === state.coalesceKey &&
+        now - state.coalesceAt < COALESCE_WINDOW_MS &&
+        state.past.length > 0;
+
       set({
         doc: result.doc,
-        past: [...past, doc].slice(-HISTORY_LIMIT),
+        past: continuesRun ? state.past : [...state.past, state.doc].slice(-HISTORY_LIMIT),
         future: [],
         saveState: "dirty",
-        editGeneration: get().editGeneration + 1,
+        editGeneration: state.editGeneration + 1,
+        coalesceKey,
+        coalesceAt: coalesceKey === null ? 0 : now,
       });
     };
 
@@ -284,6 +332,8 @@ export function createBuilderStore(init: BuilderInit) {
       catalogError: null,
       past: [],
       future: [],
+      coalesceKey: null,
+      coalesceAt: 0,
       canvas: init.canvas,
       isRendering: false,
       canvasRefreshRequest: 0,
@@ -356,7 +406,13 @@ export function createBuilderStore(init: BuilderInit) {
 
       moveSectionBy: (id, delta) => apply(moveSectionBy(get().doc, id, delta)),
 
-      updateProps: (id, patch) => apply(updateSectionProps(get().doc, id, patch)),
+      updateProps: (id, patch, opts) =>
+        apply(
+          updateSectionProps(get().doc, id, patch),
+          // Keyed by field, so moving to a different one starts a new entry
+          // even mid-run.
+          opts?.coalesce ? `${id}:${Object.keys(patch).sort().join(",")}` : null,
+        ),
 
       updateSeo: (patch) => {
         const { doc, past } = get();
@@ -366,6 +422,7 @@ export function createBuilderStore(init: BuilderInit) {
           future: [],
           saveState: "dirty",
           editGeneration: get().editGeneration + 1,
+          coalesceKey: null,
         });
       },
 
@@ -379,6 +436,9 @@ export function createBuilderStore(init: BuilderInit) {
           future: [doc, ...future].slice(0, HISTORY_LIMIT),
           saveState: "dirty",
           editGeneration: get().editGeneration + 1,
+          // Otherwise the next keystroke would fold into the entry undo just
+          // restored, and stepping back would not be repeatable.
+          coalesceKey: null,
         });
       },
 
@@ -445,6 +505,7 @@ export function createBuilderStore(init: BuilderInit) {
           selectedId: null,
           saveState: "dirty",
           editGeneration: state.editGeneration + 1,
+          coalesceKey: null,
         })),
 
       // Deliberately does not touch `saveState`: the rename is already stored,
