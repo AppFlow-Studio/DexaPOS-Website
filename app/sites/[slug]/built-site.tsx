@@ -19,6 +19,7 @@ import { resolveRenderMode } from "@/lib/site-builder/resolve-render-mode";
 import { resolveTracking } from "@/lib/site-builder/tracking";
 import { collectFormIds, formResolver, loadPublicFormMap } from "@/lib/site-builder/forms/form-map";
 import { loadPublicEvents } from "@/lib/site-builder/events/event-map";
+import { pageNeedsEvents } from "@/lib/site-builder/sections/registry";
 import { createAnonSupabaseClient } from "@/lib/supabase/anon";
 
 /**
@@ -200,9 +201,13 @@ export async function renderBuiltSite(
   // only PUBLISHED definitions, so a merchant editing a form does not change
   // what live visitors are filling in until they publish it.
   // Forms and events are independent round trips, so they overlap. Events are
-  // only fetched when the page actually carries an events section — most pages
-  // do not, and this is a whole extra query.
-  const wantsEvents = doc.sections.some((section) => section.kind === "events");
+  // only fetched when the page actually carries an event-backed section — most
+  // pages do not, and this is a whole extra query.
+  //
+  // Asked of the registry rather than matched against one kind by name: the
+  // literal this replaced silently excluded `featured-event`, which would have
+  // rendered against an empty list on a live site with nothing reporting it.
+  const wantsEvents = pageNeedsEvents(doc.sections);
 
   const [forms, events] = await Promise.all([
     loadPublicFormMap(supabase, decision.siteId, collectFormIds(doc)),

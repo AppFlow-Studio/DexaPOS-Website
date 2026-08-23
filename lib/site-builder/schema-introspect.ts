@@ -20,12 +20,15 @@ export type ControlKind =
   | "richtext"
   | "boolean"
   | "number"
+  | "rating"
   | "select"
   | "image"
   | "file"
   | "binding-list"
   | "form"
+  | "event"
   | "video"
+  | "embed"
   | "repeater"
   | "link"
   | "unsupported";
@@ -38,6 +41,24 @@ export interface FieldControl {
   optional: boolean;
   /** Options for `select`. */
   options?: { value: string; label: string }[];
+  /**
+   * Explanatory copy under the control, and the input's placeholder.
+   *
+   * Neither can be derived from a field name, and for the integrations embed
+   * neither is even constant for the field: the right words depend on which
+   * provider is selected. Both therefore arrive from the registry's
+   * `fieldOverrides`, which is the one hook that gets to see sibling props.
+   */
+  help?: string;
+  placeholder?: string;
+  /**
+   * Sibling fields this control's value invalidates, cleared in the same patch.
+   *
+   * `integrations.provider` clears `embedUrl`: a Spotify link under the Google
+   * Maps provider is not a state the schema permits, so without this the panel
+   * simply stops accepting edits the moment the provider is switched.
+   */
+  clears?: string[];
   min?: number;
   /**
    * The real limit, read off the Zod `.max()` check.
@@ -195,7 +216,18 @@ export function describeField(name: string, field: unknown): FieldControl {
       // data — the same reasoning as `RICHTEXT_FIELDS` and `MULTILINE_FIELDS`
       // directly below.
       if (name === "formId") return { ...base, kind: "form" };
+      // Same reasoning as `formId`: the schema holds an id because an id is
+      // what it is, but the control has to be a list of the merchant's own
+      // events. Optional here, unlike `formId` — blank means "whichever event
+      // is next", which is the default and the better answer for most
+      // placements. See `featuredEventSchema`.
+      if (name === "eventId") return { ...base, kind: "event" };
       if (name === "videoId") return { ...base, kind: "video" };
+      // Same family again. The stored value is a URL, but the control is a
+      // paste target that accepts iframe markup and bare ids too, normalises
+      // whatever arrives, and shows the resolved ids back — none of which a
+      // plain text box does. See `resolveIntegrationEmbed`.
+      if (name === "embedUrl") return { ...base, kind: "embed" };
 
       const max = maxLengthOf(def);
       return {
@@ -212,7 +244,11 @@ export function describeField(name: string, field: unknown): FieldControl {
       return { ...base, kind: "boolean" };
 
     case "number":
-      return { ...base, kind: "number", ...numberBoundsOf(def) };
+      return {
+        ...base,
+        kind: name === "rating" ? "rating" : "number",
+        ...numberBoundsOf(def),
+      };
 
     case "enum":
       return {

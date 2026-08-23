@@ -1,3 +1,5 @@
+import { Star } from "lucide-react";
+
 import type { SectionRenderProps } from "@/lib/site-builder/render-context";
 import { fieldAttrsFor } from "../edit-attrs";
 import { Container, SectionHeading, sectionClassName, sectionStyleProps } from "../section-shell";
@@ -43,14 +45,24 @@ export default function ReviewsSection({ section, ctx }: SectionRenderProps<"rev
                 style={{ borderColor: "var(--site-border)", background: "var(--site-card)" }}
               >
                 {item.rating && (
-                  <span
-                    className="mb-3 text-sm tracking-wider"
+                  <div
+                    className="mb-4 flex items-center gap-1"
                     style={{ color: "var(--site-brand)" }}
+                    role="img"
                     aria-label={`${item.rating} out of 5`}
                   >
-                    {"★".repeat(item.rating)}
-                    <span className="opacity-30">{"★".repeat(5 - item.rating)}</span>
-                  </span>
+                    {Array.from({ length: 5 }, (_, index) => {
+                      const filled = index < item.rating!;
+                      return (
+                        <Star
+                          key={index}
+                          aria-hidden
+                          className={filled ? "size-6 fill-current" : "size-6 opacity-25"}
+                          strokeWidth={1.8}
+                        />
+                      );
+                    })}
+                  </div>
                 )}
                 <blockquote
                   className="flex-1 text-sm leading-relaxed"

@@ -1,15 +1,22 @@
 "use client";
 
 import {
+  CalendarDays,
+  CalendarHeart,
+  ClipboardList,
+  FileText,
   Image as ImageIcon,
   Images,
   LayoutGrid,
   MapPin,
+  Megaphone,
   MessageCircleQuestion,
   PanelBottom,
   PanelTop,
+  Play,
   Plug,
   Sparkles,
+  Star,
   Text,
   UtensilsCrossed,
   type LucideIcon,
@@ -42,6 +49,22 @@ const ICONS: Record<string, LucideIcon> = {
   MessageCircleQuestion,
   MapPin,
   Plug,
+  // Every kind added after the allowlist was written named an icon that was
+  // never added here, so six sections had been quietly drawing the fallback
+  // square in the Add Section modal — the failure mode the fallback exists to
+  // survive, working exactly as designed and hiding the omission perfectly.
+  // `featured-event.test.tsx` now asserts the two lists agree.
+  CalendarDays,
+  CalendarHeart,
+  ClipboardList,
+  FileText,
+  Megaphone,
+  Play,
+  Star,
+  // Named outright by `cards`, not only used as the fallback below. Relying on
+  // the fallback to render it would make the entry indistinguishable from a
+  // typo.
+  LayoutGrid,
 };
 
 export function SectionIcon({ name, className }: { name: string; className?: string }) {

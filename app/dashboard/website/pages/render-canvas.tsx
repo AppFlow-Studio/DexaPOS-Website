@@ -10,6 +10,7 @@ import { getResolverSources } from "@/lib/site-builder/request-scope";
 import { loadAssetMap } from "@/lib/site-builder/asset-map";
 import { collectFormIds, formResolver, loadFormMap } from "@/lib/site-builder/forms/form-map";
 import { loadEvents } from "@/lib/site-builder/events/event-map";
+import { pageNeedsEvents } from "@/lib/site-builder/sections/registry";
 import { buildRenderContext, loadSiteContext } from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -49,7 +50,10 @@ export async function renderCanvas(doc: unknown, locationId: string) {
 
   // Menu bindings, photographs and forms are unrelated round trips, so they
   // overlap.
-  const wantsEvents = page.sections.some((section) => section.kind === "events");
+  // Registry-driven, and it must stay identical to the public renderer's test:
+  // a section that resolves its events in one and not the other looks correct
+  // in the canvas and blank once published.
+  const wantsEvents = pageNeedsEvents(page.sections);
 
   const [{ map: resolved }, assets, forms, events] = await Promise.all([
     resolveBindings(

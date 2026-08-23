@@ -17,9 +17,11 @@
 import type { z } from "zod";
 
 import type { BindingType } from "../bindings/types";
+import type { FieldControl } from "../schema-introspect";
 import { FEATURE_LABELS, type SiteFeature, type SiteFeatures } from "../site-settings";
 import type { SectionCategory, SectionKind, Zone } from "./kinds";
 import { SECTION_CATEGORIES, SECTION_KINDS } from "./kinds";
+import type { IntegrationProvider } from "./schemas/integrations";
 import type { PropsOf } from "./schemas";
 import {
   cardsDefaults,
@@ -34,6 +36,7 @@ import {
   eventsSchema,
   integrationsDefaults,
   integrationsSchema,
+  PROVIDER_SPECS,
   reviewsDefaults,
   reviewsSchema,
   scrollingBannerDefaults,
@@ -170,6 +173,21 @@ export interface SectionDefinition<K extends SectionKind> {
    * fields are all always relevant.
    */
   hiddenFields?: (props: Record<string, unknown>) => string[];
+  /**
+   * Per-field refinements the schema cannot express, keyed by field name.
+   *
+   * `describeSchema` derives a control from a field in isolation, which is what
+   * keeps it honest — but a few controls are only correctly labelled in the
+   * light of a *sibling* prop. The integrations embed field is the case: its
+   * label, help text and example are facts about the chosen provider, not about
+   * the field, and its provider selector has to declare what it invalidates.
+   *
+   * Kept to a merge over the derived control rather than a free-form panel
+   * hook, so a kind can still only adjust what the schema already produced.
+   */
+  fieldOverrides?: (
+    props: Record<string, unknown>,
+  ) => Record<string, Partial<FieldControl>>;
   /** Runtime validation. `.shape` is used by `normalize` for field-level repair. */
   schema: z.ZodObject<any>;
   defaults: (ctx?: SectionDefaultsContext) => PropsOf<K>;
@@ -182,6 +200,22 @@ export interface SectionDefinition<K extends SectionKind> {
    * fields have nowhere to live in the schema.
    */
   liveFields: readonly string[];
+  /**
+   * Whether rendering this kind needs the site's events on the render context.
+   *
+   * Events do not travel through the binding resolver — they arrive as a whole
+   * list, fetched once per page, and only for pages that actually want them
+   * (it is a query nearly every page would waste). Both render paths therefore
+   * have to ask "does this document contain an event-backed section", and both
+   * used to answer it with a hard-coded `kind === "events"`.
+   *
+   * That is a trap rather than a shortcut: a kind the literal did not name
+   * renders against an empty list — no error, no warning, just a section that
+   * is silently blank on a merchant's live homepage. Declaring the dependency
+   * here means the next event-backed kind inherits the fetch by existing, and
+   * `pageNeedsEvents` is the only thing that reads it.
+   */
+  usesEvents?: boolean;
 }
 
 export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
@@ -381,7 +415,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
   events: {
     kind: "events",
     label: "Events",
-    description: "Your upcoming events. Updates itself as events come and go.",
+    description: "Your events — all of them as a grid, or one on its own.",
     icon: "CalendarDays",
     zone: "body",
     category: "extras",
@@ -408,12 +442,32 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
      * merchant-facing and where it belongs.
      */
     liveFields: [],
+    usesEvents: true,
+    /**
+     * Half of this panel belongs to a layout the merchant is not using.
+     *
+     * `grid` has a count and nothing else to say; `spotlight` has a photograph
+     * to place and no count, because it shows exactly one. Showing both sets at
+     * once would put five controls on screen that visibly do nothing — the
+     * defect this hook exists to prevent (see the hero's `overlayOpacity`
+     * directly above).
+     *
+     * Within `spotlight` the same rule applies once more: a size makes no sense
+     * for a photograph that fills the band, and a scrim makes no sense for one
+     * that no text sits on.
+     */
+    hiddenFields: (props) => {
+      if (props.layout !== "spotlight") {
+        return ["eventId", "photoPosition", "photoSize", "textSize", "overlayOpacity"];
+      }
+      return ["limit", props.photoPosition === "behind" ? "photoSize" : "overlayOpacity"];
+    },
   },
 
   integrations: {
     kind: "integrations",
     label: "Integrations",
-    description: "A trusted third-party embed from Google Maps or Spotify.",
+    description: "A trusted third-party embed — a Google map, a Spotify player, an Untappd beer menu.",
     icon: "Plug",
     zone: "body",
     category: "extras",
@@ -423,6 +477,24 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
+    /*
+      The paste field is a different field depending on the provider — "Untappd
+      iframe URL or IDs" is only right while Untappd is selected — and switching
+      provider strands the old link, which the schema then refuses. Both are
+      sibling-dependent, so both live here rather than in the drawer.
+    */
+    fieldOverrides: (props) => {
+      const spec =
+        PROVIDER_SPECS[props.provider as IntegrationProvider] ?? PROVIDER_SPECS["google-maps"];
+      return {
+        provider: { clears: ["embedUrl"] },
+        embedUrl: {
+          label: spec.inputLabel,
+          help: spec.help,
+          placeholder: spec.placeholder,
+        },
+      };
+    },
     schema: integrationsSchema,
     defaults: () => integrationsDefaults(),
     bindingTypes: [],
@@ -652,4 +724,21 @@ export function sectionTitle(section: { kind: SectionKind; props: unknown }): st
 export function isLiveBound(kind: SectionKind): boolean {
   const def = getSectionDefinition(kind);
   return !!def && def.bindingTypes.length > 0;
+}
+
+/**
+ * Whether a document contains anything that needs the site's events fetched.
+ *
+ * The events list is one round trip that most pages have no use for, so it is
+ * conditional — and the condition has to be identical on the public renderer
+ * and in the builder canvas, or a section renders in one and is blank in the
+ * other. Deriving it from `usesEvents` is what makes those two call sites
+ * incapable of drifting apart; the string literal they both used before was
+ * already wrong for every kind added after `events`.
+ *
+ * Structurally typed, like `sectionTitle`, so callers need not import the
+ * `Section` union to ask.
+ */
+export function pageNeedsEvents(sections: readonly { kind: string }[]): boolean {
+  return sections.some((section) => getSectionDefinition(section.kind)?.usesEvents === true);
 }
