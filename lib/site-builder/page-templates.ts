@@ -204,12 +204,26 @@ function showcase({ locationId, title }: PageTemplateOptions): PageDocument {
 }
 
 /**
- * Header and footer only.
+ * The required page frame with an empty body.
  *
  * Matches Owner's Blank exactly — the frame renders, the body is empty, and the
- * merchant builds from `Add Section`. It is the honest option for anyone who
- * already knows what they want.
+ * merchant builds from `Add Section`. The hero remains because it is a locked,
+ * required section and cannot be added from the section catalogue.
  */
 function blank({ locationId, title }: PageTemplateOptions): PageDocument {
-  return shell(locationId, [], title);
+  return shell(
+    locationId,
+    [
+      {
+        id: "s_tpl_hero",
+        kind: "hero",
+        props: {
+          variant: "classic",
+          heading: title,
+          overlayOpacity: 35,
+        },
+      },
+    ] as PageDocument["sections"],
+    title,
+  );
 }

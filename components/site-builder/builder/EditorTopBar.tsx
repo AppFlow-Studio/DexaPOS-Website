@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { PublishPage } from "@/app/dashboard/website/actions/publish";
 import { Button } from "@/components/ui/button";
 import { diffDocuments } from "@/lib/site-builder/diff";
+import { SECTION_REGISTRY } from "@/lib/site-builder/sections/registry";
 import { validatePage } from "@/lib/site-builder/validate";
 import { cn } from "@/lib/utils";
 import { websiteRoutes } from "../routes";
@@ -52,7 +53,7 @@ export default function EditorTopBar({
       onTitleClick={mode === "build" ? openPageSettings : undefined}
       closeHref={websiteRoutes.pages(locationId)}
       centre={<ModeSwitch mode={mode} onChange={setMode} />}
-      action={<PublishButton store={store} clerkOrgId={clerkOrgId} />}
+      action={<PublishButton store={store} clerkOrgId={clerkOrgId} locationId={locationId} />}
     >
       {children}
     </OverlayChrome>
@@ -103,13 +104,23 @@ function ModeSwitch({
   );
 }
 
-function PublishButton({ store, clerkOrgId }: { store: BuilderStore; clerkOrgId: string }) {
+function PublishButton({
+  store,
+  clerkOrgId,
+  locationId,
+}: {
+  store: BuilderStore;
+  clerkOrgId: string;
+  locationId: string;
+}) {
   const doc = store((s) => s.doc);
   const page = store((s) => s.page);
   const publishedDoc = store((s) => s.publishedDoc);
   const publishing = store((s) => s.publishing);
   const saveState = store((s) => s.saveState);
   const select = store((s) => s.select);
+  const openAddSection = store((s) => s.openAddSection);
+  const restoreRequiredSection = store((s) => s.restoreRequiredSection);
   const setPublishing = store((s) => s.setPublishing);
   const markPublished = store((s) => s.markPublished);
 
@@ -149,6 +160,9 @@ function PublishButton({ store, clerkOrgId }: { store: BuilderStore; clerkOrgId:
   };
 
   const blocker = validation.errors[0];
+  const missingRequired =
+    blocker?.code === "missing_required_section" && blocker.kind ? blocker.kind : null;
+  const canAddFirstSection = blocker?.code === "empty_page";
 
   return (
     <div className="relative">
@@ -179,6 +193,26 @@ function PublishButton({ store, clerkOrgId }: { store: BuilderStore; clerkOrgId:
                 className="mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-medium underline underline-offset-2"
               >
                 Fix it
+                <ArrowRight className="size-3" />
+              </button>
+            )}
+            {missingRequired && (
+              <button
+                type="button"
+                onClick={() => restoreRequiredSection(missingRequired, locationId)}
+                className="mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-medium underline underline-offset-2"
+              >
+                Add {SECTION_REGISTRY[missingRequired].label}
+                <ArrowRight className="size-3" />
+              </button>
+            )}
+            {canAddFirstSection && (
+              <button
+                type="button"
+                onClick={() => openAddSection()}
+                className="mt-0.5 inline-flex items-center gap-0.5 text-[11px] font-medium underline underline-offset-2"
+              >
+                Add section
                 <ArrowRight className="size-3" />
               </button>
             )}

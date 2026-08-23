@@ -2,7 +2,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { measureSectionRects, SECTION_BOUNDARY_SELECTOR } from "../canvas-dom";
+import { createEmptyPage } from "@/lib/site-builder/page-document";
+import {
+  getAddSectionPoints,
+  measureSectionRects,
+  SECTION_BOUNDARY_SELECTOR,
+} from "../canvas-dom";
 
 describe("canvas section geometry", () => {
   it("measures section boundaries, never editable descendants with the same id", () => {
@@ -39,5 +44,19 @@ describe("canvas section geometry", () => {
     }
 
     expect(Object.keys(measureSectionRects(host))).toEqual(["one", "two"]);
+  });
+});
+
+describe("add-section geometry", () => {
+  it("offers the first insertion point when the page body is empty", () => {
+    const doc = createEmptyPage({ locationId: "loc_1" });
+    const footer = doc.sections.find((section) => section.kind === "footer")!;
+    const footerIndex = doc.sections.indexOf(footer);
+
+    expect(
+      getAddSectionPoints(doc, {
+        [footer.id]: new DOMRect(0, 640, 1120, 240),
+      }),
+    ).toEqual([{ key: "empty-body", atIndex: footerIndex, y: 640 }]);
   });
 });

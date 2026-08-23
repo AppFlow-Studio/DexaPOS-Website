@@ -8,7 +8,11 @@ import type { PageDocument } from "@/lib/site-builder/page-document";
 import { SECTION_REGISTRY, sectionTitle } from "@/lib/site-builder/sections/registry";
 import { cn } from "@/lib/utils";
 import { announce } from "./announce";
-import { measureSectionRects, SECTION_BOUNDARY_SELECTOR } from "./canvas-dom";
+import {
+  getAddSectionPoints,
+  measureSectionRects,
+  SECTION_BOUNDARY_SELECTOR,
+} from "./canvas-dom";
 import { deleteSectionWithUndo } from "./delete-section";
 import { applyTextPreviewPatches, getTextPreviewPatches } from "./preview-sync";
 import type { BuilderStore } from "./store";
@@ -285,24 +289,7 @@ function AddSectionBands({
   rects: Record<string, DOMRect>;
   onInsert: (atIndex: number) => void;
 }) {
-  const points = useMemo(() => {
-    const out: { key: string; atIndex: number; y: number }[] = [];
-
-    doc.sections.forEach((section, index) => {
-      if (SECTION_REGISTRY[section.kind].zone !== "body") return;
-      const rect = rects[section.id];
-      if (!rect) return;
-
-      out.push({ key: `before-${section.id}`, atIndex: index, y: rect.y });
-
-      const next = doc.sections[index + 1];
-      if (!next || SECTION_REGISTRY[next.kind].zone !== "body") {
-        out.push({ key: `after-${section.id}`, atIndex: index + 1, y: rect.y + rect.height });
-      }
-    });
-
-    return out;
-  }, [doc, rects]);
+  const points = useMemo(() => getAddSectionPoints(doc, rects), [doc, rects]);
 
   return (
     <div className="pointer-events-none absolute inset-0">
@@ -431,7 +418,7 @@ function Gutters({
                     label={`Edit ${sectionTitle(section)}`}
                     onClick={() => select(section.id, "canvas")}
                   >
-                    <Pencil className="size-3.5" />
+                    <Pencil className="size-4" />
                   </GutterButton>
                 )}
 
@@ -441,7 +428,7 @@ function Gutters({
                     destructive
                     onClick={() => deleteSectionWithUndo(store, section.id)}
                   >
-                    <Trash2 className="size-3.5" />
+                    <Trash2 className="size-4" />
                   </GutterButton>
                 )}
               </GutterStack>
@@ -450,10 +437,10 @@ function Gutters({
             {(canMoveUp || canMoveDown) && (
               <GutterStack side="right">
                 <GutterButton label="Move up" disabled={!canMoveUp} onClick={() => move(-1)}>
-                  <ChevronUp className="size-3.5" />
+                  <ChevronUp className="size-4" />
                 </GutterButton>
                 <GutterButton label="Move down" disabled={!canMoveDown} onClick={() => move(1)}>
-                  <ChevronDown className="size-3.5" />
+                  <ChevronDown className="size-4" />
                 </GutterButton>
               </GutterStack>
             )}
@@ -513,7 +500,7 @@ function GutterButton({
           disabled={disabled}
           onClick={onClick}
           className={cn(
-            "flex size-7 items-center justify-center text-muted-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30",
+            "flex size-8 items-center justify-center text-muted-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-30",
             destructive
               ? "hover:bg-destructive/10 hover:text-destructive"
               : "hover:bg-accent hover:text-foreground",
