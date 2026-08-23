@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Site } from "@/types/site";
 import { StorefrontMenu } from "@/types/storefront";
 import { MobileBottomTabs, TabType } from "./MobileBottomTabs";
+import { ItemDeepLink } from "./ItemDeepLink";
 import { MenuBrowser } from "./MenuBrowser";
 import { OrdersPanel } from "./OrdersPanel";
 import { OrdersSheet } from "./OrdersSheet";
@@ -63,50 +64,69 @@ export function StorefrontLayout({
   const templateId: SiteThemeConfig["templateId"] =
     site?.theme_config?.templateId || "classic";
 
+  /*
+    Mounted above the template fork on purpose: every layout below already
+    watches the cart store for `pendingModalItem`, so one mount here serves all
+    four rather than each growing its own copy of the same effect.
+  */
+  const deepLink = <ItemDeepLink menus={menus} />;
+
   // Delegate to dedicated layout components for new templates
   if (templateId === "hero") {
     return (
-      <HeroLayout
-        site={site}
-        location={location}
-        menus={menus}
-        slug={slug}
-        seedQrSession={seedQrSession}
-      />
+      <>
+        {deepLink}
+        <HeroLayout
+          site={site}
+          location={location}
+          menus={menus}
+          slug={slug}
+          seedQrSession={seedQrSession}
+        />
+      </>
     );
   }
   if (templateId === "market") {
     return (
-      <MarketLayout
-        site={site}
-        location={location}
-        menus={menus}
-        slug={slug}
-        seedQrSession={seedQrSession}
-      />
+      <>
+        {deepLink}
+        <MarketLayout
+          site={site}
+          location={location}
+          menus={menus}
+          slug={slug}
+          seedQrSession={seedQrSession}
+        />
+      </>
     );
   }
   if (templateId === "boutique") {
     return (
-      <BoutiqueLayout
-        site={site}
-        location={location}
-        menus={menus}
-        slug={slug}
-        seedQrSession={seedQrSession}
-      />
+      <>
+        {deepLink}
+        <BoutiqueLayout
+          site={site}
+          location={location}
+          menus={menus}
+          slug={slug}
+          seedQrSession={seedQrSession}
+        />
+      </>
     );
   }
 
   // Classic (and legacy minimal/bold) layout
   return (
-    <ClassicLayout
-      site={site}
-      location={location}
-      menus={menus}
-      slug={slug}
-      seedQrSession={seedQrSession}
-    />
+    <>
+      {deepLink}
+      <ClassicLayout
+        site={site}
+        location={location}
+        menus={menus}
+        slug={slug}
+        seedQrSession={seedQrSession}
+      />
+    </>
   );
 }
 

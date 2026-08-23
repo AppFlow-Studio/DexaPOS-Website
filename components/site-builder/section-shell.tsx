@@ -118,6 +118,32 @@ export function resolveHref(target: LinkTarget, ctx: RenderContext): string {
 }
 
 /**
+ * A link into the ordering storefront that opens one item's details modal.
+ *
+ * **Why this is safe to point at `orderUrl` directly.** A storefront slug always
+ * serves ordering — `decideRenderMode` returns `template` for any address that
+ * is not a brand subdomain, so no state of the built site can shadow it — and
+ * `orderUrl` is derived from `online_store_config.slug`, which is a storefront
+ * address by construction. There is no separate `/menu` route to aim at and no
+ * collision to route around.
+ *
+ * The id is the only thing travelling. The storefront resolves it against the
+ * menu data it has already loaded rather than fetching by it, so a crafted id
+ * addresses nothing a visitor could not already see — see `ItemDeepLink`.
+ *
+ * Null when the merchant has no storefront to link into, so the caller drops
+ * the button rather than rendering a dead `#`.
+ */
+export function orderItemHref(
+  itemId: string,
+  ctx: RenderContext,
+): string | null {
+  const base = ctx.site.orderUrl;
+  if (!base || base === "#") return null;
+  return `${base}?item=${encodeURIComponent(itemId)}`;
+}
+
+/**
  * Merchant-supplied URLs are untrusted input rendered on a public page, so only
  * http/https/mailto/tel survive — `javascript:` and `data:` are dropped.
  */

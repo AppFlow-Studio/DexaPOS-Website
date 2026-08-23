@@ -5,11 +5,13 @@ import {
 import { canShowPrices, type SectionRenderProps } from "@/lib/site-builder/render-context";
 import { fieldAttrsFor } from "../edit-attrs";
 import SiteImage from "../SiteImage";
+import { trackAttrs } from "@/lib/site-builder/tracking";
 import {
   Container,
   CtaButton,
   SectionHeading,
   formatMoney,
+  orderItemHref,
   sectionClassName,
   sectionStyleProps,
 } from "../section-shell";
@@ -46,13 +48,27 @@ export default function PopularItemsSection({
   resolved,
   ctx,
 }: SectionRenderProps<"popular-items">) {
-  const { heading, subheading, items, layout, showPrices, showDescriptions, cta } = section.props;
+  const {
+    heading,
+    subheading,
+    items,
+    layout,
+    showPrices,
+    showDescriptions,
+    showAddButton,
+    cta,
+  } = section.props;
   const f = fieldAttrsFor(ctx.mode, section.id);
 
   // The merchant asked for prices; whether they may appear is a separate
   // question. On a brand page, before the visitor has picked a restaurant, five
   // branches may charge five different amounts — so no number is the honest one.
   const showMoney = showPrices && canShowPrices(ctx);
+
+  // The `+` navigates. In the builder that would throw the merchant off the page
+  // they are editing, so the affordance is drawn but inert there — they still see
+  // what a visitor sees without being able to leave by accident.
+  const addIsLive = showAddButton && ctx.mode !== "builder";
 
   const visible: { binding: (typeof items)[number]; item: ResolvedMenuItem }[] = [];
   for (const binding of items) {
@@ -87,41 +103,55 @@ export default function PopularItemsSection({
             </p>
           ) : null
         ) : (
-          <ul className={`grid gap-6 ${GRID_CLASSES[layout]}`}>
+          <ul className={`grid gap-x-4 gap-y-8 ${GRID_CLASSES[layout]}`}>
             {visible.map(({ binding, item }) => {
+              const label = binding.overrides?.label ?? item.name;
+              // Null when the merchant has no storefront to link into: the card
+              // still renders, it just loses a button that could go nowhere.
+              const addHref = showAddButton ? orderItemHref(item.id, ctx) : null;
+              const add = addHref ? (
+                <AddButton href={addHref} label={label} live={addIsLive} />
+              ) : null;
+
               return (
-                <li
-                  key={binding.id}
-                  className="flex flex-col overflow-hidden rounded-[var(--site-radius)] border"
-                  style={{ borderColor: "var(--site-border)", background: "var(--site-card)" }}
-                >
-                  {item.image && (
-                    <SiteImage
-                      asset={null}
-                      ctx={ctx}
-                      fallbackUrl={item.image}
-                      className="aspect-[4/3] w-full object-cover"
-                    />
-                  )}
-                  <div className="flex flex-1 flex-col gap-2 p-5">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <h3 className="text-base font-semibold">
-                        {/* An override is the one legal way to shadow live data. */}
-                        {binding.overrides?.label ?? item.name}
-                      </h3>
-                      {showMoney && (
-                        <span className="shrink-0 text-base font-semibold tabular-nums">
-                          {formatMoney(item.price, ctx.locale)}
-                        </span>
-                      )}
-                    </div>
+                <li key={binding.id} className="group flex min-w-0 flex-col">
+                  <div
+                    className="relative aspect-square overflow-hidden rounded-[var(--site-radius)]"
+                    style={{ background: "var(--site-surface-muted)" }}
+                  >
+                    {item.image ? (
+                      <SiteImage
+                        asset={null}
+                        ctx={ctx}
+                        fallbackUrl={item.image}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center text-xs font-medium opacity-45">
+                        No image
+                      </span>
+                    )}
+                    {/* Over the image or its placeholder, as Owner places it. */}
+                    {add && <div className="absolute bottom-3 right-3">{add}</div>}
+                  </div>
+
+                  <div className="flex flex-1 flex-col gap-1 pt-3">
+                    <h3 className="text-base font-semibold leading-snug">
+                      {/* An override is the one legal way to shadow live data. */}
+                      {label}
+                    </h3>
+                    {showMoney && (
+                      <span className="text-base font-medium leading-snug tabular-nums">
+                        {formatMoney(item.price, ctx.locale)}
+                      </span>
+                    )}
                     {showDescriptions && (binding.overrides?.caption ?? item.description) && (
-                      <p className="text-sm leading-relaxed opacity-70">
+                      <p className="pt-1 text-sm leading-relaxed opacity-65">
                         {binding.overrides?.caption ?? item.description}
                       </p>
                     )}
                     {item.dietaryTags.length > 0 && (
-                      <ul className="mt-auto flex flex-wrap gap-1.5 pt-2">
+                      <ul className="mt-auto flex flex-wrap gap-1.5 pt-3">
                         {item.dietaryTags.map((tag) => (
                           <li
                             key={tag}
@@ -157,5 +187,60 @@ export default function PopularItemsSection({
         )}
       </Container>
     </section>
+  );
+}
+
+/**
+ * The `+` on a card — the same affordance the ordering menu already puts on its
+ * own item cards (`app/sites/components/MenuBrowser.tsx`), so a visitor meets
+ * one button that means one thing across both surfaces.
+ *
+ * An anchor rather than a handler, because this section is a server component
+ * and must stay one. It also means middle-click and "open in new tab" behave,
+ * which a div with an onClick would not.
+ *
+ * `live` is false inside the builder: the merchant sees the button on their card
+ * but cannot navigate off the page they are editing by clicking it.
+ */
+function AddButton({
+  href,
+  label,
+  live,
+}: {
+  href: string;
+  label: string;
+  live: boolean;
+}) {
+  const className =
+    "flex h-10 w-10 items-center justify-center rounded-full text-xl leading-none shadow-sm transition-transform hover:scale-110";
+  const style = {
+    background: "var(--site-brand)",
+    color: "var(--site-brand-contrast)",
+  } as const;
+
+  if (!live) {
+    return (
+      <span className={className} style={style} aria-hidden="true">
+        +
+      </span>
+    );
+  }
+
+  return (
+    <a
+      href={href}
+      className={className}
+      style={style}
+      // Matches the storefront's own wording for the same control.
+      aria-label={`Add ${label} to cart`}
+      /*
+        This is an order click in every sense that matters — the visitor is
+        leaving for the ordering storefront — so it reports as one rather than
+        inventing a second name for the same conversion. See `CtaButton`.
+      */
+      {...trackAttrs("order_click")}
+    >
+      <span aria-hidden="true">+</span>
+    </a>
   );
 }

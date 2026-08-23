@@ -54,12 +54,16 @@ describe("describeSchema", () => {
     ["gallery", "columns", "select"],
     ["popular-items", "items", "binding-list"],
     ["popular-items", "showPrices", "boolean"],
+    // Wrapped in `.default(true)`; `unwrap` must see through it to the boolean.
+    ["popular-items", "showAddButton", "boolean"],
     ["features", "items", "repeater"],
     ["faq", "items", "repeater"],
     ["location", "location", "binding-list"],
     ["location", "mapStyle", "select"],
     ["footer", "links", "repeater"],
     ["video", "videoId", "video"],
+    ["integrations", "provider", "select"],
+    ["integrations", "embedUrl", "embed"],
   ])("classifies %s.%s as %s", (kind, field, expected) => {
     const controls = controlsFor(kind as (typeof SECTION_KINDS)[number]);
     expect(controls[field]?.kind).toBe(expected);
@@ -105,13 +109,53 @@ describe("describeSchema", () => {
     expect(controlsFor("hero").overlayOpacity).toMatchObject({ min: 0, max: 100 });
     expect(controlsFor("events").limit).toMatchObject({ min: 1, max: 24 });
     const rating = controlsFor("reviews").items.fields?.find((field) => field.name === "rating");
-    expect(rating).toMatchObject({ min: 1, max: 5 });
+    expect(rating).toMatchObject({ kind: "rating", min: 1, max: 5 });
   });
 
   it("describes repeater sub-fields", () => {
     const faqItems = controlsFor("faq").items;
     expect(faqItems.fields?.map((f) => f.name)).toEqual(["question", "answer"]);
     expect(faqItems.fields?.find((f) => f.name === "answer")?.kind).toBe("richtext");
+  });
+});
+
+/**
+ * `describeSchema` sees one field at a time, which is what keeps it honest —
+ * but a few controls are only correctly labelled in the light of a sibling.
+ * The integrations paste box is the case: "Untappd iframe URL or IDs" is the
+ * right label only while Untappd is the selected provider.
+ */
+describe("fieldOverrides refine what the schema cannot know", () => {
+  const overridesFor = (provider: string) =>
+    SECTION_REGISTRY.integrations.fieldOverrides?.({ provider }) ?? {};
+
+  it("relabels the embed field for the chosen provider", () => {
+    expect(overridesFor("untappd").embedUrl?.label).toBe("Untappd iframe URL or IDs");
+    expect(overridesFor("spotify").embedUrl?.label).toContain("Spotify");
+    expect(overridesFor("google-maps").embedUrl?.label).toContain("Google Maps");
+  });
+
+  it("carries help text and an example the plain control has nowhere to get", () => {
+    const embed = overridesFor("untappd").embedUrl;
+    expect(embed?.help).toContain("Only the verified IDs are saved");
+    expect(embed?.placeholder).toContain("business.untappd.com");
+  });
+
+  it("falls back rather than throwing on an unknown provider", () => {
+    expect(overridesFor("not-a-provider").embedUrl?.label).toBeTruthy();
+  });
+
+  it("only ever merges over a control the schema already produced", () => {
+    const fields = new Set(Object.keys(SECTION_REGISTRY.integrations.schema.shape));
+    for (const kind of SECTION_KINDS) {
+      const def = SECTION_REGISTRY[kind];
+      if (!def.fieldOverrides) continue;
+      const schemaKeys = new Set(Object.keys(def.schema.shape));
+      for (const name of Object.keys(def.fieldOverrides({}))) {
+        expect(schemaKeys.has(name), `${kind}.${name}`).toBe(true);
+      }
+    }
+    expect(fields.has("embedUrl")).toBe(true);
   });
 });
 
