@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, ImagePlus, Loader2, Trash2, Upload } from "lucide-react";
+import { FileText, ImagePlus, ImageOff, Loader2, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -529,8 +529,23 @@ export function AssetListPicker({
         <ul className="mb-2 space-y-1.5">
           {value.map((item, index) => {
             const asset = assets?.find((a) => a.id === item.assetId);
+            /*
+              "Not loaded yet" and "deleted from the library" are different
+              facts, and this row used to render both as a grey square labelled
+              "Photo". The second one means the merchant's live page has an
+              empty cell where a photo used to be, and this drawer is the only
+              place they can see it — so it says so, loudly. Same distinction
+              the single `AssetPicker` makes, and the same string.
+            */
+            const missing = assets !== null && !asset;
             return (
-              <li key={`${item.assetId}-${index}`} className="flex items-center gap-2 rounded-md border p-1.5">
+              <li
+                key={`${item.assetId}-${index}`}
+                className={cn(
+                  "flex items-center gap-2 rounded-md border p-1.5",
+                  missing && "border-destructive/60 bg-destructive/5",
+                )}
+              >
                 {asset ? (
                   // eslint-disable-next-line @next/next/no-img-element -- merchant CDN host
                   <img
@@ -538,11 +553,22 @@ export function AssetListPicker({
                     alt={asset.altText ?? ""}
                     className="size-10 shrink-0 rounded object-cover"
                   />
+                ) : missing ? (
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded bg-destructive/10 text-destructive">
+                    <ImageOff className="size-4" />
+                  </span>
                 ) : (
                   <span className="size-10 shrink-0 rounded bg-muted" />
                 )}
-                <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
-                  {asset?.altText || asset?.originalFilename || "Photo"}
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate text-[11px]",
+                    missing ? "font-medium text-destructive" : "text-muted-foreground",
+                  )}
+                >
+                  {missing
+                    ? KIND_COPY.image.missing
+                    : asset?.altText || asset?.originalFilename || "Photo"}
                 </span>
                 <button
                   type="button"

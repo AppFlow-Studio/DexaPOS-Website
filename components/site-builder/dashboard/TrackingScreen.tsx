@@ -116,9 +116,19 @@ export default function TrackingScreen({
         </div>
       </section>
 
+      {/*
+        Sticky inside this column, not fixed to the viewport.
+
+        `fixed inset-x-0` spanned the whole window, so the bar ran under the
+        dashboard sidebar and the mobile tab bar and looked like a piece of the
+        app rather than of this screen. Sticky keeps it pinned to the bottom of
+        the reading column, which is where the thing it saves lives. The
+        negative margins undo the page padding so the bar still reaches the
+        column's edges.
+      */}
       {dirty && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur">
-          <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 p-3 sm:px-6 lg:px-8">
+        <div className="sticky bottom-0 -mx-4 border-t bg-background/95 backdrop-blur sm:-mx-6 lg:-mx-8">
+          <div className="flex items-center justify-between gap-4 p-3 sm:px-6 lg:px-8">
             <p className="text-xs text-muted-foreground">
               These go live on your website as soon as you save them.
             </p>

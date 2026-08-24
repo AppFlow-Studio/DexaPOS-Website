@@ -31,6 +31,8 @@ import {
 } from "@/lib/site-builder/forms/mutations";
 import { cn } from "@/lib/utils";
 import PublicForm from "../forms/PublicForm";
+import { googleFontsHref } from "@/lib/site-builder/fonts";
+import { themeToCssVars, type ThemeTokens } from "@/lib/site-builder/render-context";
 import { websiteRoutes } from "../routes";
 import OverlayChrome, { OverlayRail, OverlayStage } from "../shell/OverlayChrome";
 import {
@@ -56,6 +58,14 @@ import { SectionIcon } from "./section-icons";
  * with `interactive={false}` so the merchant cannot post a fake lead into their
  * own inbox while laying it out. One implementation of the markup, which cannot
  * drift from what is served.
+ *
+ * **And now the real theme with it.** `PublicForm` styles itself entirely from
+ * `--site-brand`, `--site-radius` and the rest, and nothing in this screen
+ * defined them — so the preview rendered in the dashboard's own theme with
+ * square inputs, and the Send button, whose background is `var(--site-brand)`,
+ * came out as grey text on white and read as disabled. The tokens are applied
+ * here rather than by importing `SiteChrome`, which would drag the whole
+ * server-rendered section graph into this client bundle.
  */
 export default function FormBuilder({
   clerkOrgId,
@@ -65,6 +75,7 @@ export default function FormBuilder({
   initialRevision,
   initialPublishedAt,
   submissionCount,
+  theme,
 }: {
   clerkOrgId: string;
   formId: string;
@@ -73,6 +84,8 @@ export default function FormBuilder({
   initialRevision: number;
   initialPublishedAt: string | null;
   submissionCount: number;
+  /** The site's resolved design tokens, for the preview. */
+  theme: ThemeTokens;
 }) {
   const [doc, setDoc] = useState(initialDoc);
   const [revision, setRevision] = useState(initialRevision);
@@ -96,6 +109,7 @@ export default function FormBuilder({
   );
 
   const selected = doc.fields.find((field) => field.id === selectedId) ?? null;
+  const fontsHref = googleFontsHref([theme.fontFamily, theme.headingFont]);
 
   const publish = async () => {
     setPublishing(true);
@@ -164,9 +178,31 @@ export default function FormBuilder({
         )}
 
         <OverlayStage>
-          <div className="mx-auto max-w-xl rounded-xl border bg-background p-6 shadow-sm">
-            <h2 className="text-xl font-semibold tracking-tight">{doc.title}</h2>
-            {doc.intro && <p className="mt-2 text-sm text-muted-foreground">{doc.intro}</p>}
+          {/* The typefaces the theme actually names, so the specimen is not a
+              lie about the shape of the words. */}
+          {fontsHref && (
+            <link rel="stylesheet" href={fontsHref} precedence="site-form-preview-fonts" />
+          )}
+          <div
+            style={{
+              ...themeToCssVars(theme),
+              background: "var(--site-surface)",
+              color: "var(--site-text)",
+              fontFamily: "var(--site-font)",
+            }}
+            className="mx-auto max-w-xl rounded-xl border p-6 shadow-sm"
+          >
+            <h2
+              className="text-xl font-semibold tracking-tight"
+              style={{ fontFamily: "var(--site-heading-font)" }}
+            >
+              {doc.title}
+            </h2>
+            {doc.intro && (
+              <p className="mt-2 text-sm" style={{ color: "var(--site-text-muted)" }}>
+                {doc.intro}
+              </p>
+            )}
             <div className="mt-6">
               <PublicForm formId={formId} siteId="" doc={doc} interactive={false} />
             </div>

@@ -41,6 +41,13 @@ export interface SiteContext {
   locationId: string;
   storeConfigId: string;
   slug: string;
+  /**
+   * The brand address the built site is served at, when the merchant has one.
+   * Deliberately apart from `slug`: the storefront slug is where ordering
+   * lives, the subdomain is where the built pages live, and one string cannot
+   * honestly be both (see `buildRenderContext`).
+   */
+  subdomain: string | null;
   name: string;
   logoUrl: string | null;
   heroImageUrl: string | null;
@@ -202,6 +209,7 @@ async function fetchWebsiteSettings(merchantId: string): Promise<{
   brand: SiteBrand;
   nav: unknown;
   logoUrl: string | null;
+  subdomain: string | null;
 }> {
   const site = await fetchMerchantSite(merchantId);
   const { features, brand } = readSiteSettings({
@@ -218,6 +226,7 @@ async function fetchWebsiteSettings(merchantId: string): Promise<{
     features,
     brand,
     nav: site?.nav ?? null,
+    subdomain: site?.subdomain ?? null,
   };
 }
 
@@ -251,6 +260,7 @@ export async function loadSiteContext(
     locationId: String(config.location_id),
     storeConfigId: String(config.id),
     slug: String(config.slug ?? ""),
+    subdomain: website.subdomain,
     // Same precedence as the public renderer, through the same function, so the
     // canvas cannot show one name while the live page shows another.
     name: siteDisplayName({
@@ -292,7 +302,13 @@ export function buildRenderContext(
    */
   assets: AssetMap = EMPTY_ASSET_MAP,
 ): RenderContext {
-  const basePath = `/sites/${site.slug}`;
+  // Two addresses, not one. The storefront is where ordering lives; the brand
+  // subdomain is where the built pages live. Collapsing them meant every nav
+  // link in the editor pointed at a storefront route that has no such page and
+  // 404ed. A merchant who has never opened the builder has no subdomain, so the
+  // storefront remains the fallback — which is the pre-builder behaviour.
+  const storefrontPath = `/sites/${site.slug}`;
+  const basePath = site.subdomain ? `/sites/${site.subdomain}` : storefrontPath;
 
   return createRenderContext({
     mode,
@@ -305,11 +321,10 @@ export function buildRenderContext(
       heroImageUrl: site.heroImageUrl,
       phone: site.phone,
       basePath,
-      // Stage 6 owns the real answer (PLAN-04 §2): the ordering storefront sits
-      // at the root of /sites/[slug], which is exactly where a built site wants
-      // to be. Until that collision is resolved, both point at the storefront.
-      orderUrl: basePath,
-      menuUrl: basePath,
+      // Ordering lives on the ordering storefront and nowhere else, so these
+      // two deliberately do not follow `basePath` onto the brand subdomain.
+      orderUrl: storefrontPath,
+      menuUrl: storefrontPath,
       /**
        * The real navigation, not an empty list.
        *
@@ -319,9 +334,10 @@ export function buildRenderContext(
        * It was defensible when nothing could edit the nav; it stopped being
        * defensible the moment the nav editor shipped.
        *
-       * `basePath` here is the storefront path form, which is what the editor
-       * previews at; the public render prefixes the same stored paths with `''`
-       * when the visitor arrived by subdomain. One stored nav, correct at both.
+       * `basePath` here is the brand address once the merchant has a subdomain,
+       * and the storefront until they do; the public render prefixes the same
+       * stored paths with `''` when the visitor arrived by subdomain. One
+       * stored nav, correct at all three.
        */
       nav: readNav(site.nav, basePath),
       pricingDisclosureText: site.pricingDisclosureText,

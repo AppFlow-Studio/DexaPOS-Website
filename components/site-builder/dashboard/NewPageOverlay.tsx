@@ -159,7 +159,9 @@ function usePreview(
           locationId,
           title: title || "Your new page",
         });
-        const node = await renderCanvas(doc, locationId);
+        // Nothing in this preview is editable, so it renders as a visitor
+        // would see the template rather than as the builder canvas.
+        const node = await renderCanvas(doc, locationId, "preview");
         if (token === latest.current) setPreview(node);
       } catch (error) {
         console.error("[site-builder] template preview failed:", error);

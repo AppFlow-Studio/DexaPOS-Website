@@ -66,7 +66,7 @@ export function createStarterHomePage(options: StarterPageOptions): PageDocument
         id: "s_home_popular",
         kind: "popular-items",
         props: {
-          heading: "Guest favourites",
+          heading: "Guest favorites",
           subheading: "The dishes people come back for.",
           // Bindings, not copies: prices, photos and availability resolve live
           // from the POS, so this section is correct before it is ever edited.

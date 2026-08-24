@@ -164,10 +164,24 @@ function HeroMedia({
     seenAssetIds.add(asset.assetId);
     return true;
   });
-  const hasPrimary = Boolean(image || ctx.site.heroImageUrl);
+  // A dead primary is not a frame. Without the resolve check it still claimed
+  // a slot in the carousel's timeline and the rotation paused on nothing — the
+  // same defect as the gallery's empty cells, one layer up.
+  const hasPrimary = Boolean(
+    (image && ctx.resolveAsset(image.assetId)) || ctx.site.heroImageUrl,
+  );
   const frames: (AssetRef | null)[] = [...(hasPrimary ? [image ?? null] : []), ...extras];
 
-  if (frames.length <= 1) {
+  /*
+    The canvas gets the first frame and no rotation.
+
+    A carousel that cycles every five seconds while the merchant is working
+    changes the section under their cursor: they select a photo, look away to
+    the drawer, and the thing they were editing has been replaced by another
+    image. Preview and the live page still animate, so the behaviour is still
+    reviewable — it simply is not running while someone is trying to edit it.
+  */
+  if (frames.length <= 1 || ctx.mode === "builder") {
     return (
       <SiteImage
         asset={frames[0] ?? image ?? null}

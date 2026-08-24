@@ -10,10 +10,16 @@ import AddSectionModal from "./AddSectionModal";
 import Canvas from "./Canvas";
 import EditorTopBar from "./EditorTopBar";
 import SectionDrawer, { type DrawerSite } from "./SectionDrawer";
+import { escapeClosesDrawer } from "./escape-guard";
 import { getTextPreviewPatches } from "./preview-sync";
 import { createDraftSaveAdapter } from "./save-adapter";
 import type { SiteFeatures } from "@/lib/site-builder/site-settings";
-import { createBuilderStore, type EditorPage, type SaveAdapter } from "./store";
+import {
+  createBuilderStore,
+  type EditorMode,
+  type EditorPage,
+  type SaveAdapter,
+} from "./store";
 
 /**
  * The editor's only stateful client root.
@@ -116,6 +122,7 @@ export default function BuilderShell({
   });
 
   const doc = store((s) => s.doc);
+  const mode = store((s) => s.mode);
   const notice = store((s) => s.notice);
   const selectedId = store((s) => s.selectedId);
   const pageSettingsOpen = store((s) => s.pageSettingsOpen);
@@ -134,7 +141,7 @@ export default function BuilderShell({
     clearNotice();
   }, [notice, clearNotice]);
 
-  useServerRender(doc, locationId, canvasRefreshRequest, setCanvas, setRendering);
+  useServerRender(doc, locationId, mode, canvasRefreshRequest, setCanvas, setRendering);
   useAutosave(store, resolvedAdapter);
   useSaveFailureToast(store);
   useMenuCatalog(store, locationId, !!initialCatalog);
@@ -173,12 +180,20 @@ export default function BuilderShell({
 function useServerRender(
   doc: PageDocument,
   locationId: string,
+  /**
+   * Build or Preview. Part of what the *server* renders, not just chrome: the
+   * toggle used to hide the gutter controls and leave the page itself in
+   * builder mode, so Preview still drew placeholders for empty sections that no
+   * visitor would ever see.
+   */
+  mode: EditorMode,
   canvasRefreshRequest: number,
   setCanvas: (canvas: React.ReactNode) => void,
   setRendering: (rendering: boolean) => void,
 ) {
   const first = useRef(true);
   const renderedDoc = useRef(doc);
+  const renderedMode = useRef(mode);
   const handledRefreshRequest = useRef(canvasRefreshRequest);
   // Monotonic token: a slow earlier render must never overwrite a newer one.
   const latest = useRef(0);
@@ -192,17 +207,26 @@ function useServerRender(
 
     const refreshRequested = canvasRefreshRequest !== handledRefreshRequest.current;
     if (refreshRequested) handledRefreshRequest.current = canvasRefreshRequest;
-    const mustRender = refreshRequested || getTextPreviewPatches(renderedDoc.current, doc) === null;
+    // A mode flip changes the markup even when the document has not moved, so
+    // it is its own reason to re-render. Driven off `mode` directly rather than
+    // by also bumping `canvasRefreshRequest` inside `setMode`: one signal for
+    // one idea, and this one cannot get out of step with what was rendered.
+    const modeChanged = mode !== renderedMode.current;
+    if (modeChanged) renderedMode.current = mode;
+    const mustRender =
+      modeChanged || refreshRequested || getTextPreviewPatches(renderedDoc.current, doc) === null;
     if (!mustRender) return;
 
     // Advance the token at scheduling time, not only when the timer fires. A
     // newer edit must be able to invalidate an older in-flight server response.
     const token = ++latest.current;
     const snapshot = doc;
+    // Edits are debounced so a burst of typing costs one render. A mode flip is
+    // the direct answer to a click, and waiting 400 ms for it reads as a stall.
     const timer = setTimeout(async () => {
       setRendering(true);
       try {
-        const node = await renderCanvas(snapshot, locationId);
+        const node = await renderCanvas(snapshot, locationId, mode);
         if (token !== latest.current) return;
 
         /**
@@ -229,10 +253,12 @@ function useServerRender(
       } finally {
         if (token === latest.current) setRendering(false);
       }
-    }, 400);
+    }, modeChanged ? 0 : 400);
 
     return () => clearTimeout(timer);
-  }, [doc, locationId, canvasRefreshRequest, setCanvas, setRendering]);
+    // `mode` is safe to depend on here — it changes only on a click. Anything
+    // with a fresh identity per render is not; see the loop documented above.
+  }, [doc, locationId, mode, canvasRefreshRequest, setCanvas, setRendering]);
 }
 
 /**
@@ -407,25 +433,7 @@ function useUnsavedChangesWarning(store: ReturnType<typeof createBuilderStore>) 
 function useEscapeClosesDrawer(store: ReturnType<typeof createBuilderStore>) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-
-      // An open popover, dropdown or dialog owns this Escape. Radix renders open
-      // layers into these wrappers and has not yet unmounted them when this
-      // window listener runs, so without the guard one keypress dismisses two
-      // things and only one of them was asked for.
-      const layerOpen = document.querySelector(
-        '[data-radix-popper-content-wrapper], [role="dialog"][data-state="open"]',
-      );
-      if (layerOpen) return;
-
-      const target = event.target;
-      if (
-        target instanceof Element &&
-        target.matches("input, textarea, select, [contenteditable]")
-      ) {
-        return;
-      }
-
+      if (!escapeClosesDrawer(event)) return;
       store.getState().closeDrawer();
     };
 

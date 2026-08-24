@@ -77,8 +77,16 @@ function SectionGrid({ store }: { store: BuilderStore }) {
   const awaiting = kindsAwaitingFeature(features);
   const present = new Set(doc.sections.map((section) => section.kind));
 
-  const firstAvailable = kinds.find((kind) => !isBlocked(kind, present));
-  const [chosen, setChosen] = useState<SectionKind | undefined>(firstAvailable);
+  /*
+    Nothing is chosen to begin with.
+
+    This used to preselect the first available kind, which was always Content —
+    so a merchant who opened the modal and clicked `Add` without reading it got
+    a Content section they had not asked for, and the highlighted row made it
+    look like the product had recommended one. `Add` stays disabled until they
+    say what they want.
+  */
+  const [chosen, setChosen] = useState<SectionKind | undefined>(undefined);
 
   const add = () => {
     if (!chosen) return;
@@ -92,7 +100,14 @@ function SectionGrid({ store }: { store: BuilderStore }) {
         <DialogTitle>Add Section</DialogTitle>
       </DialogHeader>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {/* A real radiogroup. The rows already carried `role="radio"` and
+          `aria-checked`, which is invalid ARIA without an owning group — a
+          screen reader announced eleven unrelated radios with no set. */}
+      <div
+        role="radiogroup"
+        aria-label="Section type"
+        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+      >
         {kinds.map((kind) => (
           <SectionRow
             key={kind}
@@ -165,7 +180,14 @@ function SectionRow({
       type="button"
       role="radio"
       aria-checked={selected}
-      aria-label={reason ? `${def.label} — ${reason}` : `Add a ${def.label} section`}
+      /*
+        The row's own text is its accessible name inside a group already labelled
+        "Section type" — which is both correct ARIA and better than what was
+        here: a template that read "Add a Events section" and "Add a
+        Integrations section". A blocked row still needs its reason spoken,
+        since the tooltip carrying it is not reachable by keyboard.
+      */
+      aria-label={reason ? `${def.label} — ${reason}` : undefined}
       disabled={blocked}
       onClick={onSelect}
       className={cn(
@@ -177,6 +199,14 @@ function SectionRow({
     >
       <SectionIcon name={def.icon} className="size-4 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate">{def.label}</span>
+      {/* Why the row is inert, on the row. It used to live only in the
+          `aria-label` and in a tooltip, so a sighted merchant saw a greyed row
+          with no explanation and read it as broken. */}
+      {blocked && (
+        <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+          {placed ? "Added" : "Soon"}
+        </span>
+      )}
       {!blocked && selected && <CircleCheck className="size-4 shrink-0 text-primary" />}
     </button>
   );

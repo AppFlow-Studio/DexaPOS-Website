@@ -2,9 +2,11 @@ import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { loadMenuCatalog } from "@/app/dashboard/website/pages/menu-catalog";
 import StyleOverlay from "@/components/site-builder/dashboard/StyleOverlay";
 import { Button } from "@/components/ui/button";
 import type { MerchantSiteRow } from "@/lib/site-builder/db-types";
+import { parseNavItems } from "@/lib/site-builder/nav";
 import { loadSiteContext } from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -53,6 +55,19 @@ export default async function StyleRoute({
     );
   }
 
+  /*
+    The merchant's own navigation and their own dishes, so the miniature page is
+    a preview of *their* site rather than of an imaginary one. The catalog read
+    is the same one the page editor makes and is scoped to this location; a
+    failure costs the three dish names and nothing else, because `ThemePreview`
+    falls back to placeholders.
+  */
+  const catalog = await loadMenuCatalog(storefront.locationId);
+  const previewItems = catalog.items
+    .filter((item) => item.available)
+    .slice(0, 3)
+    .map((item) => ({ name: item.name, image: item.image }));
+
   return (
     <StyleOverlay
       clerkOrgId={orgId}
@@ -60,6 +75,8 @@ export default async function StyleRoute({
       website={website as MerchantSiteRow}
       siteName={storefront.name}
       logoUrl={storefront.logoUrl}
+      nav={parseNavItems((website as MerchantSiteRow).nav).map((item) => item.label)}
+      previewItems={previewItems}
       // The pre-builder storefront colours, used only for keys the website theme
       // has never set. `resolveTheme` layers these under the saved theme.
       fallbackTheme={{

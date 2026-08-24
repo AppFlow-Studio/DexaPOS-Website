@@ -11,6 +11,7 @@ import { loadAssetMap } from "@/lib/site-builder/asset-map";
 import { collectFormIds, formResolver, loadFormMap } from "@/lib/site-builder/forms/form-map";
 import { loadEvents } from "@/lib/site-builder/events/event-map";
 import { pageNeedsEvents } from "@/lib/site-builder/sections/registry";
+import type { RenderMode } from "@/lib/site-builder/render-context";
 import { buildRenderContext, loadSiteContext } from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -33,7 +34,16 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * normalized before it reaches a renderer, and the merchant is re-authorized on
  * every call rather than trusting the session that opened the builder.
  */
-export async function renderCanvas(doc: unknown, locationId: string) {
+export async function renderCanvas(
+  doc: unknown,
+  locationId: string,
+  /**
+   * Which editor mode the canvas is standing in for. `"preview"` renders the
+   * page exactly as a visitor would see it — no gutters, and no placeholders
+   * for empty sections — which is the whole point of the Build/Preview toggle.
+   */
+  mode: "build" | "preview" = "build",
+) {
   const { orgId } = await auth();
   if (!orgId) return null;
 
@@ -45,6 +55,14 @@ export async function renderCanvas(doc: unknown, locationId: string) {
 
   // Never trust the posted document.
   const page = normalizePage(doc);
+
+  /**
+   * Nor the posted mode. This is a Server Action, so `mode` arrives over the
+   * network and its TypeScript union is not enforced at runtime: anything that
+   * is not the literal `"preview"` renders as the builder. In particular a
+   * crafted call must not be able to reach `"public"`.
+   */
+  const renderMode: RenderMode = mode === "preview" ? "preview" : "builder";
 
   const sources = getResolverSources(site.deliveryPricingEnabled);
 
@@ -70,7 +88,7 @@ export async function renderCanvas(doc: unknown, locationId: string) {
   ]);
 
   const ctx = {
-    ...buildRenderContext(site, "builder", assets),
+    ...buildRenderContext(site, renderMode, assets),
     resolveForm: formResolver(forms),
     events,
     // No `eventUrl` in the builder: the public address does not exist until the

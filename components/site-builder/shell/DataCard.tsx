@@ -21,6 +21,14 @@ import { cn } from "@/lib/utils";
  * own pages and forms: tens of rows, already in memory because the server
  * component fetched them to render the screen. A round trip per keystroke would
  * buy nothing and cost the responsiveness that makes the search feel worth using.
+ *
+ * **The template only applies from `sm` up.** It was applied unconditionally,
+ * so on a phone the metadata columns held their fixed pixel widths — 240px of
+ * `Updated` and `Status` on a 420px screen — and the row's identity, its name,
+ * took whatever was left: `Abo…`, `Car…`, `Test…`. Below `sm` the row stacks
+ * instead, name first and full width, and the column headings go away because a
+ * heading over a stacked cell is noise. Fixed here rather than at the four call
+ * sites, all of which had the same bug and would drift apart fixing it.
  */
 export default function DataCard<T>({
   items,
@@ -42,7 +50,10 @@ export default function DataCard<T>({
   renderRow: (item: T) => React.ReactNode;
   /** Headings for every column after the first. The first is the search box. */
   columns?: string[];
-  /** e.g. `"1fr 120px 140px"` — one track per cell `renderRow` returns. */
+  /**
+   * e.g. `"minmax(0,1fr) 120px 140px"` — one track per cell `renderRow`
+   * returns. Applied from the `sm` breakpoint up; below it every row stacks.
+   */
   gridTemplate: string;
   searchPlaceholder?: string;
   emptyLabel: string;
@@ -88,8 +99,11 @@ export default function DataCard<T>({
     <div>
       <div className="overflow-hidden rounded-xl border">
         <div
-          className="grid items-center gap-3 border-b border-dashed px-4 py-2.5"
-          style={{ gridTemplateColumns: gridTemplate }}
+          className={cn(
+            "grid grid-cols-1 items-center gap-3 border-b border-dashed px-4 py-2.5",
+            "sm:[grid-template-columns:var(--data-card-columns)]",
+          )}
+          style={{ "--data-card-columns": gridTemplate } as React.CSSProperties}
         >
           <label className="relative flex min-w-0 items-center">
             <Search className="pointer-events-none absolute left-2.5 size-4 text-muted-foreground" />
@@ -106,8 +120,10 @@ export default function DataCard<T>({
             />
           </label>
 
+          {/* Hidden below `sm`, where the cells they label are stacked under
+              the name rather than beside it. */}
           {columns.map((label) => (
-            <span key={label} className="truncate text-xs text-muted-foreground">
+            <span key={label} className="hidden truncate text-xs text-muted-foreground sm:block">
               {label}
             </span>
           ))}
@@ -122,8 +138,11 @@ export default function DataCard<T>({
             {visible.map((item) => (
               <li
                 key={getKey(item)}
-                className="grid items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
-                style={{ gridTemplateColumns: gridTemplate }}
+                className={cn(
+                  "grid grid-cols-1 gap-1 px-4 py-3 transition-colors hover:bg-muted/40",
+                  "sm:items-center sm:gap-3 sm:[grid-template-columns:var(--data-card-columns)]",
+                )}
+                style={{ "--data-card-columns": gridTemplate } as React.CSSProperties}
               >
                 {renderRow(item)}
               </li>

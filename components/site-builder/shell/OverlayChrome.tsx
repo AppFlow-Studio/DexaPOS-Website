@@ -2,8 +2,10 @@
 
 import { CircleX, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect, useId, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
+import { claimOverlay } from "@/lib/hooks/overlay-open";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,6 +26,15 @@ import { cn } from "@/lib/utils";
  * `Create →`. That is not decoration: it distinguishes the one committing
  * button on screen from every other button in the product, which puts icons
  * on the left.
+ *
+ * **It claims the screen as well as covering it.** Covering was all it used to
+ * do: the sidebar, the dashboard header and the mobile tab bar stayed tabbable
+ * behind it, the tab bar rendered *over* the drawer's Done button because both
+ * were `z-50` and it came later in the DOM, and ⌘K opened the global palette
+ * with an offer to navigate away mid-edit. It now announces itself as a modal
+ * dialog and publishes its existence through `claimOverlay`, which is what the
+ * dashboard shell reads to make itself inert. See `lib/hooks/overlay-open.ts`
+ * for why the shell cannot simply be made inert from here.
  */
 export default function OverlayChrome({
   title,
@@ -58,6 +69,25 @@ export default function OverlayChrome({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const surfaceRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+
+  // Publishes "an overlay is open" for as long as this one is mounted.
+  useEffect(() => claimOverlay(), []);
+
+  /*
+    Focus starts inside the overlay rather than wherever the click that opened
+    it left it. Without this the first Tab lands on whatever followed the
+    trigger in the *dashboard's* tab order, which is the behaviour that made
+    the app behind the overlay reachable in the first place.
+
+    The container takes the focus, not the first control: a merchant who opened
+    the editor to look at their page has not asked to have the Close button
+    highlighted.
+  */
+  useEffect(() => {
+    surfaceRef.current?.focus({ preventScroll: true });
+  }, []);
 
   const close = () => {
     if (onClose) return onClose();
@@ -65,7 +95,20 @@ export default function OverlayChrome({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background">
+    <div
+      ref={surfaceRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      tabIndex={-1}
+      /*
+        z-60, not z-50. `MobileBottomNav` is also z-50 and renders later in the
+        dashboard layout's DOM order, so at 420 px it won the tie and covered
+        the drawer's Done button completely — the button reported its own
+        coordinates correctly and `elementFromPoint` returned the tab bar.
+      */
+      className="fixed inset-0 z-[60] flex flex-col bg-background outline-none"
+    >
       <header className="relative flex h-14 shrink-0 items-center gap-3 border-b px-3 sm:px-4">
         <Button variant="outline" size="sm" onClick={close} className="gap-1.5">
           <CircleX className="size-4" />
@@ -82,17 +125,27 @@ export default function OverlayChrome({
             aria-label={`${title} — page settings`}
             className="-mx-1.5 flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-accent"
           >
-            <h1 className="min-w-0 truncate text-sm font-semibold">{title}</h1>
+            <h1 id={titleId} className="min-w-0 truncate text-sm font-semibold">
+              {title}
+            </h1>
             <Settings2 className="size-3.5 shrink-0 text-muted-foreground" />
           </button>
         ) : (
-          <h1 className="min-w-0 truncate text-sm font-semibold">{title}</h1>
+          <h1 id={titleId} className="min-w-0 truncate text-sm font-semibold">
+            {title}
+          </h1>
         )}
 
         {/* Absolutely centred rather than flex-centred: the title on the left
             and the actions on the right are different widths on every screen,
             and a mode switch that drifts as the page name grows reads as a
-            rendering bug. */}
+            rendering bug.
+
+            There is no room to centre anything on a phone, so below `md` the
+            same control rides in the action cluster instead. It used to be
+            `hidden md:block` and nothing else, which meant Preview — the one
+            thing that works properly on a small screen — was the one thing
+            unreachable there. */}
         {centre && (
           <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 md:block">
             <div className="pointer-events-auto">{centre}</div>
@@ -100,6 +153,7 @@ export default function OverlayChrome({
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          {centre && <div className="md:hidden">{centre}</div>}
           {aside}
           {action}
         </div>
@@ -132,7 +186,11 @@ export function OverlayRail({
         className,
       )}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+      {/* The bottom padding is for the pinned footer: without it the last
+          control in the rail ended flush against the Done button and read as
+          clipped — the SEO panel's helper text was cut mid-sentence and the
+          Gallery drawer's Columns control sat right under the button. */}
+      <div className="min-h-0 flex-1 overflow-y-auto pb-6">{children}</div>
       {footer && <div className="shrink-0 border-t p-3">{footer}</div>}
     </aside>
   );

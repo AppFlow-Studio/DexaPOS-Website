@@ -4,7 +4,11 @@ import { Check, Plus, Save, X } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { UpdateSiteBrand, UpdateSiteFeatures } from "@/app/dashboard/website/actions/site";
+import {
+  UpdateSiteBrand,
+  UpdateSiteFeatures,
+  UpdateSiteSeo,
+} from "@/app/dashboard/website/actions/site";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,19 +20,23 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
+  AVAILABLE_SITE_FEATURES,
   FEATURE_DESCRIPTIONS,
   FEATURE_LABELS,
   MAX_BRAND_NAME,
   MAX_CUISINES,
+  MAX_SEO_DESCRIPTION,
+  MAX_SEO_SUFFIX,
   PRICE_RANGE_HINTS,
   PRICE_RANGES,
-  SITE_FEATURES,
   SOCIAL_LABELS,
   SOCIAL_PLATFORMS,
   httpUrlSchema,
   type SiteBrand,
   type SiteFeature,
   type SiteFeatures,
+  type SiteSeo,
+  UNAVAILABLE_FEATURES,
   type SocialPlatform,
 } from "@/lib/site-builder/site-settings";
 import ListHeader from "../shell/ListHeader";
@@ -53,6 +61,7 @@ export default function SettingsScreen({
   siteId,
   features: savedFeatures,
   brand: savedBrand,
+  seo: savedSeo,
   locations,
   merchantName,
 }: {
@@ -60,6 +69,7 @@ export default function SettingsScreen({
   siteId: string;
   features: SiteFeatures;
   brand: SiteBrand;
+  seo: SiteSeo;
   locations: { id: string; name: string }[];
   /**
    * What the site calls itself when the field below is blank. Shown as the
@@ -69,6 +79,7 @@ export default function SettingsScreen({
 }) {
   const [features, setFeatures] = useState(savedFeatures);
   const [brand, setBrand] = useState(savedBrand);
+  const [seo, setSeo] = useState(savedSeo);
   const [pending, startTransition] = useTransition();
 
   const featuresDirty = useMemo(
@@ -79,9 +90,18 @@ export default function SettingsScreen({
     () => JSON.stringify(brand) !== JSON.stringify(savedBrand),
     [brand, savedBrand],
   );
-  const dirty = featuresDirty || brandDirty;
+  const seoDirty = useMemo(
+    () => JSON.stringify(seo) !== JSON.stringify(savedSeo),
+    [seo, savedSeo],
+  );
+  const dirty = featuresDirty || brandDirty || seoDirty;
 
   const patchBrand = (patch: Partial<SiteBrand>) => setBrand((current) => ({ ...current, ...patch }));
+
+  // What the site calls itself as things stand, mirroring `siteDisplayName`'s
+  // precedence. Read off the *unsaved* brand name so the search-appearance
+  // placeholder tracks the field above it rather than going stale mid-edit.
+  const siteName = brand.name?.trim() || merchantName;
 
   const save = () => {
     startTransition(async () => {
@@ -90,6 +110,7 @@ export default function SettingsScreen({
       const results = await Promise.all([
         featuresDirty ? UpdateSiteFeatures(clerkOrgId, siteId, features) : null,
         brandDirty ? UpdateSiteBrand(clerkOrgId, siteId, brand) : null,
+        seoDirty ? UpdateSiteSeo(clerkOrgId, siteId, seo) : null,
       ]);
 
       const failure = results.find((result) => result?.error);
@@ -140,11 +161,73 @@ export default function SettingsScreen({
       </Card>
 
       <Card
+        title="Search appearance"
+        description="How your website shows up in Google and when someone shares a link to it."
+      >
+        <div className="space-y-5 p-4">
+          <div className="space-y-2">
+            <FieldLabel>Site name in search results</FieldLabel>
+            <Input
+              value={seo.titleSuffix ?? ""}
+              maxLength={MAX_SEO_SUFFIX}
+              placeholder={siteName}
+              aria-label="Site name in search results"
+              className="w-full sm:w-96"
+              onChange={(e) => {
+                // Empty means "use the default" — an absent key, never a stored
+                // empty string, which would put every page back to a bare
+                // "Home" with nothing after it.
+                const next = e.target.value;
+                setSeo((current) => ({
+                  ...current,
+                  titleSuffix: next.trim() ? next : undefined,
+                }));
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Added after each page name, so your home page reads{" "}
+              <span className="font-medium text-foreground">
+                Home — {seo.titleSuffix?.trim() || siteName}
+              </span>
+              . Leave it empty to use{" "}
+              <span className="font-medium text-foreground">{siteName}</span>.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <FieldLabel>Default description</FieldLabel>
+            <textarea
+              value={seo.description ?? ""}
+              maxLength={MAX_SEO_DESCRIPTION}
+              rows={3}
+              aria-label="Default description"
+              placeholder="A wood-fired pizzeria in Brooklyn, open late seven nights a week."
+              className="w-full rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:w-[36rem]"
+              onChange={(e) => {
+                const next = e.target.value;
+                setSeo((current) => ({
+                  ...current,
+                  description: next.trim() ? next : undefined,
+                }));
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              The sentence under your link in search results, used on any page that has not written
+              its own. {MAX_SEO_DESCRIPTION - (seo.description?.length ?? 0)} characters left.
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <Card
         title="Features"
         description="Turn on what your restaurant actually does. Sections you can add to a page follow from these."
       >
         <div className="divide-y">
-          {SITE_FEATURES.map((feature) => (
+          {/* Only the toggles that do something. Rewards and Gift cards had no
+              consumer anywhere in the product, so switching one on promised a
+              capability the website could not deliver. */}
+          {AVAILABLE_SITE_FEATURES.map((feature) => (
             <FeatureRow
               key={feature}
               feature={feature}
@@ -157,6 +240,15 @@ export default function SettingsScreen({
           Turning one off removes it from the Add Section list. Sections already on a page stay where
           they are — nothing you have published disappears.
         </p>
+        {Object.keys(UNAVAILABLE_FEATURES).length > 0 && (
+          <p className="border-t px-4 py-3 text-xs text-muted-foreground">
+            {(Object.keys(UNAVAILABLE_FEATURES) as SiteFeature[])
+              .map((feature) => FEATURE_LABELS[feature])
+              .join(" and ")}{" "}
+            are on the way. They are not switches yet, because there is nothing behind them to put
+            on a page.
+          </p>
+        )}
       </Card>
 
       <Card

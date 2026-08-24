@@ -13,9 +13,15 @@ import {
 import {
   DEFAULT_BRAND,
   DEFAULT_FEATURES,
+  AVAILABLE_SITE_FEATURES,
   MAX_BRAND_NAME,
+  MAX_SEO_DESCRIPTION,
+  MAX_SEO_SUFFIX,
   resolveBrand,
+  resolveSiteSeo,
   siteDisplayName,
+  SITE_FEATURES,
+  UNAVAILABLE_FEATURES,
   resolveFeatures,
   resolvePricingLocation,
   siteBrandSchema,
@@ -451,5 +457,67 @@ describe("resolveBrand — name", () => {
     const brand = resolveBrand({ name: { evil: true }, cuisines: ["Coffee"] });
     expect(brand.name).toBeUndefined();
     expect(brand.cuisines).toEqual(["Coffee"]);
+  });
+});
+
+/**
+ * The site-wide SEO block had a reader in the public renderer and no writer
+ * anywhere in the product, so `merchant_sites.site_seo` was always `{}` and
+ * every page shipped `<title>Home</title>`.
+ */
+describe("resolveSiteSeo", () => {
+  it("keeps a well-formed block", () => {
+    expect(resolveSiteSeo({ titleSuffix: "Joes Coffee Shop", description: "Good coffee." })).toEqual(
+      { titleSuffix: "Joes Coffee Shop", description: "Good coffee." },
+    );
+  });
+
+  it("treats blank and non-string values as unset rather than storing them", () => {
+    expect(resolveSiteSeo({ titleSuffix: "   ", description: 42 })).toEqual({});
+    expect(resolveSiteSeo(null)).toEqual({});
+    expect(resolveSiteSeo("not an object")).toEqual({});
+    expect(resolveSiteSeo([])).toEqual({});
+  });
+
+  it("clamps rather than rejects, so an over-long value is not lost entirely", () => {
+    const long = "x".repeat(400);
+    const resolved = resolveSiteSeo({ titleSuffix: long, description: long });
+
+    expect(resolved.titleSuffix).toHaveLength(MAX_SEO_SUFFIX);
+    expect(resolved.description).toHaveLength(MAX_SEO_DESCRIPTION);
+  });
+
+  it("keeps one bad field from taking the other with it", () => {
+    expect(resolveSiteSeo({ titleSuffix: "", description: "Still here." })).toEqual({
+      description: "Still here.",
+    });
+  });
+});
+
+/**
+ * A toggle that promises a storefront capability and silently does nothing is
+ * worse than an absent one. `rewards` and `giftCards` had zero consumers.
+ */
+describe("feature availability", () => {
+  it("offers only the toggles something is wired to", () => {
+    expect(AVAILABLE_SITE_FEATURES).toEqual(["reviews", "reservations"]);
+  });
+
+  it("keeps the unavailable keys parsing, because live rows carry them", () => {
+    // Deleting them from the schema would fail validation on stored settings.
+    expect(resolveFeatures({ rewards: true, giftCards: true })).toEqual({
+      ...DEFAULT_FEATURES,
+      rewards: true,
+      giftCards: true,
+    });
+    expect(SITE_FEATURES).toContain("rewards");
+    expect(SITE_FEATURES).toContain("giftCards");
+  });
+
+  it("gives a reason for each one it withholds", () => {
+    for (const feature of SITE_FEATURES) {
+      if (AVAILABLE_SITE_FEATURES.includes(feature)) continue;
+      expect(UNAVAILABLE_FEATURES[feature]).toBeTruthy();
+    }
   });
 });

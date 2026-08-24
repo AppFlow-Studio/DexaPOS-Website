@@ -6,7 +6,7 @@ import SettingsScreen from "@/components/site-builder/dashboard/SettingsScreen";
 import { Button } from "@/components/ui/button";
 import type { MerchantSiteRow } from "@/lib/site-builder/db-types";
 import { fetchMerchant, loadSiteContext } from "@/lib/site-builder/site-context";
-import { readSiteSettings } from "@/lib/site-builder/site-settings";
+import { readSiteSettings, resolveSiteSeo } from "@/lib/site-builder/site-settings";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -69,6 +69,7 @@ export default async function WebsiteSettingsRoute({
 
   const site = website as MerchantSiteRow;
   const { features, brand } = readSiteSettings(site);
+  const seo = resolveSiteSeo(site.site_seo);
 
   const locations = ((storefronts ?? []) as Record<string, unknown>[]).map((row) => ({
     id: String(row.location_id),
@@ -81,6 +82,7 @@ export default async function WebsiteSettingsRoute({
       siteId={site.id}
       features={features}
       brand={brand}
+      seo={seo}
       locations={locations}
       merchantName={merchant?.name?.trim() || "Your restaurant"}
     />

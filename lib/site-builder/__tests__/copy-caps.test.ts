@@ -62,7 +62,18 @@ describe("the counter can see the cap", () => {
   it("keeps the textarea decision separate from the cap", () => {
     const hero = describeSchema(SECTION_REGISTRY.hero.schema);
     expect(hero.find((c) => c.name === "subheading")?.multiline).toBe(true);
-    expect(hero.find((c) => c.name === "heading")?.multiline).toBe(false);
+    // `heading` used to be the counter-example here. It is a textarea now — at
+    // 150 characters it routinely runs to a full sentence, and in an `<input>`
+    // a merchant edited it through a 30-character window. The point the test
+    // makes is unchanged: a capped field is not automatically a textarea.
+    expect(hero.find((c) => c.name === "heading")?.multiline).toBe(true);
+
+    // A capped field that is still a single line, which is the point: the cap
+    // and the control are decided separately.
+    const content = describeSchema(SECTION_REGISTRY.content.schema);
+    const title = content.find((c) => c.name === "title");
+    expect(title?.max).toBe(TITLE_MAX);
+    expect(title?.multiline).toBe(false);
   });
 
   it("gives every capped text field on every kind a usable number", () => {

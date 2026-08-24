@@ -171,6 +171,22 @@ export default function Canvas({ store }: { store: BuilderStore }) {
     <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-muted/40">
       <RenderingPill visible={isRendering} />
 
+      {/*
+        An honest answer instead of a broken one.
+
+        The editing controls live in the gutters either side of the page, and
+        the gutters are the first thing a narrow viewport takes away — so below
+        `sm` the merchant had a canvas they could tap and nothing that would
+        respond, except Add Section, which worked and made the rest look
+        deliberate. Preview is genuinely useful at this width and now reachable
+        from the header, so this points at it rather than pretending.
+      */}
+      {building && (
+        <p className="border-b bg-background px-4 py-2 text-center text-[11px] leading-relaxed text-muted-foreground sm:hidden">
+          Editing a section needs a wider screen. Preview works here.
+        </p>
+      )}
+
       <div ref={scrollerRef} className="flex-1 overflow-auto px-4 py-6 sm:px-16 sm:py-10">
         {/* `overflow-visible` on purpose: the gutter controls hang outside this
             frame, which is the whole point of putting them there. */}

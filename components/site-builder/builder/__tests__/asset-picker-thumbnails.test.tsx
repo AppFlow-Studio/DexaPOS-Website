@@ -141,6 +141,29 @@ describe("AssetListPicker draws its rows without being opened", () => {
     expect(container.textContent).toContain("A plate of pasta");
   });
 
+  it("marks a row whose photo has been deleted from the library", async () => {
+    listSiteAssets.mockResolvedValue({ data: [PHOTO] });
+
+    const container = await render(
+      <AssetListPicker
+        label="Photos"
+        clerkOrgId="org_1"
+        maxItems={5}
+        value={[{ assetId: "asset_1" }, { assetId: "deleted_asset" }]}
+        onChange={() => {}}
+      />,
+    );
+
+    // The dead row is the loudest thing in the list, not the quietest: it is
+    // the only place the merchant learns their live page has an empty cell.
+    expect(container.textContent).toContain("no longer in your library");
+
+    const rows = container.querySelectorAll("li");
+    expect(rows).toHaveLength(2);
+    expect(rows[1].className).toContain("destructive");
+    expect(rows[0].className).not.toContain("destructive");
+  });
+
   it("does not fetch anything for an empty list", async () => {
     await render(
       <AssetListPicker

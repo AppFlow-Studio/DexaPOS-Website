@@ -108,6 +108,7 @@ import { ImpersonationHydrator } from "@/components/dashboard/ImpersonationHydra
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { GetUnreadTicketCounts } from "./actions/support";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
+import { isOverlayOpen, useOverlayOpen } from "@/lib/hooks/overlay-open";
 import type { BottomNavTab, MoreNavItem } from "@/components/dashboard/MobileBottomNav";
 import { GlobalSearch } from "./components/global-search/GlobalSearch";
 
@@ -372,9 +373,29 @@ const navFooter = [
   },
 ];
 
-function MerchantSidebar() {
+function MerchantSidebar({ inert }: { inert?: boolean }) {
   const { data: userInfo, isLoading } = useUserInfo();
   const pathname = usePathname();
+
+  /*
+    Bring the current page's nav item into view.
+
+    The nav is long enough that opening a group near the bottom — Website, at
+    1440×900 — expanded it entirely below the fold: the merchant saw a chevron
+    and no sub-items at all, and nothing suggested there was anything to scroll
+    to. `block: "nearest"` scrolls only when the item is actually out of view,
+    so a visible item does not get yanked around on every navigation.
+
+    A DOM query rather than a ref because the nav is written out by hand, group
+    by group; `data-active` is set by the shared sidebar primitives, so this
+    keeps working as items are added.
+  */
+  useEffect(() => {
+    const active = document.querySelector<HTMLElement>(
+      '[data-sidebar="menu-sub-button"][data-active="true"]',
+    );
+    active?.scrollIntoView({ block: "nearest" });
+  }, [pathname]);
   const { signOut } = useClerk();
   const queryClient = useQueryClient();
 
@@ -389,7 +410,10 @@ function MerchantSidebar() {
   };
 
   return (
-    <Sidebar variant="inset">
+    // `inert` while a builder overlay owns the screen: the whole nav tree stays
+    // rendered (so nothing reflows when the overlay closes) but stops being
+    // tabbable, clickable and visible to assistive tech.
+    <Sidebar variant="inset" inert={inert}>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-4 py-2">
           {isLoading ? (
@@ -1229,10 +1253,26 @@ export default function MerchantDashboardLayout({
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => { setIsMounted(true); }, []);
   const [searchOpen, setSearchOpen] = useState(false);
+  // True while the website builder (or any other `OverlayChrome` surface) owns
+  // the screen.
+  const overlayOpen = useOverlayOpen();
 
   // Global ⌘K / Ctrl+K opens the command palette from anywhere in the dashboard.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      /*
+        …anywhere except under a full-screen overlay. Inside the website
+        builder this popped the dashboard palette over the canvas and offered
+        to navigate to Orders or Staff, discarding the edit in progress.
+
+        Read imperatively rather than closed over: this listener is bound once,
+        and the answer has to be the one that is true when the key is pressed.
+        It also cannot be solved from the overlay with `stopPropagation` — the
+        listener is on `document` and a keypress starting at `body` never
+        passes through the overlay at all.
+      */
+      if (isOverlayOpen()) return;
+
       if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
         setSearchOpen((prev) => !prev);
@@ -1436,12 +1476,22 @@ export default function MerchantDashboardLayout({
   ];
 
   return (
+    /*
+      `overlayOpen` switches off every part of the shell that is not an
+      ancestor of the overlay. The overlay renders inside `{children}`, so
+      `inert` on `<main>` or higher would disable the overlay along with the
+      app — which is why the flag is published from the overlay and read here
+      rather than applied at the top.
+    */
     <SidebarProvider className="dashboard-sidebar-theme">
       <ImpersonationHydrator />
-      <MerchantSidebar />
+      <MerchantSidebar inert={overlayOpen} />
       <main aria-label="Dashboard content" className="flex-1 flex flex-col min-w-0 bg-background">
         <ImpersonationBanner />
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
+        <header
+          inert={overlayOpen}
+          className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4"
+        >
           <SidebarTrigger className="-ml-1 hidden sm:flex" />
           <h1 className="text-base md:text-sm lg:text-base font-semibold truncate flex-1 min-w-0">Merchant Dashboard</h1>
           <LocationIndicator userRole={userRole} />
@@ -1466,7 +1516,11 @@ export default function MerchantDashboardLayout({
         </header>
         <div id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6">{children}</div>
       </main>
-      <MobileBottomNav tabs={dashboardBottomTabs} moreItems={dashboardMoreItems} />
+      <MobileBottomNav
+        tabs={dashboardBottomTabs}
+        moreItems={dashboardMoreItems}
+        inert={overlayOpen}
+      />
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
     </SidebarProvider>
   );

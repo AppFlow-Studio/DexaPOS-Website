@@ -25,7 +25,23 @@ export default function GallerySection({ section, ctx }: SectionRenderProps<"gal
   const { heading, subheading, images, layout, columns } = section.props;
   const f = fieldAttrsFor(ctx.mode, section.id);
 
-  if (images.length === 0 && ctx.mode !== "builder") return null;
+  /**
+   * Resolve before deciding the markup, not after.
+   *
+   * `SiteImage` renders nothing for a photo that has been deleted from the
+   * library, which is right — but the `<li>` around it is this section's to
+   * omit, and it was being emitted regardless. A merchant who tidied their
+   * photo library shipped a row of empty cells to their visitors. The rule
+   * generalises: if a section wraps `SiteImage` in an element, that element is
+   * the section's responsibility to leave out.
+   *
+   * Filtered in every mode, builder included, so the canvas shows what a
+   * visitor will actually get. The dead references are surfaced where they can
+   * be fixed — in the photo picker in the drawer — rather than as a hole here.
+   */
+  const visible = images.filter((image) => ctx.resolveAsset(image.assetId));
+
+  if (visible.length === 0 && ctx.mode !== "builder") return null;
 
   const layoutClasses =
     layout === "carousel"
@@ -49,7 +65,7 @@ export default function GallerySection({ section, ctx }: SectionRenderProps<"gal
           subheadingAttrs={f("props.subheading")}
         />
 
-        {images.length === 0 ? (
+        {visible.length === 0 ? (
           <p className="rounded-[var(--site-radius)] border border-dashed p-8 text-center text-sm opacity-70">
             Add photos to fill this gallery.
           </p>
@@ -60,7 +76,7 @@ export default function GallerySection({ section, ctx }: SectionRenderProps<"gal
             }`}
             {...f("props.images", "list")}
           >
-            {images.map((image, index) => (
+            {visible.map((image, index) => (
               <SiteImage
                 key={`${image.assetId}-${index}`}
                 asset={image}
@@ -71,7 +87,7 @@ export default function GallerySection({ section, ctx }: SectionRenderProps<"gal
           </div>
         ) : (
           <ul className={`grid gap-4 ${layoutClasses}`} {...f("props.images", "list")}>
-            {images.map((image, index) => (
+            {visible.map((image, index) => (
               <li key={`${image.assetId}-${index}`}>
                 <SiteImage
                   asset={image}

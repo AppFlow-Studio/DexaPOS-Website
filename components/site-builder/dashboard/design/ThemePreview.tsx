@@ -20,23 +20,54 @@ export type PreviewDevice = "desktop" | "mobile";
  * so toggling the mode appeared to leave the footer unchanged — while the real
  * `FooterSection`, on `surfaceMuted`, had been inverting correctly all along.
  * A preview that disagrees with the renderer is worse than no preview.
+ *
+ * **The content is the merchant's own.** It used to be furniture — a nav of
+ * `Menu · About · Contact` against a site whose real pages are `Home · About
+ * us · Careers`, three grey boxes labelled "Signature plate", "House favourite"
+ * and "Chef's pick". A merchant judging their own colours was reading someone
+ * else's restaurant, and the grey boxes read as broken images rather than as
+ * placeholders. The nav and the dishes come in as props now; the invented
+ * strings survive only as the fallback for a site that genuinely has neither.
  */
 export default function ThemePreview({
   theme,
   device,
   restaurantName,
+  nav = [],
+  items = [],
 }: {
   theme: ThemeTokens;
   device: PreviewDevice;
   restaurantName: string;
+  /** The merchant's real navigation labels, in order. */
+  nav?: string[];
+  /** A few real dishes — name, and a photo where the merchant has one. */
+  items?: { name: string; image: string | null }[];
 }) {
   const heading = { fontFamily: theme.headingFont || theme.fontFamily };
   const mobile = device === "mobile";
 
+  // A brand-new site has neither, and an empty header would show less about the
+  // theme than a populated one does.
+  const navLabels = (nav.length > 0 ? nav : ["Menu", "About", "Contact"]).slice(0, 3);
+  const dishes = (
+    items.length > 0
+      ? items
+      : [
+          { name: "Signature plate", image: null },
+          { name: "House favorite", image: null },
+          { name: "Chef's pick", image: null },
+        ]
+  ).slice(0, mobile ? 2 : 3);
+
   return (
     <div
       className={cn(
-        "mx-auto w-full overflow-hidden border shadow-sm transition-[max-width] duration-300",
+        // `ring-1` on top of the themed border: the border is the *site's*
+        // colour and can sit invisibly close to the app's own surface in dark
+        // mode, so a neutral hairline guarantees the frame exists whatever the
+        // merchant picks.
+        "mx-auto w-full overflow-hidden border shadow-sm ring-1 ring-border transition-[max-width] duration-300",
         mobile ? "max-w-[320px]" : "max-w-none",
       )}
       style={{
@@ -63,9 +94,11 @@ export default function ThemePreview({
           </span>
         ) : (
           <span className="flex items-center gap-3 text-[10px]" style={{ color: theme.textMuted }}>
-            <span>Menu</span>
-            <span>About</span>
-            <span>Contact</span>
+            {navLabels.map((label) => (
+              <span key={label} className="max-w-20 truncate">
+                {label}
+              </span>
+            ))}
             <span
               className="px-2.5 py-1 text-[10px] font-semibold"
               style={{ background: theme.brand, color: theme.brandContrast, borderRadius: theme.radius }}
@@ -111,26 +144,34 @@ export default function ThemePreview({
           The dishes people come back for.
         </p>
         <div className={cn("mt-3 grid gap-2", mobile ? "grid-cols-2" : "grid-cols-3")}>
-          {["Signature plate", "House favourite", "Chef's pick"]
-            .slice(0, mobile ? 2 : 3)
-            .map((label) => (
+          {dishes.map((dish) => (
+            <div
+              key={dish.name}
+              className="border p-2.5"
+              style={{ background: theme.card, borderColor: theme.border, borderRadius: theme.radius }}
+            >
               <div
-                key={label}
-                className="border p-2.5"
-                style={{ background: theme.card, borderColor: theme.border, borderRadius: theme.radius }}
+                className="mb-2 aspect-[4/3] w-full overflow-hidden"
+                style={{ background: theme.surfaceMuted, borderRadius: `calc(${theme.radius} / 1.6)` }}
               >
-                <div
-                  className="mb-2 aspect-[4/3] w-full"
-                  style={{ background: theme.surfaceMuted, borderRadius: `calc(${theme.radius} / 1.6)` }}
-                />
-                <p className="truncate text-[11px] font-semibold" style={heading}>
-                  {label}
-                </p>
-                <p className="mt-0.5 text-[10px]" style={{ color: theme.textMuted }}>
-                  Made to order
-                </p>
+                {dish.image && (
+                  // eslint-disable-next-line @next/next/no-img-element -- merchant CDN host
+                  <img
+                    src={dish.image}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                )}
               </div>
-            ))}
+              <p className="truncate text-[11px] font-semibold" style={heading}>
+                {dish.name}
+              </p>
+              <p className="mt-0.5 text-[10px]" style={{ color: theme.textMuted }}>
+                Made to order
+              </p>
+            </div>
+          ))}
         </div>
       </div>
 

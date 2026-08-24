@@ -91,6 +91,10 @@ export interface FieldControl {
 
 /** Fields long enough to want a textarea rather than a single-line input. */
 const MULTILINE_FIELDS = new Set([
+  // A heading is capped at 150 characters and routinely runs to a full
+  // sentence; in an `<input>` the merchant edited it through a 30-character
+  // window and could not see what they had written.
+  "heading",
   "subheading",
   "subtitle",
   "description",

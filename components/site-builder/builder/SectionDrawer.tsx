@@ -142,6 +142,8 @@ function SectionSettings({
   }, [def, props]);
 
   const isHeader = section.kind === "header";
+  const title = isHeader ? "Navigation" : sectionTitle(section);
+  const subtitle = title === def.label ? null : def.label;
 
   return (
     <OverlayRail
@@ -153,11 +155,15 @@ function SectionSettings({
         )
       }
     >
+      {/*
+        `sectionTitle` falls back to the kind's label when the section has no
+        heading of its own, so an unfilled Form section titled the drawer
+        "Form" and then subtitled it "Form" as well. The kind is a subtitle only
+        when it is telling the merchant something the title has not.
+      */}
       <div className="border-b px-4 py-3">
-        <h2 className="truncate text-sm font-semibold">
-          {isHeader ? "Navigation" : sectionTitle(section)}
-        </h2>
-        <p className="truncate text-xs text-muted-foreground">{def.label}</p>
+        <h2 className="truncate text-sm font-semibold">{title}</h2>
+        {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
       </div>
 
       {/* The navigation is the reason a merchant opens the header, so it comes
@@ -1234,8 +1240,8 @@ function PageSeoFields({ store, clerkOrgId }: { store: BuilderStore; clerkOrgId:
   return (
     <details className="rounded-md border">
       <summary className="cursor-pointer list-none px-3 py-2.5 text-xs font-medium [&::-webkit-details-marker]:hidden">
-        Search &amp; sharing
-        <span className="ml-1 font-normal text-muted-foreground">optional</span>
+        Search &amp; sharing{" "}
+        <span className="font-normal text-muted-foreground">· optional</span>
       </summary>
 
       <div className="space-y-4 border-t p-3">

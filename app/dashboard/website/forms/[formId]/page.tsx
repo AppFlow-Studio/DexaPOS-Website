@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { GetForm } from "@/app/dashboard/website/actions/forms";
 import FormBuilder from "@/components/site-builder/builder/FormBuilder";
-import { loadSiteContext } from "@/lib/site-builder/site-context";
+import { buildRenderContext, loadSiteContext } from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /** The form builder — the page editor's shell, editing a form. */
@@ -38,11 +38,17 @@ export default async function FormEditorRoute({
     .eq("id", formId)
     .maybeSingle();
 
+  // The merchant's own theme, resolved by the same function the canvas and the
+  // live page use, so the form preview cannot show one brand colour while the
+  // page carrying the form shows another.
+  const { theme } = buildRenderContext(storefront, "preview");
+
   return (
     <FormBuilder
       clerkOrgId={orgId}
       formId={result.data.id}
       locationId={storefront.locationId}
+      theme={theme}
       initialDoc={result.data.doc}
       initialRevision={result.data.revision}
       initialPublishedAt={result.data.publishedAt}

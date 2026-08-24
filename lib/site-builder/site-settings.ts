@@ -74,10 +74,39 @@ export const FEATURE_LABELS: Record<SiteFeature, string> = {
 
 export const FEATURE_DESCRIPTIONS: Record<SiteFeature, string> = {
   reviews: "Show what guests have said about you, in their own words.",
-  rewards: "Tell guests about your loyalty programme.",
+  rewards: "Tell guests about your loyalty program.",
   giftCards: "Let guests buy a gift card from your website.",
   reservations: "Let guests book a table, and add a Book a table button to your header.",
 };
+
+/**
+ * Toggles the product cannot yet keep the promise of.
+ *
+ * `reviews` gates a section kind and `reservations` puts a button in the header
+ * — both do exactly what their description says. `rewards` and `giftCards` had
+ * **no consumer anywhere**: switching one on promised a loyalty programme or
+ * gift-card sales on the merchant's website and did nothing at all, which made
+ * the panel's own line — "Sections you can add to a page follow from these" —
+ * false for half the list. Both were on for the test merchant.
+ *
+ * Not deleted from `SITE_FEATURES` or from the schema: the keys are stored on
+ * live rows and must keep parsing. They are simply not offered until there is a
+ * section behind them, at which point deleting an entry here turns one back on.
+ *
+ * The same shape as the section registry's `unavailable`, and hidden the same
+ * way it hides a kind — absent from the list, with one sentence saying so,
+ * rather than shown as a disabled row that teaches a merchant the product is
+ * full of things they may not have.
+ */
+export const UNAVAILABLE_FEATURES: Partial<Record<SiteFeature, string>> = {
+  rewards: "there is no Rewards section to put on a page yet",
+  giftCards: "there is no Gift cards section to put on a page yet",
+};
+
+/** The toggles a merchant may actually set today. */
+export const AVAILABLE_SITE_FEATURES: readonly SiteFeature[] = SITE_FEATURES.filter(
+  (feature) => !UNAVAILABLE_FEATURES[feature],
+);
 
 /** Completes a partially-stored — or entirely absent — feature set. */
 export function resolveFeatures(stored: unknown): SiteFeatures {
@@ -341,6 +370,66 @@ export function readSiteSettings(site: {
   brand?: unknown;
 }): { features: SiteFeatures; brand: SiteBrand } {
   return { features: resolveFeatures(site.features), brand: resolveBrand(site.brand) };
+}
+
+export const MAX_SEO_SUFFIX = 60;
+export const MAX_SEO_DESCRIPTION = 160;
+
+/**
+ * How the website presents itself in a search result and a shared link.
+ *
+ * Site-wide rather than per page, because both fields are answers a merchant
+ * gives once. The per-page SEO panel already overrides each of them where a
+ * page has something more specific to say.
+ *
+ * Stored in the existing `merchant_sites.site_seo` jsonb column, which the
+ * public renderer has read since the feature shipped — with nothing anywhere in
+ * the product able to write it. Every merchant site therefore served
+ * `<title>Home</title>` and no description at all.
+ */
+export const siteSeoSchema = z.object({
+  /**
+   * Appended after every page title: "Menu — Joes Coffee Shop".
+   *
+   * Optional, and it should usually stay that way — `builtSiteMetadata` falls
+   * back to the resolved site name, which is the right answer for nearly
+   * everyone. The field exists for the merchant whose trading name in search
+   * differs from the name on their header.
+   */
+  titleSuffix: z.string().trim().min(1).max(MAX_SEO_SUFFIX).optional(),
+  /**
+   * The description a page falls back to when it has none of its own.
+   *
+   * Capped at 160 characters because that is roughly where Google truncates,
+   * and a description cut mid-word reads worse than a shorter one.
+   */
+  description: z.string().trim().min(1).max(MAX_SEO_DESCRIPTION).optional(),
+});
+
+export type SiteSeo = z.infer<typeof siteSeoSchema>;
+
+export const DEFAULT_SEO: SiteSeo = {};
+
+/**
+ * Completes a partially-stored SEO block, discarding anything unparseable.
+ *
+ * Field by field, for the same reason `resolveBrand` is: a malformed suffix
+ * must not take the merchant's description with it.
+ */
+export function resolveSiteSeo(stored: unknown): SiteSeo {
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return DEFAULT_SEO;
+
+  const source = stored as Record<string, unknown>;
+  const clamp = (value: unknown, max: number) =>
+    typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined;
+
+  const titleSuffix = clamp(source.titleSuffix, MAX_SEO_SUFFIX);
+  const description = clamp(source.description, MAX_SEO_DESCRIPTION);
+
+  return {
+    ...(titleSuffix ? { titleSuffix } : {}),
+    ...(description ? { description } : {}),
+  };
 }
 
 /**

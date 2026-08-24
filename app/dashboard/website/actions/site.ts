@@ -16,8 +16,10 @@ import { checkSubdomain } from "@/lib/site-builder/reserved-subdomains";
 import {
   siteBrandSchema,
   siteFeaturesSchema,
+  siteSeoSchema,
   type SiteBrand,
   type SiteFeatures,
+  type SiteSeo,
 } from "@/lib/site-builder/site-settings";
 import {
   siteTrackingSchema,
@@ -341,6 +343,41 @@ export async function UpdateSiteBrand(
   }
 
   const result = await UpdateSiteSettings(clerkOrgId, siteId, { brand: parsed.data });
+  if (result.data) revalidatePath("/dashboard/website", "layout");
+
+  return result;
+}
+
+/**
+ * Writes the site-wide search appearance.
+ *
+ * Same shape as `UpdateSiteBrand` deliberately — narrow, schema-validated,
+ * one column — rather than a third settings write path. An empty string means
+ * "use the default", so it clears the key instead of storing `""`: a stored
+ * empty suffix would suppress the resolved site name and put every page back to
+ * a bare `<title>Home</title>`, which is the defect this field exists to fix.
+ */
+export async function UpdateSiteSeo(
+  clerkOrgId: string,
+  siteId: string,
+  seo: SiteSeo,
+): Promise<ActionResult<MerchantSiteRow>> {
+  if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
+
+  const cleaned = Object.fromEntries(
+    Object.entries(seo).filter(([, value]) => typeof value === "string" && value.trim()),
+  );
+
+  const parsed = siteSeoSchema.safeParse(cleaned);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    return {
+      error: first?.message ?? "Those settings could not be saved",
+      code: "invalid_document",
+    };
+  }
+
+  const result = await UpdateSiteSettings(clerkOrgId, siteId, { site_seo: parsed.data });
   if (result.data) revalidatePath("/dashboard/website", "layout");
 
   return result;

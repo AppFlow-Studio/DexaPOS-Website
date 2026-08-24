@@ -16,6 +16,11 @@ import { loadPublicAssetMap } from "@/lib/site-builder/asset-map";
 import { buildPublicRenderContext } from "@/lib/site-builder/public-context";
 import { sitePublicUrl } from "@/lib/site-builder/public-url";
 import { resolveRenderMode } from "@/lib/site-builder/resolve-render-mode";
+import {
+  readSiteSettings,
+  resolveSiteSeo,
+  siteDisplayName,
+} from "@/lib/site-builder/site-settings";
 import { resolveTracking } from "@/lib/site-builder/tracking";
 import { collectFormIds, formResolver, loadPublicFormMap } from "@/lib/site-builder/forms/form-map";
 import { loadPublicEvents } from "@/lib/site-builder/events/event-map";
@@ -77,7 +82,9 @@ export async function builtSiteMetadata(
     ogImageAssetId?: string;
     noindex?: boolean;
   };
-  const siteSeo = (decision.siteSeo ?? {}) as { titleSuffix?: string; description?: string };
+  // Through the resolver, not a cast: this column has never had a writer, so
+  // anything already in it arrived by hand and cannot be assumed well-formed.
+  const siteSeo = resolveSiteSeo(decision.siteSeo);
 
   // The page's own title wins; the page *name* is the fallback, because a
   // merchant who never opened the SEO panel still deserves a real tab title
@@ -85,14 +92,34 @@ export async function builtSiteMetadata(
   const pageTitle = seo.title?.trim() || decision.pageTitle?.trim() || undefined;
   const description = seo.description?.trim() || siteSeo.description?.trim() || undefined;
 
-  // The merchant's own suffix, not ours. The root layout sets a title template
-  // of "%s — DEXA POS", which is correct for the dashboard and wrong on a
-  // restaurant's own website — it put our brand in their browser tab and in
-  // every link they shared. `absolute` is what opts out of an inherited
-  // template, so it has to be used even when there is no suffix to add.
-  const suffix = siteSeo.titleSuffix?.trim();
+  // What this website calls itself, through the one shared precedence function
+  // so the tab title cannot disagree with the name rendered in the header.
+  const { brand } = readSiteSettings({ brand: decision.brand });
+  const siteName = siteDisplayName({
+    brandName: brand.name,
+    merchantName: decision.merchantName,
+  });
+
+  /**
+   * The merchant's own suffix, not ours.
+   *
+   * The root layout sets a title template of "%s — DEXA POS", which is correct
+   * for the dashboard and wrong on a restaurant's own website — it put our
+   * brand in their browser tab and in every link they shared. `absolute` is
+   * what opts out of an inherited template, so it is used even when there is
+   * nothing to append.
+   *
+   * With no suffix stored the site's own name is the default, because
+   * `<title>Home</title>` names nobody: a merchant who has never opened an SEO
+   * panel still gets "Home — Joes Coffee Shop" in a search result and a
+   * shared link. Skipped when the page title already carries the name, so a
+   * page called "Joes Coffee Shop" is not titled twice over.
+   */
+  const suffix = siteSeo.titleSuffix?.trim() || siteName;
+  const suffixIsRedundant =
+    !suffix || (pageTitle?.toLowerCase().includes(suffix.toLowerCase()) ?? false);
   const title = pageTitle
-    ? { absolute: suffix ? `${pageTitle} — ${suffix}` : pageTitle }
+    ? { absolute: suffixIsRedundant ? pageTitle : `${pageTitle} — ${suffix}` }
     : undefined;
 
   // Canonical is the brand subdomain, never `/sites/{slug}` — see
@@ -120,9 +147,33 @@ export async function builtSiteMetadata(
 
   const image = ogImage ?? decision.logoUrl ?? undefined;
 
+  /**
+   * Everything else the root layout would otherwise lend this page.
+   *
+   * `title` was escaped above and the reason applies just as strongly to the
+   * rest of `app/layout.tsx`: without these three, a restaurant's website
+   * served the DexaPOS logo as its favicon, called itself "DEXA POS" as its
+   * application name, and carried our sales keywords — "quick-service POS",
+   * "kitchen display system" — in the head of a page about someone's pizza.
+   *
+   * `null`, not `undefined`: an absent field inherits from the parent layout,
+   * and only an explicit null removes it. Anyone adding a field to the root
+   * layout's metadata needs to decide here whether a merchant should inherit
+   * it. The default answer is no.
+   */
   return {
     title,
     description,
+    applicationName: siteName,
+    // We have no honest keywords for someone else's restaurant, and the tag is
+    // worth nothing to search engines anyway. Emitting *ours* is the harm.
+    keywords: null,
+    // The merchant's own logo, or no icon at all and the browser's default
+    // letter — never ours. The URL is already absolute (a CDN URL), which
+    // matters because `metadataBase` is dexaposai.com.
+    icons: decision.logoUrl
+      ? { icon: decision.logoUrl, shortcut: decision.logoUrl, apple: decision.logoUrl }
+      : null,
     alternates: { canonical },
     // A merchant can take one page out of search results without unpublishing
     // it — a booking confirmation or a page shared only by link. `follow` stays
@@ -133,9 +184,24 @@ export async function builtSiteMetadata(
       description,
       url: canonical,
       type: "website",
+      siteName: siteName,
       ...(image ? { images: [image] } : {}),
     },
-    ...(image ? { twitter: { card: "summary_large_image" as const, images: [image] } } : {}),
+    /**
+     * Always emitted, even with no image to put in it.
+     *
+     * This used to be conditional on `image`, and an absent `twitter` key
+     * inherits the root layout's — so a merchant with no sharing image had
+     * their page shared as "DEXA POS — Restaurant operations, simplified."
+     * with our logo on the card. The card type follows the image: `summary`
+     * without one, which is what Twitter renders for a link with no art.
+     */
+    twitter: {
+      card: image ? ("summary_large_image" as const) : ("summary" as const),
+      title: title?.absolute,
+      description,
+      ...(image ? { images: [image] } : {}),
+    },
   };
 }
 

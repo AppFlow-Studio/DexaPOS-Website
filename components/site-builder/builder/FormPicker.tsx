@@ -1,10 +1,24 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ListForms, type FormSummary } from "@/app/dashboard/website/actions/forms";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { websiteRoutes } from "../routes";
+
+/**
+ * Radix refuses an item with an empty value, so "nothing chosen" needs a name
+ * of its own. It never leaves this component: it is translated back to the
+ * empty string the section schema stores.
+ */
+const NONE = "__none__";
 
 /**
  * Choosing which of the merchant's forms a `form` section shows.
@@ -65,32 +79,50 @@ export default function FormPicker({
     );
   }
 
+  const chosenUnpublished = forms.find((form) => form.id === value && !form.publishedAt);
+
   return (
     <div>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      {/* The app's own Select, not a bare `<select>`: this was the one control
+          in the drawer rendering as the operating system drew it. */}
+      <Select
+        value={value || NONE}
+        onValueChange={(next) => onChange(next === NONE ? "" : next)}
       >
-        <option value="">Choose a form…</option>
-        {forms.map((form) => (
-          <option key={form.id} value={form.id}>
-            {form.name}
-            {form.publishedAt ? "" : " (not published)"}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger className="w-full" aria-label="Form">
+          <SelectValue placeholder="Choose a form…" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NONE}>Choose a form…</SelectItem>
+          {forms.map((form) => (
+            <SelectItem key={form.id} value={form.id}>
+              {form.name}
+              {form.publishedAt ? "" : " (not published)"}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       {/*
         A form that has never been published renders nothing to a visitor, and
         that is invisible from the page editor — the merchant sees their form in
-        the canvas because the canvas resolves drafts. Worth saying here rather
-        than letting them publish a page with a hole in it.
+        the canvas because the canvas resolves drafts.
+
+        Styled as a warning rather than as help text. It said the right thing in
+        `text-muted-foreground`, which is the same treatment as every hint in
+        the drawer, so it read as guidance rather than as "the section you just
+        configured will be empty on your live page".
+
+        Selection is deliberately *not* blocked: choosing a form and publishing
+        it afterwards is a legitimate order of work.
       */}
-      {value && forms.find((form) => form.id === value && !form.publishedAt) && (
-        <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
-          This form has not been published yet, so guests will not see it until you publish it from
-          the Forms screen.
+      {chosenUnpublished && (
+        <p className="mt-1.5 flex items-start gap-1.5 text-[11px] leading-relaxed text-destructive">
+          <TriangleAlert className="mt-px size-3.5 shrink-0" />
+          <span>
+            “{chosenUnpublished.name}” has not been published yet, so guests will not see it until
+            you publish it from the Forms screen.
+          </span>
         </p>
       )}
     </div>

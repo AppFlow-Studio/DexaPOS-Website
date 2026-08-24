@@ -1,11 +1,22 @@
 "use client";
 
-import { CalendarDays, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, Check, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { ArchiveEvent, CreateEvent, UpdateEvent } from "@/app/dashboard/website/actions/events";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,6 +26,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+/** Radix refuses an empty item value; "every branch" needs a name of its own. */
+const ALL_LOCATIONS = "__all__";
 import {
   DEFAULT_END_TIME,
   DEFAULT_START_TIME,
@@ -83,7 +104,7 @@ export default function EventsScreen({
         items={events}
         getKey={(event) => event.id}
         getSearchText={(event) => `${event.name} ${event.description ?? ""}`}
-        columns={["When", "Repeats", ""]}
+        columns={["When", "Repeats", "Remove"]}
         gridTemplate="minmax(0,1fr) 230px 110px 40px"
         emptyLabel="No events"
         emptyIcon={CalendarDays}
@@ -126,15 +147,39 @@ export default function EventsScreen({
                 {event.repeat === "none" ? "—" : REPEAT_LABELS[event.repeat]}
               </span>
 
-              <button
-                type="button"
-                aria-label={`Remove ${event.name}`}
-                disabled={pending}
-                onClick={() => archive(event)}
-                className="rounded p-1 text-muted-foreground transition-colors hover:text-destructive disabled:opacity-40"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
+              {/*
+                Confirmed, unlike a section delete — which has an Undo toast to
+                fall back on. Removing an event here has no undo at all, and
+                the control is a bare icon at the end of a row that is otherwise
+                entirely clickable.
+              */}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${event.name}`}
+                    disabled={pending}
+                    className="rounded p-1 text-muted-foreground transition-colors hover:text-destructive disabled:opacity-40"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remove “{event.name}”?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      It comes off your website straight away, and any Events section showing it
+                      moves on to the next one. This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep it</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => archive(event)}>
+                      Remove the event
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </>
           );
         }}
@@ -236,6 +281,12 @@ function EventDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/*
+            The requirement is stated once, and only while it is unmet. It used
+            to sit permanently under a filled picker whose own Remove button was
+            directly above it, so the screen said "Required" and offered to
+            remove the required thing in the same breath.
+          */}
           <div>
             <AssetPicker
               label="Photo"
@@ -243,14 +294,12 @@ function EventDialog({
               value={draft.photoAssetId ? { assetId: draft.photoAssetId } : undefined}
               onChange={(value) => patch({ photoAssetId: value?.assetId ?? "" })}
             />
-            <p
-              className={cn(
-                "mt-1.5 text-[11px] leading-relaxed",
-                draft.photoAssetId ? "text-muted-foreground" : "text-destructive",
-              )}
-            >
-              Required — an event with no photo looks unfinished beside the others on your site.
-            </p>
+            {!draft.photoAssetId && (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-destructive">
+                A photo is required — an event without one looks unfinished beside the others on
+                your site.
+              </p>
+            )}
           </div>
 
           <Field label="Name">
@@ -275,18 +324,24 @@ function EventDialog({
 
           {locations.length > 0 && (
             <Field label="Location">
-              <select
-                value={draft.locationId ?? ""}
-                onChange={(e) => patch({ locationId: e.target.value || null })}
-                className={INPUT_CLASS}
+              <Select
+                value={draft.locationId ?? ALL_LOCATIONS}
+                onValueChange={(value) =>
+                  patch({ locationId: value === ALL_LOCATIONS ? null : value })
+                }
               >
-                <option value="">All locations</option>
-                {locations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_LOCATIONS}>All locations</SelectItem>
+                  {locations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
           )}
 
@@ -324,17 +379,21 @@ function EventDialog({
           )}
 
           <Field label="Repeat">
-            <select
+            <Select
               value={draft.repeat}
-              onChange={(e) => patch({ repeat: e.target.value as EventRepeat })}
-              className={INPUT_CLASS}
+              onValueChange={(value) => patch({ repeat: value as EventRepeat })}
             >
-              {EVENT_REPEATS.map((repeat) => (
-                <option key={repeat} value={repeat}>
-                  {REPEAT_LABELS[repeat]}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EVENT_REPEATS.map((repeat) => (
+                  <SelectItem key={repeat} value={repeat}>
+                    {REPEAT_LABELS[repeat]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
 
           {showTicket ? (
@@ -363,7 +422,9 @@ function EventDialog({
         <DialogFooter>
           <Button disabled={!ready || pending} onClick={save}>
             {pending ? "Saving…" : event ? "Save changes" : "Add Event"}
-            <Plus className="size-4" />
+            {/* A plus means "one more of these"; saving an edit does not add
+                anything. The icon follows the verb. */}
+            {event ? <Check className="size-4" /> : <Plus className="size-4" />}
           </Button>
         </DialogFooter>
       </DialogContent>
