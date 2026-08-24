@@ -40,6 +40,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { useAdminMerchantLocationDetails, useAdminUpdateMerchant } from '@/lib/queries/use-admin-merchant'
+import { formatPhoneForDisplay, normalizePhone } from '@/lib/phone'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -57,6 +58,37 @@ const businessTypes = {
     'sole_proprietor': 'Sole Proprietor',
     'partnership': 'Partnership',
     'nonprofit': 'Nonprofit',
+}
+
+// --- Input sanitizers ---------------------------------------------------------
+// The inputMode/maxLength attributes are only hints — the browser still accepts
+// arbitrary text. These enforce the formats as the user types. All are permissive
+// enough to backspace to empty (never trap the last character).
+
+/** Keep digits only, optionally capped to `max` characters. */
+const onlyDigits = (value: string, max?: number) => {
+    const digits = value.replace(/\D/g, '')
+    return typeof max === 'number' ? digits.slice(0, max) : digits
+}
+
+/** Two-letter uppercase US state code (e.g. AZ). */
+const formatStateInput = (value: string) =>
+    value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 2)
+
+/** Live "(XXX) XXX-XXXX" formatting for a US phone number as it is typed. */
+const formatPhoneInput = (value: string) => {
+    const d = onlyDigits(value, 10)
+    if (d.length === 0) return ''
+    if (d.length < 4) return `(${d}`
+    if (d.length < 7) return `(${d.slice(0, 3)}) ${d.slice(3)}`
+    return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`
+}
+
+/** Digits plus at most one decimal point, for a percentage field. */
+const formatPercentInput = (value: string) => {
+    const cleaned = value.replace(/[^\d.]/g, '')
+    const parts = cleaned.split('.')
+    return parts.length <= 1 ? cleaned : `${parts[0]}.${parts.slice(1).join('')}`
 }
 
 export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
@@ -102,7 +134,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
         merchant_type: '',
         status: '',
         pricing_strategy: 'manual' as 'manual' | 'dual',
-        dual_pricing_percentage: 4,
+        dual_pricing_percentage: '4',
         // Owner / contact + business address (required for Valor boarding)
         owner_first_name: '',
         owner_last_name: '',
@@ -126,11 +158,11 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                 merchant_type: merchantInfo?.business_type || '',
                 status: merchantInfo?.onboarding_status || '',
                 pricing_strategy: (merchantInfo?.pricing_strategy as 'manual' | 'dual') || 'manual',
-                dual_pricing_percentage: merchantInfo?.dual_pricing_percentage ?? 4,
+                dual_pricing_percentage: String(merchantInfo?.dual_pricing_percentage ?? 4),
                 owner_first_name: merchantInfo?.owner_first_name || '',
                 owner_last_name: merchantInfo?.owner_last_name || '',
                 owner_email: merchantInfo?.owner_email || '',
-                owner_phone: merchantInfo?.owner_phone || '',
+                owner_phone: formatPhoneForDisplay(merchantInfo?.owner_phone) || '',
                 business_address_line1: merchantInfo?.business_address_line1 || '',
                 business_address_line2: merchantInfo?.business_address_line2 || '',
                 business_city: merchantInfo?.business_city || '',
@@ -178,7 +210,9 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                     owner_first_name: formData.owner_first_name.trim() || null,
                     owner_last_name: formData.owner_last_name.trim() || null,
                     owner_email: formData.owner_email.trim() || null,
-                    owner_phone: formData.owner_phone.trim() || null,
+                    // Store normalized E.164 (DB convention); fall back to the raw
+                    // entry if it can't be parsed so nothing is silently dropped.
+                    owner_phone: normalizePhone(formData.owner_phone) ?? (formData.owner_phone.trim() || null),
                     business_address_line1: formData.business_address_line1.trim() || null,
                     business_address_line2: formData.business_address_line2.trim() || null,
                     business_city: formData.business_city.trim() || null,
@@ -538,7 +572,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
 
             {/* Edit Business Info Dialog */}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                <DialogContent >
+                <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Edit Business Information</DialogTitle>
                         <DialogDescription>
@@ -570,9 +604,10 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             <Input
                                 id="ein_tax_id"
                                 inputMode="numeric"
+                                maxLength={4}
                                 placeholder="Last 4 of EIN / Tax ID"
                                 value={formData.ein_tax_id}
-                                onChange={(e) => setFormData({ ...formData, ein_tax_id: e.target.value })}
+                                onChange={(e) => setFormData({ ...formData, ein_tax_id: onlyDigits(e.target.value, 4) })}
                             />
                         </div>
 
@@ -635,15 +670,13 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                 <Label htmlFor="dual_pricing_percentage">Cash Discount %</Label>
                                 <Input
                                     id="dual_pricing_percentage"
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    step="0.1"
+                                    inputMode="decimal"
+                                    placeholder="e.g. 4"
                                     value={formData.dual_pricing_percentage}
                                     onChange={(e) =>
                                         setFormData({
                                             ...formData,
-                                            dual_pricing_percentage: Number(e.target.value),
+                                            dual_pricing_percentage: formatPercentInput(e.target.value),
                                         })
                                     }
                                 />
@@ -701,9 +734,10 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             <Input
                                 id="owner_phone"
                                 inputMode="tel"
-                                placeholder="10 digits"
+                                maxLength={14}
+                                placeholder="(555) 123-4567"
                                 value={formData.owner_phone}
-                                onChange={(e) => setFormData({ ...formData, owner_phone: e.target.value })}
+                                onChange={(e) => setFormData({ ...formData, owner_phone: formatPhoneInput(e.target.value) })}
                             />
                         </div>
 
@@ -742,7 +776,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                 maxLength={2}
                                 placeholder="2-letter (e.g. AZ)"
                                 value={formData.business_state}
-                                onChange={(e) => setFormData({ ...formData, business_state: e.target.value })}
+                                onChange={(e) => setFormData({ ...formData, business_state: formatStateInput(e.target.value) })}
                             />
                         </div>
                         <div className="space-y-2">
@@ -750,9 +784,10 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             <Input
                                 id="business_postal_code"
                                 inputMode="numeric"
+                                maxLength={5}
                                 placeholder="5 digits"
                                 value={formData.business_postal_code}
-                                onChange={(e) => setFormData({ ...formData, business_postal_code: e.target.value })}
+                                onChange={(e) => setFormData({ ...formData, business_postal_code: onlyDigits(e.target.value, 5) })}
                             />
                         </div>
                     </div>

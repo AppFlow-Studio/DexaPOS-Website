@@ -38,6 +38,10 @@ interface PassageOptions {
   clientToken: string;
   epi: string;
   formAction: string;
+  /** Id of the container element Passage.js v2 auto-renders the fields into. */
+  formFieldId?: string;
+  /** Pay button background color. */
+  submitBg?: string;
   variant?: PassageVariant;
   isDemo?: boolean;
   enableACH?: boolean;
@@ -151,6 +155,12 @@ export function PassageCheckout({
   className,
 }: PassageCheckoutProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // Passage.js v2 renders into the element whose id === formFieldId, so the
+  // container needs a stable unique id. Lazy useState (not a ref) so it's safe to
+  // read during render; client-only render, so no SSR hydration mismatch.
+  const [containerId] = useState(
+    () => `valor-fields-${Math.random().toString(36).slice(2, 10)}`
+  );
   const instanceRef = useRef<PassageInstance | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "unavailable">(
     "loading"
@@ -189,14 +199,18 @@ export function PassageCheckout({
           return;
         }
 
+        // Passage.js v2 auto-renders into the element whose id === formFieldId on
+        // construction — there is no separate mount() method ([V-PASS2]).
         const instance = new Passage({
           clientToken,
           epi,
           formAction,
+          formFieldId: containerId,
           variant,
           isDemo,
           enableACH,
           submitText,
+          submitBg: DEXA_BRAND_BLUE,
           ...(sessionExpiryMinutes !== undefined ? { sessionExpiryMinutes } : {}),
           ...(customData ? { customData } : {}),
           onTokenReceived: (token, method) =>
@@ -207,7 +221,6 @@ export function PassageCheckout({
             handlersRef.current.onValidationChange?.(isValid),
         });
 
-        instance.mount?.(containerRef.current);
         instanceRef.current = instance;
         setStatus("ready");
       })
@@ -223,6 +236,7 @@ export function PassageCheckout({
     clientToken,
     epi,
     formAction,
+    containerId,
     variant,
     isDemo,
     enableACH,
@@ -247,9 +261,9 @@ export function PassageCheckout({
   return (
     <div
       ref={containerRef}
+      id={containerId}
       className={className}
       data-passage-status={status}
-      style={{ ["--passage-submit-color" as string]: DEXA_BRAND_BLUE }}
     />
   );
 }
