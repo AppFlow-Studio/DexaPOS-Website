@@ -572,9 +572,15 @@ Single index for active ticket streams and their source trackers.
   authorization evidence for new merchant plan requests.
 - Merchant tiers and billing history are merchant-wide. Hardware requests are
   location-scoped and reviewed independently by HQ.
-- The plan-request flow has reached authenticated QA. The hardware-request
-  migration still needs shared-staging application; generated types, hardware
-  QA, realtime proof, and email verification remain.
+- Shared staging has all three request/hardware/authorization migrations
+  applied, generated Supabase types are refreshed, and the five hardened
+  billing Edge Functions are deployed and active. Automated tests, focused
+  lint, production build, unauthenticated rejection, and the current Supabase
+  secret-key path are verified in PR #285.
+- Remaining closure work is authenticated merchant/HQ QA, controlled declined
+  payment and idempotency proof, scheduled internal-secret verification,
+  Resend log verification, deployment-secret rotation confirmation, and the
+  recorded sign-off artifact.
 
 8. Next 16 upgrade handoff:
 - `docs/engineering/framework-upgrades/HANDOFF-2026-07-13-NEXT-16-UPGRADE.md`
