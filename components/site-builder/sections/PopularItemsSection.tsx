@@ -80,8 +80,6 @@ export default function PopularItemsSection({
   // even when every item is currently 86'd — otherwise it appears to vanish.
   if (visible.length < 2 && ctx.mode !== "builder") return null;
 
-  const showDisclosure = showMoney && ctx.site.pricingDisclosureText;
-
   return (
     <section
       className={sectionClassName(section.style)}
@@ -114,9 +112,13 @@ export default function PopularItemsSection({
               ) : null;
 
               return (
-                <li key={binding.id} className="group flex min-w-0 flex-col">
+                <li
+                  key={binding.id}
+                  className="group flex min-w-0 flex-col overflow-hidden rounded-[var(--site-radius)] border"
+                  style={{ borderColor: "var(--site-border)", background: "var(--site-card)" }}
+                >
                   <div
-                    className="relative aspect-square overflow-hidden rounded-[var(--site-radius)]"
+                    className="relative aspect-square overflow-hidden"
                     style={{ background: "var(--site-surface-muted)" }}
                   >
                     {item.image ? (
@@ -135,8 +137,8 @@ export default function PopularItemsSection({
                     {add && <div className="absolute bottom-3 right-3">{add}</div>}
                   </div>
 
-                  <div className="flex flex-1 flex-col gap-1 pt-3">
-                    <h3 className="text-base font-semibold leading-snug">
+                  <div className="flex flex-1 flex-col gap-1 p-4">
+                    <h3 className="text-xl font-semibold leading-snug">
                       {/* An override is the one legal way to shadow live data. */}
                       {label}
                     </h3>
@@ -146,7 +148,7 @@ export default function PopularItemsSection({
                       </span>
                     )}
                     {showDescriptions && (binding.overrides?.caption ?? item.description) && (
-                      <p className="pt-1 text-sm leading-relaxed opacity-65">
+                      <p className="pt-1 text-base leading-relaxed">
                         {binding.overrides?.caption ?? item.description}
                       </p>
                     )}
@@ -170,12 +172,8 @@ export default function PopularItemsSection({
           </ul>
         )}
 
-        {showDisclosure && (
-          <p className="mt-6 text-xs opacity-60">{ctx.site.pricingDisclosureText}</p>
-        )}
-
         {cta && (
-          <div className={`mt-10 ${section.style?.align === "center" ? "text-center" : ""}`}>
+          <div className="mt-6 text-center">
             <CtaButton
               label={cta.label}
               target={cta.target}
@@ -212,7 +210,7 @@ function AddButton({
   live: boolean;
 }) {
   const className =
-    "flex h-10 w-10 items-center justify-center rounded-full text-xl leading-none shadow-sm transition-transform hover:scale-110";
+    "flex h-10 w-10 items-center justify-center rounded-[var(--site-radius)] text-xl leading-none shadow-sm transition-transform hover:scale-110";
   const style = {
     background: "var(--site-brand)",
     color: "var(--site-brand-contrast)",
