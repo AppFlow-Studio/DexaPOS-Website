@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -258,6 +259,8 @@ export function MerchantSubscriptionOverviewCard({
   const [invoiceActionId, setInvoiceActionId] = useState<string | null>(null)
   const [contactModalMode, setContactModalMode] = useState<'plan' | 'hardware' | null>(null)
   const [selectedRequestedPlanId, setSelectedRequestedPlanId] = useState('')
+  const [hasAcceptedPlanAuthorization, setHasAcceptedPlanAuthorization] =
+    useState(false)
   const [isSubmittingPlanRequest, setIsSubmittingPlanRequest] = useState(false)
   const [isSubmittingHardwareRequest, setIsSubmittingHardwareRequest] = useState(false)
   const [hardwareRequestQuantity, setHardwareRequestQuantity] = useState('1')
@@ -460,8 +463,15 @@ export function MerchantSubscriptionOverviewCard({
       return
     }
 
+    if (!hasAcceptedPlanAuthorization) {
+      toast.error('Accept the recurring charge authorization before submitting.')
+      return
+    }
+
     setIsSubmittingPlanRequest(true)
-    const result = await RequestMerchantTierPlan(selectedRequestedPlan.id)
+    const result = await RequestMerchantTierPlan(selectedRequestedPlan.id, {
+      accepted: hasAcceptedPlanAuthorization,
+    })
     setIsSubmittingPlanRequest(false)
 
     if (!result.success) {
@@ -482,7 +492,13 @@ export function MerchantSubscriptionOverviewCard({
     }
 
     await overviewQuery.refetch()
+    setHasAcceptedPlanAuthorization(false)
     setContactModalMode(null)
+  }
+
+  const openPlanRequestDialog = () => {
+    setHasAcceptedPlanAuthorization(false)
+    setContactModalMode('plan')
   }
 
   const handleRequestHardware = async () => {
@@ -582,7 +598,7 @@ export function MerchantSubscriptionOverviewCard({
         label="Current Plan"
         caption="Review your current coverage or request a different merchant-wide subscription tier."
         action={
-          <Button type="button" className="rounded-full" onClick={() => setContactModalMode('plan')}>
+          <Button type="button" className="rounded-full" onClick={openPlanRequestDialog}>
             Manage plan
           </Button>
         }
@@ -687,7 +703,10 @@ export function MerchantSubscriptionOverviewCard({
                       key={plan.id}
                       type="button"
                       aria-pressed={isSelected}
-                      onClick={() => setSelectedRequestedPlanId(plan.id)}
+                      onClick={() => {
+                        setSelectedRequestedPlanId(plan.id)
+                        setHasAcceptedPlanAuthorization(false)
+                      }}
                       className={cn(
                         'relative flex min-h-[320px] flex-col rounded-2xl bg-muted/45 p-6 text-left transition-all',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
@@ -744,7 +763,7 @@ export function MerchantSubscriptionOverviewCard({
                   !selectedRequestedPlan ||
                   selectedRequestedPlan.plan_code === merchantPlanStatus.plan?.code
                 }
-                onClick={() => setContactModalMode('plan')}
+                onClick={openPlanRequestDialog}
               >
                 Review plan request
               </Button>
@@ -762,7 +781,7 @@ export function MerchantSubscriptionOverviewCard({
                     You are over your plan limit ({merchantPlanStatus.active_location_count}/{merchantPlanStatus.plan.max_locations} locations).
                   </div>
                   <div>Request an upgrade{requiredPlanLabel ? ` to ${requiredPlanLabel}` : ''}.</div>
-                  <Button type="button" size="sm" onClick={() => setContactModalMode('plan')}>
+                  <Button type="button" size="sm" onClick={openPlanRequestDialog}>
                     Request upgrade
                   </Button>
                 </div>
@@ -1183,7 +1202,15 @@ export function MerchantSubscriptionOverviewCard({
           ) : null}
       </Panel>
 
-      <Dialog open={Boolean(contactModalMode)} onOpenChange={(open) => !open && setContactModalMode(null)}>
+      <Dialog
+        open={Boolean(contactModalMode)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHasAcceptedPlanAuthorization(false)
+            setContactModalMode(null)
+          }
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
@@ -1262,6 +1289,35 @@ export function MerchantSubscriptionOverviewCard({
                   : 'Submitting sends a subscription request and a read-only notification to DEXA Billing. It does not open a support ticket.'}
               </div>
             </div>
+            {contactModalMode === 'plan' && selectedRequestedPlan ? (
+              <div className="rounded-xl bg-background p-3">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="plan-charge-authorization"
+                    checked={hasAcceptedPlanAuthorization}
+                    onCheckedChange={(checked) =>
+                      setHasAcceptedPlanAuthorization(checked === true)
+                    }
+                  />
+                  <Label
+                    htmlFor="plan-charge-authorization"
+                    className="cursor-pointer text-sm font-normal leading-5"
+                  >
+                    I authorize DEXA POS to charge{' '}
+                    <span className="font-semibold">
+                      {formatTierPrice(selectedRequestedPlan.monthly_price_cents)}
+                    </span>{' '}
+                    on a recurring monthly basis for{' '}
+                    <span className="font-semibold">
+                      {selectedRequestedPlan.display_name}
+                    </span>
+                    . I understand activation requires DEXA HQ approval and
+                    billing continues until cancellation under the applicable
+                    terms.
+                  </Label>
+                </div>
+              </div>
+            ) : null}
           </div>
           <DialogFooter className="sm:justify-between">
             <div className="text-xs text-muted-foreground">
@@ -1290,6 +1346,7 @@ export function MerchantSubscriptionOverviewCard({
                     isSubmittingPlanRequest ||
                     Boolean(pendingTierRequest) ||
                     !selectedRequestedPlan ||
+                    !hasAcceptedPlanAuthorization ||
                     selectedRequestedPlan.plan_code === merchantPlanStatus.plan?.code
                   }
                   onClick={handleRequestPlan}

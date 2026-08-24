@@ -20,6 +20,23 @@ billing engine:
 
 Support tickets remain reserved for intentional support conversations.
 
+## Billing Safety Addendum - 2026-08-24
+
+The first three SaaS-billing hardening items are implemented in code:
+
+1. All five service-role billing Edge Functions require either the Supabase
+   service-role bearer token or the existing `x-internal-secret`.
+2. Failed subscription charges create attempt-scoped merchant and HQ in-app
+   notifications and email the merchant billing contact plus DEXA support.
+   A delivery ledger prevents duplicate delivery for the same attempt.
+3. Merchant plan requests require explicit recurring-charge authorization.
+   The server snapshots the plan, price, terms version, user/email, IP address,
+   user agent, acceptance time, and a unique authorization reference. Accepted
+   evidence is immutable.
+
+These items do not yet implement automatic grace-period suspension, a merchant
+payment-method editor, or outstanding-balance collection.
+
 ## Implemented Flow
 
 1. A merchant selects an available tier on `/dashboard/subscriptions`.
@@ -88,6 +105,14 @@ Creates `subscription_hardware_requests`, the `DEV-xxxxx` request-number
 sequence, location-scoped uniqueness, RLS, grants, indexes, and the updated-at
 trigger. Apply it after the notification migration.
 
+Authorization and failed-payment delivery migration:
+
+`supabase/migrations/20260824140000_subscription_authorizations_and_failure_notifications.sql`
+
+Adds immutable plan-authorization evidence and the RLS-protected, idempotent
+failed-payment delivery ledger. Apply it after both request migrations. It was
+created but not executed during implementation.
+
 The migration is present in code but was not executed during implementation.
 Apply it to shared staging before deploying or testing the website code. Do not
 deploy the website first because the subscription overview reads the new
@@ -125,6 +150,18 @@ updated before the migration exists in the shared database.
   - Adds plan and hardware approval/denial controls.
 - `supabase/migrations/20260824130000_subscription_hardware_requests.sql`
   - Adds the dedicated location-scoped hardware request lifecycle.
+- `supabase/migrations/20260824140000_subscription_authorizations_and_failure_notifications.sql`
+  - Adds immutable authorization evidence and the notification delivery ledger.
+- `supabase/functions/_shared/internal-billing-auth.ts`
+  - Centralizes service-role and internal-secret authorization.
+- `supabase/functions/_shared/subscription-failure-notifications.ts`
+  - Delivers idempotent merchant/HQ failed-payment notifications and emails.
+- `supabase/functions/_shared/payment-emails.ts`
+  - Adds the failed subscription payment email.
+- `supabase/functions/billing-*/index.ts`
+  - Protects all billing mutations; charge/failure handlers now notify.
+- `tests/subscription-billing-safety.test.ts`
+  - Covers billing authorization, consent evidence, and failure alerts.
 
 ## Environment
 
@@ -133,6 +170,11 @@ updated before the migration exists in the shared database.
   list for the request email fallback. Its name is legacy; request persistence
   and in-app delivery do not depend on email.
 - No new environment variable is required for in-app notifications.
+- `INTERNAL_NOTIFICATION_SECRET` authorizes scheduled billing calls that do not
+  use the service-role bearer token.
+- `BILLING_NOTIFICATION_EMAILS` optionally adds billing-specific recipients.
+  `support@mtechdistributors.com` and `SUPPORT_TICKET_NOTIFICATION_EMAILS` are
+  still included for failed-payment alerts.
 
 ## Verification Completed
 
@@ -152,6 +194,9 @@ updated before the migration exists in the shared database.
   contract tests cover request lifecycles, RLS/read-state primitives, exact
   request finalization, merchant-wide billing, location-scoped hardware, and
   the no-automatic-support-ticket boundary.
+- `tests/subscription-billing-safety.test.ts`: 4 tests passed. The contract
+  tests cover internal Edge Function authorization, required consent, immutable
+  evidence, delivery idempotency, and merchant/HQ failed-payment alerts.
 - Authenticated database/realtime/Resend QA remains pending.
 
 ## Manual QA
@@ -246,9 +291,39 @@ updated before the migration exists in the shared database.
 5. Confirm each pending card disappears, no inventory row is created
    automatically, and the merchant receives both read-only decisions.
 
+### 10. Merchant recurring-charge authorization
+
+1. Select a non-current plan and open **Review plan request**.
+2. Confirm **Submit request** is disabled until the recurring-charge checkbox
+   is selected.
+3. Select it, submit, and inspect the new `subscription_plan_requests` row.
+4. Confirm the authorization reference, server price snapshot, terms version,
+   user/email, acceptance timestamp, IP, and user agent are present.
+5. In staging only, attempt to update an accepted authorization field and
+   confirm the immutable-evidence trigger rejects it.
+
+### 11. Failed-payment alerts
+
+1. In staging, use a controlled declined NMI test credential or invoke the
+   protected failure handler for a test invoice.
+2. Confirm the invoice becomes `failed` and the subscription becomes
+   `past_due`.
+3. Confirm merchant and HQ notification bells receive the failure alert.
+4. Confirm merchant billing and configured DEXA recipients receive email.
+5. Confirm delivery rows are `sent`; repeating the same recorded attempt must
+   not duplicate notifications, while a new attempt must create a new alert.
+
+### 12. Internal billing authorization
+
+1. Call each billing function without service-role authorization or
+   `x-internal-secret`; expect HTTP 401.
+2. Repeat with the service-role bearer token; expect normal function behavior.
+3. Repeat a scheduled function with the matching internal secret; expect
+   normal function behavior.
+
 ## Remaining Work
 
-- Apply both migrations to shared staging in timestamp order.
+- Apply all three migrations to shared staging in timestamp order.
 - Regenerate Supabase TypeScript types.
 - Run authenticated staging QA, including realtime and tenant isolation.
 - Verify Resend delivery logs.

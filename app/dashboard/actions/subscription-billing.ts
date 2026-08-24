@@ -1,7 +1,9 @@
 ﻿'use server'
 
-import { auth } from '@clerk/nextjs/server'
+import { auth, currentUser } from '@clerk/nextjs/server'
+import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getEffectiveMerchantContext } from '@/lib/admin/merchant-context'
@@ -765,7 +767,10 @@ export async function getMerchantTierPlansForCurrentMerchant(): Promise<
   )
 }
 
-export async function RequestMerchantTierPlan(planId: string): Promise<{
+export async function RequestMerchantTierPlan(
+  planId: string,
+  authorization: { accepted: boolean },
+): Promise<{
   success: boolean
   requestId?: string
   requestNumber?: string
@@ -776,6 +781,13 @@ export async function RequestMerchantTierPlan(planId: string): Promise<{
   try {
     if (!planId?.trim()) {
       return { success: false, error: 'Select a subscription plan first.' }
+    }
+
+    if (!authorization?.accepted) {
+      return {
+        success: false,
+        error: 'Accept the recurring charge authorization before submitting.',
+      }
     }
 
     const { userId } = await auth()
@@ -874,6 +886,36 @@ export async function RequestMerchantTierPlan(planId: string): Promise<{
     const currentPlanName = String(
       currentPlan?.name ?? currentPlan?.display_name ?? 'No active plan',
     )
+    const [clerkUser, requestHeaders] = await Promise.all([
+      currentUser(),
+      headers(),
+    ])
+    const requestedByEmail =
+      clerkUser?.emailAddresses.find(
+        (email) => email.id === clerkUser.primaryEmailAddressId,
+      )?.emailAddress ??
+      clerkUser?.emailAddresses[0]?.emailAddress ??
+      null
+    const forwardedFor = requestHeaders.get('x-forwarded-for')
+    const authorizationIpAddress = (
+      forwardedFor?.split(',')[0]?.trim() ||
+      requestHeaders.get('cf-connecting-ip')?.trim() ||
+      requestHeaders.get('x-real-ip')?.trim() ||
+      ''
+    ).slice(0, 128) || null
+    const authorizationUserAgent =
+      requestHeaders.get('user-agent')?.trim().slice(0, 1000) || null
+    const authorizationAcceptedAt = new Date().toISOString()
+    const authorizationReference = `AUTH-${randomUUID().toUpperCase()}`
+    const authorizedPriceCents = Number(
+      requestedPlan.monthly_price_cents ?? 0,
+    )
+    const authorizationTermsVersion = 'merchant-plan-recurring-v1'
+    const authorizationText = `I authorize DEXA POS to charge ${
+      authorizedPriceCents > 0
+        ? `$${(authorizedPriceCents / 100).toFixed(2)}`
+        : '$0.00'
+    } per month for ${requestedPlan.display_name}. I understand the charge is recurring, activation requires DEXA HQ approval, and billing continues until cancellation under the applicable terms.`
     const requestInsert = await (serviceRole as any)
       .from('subscription_plan_requests')
       .insert({
@@ -881,7 +923,17 @@ export async function RequestMerchantTierPlan(planId: string): Promise<{
         current_plan_id: currentPlan?.id ?? null,
         requested_plan_id: requestedPlan.id,
         requested_by: userId,
+        requested_by_email: requestedByEmail,
         status: 'pending',
+        authorization_reference: authorizationReference,
+        authorization_accepted: true,
+        authorization_accepted_at: authorizationAcceptedAt,
+        authorization_terms_version: authorizationTermsVersion,
+        authorization_text: authorizationText,
+        authorized_price_cents: authorizedPriceCents,
+        authorized_billing_cadence: 'monthly_recurring',
+        authorization_ip_address: authorizationIpAddress,
+        authorization_user_agent: authorizationUserAgent,
         metadata: {
           source: 'merchant_subscription_plan_request',
           requested_plan_code: requestedPlan.plan_code,
@@ -892,6 +944,8 @@ export async function RequestMerchantTierPlan(planId: string): Promise<{
           current_plan_code: currentPlan?.code ?? null,
           current_plan_name: currentPlanName,
           active_location_count: Number(status.active_location_count ?? 0),
+          authorization_reference: authorizationReference,
+          authorization_terms_version: authorizationTermsVersion,
         },
       })
       .select('id, request_number')

@@ -567,6 +567,9 @@ Single index for active ticket streams and their source trackers.
 - First-click approval now records the merchant plan subscription ID expected by
   the request foreign key; it no longer leaves the request pending after the
   plan and invoice succeed.
+- Billing hardening protects service-role billing functions, sends idempotent
+  merchant/HQ failed-payment alerts, and requires immutable recurring-charge
+  authorization evidence for new merchant plan requests.
 - Merchant tiers and billing history are merchant-wide. Hardware requests are
   location-scoped and reviewed independently by HQ.
 - The plan-request flow has reached authenticated QA. The hardware-request
