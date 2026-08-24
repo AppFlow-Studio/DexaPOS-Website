@@ -34,8 +34,8 @@ export default function CardsSection({ section, ctx }: SectionRenderProps<"cards
           {items.map((item, index) => (
             <li
               key={index}
-              className="flex flex-col overflow-hidden rounded-[var(--site-radius)] border"
-              style={{ borderColor: "var(--site-border)", background: "var(--site-card)" }}
+              className="flex flex-col overflow-hidden rounded-[var(--site-radius)]"
+              style={{ background: "var(--site-card)" }}
             >
               {item.image && (
                 <SiteImage

@@ -114,8 +114,8 @@ export default function PopularItemsSection({
               return (
                 <li
                   key={binding.id}
-                  className="group flex min-w-0 flex-col overflow-hidden rounded-[var(--site-radius)] border"
-                  style={{ borderColor: "var(--site-border)", background: "var(--site-card)" }}
+                  className="group flex min-w-0 flex-col overflow-hidden rounded-[var(--site-radius)]"
+                  style={{ background: "var(--site-card)" }}
                 >
                   <div
                     className="relative aspect-square overflow-hidden"
