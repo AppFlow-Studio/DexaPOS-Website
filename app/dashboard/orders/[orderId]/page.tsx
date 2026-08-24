@@ -20,6 +20,7 @@ import {
 import { ReceiptModal } from "@/components/dashboard/orders/ReceiptModal";
 import { useLocationStore } from "@/stores/location-store";
 import { GetOrderDetails, RefundOrder, VoidOrder } from "../../actions/order";
+import { ValorRefundDialog } from "@/components/dashboard/orders/ValorRefundDialog";
 import { GetOrderFullHistory } from "../../actions/order-full-history";
 import { OrderStatusBadge } from "@/components/dashboard/orders/OrderStatusBadge";
 import { PaymentStatusBadge } from "@/components/dashboard/orders/PaymentStatusBadge";
@@ -140,8 +141,26 @@ function getOrderTypeColor(type: string) {
 }
 
 // Payment Card with collapsible item attribution
-function PaymentCard({ payment }: { payment: OrderPayment }) {
+function PaymentCard({
+  payment,
+  clerkOrgId,
+  orderId,
+  onRefunded,
+}: {
+  payment: OrderPayment;
+  clerkOrgId: string;
+  orderId: string;
+  onRefunded: () => void;
+}) {
   const [isExpanded, setIsExpanded] = React.useState(false);
+  const [refundOpen, setRefundOpen] = React.useState(false);
+  const refundableCents =
+    Math.round(Number(payment.amount ?? 0) * 100) -
+    Math.round(Number(payment.refunded_amount ?? 0) * 100);
+  const canRefund =
+    payment.processor_name === "valor" &&
+    ["captured", "paid"].includes((payment.status as string) ?? "") &&
+    refundableCents > 0;
   const paymentItems = payment.order_payment_items || [];
   const hasItems = paymentItems.length > 0;
 
@@ -183,6 +202,30 @@ function PaymentCard({ payment }: { payment: OrderPayment }) {
           </p>
         </div>
       </div>
+
+      {canRefund && (
+        <div className="flex justify-end px-2 pb-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setRefundOpen(true);
+            }}
+          >
+            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+            Refund
+          </Button>
+          <ValorRefundDialog
+            open={refundOpen}
+            onOpenChange={setRefundOpen}
+            clerkOrgId={clerkOrgId}
+            orderId={orderId}
+            payment={payment}
+            onRefunded={onRefunded}
+          />
+        </div>
+      )}
 
       {/* Collapsible Item Attribution */}
       {isExpanded && (
@@ -773,7 +816,18 @@ export default function OrderDetailPage() {
               <DetailBody>
                 <div className="-mx-2">
                   {payments.map((payment) => (
-                    <PaymentCard key={payment.id} payment={payment} />
+                    <PaymentCard
+                      key={payment.id}
+                      payment={payment}
+                      clerkOrgId={clerkOrgId}
+                      orderId={orderId ?? ""}
+                      onRefunded={() => {
+                        queryClient.invalidateQueries({
+                          queryKey: ["order-details", orderId],
+                        });
+                        queryClient.invalidateQueries({ queryKey: ["orders"] });
+                      }}
+                    />
                   ))}
                 </div>
               </DetailBody>

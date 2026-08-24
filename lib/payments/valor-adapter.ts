@@ -7,9 +7,10 @@
  *
  * WHAT IS AND ISN'T IMPLEMENTED
  *   sale + createCustomer map onto real Valor calls (Direct Sale Token, and the
- *   customer/payment-profile vault). voidSale, refund and getTransaction throw
- *   `unsupported_operation`: the web dashboard does not void/refund (that is a
- *   POS-only action), and Valor reconciliation arrives via webhook projection
+ *   customer/payment-profile vault). refund + voidSale reverse a card-not-present
+ *   online sale (see `valor/refundApi`) — the web dashboard owns these because a
+ *   POS terminal cannot reverse a web charge. getTransaction still throws
+ *   `unsupported_operation`: Valor reconciliation arrives via webhook projection
  *   (C6), not a synchronous transaction lookup. chargeCustomer is intentionally
  *   omitted — Valor bills stored credentials through the subscription rail
  *   (`valor/subscriptionApi`), not a one-off vault charge.
@@ -24,6 +25,7 @@ import {
   type ValorProductLine,
   type ValorSaleParams,
 } from "./valor/saleApi";
+import { createRefund, voidSale as valorVoidSale } from "./valor/refundApi";
 import {
   attachPaymentProfile,
   createCustomerProfile,
@@ -137,12 +139,18 @@ export function createValorProcessor(
       return createSale(options, toSaleParams(request));
     },
 
-    async voidSale(_request: VoidRequest): Promise<ProcessorTransaction> {
-      unsupported("voidSale");
+    async voidSale(request: VoidRequest): Promise<ProcessorTransaction> {
+      return valorVoidSale(options, {
+        transactionId: request.transactionId,
+        reason: request.reason,
+      });
     },
 
-    async refund(_request: RefundRequest): Promise<ProcessorTransaction> {
-      unsupported("refund");
+    async refund(request: RefundRequest): Promise<ProcessorTransaction> {
+      return createRefund(options, {
+        transactionId: request.transactionId,
+        money: request.money,
+      });
     },
 
     async getTransaction(_transactionId: string): Promise<ProcessorTransaction> {

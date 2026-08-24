@@ -176,30 +176,64 @@ describe("createValorProcessor — createCustomer", () => {
   });
 });
 
-describe("createValorProcessor — unsupported operations", () => {
-  const { fetchImpl } = stubFetch([]);
-  const processor = createValorProcessor({ ...CREDS, endpoints: ENDPOINTS, fetchImpl });
+describe("createValorProcessor — refund / void / lookup", () => {
+  it("voids a sale via the void endpoint and approves on S00/00", async () => {
+    const { fetchImpl, calls } = stubFetch([
+      { status: 200, body: { error_no: "S00", error_code: "00", txn_id: "rev_1" } },
+    ]);
+    const processor = createValorProcessor({ ...CREDS, endpoints: ENDPOINTS, fetchImpl });
 
-  it("throws unsupported_operation for voidSale", async () => {
-    await expect(processor.voidSale({ transactionId: "t" })).rejects.toMatchObject({
-      name: "PaymentProcessorError",
-      code: "unsupported_operation",
+    const tx = await processor.voidSale({ transactionId: "txn_orig", reason: "test" });
+
+    expect(tx.outcome).toBe("approved");
+    expect(tx.processor).toBe("valor");
+    expect(calls[0].url).toBe("https://txn.test/?void");
+    const body = jsonBody(calls[0]);
+    expect(body.txn_type).toBe("void");
+    expect(body.transaction_id).toBe("txn_orig");
+  });
+
+  it("refunds (partial) via the refund endpoint with a formatted amount", async () => {
+    const { fetchImpl, calls } = stubFetch([
+      { status: 200, body: { error_no: "S00", error_code: "00", txn_id: "rev_2", rrn: "RRN9" } },
+    ]);
+    const processor = createValorProcessor({ ...CREDS, endpoints: ENDPOINTS, fetchImpl });
+
+    const tx = await processor.refund({
+      transactionId: "txn_orig",
+      money: { amountMinor: 1250, currency: "USD" },
     });
+
+    expect(tx.outcome).toBe("approved");
+    expect(tx.transactionId).toBe("rev_2");
+    expect(calls[0].url).toBe("https://txn.test/?refund");
+    const body = jsonBody(calls[0]);
+    expect(body.txn_type).toBe("refund");
+    expect(body.transaction_id).toBe("txn_orig");
+    expect(body.amount).toBe("12.50");
   });
 
-  it("throws unsupported_operation for refund", async () => {
-    await expect(processor.refund({ transactionId: "t" })).rejects.toBeInstanceOf(
-      PaymentProcessorError
-    );
+  it("omits amount for a full refund", async () => {
+    const { fetchImpl, calls } = stubFetch([
+      { status: 200, body: { error_no: "S00", error_code: "00", txn_id: "rev_3" } },
+    ]);
+    const processor = createValorProcessor({ ...CREDS, endpoints: ENDPOINTS, fetchImpl });
+
+    await processor.refund({ transactionId: "txn_orig" });
+    expect(jsonBody(calls[0]).amount).toBeUndefined();
   });
 
-  it("throws unsupported_operation for getTransaction", async () => {
+  it("still throws unsupported_operation for getTransaction", async () => {
+    const { fetchImpl } = stubFetch([]);
+    const processor = createValorProcessor({ ...CREDS, endpoints: ENDPOINTS, fetchImpl });
     await expect(processor.getTransaction("t")).rejects.toMatchObject({
       code: "unsupported_operation",
     });
   });
 
   it("omits chargeCustomer (Valor bills via the subscription rail)", () => {
+    const { fetchImpl } = stubFetch([]);
+    const processor = createValorProcessor({ ...CREDS, endpoints: ENDPOINTS, fetchImpl });
     expect(processor.chargeCustomer).toBeUndefined();
   });
 });
