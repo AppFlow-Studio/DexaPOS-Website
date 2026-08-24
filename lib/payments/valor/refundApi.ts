@@ -1,17 +1,24 @@
 /**
- * [C5] Valor refund + void (Direct API).
+ * [C5] Valor refund + void (securelink transaction API).
  *
  * Web sales are card-not-present, so a POS terminal cannot reverse them — refunds
- * and voids for online Valor orders have to run through this rail. `createRefund`
- * returns funds on a settled sale; `voidSale` cancels one that has not yet
- * settled. Both are keyed by the original sale's Valor transaction id.
+ * and voids for online Valor orders run through this rail. `createRefund` returns
+ * funds on a settled sale (full or partial); `voidSale` cancels one that has not
+ * yet settled. Both are keyed by the original sale's Valor transaction id
+ * (`ref_txn_id`), on the same :443 transaction host + body credentials as the sale.
  *
- * [V-REFUND] UNVERIFIED — the team validated boarding + sale live, NOT refund or
- * void. The endpoint PATHS and `txn_type` VALUES below are inferred from the
- * Direct Sale Token API shape ([V-DST]) and MUST be confirmed against Valor's
- * refund/void reference (and whether partial amounts + rrn keying are supported)
- * before any production use. Everything processor-specific is isolated in THIS
- * file, so a correction never touches valor-adapter.ts or the server action.
+ * Schema confirmed against Valor docs 2026-08-24:
+ *   refund → POST /?refund  txn_type "refund"  { amount, ref_txn_id, sale_refund,
+ *            surchargeIndicator, auth_code?, rrn?, invoicenumber? }  (amount REQUIRED,
+ *            must be <= the sale amount; a smaller amount is a partial refund)
+ *   void   → POST /?void    txn_type "void"    { ref_txn_id, surchargeindicator,
+ *            amount? }
+ *   success = error_no "S00" + error_code "00"; ids come back as txnid/txn_id.
+ *
+ * [V-REFUND] Two micro-details remain sandbox-UNVERIFIED and are isolated here for
+ * a one-line fix: (a) surcharge-indicator key casing differs between the two docs
+ * (surchargeIndicator on refund, surchargeindicator on void); (b) sale_refund is
+ * documented as "value 1" (sent as string "1"). Confirm both on first sandbox run.
  */
 
 import {
@@ -26,55 +33,74 @@ import {
   postWithBodyCredentials,
   type ValorRequestOptions,
 } from "./client";
-import {
-  VALOR_MAX_AMOUNT_MINOR,
-  type ValorMerchantCredentials,
-} from "./config";
+import { VALOR_MAX_AMOUNT_MINOR, type ValorMerchantCredentials } from "./config";
 
-// [V-REFUND] UNVERIFIED — single point of correction for the transaction :443 host.
 const REFUND_PATH = "/?refund";
 const VOID_PATH = "/?void";
-const REFUND_TXN_TYPE = "refund" as const;
-const VOID_TXN_TYPE = "void" as const;
+/** Card-only, traditional MID — same rationale as the sale's "0". */
+const SURCHARGE_INDICATOR_CARD_ONLY = "0" as const;
 
 export interface ValorRefundParams {
-  /** The original sale's Valor transaction id (`txn_id` from the sale response). */
+  /** The original sale's Valor transaction id (`ref_txn_id`). Required. */
   transactionId: string;
-  /** Omit for a full refund; present for a partial. */
-  money?: Money;
-  /** Original retrieval reference number, if Valor keys refunds on it as well. */
+  /** Refund amount. Valor requires it on every refund (partial = a smaller amount). */
+  money: Money;
+  /** Optional supporting identifiers from the original sale response. */
+  authCode?: string;
   rrn?: string;
+  invoiceNumber?: string;
 }
 
 export interface ValorVoidParams {
-  /** The original sale's Valor transaction id. */
+  /** The original sale's Valor transaction id (`ref_txn_id`). Required. */
   transactionId: string;
-  reason?: string;
+  /** Optional — Valor lets a void identified by ref_txn_id omit the amount. */
+  money?: Money;
 }
 
 export interface ValorReversalRequestBody {
   appid: string;
   appkey: string;
   epi: string;
-  txn_type: typeof REFUND_TXN_TYPE | typeof VOID_TXN_TYPE;
-  transaction_id: string;
+  txn_type: "refund" | "void";
+  ref_txn_id: string;
   amount?: string;
+  sale_refund?: string;
+  surchargeIndicator?: string;
+  surchargeindicator?: string;
+  auth_code?: string;
   rrn?: string;
-  reason?: string;
+  invoicenumber?: string;
 }
 
-/** Valor's reversal response schema is unspecified; every field is read defensively. */
+/** Valor's reversal response schema is unspecified beyond 200/400; read defensively. */
 export interface ValorReversalResponseBody {
   error_no?: string;
   error_code?: string;
   txn_id?: string;
+  txnid?: string;
   transaction_id?: string;
   approval_code?: string;
   auth_code?: string;
   response_text?: string;
+  msg?: string;
   error_message?: string;
   rrn?: string;
   [key: string]: unknown;
+}
+
+function assertRefundable(money: Money): void {
+  assertValidMoney(money);
+  if (money.amountMinor === 0) {
+    throw new RangeError("Valor will not process a zero-amount refund");
+  }
+  if (money.amountMinor > VALOR_MAX_AMOUNT_MINOR) {
+    throw new RangeError(
+      `Refund exceeds Valor's $99,999.99 per-transaction cap (received ${formatMinorUnits(
+        money.amountMinor
+      )})`
+    );
+  }
 }
 
 /** Build the refund request body. Pure — exported for tests. */
@@ -82,28 +108,20 @@ export function buildRefundRequestBody(
   credentials: ValorMerchantCredentials,
   params: ValorRefundParams
 ): ValorReversalRequestBody {
-  if (params.money) {
-    assertValidMoney(params.money);
-    if (params.money.amountMinor === 0) {
-      throw new RangeError("Valor will not process a zero-amount refund");
-    }
-    if (params.money.amountMinor > VALOR_MAX_AMOUNT_MINOR) {
-      throw new RangeError(
-        `Refund exceeds Valor's $99,999.99 per-transaction cap (received ${formatMinorUnits(
-          params.money.amountMinor
-        )})`
-      );
-    }
-  }
+  assertRefundable(params.money);
 
   return {
     appid: credentials.appId,
     appkey: credentials.appKey,
     epi: credentials.epi,
-    txn_type: REFUND_TXN_TYPE,
-    transaction_id: params.transactionId,
-    ...(params.money ? { amount: formatMinorUnits(params.money.amountMinor) } : {}),
+    txn_type: "refund",
+    amount: formatMinorUnits(params.money.amountMinor),
+    ref_txn_id: params.transactionId,
+    sale_refund: "1",
+    surchargeIndicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    ...(params.authCode ? { auth_code: params.authCode } : {}),
     ...(params.rrn ? { rrn: params.rrn } : {}),
+    ...(params.invoiceNumber ? { invoicenumber: params.invoiceNumber } : {}),
   };
 }
 
@@ -112,23 +130,25 @@ export function buildVoidRequestBody(
   credentials: ValorMerchantCredentials,
   params: ValorVoidParams
 ): ValorReversalRequestBody {
+  if (params.money) assertRefundable(params.money);
+
   return {
     appid: credentials.appId,
     appkey: credentials.appKey,
     epi: credentials.epi,
-    txn_type: VOID_TXN_TYPE,
-    transaction_id: params.transactionId,
-    ...(params.reason ? { reason: params.reason } : {}),
+    txn_type: "void",
+    ref_txn_id: params.transactionId,
+    surchargeindicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    ...(params.money ? { amount: formatMinorUnits(params.money.amountMinor) } : {}),
   };
 }
 
 /**
  * Map a Valor reversal response onto the processor-agnostic result.
  *
- * Same success/declined/error split as a sale: `error` (transport/5xx) means the
- * reversal state is UNKNOWN and the caller must reconcile rather than assume the
- * money moved; `declined` means Valor refused (e.g. already reversed, or a void
- * on a settled txn) and the caller may adapt (void -> refund).
+ * `error` (transport/5xx) means the reversal state is UNKNOWN — the caller must
+ * reconcile, not assume the money moved. `declined` means Valor refused (already
+ * reversed, or a void on a settled txn) and the caller may adapt.
  */
 export function toReversalProcessorTransaction(result: {
   status: number;
@@ -139,11 +159,13 @@ export function toReversalProcessorTransaction(result: {
 
   return {
     outcome: approved ? "approved" : transportFailed ? "error" : "declined",
-    transactionId: result.body.txn_id ?? result.body.transaction_id ?? null,
+    transactionId:
+      result.body.txn_id ?? result.body.txnid ?? result.body.transaction_id ?? null,
     authCode: result.body.approval_code ?? result.body.auth_code ?? null,
     responseCode: result.body.error_code ?? null,
     responseText:
       result.body.response_text ??
+      result.body.msg ??
       result.body.error_message ??
       extractValorError(result.body) ??
       (transportFailed
@@ -154,7 +176,7 @@ export function toReversalProcessorTransaction(result: {
   };
 }
 
-/** Refund a settled Valor sale (full when `money` is omitted, else partial). */
+/** Refund a Valor sale (full or partial). `money` is always required by Valor. */
 export async function createRefund(
   options: ValorRequestOptions,
   params: ValorRefundParams

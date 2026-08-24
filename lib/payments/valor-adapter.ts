@@ -140,16 +140,21 @@ export function createValorProcessor(
     },
 
     async voidSale(request: VoidRequest): Promise<ProcessorTransaction> {
-      return valorVoidSale(options, {
-        transactionId: request.transactionId,
-        reason: request.reason,
-      });
+      return valorVoidSale(options, { transactionId: request.transactionId });
     },
 
     async refund(request: RefundRequest): Promise<ProcessorTransaction> {
+      if (!request.money) {
+        throw new PaymentProcessorError(
+          "unsupported_operation",
+          "Valor refunds require an explicit amount; the gateway has no full-refund shorthand."
+        );
+      }
       return createRefund(options, {
         transactionId: request.transactionId,
         money: request.money,
+        authCode: request.authCode,
+        rrn: request.rrn,
       });
     },
 

@@ -190,7 +190,7 @@ describe("createValorProcessor — refund / void / lookup", () => {
     expect(calls[0].url).toBe("https://txn.test/?void");
     const body = jsonBody(calls[0]);
     expect(body.txn_type).toBe("void");
-    expect(body.transaction_id).toBe("txn_orig");
+    expect(body.ref_txn_id).toBe("txn_orig");
   });
 
   it("refunds (partial) via the refund endpoint with a formatted amount", async () => {
@@ -209,18 +209,18 @@ describe("createValorProcessor — refund / void / lookup", () => {
     expect(calls[0].url).toBe("https://txn.test/?refund");
     const body = jsonBody(calls[0]);
     expect(body.txn_type).toBe("refund");
-    expect(body.transaction_id).toBe("txn_orig");
+    expect(body.ref_txn_id).toBe("txn_orig");
     expect(body.amount).toBe("12.50");
+    expect(body.sale_refund).toBe("1");
   });
 
-  it("omits amount for a full refund", async () => {
-    const { fetchImpl, calls } = stubFetch([
-      { status: 200, body: { error_no: "S00", error_code: "00", txn_id: "rev_3" } },
-    ]);
+  it("requires an explicit amount — Valor has no full-refund shorthand", async () => {
+    const { fetchImpl } = stubFetch([]);
     const processor = createValorProcessor({ ...CREDS, endpoints: ENDPOINTS, fetchImpl });
 
-    await processor.refund({ transactionId: "txn_orig" });
-    expect(jsonBody(calls[0]).amount).toBeUndefined();
+    await expect(processor.refund({ transactionId: "txn_orig" })).rejects.toMatchObject({
+      code: "unsupported_operation",
+    });
   });
 
   it("still throws unsupported_operation for getTransaction", async () => {

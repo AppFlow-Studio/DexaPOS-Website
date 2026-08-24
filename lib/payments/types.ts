@@ -128,8 +128,11 @@ export interface VoidRequest {
 
 export interface RefundRequest {
   transactionId: string;
-  /** Omit for a full refund. */
+  /** Omit for a full refund. Valor requires an explicit amount on every refund. */
   money?: Money;
+  /** Original-sale identifiers some processors need to match the refund (e.g. Valor). */
+  authCode?: string;
+  rrn?: string;
 }
 
 export interface CreateCustomerRequest {

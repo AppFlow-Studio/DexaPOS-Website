@@ -57,8 +57,6 @@ export interface RefundOnlineOrderInput {
   paymentId: string;
   /** Refund amount in cents. Omit for a full refund of the remaining balance. */
   amountCents?: number;
-  /** Portion of the tip to refund, in cents. */
-  tipRefundCents?: number;
   reasonCode?: RefundReasonCode;
   reasonDescription?: string;
   /**
@@ -100,7 +98,7 @@ export async function RefundOnlineOrder(
   const { data: payment } = await svc
     .from("order_payments")
     .select(
-      "id, order_id, merchant_id, location_id, processor_name, transaction_id, rrn, status, amount, tip_amount, refunded_amount, is_settled, settled_at, settlement_batch_id, metadata"
+      "id, order_id, merchant_id, location_id, processor_name, transaction_id, authorization_code, rrn, status, amount, tip_amount, refunded_amount, is_settled, settled_at, settlement_batch_id, metadata"
     )
     .eq("id", paymentId)
     .single();
@@ -136,8 +134,17 @@ export async function RefundOnlineOrder(
     };
   }
   const isFull = requestedCents >= maxRefundableCents;
+  // tip_amount is a subset already inside `amount` (order_payments.amount = grand
+  // total from process_online_order), so the refund `amount` already returns the
+  // tip to the card. tipRefundCents only tells apply_refund_to_payment_v4 how much
+  // of the refund was tip, for the proportional tip-fee reversal — full tip on a
+  // full refund, prorated on a partial.
   const tipCapCents = Math.round(Number(payment.tip_amount ?? 0) * 100);
-  const tipRefundCents = Math.max(0, Math.min(input.tipRefundCents ?? 0, tipCapCents));
+  const tipRefundCents = isFull
+    ? tipCapCents
+    : paymentAmountCents > 0
+      ? Math.min(tipCapCents, Math.round((tipCapCents * requestedCents) / paymentAmountCents))
+      : 0;
 
   // 4. Permission gate (RLS client).
   const { data: canManage, error: permError } = await rls.rpc("user_has_location_permission", {
@@ -219,7 +226,9 @@ export async function RefundOnlineOrder(
           })
         : await processor.refund({
             transactionId: payment.transaction_id,
-            money: isFull ? undefined : { amountMinor: requestedCents, currency: "USD" },
+            money: { amountMinor: requestedCents, currency: "USD" },
+            authCode: payment.authorization_code ?? undefined,
+            rrn: payment.rrn ?? undefined,
           });
   } catch (err) {
     await rls.rpc("update_reversal_status_v2", {

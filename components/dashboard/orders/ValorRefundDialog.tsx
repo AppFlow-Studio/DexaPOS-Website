@@ -23,7 +23,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -71,13 +70,11 @@ export function ValorRefundDialog({
   const baseCents = Math.round(Number(payment.amount ?? 0) * 100);
   const refundedCents = Math.round(Number(payment.refunded_amount ?? 0) * 100);
   const maxRefundableCents = Math.max(0, baseCents - refundedCents);
-  const tipCapCents = Math.round(Number(payment.tip_amount ?? 0) * 100);
   const isSettled = Boolean(
     payment.is_settled || payment.settled_at || payment.settlement_batch_id
   );
 
   const [amountStr, setAmountStr] = React.useState("");
-  const [includeTip, setIncludeTip] = React.useState(tipCapCents > 0);
   const [reason, setReason] = React.useState<RefundReasonCode>("customer_request");
   const [note, setNote] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
@@ -89,7 +86,6 @@ export function ValorRefundDialog({
   if (open && !wasOpen) {
     setWasOpen(true);
     setAmountStr((maxRefundableCents / 100).toFixed(2));
-    setIncludeTip(tipCapCents > 0);
     setReason("customer_request");
     setNote("");
     setSubmitting(false);
@@ -115,7 +111,6 @@ export function ValorRefundDialog({
         orderId,
         paymentId: payment.id,
         amountCents,
-        tipRefundCents: includeTip ? tipCapCents : 0,
         reasonCode: reason,
         reasonDescription: note.trim() || undefined,
         idempotencyKey:
@@ -175,17 +170,6 @@ export function ValorRefundDialog({
               .
             </p>
           </div>
-
-          {tipCapCents > 0 && (
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={includeTip}
-                onCheckedChange={(v) => setIncludeTip(v === true)}
-                disabled={submitting}
-              />
-              Also refund the ${(tipCapCents / 100).toFixed(2)} tip
-            </label>
-          )}
 
           <div className="space-y-1.5">
             <Label>Reason</Label>
