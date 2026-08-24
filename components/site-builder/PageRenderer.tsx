@@ -128,4 +128,40 @@ const PROSE_STYLES = `
 .site-prose strong { font-weight: 600; }
 `;
 
-const SHELL_STYLES = `${HEADING_STYLES}${PROSE_STYLES}`;
+/**
+ * The FAQ accordion's open/close animation.
+ *
+ * `<details>` is not animatable by default: its content is simply not rendered
+ * until it is open, so there is nothing to transition from. `::details-content`
+ * gives that hidden box a handle, and `interpolate-size: allow-keywords` is what
+ * lets `block-size` animate to `auto` — the height nobody can know in advance
+ * and the reason accordions are usually written in JavaScript with a
+ * `scrollHeight` measurement.
+ *
+ * Doing it here keeps every section renderer a server component, which the whole
+ * same-document canvas depends on. A browser without `::details-content` gets
+ * the instant open it always had: the section works, it simply does not glide.
+ *
+ * Emitted once per page from the shell rather than per section, like the prose
+ * and heading rules above it.
+ */
+const FAQ_STYLES = `
+.site-faq { interpolate-size: allow-keywords; }
+.site-faq summary::-webkit-details-marker { display: none; }
+.site-faq-item::details-content {
+  block-size: 0;
+  overflow: clip;
+  opacity: 0;
+  transition:
+    block-size 280ms ease,
+    opacity 220ms ease,
+    content-visibility 280ms allow-discrete;
+}
+.site-faq-item[open]::details-content { block-size: auto; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .site-faq-item::details-content { transition: none; }
+  .site-faq-item summary > span:last-child { transition: none; }
+}
+`;
+
+const SHELL_STYLES = `${HEADING_STYLES}${PROSE_STYLES}${FAQ_STYLES}`;

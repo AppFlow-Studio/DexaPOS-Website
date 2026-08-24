@@ -1,6 +1,7 @@
 import type { RenderContext } from "@/lib/site-builder/render-context";
 import type { LinkTarget, SectionStyle } from "@/lib/site-builder/sections/primitives";
 import { trackAttrs } from "@/lib/site-builder/tracking";
+import { cn } from "@/lib/utils";
 
 /**
  * Shared chrome for section renderers: spacing, background tone, alignment, and
@@ -45,7 +46,15 @@ export function sectionStyleProps(style: SectionStyle | undefined): React.CSSPro
   return BACKGROUND_STYLES[style?.background ?? "default"];
 }
 
-/** Constrained content column. Sections should not invent their own widths. */
+/**
+ * Constrained content column. Sections should not invent their own widths.
+ *
+ * Merged through `cn` rather than concatenated: a caller narrowing the column —
+ * the FAQ asks for `max-w-3xl`, because a reading column that wide is unreadable
+ * — was appending a second `max-width` utility that lost to `max-w-6xl` on
+ * source order alone. The section looked like it had been given a width and had
+ * silently been refused one, which is the worst of both.
+ */
 export function Container({
   children,
   className = "",
@@ -54,7 +63,7 @@ export function Container({
   className?: string;
 }) {
   return (
-    <div className={`mx-auto w-full max-w-6xl px-5 md:px-8 ${className}`}>{children}</div>
+    <div className={cn("mx-auto w-full max-w-6xl px-5 md:px-8", className)}>{children}</div>
   );
 }
 

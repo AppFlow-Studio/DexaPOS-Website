@@ -17,6 +17,8 @@ import { updateSectionProps } from "../mutations";
 import { normalizePage, type PageDocument } from "../index";
 import { createRenderContext, type RenderMode } from "../render-context";
 import { SECTION_KINDS } from "../sections/kinds";
+import GallerySection from "@/components/site-builder/sections/GallerySection";
+import FaqSection from "@/components/site-builder/sections/FaqSection";
 import HeroSection from "@/components/site-builder/sections/HeroSection";
 import ThemePreview from "@/components/site-builder/dashboard/design/ThemePreview";
 import { composeTheme, type StyleMode } from "../style-inputs";
@@ -747,5 +749,144 @@ describe("hero carousel positioning", () => {
     // twice more in the reduced-motion rules.
     expect(html.split("<img ").length - 1).toBe(3);
     for (const id of ["a", "b", "c"]) expect(html).toContain(`https://cdn.test/${id}.jpg`);
+  });
+});
+// ─────────────────────────────────────────────────────────────────────────────
+// gallery: what a visitor actually receives
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("gallery photos", () => {
+  /** A gallery of `assetIds`, where only those in `live` still exist. */
+  const galleryHtml = (
+    assetIds: string[],
+    live: string[],
+    mode: RenderMode = "public",
+  ) => {
+    const alive = new Set(live);
+    const ctx = ctxFor(mode);
+    ctx.resolveAsset = (id: string) =>
+      alive.has(id)
+        ? { url: `https://cdn.test/${id}.jpg`, alt: null, width: 800, height: 800 }
+        : null;
+
+    const section = {
+      id: "sec_gallery",
+      kind: "gallery" as const,
+      props: {
+        heading: "Our room",
+        images: assetIds.map((assetId) => ({ assetId })),
+        layout: "grid",
+        columns: 3,
+      },
+    };
+
+    return renderToStaticMarkup(
+      <GallerySection section={section as never} resolved={emptyResolvedMap()} ctx={ctx} />,
+    );
+  };
+
+  it("omits the cell for a photo that is no longer in the library", () => {
+    const html = galleryHtml(["a", "dead", "c"], ["a", "c"]);
+
+    expect(html.split("<li>").length - 1).toBe(2);
+    // The defect shipped `<li></li>` — an empty cell in the grid.
+    expect(html).not.toContain("<li></li>");
+  });
+
+  it("renders nothing publicly when every photo has been deleted", () => {
+    expect(galleryHtml(["dead-1", "dead-2"], [])).toBe("");
+  });
+
+  it("still tells the merchant in the builder, and never a visitor", () => {
+    expect(galleryHtml(["dead-1"], [], "builder")).toContain(
+      "Add photos to fill this gallery.",
+    );
+    expect(galleryHtml([], [], "builder")).toContain("Add photos to fill this gallery.");
+    // Preview means "what a visitor sees", so the placeholder must not survive
+    // it — this is the whole of the Build/Preview defect.
+    expect(galleryHtml([], [], "preview")).toBe("");
+    expect(galleryHtml([], [], "public")).toBe("");
+  });
+});
+// ─────────────────────────────────────────────────────────────────────────────
+// faq: one card per question, opened by the browser
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("faq accordion", () => {
+  const faqHtml = (align?: "left" | "center") => {
+    const section = {
+      id: "sec_faq",
+      kind: "faq" as const,
+      props: {
+        heading: "Frequently asked questions",
+        items: [
+          { question: "What is the best food in your store?", answer: "<p>Our salad.</p>" },
+          { question: "Do you deliver?", answer: "<p>Within two miles.</p>" },
+        ],
+        defaultOpenFirst: true,
+      },
+      ...(align ? { style: { align } } : {}),
+    };
+
+    return renderToStaticMarkup(
+      <FaqSection section={section as never} resolved={emptyResolvedMap()} ctx={ctxFor()} />,
+    );
+  };
+
+  it("gives every question its own card rather than a shared column", () => {
+    const html = faqHtml();
+
+    expect(html.split("<details").length - 1).toBe(2);
+    // The card is what makes one question distinguishable from the next.
+    expect(html).toContain("site-faq-item");
+    expect(html).toContain("var(--site-card)");
+  });
+
+  it("opens only the first question, and animates through CSS not JavaScript", () => {
+    const html = faqHtml();
+
+    expect(html.split('open=""').length - 1).toBe(1);
+    // `.site-faq` is the hook `FAQ_STYLES` transitions `::details-content` on.
+    // Without the class the accordion still works — it just snaps open.
+    expect(html).toContain("site-faq");
+  });
+
+  it("marks the toggle with a chevron, not a plus that reads as a close button", () => {
+    const html = faqHtml();
+
+    expect(html).toContain("<svg");
+    expect(html).toContain("group-open:rotate-180");
+    expect(html).not.toContain(">+<");
+  });
+
+  it("centres itself by default, and still obeys an explicit left", () => {
+    expect(faqHtml()).toContain("text-center");
+    expect(faqHtml("center")).toContain("text-center");
+    // The Style control has to keep doing something.
+    expect(faqHtml("left")).not.toContain("text-center");
+  });
+
+  it("keeps the question text patchable by the canvas", () => {
+    const ctx = ctxFor("builder");
+    const section = {
+      id: "sec_faq",
+      kind: "faq" as const,
+      props: {
+        heading: "FAQ",
+        items: [{ question: "Do you deliver?", answer: "<p>Yes.</p>" }],
+        defaultOpenFirst: false,
+      },
+    };
+
+    const html = renderToStaticMarkup(
+      <FaqSection section={section as never} resolved={emptyResolvedMap()} ctx={ctx} />,
+    );
+
+    // The marker has to sit on the element holding *only* the text: the canvas
+    // refuses to patch a node with element children, and with the marker on the
+    // `<summary>` the chevron beside it forced a full server render per
+    // keystroke.
+    const marked = html.match(/<span[^>]*data-sb-field="props\.items\.0\.question"[^>]*>([^<]*)</);
+    expect(marked?.[1]).toBe("Do you deliver?");
   });
 });
