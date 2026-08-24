@@ -204,6 +204,16 @@ export function validatePage(
         kind: section.kind,
       });
     }
+    if (
+      section.kind === "video" &&
+      !section.hidden &&
+      (typeof props.videoId !== "string" || !props.videoId.trim())
+    ) {
+      warn("empty_section", "Video has no link and will not appear on the live page.", {
+        sectionId: section.id,
+        kind: section.kind,
+      });
+    }
 
     for (const asset of collectAssetRefs(props)) {
       if (!asset.alt) {
@@ -248,10 +258,6 @@ function incompleteSectionMessage(
   props: Record<string, unknown>,
 ): string | null {
   switch (kind) {
-    case "video":
-      return typeof props.videoId === "string" && props.videoId.trim()
-        ? null
-        : "Add a video link or hide the Video section before publishing.";
     case "form":
       return typeof props.formId === "string" && props.formId.trim()
         ? null

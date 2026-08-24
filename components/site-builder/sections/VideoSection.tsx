@@ -19,6 +19,10 @@ export default function VideoSection({ section, ctx }: SectionRenderProps<"video
   const { title, subtitle, provider, videoId } = section.props;
   const f = fieldAttrsFor(ctx.mode, section.id);
 
+  // An unfinished optional video should stay editable in the builder without
+  // leaving an empty band on the published page.
+  if (!videoId && ctx.mode !== "builder") return null;
+
   return (
     <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style)}>
       <Container>

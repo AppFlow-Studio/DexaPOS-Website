@@ -169,7 +169,7 @@ describe("validatePage", () => {
     expect(codes(result.errors)).toContain("invalid_section_props");
   });
 
-  it.each(["video", "form", "pdf", "integrations"] as const)(
+  it.each(["form", "pdf", "integrations"] as const)(
     "blocks an incomplete visible %s section",
     (kind) => {
       const added = addSection(starter(), kind);
@@ -180,15 +180,27 @@ describe("validatePage", () => {
     },
   );
 
-  it("allows an incomplete section to remain as a hidden draft", () => {
+  it("allows an empty video section to publish and warns that it will be omitted", () => {
     const added = addSection(starter(), "video");
     expect(added.ok).toBe(true);
     if (!added.ok) return;
-    const videoId = added.doc.sections.find((section) => section.kind === "video")!.id;
+
+    const result = validatePage(added.doc);
+    const videoWarnings = result.warnings.filter((warning) => warning.kind === "video");
+    expect(result.ok).toBe(true);
+    expect(codes(result.errors)).not.toContain("incomplete_section");
+    expect(codes(videoWarnings)).toContain("empty_section");
+  });
+
+  it("allows an incomplete section to remain as a hidden draft", () => {
+    const added = addSection(starter(), "form");
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    const formId = added.doc.sections.find((section) => section.kind === "form")!.id;
     const hidden = {
       ...added.doc,
       sections: added.doc.sections.map((section) =>
-        section.id === videoId ? { ...section, hidden: true } : section,
+        section.id === formId ? { ...section, hidden: true } : section,
       ),
     };
     expect(codes(validatePage(hidden).errors)).not.toContain("incomplete_section");
