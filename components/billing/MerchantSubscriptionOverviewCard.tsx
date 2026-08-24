@@ -12,7 +12,6 @@ import {
   Eye,
   FileText,
   Loader2,
-  Mail,
   Monitor,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -26,6 +25,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -47,6 +48,7 @@ import { PageHeader, PageShell, Panel, PanelSection } from '@/components/dashboa
 import {
   getMerchantSubscriptionInvoiceDocument,
   RequestMerchantTierPlan,
+  RequestSubscriptionHardware,
   type MerchantBillingLocationViewRecord,
   type MerchantPlanStatusView,
   type MerchantProvisionedDeviceViewRecord,
@@ -101,7 +103,7 @@ const SUBSCRIPTION_SECTIONS: Array<{
 }> = [
   {
     id: 'plan',
-    label: 'Plan & locations',
+    label: 'Plan & coverage',
     icon: Building2,
   },
   {
@@ -257,6 +259,9 @@ export function MerchantSubscriptionOverviewCard({
   const [contactModalMode, setContactModalMode] = useState<'plan' | 'hardware' | null>(null)
   const [selectedRequestedPlanId, setSelectedRequestedPlanId] = useState('')
   const [isSubmittingPlanRequest, setIsSubmittingPlanRequest] = useState(false)
+  const [isSubmittingHardwareRequest, setIsSubmittingHardwareRequest] = useState(false)
+  const [hardwareRequestQuantity, setHardwareRequestQuantity] = useState('1')
+  const [hardwareRequestNote, setHardwareRequestNote] = useState('')
   const [activeSection, setActiveSection] = useState<SubscriptionSection>('plan')
   const [locationPage, setLocationPage] = useState(1)
   const [openLocationIds, setOpenLocationIds] = useState<string[]>([])
@@ -266,6 +271,7 @@ export function MerchantSubscriptionOverviewCard({
   const isLoading = overviewQuery.isLoading
   const merchantPlanStatus = overviewQuery.data?.merchantPlanStatus ?? EMPTY_PLAN_STATUS
   const pendingTierRequest = overviewQuery.data?.pendingTierRequest ?? null
+  const pendingHardwareRequests = overviewQuery.data?.pendingHardwareRequests ?? []
   const locations = overviewQuery.data?.locations ?? EMPTY_LOCATIONS
   const merchantTierPlans = useMemo(
     () =>
@@ -278,6 +284,7 @@ export function MerchantSubscriptionOverviewCard({
   const invoices = overviewQuery.data?.invoices ?? EMPTY_INVOICES
   const billingProfilesByLocationId =
     overviewQuery.data?.billingProfilesByLocationId ?? EMPTY_BILLING_PROFILES
+  const primaryBillingProfile = overviewQuery.data?.primaryBillingProfile ?? null
 
   const invoicePreviewHtml = useMemo(
     () => (invoicePreviewDocument ? renderSubscriptionInvoiceHtml(invoicePreviewDocument) : ''),
@@ -287,16 +294,6 @@ export function MerchantSubscriptionOverviewCard({
   const selectedLocation = useMemo(
     () => locations.find((location) => location.id === selectedLocationId) ?? locations[0] ?? null,
     [locations, selectedLocationId],
-  )
-
-  const selectedInvoices = useMemo(
-    () => invoices.filter((invoice) => invoice.location_id === selectedLocation?.id),
-    [invoices, selectedLocation],
-  )
-
-  const selectedBillingProfile = useMemo(
-    () => (selectedLocation?.id ? billingProfilesByLocationId[selectedLocation.id] ?? null : null),
-    [billingProfilesByLocationId, selectedLocation],
   )
 
   const usage = useMemo(() => usageLabel(merchantPlanStatus), [merchantPlanStatus])
@@ -321,20 +318,20 @@ export function MerchantSubscriptionOverviewCard({
   }, [merchantPlanStatus.plan?.code, merchantPlanStatus.required_plan_code, merchantTierPlans, selectedRequestedPlanId])
 
   const transactionSummary = useMemo(() => {
-    const collected = selectedInvoices
+    const collected = invoices
       .filter((invoice) => invoice.status === 'paid')
       .reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0)
 
-    const pending = selectedInvoices
+    const pending = invoices
       .filter((invoice) => ['open', 'processing', 'failed'].includes(invoice.status))
       .reduce((sum, invoice) => sum + Number(invoice.total_amount || 0), 0)
 
     return {
       collected,
       pending,
-      count: selectedInvoices.length,
+      count: invoices.length,
     }
-  }, [selectedInvoices])
+  }, [invoices])
 
   const totalLocationPages = Math.max(1, Math.ceil(locations.length / LOCATION_PAGE_SIZE))
   const effectiveLocationPage = Math.min(locationPage, totalLocationPages)
@@ -488,23 +485,37 @@ export function MerchantSubscriptionOverviewCard({
     setContactModalMode(null)
   }
 
-  const contactRepHref = useMemo(() => {
-    const reason = contactModalMode === 'hardware' ? 'hardware request' : 'plan assistance'
-    const planName = merchantPlanStatus.plan?.name || 'No active plan'
-    const selectedLocationName = selectedLocation?.name || 'No location selected'
-    const subject = encodeURIComponent(`Dexa ${reason} - ${merchantName}`)
-    const body = encodeURIComponent(
-      `Hi Dexa team,\n\n` +
-        `Merchant: ${merchantName}\n` +
-        `Selected location: ${selectedLocationName}\n` +
-        `Current plan: ${planName}\n` +
-        `Active locations: ${merchantPlanStatus.active_location_count}\n` +
-        `Requested help: ${reason}\n\n` +
-        `Please follow up with the next steps.`,
-    )
+  const handleRequestHardware = async () => {
+    if (!selectedLocation) {
+      toast.error('Select a location first.')
+      return
+    }
 
-    return `mailto:support@dexaposai.com?subject=${subject}&body=${body}`
-  }, [contactModalMode, merchantName, merchantPlanStatus, selectedLocation])
+    setIsSubmittingHardwareRequest(true)
+    const result = await RequestSubscriptionHardware({
+      locationId: selectedLocation.id,
+      quantity: Number(hardwareRequestQuantity),
+      note: hardwareRequestNote,
+    })
+    setIsSubmittingHardwareRequest(false)
+
+    if (!result.success) {
+      toast.error(result.error || 'Failed to submit the hardware request.')
+      return
+    }
+
+    if (result.alreadyRequested) {
+      toast.info(`Request ${result.requestNumber || ''} is already awaiting review.`.trim())
+    } else {
+      toast.success(`Hardware request submitted${result.requestNumber ? ` as ${result.requestNumber}` : ''}.`)
+    }
+    if (result.notificationWarning) toast.warning(result.notificationWarning)
+
+    await overviewQuery.refetch()
+    setHardwareRequestQuantity('1')
+    setHardwareRequestNote('')
+    setContactModalMode(null)
+  }
 
   const planAmountLabel = merchantPlanStatus.plan
     ? merchantPlanStatus.plan.monthly_price_cents > 0
@@ -521,32 +532,6 @@ export function MerchantSubscriptionOverviewCard({
       <PageHeader
         title="Subscription & Billing"
         subtitle="Review plan coverage, provisioned hardware, payments, and invoices."
-        actions={
-          <div className="w-full min-w-0 sm:w-auto">
-            <Label htmlFor="merchant-subscriptions-location" className="sr-only">
-              Selected location
-            </Label>
-            <Select
-              value={selectedLocation?.id || ''}
-              onValueChange={selectLocation}
-              disabled={isLoading || locations.length === 0}
-            >
-              <SelectTrigger
-                id="merchant-subscriptions-location"
-                className="h-9 w-full min-w-0 rounded-full bg-card px-4 shadow-sm sm:w-[280px]"
-              >
-                <SelectValue placeholder="Select location" />
-              </SelectTrigger>
-              <SelectContent>
-                {locations.map((location) => (
-                  <SelectItem key={location.id} value={location.id}>
-                    {location.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        }
       />
 
       {merchantPlanStatus.subscription_status === 'suspended' ? (
@@ -648,16 +633,16 @@ export function MerchantSubscriptionOverviewCard({
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <div>
-                  <div className="text-sm text-muted-foreground">Payment Method</div>
-                  <div className="mt-1 font-medium">{buildPaymentMethodLabel(selectedBillingProfile)}</div>
+                  <div className="text-sm text-muted-foreground">Merchant Payment Method</div>
+                  <div className="mt-1 font-medium">{buildPaymentMethodLabel(primaryBillingProfile)}</div>
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Billing Contact</div>
-                  <div className="mt-1 font-medium">{selectedBillingProfile?.billing_email || 'Not set'}</div>
+                  <div className="mt-1 font-medium">{primaryBillingProfile?.billing_email || 'Not set'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Selected Location</div>
-                  <div className="mt-1 font-medium">{selectedLocation?.name || 'No location selected'}</div>
+                  <div className="text-sm text-muted-foreground">Billing Anchor</div>
+                  <div className="mt-1 font-medium">{primaryBillingProfile?.location_name || 'Not configured'}</div>
                 </div>
               </div>
             </>
@@ -921,6 +906,9 @@ export function MerchantSubscriptionOverviewCard({
           ) : (
             locations.map((location) => {
               const locationDevices = devicesByLocationId[location.id] ?? []
+              const pendingHardwareRequest = pendingHardwareRequests.find(
+                (request) => request.location_id === location.id,
+              )
               const isOpen =
                 openLocationIds.includes(location.id) ||
                 (openLocationIds.length === 0 && selectedLocation?.id === location.id)
@@ -938,6 +926,11 @@ export function MerchantSubscriptionOverviewCard({
                         </div>
                         <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center sm:flex sm:w-auto sm:shrink-0 sm:gap-3">
                           <span aria-hidden="true" className="sm:hidden" />
+                          {pendingHardwareRequest ? (
+                            <Badge variant="outline" className="rounded-full">
+                              {pendingHardwareRequest.request_number} pending
+                            </Badge>
+                          ) : null}
                           <Badge variant="secondary" className="rounded-full tabular-nums">{locationDevices.length} devices</Badge>
                           <ChevronDown className={`h-4 w-4 justify-self-end transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                         </div>
@@ -996,7 +989,7 @@ export function MerchantSubscriptionOverviewCard({
 
           {activeSection === 'billing' ? (
             <div className="min-w-0">
-      <PanelSection label="Payment Method" caption="Billing details for the selected location.">
+      <PanelSection label="Merchant Payment Method" caption="The primary payment profile used for merchant-wide subscription billing.">
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Loading payment method...</div>
         ) : (
@@ -1006,26 +999,49 @@ export function MerchantSubscriptionOverviewCard({
                 <CreditCard className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
-                <div className="font-medium">{buildPaymentMethodLabel(selectedBillingProfile)}</div>
+                <div className="font-medium">{buildPaymentMethodLabel(primaryBillingProfile)}</div>
                 <div className="text-sm text-muted-foreground">
-                  {selectedBillingProfile?.billing_method === 'card' && selectedBillingProfile?.card_exp_month && selectedBillingProfile?.card_exp_year
-                    ? `Expires ${String(selectedBillingProfile.card_exp_month).padStart(2, '0')}/${selectedBillingProfile.card_exp_year}`
-                    : selectedBillingProfile?.billing_method === 'ach'
+                  {primaryBillingProfile?.billing_method === 'card' && primaryBillingProfile?.card_exp_month && primaryBillingProfile?.card_exp_year
+                    ? `Expires ${String(primaryBillingProfile.card_exp_month).padStart(2, '0')}/${primaryBillingProfile.card_exp_year}`
+                    : primaryBillingProfile?.billing_method === 'ach'
                       ? 'Bank account on file'
                       : 'Payment method setup is handled by your Dexa team.'}
                 </div>
+                {primaryBillingProfile?.location_name ? (
+                  <div className="mt-1 text-xs text-muted-foreground">Billing anchor: {primaryBillingProfile.location_name}</div>
+                ) : null}
               </div>
             </div>
-            {selectedBillingProfile?.is_primary ? (
+            {primaryBillingProfile?.is_primary ? (
               <Badge variant="secondary" className="rounded-full">Primary</Badge>
             ) : null}
           </div>
         )}
+        {Object.keys(billingProfilesByLocationId).length > 1 ? (
+          <div className="mt-5 space-y-2">
+            <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              Location payment profiles
+            </div>
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {Object.values(billingProfilesByLocationId).map((profile) => (
+                <div key={profile.id} className="rounded-2xl bg-muted/35 px-4 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs text-muted-foreground">{profile.location_name || 'Location profile'}</div>
+                    {profile.id === primaryBillingProfile?.id ? (
+                      <Badge variant="outline" className="rounded-full text-[0.6875rem]">Billing anchor</Badge>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 text-sm font-medium">{buildPaymentMethodLabel(profile)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </PanelSection>
 
       <PanelSection
         label="Transactions"
-        caption={`Subscription payment activity for ${selectedLocation?.name || merchantName}.`}
+        caption={`Merchant-wide subscription payment activity for ${merchantName}.`}
       >
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
@@ -1045,9 +1061,9 @@ export function MerchantSubscriptionOverviewCard({
 
           {isLoading ? (
             <div className="text-sm text-muted-foreground">Loading transactions...</div>
-          ) : selectedInvoices.length === 0 ? (
+          ) : invoices.length === 0 ? (
             <div className="rounded-2xl bg-muted/30 p-4 text-sm text-muted-foreground">
-              No subscription transactions for this location yet.
+              No merchant subscription transactions yet.
             </div>
           ) : (
             <div className="overflow-x-auto rounded-2xl bg-muted/20">
@@ -1059,11 +1075,12 @@ export function MerchantSubscriptionOverviewCard({
                     <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Method</TableHead>
                     <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Status</TableHead>
                     <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Invoice</TableHead>
+                    <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">Location</TableHead>
                     <TableHead className="text-right text-[0.8125rem] font-normal text-muted-foreground">Amount</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {selectedInvoices.map((invoice) => {
+                  {invoices.map((invoice) => {
                     const activityDate = invoice.paid_at || invoice.last_payment_attempt_at || invoice.created_at
                     const reference = invoice.nmi_transaction_id || invoice.last_payment_error || '-'
 
@@ -1076,6 +1093,7 @@ export function MerchantSubscriptionOverviewCard({
                           <StatusBadge label={invoiceStatusLabel(invoice.status)} />
                         </TableCell>
                         <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
+                        <TableCell>{invoice.location_name}</TableCell>
                         <TableCell className="text-right font-medium tabular-nums">{formatMoney(invoice.total_amount)}</TableCell>
                       </TableRow>
                     )
@@ -1090,13 +1108,13 @@ export function MerchantSubscriptionOverviewCard({
       <PanelSection
         icon={FileText}
         label="Billing History"
-        caption="View and download generated invoices for the selected location."
+        caption="View and download invoices across all merchant locations."
       >
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Loading invoices...</div>
-        ) : selectedInvoices.length === 0 ? (
+        ) : invoices.length === 0 ? (
           <div className="rounded-2xl bg-muted/30 p-4 text-sm text-muted-foreground">
-            No invoices have been generated for this location yet.
+            No merchant invoices have been generated yet.
           </div>
         ) : (
           <div className="overflow-x-auto rounded-2xl bg-muted/20">
@@ -1112,7 +1130,7 @@ export function MerchantSubscriptionOverviewCard({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {selectedInvoices.map((invoice) => (
+                {invoices.map((invoice) => (
                   <TableRow key={invoice.id} className="border-0">
                     <TableCell>{formatDate(invoice.created_at)}</TableCell>
                     <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
@@ -1120,7 +1138,7 @@ export function MerchantSubscriptionOverviewCard({
                       <StatusBadge label={invoiceStatusLabel(invoice.status)} />
                     </TableCell>
                     <TableCell>
-                      Subscription billing for {selectedLocation?.name || 'selected location'}
+                      Subscription billing for {invoice.location_name}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{formatMoney(invoice.total_amount)}</TableCell>
                     <TableCell className="text-right">
@@ -1173,7 +1191,7 @@ export function MerchantSubscriptionOverviewCard({
             </DialogTitle>
             <DialogDescription>
               {contactModalMode === 'hardware'
-                ? 'Hardware requests are handled by your DEXA representative.'
+                ? 'Send a location-specific device request to DEXA HQ for review.'
                 : 'Review the selected plan before sending it to DEXA Billing for approval.'}
             </DialogDescription>
           </DialogHeader>
@@ -1182,6 +1200,44 @@ export function MerchantSubscriptionOverviewCard({
               <div className="font-medium">Merchant</div>
               <div className="text-muted-foreground">{merchantName}</div>
             </div>
+            {contactModalMode === 'hardware' ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="hardware-request-location">Location</Label>
+                  <Select value={selectedLocation?.id || ''} onValueChange={selectLocation}>
+                    <SelectTrigger id="hardware-request-location">
+                      <SelectValue placeholder="Select location" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locations.map((location) => (
+                        <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hardware-request-quantity">Device quantity</Label>
+                  <Input
+                    id="hardware-request-quantity"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={hardwareRequestQuantity}
+                    onChange={(event) => setHardwareRequestQuantity(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hardware-request-note">Request details (optional)</Label>
+                  <Textarea
+                    id="hardware-request-note"
+                    value={hardwareRequestNote}
+                    maxLength={2000}
+                    onChange={(event) => setHardwareRequestNote(event.target.value)}
+                    placeholder="Device type, intended use, or fulfillment notes"
+                  />
+                </div>
+              </>
+            ) : null}
             <div>
               <div className="font-medium">
                 {contactModalMode === 'hardware' ? 'Selected location' : 'Requested plan'}
@@ -1202,7 +1258,7 @@ export function MerchantSubscriptionOverviewCard({
               <div className="font-medium">Recommended next step</div>
               <div className="text-muted-foreground">
                 {contactModalMode === 'hardware'
-                  ? 'Ask your Dexa rep to provision or assign additional hardware to the selected location.'
+                  ? 'DEXA HQ will review this request before inventory is provisioned or assigned.'
                   : 'Submitting sends a subscription request and a read-only notification to DEXA Billing. It does not open a support ticket.'}
               </div>
             </div>
@@ -1210,7 +1266,7 @@ export function MerchantSubscriptionOverviewCard({
           <DialogFooter className="sm:justify-between">
             <div className="text-xs text-muted-foreground">
               {contactModalMode === 'hardware'
-                ? 'We prefill the email with your merchant and selected location details.'
+                ? 'Submitting creates a read-only request and notifies DEXA HQ.'
                 : 'Plan activation remains controlled by DEXA Billing.'}
             </div>
             <div className="flex gap-2">
@@ -1218,11 +1274,14 @@ export function MerchantSubscriptionOverviewCard({
                 Close
               </Button>
               {contactModalMode === 'hardware' ? (
-                <Button asChild className="bg-[#0C4FD1] hover:bg-[#0A45BA]">
-                  <a href={contactRepHref}>
-                    <Mail className="mr-2 h-4 w-4" />
-                    Contact your DEXA rep
-                  </a>
+                <Button
+                  type="button"
+                  className="bg-[#0C4FD1] hover:bg-[#0A45BA]"
+                  disabled={isSubmittingHardwareRequest || !selectedLocation}
+                  onClick={handleRequestHardware}
+                >
+                  {isSubmittingHardwareRequest ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Submit request
                 </Button>
               ) : (
                 <Button

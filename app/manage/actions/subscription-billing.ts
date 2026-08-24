@@ -1,4 +1,4 @@
-'use server'
+﻿'use server'
 
 import { revalidatePath } from 'next/cache'
 import { assertHQPermission } from '@/lib/admin/auth'
@@ -244,6 +244,7 @@ export interface MerchantTierStatusRecord {
 export interface UpsertMerchantTierSubscriptionParams {
   merchantId: string
   planId: string
+  requestId?: string
   status: 'active' | 'past_due' | 'suspended' | 'cancelled'
   currentPeriodStart: string
   currentPeriodEnd?: string | null
@@ -269,6 +270,22 @@ export interface MerchantTierPlanRequestRecord {
   applied_subscription_id: string | null
 }
 
+export interface MerchantHardwareRequestRecord {
+  id: string
+  request_number: string
+  merchant_id: string
+  location_id: string
+  location_name: string
+  requested_quantity: number
+  request_note: string | null
+  requested_by: string
+  status: 'pending' | 'approved' | 'denied' | 'cancelled'
+  requested_at: string
+  reviewed_at: string | null
+  reviewed_by: string | null
+  decision_note: string | null
+}
+
 function escapeEmailText(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -281,12 +298,25 @@ function escapeEmailText(value: string): string {
 async function notifyMerchantOfTierAssignment(params: {
   merchantId: string
   planId: string
+  requestId?: string
   status: UpsertMerchantTierSubscriptionParams['status']
   adminUserId: string | null
-  appliedSubscriptionId: string
+  appliedMerchantPlanSubscriptionId: string
 }): Promise<string | undefined> {
   const serviceRole = createServiceRoleClient()
-  const [merchantResult, planResult, billingProfileResult, requestResult] = await Promise.all([
+  let pendingRequestQuery = (serviceRole as any)
+    .from('subscription_plan_requests')
+    .select('id, request_number')
+    .eq('merchant_id', params.merchantId)
+    .eq('requested_plan_id', params.planId)
+    .eq('status', 'pending')
+
+  if (params.requestId) {
+    pendingRequestQuery = pendingRequestQuery.eq('id', params.requestId)
+  }
+
+  const [merchantResult, planResult, billingProfileResult, requestResult] =
+    await Promise.all([
     serviceRole
       .from('merchants')
       .select('id, name, owner_email')
@@ -306,18 +336,18 @@ async function notifyMerchantOfTierAssignment(params: {
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    (serviceRole as any)
-      .from('subscription_plan_requests')
-      .select('id, request_number')
-      .eq('merchant_id', params.merchantId)
-      .eq('requested_plan_id', params.planId)
-      .eq('status', 'pending')
+      pendingRequestQuery
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
   ])
 
-  if (merchantResult.error || !merchantResult.data || planResult.error || !planResult.data) {
+  if (
+    merchantResult.error ||
+    !merchantResult.data ||
+    planResult.error ||
+    !planResult.data
+  ) {
     console.error('[notifyMerchantOfTierAssignment] context lookup failed:', {
       merchantError: merchantResult.error,
       planError: planResult.error,
@@ -326,7 +356,10 @@ async function notifyMerchantOfTierAssignment(params: {
   }
 
   if (requestResult.error) {
-    console.error('[notifyMerchantOfTierAssignment] request lookup failed:', requestResult.error)
+    console.error(
+      '[notifyMerchantOfTierAssignment] request lookup failed:',
+      requestResult.error,
+    )
   }
 
   const merchant = merchantResult.data
@@ -347,7 +380,7 @@ async function notifyMerchantOfTierAssignment(params: {
         reviewed_at: now,
         reviewed_by: params.adminUserId,
         decision_note: message,
-        applied_subscription_id: params.appliedSubscriptionId,
+        applied_subscription_id: params.appliedMerchantPlanSubscriptionId,
         updated_at: now,
       })
       .eq('id', requestResult.data.id)
@@ -356,9 +389,13 @@ async function notifyMerchantOfTierAssignment(params: {
       .maybeSingle()
 
     if (error || !updatedRequest) {
-      console.error('[notifyMerchantOfTierAssignment] request approval failed:', error)
+      console.error(
+        '[notifyMerchantOfTierAssignment] request approval failed:',
+        error,
+      )
       requestUpdateError =
-        error?.message || 'The request was decided by another user before approval completed.'
+        error?.message ||
+        'The request was decided by another user before approval completed.'
     } else {
       approvedRequest = requestResult.data
     }
@@ -381,12 +418,14 @@ async function notifyMerchantOfTierAssignment(params: {
       assigned_plan_id: plan.id,
       assigned_plan_code: plan.plan_code,
       subscription_status: params.status,
-      applied_subscription_id: params.appliedSubscriptionId,
+      applied_subscription_id: params.appliedMerchantPlanSubscriptionId,
     },
   })
 
   const recipient =
-    billingProfileResult.data?.billing_email?.trim() || merchant.owner_email?.trim() || ''
+    billingProfileResult.data?.billing_email?.trim() ||
+    merchant.owner_email?.trim() ||
+    ''
   let emailError: string | undefined
 
   if (recipient) {
@@ -402,7 +441,10 @@ async function notifyMerchantOfTierAssignment(params: {
 
     if ('error' in emailResult) {
       emailError = emailResult.error
-      console.error('[notifyMerchantOfTierAssignment] email failed:', emailResult.error)
+      console.error(
+        '[notifyMerchantOfTierAssignment] email failed:',
+        emailResult.error,
+      )
     }
   }
 
@@ -428,7 +470,10 @@ async function notifyMerchantOfTierAssignment(params: {
   return undefined
 }
 
-function addOneMonthPeriod(startDate: string, endDate: string): {
+function addOneMonthPeriod(
+  startDate: string,
+  endDate: string,
+): {
   nextPeriodStart: string
   nextPeriodEnd: string
 } {
@@ -468,15 +513,28 @@ async function syncMerchantTierBillingArtifacts(params: {
     .maybeSingle()
 
   if (anchorProfileError) {
-    console.error('[syncMerchantTierBillingArtifacts] anchor profile lookup error:', anchorProfileError)
-    return { success: false as const, error: 'Failed to resolve billing anchor location.' }
+    console.error(
+      '[syncMerchantTierBillingArtifacts] anchor profile lookup error:',
+      anchorProfileError,
+    )
+    return {
+      success: false as const,
+      error: 'Failed to resolve billing anchor location.',
+    }
   }
 
   if (!anchorProfile?.location_id) {
-    return { success: false as const, error: 'No location billing profile is available to anchor merchant tier billing.' }
+    return {
+      success: false as const,
+      error:
+        'No location billing profile is available to anchor merchant tier billing.',
+    }
   }
 
-  const { data: existingAnchorSubscription, error: existingAnchorSubscriptionError } = await serviceRole
+  const {
+    data: existingAnchorSubscription,
+    error: existingAnchorSubscriptionError,
+  } = await serviceRole
     .from('merchant_subscriptions')
     .select('id, metadata')
     .eq('merchant_id', params.merchantId)
@@ -488,7 +546,10 @@ async function syncMerchantTierBillingArtifacts(params: {
       '[syncMerchantTierBillingArtifacts] existing anchor subscription lookup error:',
       existingAnchorSubscriptionError,
     )
-    return { success: false as const, error: 'Failed to resolve location anchor subscription.' }
+    return {
+      success: false as const,
+      error: 'Failed to resolve location anchor subscription.',
+    }
   }
 
   const anchorMetadata = {
@@ -497,9 +558,8 @@ async function syncMerchantTierBillingArtifacts(params: {
     merchant_tier_plan_id: params.planId,
   }
 
-  const { data: anchorSubscriptionId, error: anchorSubscriptionError } = await serviceRole.rpc(
-    'upsert_merchant_subscription',
-    {
+  const { data: anchorSubscriptionId, error: anchorSubscriptionError } =
+    await serviceRole.rpc('upsert_merchant_subscription', {
       p_subscription_id: existingAnchorSubscription?.id ?? null,
       p_merchant_id: params.merchantId,
       p_location_id: anchorProfile.location_id,
@@ -511,12 +571,19 @@ async function syncMerchantTierBillingArtifacts(params: {
       p_trial_ends_at: null,
       p_billing_profile_id: anchorProfile.id,
       p_metadata: anchorMetadata,
-    },
-  )
+    })
 
   if (anchorSubscriptionError || !anchorSubscriptionId) {
-    console.error('[syncMerchantTierBillingArtifacts] anchor subscription upsert error:', anchorSubscriptionError)
-    return { success: false as const, error: anchorSubscriptionError?.message || 'Failed to create anchor subscription.' }
+    console.error(
+      '[syncMerchantTierBillingArtifacts] anchor subscription upsert error:',
+      anchorSubscriptionError,
+    )
+    return {
+      success: false as const,
+      error:
+        anchorSubscriptionError?.message ||
+        'Failed to create anchor subscription.',
+    }
   }
 
   if (params.status === 'cancelled') {
@@ -528,7 +595,8 @@ async function syncMerchantTierBillingArtifacts(params: {
     }
   }
 
-  const { data: existingInvoice, error: existingInvoiceError } = await serviceRole
+  const { data: existingInvoice, error: existingInvoiceError } =
+    await serviceRole
     .from('subscription_invoices')
     .select('id, created_at')
     .eq('subscription_id', anchorSubscriptionId as string)
@@ -539,24 +607,36 @@ async function syncMerchantTierBillingArtifacts(params: {
     .maybeSingle()
 
   if (existingInvoiceError) {
-    console.error('[syncMerchantTierBillingArtifacts] existing invoice lookup error:', existingInvoiceError)
-    return { success: false as const, error: 'Failed to check existing merchant tier invoice.' }
+    console.error(
+      '[syncMerchantTierBillingArtifacts] existing invoice lookup error:',
+      existingInvoiceError,
+    )
+    return {
+      success: false as const,
+      error: 'Failed to check existing merchant tier invoice.',
+    }
   }
 
   let invoiceId: string | null = existingInvoice?.id ?? null
 
   if (!invoiceId) {
-    const { data: generatedInvoiceId, error: generatedInvoiceError } = await serviceRole.rpc(
-      'generate_subscription_invoice',
-      {
+    const { data: generatedInvoiceId, error: generatedInvoiceError } =
+      await serviceRole.rpc('generate_subscription_invoice', {
         p_subscription_id: anchorSubscriptionId as string,
         p_due_date: params.currentPeriodEnd,
-      },
-    )
+      })
 
     if (generatedInvoiceError || !generatedInvoiceId) {
-      console.error('[syncMerchantTierBillingArtifacts] invoice generation error:', generatedInvoiceError)
-      return { success: false as const, error: generatedInvoiceError?.message || 'Failed to generate merchant tier invoice.' }
+      console.error(
+        '[syncMerchantTierBillingArtifacts] invoice generation error:',
+        generatedInvoiceError,
+      )
+      return {
+        success: false as const,
+        error:
+          generatedInvoiceError?.message ||
+          'Failed to generate merchant tier invoice.',
+      }
     }
 
     invoiceId = generatedInvoiceId as string
@@ -576,22 +656,28 @@ async function syncMerchantTierBillingArtifacts(params: {
       .eq('id', params.merchantTierSubscriptionId)
 
     if (mirrorAdvanceError) {
-      console.error('[syncMerchantTierBillingArtifacts] merchant tier period advance error:', mirrorAdvanceError)
+      console.error(
+        '[syncMerchantTierBillingArtifacts] merchant tier period advance error:',
+        mirrorAdvanceError,
+      )
     }
   } else {
-    const { data: duplicateInvoiceId, error: duplicateInvoiceError } = await serviceRole.rpc(
-      'generate_subscription_invoice_snapshot',
-      {
+    const { data: duplicateInvoiceId, error: duplicateInvoiceError } =
+      await serviceRole.rpc('generate_subscription_invoice_snapshot', {
         p_subscription_id: anchorSubscriptionId as string,
         p_due_date: params.currentPeriodEnd,
-      },
-    )
+      })
 
     if (duplicateInvoiceError || !duplicateInvoiceId) {
-      console.error('[syncMerchantTierBillingArtifacts] duplicate tier invoice generation error:', duplicateInvoiceError)
+      console.error(
+        '[syncMerchantTierBillingArtifacts] duplicate tier invoice generation error:',
+        duplicateInvoiceError,
+      )
       return {
         success: false as const,
-        error: duplicateInvoiceError?.message || 'Failed to generate updated merchant tier invoice.',
+        error:
+          duplicateInvoiceError?.message ||
+          'Failed to generate updated merchant tier invoice.',
       }
     }
 
@@ -669,7 +755,9 @@ function normalizeSubscriptionInvoiceLineItems(
 
     if (typeof item.amount !== 'undefined') {
       amount = toNumber(item.amount)
-      unitPrice = toNumber(item.unit_price ?? (quantity > 0 ? amount / quantity : amount))
+      unitPrice = toNumber(
+        item.unit_price ?? (quantity > 0 ? amount / quantity : amount),
+      )
     } else if (typeof item.subtotal !== 'undefined') {
       amount = toNumber(item.subtotal)
       unitPrice = quantity > 0 ? amount / quantity : amount
@@ -680,13 +768,12 @@ function normalizeSubscriptionInvoiceLineItems(
 
     return {
       code,
-      description:
-        String(
+      description: String(
           item.description ??
           item.display_name ??
           item.service_code ??
           item.code ??
-          'Line item'
+          'Line item',
         ),
       periodLabel,
       quantity,
@@ -701,7 +788,11 @@ function buildInvoiceStatusSummary(invoice: {
   total_amount: number
   paid_at: string | null
   due_date: string
-}): { summaryTitle: string; finalAmountLabel: string; finalAmountValue: number } {
+}): {
+  summaryTitle: string
+  finalAmountLabel: string
+  finalAmountValue: number
+} {
   const amountLabel = formatUsd(invoice.total_amount)
 
   if (invoice.status === 'paid') {
@@ -787,8 +878,12 @@ function buildAssignmentPreviewLineItems(
       amount = toNumber(assignment.base_price_monthly) * assignment.quantity
     } else {
       const base = toNumber(assignment.base_price_monthly)
-      const additionalQuantity = Math.max(0, assignment.quantity - toNumber(assignment.included_quantity))
-      amount = base + additionalQuantity * toNumber(assignment.additional_unit_price)
+      const additionalQuantity = Math.max(
+        0,
+        assignment.quantity - toNumber(assignment.included_quantity),
+      )
+      amount =
+        base + additionalQuantity * toNumber(assignment.additional_unit_price)
     }
 
     subtotal += amount
@@ -798,7 +893,8 @@ function buildAssignmentPreviewLineItems(
       description: assignment.display_name,
       periodLabel,
       quantity: assignment.quantity,
-      unitPrice: assignment.quantity > 0 ? amount / assignment.quantity : amount,
+      unitPrice:
+        assignment.quantity > 0 ? amount / assignment.quantity : amount,
       amount,
     }
   })
@@ -806,7 +902,9 @@ function buildAssignmentPreviewLineItems(
   return { lineItems, subtotal }
 }
 
-export async function getSubscriptionPlans(): Promise<SubscriptionPlanRecord[]> {
+export async function getSubscriptionPlans(): Promise<
+  SubscriptionPlanRecord[]
+> {
   await assertHQPermission('system.billing.manage')
 
   const supabase = createServerSupabaseClient()
@@ -825,7 +923,7 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlanRecord[]> 
 }
 
 export async function upsertSubscriptionPlan(
-  params: UpsertSubscriptionPlanParams
+  params: UpsertSubscriptionPlanParams,
 ): Promise<{ success: boolean; planId?: string; error?: string }> {
   await assertHQPermission('system.billing.manage')
 
@@ -861,13 +959,17 @@ export async function upsertSubscriptionPlan(
   return { success: true, planId: data as string }
 }
 
-export async function getMerchantTierPlans(): Promise<MerchantTierPlanRecord[]> {
+export async function getMerchantTierPlans(): Promise<
+  MerchantTierPlanRecord[]
+> {
   await assertHQPermission('system.billing.manage')
 
   const supabase = createServerSupabaseClient()
   const { data, error } = await supabase
     .from('subscription_plans')
-    .select('id, plan_code, display_name, min_locations, max_locations, monthly_price_cents, description, display_order, is_active')
+    .select(
+      'id, plan_code, display_name, min_locations, max_locations, monthly_price_cents, description, display_order, is_active',
+    )
     .eq('plan_scope', 'merchant_tier')
     .eq('is_active', true)
     .order('display_order', { ascending: true })
@@ -880,8 +982,10 @@ export async function getMerchantTierPlans(): Promise<MerchantTierPlanRecord[]> 
 
   return ((data ?? []) as MerchantTierPlanRecord[]).map((row) => ({
     ...row,
-    min_locations: row.min_locations === null ? null : Number(row.min_locations || 0),
-    max_locations: row.max_locations === null ? null : Number(row.max_locations || 0),
+    min_locations:
+      row.min_locations === null ? null : Number(row.min_locations || 0),
+    max_locations:
+      row.max_locations === null ? null : Number(row.max_locations || 0),
     monthly_price_cents: Number(row.monthly_price_cents || 0),
     display_order: Number(row.display_order || 0),
   }))
@@ -893,9 +997,12 @@ export async function getMerchantTierStatus(
   await assertHQPermission('system.billing.manage')
 
   const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase.rpc('get_merchant_subscription_status', {
+  const { data, error } = await supabase.rpc(
+    'get_merchant_subscription_status',
+    {
     p_merchant_id: merchantId,
-  })
+    },
+  )
 
   if (error) {
     console.error('[getMerchantTierStatus] Error:', error)
@@ -909,20 +1016,35 @@ export async function getMerchantTierStatus(
       ? {
           code: String(raw.plan.code),
           name: String(raw.plan.name),
-          min_locations: raw.plan.min_locations === null ? null : Number(raw.plan.min_locations || 0),
-          max_locations: raw.plan.max_locations === null ? null : Number(raw.plan.max_locations || 0),
+          min_locations:
+            raw.plan.min_locations === null
+              ? null
+              : Number(raw.plan.min_locations || 0),
+          max_locations:
+            raw.plan.max_locations === null
+              ? null
+              : Number(raw.plan.max_locations || 0),
           monthly_price_cents: Number(raw.plan.monthly_price_cents || 0),
-          description: typeof raw.plan.description === 'string' ? raw.plan.description : null,
+          description:
+            typeof raw.plan.description === 'string'
+              ? raw.plan.description
+              : null,
         }
       : null,
     active_location_count: Number(raw.active_location_count || 0),
     is_over_limit: Boolean(raw.is_over_limit),
-    required_plan_code: typeof raw.required_plan_code === 'string' ? raw.required_plan_code : null,
+    required_plan_code:
+      typeof raw.required_plan_code === 'string'
+        ? raw.required_plan_code
+        : null,
     subscription_status:
       typeof raw.subscription_status === 'string'
         ? (raw.subscription_status as MerchantTierStatusRecord['subscription_status'])
         : null,
-    current_period_end: typeof raw.current_period_end === 'string' ? raw.current_period_end : null,
+    current_period_end:
+      typeof raw.current_period_end === 'string'
+        ? raw.current_period_end
+        : null,
   }
 }
 
@@ -934,7 +1056,8 @@ export async function getMerchantTierSubscription(
   const serviceRole = createServiceRoleClient()
   const { data, error } = await serviceRole
     .from('merchant_plan_subscriptions')
-    .select(`
+    .select(
+      `
       id,
       merchant_id,
       plan_id,
@@ -952,7 +1075,8 @@ export async function getMerchantTierSubscription(
         monthly_price_cents,
         description
       )
-    `)
+    `,
+    )
     .eq('merchant_id', merchantId)
     .eq('subscription_plans.plan_scope', 'merchant_tier')
     .order('updated_at', { ascending: false })
@@ -979,10 +1103,13 @@ export async function getMerchantTierSubscription(
     plan_id: data.plan_id as string,
     plan_code: String(plan?.plan_code || ''),
     display_name: String(plan?.display_name || ''),
-    min_locations: plan?.min_locations === null ? null : Number(plan?.min_locations || 0),
-    max_locations: plan?.max_locations === null ? null : Number(plan?.max_locations || 0),
+    min_locations:
+      plan?.min_locations === null ? null : Number(plan?.min_locations || 0),
+    max_locations:
+      plan?.max_locations === null ? null : Number(plan?.max_locations || 0),
     monthly_price_cents: Number(plan?.monthly_price_cents || 0),
-    description: typeof plan?.description === 'string' ? plan.description : null,
+    description:
+      typeof plan?.description === 'string' ? plan.description : null,
     status: data.status as MerchantTierSubscriptionRecord['status'],
     current_period_start: data.current_period_start as string,
     current_period_end: data.current_period_end as string,
@@ -1008,7 +1135,10 @@ export async function getPendingMerchantTierRequest(
     .maybeSingle()
 
   if (error) {
-    console.error('[getPendingMerchantTierRequest] request lookup failed:', error)
+    console.error(
+      '[getPendingMerchantTierRequest] request lookup failed:',
+      error,
+    )
     throw new Error('Failed to load the pending subscription request.')
   }
   if (!request) return null
@@ -1020,7 +1150,10 @@ export async function getPendingMerchantTierRequest(
     .maybeSingle()
 
   if (planError || !requestedPlan) {
-    console.error('[getPendingMerchantTierRequest] plan lookup failed:', planError)
+    console.error(
+      '[getPendingMerchantTierRequest] plan lookup failed:',
+      planError,
+    )
     throw new Error('The requested subscription plan is no longer available.')
   }
 
@@ -1031,14 +1164,18 @@ export async function getPendingMerchantTierRequest(
     merchant_id: request.merchant_id,
     current_plan_id: request.current_plan_id ?? null,
     current_plan_name:
-      typeof metadata.current_plan_name === 'string' ? metadata.current_plan_name : null,
+      typeof metadata.current_plan_name === 'string'
+        ? metadata.current_plan_name
+        : null,
     requested_plan_id: request.requested_plan_id,
     requested_plan_code: requestedPlan.plan_code,
     requested_plan_name: requestedPlan.display_name,
-    requested_monthly_price_cents: Number(requestedPlan.monthly_price_cents ?? 0),
+    requested_monthly_price_cents: Number(
+      requestedPlan.monthly_price_cents ?? 0,
+    ),
     requested_by: request.requested_by,
     status: request.status,
-    requested_at: request.requested_at,
+    requested_at: request.created_at,
     reviewed_at: request.reviewed_at ?? null,
     reviewed_by: request.reviewed_by ?? null,
     decision_note: request.decision_note ?? null,
@@ -1061,11 +1198,17 @@ export async function denyMerchantTierPlanRequest(
     .maybeSingle()
 
   if (requestError || !request) {
-    console.error('[denyMerchantTierPlanRequest] request lookup failed:', requestError)
+    console.error(
+      '[denyMerchantTierPlanRequest] request lookup failed:',
+      requestError,
+    )
     return { success: false, error: 'Subscription request not found.' }
   }
   if (request.status !== 'pending') {
-    return { success: false, error: `Request ${request.request_number} is no longer pending.` }
+    return {
+      success: false,
+      error: `Request ${request.request_number} is no longer pending.`,
+    }
   }
 
   const [merchantResult, planResult, billingProfileResult] = await Promise.all([
@@ -1090,12 +1233,20 @@ export async function denyMerchantTierPlanRequest(
       .maybeSingle(),
   ])
 
-  if (merchantResult.error || !merchantResult.data || planResult.error || !planResult.data) {
+  if (
+    merchantResult.error ||
+    !merchantResult.data ||
+    planResult.error ||
+    !planResult.data
+  ) {
     console.error('[denyMerchantTierPlanRequest] context lookup failed:', {
       merchantError: merchantResult.error,
       planError: planResult.error,
     })
-    return { success: false, error: 'Failed to prepare the subscription decision.' }
+    return {
+      success: false,
+      error: 'Failed to prepare the subscription decision.',
+    }
   }
 
   const note = decisionNote?.trim() || null
@@ -1115,8 +1266,15 @@ export async function denyMerchantTierPlanRequest(
     .maybeSingle()
 
   if (updateError || !updated) {
-    console.error('[denyMerchantTierPlanRequest] request update failed:', updateError)
-    return { success: false, error: 'The request changed before it could be denied. Refresh and try again.' }
+    console.error(
+      '[denyMerchantTierPlanRequest] request update failed:',
+      updateError,
+    )
+    return {
+      success: false,
+      error:
+        'The request changed before it could be denied. Refresh and try again.',
+    }
   }
 
   const body = note
@@ -1162,29 +1320,278 @@ export async function denyMerchantTierPlanRequest(
   if (notificationResult.error && emailError) {
     return {
       success: true,
-      notificationWarning: 'The request was denied, but neither the in-app nor email notification could be confirmed.',
+      notificationWarning:
+        'The request was denied, but neither the in-app nor email notification could be confirmed.',
     }
   }
   if (notificationResult.error) {
     return {
       success: true,
-      notificationWarning: 'The request was denied and emailed, but the in-app notification could not be confirmed.',
+      notificationWarning:
+        'The request was denied and emailed, but the in-app notification could not be confirmed.',
     }
   }
   if (emailError) {
     return {
       success: true,
-      notificationWarning: 'The request was denied in-app, but email delivery could not be confirmed.',
+      notificationWarning:
+        'The request was denied in-app, but email delivery could not be confirmed.',
     }
   }
   if (!recipient) {
     return {
       success: true,
-      notificationWarning: 'The request was denied in-app; no merchant billing email is configured.',
+      notificationWarning:
+        'The request was denied in-app; no merchant billing email is configured.',
     }
   }
 
   return { success: true }
+}
+
+export async function getPendingMerchantHardwareRequests(
+  merchantId: string,
+): Promise<MerchantHardwareRequestRecord[]> {
+  await assertHQPermission('system.billing.manage')
+
+  const serviceRole = createServiceRoleClient() as any
+  const { data, error } = await serviceRole
+    .from('subscription_hardware_requests')
+    .select(
+      `
+      id,
+      request_number,
+      merchant_id,
+      location_id,
+      requested_quantity,
+      request_note,
+      requested_by,
+      status,
+      created_at,
+      reviewed_at,
+      reviewed_by,
+      decision_note,
+      locations!inner(name)
+    `,
+    )
+    .eq('merchant_id', merchantId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('[getPendingMerchantHardwareRequests] lookup failed:', error)
+    throw new Error('Failed to load pending hardware requests.')
+  }
+
+  return (data ?? []).map((request: any) => ({
+    id: request.id,
+    request_number: request.request_number,
+    merchant_id: request.merchant_id,
+    location_id: request.location_id,
+    location_name: Array.isArray(request.locations)
+      ? (request.locations[0]?.name ?? 'Unknown location')
+      : (request.locations?.name ?? 'Unknown location'),
+    requested_quantity: Number(request.requested_quantity ?? 1),
+    request_note: request.request_note ?? null,
+    requested_by: request.requested_by,
+    status: request.status,
+    requested_at: request.created_at,
+    reviewed_at: request.reviewed_at ?? null,
+    reviewed_by: request.reviewed_by ?? null,
+    decision_note: request.decision_note ?? null,
+  }))
+}
+
+async function reviewMerchantHardwareRequest(params: {
+  requestId: string
+  decision: 'approved' | 'denied'
+  decisionNote?: string
+}): Promise<{
+  success: boolean
+  notificationWarning?: string
+  error?: string
+}> {
+  const { userId } = await assertHQPermission('system.billing.manage')
+  if (!params.requestId)
+    return { success: false, error: 'requestId is required.' }
+
+  const serviceRole = createServiceRoleClient() as any
+  const { data: request, error: requestError } = await serviceRole
+    .from('subscription_hardware_requests')
+    .select(
+      'id, request_number, merchant_id, location_id, requested_quantity, status',
+    )
+    .eq('id', params.requestId)
+    .maybeSingle()
+
+  if (requestError || !request) {
+    console.error(
+      '[reviewMerchantHardwareRequest] request lookup failed:',
+      requestError,
+    )
+    return { success: false, error: 'Hardware request not found.' }
+  }
+  if (request.status !== 'pending') {
+    return {
+      success: false,
+      error: `Request ${request.request_number} is no longer pending.`,
+    }
+  }
+
+  const [merchantResult, locationResult, billingProfileResult] =
+    await Promise.all([
+      serviceRole
+        .from('merchants')
+        .select('id, name, owner_email')
+        .eq('id', request.merchant_id)
+        .maybeSingle(),
+      serviceRole
+        .from('locations')
+        .select('id, name')
+        .eq('id', request.location_id)
+        .eq('merchant_id', request.merchant_id)
+        .maybeSingle(),
+      serviceRole
+        .from('merchant_billing_profiles')
+        .select('billing_email')
+        .eq('merchant_id', request.merchant_id)
+        .eq('is_primary', true)
+        .eq('is_active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+    ])
+
+  if (
+    merchantResult.error ||
+    !merchantResult.data ||
+    locationResult.error ||
+    !locationResult.data
+  ) {
+    return {
+      success: false,
+      error: 'Failed to prepare the hardware request decision.',
+    }
+  }
+
+  const now = new Date().toISOString()
+  const note = params.decisionNote?.trim() || null
+  const { data: updated, error: updateError } = await serviceRole
+    .from('subscription_hardware_requests')
+    .update({
+      status: params.decision,
+      reviewed_by: userId,
+      reviewed_at: now,
+      decision_note: note,
+      updated_at: now,
+    })
+    .eq('id', request.id)
+    .eq('status', 'pending')
+    .select('id')
+    .maybeSingle()
+
+  if (updateError || !updated) {
+    console.error('[reviewMerchantHardwareRequest] update failed:', updateError)
+    return {
+      success: false,
+      error:
+        'The request changed before it could be reviewed. Refresh and try again.',
+    }
+  }
+
+  const approved = params.decision === 'approved'
+  const body = approved
+    ? `DEXA approved ${request.request_number} for ${request.requested_quantity} device${request.requested_quantity === 1 ? '' : 's'} at ${locationResult.data.name}. Approval starts fulfillment; it does not automatically assign inventory.${note ? ` Note: ${note}` : ''}`
+    : `DEXA did not approve ${request.request_number} for ${locationResult.data.name}.${note ? ` Note: ${note}` : ''}`
+  const notificationResult = await createAppNotification({
+    audience: 'merchant',
+    merchantId: request.merchant_id,
+    notificationType: approved
+      ? 'subscription_hardware_request_approved'
+      : 'subscription_hardware_request_denied',
+    title: `Hardware request ${request.request_number} ${approved ? 'approved' : 'not approved'}`,
+    body,
+    href: '/dashboard/subscriptions',
+    actorUserId: userId,
+    metadata: {
+      hardware_request_id: request.id,
+      request_number: request.request_number,
+      location_id: request.location_id,
+      requested_quantity: request.requested_quantity,
+      decision: params.decision,
+    },
+  })
+
+  const recipient =
+    billingProfileResult.data?.billing_email?.trim() ||
+    merchantResult.data.owner_email?.trim() ||
+    ''
+  let emailError: string | undefined
+  if (recipient) {
+    const emailResult = await sendEmail(
+      recipient,
+      `DEXA hardware request update - ${request.request_number}`,
+      buildEmailTemplate('DEXA POS', 'Hardware request update', body),
+    )
+    if ('error' in emailResult) emailError = emailResult.error
+  }
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath(`/manage/subscriptions/${request.merchant_id}`)
+  revalidatePath('/dashboard/subscriptions')
+
+  if (notificationResult.error && emailError) {
+    return {
+      success: true,
+      notificationWarning:
+        'The decision was saved, but neither notification channel could be confirmed.',
+    }
+  }
+  if (notificationResult.error) {
+    return {
+      success: true,
+      notificationWarning:
+        'The decision was emailed, but the in-app notification could not be confirmed.',
+    }
+  }
+  if (emailError) {
+    return {
+      success: true,
+      notificationWarning:
+        'The decision was saved in-app, but email delivery could not be confirmed.',
+    }
+  }
+  if (!recipient) {
+    return {
+      success: true,
+      notificationWarning:
+        'The decision was saved in-app; no merchant billing email is configured.',
+    }
+  }
+
+  return { success: true }
+}
+
+export async function approveMerchantHardwareRequest(
+  requestId: string,
+  decisionNote?: string,
+) {
+  return reviewMerchantHardwareRequest({
+    requestId,
+    decision: 'approved',
+    decisionNote,
+  })
+}
+
+export async function denyMerchantHardwareRequest(
+  requestId: string,
+  decisionNote?: string,
+) {
+  return reviewMerchantHardwareRequest({
+    requestId,
+    decision: 'denied',
+    decisionNote,
+  })
 }
 
 export async function upsertMerchantTierSubscription(
@@ -1212,7 +1619,10 @@ export async function upsertMerchantTierSubscription(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Invalid merchant billing period.',
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Invalid merchant billing period.',
     }
   }
 
@@ -1227,7 +1637,10 @@ export async function upsertMerchantTierSubscription(
     .maybeSingle()
 
   if (existingError) {
-    console.error('[upsertMerchantTierSubscription] Existing lookup error:', existingError)
+    console.error(
+      '[upsertMerchantTierSubscription] Existing lookup error:',
+      existingError,
+    )
     return { success: false, error: 'Failed to load existing merchant plan.' }
   }
 
@@ -1254,8 +1667,46 @@ export async function upsertMerchantTierSubscription(
         .single()
 
   if (result.error || !result.data) {
-    console.error('[upsertMerchantTierSubscription] Upsert error:', result.error)
-    return { success: false, error: result.error?.message || 'Failed to save merchant plan.' }
+    console.error(
+      '[upsertMerchantTierSubscription] Upsert error:',
+      result.error,
+    )
+    return {
+      success: false,
+      error: result.error?.message || 'Failed to save merchant plan.',
+    }
+  }
+
+  const subscriptionChanged =
+    !existing ||
+    existing.plan_id !== params.planId ||
+    existing.status !== params.status
+
+  // A prior approval attempt may have saved billing successfully but failed
+  // before closing the request. Finalize that request without generating a
+  // second invoice or repeating location billing synchronization.
+  if (!subscriptionChanged && params.requestId) {
+    const notificationWarning = await notifyMerchantOfTierAssignment({
+      merchantId: params.merchantId,
+      planId: params.planId,
+      requestId: params.requestId,
+      status: params.status,
+      adminUserId: userId,
+      appliedMerchantPlanSubscriptionId: result.data.id as string,
+    })
+
+    revalidatePath('/manage/subscriptions')
+    revalidatePath(`/manage/subscriptions/${params.merchantId}`)
+    revalidatePath('/dashboard/subscriptions')
+    revalidatePath(`/manage/merchants/${params.merchantId}`)
+    revalidatePath(`/manage/merchants/${params.merchantId}/billing`)
+
+    return {
+      success: true,
+      subscriptionId: result.data.id as string,
+      invoiceId: null,
+      notificationWarning,
+    }
   }
 
   const synced = await syncMerchantTierBillingArtifacts({
@@ -1271,15 +1722,15 @@ export async function upsertMerchantTierSubscription(
     return { success: false, error: synced.error }
   }
 
-  const subscriptionChanged =
-    !existing || existing.plan_id !== params.planId || existing.status !== params.status
-  const notificationWarning = subscriptionChanged
+  const notificationWarning =
+    subscriptionChanged || Boolean(params.requestId)
     ? await notifyMerchantOfTierAssignment({
         merchantId: params.merchantId,
         planId: params.planId,
+          requestId: params.requestId,
         status: params.status,
         adminUserId: userId,
-        appliedSubscriptionId: synced.anchorSubscriptionId,
+        appliedMerchantPlanSubscriptionId: result.data.id as string,
       })
     : undefined
 
@@ -1298,7 +1749,9 @@ export async function upsertMerchantTierSubscription(
   }
 }
 
-export async function getBillableServices(includeInactive = false): Promise<BillableServiceRecord[]> {
+export async function getBillableServices(
+  includeInactive = false,
+): Promise<BillableServiceRecord[]> {
   await assertHQPermission('system.billing.manage')
 
   const supabase = createServerSupabaseClient() as any
@@ -1325,14 +1778,17 @@ export async function getBillableServices(includeInactive = false): Promise<Bill
   return ((data ?? []) as BillableServiceRecord[]).map((row) => ({
     ...row,
     base_price_monthly: Number(row.base_price_monthly || 0),
-    additional_unit_price: row.additional_unit_price === null ? null : Number(row.additional_unit_price || 0),
+    additional_unit_price:
+      row.additional_unit_price === null
+        ? null
+        : Number(row.additional_unit_price || 0),
     included_quantity: Number(row.included_quantity || 0),
     card_surcharge_pct: Number(row.card_surcharge_pct || 0),
   }))
 }
 
 export async function upsertBillableService(
-  params: UpsertBillableServiceParams
+  params: UpsertBillableServiceParams,
 ): Promise<{ success: boolean; serviceId?: string; error?: string }> {
   await assertHQPermission('system.billing.manage')
 
@@ -1370,7 +1826,9 @@ export async function upsertBillableService(
   return { success: true, serviceId: data as string }
 }
 
-export async function getDeviceBillingServiceMappings(): Promise<DeviceBillingServiceMappingRecord[]> {
+export async function getDeviceBillingServiceMappings(): Promise<
+  DeviceBillingServiceMappingRecord[]
+> {
   await assertHQPermission('system.billing.manage')
 
   const supabase = createServerSupabaseClient() as any
@@ -1388,7 +1846,7 @@ export async function getDeviceBillingServiceMappings(): Promise<DeviceBillingSe
 }
 
 export async function upsertDeviceBillingServiceMapping(
-  params: UpsertDeviceBillingServiceMappingParams
+  params: UpsertDeviceBillingServiceMappingParams,
 ): Promise<{ success: boolean; mappingId?: string; error?: string }> {
   await assertHQPermission('system.billing.manage')
 
@@ -1401,12 +1859,15 @@ export async function upsertDeviceBillingServiceMapping(
   }
 
   const supabase = createServerSupabaseClient() as any
-  const { data, error } = await supabase.rpc('upsert_device_billing_service_mapping', {
+  const { data, error } = await supabase.rpc(
+    'upsert_device_billing_service_mapping',
+    {
     p_device_category: params.deviceCategory,
     p_service_code: params.serviceCode,
     p_is_active: params.isActive ?? true,
     p_metadata: params.metadata ?? {},
-  })
+    },
+  )
 
   if (error) {
     console.error('[upsertDeviceBillingServiceMapping] Error:', error)
@@ -1420,8 +1881,12 @@ export async function upsertDeviceBillingServiceMapping(
 }
 
 export async function calculateSubscriptionTotal(
-  params: CalculateSubscriptionTotalParams
-): Promise<{ success: boolean; data?: SubscriptionQuoteResult; error?: string }> {
+  params: CalculateSubscriptionTotalParams,
+): Promise<{
+  success: boolean
+  data?: SubscriptionQuoteResult
+  error?: string
+}> {
   await assertHQPermission('system.billing.manage')
 
   const supabase = createServerSupabaseClient() as any
@@ -1460,8 +1925,12 @@ export async function calculateSubscriptionTotal(
 }
 
 export async function recalculateMerchantSubscription(
-  subscriptionId: string
-): Promise<{ success: boolean; data?: SubscriptionQuoteResult; error?: string }> {
+  subscriptionId: string,
+): Promise<{
+  success: boolean
+  data?: SubscriptionQuoteResult
+  error?: string
+}> {
   await assertHQPermission('system.billing.manage')
 
   if (!subscriptionId?.trim()) {
@@ -1500,7 +1969,7 @@ export async function recalculateMerchantSubscription(
 }
 
 export async function getMerchantSubscriptions(
-  merchantId: string
+  merchantId: string,
 ): Promise<MerchantSubscriptionRecord[]> {
   await assertHQPermission('system.billing.manage')
 
@@ -1522,7 +1991,7 @@ export async function getMerchantSubscriptions(
 }
 
 export async function upsertMerchantSubscription(
-  params: UpsertMerchantSubscriptionParams
+  params: UpsertMerchantSubscriptionParams,
 ): Promise<{ success: boolean; subscriptionId?: string; error?: string }> {
   await assertHQPermission('system.billing.manage')
 
@@ -1552,7 +2021,12 @@ export async function upsertMerchantSubscription(
 
   try {
     const serviceRole = createServiceRoleClient()
-    const [subscriptionRecord, locationRecord, merchantRecord, billingProfileRecord] = await Promise.all([
+    const [
+      subscriptionRecord,
+      locationRecord,
+      merchantRecord,
+      billingProfileRecord,
+    ] = await Promise.all([
       serviceRole
         .from('merchant_subscriptions')
         .select('id, monthly_amount, status, location_id')
@@ -1585,7 +2059,9 @@ export async function upsertMerchantSubscription(
     ])
 
     const recipientEmail =
-      billingProfileRecord.data?.billing_email?.trim() || merchantRecord.data?.owner_email?.trim() || ''
+      billingProfileRecord.data?.billing_email?.trim() ||
+      merchantRecord.data?.owner_email?.trim() ||
+      ''
 
     if (recipientEmail && params.status === 'canceled') {
       const locationName = locationRecord.data?.name || 'Location'
@@ -1622,7 +2098,10 @@ export async function upsertMerchantSubscription(
       })
     }
   } catch (emailError) {
-    console.error('[upsertMerchantSubscription] Failed to send lifecycle email:', emailError)
+    console.error(
+      '[upsertMerchantSubscription] Failed to send lifecycle email:',
+      emailError,
+    )
   }
 
   revalidatePath('/manage/billing')
@@ -1633,14 +2112,17 @@ export async function upsertMerchantSubscription(
 }
 
 export async function getSubscriptionServiceAssignments(
-  subscriptionId: string
+  subscriptionId: string,
 ): Promise<SubscriptionServiceAssignmentRecord[]> {
   await assertHQPermission('system.billing.manage')
 
   const supabase = createServerSupabaseClient()
-  const { data, error } = await supabase.rpc('list_subscription_service_assignments', {
+  const { data, error } = await supabase.rpc(
+    'list_subscription_service_assignments',
+    {
     p_subscription_id: subscriptionId,
-  })
+    },
+  )
 
   if (error) {
     console.error('[getSubscriptionServiceAssignments] Error:', error)
@@ -1651,7 +2133,10 @@ export async function getSubscriptionServiceAssignments(
     ...row,
     quantity: Number(row.quantity || 0),
     base_price_monthly: Number(row.base_price_monthly || 0),
-    additional_unit_price: row.additional_unit_price === null ? null : Number(row.additional_unit_price || 0),
+    additional_unit_price:
+      row.additional_unit_price === null
+        ? null
+        : Number(row.additional_unit_price || 0),
     included_quantity: Number(row.included_quantity || 0),
     card_surcharge_pct: Number(row.card_surcharge_pct || 0),
   }))
@@ -1664,7 +2149,7 @@ export async function replaceSubscriptionServiceAssignments(
     quantity: number
     enabled?: boolean
     metadata?: Record<string, unknown>
-  }>
+  }>,
 ): Promise<{ success: boolean; error?: string }> {
   await assertHQPermission('system.billing.manage')
 
@@ -1673,7 +2158,9 @@ export async function replaceSubscriptionServiceAssignments(
   }
 
   const supabase = createServerSupabaseClient()
-  const { error } = await supabase.rpc('replace_merchant_subscription_services', {
+  const { error } = await supabase.rpc(
+    'replace_merchant_subscription_services',
+    {
     p_subscription_id: subscriptionId,
     p_services: services.map((service) => ({
       service_id: service.serviceId,
@@ -1681,7 +2168,8 @@ export async function replaceSubscriptionServiceAssignments(
       enabled: service.enabled ?? true,
       metadata: service.metadata ?? {},
     })),
-  })
+    },
+  )
 
   if (error) {
     console.error('[replaceSubscriptionServiceAssignments] Error:', error)
@@ -1693,7 +2181,9 @@ export async function replaceSubscriptionServiceAssignments(
     const [subscriptionRecord, assignmentRecord] = await Promise.all([
       serviceRole
         .from('merchant_subscriptions')
-        .select('id, merchant_id, location_id, monthly_amount, status, current_period_start, current_period_end, next_billing_date')
+        .select(
+          'id, merchant_id, location_id, monthly_amount, status, current_period_start, current_period_end, next_billing_date',
+        )
         .eq('id', subscriptionId)
         .maybeSingle(),
       serviceRole.rpc('list_subscription_service_assignments', {
@@ -1701,8 +2191,15 @@ export async function replaceSubscriptionServiceAssignments(
       }),
     ])
 
-    if (subscriptionRecord.data && subscriptionRecord.data.status !== 'canceled') {
-      const [{ data: merchantRecord }, { data: locationRecord }, { data: billingProfileRecord }] = await Promise.all([
+    if (
+      subscriptionRecord.data &&
+      subscriptionRecord.data.status !== 'canceled'
+    ) {
+      const [
+        { data: merchantRecord },
+        { data: locationRecord },
+        { data: billingProfileRecord },
+      ] = await Promise.all([
         serviceRole
           .from('merchants')
           .select('name, owner_email')
@@ -1724,17 +2221,31 @@ export async function replaceSubscriptionServiceAssignments(
       ])
 
       const recipientEmail =
-        billingProfileRecord?.billing_email?.trim() || merchantRecord?.owner_email?.trim() || ''
+        billingProfileRecord?.billing_email?.trim() ||
+        merchantRecord?.owner_email?.trim() ||
+        ''
 
       if (recipientEmail) {
-        const assignmentCount = Array.isArray(assignmentRecord.data) ? assignmentRecord.data.length : 0
+        const assignmentCount = Array.isArray(assignmentRecord.data)
+          ? assignmentRecord.data.length
+          : 0
         const locationName = locationRecord?.name || 'Location'
         const merchantName = merchantRecord?.name || 'Dexa POS'
-        const monthlyAmount = Number(subscriptionRecord.data.monthly_amount || 0)
-        const periodStart = subscriptionRecord.data.current_period_start || new Date().toISOString()
-        const periodEnd = subscriptionRecord.data.current_period_end || periodStart
-        const assignmentRows = (assignmentRecord.data ?? []) as SubscriptionServiceAssignmentRecord[]
-        const pricingPreview = buildAssignmentPreviewLineItems(assignmentRows, periodStart, periodEnd)
+        const monthlyAmount = Number(
+          subscriptionRecord.data.monthly_amount || 0,
+        )
+        const periodStart =
+          subscriptionRecord.data.current_period_start ||
+          new Date().toISOString()
+        const periodEnd =
+          subscriptionRecord.data.current_period_end || periodStart
+        const assignmentRows = (assignmentRecord.data ??
+          []) as SubscriptionServiceAssignmentRecord[]
+        const pricingPreview = buildAssignmentPreviewLineItems(
+          assignmentRows,
+          periodStart,
+          periodEnd,
+        )
         const surcharge = Math.max(0, monthlyAmount - pricingPreview.subtotal)
 
         await sendSubscriptionLifecycleEmail({
@@ -1769,12 +2280,15 @@ export async function replaceSubscriptionServiceAssignments(
           {
             merchantId: subscriptionRecord.data.merchant_id,
             locationId: subscriptionRecord.data.location_id,
-          }
+          },
         )
       }
     }
   } catch (emailError) {
-    console.error('[replaceSubscriptionServiceAssignments] Failed to send lifecycle email:', emailError)
+    console.error(
+      '[replaceSubscriptionServiceAssignments] Failed to send lifecycle email:',
+      emailError,
+    )
   }
 
   revalidatePath('/manage/billing')
@@ -1783,7 +2297,7 @@ export async function replaceSubscriptionServiceAssignments(
 
 export async function generateSubscriptionInvoiceManually(
   subscriptionId: string,
-  dueDate?: string | null
+  dueDate?: string | null,
 ): Promise<{ success: boolean; invoiceId?: string; error?: string }> {
   await assertHQPermission('system.billing.manage')
 
@@ -1798,7 +2312,8 @@ export async function generateSubscriptionInvoiceManually(
   })
 
   if (error) {
-    const isDuplicatePeriodError = /invoice already exists for subscription/i.test(error.message || '')
+    const isDuplicatePeriodError =
+      /invoice already exists for subscription/i.test(error.message || '')
 
     if (!isDuplicatePeriodError) {
       console.error('[generateSubscriptionInvoiceManually] Error:', error)
@@ -1806,28 +2321,39 @@ export async function generateSubscriptionInvoiceManually(
     }
 
     const serviceRole = createServiceRoleClient()
-    const { data: duplicateInvoiceId, error: duplicateInvoiceError } = await serviceRole.rpc(
-      'generate_subscription_invoice_snapshot',
-      {
+    const { data: duplicateInvoiceId, error: duplicateInvoiceError } =
+      await serviceRole.rpc('generate_subscription_invoice_snapshot', {
         p_subscription_id: subscriptionId,
         p_due_date: dueDate ?? null,
-      },
-    )
+      })
 
     if (duplicateInvoiceError || !duplicateInvoiceId) {
-      console.error('[generateSubscriptionInvoiceManually] Duplicate fallback snapshot error:', duplicateInvoiceError)
-      return { success: false, error: 'Failed to create a duplicate test invoice.' }
+      console.error(
+        '[generateSubscriptionInvoiceManually] Duplicate fallback snapshot error:',
+        duplicateInvoiceError,
+      )
+      return {
+        success: false,
+        error: 'Failed to create a duplicate test invoice.',
+      }
     }
 
-    const { data: duplicateInvoice, error: duplicateInvoiceLookupError } = await serviceRole
+    const { data: duplicateInvoice, error: duplicateInvoiceLookupError } =
+      await serviceRole
       .from('subscription_invoices')
       .select('id, merchant_id')
       .eq('id', duplicateInvoiceId as string)
       .maybeSingle()
 
     if (duplicateInvoiceLookupError || !duplicateInvoice) {
-      console.error('[generateSubscriptionInvoiceManually] Duplicate fallback invoice lookup error:', duplicateInvoiceLookupError)
-      return { success: false, error: 'Failed to load the duplicate test invoice.' }
+      console.error(
+        '[generateSubscriptionInvoiceManually] Duplicate fallback invoice lookup error:',
+        duplicateInvoiceLookupError,
+      )
+      return {
+        success: false,
+        error: 'Failed to load the duplicate test invoice.',
+      }
     }
 
     revalidatePath('/manage/billing')
@@ -1845,7 +2371,7 @@ export async function generateSubscriptionInvoiceManually(
 export async function getSubscriptionInvoices(
   merchantId: string,
   locationId?: string | null,
-  limit = 100
+  limit = 100,
 ): Promise<SubscriptionInvoiceRecord[]> {
   await assertHQPermission('system.billing.manage')
 
@@ -1873,7 +2399,11 @@ export async function getSubscriptionInvoices(
 
 export async function getSubscriptionInvoiceDocument(
   invoiceId: string,
-): Promise<{ success: boolean; document?: SubscriptionInvoiceDocumentData; error?: string }> {
+): Promise<{
+  success: boolean
+  document?: SubscriptionInvoiceDocumentData
+  error?: string
+}> {
   await assertHQPermission('system.billing.manage')
 
   if (!invoiceId?.trim()) {
@@ -1883,7 +2413,8 @@ export async function getSubscriptionInvoiceDocument(
   const serviceRole = createServiceRoleClient()
   const { data: invoice, error: invoiceError } = await serviceRole
     .from('subscription_invoices')
-    .select(`
+    .select(
+      `
       id,
       merchant_id,
       location_id,
@@ -1899,16 +2430,21 @@ export async function getSubscriptionInvoiceDocument(
       due_date,
       paid_at,
       created_at
-    `)
+    `,
+    )
     .eq('id', invoiceId)
     .maybeSingle()
 
   if (invoiceError || !invoice) {
-    console.error('[getSubscriptionInvoiceDocument] Invoice lookup error:', invoiceError)
+    console.error(
+      '[getSubscriptionInvoiceDocument] Invoice lookup error:',
+      invoiceError,
+    )
     return { success: false, error: 'Invoice not found.' }
   }
 
-  const [{ data: merchant }, { data: location }, billingProfileResult] = await Promise.all([
+  const [{ data: merchant }, { data: location }, billingProfileResult] =
+    await Promise.all([
     serviceRole
       .from('merchants')
       .select('name')
@@ -1955,7 +2491,8 @@ export async function getSubscriptionInvoiceDocument(
         merchantName: merchant?.name || 'Merchant',
         locationName: location?.name || 'Location',
         billingEmail: billingProfileResult.data?.billing_email || null,
-        accountHolderName: billingProfileResult.data?.account_holder_name || null,
+        accountHolderName:
+          billingProfileResult.data?.account_holder_name || null,
       },
       lineItems: normalizeSubscriptionInvoiceLineItems(
         (invoice.line_items as Array<Record<string, unknown>> | null) ?? [],
@@ -1976,8 +2513,14 @@ export async function getSubscriptionInvoiceDocument(
 }
 
 export async function chargeSubscriptionInvoiceManually(
-  invoiceId: string
-): Promise<{ success: boolean; invoiceId?: string; status?: string; transactionId?: string | null; error?: string }> {
+  invoiceId: string,
+): Promise<{
+  success: boolean
+  invoiceId?: string
+  status?: string
+  transactionId?: string | null
+  error?: string
+}> {
   await assertHQPermission('system.billing.manage')
 
   if (!invoiceId?.trim()) {
@@ -1991,7 +2534,9 @@ export async function chargeSubscriptionInvoiceManually(
     return { success: false, error: 'Missing Supabase server configuration.' }
   }
 
-  const response = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/functions/v1/billing-charge-subscription`, {
+  const response = await fetch(
+    `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/billing-charge-subscription`,
+    {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${serviceRoleKey}`,
@@ -2000,9 +2545,10 @@ export async function chargeSubscriptionInvoiceManually(
     },
     body: JSON.stringify({ invoice_id: invoiceId }),
     cache: 'no-store',
-  })
+    },
+  )
 
-  const payload = await response.json().catch(() => ({})) as {
+  const payload = (await response.json().catch(() => ({}))) as {
     success?: boolean
     error?: string
     invoice_id?: string

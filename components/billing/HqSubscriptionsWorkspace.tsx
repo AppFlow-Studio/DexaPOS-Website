@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
@@ -55,8 +55,11 @@ import {
 import {
   getMerchantTierPlans,
   getPendingMerchantTierRequest,
+  getPendingMerchantHardwareRequests,
   getMerchantTierStatus,
   getMerchantTierSubscription,
+  approveMerchantHardwareRequest,
+  denyMerchantHardwareRequest,
   denyMerchantTierPlanRequest,
   chargeSubscriptionInvoiceManually,
   calculateSubscriptionTotal,
@@ -75,6 +78,7 @@ import {
   type SubscriptionQuoteResult,
   type MerchantTierPlanRecord,
   type MerchantTierPlanRequestRecord,
+  type MerchantHardwareRequestRecord,
   type MerchantTierStatusRecord,
   type MerchantTierSubscriptionRecord,
   type MerchantSubscriptionRecord,
@@ -481,6 +485,8 @@ export function HqSubscriptionsWorkspace({
   const [merchantTierSubscription, setMerchantTierSubscription] = useState<MerchantTierSubscriptionRecord | null>(null)
   const [pendingMerchantTierRequest, setPendingMerchantTierRequest] = useState<MerchantTierPlanRequestRecord | null>(null)
   const [merchantTierDecisionNote, setMerchantTierDecisionNote] = useState('')
+  const [pendingHardwareRequests, setPendingHardwareRequests] = useState<MerchantHardwareRequestRecord[]>([])
+  const [hardwareDecisionNotes, setHardwareDecisionNotes] = useState<Record<string, string>>({})
   const [selectedMerchantTierPlanId, setSelectedMerchantTierPlanId] = useState('')
   const [merchantTierSubscriptionStatus, setMerchantTierSubscriptionStatus] = useState<'active' | 'past_due' | 'suspended' | 'cancelled'>('active')
   const [merchantTierPeriodStart, setMerchantTierPeriodStart] = useState(startOfMonthIso())
@@ -721,6 +727,7 @@ export function HqSubscriptionsWorkspace({
           nextMerchantTierStatus,
           nextMerchantTierSubscription,
           nextPendingMerchantTierRequest,
+          nextPendingHardwareRequests,
         ] = await Promise.all([
           getBillableServices(),
           getDeviceBillingServiceMappings(),
@@ -733,6 +740,7 @@ export function HqSubscriptionsWorkspace({
           getMerchantTierStatus(merchant.id),
           getMerchantTierSubscription(merchant.id),
           getPendingMerchantTierRequest(merchant.id),
+          getPendingMerchantHardwareRequests(merchant.id),
         ])
 
         const assignmentEntries = await Promise.all(
@@ -765,6 +773,7 @@ export function HqSubscriptionsWorkspace({
         setMerchantTierStatus(nextMerchantTierStatus)
         setMerchantTierSubscription(nextMerchantTierSubscription)
         setPendingMerchantTierRequest(nextPendingMerchantTierRequest)
+        setPendingHardwareRequests(nextPendingHardwareRequests)
 
         const defaultServicePlan =
           nextServicePlans.find((plan) => plan.id === selectedServicePlanId) ??
@@ -1067,6 +1076,7 @@ export function HqSubscriptionsWorkspace({
   const handleSaveMerchantTier = (
     planIdOverride?: string,
     statusOverride?: 'active' | 'past_due' | 'suspended' | 'cancelled',
+    requestIdOverride?: string,
   ) => {
     const planId = planIdOverride || selectedMerchantTierPlanId
     const subscriptionStatus = statusOverride || merchantTierSubscriptionStatus
@@ -1079,6 +1089,7 @@ export function HqSubscriptionsWorkspace({
       const result = await upsertMerchantTierSubscription({
         merchantId: merchant.id,
         planId,
+        requestId: requestIdOverride,
         status: subscriptionStatus,
         currentPeriodStart: merchantTierPeriodStart,
         trialEndsAt: null,
@@ -1121,6 +1132,35 @@ export function HqSubscriptionsWorkspace({
 
       toast.success(`Request ${pendingMerchantTierRequest.request_number} denied.`)
       if (result.notificationWarning) toast.warning(result.notificationWarning)
+      refresh()
+    })
+  }
+
+  const handleHardwareRequestDecision = (
+    request: MerchantHardwareRequestRecord,
+    decision: 'approved' | 'denied',
+  ) => {
+    startTransition(async () => {
+      const decisionNote = hardwareDecisionNotes[request.id]?.trim()
+      const result =
+        decision === 'approved'
+          ? await approveMerchantHardwareRequest(request.id, decisionNote)
+          : await denyMerchantHardwareRequest(request.id, decisionNote)
+
+      if (!result.success) {
+        toast.error(result.error || 'Failed to review the hardware request.')
+        return
+      }
+
+      toast.success(
+        `Request ${request.request_number} ${decision === 'approved' ? 'approved' : 'denied'}.`,
+      )
+      if (result.notificationWarning) toast.warning(result.notificationWarning)
+      setHardwareDecisionNotes((current) => {
+        const next = { ...current }
+        delete next[request.id]
+        return next
+      })
       refresh()
     })
   }
@@ -1321,6 +1361,7 @@ export function HqSubscriptionsWorkspace({
                         handleSaveMerchantTier(
                           pendingMerchantTierRequest.requested_plan_id,
                           'active',
+                          pendingMerchantTierRequest.id,
                         )
                       }}
                     >
@@ -1338,6 +1379,73 @@ export function HqSubscriptionsWorkspace({
                     </Button>
                   </div>
                 </div>
+              </div>
+            </div>
+          ) : null}
+          {pendingHardwareRequests.length > 0 ? (
+            <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50/40 p-4 sm:p-5">
+              <div>
+                <h3 className="font-semibold">Pending hardware requests</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Review each location independently. Approval starts fulfillment and does not assign inventory automatically.
+                </p>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {pendingHardwareRequests.map((request) => (
+                  <div key={request.id} className="space-y-4 rounded-xl border bg-background p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{request.request_number}</Badge>
+                          <Badge variant="secondary">{request.requested_quantity} device{request.requested_quantity === 1 ? '' : 's'}</Badge>
+                        </div>
+                        <p className="mt-2 font-medium">{request.location_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Requested {formatDate(request.requested_at)}
+                        </p>
+                      </div>
+                    </div>
+                    {request.request_note ? (
+                      <p className="rounded-lg bg-muted/50 p-3 text-sm">{request.request_note}</p>
+                    ) : null}
+                    <div className="space-y-2">
+                      <Label htmlFor={`hardware-decision-note-${request.id}`}>
+                        Decision note (optional)
+                      </Label>
+                      <Textarea
+                        id={`hardware-decision-note-${request.id}`}
+                        value={hardwareDecisionNotes[request.id] ?? ''}
+                        onChange={(event) =>
+                          setHardwareDecisionNotes((current) => ({
+                            ...current,
+                            [request.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="Add fulfillment details or explain the decision."
+                        rows={2}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        type="button"
+                        className="sm:flex-1"
+                        disabled={isPending}
+                        onClick={() => handleHardwareRequestDecision(request, 'approved')}
+                      >
+                        Approve request
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="sm:flex-1"
+                        disabled={isPending}
+                        onClick={() => handleHardwareRequestDecision(request, 'denied')}
+                      >
+                        Deny request
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ) : null}

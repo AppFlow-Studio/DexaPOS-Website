@@ -1,4 +1,4 @@
-# Merchant Subscription Requests and Read-Only Notifications
+﻿# Merchant Subscription Requests and Read-Only Notifications
 
 ## Summary
 
@@ -7,6 +7,16 @@ Billing for review. The request is a dedicated billing workflow record, not a
 support ticket. HQ can approve and activate the requested tier or deny it with
 an optional note. Both HQ and merchant users receive read-only in-app
 notifications for the events relevant to them.
+
+The merchant subscription page now follows the same scope boundaries as the
+billing engine:
+
+- the tier, primary payment profile, transactions, and invoices are
+  merchant-wide;
+- the primary payment profile is the earliest active primary profile used as
+  the merchant-tier billing anchor;
+- other location payment profiles remain visible as secondary context; and
+- hardware inventory and hardware requests remain location-scoped.
 
 Support tickets remain reserved for intentional support conversations.
 
@@ -27,6 +37,9 @@ Support tickets remain reserved for intentional support conversations.
    the merchant an optional decision note.
 8. Direct HQ assignments without a merchant request remain supported and create
    a read-only merchant notification instead of a support ticket.
+9. A merchant can submit a `DEV-xxxxx` hardware request for one location. HQ
+   reviews each location request independently and the merchant receives the
+   decision as a read-only notification.
 
 ## Scope and Security
 
@@ -40,8 +53,14 @@ Support tickets remain reserved for intentional support conversations.
 - Notification cache keys include Clerk user, active organization, and HQ versus
   merchant surface to prevent cross-context cache reuse.
 - One pending request per merchant is enforced by a partial unique index.
+- One pending hardware request per merchant/location pair is enforced by a
+  separate partial unique index.
 - Notification delivery failure does not roll back a successful billing change;
   the UI reports a warning instead.
+- Plan approval stores the merchant-wide `merchant_plan_subscriptions.id` on
+  the request. It never writes the location anchor `merchant_subscriptions.id`,
+  preventing the first approval from failing its foreign-key update and
+  requiring a second click.
 
 ## Database Migration
 
@@ -60,6 +79,14 @@ Creates:
 - `mark_all_app_notifications_read()`
 - RLS policies, grants, indexes, request-number sequence, and realtime
   publication for notification inserts
+
+Hardware migration:
+
+`supabase/migrations/20260824130000_subscription_hardware_requests.sql`
+
+Creates `subscription_hardware_requests`, the `DEV-xxxxx` request-number
+sequence, location-scoped uniqueness, RLS, grants, indexes, and the updated-at
+trigger. Apply it after the notification migration.
 
 The migration is present in code but was not executed during implementation.
 Apply it to shared staging before deploying or testing the website code. Do not
@@ -88,12 +115,16 @@ updated before the migration exists in the shared database.
   - Replaces automatic support-ticket creation with request creation, HQ
     notification, duplicate prevention, and pending-request reads.
 - `components/billing/MerchantSubscriptionOverviewCard.tsx`
-  - Shows persisted pending state and clarifies that no ticket is opened.
+  - Shows persisted pending state, merchant-wide billing, the canonical billing
+    anchor, secondary location payment methods, and a real location-scoped
+    hardware request form.
 - `app/manage/actions/subscription-billing.ts`
   - Adds pending-request loading, denial, approval finalization, merchant
     notification, and direct-assignment notification.
 - `components/billing/HqSubscriptionsWorkspace.tsx`
-  - Adds the HQ approval and denial controls.
+  - Adds plan and hardware approval/denial controls.
+- `supabase/migrations/20260824130000_subscription_hardware_requests.sql`
+  - Adds the dedicated location-scoped hardware request lifecycle.
 
 ## Environment
 
@@ -117,8 +148,9 @@ updated before the migration exists in the shared database.
 - A scoped semantic TypeScript check reported zero diagnostics in the nine
   changed TypeScript/TSX files. The loaded project still contains 14 unrelated
   diagnostics outside this change set.
-- `tests/subscription-plan-request-notifications.test.ts`: 3 tests passed. The
-  contract test covers the request lifecycle, RLS/read-state primitives, and
+- `tests/subscription-plan-request-notifications.test.ts`: 6 tests passed. The
+  contract tests cover request lifecycles, RLS/read-state primitives, exact
+  request finalization, merchant-wide billing, location-scoped hardware, and
   the no-automatic-support-ticket boundary.
 - Authenticated database/realtime/Resend QA remains pending.
 
@@ -126,15 +158,17 @@ updated before the migration exists in the shared database.
 
 ### 1. Migration preflight
 
-1. Apply the migration to shared staging before deploying the website branch.
-2. Confirm all three tables and four RPCs exist.
+1. Apply both migrations to shared staging in timestamp order before deploying
+   the website branch.
+2. Confirm the notification/request tables, hardware request table, and four
+   notification RPCs exist.
 3. Confirm RLS is enabled and forced on all three tables.
 4. Regenerate Supabase TypeScript types after the migration is deployed.
 
 ### 2. Merchant request
 
 1. Sign in as a merchant and open `/dashboard/subscriptions`.
-2. Open **Plan & locations** and select a non-current plan.
+2. Open **Plan & coverage** and select a non-current plan.
 3. Choose **Review plan request**, then submit.
 4. Confirm the success message contains a `SUB-xxxxx` number.
 5. Reload the page.
@@ -189,9 +223,32 @@ updated before the migration exists in the shared database.
 3. Verify in-app delivery still works when Resend is intentionally unavailable
    and that the successful billing/request action returns a warning.
 
+### 8. Merchant-wide billing scope
+
+1. Use a merchant with payment profiles and invoices at multiple locations.
+2. Open `/dashboard/subscriptions` and confirm there is no page-level location
+   selector.
+3. Confirm **Plan & coverage** always shows the merchant billing anchor.
+4. Open **Billing** and confirm totals/history include all merchant invoices,
+   each invoice identifies its location, and secondary location payment methods
+   are listed separately.
+5. Open **Hardware** and confirm location selection remains available only for
+   device inventory and requests.
+
+### 9. Hardware request and decision
+
+1. In **Hardware**, select Location A, request two devices, and add a note.
+2. Confirm a `DEV-xxxxx` request appears as pending for Location A and an HQ
+   notification is created.
+3. Confirm the merchant may submit a separate request for Location B but cannot
+   create a second pending request for Location A.
+4. In HQ, approve Location A and deny Location B with decision notes.
+5. Confirm each pending card disappears, no inventory row is created
+   automatically, and the merchant receives both read-only decisions.
+
 ## Remaining Work
 
-- Apply the migration to shared staging.
+- Apply both migrations to shared staging in timestamp order.
 - Regenerate Supabase TypeScript types.
 - Run authenticated staging QA, including realtime and tenant isolation.
 - Verify Resend delivery logs.

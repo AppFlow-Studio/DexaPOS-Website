@@ -564,8 +564,14 @@ Single index for active ticket streams and their source trackers.
 - HQ can approve and activate or deny with an optional note. Merchant and HQ
   updates use the read-only application notification feed.
 - Direct HQ assignment creates a read-only merchant update, not a ticket.
-- The migration is written but unapplied; shared-staging migration, generated
-  types, authenticated QA, realtime proof, and email verification remain.
+- First-click approval now records the merchant plan subscription ID expected by
+  the request foreign key; it no longer leaves the request pending after the
+  plan and invoice succeed.
+- Merchant tiers and billing history are merchant-wide. Hardware requests are
+  location-scoped and reviewed independently by HQ.
+- The plan-request flow has reached authenticated QA. The hardware-request
+  migration still needs shared-staging application; generated types, hardware
+  QA, realtime proof, and email verification remain.
 
 8. Next 16 upgrade handoff:
 - `docs/engineering/framework-upgrades/HANDOFF-2026-07-13-NEXT-16-UPGRADE.md`
