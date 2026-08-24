@@ -34,8 +34,9 @@ The first three SaaS-billing hardening items are implemented in code:
    user agent, acceptance time, and a unique authorization reference. Accepted
    evidence is immutable.
 
-These items do not yet implement automatic grace-period suspension, a merchant
-payment-method editor, or outstanding-balance collection.
+These items are deployed to shared staging. They do not yet implement automatic
+grace-period suspension, a merchant payment-method editor, or
+outstanding-balance collection.
 
 ## Implemented Flow
 
@@ -110,17 +111,11 @@ Authorization and failed-payment delivery migration:
 `supabase/migrations/20260824140000_subscription_authorizations_and_failure_notifications.sql`
 
 Adds immutable plan-authorization evidence and the RLS-protected, idempotent
-failed-payment delivery ledger. Apply it after both request migrations. It was
-created but not executed during implementation.
+failed-payment delivery ledger. Apply it after both request migrations.
 
-The migration is present in code but was not executed during implementation.
-Apply it to shared staging before deploying or testing the website code. Do not
-deploy the website first because the subscription overview reads the new
-request table.
-
-After staging deployment, regenerate Supabase TypeScript types. The new table
-access currently uses narrow `any` casts only because generated types cannot be
-updated before the migration exists in the shared database.
+All three migrations are recorded as applied on shared staging project
+`dfwqakoyittmrwbqvxgw`. Generated Supabase TypeScript types were refreshed from
+that staging schema after deployment.
 
 ## Files Changed
 
@@ -160,6 +155,11 @@ updated before the migration exists in the shared database.
   - Adds the failed subscription payment email.
 - `supabase/functions/billing-*/index.ts`
   - Protects all billing mutations; charge/failure handlers now notify.
+- `supabase/config.toml`
+  - Records `verify_jwt = false` for the five self-authorizing internal billing
+    functions so scheduled internal-secret calls reach function-level auth.
+- `app/database.types.ts`
+  - Regenerates database types from the deployed shared staging schema.
 - `tests/subscription-billing-safety.test.ts`
   - Covers billing authorization, consent evidence, and failure alerts.
 
@@ -197,18 +197,34 @@ updated before the migration exists in the shared database.
 - `tests/subscription-billing-safety.test.ts`: 4 tests passed. The contract
   tests cover internal Edge Function authorization, required consent, immutable
   evidence, delivery idempotency, and merchant/HQ failed-payment alerts.
+- Shared staging migrations `20260824120000`, `20260824130000`, and
+  `20260824140000` are applied and aligned in migration history.
+- The five billing Edge Functions are deployed to shared staging, report
+  `ACTIVE`, and have `verify_jwt = false`; each function performs its own
+  service-role/internal-secret authorization.
+- Required staging secrets are configured: `INTERNAL_NOTIFICATION_SECRET`,
+  `RESEND_API_KEY`, and `RESEND_FROM_EMAIL`. `BILLING_NOTIFICATION_EMAILS`
+  remains optional and is not configured, so documented fallback recipients
+  apply.
+- Live staging probes confirmed every billing function rejects unauthenticated
+  calls with HTTP 401. The charge function accepts the project's current
+  Supabase secret key and reaches request validation (HTTP 400 for an empty
+  body), confirming the authorized path without mutating billing data.
+- `npm run build` completed successfully with Next.js 16.2.12 and generated all
+  118 static pages.
 - Authenticated database/realtime/Resend QA remains pending.
 
 ## Manual QA
 
 ### 1. Migration preflight
 
-1. Apply both migrations to shared staging in timestamp order before deploying
-   the website branch.
+1. Confirm shared staging migration history contains `20260824120000`,
+   `20260824130000`, and `20260824140000`.
 2. Confirm the notification/request tables, hardware request table, and four
    notification RPCs exist.
 3. Confirm RLS is enabled and forced on all three tables.
-4. Regenerate Supabase TypeScript types after the migration is deployed.
+4. Confirm generated TypeScript types include the deployed billing tables and
+   authorization fields.
 
 ### 2. Merchant request
 
@@ -323,9 +339,13 @@ updated before the migration exists in the shared database.
 
 ## Remaining Work
 
-- Apply all three migrations to shared staging in timestamp order.
-- Regenerate Supabase TypeScript types.
 - Run authenticated staging QA, including realtime and tenant isolation.
+- Run a controlled declined-payment test and verify attempt-level idempotency.
+- Verify the scheduled-call path with the matching internal secret. The
+  unauthenticated and current Supabase secret-key paths are already verified.
+- Verify the website deployment uses the current Supabase secret key after the
+  staging key rotation; the local `.env` contains an older credential and was
+  intentionally not overwritten by this change.
 - Verify Resend delivery logs.
 - Record merchant request, HQ approval or denial, and merchant notification as
   the closure artifact.
