@@ -5,6 +5,7 @@ import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { buildEmailTemplate, sendEmail } from '@/lib/messaging/resend'
+import { createAppNotification } from '@/lib/notifications/app-notifications'
 import {
   formatLongDate,
   formatShortDateRange,
@@ -249,6 +250,25 @@ export interface UpsertMerchantTierSubscriptionParams {
   trialEndsAt?: string | null
 }
 
+export interface MerchantTierPlanRequestRecord {
+  id: string
+  request_number: string
+  merchant_id: string
+  current_plan_id: string | null
+  current_plan_name: string | null
+  requested_plan_id: string
+  requested_plan_code: string
+  requested_plan_name: string
+  requested_monthly_price_cents: number
+  requested_by: string
+  status: 'pending' | 'approved' | 'denied' | 'cancelled'
+  requested_at: string
+  reviewed_at: string | null
+  reviewed_by: string | null
+  decision_note: string | null
+  applied_subscription_id: string | null
+}
+
 function escapeEmailText(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -263,6 +283,7 @@ async function notifyMerchantOfTierAssignment(params: {
   planId: string
   status: UpsertMerchantTierSubscriptionParams['status']
   adminUserId: string | null
+  appliedSubscriptionId: string
 }): Promise<string | undefined> {
   const serviceRole = createServiceRoleClient()
   const [merchantResult, planResult, billingProfileResult, requestResult] = await Promise.all([
@@ -285,17 +306,12 @@ async function notifyMerchantOfTierAssignment(params: {
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    serviceRole
-      .from('support_tickets')
-      .select('id, ticket_number')
+    (serviceRole as any)
+      .from('subscription_plan_requests')
+      .select('id, request_number')
       .eq('merchant_id', params.merchantId)
-      .eq('ticket_scope', 'merchant')
-      .eq('category', 'billing')
-      .in('status', ['open', 'in_progress', 'waiting_on_merchant'])
-      .contains('metadata', {
-        source: 'merchant_subscription_plan_request',
-        requested_plan_id: params.planId,
-      })
+      .eq('requested_plan_id', params.planId)
+      .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
@@ -319,100 +335,55 @@ async function notifyMerchantOfTierAssignment(params: {
   const message =
     `DEXA updated your merchant subscription to ${plan.display_name}. ` +
     `The subscription status is now ${statusLabel}.`
-  let threadError: string | undefined
+  const now = new Date().toISOString()
+  let requestUpdateError: string | undefined
+  let approvedRequest: { id: string; request_number: string } | null = null
 
-  if (requestResult.data) {
-    const { error: messageError } = await (serviceRole as any).rpc(
-      'add_ticket_message_with_attachments',
-      {
-        p_ticket_id: requestResult.data.id,
-        p_sender_id: params.adminUserId || 'dexa-billing',
-        p_sender_name: 'DEXA Billing',
-        p_sender_role: 'admin',
-        p_message: message,
-        p_is_internal: false,
-        p_attachments: [],
-      },
-    )
+  if (requestResult.data && params.status === 'active') {
+    const { data: updatedRequest, error } = await (serviceRole as any)
+      .from('subscription_plan_requests')
+      .update({
+        status: 'approved',
+        reviewed_at: now,
+        reviewed_by: params.adminUserId,
+        decision_note: message,
+        applied_subscription_id: params.appliedSubscriptionId,
+        updated_at: now,
+      })
+      .eq('id', requestResult.data.id)
+      .eq('status', 'pending')
+      .select('id')
+      .maybeSingle()
 
-    if (messageError) {
-      console.error('[notifyMerchantOfTierAssignment] request message failed:', messageError)
-      threadError = messageError.message
+    if (error || !updatedRequest) {
+      console.error('[notifyMerchantOfTierAssignment] request approval failed:', error)
+      requestUpdateError =
+        error?.message || 'The request was decided by another user before approval completed.'
     } else {
-      const { error: ticketUpdateError } = await serviceRole
-        .from('support_tickets')
-        .update({
-          status: 'resolved',
-          resolved_at: new Date().toISOString(),
-          resolved_by: params.adminUserId || 'dexa-billing',
-          resolution_notes: message,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', requestResult.data.id)
-
-      if (ticketUpdateError) {
-        console.error('[notifyMerchantOfTierAssignment] request resolution failed:', ticketUpdateError)
-      }
-    }
-  } else {
-    const { data: createdTicket, error: createTicketError } = await (serviceRole as any).rpc(
-      'create_support_ticket',
-      {
-        p_merchant_id: params.merchantId,
-        p_location_id: null,
-        p_subject: `Subscription updated: ${plan.display_name}`,
-        p_description: message,
-        p_category: 'billing',
-        p_submitted_by: params.adminUserId || 'dexa-billing',
-        p_submitted_by_name: 'DEXA Billing',
-        p_submitted_by_email: null,
-        p_carrier_id: null,
-        p_metadata: {
-          source: 'hq_subscription_assignment',
-          assigned_plan_id: plan.id,
-          assigned_plan_code: plan.plan_code,
-          subscription_status: params.status,
-        },
-        p_attachments: [],
-      },
-    )
-
-    if (createTicketError || !createdTicket?.ticket_id) {
-      console.error('[notifyMerchantOfTierAssignment] notification ticket failed:', createTicketError)
-      threadError = createTicketError?.message || 'Failed to create merchant notification thread.'
-    } else {
-      const now = new Date().toISOString()
-      const [{ error: ticketUpdateError }, { error: messageUpdateError }] = await Promise.all([
-        serviceRole
-          .from('support_tickets')
-          .update({
-            status: 'resolved',
-            resolved_at: now,
-            resolved_by: params.adminUserId || 'dexa-billing',
-            resolution_notes: message,
-            updated_at: now,
-          })
-          .eq('id', createdTicket.ticket_id),
-        serviceRole
-          .from('support_ticket_messages')
-          .update({
-            sender_role: 'admin',
-            read_by_admin: true,
-            read_by_merchant: false,
-          })
-          .eq('ticket_id', createdTicket.ticket_id)
-          .eq('message', message),
-      ])
-
-      if (ticketUpdateError || messageUpdateError) {
-        console.error('[notifyMerchantOfTierAssignment] notification thread finalization failed:', {
-          ticketUpdateError,
-          messageUpdateError,
-        })
-        threadError = ticketUpdateError?.message || messageUpdateError?.message
-      }
+      approvedRequest = requestResult.data
     }
   }
+
+  const inAppResult = await createAppNotification({
+    audience: 'merchant',
+    merchantId: params.merchantId,
+    notificationType: approvedRequest
+      ? 'subscription_plan_request_approved'
+      : 'subscription_plan_assigned',
+    title: approvedRequest
+      ? `Subscription request ${approvedRequest.request_number} approved`
+      : 'Subscription updated',
+    body: message,
+    href: '/dashboard/subscriptions',
+    actorUserId: params.adminUserId,
+    subscriptionPlanRequestId: approvedRequest?.id ?? null,
+    metadata: {
+      assigned_plan_id: plan.id,
+      assigned_plan_code: plan.plan_code,
+      subscription_status: params.status,
+      applied_subscription_id: params.appliedSubscriptionId,
+    },
+  })
 
   const recipient =
     billingProfileResult.data?.billing_email?.trim() || merchant.owner_email?.trim() || ''
@@ -425,7 +396,7 @@ async function notifyMerchantOfTierAssignment(params: {
       buildEmailTemplate(
         'DEXA POS',
         'Subscription updated',
-        `${escapeEmailText(merchant.name)},\n\n${escapeEmailText(message)}\n\nYou can review the update in your DEXA dashboard support inbox.`,
+        `${escapeEmailText(merchant.name)},\n\n${escapeEmailText(message)}\n\nYou can review the update on the Subscriptions page in your DEXA dashboard.`,
       ),
     )
 
@@ -435,10 +406,16 @@ async function notifyMerchantOfTierAssignment(params: {
     }
   }
 
-  if (threadError && emailError) {
+  if (requestUpdateError) {
+    if (inAppResult.error && (emailError || !recipient)) {
+      return 'Plan saved, but neither the request decision status nor merchant notification could be confirmed.'
+    }
+    return 'Plan saved and the merchant was notified, but the request decision status could not be confirmed.'
+  }
+  if (inAppResult.error && emailError) {
     return 'Plan saved, but neither the in-app nor email notification could be confirmed.'
   }
-  if (threadError) {
+  if (inAppResult.error) {
     return 'Plan saved and email sent, but the in-app notification could not be confirmed.'
   }
   if (emailError) {
@@ -1015,6 +992,201 @@ export async function getMerchantTierSubscription(
   }
 }
 
+export async function getPendingMerchantTierRequest(
+  merchantId: string,
+): Promise<MerchantTierPlanRequestRecord | null> {
+  await assertHQPermission('system.billing.manage')
+
+  const serviceRole = createServiceRoleClient() as any
+  const { data: request, error } = await serviceRole
+    .from('subscription_plan_requests')
+    .select('*')
+    .eq('merchant_id', merchantId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[getPendingMerchantTierRequest] request lookup failed:', error)
+    throw new Error('Failed to load the pending subscription request.')
+  }
+  if (!request) return null
+
+  const { data: requestedPlan, error: planError } = await serviceRole
+    .from('subscription_plans')
+    .select('id, plan_code, display_name, monthly_price_cents')
+    .eq('id', request.requested_plan_id)
+    .maybeSingle()
+
+  if (planError || !requestedPlan) {
+    console.error('[getPendingMerchantTierRequest] plan lookup failed:', planError)
+    throw new Error('The requested subscription plan is no longer available.')
+  }
+
+  const metadata = (request.metadata ?? {}) as Record<string, unknown>
+  return {
+    id: request.id,
+    request_number: request.request_number,
+    merchant_id: request.merchant_id,
+    current_plan_id: request.current_plan_id ?? null,
+    current_plan_name:
+      typeof metadata.current_plan_name === 'string' ? metadata.current_plan_name : null,
+    requested_plan_id: request.requested_plan_id,
+    requested_plan_code: requestedPlan.plan_code,
+    requested_plan_name: requestedPlan.display_name,
+    requested_monthly_price_cents: Number(requestedPlan.monthly_price_cents ?? 0),
+    requested_by: request.requested_by,
+    status: request.status,
+    requested_at: request.requested_at,
+    reviewed_at: request.reviewed_at ?? null,
+    reviewed_by: request.reviewed_by ?? null,
+    decision_note: request.decision_note ?? null,
+    applied_subscription_id: request.applied_subscription_id ?? null,
+  }
+}
+
+export async function denyMerchantTierPlanRequest(
+  requestId: string,
+  decisionNote?: string,
+): Promise<{ success: boolean; notificationWarning?: string; error?: string }> {
+  const { userId } = await assertHQPermission('system.billing.manage')
+  if (!requestId) return { success: false, error: 'requestId is required.' }
+
+  const serviceRole = createServiceRoleClient() as any
+  const { data: request, error: requestError } = await serviceRole
+    .from('subscription_plan_requests')
+    .select('id, request_number, merchant_id, requested_plan_id, status')
+    .eq('id', requestId)
+    .maybeSingle()
+
+  if (requestError || !request) {
+    console.error('[denyMerchantTierPlanRequest] request lookup failed:', requestError)
+    return { success: false, error: 'Subscription request not found.' }
+  }
+  if (request.status !== 'pending') {
+    return { success: false, error: `Request ${request.request_number} is no longer pending.` }
+  }
+
+  const [merchantResult, planResult, billingProfileResult] = await Promise.all([
+    serviceRole
+      .from('merchants')
+      .select('id, name, owner_email')
+      .eq('id', request.merchant_id)
+      .maybeSingle(),
+    serviceRole
+      .from('subscription_plans')
+      .select('id, plan_code, display_name')
+      .eq('id', request.requested_plan_id)
+      .maybeSingle(),
+    serviceRole
+      .from('merchant_billing_profiles')
+      .select('billing_email')
+      .eq('merchant_id', request.merchant_id)
+      .eq('is_primary', true)
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  if (merchantResult.error || !merchantResult.data || planResult.error || !planResult.data) {
+    console.error('[denyMerchantTierPlanRequest] context lookup failed:', {
+      merchantError: merchantResult.error,
+      planError: planResult.error,
+    })
+    return { success: false, error: 'Failed to prepare the subscription decision.' }
+  }
+
+  const note = decisionNote?.trim() || null
+  const now = new Date().toISOString()
+  const { data: updated, error: updateError } = await serviceRole
+    .from('subscription_plan_requests')
+    .update({
+      status: 'denied',
+      reviewed_at: now,
+      reviewed_by: userId,
+      decision_note: note,
+      updated_at: now,
+    })
+    .eq('id', request.id)
+    .eq('status', 'pending')
+    .select('id')
+    .maybeSingle()
+
+  if (updateError || !updated) {
+    console.error('[denyMerchantTierPlanRequest] request update failed:', updateError)
+    return { success: false, error: 'The request changed before it could be denied. Refresh and try again.' }
+  }
+
+  const body = note
+    ? `DEXA did not approve your request for ${planResult.data.display_name}. Note: ${note}`
+    : `DEXA did not approve your request for ${planResult.data.display_name}. Contact DEXA Billing if you need more information.`
+  const notificationResult = await createAppNotification({
+    audience: 'merchant',
+    merchantId: request.merchant_id,
+    notificationType: 'subscription_plan_request_denied',
+    title: `Subscription request ${request.request_number} was not approved`,
+    body,
+    href: '/dashboard/subscriptions',
+    actorUserId: userId,
+    subscriptionPlanRequestId: request.id,
+    metadata: {
+      requested_plan_id: planResult.data.id,
+      requested_plan_code: planResult.data.plan_code,
+    },
+  })
+
+  const recipient =
+    billingProfileResult.data?.billing_email?.trim() ||
+    merchantResult.data.owner_email?.trim() ||
+    ''
+  let emailError: string | undefined
+  if (recipient) {
+    const emailResult = await sendEmail(
+      recipient,
+      `DEXA subscription request update - ${planResult.data.display_name}`,
+      buildEmailTemplate(
+        'DEXA POS',
+        'Subscription request update',
+        `${escapeEmailText(merchantResult.data.name)},\n\n${escapeEmailText(body)}\n\nYou can review your current plan on the Subscriptions page in your DEXA dashboard.`,
+      ),
+    )
+    if ('error' in emailResult) emailError = emailResult.error
+  }
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath(`/manage/subscriptions/${request.merchant_id}`)
+  revalidatePath('/dashboard/subscriptions')
+
+  if (notificationResult.error && emailError) {
+    return {
+      success: true,
+      notificationWarning: 'The request was denied, but neither the in-app nor email notification could be confirmed.',
+    }
+  }
+  if (notificationResult.error) {
+    return {
+      success: true,
+      notificationWarning: 'The request was denied and emailed, but the in-app notification could not be confirmed.',
+    }
+  }
+  if (emailError) {
+    return {
+      success: true,
+      notificationWarning: 'The request was denied in-app, but email delivery could not be confirmed.',
+    }
+  }
+  if (!recipient) {
+    return {
+      success: true,
+      notificationWarning: 'The request was denied in-app; no merchant billing email is configured.',
+    }
+  }
+
+  return { success: true }
+}
+
 export async function upsertMerchantTierSubscription(
   params: UpsertMerchantTierSubscriptionParams,
 ): Promise<{
@@ -1107,14 +1279,13 @@ export async function upsertMerchantTierSubscription(
         planId: params.planId,
         status: params.status,
         adminUserId: userId,
+        appliedSubscriptionId: synced.anchorSubscriptionId,
       })
     : undefined
 
   revalidatePath('/manage/subscriptions')
   revalidatePath(`/manage/subscriptions/${params.merchantId}`)
   revalidatePath('/dashboard/subscriptions')
-  revalidatePath('/dashboard/support')
-  revalidatePath('/manage/support')
   revalidatePath(`/manage/merchants/${params.merchantId}`)
   revalidatePath(`/manage/merchants/${params.merchantId}/billing`)
 

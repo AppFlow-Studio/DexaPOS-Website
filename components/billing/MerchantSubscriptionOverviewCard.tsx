@@ -265,6 +265,7 @@ export function MerchantSubscriptionOverviewCard({
   const sectionNavRef = useRef<HTMLElement | null>(null)
   const isLoading = overviewQuery.isLoading
   const merchantPlanStatus = overviewQuery.data?.merchantPlanStatus ?? EMPTY_PLAN_STATUS
+  const pendingTierRequest = overviewQuery.data?.pendingTierRequest ?? null
   const locations = overviewQuery.data?.locations ?? EMPTY_LOCATIONS
   const merchantTierPlans = useMemo(
     () =>
@@ -472,10 +473,10 @@ export function MerchantSubscriptionOverviewCard({
     }
 
     if (result.alreadyRequested) {
-      toast.info(`Request ${result.ticketNumber || ''} is already awaiting review.`.trim())
+      toast.info(`Request ${result.requestNumber || ''} is already awaiting review.`.trim())
     } else {
       toast.success(
-        `Plan request submitted${result.ticketNumber ? ` as ${result.ticketNumber}` : ''}.`,
+        `Plan request submitted${result.requestNumber ? ` as ${result.requestNumber}` : ''}.`,
       )
     }
 
@@ -483,6 +484,7 @@ export function MerchantSubscriptionOverviewCard({
       toast.warning(result.notificationWarning)
     }
 
+    await overviewQuery.refetch()
     setContactModalMode(null)
   }
 
@@ -661,6 +663,23 @@ export function MerchantSubscriptionOverviewCard({
             </>
           )}
 
+          {pendingTierRequest ? (
+            <div className="rounded-2xl bg-primary/[0.06] px-4 py-3 text-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="font-medium text-foreground">
+                    {pendingTierRequest.request_number} is awaiting DEXA review
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    Requested plan: {pendingTierRequest.requested_plan_name} · Submitted{' '}
+                    {formatDate(pendingTierRequest.requested_at)}
+                  </div>
+                </div>
+                <Badge variant="outline">Pending</Badge>
+              </div>
+            </div>
+          ) : null}
+
           <div className="space-y-3">
             <div>
               <div className="font-medium">Available plans</div>
@@ -736,6 +755,7 @@ export function MerchantSubscriptionOverviewCard({
                 type="button"
                 className="rounded-full"
                 disabled={
+                  Boolean(pendingTierRequest) ||
                   !selectedRequestedPlan ||
                   selectedRequestedPlan.plan_code === merchantPlanStatus.plan?.code
                 }
@@ -1183,7 +1203,7 @@ export function MerchantSubscriptionOverviewCard({
               <div className="text-muted-foreground">
                 {contactModalMode === 'hardware'
                   ? 'Ask your Dexa rep to provision or assign additional hardware to the selected location.'
-                  : 'Submitting creates a Billing & Account request. DEXA staff will be notified and you will receive an update when the plan is applied.'}
+                  : 'Submitting sends a subscription request and a read-only notification to DEXA Billing. It does not open a support ticket.'}
               </div>
             </div>
           </div>
@@ -1209,6 +1229,7 @@ export function MerchantSubscriptionOverviewCard({
                   type="button"
                   disabled={
                     isSubmittingPlanRequest ||
+                    Boolean(pendingTierRequest) ||
                     !selectedRequestedPlan ||
                     selectedRequestedPlan.plan_code === merchantPlanStatus.plan?.code
                   }

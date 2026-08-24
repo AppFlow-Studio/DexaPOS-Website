@@ -5,7 +5,9 @@ import { revalidatePath } from 'next/cache'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getEffectiveMerchantContext } from '@/lib/admin/merchant-context'
-import { CreateTicket } from '@/app/dashboard/actions/support'
+import { buildEmailTemplate, sendEmail } from '@/lib/messaging/resend'
+import { createAppNotification } from '@/lib/notifications/app-notifications'
+import { parseSupportAssigneeEmails } from '@/lib/support/assignees'
 import {
   formatLongDate,
   formatShortDateRange,
@@ -124,6 +126,15 @@ export interface MerchantTierPlanViewRecord {
   monthly_price_cents: number
   description: string | null
   display_order: number
+}
+
+export interface MerchantPendingTierRequestViewRecord {
+  id: string
+  request_number: string
+  requested_plan_id: string
+  requested_plan_name: string
+  status: 'pending'
+  requested_at: string
 }
 
 function normalizeMerchantTierPlans(
@@ -274,6 +285,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
   merchantName: string
   merchantPlanStatus: MerchantPlanStatusView
   merchantTierPlans: MerchantTierPlanViewRecord[]
+  pendingTierRequest: MerchantPendingTierRequestViewRecord | null
   locations: MerchantBillingLocationViewRecord[]
   devicesByLocationId: Record<string, MerchantProvisionedDeviceViewRecord[]>
   invoices: MerchantSubscriptionInvoiceViewRecord[]
@@ -288,6 +300,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     invoicesResult,
     billingProfilesResult,
     devicesResult,
+    pendingTierRequestResult,
   ] = await Promise.all([
     serviceRole.rpc('get_merchant_subscription_status', {
       p_merchant_id: merchantId,
@@ -336,6 +349,14 @@ export async function getMerchantSubscriptionOverview(): Promise<{
       .eq('merchant_id', merchantId)
       .order('location_name', { ascending: true })
       .order('model_name', { ascending: true }),
+    (serviceRole as any)
+      .from('subscription_plan_requests')
+      .select('id, request_number, requested_plan_id, status, requested_at, metadata')
+      .eq('merchant_id', merchantId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ])
 
   if (merchantPlanStatusResult.error) {
@@ -361,6 +382,11 @@ export async function getMerchantSubscriptionOverview(): Promise<{
   if (billingProfilesResult.error) {
     console.error('[getMerchantSubscriptionOverview] billing profile error:', billingProfilesResult.error)
     throw new Error('Failed to load billing profiles.')
+  }
+
+  if (pendingTierRequestResult.error) {
+    console.error('[getMerchantSubscriptionOverview] pending request error:', pendingTierRequestResult.error)
+    throw new Error('Failed to load the pending subscription request.')
   }
 
   let resolvedDevicesData = devicesResult.data
@@ -510,11 +536,34 @@ export async function getMerchantSubscriptionOverview(): Promise<{
       typeof rawPlanStatus.current_period_end === 'string' ? rawPlanStatus.current_period_end : null,
   }
 
+  const pendingRequestMetadata = (pendingTierRequestResult.data?.metadata ?? {}) as Record<string, unknown>
+  const pendingRequestedPlan = pendingTierRequestResult.data
+    ? merchantTierPlans.find(
+        (plan) => plan.id === pendingTierRequestResult.data.requested_plan_id,
+      )
+    : null
+  const pendingTierRequest: MerchantPendingTierRequestViewRecord | null =
+    pendingTierRequestResult.data
+      ? {
+          id: pendingTierRequestResult.data.id,
+          request_number: pendingTierRequestResult.data.request_number,
+          requested_plan_id: pendingTierRequestResult.data.requested_plan_id,
+          requested_plan_name:
+            pendingRequestedPlan?.display_name ||
+            (typeof pendingRequestMetadata.requested_plan_name === 'string'
+              ? pendingRequestMetadata.requested_plan_name
+              : 'Subscription plan'),
+          status: 'pending',
+          requested_at: pendingTierRequestResult.data.requested_at,
+        }
+      : null
+
   return {
     merchantId,
     merchantName,
     merchantPlanStatus,
     merchantTierPlans,
+    pendingTierRequest,
     locations: normalizedLocations,
     devicesByLocationId,
     invoices: normalizedInvoices,
@@ -564,8 +613,8 @@ export async function RequestMerchantTierPlan(
   planId: string,
 ): Promise<{
   success: boolean
-  ticketId?: string
-  ticketNumber?: string
+  requestId?: string
+  requestNumber?: string
   alreadyRequested?: boolean
   notificationWarning?: string
   error?: string
@@ -617,21 +666,11 @@ export async function RequestMerchantTierPlan(
       return { success: false, error: 'This is already your current subscription plan.' }
     }
 
-    const requestMetadata = {
-      source: 'merchant_subscription_plan_request',
-      request_type: 'merchant_tier_plan',
-      requested_plan_id: requestedPlan.id,
-      requested_plan_code: requestedPlan.plan_code,
-    }
-
     const { data: existingRequest, error: existingRequestError } = await serviceRole
-      .from('support_tickets')
-      .select('id, ticket_number')
+      .from('subscription_plan_requests' as any)
+      .select('id, request_number, requested_plan_id')
       .eq('merchant_id', merchantId)
-      .eq('ticket_scope', 'merchant')
-      .eq('category', 'billing')
-      .in('status', ['open', 'in_progress', 'waiting_on_merchant'])
-      .contains('metadata', requestMetadata)
+      .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -642,54 +681,110 @@ export async function RequestMerchantTierPlan(
     }
 
     if (existingRequest) {
+      if (existingRequest.requested_plan_id !== requestedPlan.id) {
+        return {
+          success: false,
+          error: `Request ${existingRequest.request_number} is already awaiting HQ review. It must be approved or denied before another plan can be requested.`,
+        }
+      }
+
       return {
         success: true,
-        ticketId: existingRequest.id,
-        ticketNumber: existingRequest.ticket_number,
+        requestId: existingRequest.id,
+        requestNumber: existingRequest.request_number,
         alreadyRequested: true,
       }
     }
 
     const monthlyPrice = Number(requestedPlan.monthly_price_cents ?? 0) / 100
     const currentPlanName = String(currentPlan?.name ?? currentPlan?.display_name ?? 'No active plan')
-    const description = [
-      `${merchantName} requested a subscription plan change.`,
-      '',
-      `Current plan: ${currentPlanName}`,
-      `Requested plan: ${requestedPlan.display_name}`,
-      `Requested monthly price: ${monthlyPrice > 0 ? `$${monthlyPrice.toFixed(2)}` : 'Contact for pricing'}`,
-      `Active locations: ${Number(status.active_location_count ?? 0)}`,
-      '',
-      'Please review and apply the plan from the HQ subscription workspace.',
-    ].join('\n')
-
-    const result = await CreateTicket(clerkOrgId, {
-      subject: `Subscription request: ${requestedPlan.display_name}`,
-      description,
-      category: 'billing',
-      metadata: {
-        ...requestMetadata,
-        requested_plan_name: requestedPlan.display_name,
-        requested_monthly_price_cents: Number(requestedPlan.monthly_price_cents ?? 0),
+    const requestInsert = await (serviceRole as any)
+      .from('subscription_plan_requests')
+      .insert({
+        merchant_id: merchantId,
         current_plan_id: currentPlan?.id ?? null,
-        current_plan_code: currentPlan?.code ?? null,
-        current_plan_name: currentPlanName,
-        active_location_count: Number(status.active_location_count ?? 0),
+        requested_plan_id: requestedPlan.id,
+        requested_by: userId,
+        status: 'pending',
+        metadata: {
+          source: 'merchant_subscription_plan_request',
+          requested_plan_code: requestedPlan.plan_code,
+          requested_plan_name: requestedPlan.display_name,
+          requested_monthly_price_cents: Number(requestedPlan.monthly_price_cents ?? 0),
+          current_plan_code: currentPlan?.code ?? null,
+          current_plan_name: currentPlanName,
+          active_location_count: Number(status.active_location_count ?? 0),
+        },
+      })
+      .select('id, request_number')
+      .single()
+
+    if (requestInsert.error || !requestInsert.data) {
+      if (requestInsert.error?.code === '23505') {
+        return {
+          success: false,
+          error: 'A subscription request is already awaiting HQ review.',
+        }
+      }
+      console.error('[RequestMerchantTierPlan] request insert failed:', requestInsert.error)
+      return { success: false, error: requestInsert.error?.message || 'Failed to submit the plan request.' }
+    }
+
+    const request = requestInsert.data as { id: string; request_number: string }
+    const priceLabel = monthlyPrice > 0 ? `$${monthlyPrice.toFixed(2)}/month` : 'contact for pricing'
+    const notificationBody = `${merchantName} requested ${requestedPlan.display_name} at ${priceLabel}. Current plan: ${currentPlanName}.`
+    const notificationResult = await createAppNotification({
+      audience: 'hq',
+      merchantId,
+      notificationType: 'subscription_plan_requested',
+      title: `${merchantName} requested a subscription plan`,
+      body: notificationBody,
+      href: `/manage/subscriptions/${clerkOrgId}?request=${request.id}`,
+      actorUserId: userId,
+      subscriptionPlanRequestId: request.id,
+      metadata: {
+        request_number: request.request_number,
+        requested_plan_id: requestedPlan.id,
+        requested_plan_code: requestedPlan.plan_code,
       },
     })
 
-    if (result.error || !result.data) {
-      return { success: false, error: result.error || 'Failed to submit the plan request.' }
+    const recipients = parseSupportAssigneeEmails(
+      process.env.SUPPORT_TICKET_NOTIFICATION_EMAILS ?? '',
+    )
+    const emailResults = await Promise.all(
+      recipients.map((recipient) =>
+        sendEmail(
+          recipient,
+          `DEXA subscription request - ${merchantName}`,
+          buildEmailTemplate(
+            'DEXA POS',
+            'Subscription plan requested',
+            `${notificationBody}\n\nRequest: ${request.request_number}\nReview it in the DEXA HQ subscription workspace.`,
+          ),
+        ),
+      ),
+    )
+    const emailFailed = emailResults.some((result) => 'error' in result)
+
+    let notificationWarning: string | undefined
+    if (notificationResult.error && emailFailed) {
+      notificationWarning = 'The request was saved, but neither the in-app nor email notification could be confirmed.'
+    } else if (notificationResult.error) {
+      notificationWarning = 'The request was saved and emailed, but the in-app notification could not be confirmed.'
+    } else if (emailFailed) {
+      notificationWarning = 'The request was saved in-app, but one or more notification emails failed.'
     }
 
     revalidatePath('/dashboard/subscriptions')
-    revalidatePath('/dashboard/support')
+    revalidatePath('/manage/subscriptions')
+    revalidatePath(`/manage/subscriptions/${clerkOrgId}`)
 
     return {
       success: true,
-      ticketId: result.data.ticket_id,
-      ticketNumber: result.data.ticket_number,
-      notificationWarning: result.notificationWarning,
+      requestId: request.id,
+      requestNumber: request.request_number,
+      notificationWarning,
     }
   } catch (error) {
     console.error('[RequestMerchantTierPlan] exception:', error)

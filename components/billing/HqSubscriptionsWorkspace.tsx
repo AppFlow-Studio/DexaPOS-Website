@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -53,8 +54,10 @@ import {
 } from '@/components/ui/chart'
 import {
   getMerchantTierPlans,
+  getPendingMerchantTierRequest,
   getMerchantTierStatus,
   getMerchantTierSubscription,
+  denyMerchantTierPlanRequest,
   chargeSubscriptionInvoiceManually,
   calculateSubscriptionTotal,
   generateSubscriptionInvoiceManually,
@@ -71,6 +74,7 @@ import {
   type SubscriptionPlanRecord,
   type SubscriptionQuoteResult,
   type MerchantTierPlanRecord,
+  type MerchantTierPlanRequestRecord,
   type MerchantTierStatusRecord,
   type MerchantTierSubscriptionRecord,
   type MerchantSubscriptionRecord,
@@ -475,6 +479,8 @@ export function HqSubscriptionsWorkspace({
     current_period_end: null,
   })
   const [merchantTierSubscription, setMerchantTierSubscription] = useState<MerchantTierSubscriptionRecord | null>(null)
+  const [pendingMerchantTierRequest, setPendingMerchantTierRequest] = useState<MerchantTierPlanRequestRecord | null>(null)
+  const [merchantTierDecisionNote, setMerchantTierDecisionNote] = useState('')
   const [selectedMerchantTierPlanId, setSelectedMerchantTierPlanId] = useState('')
   const [merchantTierSubscriptionStatus, setMerchantTierSubscriptionStatus] = useState<'active' | 'past_due' | 'suspended' | 'cancelled'>('active')
   const [merchantTierPeriodStart, setMerchantTierPeriodStart] = useState(startOfMonthIso())
@@ -714,6 +720,7 @@ export function HqSubscriptionsWorkspace({
           nextMerchantTierPlans,
           nextMerchantTierStatus,
           nextMerchantTierSubscription,
+          nextPendingMerchantTierRequest,
         ] = await Promise.all([
           getBillableServices(),
           getDeviceBillingServiceMappings(),
@@ -725,6 +732,7 @@ export function HqSubscriptionsWorkspace({
           getMerchantTierPlans(),
           getMerchantTierStatus(merchant.id),
           getMerchantTierSubscription(merchant.id),
+          getPendingMerchantTierRequest(merchant.id),
         ])
 
         const assignmentEntries = await Promise.all(
@@ -756,6 +764,7 @@ export function HqSubscriptionsWorkspace({
         setMerchantTierPlans(nextMerchantTierPlans)
         setMerchantTierStatus(nextMerchantTierStatus)
         setMerchantTierSubscription(nextMerchantTierSubscription)
+        setPendingMerchantTierRequest(nextPendingMerchantTierRequest)
 
         const defaultServicePlan =
           nextServicePlans.find((plan) => plan.id === selectedServicePlanId) ??
@@ -827,6 +836,11 @@ export function HqSubscriptionsWorkspace({
           setMerchantTierSubscriptionStatus('active')
           setMerchantTierPeriodStart(startOfMonthIso())
         }
+
+        if (nextPendingMerchantTierRequest) {
+          setSelectedMerchantTierPlanId(nextPendingMerchantTierRequest.requested_plan_id)
+        }
+        setMerchantTierDecisionNote('')
       } catch (error: any) {
         toast.error(error?.message || 'Failed to load subscription workspace.')
       } finally {
@@ -1050,8 +1064,13 @@ export function HqSubscriptionsWorkspace({
     }
   }
 
-  const handleSaveMerchantTier = () => {
-    if (!selectedMerchantTierPlanId) {
+  const handleSaveMerchantTier = (
+    planIdOverride?: string,
+    statusOverride?: 'active' | 'past_due' | 'suspended' | 'cancelled',
+  ) => {
+    const planId = planIdOverride || selectedMerchantTierPlanId
+    const subscriptionStatus = statusOverride || merchantTierSubscriptionStatus
+    if (!planId) {
       toast.error('Select a merchant tier first.')
       return
     }
@@ -1059,8 +1078,8 @@ export function HqSubscriptionsWorkspace({
     startTransition(async () => {
       const result = await upsertMerchantTierSubscription({
         merchantId: merchant.id,
-        planId: selectedMerchantTierPlanId,
-        status: merchantTierSubscriptionStatus,
+        planId,
+        status: subscriptionStatus,
         currentPeriodStart: merchantTierPeriodStart,
         trialEndsAt: null,
       })
@@ -1082,6 +1101,26 @@ export function HqSubscriptionsWorkspace({
       if (result.notificationWarning) {
         toast.warning(result.notificationWarning)
       }
+      refresh()
+    })
+  }
+
+  const handleDenyMerchantTierRequest = () => {
+    if (!pendingMerchantTierRequest) return
+
+    startTransition(async () => {
+      const result = await denyMerchantTierPlanRequest(
+        pendingMerchantTierRequest.id,
+        merchantTierDecisionNote,
+      )
+
+      if (!result.success) {
+        toast.error(result.error || 'Failed to deny the subscription request.')
+        return
+      }
+
+      toast.success(`Request ${pendingMerchantTierRequest.request_number} denied.`)
+      if (result.notificationWarning) toast.warning(result.notificationWarning)
       refresh()
     })
   }
@@ -1237,6 +1276,71 @@ export function HqSubscriptionsWorkspace({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {pendingMerchantTierRequest ? (
+            <div className="rounded-2xl border border-primary/25 bg-primary/[0.04] p-4 sm:p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge>{pendingMerchantTierRequest.request_number}</Badge>
+                    <Badge variant="outline">Pending review</Badge>
+                  </div>
+                  <div>
+                    <p className="text-lg font-semibold">
+                      Merchant requested {pendingMerchantTierRequest.requested_plan_name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatTierPrice(pendingMerchantTierRequest.requested_monthly_price_cents)}
+                      {' · '}
+                      Requested {formatDate(pendingMerchantTierRequest.requested_at)}
+                    </p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Current plan: {pendingMerchantTierRequest.current_plan_name || 'No active plan'}
+                  </p>
+                </div>
+
+                <div className="w-full space-y-3 lg:max-w-md">
+                  <div className="space-y-2">
+                    <Label htmlFor="merchant-tier-decision-note">Decision note (optional)</Label>
+                    <Textarea
+                      id="merchant-tier-decision-note"
+                      value={merchantTierDecisionNote}
+                      onChange={(event) => setMerchantTierDecisionNote(event.target.value)}
+                      placeholder="Add context for the merchant when denying the request."
+                      rows={3}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      type="button"
+                      className="sm:flex-1"
+                      disabled={isPending}
+                      onClick={() => {
+                        setSelectedMerchantTierPlanId(pendingMerchantTierRequest.requested_plan_id)
+                        setMerchantTierSubscriptionStatus('active')
+                        handleSaveMerchantTier(
+                          pendingMerchantTierRequest.requested_plan_id,
+                          'active',
+                        )
+                      }}
+                    >
+                      {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Approve & activate
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="sm:flex-1"
+                      disabled={isPending}
+                      onClick={handleDenyMerchantTierRequest}
+                    >
+                      Deny request
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
           <div className="grid gap-4">
             <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -1393,7 +1497,7 @@ export function HqSubscriptionsWorkspace({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Button onClick={handleSaveMerchantTier} disabled={isPending || !selectedMerchantTierPlanId}>
+                <Button onClick={() => handleSaveMerchantTier()} disabled={isPending || !selectedMerchantTierPlanId}>
                   {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Save Merchant Tier
                 </Button>
