@@ -1,8 +1,16 @@
-import { Star } from "lucide-react";
-
 import type { SectionRenderProps } from "@/lib/site-builder/render-context";
+import type { ReviewLayout } from "@/lib/site-builder/sections/schemas/reviews";
+import { cn } from "@/lib/utils";
 import { fieldAttrsFor } from "../edit-attrs";
+import ReviewStarIcon from "../ReviewStarIcon";
 import { Container, SectionHeading, sectionClassName, sectionStyleProps } from "../section-shell";
+
+const LAYOUT_CLASSES: Record<ReviewLayout, string> = {
+  grid: "grid gap-5 sm:grid-cols-2 lg:grid-cols-3",
+  list: "grid max-w-3xl gap-5",
+  carousel:
+    "grid snap-x snap-mandatory grid-flow-col auto-cols-[minmax(280px,85%)] gap-5 overflow-x-auto pb-3 sm:auto-cols-[minmax(300px,48%)] lg:auto-cols-[minmax(320px,32%)]",
+};
 
 /**
  * Guest quotes, as the merchant typed them.
@@ -13,7 +21,7 @@ import { Container, SectionHeading, sectionClassName, sectionStyleProps } from "
  * and then forgets to fill it in should not be punished publicly for it.
  */
 export default function ReviewsSection({ section, ctx }: SectionRenderProps<"reviews">) {
-  const { title, subtitle, items } = section.props;
+  const { title, subtitle, layout, items } = section.props;
   const f = fieldAttrsFor(ctx.mode, section.id);
 
   if (items.length === 0 && ctx.mode !== "builder") return null;
@@ -37,41 +45,43 @@ export default function ReviewsSection({ section, ctx }: SectionRenderProps<"rev
             Add a guest review and it will appear here.
           </p>
         ) : (
-          <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className={LAYOUT_CLASSES[layout]}>
             {items.map((item, index) => (
               <li
                 key={index}
-                className="flex flex-col rounded-[var(--site-radius)] border p-5"
-                style={{ borderColor: "var(--site-border)", background: "var(--site-card)" }}
+                className={cn(
+                  "flex flex-col rounded-[var(--site-radius)] p-5",
+                  layout === "carousel" && "snap-start",
+                )}
+                style={{ background: "var(--site-card)", color: "var(--site-text)" }}
               >
                 {item.rating && (
                   <div
                     className="mb-4 flex items-center gap-1"
-                    style={{ color: "var(--site-brand)" }}
                     role="img"
                     aria-label={`${item.rating} out of 5`}
                   >
                     {Array.from({ length: 5 }, (_, index) => {
                       const filled = index < item.rating!;
                       return (
-                        <Star
+                        <ReviewStarIcon
                           key={index}
-                          aria-hidden
-                          className={filled ? "size-6 fill-current" : "size-6 opacity-25"}
-                          strokeWidth={1.8}
+                          active={filled}
+                          className="size-5"
                         />
                       );
                     })}
                   </div>
                 )}
                 <blockquote
-                  className="flex-1 text-sm leading-relaxed"
+                  className="flex-1 text-base leading-relaxed"
                   {...f(`props.items.${index}.quote`)}
                 >
                   {item.quote}
                 </blockquote>
                 <cite
-                  className="mt-4 text-xs font-medium not-italic opacity-70"
+                  className="mt-4 text-sm font-medium not-italic"
+                  style={{ color: "var(--site-text-muted)" }}
                   {...f(`props.items.${index}.author`)}
                 >
                   {item.author}

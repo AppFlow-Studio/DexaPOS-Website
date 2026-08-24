@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { subtitleSchema, titleSchema } from "../primitives";
 
+export const REVIEW_LAYOUTS = ["grid", "list", "carousel"] as const;
+export type ReviewLayout = (typeof REVIEW_LAYOUTS)[number];
+
 /**
  * Guest reviews, typed in by the merchant.
  *
@@ -19,6 +22,7 @@ import { subtitleSchema, titleSchema } from "../primitives";
 export const reviewsSchema = z.object({
   title: titleSchema.optional(),
   subtitle: subtitleSchema.optional(),
+  layout: z.enum(REVIEW_LAYOUTS).default("grid"),
   items: z
     .array(
       z.object({
@@ -38,6 +42,7 @@ export type ReviewsProps = z.infer<typeof reviewsSchema>;
 export function reviewsDefaults(): ReviewsProps {
   return {
     title: "What our guests are saying",
+    layout: "grid",
     items: [],
   };
 }

@@ -185,4 +185,16 @@ describe("reviews", () => {
   it("starts empty rather than shipping invented praise", () => {
     expect(SECTION_REGISTRY.reviews.defaults().items).toEqual([]);
   });
+
+  it("offers the three supported card layouts and defaults older reviews to grid", () => {
+    const schema = SECTION_REGISTRY.reviews.schema;
+    const base = { items: [{ quote: "Great", author: "A", rating: 5 }] };
+
+    expect(schema.parse(base).layout).toBe("grid");
+
+    for (const layout of ["grid", "list", "carousel"]) {
+      expect(schema.safeParse({ ...base, layout }).success).toBe(true);
+    }
+    expect(schema.safeParse({ ...base, layout: "custom-css" }).success).toBe(false);
+  });
 });
