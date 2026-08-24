@@ -9,6 +9,7 @@ import {
   restoreRequiredSection,
   setSectionHidden,
   updateSectionProps,
+  updateSectionStyle,
 } from "../mutations";
 import { createStarterPage, type PageDocument } from "../page-document";
 import { SECTION_REGISTRY } from "../sections/registry";
@@ -257,6 +258,29 @@ describe("updateSectionProps", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.doc.sections.find((s) => s.id === heroId)!.props).not.toHaveProperty("sneaky");
+  });
+});
+
+describe("updateSectionStyle", () => {
+  it("stores a validated section background without touching content", () => {
+    const sectionId = idOf(doc, "popular-items");
+    const before = doc.sections.find((section) => section.id === sectionId)!.props;
+    const result = updateSectionStyle(doc, sectionId, { background: "muted" });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const changed = result.doc.sections.find((section) => section.id === sectionId)!;
+    expect(changed.style?.background).toBe("muted");
+    expect(changed.props).toBe(before);
+  });
+
+  it("rejects values outside the design-token palette", () => {
+    const result = updateSectionStyle(doc, idOf(doc, "popular-items"), {
+      background: "neon" as never,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe("invalid_props");
   });
 });
 

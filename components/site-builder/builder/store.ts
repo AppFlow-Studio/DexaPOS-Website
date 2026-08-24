@@ -9,11 +9,13 @@ import {
   removeSection,
   restoreRequiredSection,
   updateSectionProps,
+  updateSectionStyle,
   updateSeo,
   type MutationResult,
 } from "@/lib/site-builder/mutations";
 import type { PageDocument } from "@/lib/site-builder/page-document";
 import type { SectionKind } from "@/lib/site-builder/sections/kinds";
+import type { SectionStyle } from "@/lib/site-builder/sections/primitives";
 import { sectionTitle } from "@/lib/site-builder/sections/registry";
 import { DEFAULT_FEATURES, type SiteFeatures } from "@/lib/site-builder/site-settings";
 
@@ -213,6 +215,7 @@ interface BuilderState {
     patch: Record<string, unknown>,
     opts?: { coalesce?: boolean },
   ) => void;
+  updateStyle: (id: string, patch: Partial<SectionStyle>) => void;
   updateSeo: (patch: Partial<PageDocument["seo"]>) => void;
 
   // history — internal only. Deletion offers an undo; there is no toolbar.
@@ -418,6 +421,8 @@ export function createBuilderStore(init: BuilderInit) {
           // even mid-run.
           opts?.coalesce ? `${id}:${Object.keys(patch).sort().join(",")}` : null,
         ),
+
+      updateStyle: (id, patch) => apply(updateSectionStyle(get().doc, id, patch)),
 
       updateSeo: (patch) => {
         const { doc, past } = get();

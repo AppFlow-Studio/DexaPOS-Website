@@ -51,6 +51,25 @@ describe("builder save acknowledgement", () => {
   });
 });
 
+describe("section appearance", () => {
+  it("marks a background change dirty and makes it undoable", () => {
+    const store = makeStore();
+
+    store.getState().updateStyle("s_demo_popular", { background: "muted" });
+    expect(
+      store.getState().doc.sections.find((section) => section.id === "s_demo_popular")?.style
+        ?.background,
+    ).toBe("muted");
+    expect(store.getState().saveState).toBe("dirty");
+
+    store.getState().undo();
+    expect(
+      store.getState().doc.sections.find((section) => section.id === "s_demo_popular")?.style
+        ?.background,
+    ).toBeUndefined();
+  });
+});
+
 /**
  * §C3 — "Load theirs" adopts the document the server already holds, so the
  * editor is *in sync*, not behind. Marking it dirty wrote the server's own

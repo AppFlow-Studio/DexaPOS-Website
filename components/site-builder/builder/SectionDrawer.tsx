@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Star, Trash2, Zap } from "lucide-react";
+import { Plus, Trash2, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DeletePage, RenamePage } from "@/app/dashboard/website/actions/pages";
@@ -27,9 +27,11 @@ import {
   type IntegrationProvider,
 } from "@/lib/site-builder/sections/schemas/integrations";
 import { parseVideoRef } from "@/lib/site-builder/sections/schemas/video";
+import type { SectionStyle } from "@/lib/site-builder/sections/primitives";
 import type { Section } from "@/lib/site-builder/sections/types";
 import { cn } from "@/lib/utils";
 import { websiteRoutes } from "../routes";
+import ReviewStarIcon from "../ReviewStarIcon";
 import { OverlayRail } from "../shell/OverlayChrome";
 import AssetPicker, { AssetListPicker } from "./AssetPicker";
 import EventPicker from "./EventPicker";
@@ -125,6 +127,7 @@ function SectionSettings({
 }) {
   const def = SECTION_REGISTRY[section.kind];
   const updateProps = store((s) => s.updateProps);
+  const updateStyle = store((s) => s.updateStyle);
   const closeDrawer = store((s) => s.closeDrawer);
 
   const props = section.props as Record<string, unknown>;
@@ -190,11 +193,51 @@ function SectionSettings({
             }
           />
         ))}
+        {section.kind === "reviews" && (
+          <SectionBackgroundControl
+            value={section.style?.background ?? "default"}
+            onChange={(background) => updateStyle(section.id, { background })}
+          />
+        )}
         {controls.length === 0 && (
           <p className="py-6 text-center text-xs text-muted-foreground">Nothing to adjust here.</p>
         )}
       </div>
     </OverlayRail>
+  );
+}
+
+type BackgroundTone = NonNullable<SectionStyle["background"]>;
+
+const SECTION_BACKGROUND_OPTIONS: Array<{ value: BackgroundTone; label: string }> = [
+  { value: "default", label: "Default" },
+  { value: "muted", label: "Muted" },
+  { value: "brand", label: "Brand" },
+  { value: "dark", label: "Dark" },
+];
+
+function SectionBackgroundControl({
+  value,
+  onChange,
+}: {
+  value: BackgroundTone;
+  onChange: (tone: BackgroundTone) => void;
+}) {
+  return (
+    <label className="block border-t pt-5">
+      <span className="mb-1.5 block text-xs font-medium">Background</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value as BackgroundTone)}
+        className={inputClass}
+      >
+        {SECTION_BACKGROUND_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -293,7 +336,11 @@ function Control({
       return (
         <fieldset>
           <legend className="mb-1.5 text-xs font-medium">{control.label}</legend>
-          <div className="flex items-center gap-1" role="radiogroup" aria-label={control.label}>
+          <div
+            className="flex w-fit items-center gap-0.5 rounded-md bg-muted p-1"
+            role="radiogroup"
+            aria-label={control.label}
+          >
             {Array.from({ length: maximum - minimum + 1 }, (_, index) => minimum + index).map(
               (rating) => {
                 const selected = rating <= current;
@@ -305,14 +352,12 @@ function Control({
                     aria-checked={rating === current}
                     aria-label={`${rating} ${rating === 1 ? "star" : "stars"}`}
                     onClick={() => onChange(rating)}
-                    className="flex size-9 items-center justify-center rounded-md transition-transform hover:scale-110 focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                    style={{ color: selected ? "var(--primary)" : "var(--muted-foreground)" }}
+                    className={cn(
+                      "flex size-8 items-center justify-center rounded-sm transition-colors hover:bg-background/70 focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                      rating === current && "bg-background shadow-sm",
+                    )}
                   >
-                    <Star
-                      aria-hidden
-                      className={cn("size-6", selected && "fill-current")}
-                      strokeWidth={1.8}
-                    />
+                    <ReviewStarIcon active={selected} className="size-5" />
                   </button>
                 );
               },

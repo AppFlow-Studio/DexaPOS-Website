@@ -20,6 +20,10 @@ import {
 import type { SectionKind } from "./sections/kinds";
 import { SECTION_KINDS, ZONE_ORDER } from "./sections/kinds";
 import { isKindAvailable, SECTION_REGISTRY, type SectionDefaultsContext } from "./sections/registry";
+import {
+  sectionStyleSchema,
+  type SectionStyle,
+} from "./sections/primitives";
 import { FEATURE_LABELS, type SiteFeatures } from "./site-settings";
 import type { Section } from "./sections/types";
 
@@ -296,6 +300,43 @@ export function updateSectionProps(
       doc,
       doc.sections.map((s) =>
         s.id === sectionId ? ({ ...s, props: parsed.data } as Section) : s,
+      ),
+    ),
+  };
+}
+
+/** Applies a validated visual-token patch without allowing arbitrary CSS. */
+export function updateSectionStyle(
+  doc: PageDocument,
+  sectionId: string,
+  patch: Partial<SectionStyle>,
+): MutationResult {
+  const section = findSection(doc, sectionId);
+  if (!section) return refuse("unknown_section", "That section is no longer on the page.");
+
+  const def = SECTION_REGISTRY[section.kind];
+  if (!def.editable) {
+    return refuse("not_editable", `${def.label} sections are not edited here.`);
+  }
+
+  const candidate = Object.fromEntries(
+    Object.entries({ ...section.style, ...patch }).filter(([, value]) => value !== undefined),
+  );
+  const parsed = sectionStyleSchema.safeParse(candidate);
+  if (!parsed.success) {
+    return refuse(
+      "invalid_props",
+      `${def.label} appearance: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`,
+    );
+  }
+
+  const style = Object.keys(parsed.data).length > 0 ? parsed.data : undefined;
+  return {
+    ok: true,
+    doc: withSections(
+      doc,
+      doc.sections.map((item) =>
+        item.id === sectionId ? ({ ...item, style } as Section) : item,
       ),
     ),
   };
