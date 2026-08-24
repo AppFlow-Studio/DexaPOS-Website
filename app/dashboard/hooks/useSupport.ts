@@ -103,6 +103,9 @@ export function useAddMessage(ticketId: string) {
       queryClient.invalidateQueries({
         queryKey: ["support-ticket", clerkOrgId, ticketId],
       });
+      if (result.notificationWarning) {
+        toast.warning(result.notificationWarning);
+      }
     },
     onError: () => {
       toast.error("Failed to send message");

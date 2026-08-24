@@ -12,7 +12,10 @@ import {
   TicketCategory,
 } from "@/types/support-ticket";
 import { LogAuditEvent } from "./audit-logs";
-import { requestSupportTicketCreatedNotification } from "@/lib/support/ticket-notification-request";
+import {
+  requestSupportTicketCreatedNotification,
+  requestSupportTicketMessageNotification,
+} from "@/lib/support/ticket-notification-request";
 
 // ============================================================================
 // GET TICKETS (Merchant)
@@ -273,7 +276,11 @@ export async function AddMessage(
   ticketId: string,
   message: string,
   attachments: AttachmentInput[] = []
-): Promise<{ data?: { message_id: string }; error?: string }> {
+): Promise<{
+  data?: { message_id: string };
+  error?: string;
+  notificationWarning?: string;
+}> {
   if (!clerkOrgId) return { error: "Organization ID is required" };
 
   const supabase = createServiceRoleClient();
@@ -313,7 +320,23 @@ export async function AddMessage(
   });
 
   if (error) return { error: error.message };
-  return { data };
+
+  const notificationResult = await requestSupportTicketMessageNotification(
+    data.message_id,
+  );
+  const notificationWarning = notificationResult.ok
+    ? undefined
+    : "Message sent, but email notification delivery could not be confirmed.";
+
+  if (!notificationResult.ok) {
+    console.error("[AddMessage] Notification request failed", {
+      ticketId,
+      messageId: data.message_id,
+      error: notificationResult.error,
+    });
+  }
+
+  return { data, notificationWarning };
 }
 
 // ============================================================================
