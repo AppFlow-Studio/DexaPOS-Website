@@ -19,6 +19,7 @@ import { createRenderContext, type RenderMode } from "../render-context";
 import { SECTION_KINDS } from "../sections/kinds";
 import GallerySection from "@/components/site-builder/sections/GallerySection";
 import FaqSection from "@/components/site-builder/sections/FaqSection";
+import ScrollingBannerSection from "@/components/site-builder/sections/ScrollingBannerSection";
 import HeroSection from "@/components/site-builder/sections/HeroSection";
 import ThemePreview from "@/components/site-builder/dashboard/design/ThemePreview";
 import { composeTheme, type StyleMode } from "../style-inputs";
@@ -374,9 +375,9 @@ describe("popular-items — decision D6 at render time", () => {
     expect(html).toContain("Guest Favorites");
   });
 
-  it("shows the pricing disclosure when prices are shown", () => {
+  it("omits the pricing disclosure when prices are shown", () => {
     const html = render(demoWith(["a", "b"]), mapWith({ a: menuItem("a"), b: menuItem("b") }));
-    expect(html).toContain("Prices reflect online rates.");
+    expect(html).not.toContain("Prices reflect online rates.");
   });
 
   it("honours a merchant label override without touching the live price", () => {
@@ -558,9 +559,7 @@ describe("prices are location-scoped", () => {
     expect(html).toContain("Dish b");
   });
 
-  it("drops the dual-pricing disclosure when no price is shown", () => {
-    // The disclosure explains a price the visitor cannot see — it would be noise
-    // at best and confusing at worst.
+  it("never restores the removed dual-pricing disclosure", () => {
     const withPrices = render(demoWith(["a", "b"]), mapWith({ a: menuItem("a"), b: menuItem("b") }));
     const brandPage = render(
       demoWith(["a", "b"]),
@@ -569,7 +568,7 @@ describe("prices are location-scoped", () => {
       BRAND_PAGE,
     );
 
-    expect(withPrices).toContain("Prices reflect online rates.");
+    expect(withPrices).not.toContain("Prices reflect online rates.");
     expect(brandPage).not.toContain("Prices reflect online rates.");
   });
 });
@@ -888,5 +887,78 @@ describe("faq accordion", () => {
     // keystroke.
     const marked = html.match(/<span[^>]*data-sb-field="props\.items\.0\.question"[^>]*>([^<]*)</);
     expect(marked?.[1]).toBe("Do you deliver?");
+  });
+});
+// ─────────────────────────────────────────────────────────────────────────────
+// scrolling banner: a loop with nothing between the end and the start
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("scrolling banner", () => {
+  const bannerHtml = (texts: string[]) => {
+    const section = {
+      id: "sec_sb",
+      kind: "scrolling-banner" as const,
+      props: {
+        items: texts.map((text) => ({ text })),
+        speed: "normal" as const,
+        tone: "brand" as const,
+      },
+    };
+
+    return renderToStaticMarkup(
+      <ScrollingBannerSection
+        section={section as never}
+        resolved={emptyResolvedMap()}
+        ctx={ctxFor()}
+      />,
+    );
+  };
+
+  it("keeps a copy of the messages at least as wide as the strip", () => {
+    /*
+      The invariant the whole loop rests on. Each copy translates by -100% of
+      its own width, so at the end of a cycle the second copy is alone on
+      screen — if a copy is narrower than the viewport, the rest of the strip
+      is empty background until the animation restarts. Two short messages on a
+      wide monitor is the ordinary case, which is why the gap was the ordinary
+      case.
+    */
+    expect(bannerHtml(["Open seven days"])).toContain("min-width: 100%");
+  });
+
+  it("renders the messages twice, and says the second copy is decoration", () => {
+    const html = bannerHtml(["Open seven days", "Free delivery over $30"]);
+
+    // `<ul` rather than the class name alone: the stylesheet in the section
+    // names the same class, and counting that would pass on the CSS instead.
+    expect(html.split('<ul class="sb-marquee-track').length - 1).toBe(2);
+    expect(html).toContain('aria-hidden="true"');
+    // Four `<li>` on screen, two of them announced.
+    expect(html.split("<li").length - 1).toBe(4);
+  });
+
+  it("spaces the messages from the items, so the seam matches every other gap", () => {
+    const html = bannerHtml(["A", "B"]);
+
+    // Spacing travels with each message. A `gap` on the track cannot reach
+    // across to the next copy, so the join was spaced differently from every
+    // interval inside a copy.
+    expect(html).toContain('class="whitespace-nowrap px-5');
+    expect(html).not.toContain("gap-10");
+    expect(html).toContain("justify-content: space-around");
+  });
+
+  it("animates only where the visitor has not asked for less motion", () => {
+    const html = bannerHtml(["Open seven days"]);
+
+    const guarded = html.slice(html.indexOf("prefers-reduced-motion: no-preference"));
+    expect(guarded).toContain("animation: sb-marquee-scroll");
+    // The second copy exists for the loop; with no loop it is noise a wrapped,
+    // static row does not need.
+    expect(html).toContain(".sb-marquee-clone { display: none; }");
+  });
+
+  it("renders nothing at all with no messages", () => {
+    expect(bannerHtml([])).toBe("");
   });
 });
