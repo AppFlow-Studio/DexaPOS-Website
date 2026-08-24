@@ -5,6 +5,7 @@ import {
   buildEpiData,
   buildGenerateKeysBody,
   onboardValorMerchant,
+  provisionValorLocations,
   readStoreAndEpi,
   type ValorAcquirerConfig,
   type ValorBoardingOptions,
@@ -36,6 +37,7 @@ const merchant: BoardingMerchantDetails = {
 const store = (name: string): BoardingStoreDetails => ({
   storeName: name,
   storeAddress: "1 Main St",
+  storeCity: "Tempe",
   storeState: "AZ",
   storeZipCode: "85284",
   superVisorName: "Sam Owner",
@@ -58,6 +60,7 @@ const acquirer: ValorAcquirerConfig = {
   device: "139",
   deviceType: "Soft POS",
   associateUserName: "demovaloriso",
+  isvUserName: "DexaISV",
   processorData: { midFDCard: "887000003193", termNoFDCard: "1515" },
 };
 
@@ -107,6 +110,20 @@ describe("request builders", () => {
     expect(s.epiData[0].device).toBe("139");
   });
 
+  it("assigns the merchant to the ISV via isv_user_name", () => {
+    const body = buildCreateMerchantBody(merchant, store("Main"), acquirer, fees, "VT");
+    expect(body.isv_user_name).toEqual(["DexaISV"]);
+    // Omitted when no ISV configured.
+    const noIsv = buildCreateMerchantBody(
+      merchant,
+      store("Main"),
+      { ...acquirer, isvUserName: undefined },
+      fees,
+      "VT"
+    );
+    expect("isv_user_name" in noIsv).toBe(false);
+  });
+
   it("overlays surcharge fields onto the acquirer processorData", () => {
     const epi = buildEpiData(acquirer, store("Main"), fees, "VT");
     const pd = epi.processorData[0] as Record<string, unknown>;
@@ -140,7 +157,27 @@ describe("request builders", () => {
 });
 
 describe("readStoreAndEpi", () => {
-  it("reads store id + EPI from a nested storeData array", () => {
+  it("reads store id + EPI from the confirmed storeInfo object shape", () => {
+    // Live /create shape (2026-08-23): storeInfo: { "<storeId>": ["<epi>"] }
+    expect(
+      readStoreAndEpi({
+        mpId: 165163,
+        storeInfo: { "184231": ["2319991698"] },
+      })
+    ).toEqual({ storeId: "184231", epi: "2319991698" });
+  });
+
+  it("reads the StoreID key returned by /createStore", () => {
+    // Live /createStore shape (2026-08-23): StoreID: { "<storeId>": ["<epi>"] }
+    expect(
+      readStoreAndEpi({
+        Mp_id: "165172",
+        StoreID: { "184252": ["2319991705"] },
+      })
+    ).toEqual({ storeId: "184252", epi: "2319991705" });
+  });
+
+  it("falls back to a nested storeData array", () => {
     expect(
       readStoreAndEpi({
         mp_id: "43919",
@@ -149,7 +186,7 @@ describe("readStoreAndEpi", () => {
     ).toEqual({ storeId: "48779", epi: "2319991082" });
   });
 
-  it("descends into a data wrapper", () => {
+  it("falls back into a data wrapper", () => {
     expect(
       readStoreAndEpi({
         data: { stores: [{ store_id: "5", epiData: [{ epi: "2000000001" }] }] },
@@ -159,14 +196,25 @@ describe("readStoreAndEpi", () => {
 });
 
 describe("onboardValorMerchant", () => {
+  // Confirmed live sandbox shapes (2026-08-23).
   const createOk = () => ({
     body: {
-      mp_id: "43919",
-      newUserId: "72239",
-      storeData: [{ id: "48779", epiData: [{ epi: "2319991082" }] }],
+      status: true,
+      message: "User Added Successfully",
+      code: 200,
+      mpId: 165163,
+      newUserId: 233518,
+      storeInfo: { "184231": ["2319991698"] },
     },
   });
-  const keysOk = () => ({ body: { appid: "APPID-32-CHARS", appkey: "APPKEY-32-CHARS" } });
+  const keysOk = () => ({
+    body: {
+      status: "OK",
+      message: "SUCCESS",
+      code: 200,
+      data: { epi: "2319991698", appid: "APPID-32-CHARS", appkey: "APPKEY-32-CHARS" },
+    },
+  });
 
   it("boards a single-location merchant and persists it", async () => {
     const persist = vi.fn(async (_account: BoardedAccount) => {});
@@ -186,18 +234,67 @@ describe("onboardValorMerchant", () => {
       persist
     );
 
-    expect(result.merchant.valorMerchantId).toBe("43919");
+    expect(result.merchant.valorMerchantId).toBe("165163");
     expect(result.accounts).toHaveLength(1);
     expect(result.failures).toHaveLength(0);
     expect(persist).toHaveBeenCalledOnce();
     expect(persist.mock.calls[0][0]).toMatchObject({
       dexaLocationId: "loc-1",
-      valorMerchantId: "43919",
-      valorStoreId: "48779",
-      valorEpi: "2319991082",
+      valorMerchantId: "165163",
+      valorStoreId: "184231",
+      valorEpi: "2319991698",
       valorAppId: "APPID-32-CHARS",
       valorAppKey: "APPKEY-32-CHARS",
     });
+  });
+
+  it("surfaces Valor's real error when /create fails (not 'no identifier')", async () => {
+    const persist = vi.fn(async () => {});
+    const fetchImpl = makeFetch({
+      "login?isotoken": () => ({ body: { token: "jwt" } }),
+      // Valor failure envelope: status:false + message, only [status,message,code].
+      "/api/valor/create?": () => ({
+        status: 400,
+        body: { status: false, message: "User Name already exist", code: 400 },
+      }),
+    });
+
+    await expect(
+      onboardValorMerchant(options(fetchImpl), merchant, fees, "m1", [
+        { store: store("Main"), dexaLocationId: "loc-1" },
+      ], persist)
+    ).rejects.toMatchObject({
+      name: "BoardingError",
+      step: "merchant_add",
+    });
+    await expect(
+      onboardValorMerchant(options(fetchImpl), merchant, fees, "m1", [
+        { store: store("Main"), dexaLocationId: "loc-1" },
+      ], persist)
+    ).rejects.toThrow(/User Name already exist/);
+    expect(persist).not.toHaveBeenCalled();
+  });
+
+  it("collects Valor's per-field validation errors from numeric keys", async () => {
+    const persist = vi.fn(async () => {});
+    const fetchImpl = makeFetch({
+      "login?isotoken": () => ({ body: { token: "jwt" } }),
+      "/api/valor/create?": () => ({
+        status: 200, // note: HTTP 200 but status:false
+        body: {
+          "0": "&mid1& Should not be blank for ProcessorData1 of Device1",
+          status: false,
+          message: "Validation Failed",
+          code: 200,
+        },
+      }),
+    });
+
+    await expect(
+      onboardValorMerchant(options(fetchImpl), merchant, fees, "m1", [
+        { store: store("Main"), dexaLocationId: "loc-1" },
+      ], persist)
+    ).rejects.toThrow(/Validation Failed[\s\S]*mid1/);
   });
 
   it("deletes the merchant when key generation fails on the first location", async () => {
@@ -218,11 +315,50 @@ describe("onboardValorMerchant", () => {
     ).rejects.toMatchObject({
       name: "BoardingError",
       step: "generate_api_keys",
-      orphaned: { valorMerchantId: "43919" },
+      orphaned: { valorMerchantId: "165163" },
       cleanedUp: true,
     });
     expect(deleteSpy).toHaveBeenCalledOnce();
     expect(persist).not.toHaveBeenCalled();
+  });
+
+  it("re-provisions an existing merchant without calling /create", async () => {
+    const persist = vi.fn(async (_a: BoardedAccount) => {});
+    let createCalls = 0;
+    const fetchImpl = makeFetch({
+      "login?isotoken": () => ({ body: { token: "jwt" } }),
+      "/api/valor/create?": () => {
+        createCalls += 1;
+        return createOk();
+      },
+      "/api/valor/createStore": () => ({
+        body: { status: true, StoreID: { "9001": ["2319990001"] } },
+      }),
+      "/api/valor/activateEpi": () => ({ body: {} }),
+      "/api/valor/getEpiAppKeyDetails": keysOk,
+    });
+
+    const result = await provisionValorLocations(
+      options(fetchImpl),
+      merchant,
+      fees,
+      "dexa-merchant-1",
+      { valorMerchantId: "165163", newUserId: "233518" },
+      [{ store: store("Second"), dexaLocationId: "loc-2", epiLabel: "VT" }],
+      persist
+    );
+
+    expect(createCalls).toBe(0); // never re-creates the merchant
+    expect(result.merchant.valorMerchantId).toBe("165163");
+    expect(result.accounts).toHaveLength(1);
+    expect(result.failures).toHaveLength(0);
+    expect(persist.mock.calls[0][0]).toMatchObject({
+      dexaLocationId: "loc-2",
+      valorMerchantId: "165163",
+      valorNewUserId: "233518",
+      valorStoreId: "9001",
+      valorEpi: "2319990001",
+    });
   });
 
   it("isolates a failing second location without tearing down the merchant", async () => {
@@ -236,8 +372,9 @@ describe("onboardValorMerchant", () => {
       "/api/valor/getEpiAppKeyDetails": keysOk,
       "/api/valor/createStore": () => {
         createStoreCalls += 1;
-        // The second location's store add returns an unusable EPI.
-        return { body: { storeData: [{ id: "99", epiData: [{ epi: "bad" }] }] } };
+        // The second location's store add returns an unusable EPI (real
+        // /createStore uses the StoreID key).
+        return { body: { status: true, StoreID: { "99": ["bad"] } } };
       },
       "/api/valor/deletestore": deleteStore,
     });

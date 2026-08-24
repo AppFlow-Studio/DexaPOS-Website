@@ -68,6 +68,8 @@ export interface BoardingMerchantDetails {
 export interface BoardingStoreDetails {
   storeName: string;
   storeAddress: string;
+  /** Required by Valor's /create + /createStore ("storeCity Required"). */
+  storeCity: string;
   storeState: string;
   storeZipCode: string;
   storeCountry?: string;
@@ -119,6 +121,8 @@ export interface BoardedAccount {
   dexaMerchantId: string;
   dexaLocationId: string | null;
   valorMerchantId: string;
+  /** Valor merchant user id — needed to add further stores via /createStore. */
+  valorNewUserId: string;
   valorStoreId: string;
   valorEpi: string;
   valorAppId: string;
@@ -284,6 +288,7 @@ export async function runBoarding(
     dexaMerchantId: params.dexaMerchantId,
     dexaLocationId: params.dexaLocationId,
     valorMerchantId,
+    valorNewUserId: newUserId,
     valorStoreId,
     valorEpi,
     valorAppId,
@@ -498,6 +503,7 @@ export async function provisionLocation(
     dexaMerchantId: params.dexaMerchantId,
     dexaLocationId: params.dexaLocationId,
     valorMerchantId: merchant.valorMerchantId,
+    valorNewUserId: merchant.newUserId,
     valorStoreId,
     valorEpi,
     valorAppId,

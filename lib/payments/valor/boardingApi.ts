@@ -52,6 +52,7 @@ import {
   type BoardingPersist,
   type BoardingStoreDetails,
   type LocationInput,
+  type MerchantContext,
   type OnboardResult,
   type ValorFeeSchedule,
 } from "./boarding";
@@ -76,8 +77,15 @@ export interface ValorAcquirerConfig {
   device: string;
   /** Human device type label, e.g. "Soft POS". */
   deviceType: string;
-  /** ISO associate username echoed on store/EPI/key calls. */
+  /** ISO associate username echoed on store/EPI/key calls (ISO/Sub-ISO branch). */
   associateUserName?: string;
+  /**
+   * ISV user(s) the merchant is assigned to — Valor's `isv_user_name` root field,
+   * the documented lever for ISV visibility/ownership (the API form of the portal
+   * "ISV User" dropdown). Without it the merchant sits under the ISO only, not the
+   * ISV. The ISV must also be enabled in the parent ISO's Integration tab.
+   */
+  isvUserName?: string;
   /**
    * Opaque per-acquirer MID/credential block merged into `processorData[0]`.
    * Sandbox uses Valor's published test values; production comes from the
@@ -155,6 +163,7 @@ export function buildStoreData(
   return {
     storeName: store.storeName,
     storeAddress: store.storeAddress,
+    storeCity: store.storeCity,
     storeState: store.storeState,
     storeCountry: store.storeCountry ?? "US",
     storeZipCode: store.storeZipCode,
@@ -199,6 +208,9 @@ export function buildCreateMerchantBody(
     ...(acquirer.associateUserName
       ? { associate_user_name: acquirer.associateUserName }
       : {}),
+    // Assign the merchant to the ISV so it's visible/manageable under the ISV
+    // (not just the parent ISO). Undocumented value format — the ISV login name.
+    ...(acquirer.isvUserName ? { isv_user_name: [acquirer.isvUserName] } : {}),
     storeData: [buildStoreData(store, acquirer, fees, epiLabel, merchant.mccCode)],
   };
 }
@@ -242,16 +254,29 @@ export function buildGenerateKeysBody(
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
- * Pull the created store id + EPI out of a nested create/createStore response.
+ * Pull the created store id + EPI out of a create/createStore response.
  *
- * UNVERIFIED shape: docs show `{}`. We probe the response top-level, a `data`
- * wrapper, and the first element of any `storeData`/`stores` array (which is
- * where the created store's `id` + its `epiData[].epi` would live). Boarding one
- * store per call keeps this unambiguous — the array has a single element.
+ * CONFIRMED live (2026-08-23): the store id + EPI come back as an object keyed by
+ * store id, each value an array of that store's EPIs — but the KEY differs by
+ * endpoint: `/create` uses `storeInfo`, `/createStore` uses `StoreID`. Both are
+ * handled. Boarding one store per call means one entry with one EPI. The
+ * `storeData`/`stores` array probing below is a defensive fallback.
  */
 export function readStoreAndEpi(
   body: ValorEnvelope
 ): { storeId: string | null; epi: string | null } {
+  const storeMap =
+    body.storeInfo ?? body.StoreID ?? body.storeID ?? body.store_info;
+  if (storeMap && typeof storeMap === "object" && !Array.isArray(storeMap)) {
+    const entries = Object.entries(storeMap as Record<string, unknown>);
+    if (entries.length > 0) {
+      const [storeId, epis] = entries[0];
+      const epi =
+        Array.isArray(epis) && epis.length > 0 ? String(epis[0]) : null;
+      if (storeId) return { storeId: String(storeId), epi };
+    }
+  }
+
   const container =
     (body.data && typeof body.data === "object" ? (body.data as ValorEnvelope) : body) ??
     body;
@@ -282,6 +307,42 @@ export function readStoreAndEpi(
   return { storeId, epi };
 }
 
+/**
+ * Did a boarding call actually succeed? Valor signals failure several ways —
+ * HTTP 4xx, `status: false`, `status: "Validation Failed"`, or a `code >= 400`
+ * even on an HTTP 200. Checked BEFORE reading identifiers so a failed create
+ * surfaces Valor's real message rather than a misleading "no identifier found".
+ */
+export function boardingResponseOk(res: {
+  status: number;
+  body: ValorEnvelope;
+}): boolean {
+  if (res.status >= 400) return false;
+  const b = res.body;
+  // Valor's `status` is boolean on some hosts and a string ("Validation Failed")
+  // on others, so read it loosely.
+  const status = (b as { status?: unknown }).status;
+  if (status === false) return false;
+  if (typeof status === "string" && /fail/i.test(status)) return false;
+  if (typeof b.code === "number" && b.code >= 400) return false;
+  return true;
+}
+
+/**
+ * Build the fullest error message a failed boarding response offers: the base
+ * message plus any per-field errors Valor returns under numeric keys
+ * (`{"0":"&mid1& Should not be blank", ...}`).
+ */
+export function valorBoardingErrorMessage(body: ValorEnvelope): string {
+  const parts: string[] = [];
+  const base = extractValorError(body);
+  if (base) parts.push(base);
+  for (const [key, value] of Object.entries(body)) {
+    if (/^\d+$/.test(key) && typeof value === "string") parts.push(value);
+  }
+  return parts.join("; ") || "unknown error";
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // HTTP client for the boarding host.
 // ────────────────────────────────────────────────────────────────────────────
@@ -306,12 +367,15 @@ async function makeBoardingHttp(
   };
   const token = await getBearerToken(authOptions);
 
+  // The bearer token authenticates the boarding calls on its own — confirmed live
+  // against sandbox: sending an `isv-secret-key` header made /create reject with
+  // 401 "Invalid Secret key or invalid associate_user_name", while omitting it let
+  // the bearer token through to body validation. So it is deliberately NOT sent.
+  // If a specific endpoint (e.g. key generation) later proves to require it, add
+  // it there alone with a verified, correctly-escaped key.
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`,
-    ...(options.credentials.isvSecretKey
-      ? { "isv-secret-key": options.credentials.isvSecretKey }
-      : {}),
   };
 
   return {
@@ -370,13 +434,14 @@ async function generateKeysForEpi(
 
 function accountFrom(
   params: BoardingParams,
-  ctx: { mpId: string },
+  ctx: { mpId: string; newUserId: string },
   provisioned: { storeId: string; epi: string; appId: string; appKey: string }
 ): BoardedAccount {
   return {
     dexaMerchantId: params.dexaMerchantId,
     dexaLocationId: params.dexaLocationId,
     valorMerchantId: ctx.mpId,
+    valorNewUserId: ctx.newUserId,
     valorStoreId: provisioned.storeId,
     valorEpi: provisioned.epi,
     valorAppId: provisioned.appId,
@@ -434,6 +499,15 @@ export async function onboardValorMerchant(
     throw new BoardingError("merchant_add", "Valor Merchant Add failed", {}, false, {
       cause: error,
     });
+  }
+
+  if (!boardingResponseOk(createRes)) {
+    throw new BoardingError(
+      "merchant_add",
+      `Valor Merchant Add failed: ${valorBoardingErrorMessage(createRes.body)}`,
+      {},
+      false
+    );
   }
 
   const mpId = readMerchantId(createRes.body);
@@ -516,6 +590,74 @@ export async function onboardValorMerchant(
 }
 
 /**
+ * Recover a merchant's `newUserId` from any of its existing EPIs.
+ *
+ * Merchants boarded before `newUserId` was persisted have it NULL in the DB, but
+ * `getEpiAppKeyDetails` echoes the EPI's `UserId` (== the merchant `newUserId`),
+ * so re-provisioning can self-heal without manual backfill. Returns null if the
+ * response doesn't carry it.
+ */
+export async function fetchValorNewUserId(
+  options: ValorBoardingOptions,
+  epi: string
+): Promise<string | null> {
+  const http = await makeBoardingHttp(options);
+  const res = await http.post(
+    "/api/valor/getEpiAppKeyDetails?apikey",
+    buildGenerateKeysBody(epi, options.acquirer.associateUserName)
+  );
+  const data = (res.body.data && typeof res.body.data === "object"
+    ? (res.body.data as ValorEnvelope)
+    : res.body) as Record<string, unknown>;
+  const uid = data.UserId ?? data.userId ?? data.newUserId ?? data.new_user_id;
+  return uid != null && String(uid).trim() ? String(uid) : null;
+}
+
+/**
+ * Add locations to a merchant that is ALREADY boarded on Valor.
+ *
+ * Skips /create entirely — reuses the existing merchant context (mp_id +
+ * newUserId, both persisted at first boarding) and only runs /createStore per
+ * location. This is the "Provision locations" path: re-running boarding for a
+ * partially-boarded merchant, or adding a store years later, without colliding
+ * on the merchant's Valor username.
+ */
+export async function provisionValorLocations(
+  options: ValorBoardingOptions,
+  merchant: BoardingMerchantDetails,
+  fees: ValorFeeSchedule,
+  dexaMerchantId: string,
+  ctx: MerchantContext,
+  locations: LocationInput[],
+  persist: BoardingPersist
+): Promise<OnboardResult> {
+  const http = await makeBoardingHttp(options);
+  const innerCtx = { mpId: ctx.valorMerchantId, newUserId: ctx.newUserId };
+  const accounts: BoardedAccount[] = [];
+  const failures: OnboardResult["failures"] = [];
+
+  for (const location of locations) {
+    const params: BoardingParams = {
+      merchant,
+      store: location.store,
+      fees,
+      dexaMerchantId,
+      dexaLocationId: location.dexaLocationId,
+      ...(location.epiLabel ? { epiLabel: location.epiLabel } : {}),
+    };
+    try {
+      accounts.push(
+        await provisionValorLocation(http, options, innerCtx, params, persist)
+      );
+    } catch (error) {
+      failures.push({ dexaLocationId: location.dexaLocationId, error });
+    }
+  }
+
+  return { merchant: ctx, accounts, failures };
+}
+
+/**
  * Provision one additional location under an already-boarded merchant.
  *
  * Store Add → keys → persist. Rolls back the *store* only (never the shared
@@ -573,6 +715,13 @@ export async function provisionValorLocation(
     );
   } catch (error) {
     return failStore("store_add", "Valor Store Add failed", error);
+  }
+
+  if (!boardingResponseOk(storeRes)) {
+    return failStore(
+      "store_add",
+      `Valor Store Add failed: ${valorBoardingErrorMessage(storeRes.body)}`
+    );
   }
 
   const { storeId, epi } = readStoreAndEpi(storeRes.body);

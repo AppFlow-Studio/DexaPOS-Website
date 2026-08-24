@@ -4,6 +4,8 @@ import {
   mapMerchantToBoardingDetails,
   missingLocationFields,
   missingMerchantFields,
+  normalizeValorEmail,
+  normalizeValorTimezone,
   readValorAcquirerConfig,
   readValorFeeSchedule,
   type LocationBoardingRow,
@@ -99,6 +101,44 @@ describe("readValorAcquirerConfig", () => {
     expect(cfg.programType).toBe("2");
     expect(cfg.device).toBe("139");
     expect(cfg.processorData).toEqual({ midFDCard: "123" });
+  });
+});
+
+describe("normalizeValorTimezone", () => {
+  it("maps IANA names to Valor abbreviations", () => {
+    expect(normalizeValorTimezone("America/Phoenix")).toBe("MST");
+    expect(normalizeValorTimezone("America/New_York")).toBe("EST");
+    expect(normalizeValorTimezone("America/Los_Angeles")).toBe("PST");
+    expect(normalizeValorTimezone("America/Anchorage")).toBe("AKST");
+  });
+  it("passes through valid abbreviations and defaults unknowns to EST", () => {
+    expect(normalizeValorTimezone("est")).toBe("EST");
+    expect(normalizeValorTimezone("Asia/Beirut")).toBe("EST");
+    expect(normalizeValorTimezone(null)).toBe("EST");
+    expect(normalizeValorTimezone("")).toBe("EST");
+  });
+});
+
+describe("normalizeValorEmail", () => {
+  it("strips gmail-style plus-addressing", () => {
+    expect(normalizeValorEmail("temur+clerk_test@gmail.com")).toBe("temur@gmail.com");
+  });
+  it("leaves plain emails untouched", () => {
+    expect(normalizeValorEmail("owner@example.com")).toBe("owner@example.com");
+    expect(normalizeValorEmail("")).toBe("");
+  });
+  it("is applied by the mappers", () => {
+    const details = mapMerchantToBoardingDetails(
+      { ...fullMerchant, owner_email: "temur+x@gmail.com" },
+      "5812"
+    );
+    expect(details.emailId).toBe("temur@gmail.com");
+    const store = mapLocationToStore(
+      { ...fullLocation, timezone: "America/Phoenix" },
+      { ...fullMerchant, owner_email: "temur+x@gmail.com" }
+    );
+    expect(store.storeTimezone).toBe("MST");
+    expect(store.superVisorEmail).toBe("temur@gmail.com");
   });
 });
 

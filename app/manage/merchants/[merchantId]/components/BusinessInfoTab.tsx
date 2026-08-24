@@ -49,12 +49,14 @@ interface BusinessInfoTabProps {
     merchantInfo: MerchantDetails
 }
 
-// Business type options
+// Business type options. Keys MUST match the merchants_business_type_check DB
+// constraint (lowercase / snake_case); the label is display-only.
 const businessTypes = {
-    'LLC': 'Limited Liability Company',
-    'Corporation': 'Corporation',
-    'Sole Proprietor': 'Sole Proprietor',
-    'Partnership': 'Partnership'
+    'llc': 'LLC',
+    'corporation': 'Corporation',
+    'sole_proprietor': 'Sole Proprietor',
+    'partnership': 'Partnership',
+    'nonprofit': 'Nonprofit',
 }
 
 export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
@@ -100,7 +102,17 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
         merchant_type: '',
         status: '',
         pricing_strategy: 'manual' as 'manual' | 'dual',
-        dual_pricing_percentage: 4
+        dual_pricing_percentage: 4,
+        // Owner / contact + business address (required for Valor boarding)
+        owner_first_name: '',
+        owner_last_name: '',
+        owner_email: '',
+        owner_phone: '',
+        business_address_line1: '',
+        business_address_line2: '',
+        business_city: '',
+        business_state: '',
+        business_postal_code: '',
     })
 
     useEffect(() => {
@@ -114,11 +126,34 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                 merchant_type: merchantInfo?.business_type || '',
                 status: merchantInfo?.onboarding_status || '',
                 pricing_strategy: (merchantInfo?.pricing_strategy as 'manual' | 'dual') || 'manual',
-                dual_pricing_percentage: merchantInfo?.dual_pricing_percentage ?? 4
+                dual_pricing_percentage: merchantInfo?.dual_pricing_percentage ?? 4,
+                owner_first_name: merchantInfo?.owner_first_name || '',
+                owner_last_name: merchantInfo?.owner_last_name || '',
+                owner_email: merchantInfo?.owner_email || '',
+                owner_phone: merchantInfo?.owner_phone || '',
+                business_address_line1: merchantInfo?.business_address_line1 || '',
+                business_address_line2: merchantInfo?.business_address_line2 || '',
+                business_city: merchantInfo?.business_city || '',
+                business_state: merchantInfo?.business_state || '',
+                business_postal_code: merchantInfo?.business_postal_code || '',
             })
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEditDialogOpen])
+
+    // Deep-link: open the edit dialog when routed here to resolve boarding gaps
+    // (e.g. from the Valor Boarding "Resolve" button → ?tab=business-info&edit=business).
+    // Strip the `edit` param once consumed so it doesn't re-open on re-render and a
+    // repeat click of the same link still triggers a fresh navigation.
+    useEffect(() => {
+        if (searchParams.get('edit') === 'business') {
+            setIsEditDialogOpen(true)
+            const sp = new URLSearchParams(searchParams.toString())
+            sp.delete('edit')
+            router.replace(`?${sp.toString()}`, { scroll: false })
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams])
 
     const handleSave = async () => {
         try {
@@ -127,12 +162,28 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                 updates: {
                     business_legal_name: formData.legal_business_name || null,
                     dba_name: formData.dba_name || null,
-                    ein_last_four: formData.ein_tax_id || null,
+                    // Column is ein_last_four — DB constraint requires exactly 4
+                    // digits. Take the last 4 digits of whatever is entered.
+                    ein_last_four: formData.ein_tax_id.replace(/\D/g, '').slice(-4) || null,
                     business_type: formData.business_type || null,
                     pricing_strategy: formData.pricing_strategy,
                     ...(formData.pricing_strategy === 'dual'
-                        ? { dual_pricing_percentage: formData.dual_pricing_percentage }
+                        ? {
+                              dual_pricing_percentage: Math.min(
+                                  100,
+                                  Math.max(0, Number(formData.dual_pricing_percentage) || 0)
+                              ),
+                          }
                         : {}),
+                    owner_first_name: formData.owner_first_name.trim() || null,
+                    owner_last_name: formData.owner_last_name.trim() || null,
+                    owner_email: formData.owner_email.trim() || null,
+                    owner_phone: formData.owner_phone.trim() || null,
+                    business_address_line1: formData.business_address_line1.trim() || null,
+                    business_address_line2: formData.business_address_line2.trim() || null,
+                    business_city: formData.business_city.trim() || null,
+                    business_state: formData.business_state.trim().toUpperCase() || null,
+                    business_postal_code: formData.business_postal_code.trim() || null,
                 }
             })
 
@@ -515,9 +566,11 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="ein_tax_id">EIN / Tax ID</Label>
+                            <Label htmlFor="ein_tax_id">EIN (last 4 digits)</Label>
                             <Input
                                 id="ein_tax_id"
+                                inputMode="numeric"
+                                placeholder="Last 4 of EIN / Tax ID"
                                 value={formData.ein_tax_id}
                                 onChange={(e) => setFormData({ ...formData, ein_tax_id: e.target.value })}
                             />
@@ -612,6 +665,95 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     <SelectItem value="onboarding">Onboarding</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+
+                        {/* Owner & contact — required for Valor boarding */}
+                        <div className="md:col-span-2 pt-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                            Owner &amp; Contact
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="owner_first_name">Owner First Name</Label>
+                            <Input
+                                id="owner_first_name"
+                                value={formData.owner_first_name}
+                                onChange={(e) => setFormData({ ...formData, owner_first_name: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="owner_last_name">Owner Last Name</Label>
+                            <Input
+                                id="owner_last_name"
+                                value={formData.owner_last_name}
+                                onChange={(e) => setFormData({ ...formData, owner_last_name: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="owner_email">Owner Email</Label>
+                            <Input
+                                id="owner_email"
+                                type="email"
+                                value={formData.owner_email}
+                                onChange={(e) => setFormData({ ...formData, owner_email: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="owner_phone">Owner Phone</Label>
+                            <Input
+                                id="owner_phone"
+                                inputMode="tel"
+                                placeholder="10 digits"
+                                value={formData.owner_phone}
+                                onChange={(e) => setFormData({ ...formData, owner_phone: e.target.value })}
+                            />
+                        </div>
+
+                        {/* Business address — required for Valor boarding */}
+                        <div className="md:col-span-2 pt-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                            Business Address
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                            <Label htmlFor="business_address_line1">Address Line 1</Label>
+                            <Input
+                                id="business_address_line1"
+                                value={formData.business_address_line1}
+                                onChange={(e) => setFormData({ ...formData, business_address_line1: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                            <Label htmlFor="business_address_line2">Address Line 2</Label>
+                            <Input
+                                id="business_address_line2"
+                                value={formData.business_address_line2}
+                                onChange={(e) => setFormData({ ...formData, business_address_line2: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="business_city">City</Label>
+                            <Input
+                                id="business_city"
+                                value={formData.business_city}
+                                onChange={(e) => setFormData({ ...formData, business_city: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="business_state">State</Label>
+                            <Input
+                                id="business_state"
+                                maxLength={2}
+                                placeholder="2-letter (e.g. AZ)"
+                                value={formData.business_state}
+                                onChange={(e) => setFormData({ ...formData, business_state: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="business_postal_code">ZIP</Label>
+                            <Input
+                                id="business_postal_code"
+                                inputMode="numeric"
+                                placeholder="5 digits"
+                                value={formData.business_postal_code}
+                                onChange={(e) => setFormData({ ...formData, business_postal_code: e.target.value })}
+                            />
                         </div>
                     </div>
 

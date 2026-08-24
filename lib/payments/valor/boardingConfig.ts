@@ -107,6 +107,9 @@ export function readValorAcquirerConfig(
     ...(env.VALOR_ISO_SUBMAIL_ID?.trim()
       ? { associateUserName: env.VALOR_ISO_SUBMAIL_ID.trim() }
       : {}),
+    ...(env.VALOR_BOARDING_ISV_USERNAME?.trim()
+      ? { isvUserName: env.VALOR_BOARDING_ISV_USERNAME.trim() }
+      : {}),
     processorData,
   };
 }
@@ -151,6 +154,47 @@ function digits(value: string | null | undefined): string {
   return (value ?? "").replace(/\D/g, "");
 }
 
+/** US timezone abbreviations Valor accepts on store/legal timezone. */
+const VALOR_TIMEZONES = new Set(["EST", "CST", "MST", "PST", "AKST", "HST"]);
+
+const IANA_TO_VALOR_TZ: Record<string, string> = {
+  "America/New_York": "EST",
+  "America/Detroit": "EST",
+  "America/Toronto": "EST",
+  "America/Chicago": "CST",
+  "America/Denver": "MST",
+  "America/Phoenix": "MST",
+  "America/Los_Angeles": "PST",
+  "America/Anchorage": "AKST",
+  "Pacific/Honolulu": "HST",
+  "America/Adak": "HST",
+};
+
+/**
+ * Valor wants a US timezone ABBREVIATION (e.g. "EST"), but DEXA stores IANA names
+ * (e.g. "America/Phoenix") — sending the IANA name fails "invalid store/timezone".
+ * Map known zones; default to EST so boarding never blocks on an unmapped zone.
+ */
+export function normalizeValorTimezone(tz: string | null | undefined): string {
+  const t = (tz ?? "").trim();
+  if (!t) return "EST";
+  if (VALOR_TIMEZONES.has(t.toUpperCase())) return t.toUpperCase();
+  return IANA_TO_VALOR_TZ[t] ?? "EST";
+}
+
+/**
+ * Strip gmail-style plus-addressing (`temur+tag@gmail.com` → `temur@gmail.com`).
+ * The `+tag` is delivery routing, not identity, and Valor's email validator
+ * rejects it outright ("Invalid email format"). Same inbox, Valor-acceptable.
+ */
+export function normalizeValorEmail(email: string | null | undefined): string {
+  const e = (email ?? "").trim();
+  const at = e.indexOf("@");
+  if (at <= 0) return e;
+  const local = e.slice(0, at).replace(/\+.*$/, "");
+  return `${local}${e.slice(at)}`;
+}
+
 export function mapMerchantToBoardingDetails(
   row: MerchantBoardingRow,
   mccCode: string
@@ -161,7 +205,7 @@ export function mapMerchantToBoardingDetails(
     dbaName: dba,
     firstName: row.owner_first_name ?? "",
     lastName: row.owner_last_name ?? "",
-    emailId: row.owner_email ?? "",
+    emailId: normalizeValorEmail(row.owner_email),
     mobile: digits(row.owner_phone),
     legalAddress: row.business_address_line1 ?? "",
     legalCity: row.business_city ?? "",
@@ -179,14 +223,15 @@ export function mapLocationToStore(
   return {
     storeName: location.name ?? merchant.dba_name ?? "Store",
     storeAddress: location.address_line1 ?? merchant.business_address_line1 ?? "",
+    storeCity: location.city ?? merchant.business_city ?? "",
     storeState: (location.state ?? merchant.business_state ?? "").toUpperCase(),
     storeZipCode: digits(location.postal_code ?? merchant.business_postal_code),
     storeCountry: location.country ?? merchant.business_country ?? "US",
-    ...(location.timezone ? { storeTimezone: location.timezone } : {}),
+    storeTimezone: normalizeValorTimezone(location.timezone),
     // The merchant owner is the store supervisor unless a per-location contact
     // is captured later.
     superVisorName: `${merchant.owner_first_name ?? ""} ${merchant.owner_last_name ?? ""}`.trim(),
-    superVisorEmail: merchant.owner_email ?? "",
+    superVisorEmail: normalizeValorEmail(merchant.owner_email),
     superVisorContact: digits(merchant.owner_phone),
   };
 }
@@ -215,6 +260,7 @@ export function missingLocationFields(
   const store = mapLocationToStore(location, merchant);
   const missing: string[] = [];
   if (!store.storeAddress) missing.push("address");
+  if (!store.storeCity) missing.push("city");
   if (store.storeState.length !== 2) missing.push("state (2-letter)");
   if (store.storeZipCode.length < 5) missing.push("ZIP (5 digits)");
   return missing;

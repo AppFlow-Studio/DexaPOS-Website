@@ -49,6 +49,7 @@ const params: BoardingParams = {
   store: {
     storeName: "Joes Coffee Downtown",
     storeAddress: "1 Main St",
+    storeCity: "Tempe",
     storeState: "AZ",
     storeZipCode: "85284",
     superVisorName: "Joe Smith",

@@ -6,7 +6,9 @@ import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 import { readIsoCredentials } from '@/lib/payments/valor/auth'
 import { ValorConfigError } from '@/lib/payments/valor/config'
 import {
+  fetchValorNewUserId,
   onboardValorMerchant,
+  provisionValorLocations,
   type ValorBoardingOptions,
 } from '@/lib/payments/valor/boardingApi'
 import {
@@ -14,6 +16,7 @@ import {
   type BoardedAccount,
   type BoardingPersist,
   type LocationInput,
+  type OnboardResult,
 } from '@/lib/payments/valor/boarding'
 import {
   mapLocationToStore,
@@ -178,6 +181,7 @@ export async function boardMerchantOnValor(
       p_valor_epi: account.valorEpi,
       p_valor_appid: account.valorAppId,
       p_valor_appkey: account.valorAppKey,
+      p_valor_new_user_id: account.valorNewUserId,
       p_fee_schedule_id: account.fees.feeScheduleId,
       p_disc_rate_percent: account.fees.discRatePercent,
       p_residual_bps: account.fees.residualBps,
@@ -189,15 +193,84 @@ export async function boardMerchantOnValor(
     }
   }
 
+  // Idempotency: if this merchant already has a Valor merchant, DON'T re-run
+  // /create (its username is taken) — reuse the existing merchant and only
+  // /createStore the locations that aren't boarded yet.
+  const { data: existingRows } = await supabase
+    .from('merchant_processor_accounts')
+    .select('location_id, valor_merchant_id, valor_new_user_id, valor_epi, is_active')
+    .eq('merchant_id', merchantId)
+    .eq('processor', 'valor')
+    .eq('purpose', 'online_order')
+
+  const existing = (existingRows ?? []) as Array<{
+    location_id: string | null
+    valor_merchant_id: string | null
+    valor_new_user_id: string | null
+    valor_epi: string | null
+    is_active: boolean
+  }>
+  const boardedLocationIds = new Set(
+    existing.filter((r) => r.is_active && r.valor_epi).map((r) => r.location_id),
+  )
+
+  // Reuse an existing Valor merchant if this merchant is already boarded. Prefer
+  // a row that already has newUserId; otherwise recover it from Valor via an EPI
+  // (rows boarded before newUserId was persisted have it NULL — self-heal).
+  const anyBoarded = existing.find(
+    (r) => r.valor_merchant_id && r.is_active && r.valor_epi,
+  )
+  let existingCtx: { valorMerchantId: string; newUserId: string } | null = null
+  if (anyBoarded?.valor_merchant_id) {
+    let newUserId =
+      existing.find((r) => r.valor_merchant_id && r.valor_new_user_id)
+        ?.valor_new_user_id ?? null
+    if (!newUserId && anyBoarded.valor_epi) {
+      newUserId = await fetchValorNewUserId(boardingOptions, anyBoarded.valor_epi)
+    }
+    if (newUserId) {
+      existingCtx = {
+        valorMerchantId: anyBoarded.valor_merchant_id,
+        newUserId,
+      }
+    }
+  }
+
   try {
-    const result = await onboardValorMerchant(
-      boardingOptions,
-      merchantDetails,
-      fees,
-      merchantId,
-      locationInputs,
-      persist
-    )
+    let result: OnboardResult
+
+    if (existingCtx) {
+      // Re-provision: only the locations not already boarded.
+      const missing = locationInputs.filter(
+        (l) => !boardedLocationIds.has(l.dexaLocationId),
+      )
+      if (missing.length === 0) {
+        return {
+          ok: true,
+          valorMerchantId: existingCtx.valorMerchantId,
+          boardedCount: 0,
+          failures: [],
+        }
+      }
+      result = await provisionValorLocations(
+        boardingOptions,
+        merchantDetails,
+        fees,
+        merchantId,
+        existingCtx,
+        missing,
+        persist,
+      )
+    } else {
+      result = await onboardValorMerchant(
+        boardingOptions,
+        merchantDetails,
+        fees,
+        merchantId,
+        locationInputs,
+        persist,
+      )
+    }
 
     await LogAuditEvent({
       merchantId,

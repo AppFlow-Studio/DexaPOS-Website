@@ -1,9 +1,10 @@
 'use client'
 
+import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { AlertTriangle, CreditCard, Store } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CreditCard, Store } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   useBoardMerchantOnValor,
@@ -58,6 +59,20 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
 
   const blockers = boarding.data && !boarding.data.ok ? boarding.data.blockers : undefined
 
+  // Where a "Resolve" jump lands, based on which blockers are present. Env-config
+  // blockers (iso_credentials/fee_schedule/acquirer) aren't fixable in the UI, so
+  // no button is offered for those alone.
+  const resolveTarget = (() => {
+    if (!blockers?.length) return null
+    if (blockers.some((b) => b.code === 'merchant_fields')) {
+      return { href: '?tab=business-info&edit=business', label: 'Resolve merchant details' }
+    }
+    if (blockers.some((b) => b.code === 'no_locations' || b.code.startsWith('location_fields'))) {
+      return { href: '?tab=locations', label: 'Resolve locations' }
+    }
+    return null
+  })()
+
   return (
     <div>
       <SectionHead
@@ -109,6 +124,16 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
                   <li key={b.code}>{b.label}</li>
                 ))}
               </ul>
+              {resolveTarget && (
+                <div className="mt-3">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={resolveTarget.href}>
+                      {resolveTarget.label}
+                      <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 

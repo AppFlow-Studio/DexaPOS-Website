@@ -39,12 +39,12 @@ function probe(body: ValorEnvelope, keys: string[]): string | null {
 /**
  * Merchant identifier from Merchant Add.
  *
- * `mp_id` is the highest-confidence guess: EPI Add documents a *required*
- * `mp_id` input, which has to come from somewhere, and Merchant Add is the only
- * preceding call.
+ * CONFIRMED live (2026-08-23, sandbox /create): the field is `mpId`. The request
+ * side calls it `mp_id`, so both are read — `mpId` first as the verified value.
  */
 export function readMerchantId(body: ValorEnvelope): string | null {
   return probe(body, [
+    "mpId",
     "mp_id",
     "merchant_id",
     "merchantId",
