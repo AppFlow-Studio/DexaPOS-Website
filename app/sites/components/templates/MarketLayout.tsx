@@ -19,12 +19,14 @@ import { useSessionInit } from "../../hooks/useSessionInit";
 import { useQrFunnelTracking } from "../../hooks/useQrFunnelTracking";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { MenuSearch } from "../MenuSearch";
+import { StoreHoursModal } from "../StoreHoursModal";
+import { getOpenUntilString, isStoreOpenNow } from "../StoreInfoBar";
 import {
   getStorefrontBrowsePrice,
   getStorefrontDeliveryPriceLabel,
 } from "../../lib/storefront-pricing";
 import { motion, AnimatePresence } from "motion/react";
-import { Plus, ChevronUp, SlidersHorizontal, LayoutGrid, LayoutList, ListFilter } from "lucide-react";
+import { Plus, ChevronUp, MapPin, Clock, Store, Truck, ArrowLeft, ArrowRight } from "lucide-react";
 
 interface MarketLayoutProps {
   site: Site | null;
@@ -40,6 +42,7 @@ interface MarketLayoutProps {
     business_hours: any;
     latitude?: number | null;
     longitude?: number | null;
+    timezone?: string | null;
   };
   menus: StorefrontMenu[];
   slug: string;
@@ -52,7 +55,6 @@ interface MarketLayoutProps {
 }
 
 type SortOption = "default" | "price_asc" | "price_desc" | "name";
-type ViewMode = "grid" | "list";
 
 function isValidImageSrc(src?: string | null): boolean {
   return !!src && (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/"));
@@ -90,6 +92,7 @@ export function MarketLayout({
   const [navHeight, setNavHeight] = useState(0);
   const mobilePillsRef = useRef<HTMLDivElement>(null);
   const sidebarNavRef = useRef<HTMLDivElement>(null);
+  const popularRowRef = useRef<HTMLDivElement>(null);
   // While a pill click is smooth-scrolling, lock the highlight to the target so
   // the scroll-spy doesn't flicker to sections passed en route.
   const scrollLockRef = useRef<string | null>(null);
@@ -99,8 +102,25 @@ export function MarketLayout({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
   const [sortOption, setSortOption] = useState<SortOption>("default");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [hoursModalOpen, setHoursModalOpen] = useState(false);
+
+  // Store header details — reuses the same hours helpers as StoreInfoBar so the
+  // open/closed logic stays in one place.
+  const storeName = site?.title || location.name;
+  const pickupEnabled = site?.online_ordering_config?.pickupEnabled !== false;
+  const deliveryEnabled = site?.online_ordering_config?.deliveryEnabled === true;
+  const rawBusinessHours =
+    site?.online_ordering_config?.operatingHours || location.business_hours;
+  const locationTimezone = location.timezone ?? null;
+  const isStoreOpen = useMemo(
+    () => isStoreOpenNow(rawBusinessHours, locationTimezone),
+    [rawBusinessHours, locationTimezone]
+  );
+  const openUntilText = useMemo(
+    () => getOpenUntilString(rawBusinessHours, locationTimezone),
+    [rawBusinessHours, locationTimezone]
+  );
 
   const { setOpen: setCartOpen, pendingModalItem, clearPendingModalItem } = useCart();
 
@@ -158,6 +178,21 @@ export function MarketLayout({
     [allCategories, processItems]
   );
 
+  // "Popular" — sourced from the merchant-set is_popular flag (there is no
+  // store-wide order-volume aggregate in the DB, so this is a curated list, not
+  // a sales ranking). Hidden when nothing is flagged, and suppressed while a
+  // tag filter is narrowing the menu.
+  const popularItems = useMemo(
+    () => (activeTag ? [] : allItems.filter((i) => i.is_popular && i.availability !== false)),
+    [allItems, activeTag]
+  );
+
+  const scrollPopular = useCallback((direction: -1 | 1) => {
+    const el = popularRowRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * Math.max(el.clientWidth * 0.8, 240), behavior: "smooth" });
+  }, []);
+
   const totalVisibleItems = useMemo(
     () => sectionsWithItems.reduce((sum, s) => sum + s.items.length, 0),
     [sectionsWithItems]
@@ -205,12 +240,6 @@ export function MarketLayout({
     return allItems.some((i) => (i.dietary_tags || []).some((t) => t.toLowerCase().includes(tag.toLowerCase())));
   });
 
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    allCategories.forEach((c) => { counts[c.id] = c.items.length; });
-    return counts;
-  }, [allCategories]);
-
   // Default the active category to the first visible section (and re-seed when
   // the menu or filters change the set of visible sections).
   useEffect(() => {
@@ -242,10 +271,11 @@ export function MarketLayout({
     // spy doesn't briefly light up sections we pass through.
     scrollLockRef.current = categoryId;
     if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
-    // Safety release in case the target never precisely reaches the boundary.
+    // Safety release for the case where the target is already in position and
+    // scrollTo emits no events at all, leaving nothing to refresh the timer.
     scrollLockTimerRef.current = setTimeout(() => {
       scrollLockRef.current = null;
-    }, 1000);
+    }, 700);
     // On mobile the category nav is sticky under the header; on desktop it isn't.
     const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
     const offset = headerHeight + (isDesktop ? 16 : navHeight + 8);
@@ -261,11 +291,17 @@ export function MarketLayout({
     if (sections.length === 0) return;
 
     const updateActiveCategory = () => {
+      // A click-lock outranks everything, including the bottom-of-page guard:
+      // clicking a short trailing category lands at the page bottom, and that
+      // guard would otherwise yank the highlight to the last section.
+      if (scrollLockRef.current) {
+        setActiveCategory(scrollLockRef.current);
+        return;
+      }
       const atBottom =
         window.innerHeight + window.scrollY >=
         document.documentElement.scrollHeight - 2;
       if (atBottom) {
-        scrollLockRef.current = null;
         setActiveCategory(sections[sections.length - 1].cat.id);
         return;
       }
@@ -285,13 +321,6 @@ export function MarketLayout({
         }
         if (rect.top - boundary <= 1) current = cat.id;
       }
-      // While locked to a click target, keep it highlighted regardless of
-      // sections passed (or slightly overshot) during the smooth scroll. The
-      // lock is released by an idle timer once scrolling settles.
-      if (scrollLockRef.current) {
-        setActiveCategory(scrollLockRef.current);
-        return;
-      }
       setActiveCategory(current);
     };
 
@@ -299,12 +328,15 @@ export function MarketLayout({
     let ticking = false;
     const onScroll = () => {
       // Refresh the idle timer: release the click-lock only once the smooth
-      // scroll has fully stopped, then re-sync to the real scroll position.
+      // scroll has fully stopped. Don't re-derive the category on release — the
+      // scroll settles with the target's top exactly on the boundary, where
+      // sub-pixel rounding can resolve to the *previous* section and flash the
+      // highlight back for a frame. The clicked target is authoritative; the
+      // next real scroll takes over from there.
       if (scrollLockRef.current) {
         if (scrollLockTimerRef.current) clearTimeout(scrollLockTimerRef.current);
         scrollLockTimerRef.current = setTimeout(() => {
           scrollLockRef.current = null;
-          updateActiveCategory();
         }, 120);
       }
       if (ticking) return;
@@ -353,31 +385,6 @@ export function MarketLayout({
 
       {activeTab === "menu" ? (
         <>
-          {/* Menu tabs — only when multiple menus */}
-          {menus.length > 1 && (
-            <div className="container mx-auto px-4 border-b" style={{ borderColor: "#E5E7EB" }}>
-              <div className="flex overflow-x-auto gap-1" style={{ scrollbarWidth: "none" }}>
-                {menus.map((menu) => {
-                  const isActive = activeMenuId === menu.id;
-                  return (
-                    <button
-                      key={menu.id}
-                      type="button"
-                      onClick={() => setActiveMenuId(menu.id)}
-                      className="px-4 py-3 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px shrink-0 uppercase tracking-wide"
-                      style={{
-                        borderColor: isActive ? "var(--primary)" : "transparent",
-                        color: isActive ? "var(--primary)" : "#9CA3AF",
-                        backgroundColor: "transparent",
-                      }}
-                    >
-                      {menu.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
           <div className="container mx-auto px-4 py-6 pb-32 lg:pb-8 flex flex-col lg:flex-row gap-6">
             {/* Left sidebar — desktop only */}
             <aside
@@ -394,62 +401,49 @@ export function MarketLayout({
                 />
               </div>
 
-              <div className="rounded-xl border p-4 mb-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB" }}>
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#6B7280" }}>
-                  <SlidersHorizontal className="h-3.5 w-3.5" />
-                  Categories
-                </div>
-                <nav ref={sidebarNavRef} className="space-y-0.5 max-h-[60vh] overflow-y-auto">
-                  {sectionsWithItems.map(({ cat }) => {
-                    const isActive = activeCategory === cat.id;
+              {/* Bare category list — no card, no borders. Only the active
+                  category is highlighted (solid fill), the rest are plain text. */}
+              <nav ref={sidebarNavRef} className="space-y-0.5 max-h-[70vh] overflow-y-auto mb-4">
+                {sectionsWithItems.map(({ cat }) => {
+                  const isActive = activeCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      data-cat-pill={cat.id}
+                      onClick={() => scrollToCategory(cat.id)}
+                      className="w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors"
+                      style={{
+                        backgroundColor: isActive ? "var(--primary)" : "transparent",
+                        color: isActive ? "var(--primary-text)" : "#374151",
+                        fontWeight: isActive ? 600 : 400,
+                      }}
+                    >
+                      {cat.name}
+                    </button>
+                  );
+                })}
+              </nav>
+
+              {activeTags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {activeTags.map((tag) => {
+                    const isActive = activeTag === tag;
                     return (
                       <button
-                        key={cat.id}
+                        key={tag}
                         type="button"
-                        data-cat-pill={cat.id}
-                        onClick={() => scrollToCategory(cat.id)}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all"
+                        onClick={() => setActiveTag(isActive ? null : tag)}
+                        className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
                         style={{
-                          backgroundColor: isActive ? "color-mix(in srgb, var(--primary) 8%, #FFFFFF)" : "transparent",
-                          color: isActive ? "var(--primary)" : "#6B7280",
-                          fontWeight: isActive ? 600 : 400,
-                          borderLeft: isActive ? "3px solid var(--primary)" : "3px solid transparent",
+                          backgroundColor: isActive ? "var(--primary)" : "#F3F4F6",
+                          color: isActive ? "var(--primary-text)" : "#374151",
                         }}
                       >
-                        <span>{cat.name}</span>
-                        <span className="text-xs" style={{ color: isActive ? "var(--primary)" : "#9CA3AF" }}>
-                          {categoryCounts[cat.id] ?? 0}
-                        </span>
+                        {tag}
                       </button>
                     );
                   })}
-                </nav>
-              </div>
-
-              {activeTags.length > 0 && (
-                <div className="rounded-xl border p-4" style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB" }}>
-                  <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#6B7280" }}>
-                    Popular Tags
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {activeTags.map((tag) => {
-                      const isActive = activeTag === tag;
-                      return (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => setActiveTag(isActive ? null : tag)}
-                          className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
-                          style={{
-                            backgroundColor: isActive ? "var(--primary)" : "#F3F4F6",
-                            color: isActive ? "var(--primary-text)" : "#374151",
-                          }}
-                        >
-                          {tag}
-                        </button>
-                      );
-                    })}
-                  </div>
                 </div>
               )}
             </aside>
@@ -498,40 +492,151 @@ export function MarketLayout({
                 </div>
               </div>
 
+              {/* Store header — branch name, address, hours, services */}
+              <div className="mb-5">
+                <h1
+                  className="text-2xl sm:text-3xl font-bold leading-tight"
+                  style={{ color: "#111827", fontFamily: "var(--font-display)" }}
+                >
+                  {storeName}
+                </h1>
+
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm" style={{ color: "#6B7280" }}>
+                  <span className="inline-flex items-center gap-1.5 min-w-0">
+                    <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--primary)" }} />
+                    <span className="truncate">
+                      {location.address_line1}, {location.city}, {location.state}
+                    </span>
+                  </span>
+
+                  {(openUntilText || isStoreOpen !== null) && (
+                    <>
+                      <span aria-hidden="true" style={{ color: "#D1D5DB" }}>·</span>
+                      <button
+                        type="button"
+                        onClick={() => setHoursModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 underline underline-offset-2 transition-opacity hover:opacity-75"
+                        style={{ color: isStoreOpen === false ? "#DC2626" : "var(--primary)" }}
+                      >
+                        <Clock className="h-3.5 w-3.5 shrink-0" />
+                        {isStoreOpen === false ? "Closed" : openUntilText || "See hours"}
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* Available services */}
+                {(pickupEnabled || deliveryEnabled) && (
+                  <div className="mt-3 flex items-center gap-2">
+                    {pickupEnabled && (
+                      <span
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full"
+                        style={{ border: "1px solid #E5E7EB", color: "#374151", backgroundColor: "#FFFFFF" }}
+                      >
+                        <Store className="h-3.5 w-3.5" style={{ color: "var(--primary)" }} />
+                        Pickup
+                      </span>
+                    )}
+                    {deliveryEnabled && (
+                      <span
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-full"
+                        style={{ border: "1px solid #E5E7EB", color: "#374151", backgroundColor: "#FFFFFF" }}
+                      >
+                        <Truck className="h-3.5 w-3.5" style={{ color: "var(--primary)" }} />
+                        Delivery
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Menu tabs — sit under the branch details, above the items */}
+                {menus.length > 1 && (
+                  <div className="mt-4 flex overflow-x-auto gap-1" style={{ scrollbarWidth: "none" }}>
+                    {menus.map((menu) => {
+                      const isActive = activeMenuId === menu.id;
+                      return (
+                        <button
+                          key={menu.id}
+                          type="button"
+                          onClick={() => setActiveMenuId(menu.id)}
+                          className="px-4 py-3 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 shrink-0 uppercase tracking-wide"
+                          style={{
+                            borderColor: isActive ? "var(--primary)" : "transparent",
+                            color: isActive ? "var(--primary)" : "#9CA3AF",
+                            backgroundColor: "transparent",
+                          }}
+                        >
+                          {menu.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               {/* Toolbar */}
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm" style={{ color: "#6B7280" }}>
                   {`${totalVisibleItems} item${totalVisibleItems !== 1 ? "s" : ""}`}
                 </p>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={sortOption}
-                    onChange={(e) => setSortOption(e.target.value as SortOption)}
-                    className="text-xs rounded-lg border px-3 py-1.5 h-8"
-                    style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", color: "#374151" }}
-                  >
-                    {(Object.keys(sortLabels) as SortOption[]).map((opt) => (
-                      <option key={opt} value={opt}>{sortLabels[opt]}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    aria-label="Filter"
-                    className="h-8 w-8 flex items-center justify-center rounded-lg border transition-colors"
-                    style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", color: "#6B7280" }}
-                  >
-                    <ListFilter className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
-                    className="h-8 w-8 flex items-center justify-center rounded-lg border transition-colors"
-                    style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", color: "#6B7280" }}
-                  >
-                    {viewMode === "grid" ? <LayoutList className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
-                  </button>
-                </div>
+                <select
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value as SortOption)}
+                  className="text-xs rounded-lg border px-3 py-1.5 h-8"
+                  style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E7EB", color: "#374151" }}
+                >
+                  {(Object.keys(sortLabels) as SortOption[]).map((opt) => (
+                    <option key={opt} value={opt}>{sortLabels[opt]}</option>
+                  ))}
+                </select>
               </div>
+
+              {/* Popular — horizontal carousel of merchant-flagged items */}
+              {popularItems.length > 0 && (
+                <section className="mb-10">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-base font-semibold" style={{ color: "var(--primary)" }}>
+                      Popular
+                    </h2>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => scrollPopular(-1)}
+                        aria-label="Scroll left"
+                        className="h-8 w-8 flex items-center justify-center rounded-full transition-opacity hover:opacity-80"
+                        style={{ backgroundColor: "#F3F4F6", color: "#374151" }}
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => scrollPopular(1)}
+                        aria-label="Scroll right"
+                        className="h-8 w-8 flex items-center justify-center rounded-full transition-opacity hover:opacity-80"
+                        style={{ backgroundColor: "#F3F4F6", color: "#374151" }}
+                      >
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    ref={popularRowRef}
+                    className="flex gap-4 overflow-x-auto pb-1"
+                    style={{ scrollbarWidth: "none", scrollSnapType: "x mandatory" }}
+                  >
+                    {popularItems.map((item) => (
+                      <PopularItemCard
+                        key={item.id}
+                        item={item}
+                        failedImageIds={failedImageIds}
+                        onImageError={handleImageError}
+                        onClick={() => handleItemClick(item)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {/* Stacked category sections — every category rendered; pills
                   scroll to them and highlight on scroll. */}
@@ -548,16 +653,15 @@ export function MarketLayout({
                       id={`market-cat-${cat.id}`}
                       style={{ scrollMarginTop: headerHeight + navHeight + 16 }}
                     >
-                      <h2 className="text-base font-semibold mb-3 pb-2 border-b" style={{ color: "var(--primary)", borderColor: "#E5E7EB" }}>
+                      <h2 className="text-base font-semibold mb-3" style={{ color: "var(--primary)" }}>
                         {cat.name}
                         <span className="ml-2 text-xs font-normal" style={{ color: "#9CA3AF" }}>({items.length})</span>
                       </h2>
-                      <div className={viewMode === "grid" ? "grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-3"}>
+                      <div className="grid gap-4 grid-cols-1 xl:grid-cols-2">
                         {items.map((item) => (
                           <MarketItemCard
                             key={item.id}
                             item={item}
-                            viewMode={viewMode}
                             failedImageIds={failedImageIds}
                             onImageError={handleImageError}
                             onClick={() => handleItemClick(item)}
@@ -601,6 +705,15 @@ export function MarketLayout({
         onItemSelect={handleItemClick}
       />
 
+      <StoreHoursModal
+        open={hoursModalOpen}
+        onOpenChange={setHoursModalOpen}
+        businessHours={rawBusinessHours}
+        timezone={locationTimezone}
+        storeName={storeName}
+        isStoreOpen={isStoreOpen}
+      />
+
       <AnimatePresence>
         {showScrollTop && (
           <motion.button
@@ -622,15 +735,79 @@ export function MarketLayout({
   );
 }
 
-function MarketItemCard({
+// "Popular" carousel card — image on top, name and price beneath, no card
+// chrome (Charcoal style). The + button overlays the image bottom-right.
+function PopularItemCard({
   item,
-  viewMode,
   failedImageIds,
   onImageError,
   onClick,
 }: {
   item: StorefrontItem;
-  viewMode: ViewMode;
+  failedImageIds: Set<string>;
+  onImageError: (id: string) => void;
+  onClick: () => void;
+}) {
+  const showImage = isValidImageSrc(item.image) && !failedImageIds.has(item.id);
+
+  return (
+    <div
+      onClick={onClick}
+      className="group shrink-0 w-40 sm:w-44 cursor-pointer"
+      style={{ scrollSnapAlign: "start" }}
+    >
+      <div
+        className="relative w-full aspect-square overflow-hidden"
+        style={{ backgroundColor: "#F3F4F6", borderRadius: "var(--radius)" }}
+      >
+        {showImage ? (
+          <Image
+            src={item.image!}
+            fill
+            alt={item.name}
+            className="object-cover"
+            sizes="176px"
+            onError={() => onImageError(item.id)}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <span className="text-3xl font-bold" style={{ color: "var(--primary)", opacity: 0.2 }}>
+              {item.name.charAt(0).toUpperCase()}
+            </span>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onClick(); }}
+          className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center rounded-full transition-all"
+          style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)" }}
+          aria-label={`Add ${item.name} to cart`}
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+
+      <h4
+        className="mt-2 text-sm font-medium line-clamp-2 group-hover:text-[color:var(--primary)] transition-colors"
+        style={{ color: "#111827" }}
+      >
+        {item.name}
+      </h4>
+      <span className="text-sm" style={{ color: "#111827" }}>
+        ${getStorefrontBrowsePrice(item).toFixed(2)}
+      </span>
+    </div>
+  );
+}
+
+// Single card layout: details on the left, photo on the right (Charcoal style).
+function MarketItemCard({
+  item,
+  failedImageIds,
+  onImageError,
+  onClick,
+}: {
+  item: StorefrontItem;
   failedImageIds: Set<string>;
   onImageError: (id: string) => void;
   onClick: () => void;
@@ -654,67 +831,6 @@ function MarketItemCard({
     e.currentTarget.style.transform = "translateY(0)";
   };
 
-  if (viewMode === "list") {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.25 }}
-        onClick={isSoldOut ? undefined : onClick}
-        onMouseEnter={isSoldOut ? undefined : handleEnter}
-        onMouseLeave={isSoldOut ? undefined : handleLeave}
-        className={`group flex items-center gap-4 p-3 overflow-hidden ${isSoldOut ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-        style={cardStyle}
-      >
-        <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden relative" style={{ backgroundColor: "#F3F4F6" }}>
-          {showImage ? (
-            <Image src={item.image!} fill alt={item.name} className="object-cover" sizes="64px" onError={() => onImageError(item.id)} />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <span className="text-xl font-bold" style={{ color: "var(--primary)", opacity: 0.25 }}>
-                {item.name.charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-sm line-clamp-1 group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#111827" }}>
-            {item.name}
-          </h4>
-          {item.description && (
-            <p className="text-xs line-clamp-1 mt-0.5" style={{ color: "#6B7280" }}>{item.description}</p>
-          )}
-          {(item.is_new || item.is_popular) && (
-            <div className="flex gap-1 mt-1">
-              {item.is_new && <span className="text-[10px] px-1.5 py-0.5 rounded-full border" style={{ color: "var(--primary)", borderColor: "var(--primary)" }}>New</span>}
-              {item.is_popular && <span className="text-[10px] px-1.5 py-0.5 rounded-full border" style={{ color: "var(--primary)", borderColor: "var(--primary)" }}>Popular</span>}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="flex flex-col items-end min-w-0 max-w-[110px]">
-            <span className="font-semibold text-sm truncate max-w-full" style={{ color: "#111827" }}>${getStorefrontBrowsePrice(item).toFixed(2)}</span>
-            {getStorefrontDeliveryPriceLabel(item) && (
-              <span className="text-[10px] truncate max-w-full" style={{ color: "#6B7280" }}>{getStorefrontDeliveryPriceLabel(item)}</span>
-            )}
-          </div>
-          {!isSoldOut && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onClick(); }}
-              className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full transition-all"
-              style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)" }}
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-      </motion.div>
-    );
-  }
-
-  // Grid card — vertical with image top
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -724,59 +840,70 @@ function MarketItemCard({
       onClick={isSoldOut ? undefined : onClick}
       onMouseEnter={isSoldOut ? undefined : handleEnter}
       onMouseLeave={isSoldOut ? undefined : handleLeave}
-      className={`group overflow-hidden flex flex-col ${isSoldOut ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+      className={`group relative flex items-stretch overflow-hidden ${isSoldOut ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
       style={cardStyle}
     >
-      <div className="w-full aspect-video relative overflow-hidden" style={{ backgroundColor: "#F3F4F6" }}>
-        {item.is_new && (
-          <span className="absolute top-2 left-2 z-10 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)" }}>
-            NEW
+      {/* Details — left */}
+      <div className="flex-1 min-w-0 p-4 flex flex-col">
+        <h4 className="font-semibold text-sm group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#111827" }}>
+          {item.name}
+        </h4>
+        <div className="flex flex-col mt-1">
+          <span className="font-semibold text-sm" style={{ color: "#111827" }}>
+            ${getStorefrontBrowsePrice(item).toFixed(2)}
           </span>
+          {getStorefrontDeliveryPriceLabel(item) && (
+            <span className="text-[10px]" style={{ color: "#6B7280" }}>{getStorefrontDeliveryPriceLabel(item)}</span>
+          )}
+        </div>
+        {item.description && (
+          <p className="text-xs line-clamp-3 mt-2" style={{ color: "#6B7280" }}>{item.description}</p>
         )}
-        {item.is_popular && !item.is_new && (
-          <span className="absolute top-2 left-2 z-10 text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: "#F59E0B", color: "#FFFFFF" }}>
-            POPULAR
-          </span>
-        )}
-        {showImage ? (
-          <Image src={item.image!} fill alt={item.name} className="object-cover group-hover:scale-105 transition-transform duration-500" sizes="(max-width: 768px) 100vw, 33vw" onError={() => onImageError(item.id)} />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <span className="text-3xl font-bold" style={{ color: "var(--primary)", opacity: 0.2 }}>{item.name.charAt(0).toUpperCase()}</span>
-          </div>
-        )}
-        {isSoldOut && (
-          <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.75)" }}>
-            <span className="text-xs font-semibold px-3 py-1 rounded-full" style={{ backgroundColor: "#F3F4F6", color: "#6B7280" }}>Sold Out</span>
+        {(item.is_new || item.is_popular) && (
+          <div className="flex gap-1 mt-2">
+            {item.is_new && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full border" style={{ color: "var(--primary)", borderColor: "var(--primary)" }}>New</span>
+            )}
+            {item.is_popular && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full border" style={{ color: "var(--primary)", borderColor: "var(--primary)" }}>Popular</span>
+            )}
           </div>
         )}
       </div>
-      <div className="p-3 flex flex-col flex-1">
-        <h4 className="font-semibold text-sm line-clamp-2 mb-0.5 group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#111827" }}>
-          {item.name}
-        </h4>
-        {item.description && (
-          <p className="text-xs line-clamp-2 flex-1 mb-2" style={{ color: "#6B7280" }}>{item.description}</p>
-        )}
-        <div className="flex items-center justify-between gap-2 mt-auto">
-          <div className="flex flex-col min-w-0">
-            <span className="font-semibold text-sm truncate max-w-full" style={{ color: "#111827" }}>${getStorefrontBrowsePrice(item).toFixed(2)}</span>
-            {getStorefrontDeliveryPriceLabel(item) && (
-              <span className="text-[10px] truncate max-w-full" style={{ color: "#6B7280" }}>{getStorefrontDeliveryPriceLabel(item)}</span>
-            )}
+
+      {/* Photo — right */}
+      <div className="relative w-32 sm:w-40 shrink-0 self-stretch" style={{ backgroundColor: "#F3F4F6" }}>
+        {showImage ? (
+          <Image
+            src={item.image!}
+            fill
+            alt={item.name}
+            className="object-cover"
+            sizes="160px"
+            onError={() => onImageError(item.id)}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <span className="text-3xl font-bold" style={{ color: "var(--primary)", opacity: 0.2 }}>
+              {item.name.charAt(0).toUpperCase()}
+            </span>
           </div>
-          {!isSoldOut && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onClick(); }}
-              className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full transition-all"
-              style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)" }}
-              aria-label={`Add ${item.name} to cart`}
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+        )}
+        {isSoldOut ? (
+          <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.75)" }}>
+            <span className="text-xs font-semibold px-3 py-1 rounded-full" style={{ backgroundColor: "#F3F4F6", color: "#6B7280" }}>Sold Out</span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onClick(); }}
+            className="absolute bottom-2 right-2 w-8 h-8 flex items-center justify-center rounded-full transition-all"
+            style={{ backgroundColor: "var(--primary)", color: "var(--primary-text)" }}
+            aria-label={`Add ${item.name} to cart`}
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </motion.div>
   );

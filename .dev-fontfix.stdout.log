@@ -1,0 +1,1020 @@
+▲ Next.js 16.2.12 (webpack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.115:3001
+- Environments: .env
+✓ Ready in 1585ms
+○ Compiling /instrumentation ...
+- Experiments (use with caution):
+  · clientTraceMetadata
+  · serverActions
+  ✓ useTypeScriptCli
+
+○ Compiling proxy ...
+Attention: Clerk collects telemetry data from its SDKs when connected to development instances.
+The data collected is used to inform Clerk's product roadmap.
+To learn more, including how to opt-out from the telemetry program, visit: https://clerk.com/docs/telemetry.
+
+○ Compiling /dashboard/menu/modifiers ...
+ GET /dashboard/menu/modifiers 200 in 3.1min (next.js: 2.4min, proxy.ts: 20.1s, application-code: 23.3s)
+ POST /dashboard/menu/modifiers 200 in 4.8s (next.js: 91ms, proxy.ts: 235ms, application-code: 4.5s)
+  └─ ƒ GetUserInfo() in 1000ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/menu/modifiers 200 in 834ms (next.js: 104ms, proxy.ts: 264ms, application-code: 465ms)
+  └─ ƒ getImpersonationContext() in 260ms ..//lib/admin/impersonation.ts
+ POST /dashboard/menu/modifiers 200 in 1025ms (next.js: 45ms, proxy.ts: 70ms, application-code: 910ms)
+  └─ ƒ GetUnreadTicketCounts() in 783ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/menu/modifiers 200 in 244ms (next.js: 38ms, proxy.ts: 59ms, application-code: 148ms)
+  └─ ƒ getImpersonationContext() in 13ms ..//lib/admin/impersonation.ts
+ POST /dashboard/menu/modifiers 200 in 1161ms (next.js: 34ms, proxy.ts: 53ms, application-code: 1074ms)
+  └─ ƒ GetModifierGroups("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "042e0d72-f669-4b58-b45d-680285ff6e3f") in 949ms ..//app/dashboard/actions/modifier-groups.ts
+ POST /dashboard/menu/modifiers 200 in 1281ms (next.js: 33ms, proxy.ts: 74ms, application-code: 1174ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1049ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/menu/modifiers 200 in 867ms (next.js: 50ms, proxy.ts: 79ms, application-code: 739ms)
+  └─ ƒ GetUnreadTicketCounts() in 568ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/menu/modifiers 200 in 823ms (next.js: 50ms, proxy.ts: 74ms, application-code: 699ms)
+  └─ ƒ GetUnreadTicketCounts() in 521ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/menu/modifiers 200 in 1433ms (next.js: 71ms, proxy.ts: 438ms, application-code: 925ms)
+  └─ ƒ GetUnreadTicketCounts() in 683ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/menu/modifiers 200 in 614ms (next.js: 31ms, proxy.ts: 52ms, application-code: 532ms)
+  └─ ƒ GetUnreadTicketCounts() in 388ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/menu/modifiers 200 in 1262ms (next.js: 46ms, proxy.ts: 65ms, application-code: 1150ms)
+  └─ ƒ GetModifierGroups("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 954ms ..//app/dashboard/actions/modifier-groups.ts
+ POST /dashboard/menu/modifiers 200 in 634ms (next.js: 33ms, proxy.ts: 52ms, application-code: 550ms)
+  └─ ƒ GetUnreadTicketCounts() in 429ms ..//app/dashboard/actions/support.ts
+○ Compiling /[...slug] ...
+ GET /dashboard/menu/modifiers 200 in 11.3s (next.js: 379ms, proxy.ts: 138ms, application-code: 10.8s)
+ GET /dashboard/menu/modifiers 200 in 10.4s (next.js: 136ms, proxy.ts: 123ms, application-code: 10.1s)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 58s (next.js: 46s, proxy.ts: 735ms, application-code: 10.5s)
+ POST /dashboard/menu/modifiers 200 in 2.5s (next.js: 43ms, proxy.ts: 98ms, application-code: 2.4s)
+  └─ ƒ GetUnreadTicketCounts() in 883ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/menu/modifiers 200 in 1180ms (next.js: 46ms, proxy.ts: 74ms, application-code: 1060ms)
+  └─ ƒ GetCurrentUserRoleInfo() in 913ms ..//app/dashboard/actions/role-check.ts
+ POST /dashboard/menu/modifiers 200 in 777ms (next.js: 41ms, proxy.ts: 70ms, application-code: 666ms)
+  └─ ƒ GetUnreadTicketCounts() in 527ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/menu/modifiers 200 in 760ms (next.js: 46ms, proxy.ts: 60ms, application-code: 654ms)
+  └─ ƒ GetRecipesForModifierItem("d957a168-6e1e-465b-8437-834e6926060a") in 388ms ..//app/dashboard/actions/modifier-recipes.ts
+ POST /dashboard/menu/modifiers 200 in 2.3s (next.js: 69ms, proxy.ts: 77ms, application-code: 2.2s)
+  └─ ƒ GetMenuItems("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1947ms ..//app/dashboard/actions/menu-items.ts
+ POST /dashboard/menu/modifiers 200 in 884ms (next.js: 30ms, proxy.ts: 68ms, application-code: 786ms)
+  └─ ƒ GetLocationModifierItemIds("36dd603a-c127-4205-8298-7ca740bdf6d5", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 659ms ..//app/dashboard/actions/modifier-assignments.ts
+ POST /dashboard/menu/modifiers 200 in 2.4s (next.js: 42ms, proxy.ts: 148ms, application-code: 2.2s)
+  └─ ƒ GetMenuItems("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1995ms ..//app/dashboard/actions/menu-items.ts
+ POST /dashboard/menu/modifiers 200 in 570ms (next.js: 42ms, proxy.ts: 69ms, application-code: 459ms)
+  └─ ƒ GetLocationModifierItemIds("36dd603a-c127-4205-8298-7ca740bdf6d5", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 279ms ..//app/dashboard/actions/modifier-assignments.ts
+ POST /dashboard/menu/modifiers 200 in 903ms (next.js: 47ms, proxy.ts: 66ms, application-code: 790ms)
+  └─ ƒ GetUnreadTicketCounts() in 650ms ..//app/dashboard/actions/support.ts
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 3.7s (next.js: 212ms, proxy.ts: 599ms, application-code: 2.8s)
+ POST /dashboard/menu/modifiers 200 in 4.5s (next.js: 62ms, proxy.ts: 109ms, application-code: 4.4s)
+  └─ ƒ GetMenuItems("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 3917ms ..//app/dashboard/actions/menu-items.ts
+ POST /dashboard/menu/modifiers 200 in 1855ms (next.js: 34ms, proxy.ts: 50ms, application-code: 1771ms)
+  └─ ƒ GetLocationModifierItemIds("36dd603a-c127-4205-8298-7ca740bdf6d5", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1623ms ..//app/dashboard/actions/modifier-assignments.ts
+ POST /dashboard/menu/modifiers 200 in 4.9s (next.js: 42ms, proxy.ts: 67ms, application-code: 4.8s)
+  └─ ƒ GetMenuItems("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 4565ms ..//app/dashboard/actions/menu-items.ts
+ POST /dashboard/menu/modifiers 200 in 2.3s (next.js: 46ms, proxy.ts: 62ms, application-code: 2.2s)
+  └─ ƒ GetLocationModifierItemIds("36dd603a-c127-4205-8298-7ca740bdf6d5", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2063ms ..//app/dashboard/actions/modifier-assignments.ts
+ POST /dashboard/menu/modifiers 200 in 1407ms (next.js: 76ms, proxy.ts: 61ms, application-code: 1270ms)
+  └─ ƒ GetUnreadTicketCounts() in 1073ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/menu/modifiers 200 in 2.9s (next.js: 59ms, proxy.ts: 110ms, application-code: 2.7s)
+  └─ ƒ GetCategories("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 2497ms ..//app/dashboard/actions/categories.ts
+ POST /dashboard/menu/modifiers 200 in 678ms (next.js: 44ms, proxy.ts: 71ms, application-code: 563ms)
+  └─ ƒ GetModifierGroupCategories("36dd603a-c127-4205-8298-7ca740bdf6d5", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 414ms ..//app/dashboard/actions/modifier-assignments.ts
+ POST /dashboard/menu/modifiers 200 in 1818ms (next.js: 43ms, proxy.ts: 64ms, application-code: 1711ms)
+  └─ ƒ GetCategories("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 1569ms ..//app/dashboard/actions/categories.ts
+ POST /dashboard/menu/modifiers 200 in 1411ms (next.js: 56ms, proxy.ts: 63ms, application-code: 1292ms)
+  └─ ƒ GetModifierGroupCategories("36dd603a-c127-4205-8298-7ca740bdf6d5", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1045ms ..//app/dashboard/actions/modifier-assignments.ts
+ POST /dashboard/menu/modifiers 200 in 1559ms (next.js: 72ms, proxy.ts: 108ms, application-code: 1379ms)
+  └─ ƒ updateModifierGroup({"displayOrder":0,"modifierGroupId":"e733c738-773e-4df4-b89e-f2c8f053a565"}) in 1112ms ..//app/dashboard/actions/menu-items-rpc.ts
+ POST /dashboard/menu/modifiers 200 in 2.0s (next.js: 59ms, proxy.ts: 96ms, application-code: 1883ms)
+  └─ ƒ updateModifierGroup({"displayOrder":1,"modifierGroupId":"36dd603a-c127-4205-8298-7ca740bdf6d5"}) in 1707ms ..//app/dashboard/actions/menu-items-rpc.ts
+ POST /dashboard/menu/modifiers 200 in 5.4s (next.js: 39ms, proxy.ts: 51ms, application-code: 5.3s)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "d54700e3-3110-48a8-b33d-43f963330378", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":2,"is_active":true}) in 5098ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 2.1s (next.js: 49ms, proxy.ts: 51ms, application-code: 2.0s)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "f2a3b4c5-d6e7-4f8a-9b0c-1d2e3f4a5b6c", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":3,"is_active":true}) in 1870ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 2.4s (next.js: 64ms, proxy.ts: 605ms, application-code: 1696ms)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "2d136b29-32f3-4df0-b32c-09c46d8b8e15", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":4,"is_active":true}) in 1466ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 2.0s (next.js: 46ms, proxy.ts: 77ms, application-code: 1906ms)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":5,"is_active":true}) in 1760ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 1638ms (next.js: 48ms, proxy.ts: 80ms, application-code: 1510ms)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "a3b4c5d6-e7f8-4a9b-0c1d-2e3f4a5b6c7d", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":6,"is_active":true}) in 1357ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 6.1s (next.js: 55ms, proxy.ts: 102ms, application-code: 6.0s)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "39ccf3eb-0b86-4b71-b370-c9c7c8eae65f", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":7,"is_active":true}) in 5781ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 1875ms (next.js: 52ms, proxy.ts: 98ms, application-code: 1725ms)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "d0e1f2a3-b4c5-4d6e-7f8a-9b0c1d2e3f4a", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":8,"is_active":true}) in 1527ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 1625ms (next.js: 40ms, proxy.ts: 60ms, application-code: 1525ms)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "b4c5d6e7-f8a9-4b0c-1d2e-3f4a5b6c7d8e", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":9,"is_active":true}) in 1362ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 1826ms (next.js: 79ms, proxy.ts: 97ms, application-code: 1651ms)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "43b97a48-7a85-45d6-a327-8daebecb75df", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":10,"is_active":true}) in 1431ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 2.4s (next.js: 38ms, proxy.ts: 70ms, application-code: 2.3s)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "f9fc3cbb-c144-4620-9ec4-0e3cba6b1a0e", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":11,"is_active":true}) in 2187ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 1644ms (next.js: 35ms, proxy.ts: 62ms, application-code: 1548ms)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "a30043d4-4d22-44ef-89f2-be96dea7f185", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":12,"is_active":true}) in 1427ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 1663ms (next.js: 40ms, proxy.ts: 52ms, application-code: 1571ms)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "d81e1b99-5512-4402-b619-9d770feab221", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":13,"is_active":true}) in 1425ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 1801ms (next.js: 34ms, proxy.ts: 66ms, application-code: 1701ms)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "99d6374b-20d2-45af-b03f-a84b62d5577c", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":14,"is_active":true}) in 1566ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 2.5s (next.js: 50ms, proxy.ts: 161ms, application-code: 2.3s)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "414f90c6-ba0d-4719-ab89-13ff477d1767", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":15,"is_active":true}) in 2169ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 1619ms (next.js: 33ms, proxy.ts: 51ms, application-code: 1536ms)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "c279f0ee-85bf-4327-afcc-15b1df4cad19", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":16,"is_active":true}) in 1402ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 1797ms (next.js: 38ms, proxy.ts: 52ms, application-code: 1707ms)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "39dc29f0-4a0f-40d4-b103-ce7f82602851", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":17,"is_active":true}) in 1563ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 1653ms (next.js: 38ms, proxy.ts: 63ms, application-code: 1553ms)
+  └─ ƒ UpsertLocationModifierGroupOverride("8835e749-9bbf-4405-b4a4-7f28a56f990a", "93c5f823-0bf0-418e-9aa4-fc5986ec6b28", "2add44cb-f498-4653-aca3-a8f0ca258e70", {"display_order":18,"is_active":true}) in 1434ms ..//app/dashboard/actions/location-modifier-overrides.ts
+ POST /dashboard/menu/modifiers 200 in 671ms (next.js: 66ms, proxy.ts: 58ms, application-code: 547ms)
+  └─ ƒ updateModifierGroup({"displayOrder":19,"modifierGroupId":"467f6a8e-6cd6-412b-b047-a08edf0763aa"}) in 292ms ..//app/dashboard/actions/menu-items-rpc.ts
+ POST /dashboard/menu/modifiers 200 in 464ms (next.js: 33ms, proxy.ts: 52ms, application-code: 379ms)
+  └─ ƒ updateModifierGroup({"displayOrder":20,"modifierGroupId":"8f9edbc9-9cba-4400-89eb-137649932816"}) in 249ms ..//app/dashboard/actions/menu-items-rpc.ts
+ POST /dashboard/menu/modifiers 200 in 1893ms (next.js: 88ms, proxy.ts: 73ms, application-code: 1732ms)
+  └─ ƒ GetModifierGroups("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1555ms ..//app/dashboard/actions/modifier-groups.ts
+○ Compiling /dashboard/staff ...
+ GET /dashboard/staff 200 in 48s (next.js: 34.6s, proxy.ts: 1772ms, application-code: 11.6s)
+ GET /dashboard/staff 200 in 3.2s (next.js: 28ms, proxy.ts: 2.9s, application-code: 267ms)
+ POST /dashboard/menu/modifiers 200 in 5.4s (next.js: 290ms, proxy.ts: 1276ms, application-code: 3.8s)
+  └─ ƒ GetUnreadTicketCounts() in 2630ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/staff 200 in 2.3s (next.js: 29ms, proxy.ts: 56ms, application-code: 2.3s)
+  └─ ƒ GetMerchantRoles() in 1975ms ..//app/dashboard/actions/staff-invite.ts
+ POST /dashboard/menu/modifiers 200 in 2.7s (next.js: 30ms, proxy.ts: 60ms, application-code: 2.6s)
+ POST /dashboard/staff 200 in 4.0s (next.js: 31ms, proxy.ts: 56ms, application-code: 3.9s)
+  └─ ƒ GetUserInfo() in 3295ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/staff 200 in 6.0s (next.js: 28ms, proxy.ts: 55ms, application-code: 5.9s)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 5696ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/menu/modifiers 200 in 6.9s (next.js: 39ms, proxy.ts: 48ms, application-code: 6.8s)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 6492ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/staff 200 in 4.7s (next.js: 45ms, proxy.ts: 64ms, application-code: 4.6s)
+  └─ ƒ GetPendingInvites("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 4375ms ..//app/dashboard/actions/invites.ts
+ POST /dashboard/menu/modifiers 200 in 5.7s (next.js: 108ms, proxy.ts: 188ms, application-code: 5.4s)
+ POST /dashboard/staff 200 in 17.2s (next.js: 25ms, proxy.ts: 46ms, application-code: 17.1s)
+  └─ ƒ GetOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a", undefined) in 16103ms ..//app/dashboard/actions/order.ts
+ POST /dashboard/menu/modifiers 200 in 10.7s (next.js: 30ms, proxy.ts: 55ms, application-code: 10.6s)
+  └─ ƒ GetModifierGroups("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 10412ms ..//app/dashboard/actions/modifier-groups.ts
+ GET /dashboard/staff 200 in 401ms (next.js: 28ms, proxy.ts: 48ms, application-code: 326ms)
+ POST /dashboard/menu/modifiers 200 in 3.0s (next.js: 37ms, proxy.ts: 57ms, application-code: 2.9s)
+  └─ ƒ GetUnreadTicketCounts() in 2728ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/staff 200 in 3.9s (next.js: 26ms, proxy.ts: 51ms, application-code: 3.8s)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 3500ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 2.4s (next.js: 28ms, proxy.ts: 47ms, application-code: 2.3s)
+  └─ ƒ GetPendingInvites("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 2043ms ..//app/dashboard/actions/invites.ts
+○ Compiling /dashboard/staff/timesheets ...
+ GET /dashboard/staff/timesheets 200 in 48s (next.js: 43s, proxy.ts: 68ms, application-code: 4.8s)
+ POST /dashboard/staff/timesheets 200 in 3.6s (next.js: 31ms, proxy.ts: 67ms, application-code: 3.5s)
+  └─ ƒ GetTimesheetResources("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 2138ms ..//app/dashboard/actions/timesheets.ts
+ POST /dashboard/staff/timesheets 200 in 1529ms (next.js: 25ms, proxy.ts: 80ms, application-code: 1424ms)
+  └─ ƒ GetTimesheets("org_34LN9aMJGO4jNllGTvHH4CLB5gq", {"dateFrom":"2026-08-08T21:00:00.000Z","dateTo":"2026-08-15T20:59:59.999Z","locationIds":["8835e749-9bbf-4405-b4a4-7f28a56f990a"]}) in 1176ms ..//app/dashboard/actions/timesheets.ts
+ POST /dashboard/staff 200 in 65s (next.js: 28ms, proxy.ts: 53ms, application-code: 65s)
+  └─ ƒ GetOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a", undefined) in 63774ms ..//app/dashboard/actions/order.ts
+○ Compiling /[...slug] ...
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 41s (next.js: 22.8s, proxy.ts: 76ms, application-code: 18.4s)
+ POST /dashboard/staff/timesheets 200 in 7.1s (next.js: 215ms, proxy.ts: 5.4s, application-code: 1507ms)
+  └─ ƒ GetUnreadTicketCounts() in 451ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/staff/timesheets 200 in 1002ms (next.js: 35ms, proxy.ts: 116ms, application-code: 851ms)
+  └─ ƒ GetTimesheets("org_34LN9aMJGO4jNllGTvHH4CLB5gq", {"dateFrom":"2026-07-15T21:00:00.000Z","dateTo":"2026-08-14T20:59:59.999Z","locationIds":["8835e749-9bbf-4405-b4a4-7f28a56f990a"]}) in 600ms ..//app/dashboard/actions/timesheets.ts
+ POST /dashboard/staff/timesheets 200 in 1002ms (next.js: 27ms, proxy.ts: 52ms, application-code: 923ms)
+  └─ ƒ GetUnreadTicketCounts() in 549ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/staff 200 in 789ms (next.js: 342ms, proxy.ts: 51ms, application-code: 397ms)
+ POST /dashboard/staff 200 in 1247ms (next.js: 34ms, proxy.ts: 57ms, application-code: 1155ms)
+  └─ ƒ GetUserInfo() in 482ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/staff 200 in 682ms (next.js: 28ms, proxy.ts: 58ms, application-code: 596ms)
+  └─ ƒ GetMerchantRoles() in 291ms ..//app/dashboard/actions/staff-invite.ts
+ POST /dashboard/staff 200 in 1529ms (next.js: 30ms, proxy.ts: 65ms, application-code: 1434ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1118ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/staff 200 in 1764ms (next.js: 35ms, proxy.ts: 58ms, application-code: 1671ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1260ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 19.4s (next.js: 43ms, proxy.ts: 116ms, application-code: 19.2s)
+  └─ ƒ GetOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a", undefined) in 17444ms ..//app/dashboard/actions/order.ts
+ POST /dashboard/staff 200 in 1453ms (next.js: 43ms, proxy.ts: 78ms, application-code: 1332ms)
+  └─ ƒ GetPendingInvites("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 1024ms ..//app/dashboard/actions/invites.ts
+ POST /dashboard/staff 200 in 656ms (next.js: 34ms, proxy.ts: 67ms, application-code: 555ms)
+  └─ ƒ GetUnreadTicketCounts() in 245ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/staff 200 in 4.7s (next.js: 198ms, proxy.ts: 330ms, application-code: 4.2s)
+  └─ ƒ checkInviteEmail("haidar.saleh@lau.edu", "org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 3700ms ..//app/dashboard/actions/check-invite-email.ts
+ GET /dashboard/staff 200 in 9.4s (next.js: 575ms, proxy.ts: 4.9s, application-code: 4.0s)
+○ Compiling /[...slug] ...
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 16.8s (next.js: 14.0s, proxy.ts: 75ms, application-code: 2.7s)
+ POST /dashboard/staff 200 in 3.9s (next.js: 294ms, proxy.ts: 1375ms, application-code: 2.3s)
+  └─ ƒ GetUnreadTicketCounts() in 1079ms ..//app/dashboard/actions/support.ts
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 1714ms (next.js: 120ms, proxy.ts: 71ms, application-code: 1523ms)
+ GET /dashboard/staff 200 in 2.4s (next.js: 350ms, proxy.ts: 90ms, application-code: 1938ms)
+ POST /dashboard/staff 200 in 5.9s (next.js: 124ms, proxy.ts: 221ms, application-code: 5.6s)
+  └─ ƒ GetUnreadTicketCounts() in 2253ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/staff 200 in 7.7s (next.js: 674ms, proxy.ts: 3.0s, application-code: 4.0s)
+  └─ ƒ GetStaffMember("913e0935-7a43-49cb-81c6-aaf1ecf72e60") in 3110ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 797ms (next.js: 39ms, proxy.ts: 95ms, application-code: 663ms)
+  └─ ƒ GetMerchantRoles() in 250ms ..//app/dashboard/actions/staff-invite.ts
+ POST /dashboard/staff 200 in 8.8s (next.js: 507ms, proxy.ts: 6.5s, application-code: 1814ms)
+  └─ ƒ GetUserInfo() in 663ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/staff 200 in 715ms (next.js: 28ms, proxy.ts: 56ms, application-code: 631ms)
+  └─ ƒ GetMerchantRoles() in 293ms ..//app/dashboard/actions/staff-invite.ts
+ POST /dashboard/staff 200 in 1584ms (next.js: 30ms, proxy.ts: 65ms, application-code: 1488ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1145ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/staff 200 in 1348ms (next.js: 25ms, proxy.ts: 47ms, application-code: 1275ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1018ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 8.0s (next.js: 37ms, proxy.ts: 57ms, application-code: 7.9s)
+  └─ ƒ GetOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a", undefined) in 6995ms ..//app/dashboard/actions/order.ts
+ POST /dashboard/staff 200 in 1111ms (next.js: 26ms, proxy.ts: 34ms, application-code: 1052ms)
+  └─ ƒ GetPendingInvites("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 900ms ..//app/dashboard/actions/invites.ts
+ GET /dashboard/staff 200 in 1815ms (next.js: 14ms, proxy.ts: 41ms, application-code: 1760ms)
+ POST /dashboard/staff 200 in 4.6s (next.js: 202ms, proxy.ts: 2.8s, application-code: 1576ms)
+  └─ ƒ GetUnreadTicketCounts() in 893ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/staff 200 in 3.5s (next.js: 649ms, proxy.ts: 218ms, application-code: 2.6s)
+  └─ ƒ GetStaffMember("913e0935-7a43-49cb-81c6-aaf1ecf72e60") in 1253ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 3.1s (next.js: 42ms, proxy.ts: 65ms, application-code: 3.0s)
+  └─ ƒ GetAuditLogs("org_34LN9aMJGO4jNllGTvHH4CLB5gq", {"staff_profile_id":"63d12e30-cae2-4359-a99f-2907572734fc"}, 20) in 2659ms ..//app/dashboard/actions/audit-logs.ts
+ GET /dashboard/staff 200 in 6.1s (next.js: 35ms, proxy.ts: 79ms, application-code: 5.9s)
+ POST /dashboard/staff 200 in 7.1s (next.js: 138ms, proxy.ts: 4.5s, application-code: 2.4s)
+  └─ ƒ GetStaffMember("d6002ef2-de42-4e8b-94c9-d6f956d51eb1") in 1371ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 697ms (next.js: 31ms, proxy.ts: 52ms, application-code: 614ms)
+  └─ ƒ GetMerchantRoles() in 281ms ..//app/dashboard/actions/staff-invite.ts
+ POST /dashboard/staff 200 in 2.3s (next.js: 34ms, proxy.ts: 55ms, application-code: 2.2s)
+  └─ ƒ DeactivateStaffMember("81e08427-8afb-4d8c-be1a-a8bf51025ae5", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1593ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 1449ms (next.js: 32ms, proxy.ts: 57ms, application-code: 1359ms)
+  └─ ƒ GetStaffMember("d6002ef2-de42-4e8b-94c9-d6f956d51eb1") in 1063ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 1061ms (next.js: 27ms, proxy.ts: 50ms, application-code: 984ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 717ms ..//app/dashboard/actions/unified-staff.ts
+○ Compiling /dashboard/schedules ...
+ GET /dashboard/schedules 200 in 92s (next.js: 89s, proxy.ts: 48ms, application-code: 3.5s)
+ POST /dashboard/schedules 200 in 2.9s (next.js: 54ms, proxy.ts: 1101ms, application-code: 1718ms)
+  └─ ƒ GetUnreadTicketCounts() in 568ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules 200 in 771ms (next.js: 29ms, proxy.ts: 44ms, application-code: 699ms)
+  └─ ƒ GetUserInfo() in 326ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/staff 200 in 4.0s (next.js: 245ms, proxy.ts: 43ms, application-code: 3.7s)
+  └─ ƒ GetStaffMember("d6002ef2-de42-4e8b-94c9-d6f956d51eb1") in 3036ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/schedules 200 in 4.5s (next.js: 27ms, proxy.ts: 50ms, application-code: 4.4s)
+ GET /dashboard/schedules 200 in 616ms (next.js: 32ms, proxy.ts: 67ms, application-code: 517ms)
+ GET /dashboard/schedules 200 in 4.2s (next.js: 531ms, proxy.ts: 98ms, application-code: 3.5s)
+ POST /dashboard/schedules 200 in 4.6s (next.js: 32ms, proxy.ts: 47ms, application-code: 4.5s)
+  └─ ƒ GetUnreadTicketCounts() in 3351ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules 200 in 957ms (next.js: 26ms, proxy.ts: 47ms, application-code: 884ms)
+  └─ ƒ GetUnreadTicketCounts() in 461ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules 200 in 1269ms (next.js: 27ms, proxy.ts: 435ms, application-code: 806ms)
+  └─ ƒ GetUnreadTicketCounts() in 445ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules 200 in 1476ms (next.js: 73ms, proxy.ts: 47ms, application-code: 1356ms)
+  └─ ƒ GetUnreadTicketCounts() in 937ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules 200 in 976ms (next.js: 26ms, proxy.ts: 46ms, application-code: 904ms)
+  └─ ƒ GetUnreadTicketCounts() in 464ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules 200 in 1336ms (next.js: 30ms, proxy.ts: 422ms, application-code: 884ms)
+  └─ ƒ GetUnreadTicketCounts() in 456ms ..//app/dashboard/actions/support.ts
+○ Compiling /dashboard/schedules/templates ...
+ GET /dashboard/schedules/templates 200 in 56s (next.js: 52s, proxy.ts: 70ms, application-code: 3.8s)
+ GET /dashboard/schedules/templates 200 in 1666ms (next.js: 59ms, proxy.ts: 174ms, application-code: 1434ms)
+ GET /dashboard/schedules 200 in 3.4s (next.js: 263ms, proxy.ts: 669ms, application-code: 2.5s)
+ GET /dashboard/schedules/templates 200 in 5.2s (next.js: 430ms, proxy.ts: 114ms, application-code: 4.7s)
+○ Compiling /dashboard/schedules/templates/create ...
+ GET /dashboard/schedules/templates/create 200 in 44s (next.js: 40s, proxy.ts: 64ms, application-code: 3.5s)
+ GET /dashboard/schedules/templates/create 200 in 2.1s (next.js: 46ms, proxy.ts: 134ms, application-code: 1888ms)
+ GET /dashboard/schedules/templates/create 200 in 853ms (next.js: 29ms, proxy.ts: 70ms, application-code: 753ms)
+ POST /dashboard/schedules/templates 200 in 3.3s (next.js: 172ms, proxy.ts: 663ms, application-code: 2.4s)
+  └─ ƒ GetUnreadTicketCounts() in 1327ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 1729ms (next.js: 56ms, proxy.ts: 66ms, application-code: 1607ms)
+  └─ ƒ GetUserInfo() in 755ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/staff 200 in 1731ms (next.js: 271ms, proxy.ts: 71ms, application-code: 1388ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 820ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/schedules/templates 200 in 3.5s (next.js: 947ms, proxy.ts: 94ms, application-code: 2.4s)
+ GET /dashboard/schedules/templates/create 200 in 786ms (next.js: 33ms, proxy.ts: 78ms, application-code: 675ms)
+ POST /dashboard/schedules/templates/create 200 in 1848ms (next.js: 32ms, proxy.ts: 475ms, application-code: 1341ms)
+  └─ ƒ GetUnreadTicketCounts() in 620ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/schedules/templates 200 in 926ms (next.js: 37ms, proxy.ts: 114ms, application-code: 774ms)
+ GET /dashboard/schedules/templates/create 200 in 1044ms (next.js: 40ms, proxy.ts: 72ms, application-code: 931ms)
+ POST /dashboard/schedules/templates/create 200 in 2.0s (next.js: 38ms, proxy.ts: 139ms, application-code: 1827ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1266ms ..//app/dashboard/actions/unified-staff.ts
+ GET /dashboard/schedules/templates/create 200 in 719ms (next.js: 34ms, proxy.ts: 59ms, application-code: 626ms)
+ POST /dashboard/schedules/templates/create 200 in 1680ms (next.js: 40ms, proxy.ts: 72ms, application-code: 1568ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1038ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/schedules/templates/create 200 in 2.8s (next.js: 419ms, proxy.ts: 201ms, application-code: 2.2s)
+  └─ ƒ GetUnreadTicketCounts() in 1240ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/schedules/templates/create 200 in 1285ms (next.js: 34ms, proxy.ts: 69ms, application-code: 1182ms)
+ POST /dashboard/schedules/templates/create 200 in 1793ms (next.js: 186ms, proxy.ts: 69ms, application-code: 1538ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1019ms ..//app/dashboard/actions/unified-staff.ts
+ GET /dashboard/schedules/templates 200 in 964ms (next.js: 212ms, proxy.ts: 129ms, application-code: 622ms)
+ GET /dashboard/schedules/templates 200 in 5.7s (next.js: 554ms, proxy.ts: 99ms, application-code: 5.0s)
+ POST /dashboard/schedules/templates 200 in 2.8s (next.js: 32ms, proxy.ts: 62ms, application-code: 2.7s)
+  └─ ƒ GetUnreadTicketCounts() in 1486ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/schedules/templates 200 in 1536ms (next.js: 151ms, proxy.ts: 460ms, application-code: 925ms)
+○ Compiling /dashboard/schedules/templates/[templateId] ...
+ GET /dashboard/schedules 200 in 10.2s (next.js: 749ms, proxy.ts: 85ms, application-code: 9.4s)
+ GET /dashboard/schedules/templates/fe5a0da4-7aa2-4510-b2a0-70c3baebf9e2 200 in 107s (proxy.ts: 89ms)
+○ Compiling /dashboard/schedules/templates/[templateId] ...
+○ Compiling /_error ...
+ GET /dashboard/schedules 200 in 7.3s (next.js: 292ms, proxy.ts: 3.6s, application-code: 3.5s)
+○ Compiling /sign-in/[[...sign-in]] ...
+ GET /dashboard/schedules/templates 200 in 10.4s (next.js: 259ms, proxy.ts: 2.8s, application-code: 7.4s)
+ POST /dashboard/schedules/templates 200 in 2.6s (next.js: 78ms, proxy.ts: 107ms, application-code: 2.4s)
+  └─ ƒ getImpersonationContext() in 8ms ..//lib/admin/impersonation.ts
+▲ Next.js 16.2.12 (webpack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.115:3001
+- Environments: .env
+✓ Ready in 1350ms
+○ Compiling /instrumentation ...
+- Experiments (use with caution):
+  · clientTraceMetadata
+  · serverActions
+  ✓ useTypeScriptCli
+
+○ Compiling proxy ...
+Attention: Clerk collects telemetry data from its SDKs when connected to development instances.
+The data collected is used to inform Clerk's product roadmap.
+To learn more, including how to opt-out from the telemetry program, visit: https://clerk.com/docs/telemetry.
+
+○ Compiling /dashboard/schedules/[scheduleId] ...
+ GET /dashboard/schedules/136541b6-c4c5-4bff-a07b-02139cb23f6d 200 in 4.0min (next.js: 3.7min, proxy.ts: 9.0s, application-code: 5.2s)
+○ Compiling /dashboard/staff ...
+ GET /dashboard/staff 200 in 80s (next.js: 56s, proxy.ts: 1689ms, application-code: 21.8s)
+ POST /sign-in 200 in 107s (next.js: 73s, proxy.ts: 27.3s, application-code: 6.7s)
+ POST /sign-in 200 in 107s (next.js: 73s, proxy.ts: 26.7s, application-code: 6.9s)
+ POST /dashboard/staff 200 in 5.7s (next.js: 37ms, proxy.ts: 163ms, application-code: 5.5s)
+  └─ ƒ GetUserInfo() in 812ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/staff 200 in 846ms (next.js: 66ms, proxy.ts: 52ms, application-code: 728ms)
+  └─ ƒ getImpersonationContext() in 456ms ..//lib/admin/impersonation.ts
+ POST /dashboard/staff 200 in 686ms (next.js: 35ms, proxy.ts: 56ms, application-code: 595ms)
+  └─ ƒ GetUnreadTicketCounts() in 300ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/staff 200 in 667ms (next.js: 54ms, proxy.ts: 65ms, application-code: 548ms)
+  └─ ƒ GetMerchantRoles() in 267ms ..//app/dashboard/actions/staff-invite.ts
+ POST /dashboard/staff 200 in 411ms (next.js: 33ms, proxy.ts: 45ms, application-code: 332ms)
+  └─ ƒ getImpersonationContext() in 44ms ..//lib/admin/impersonation.ts
+ POST /dashboard/staff 200 in 10.8s (next.js: 35ms, proxy.ts: 53ms, application-code: 10.7s)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 7431ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/staff 200 in 10.0s (next.js: 431ms, proxy.ts: 1075ms, application-code: 8.5s)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 6428ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 10.2s (next.js: 914ms, proxy.ts: 727ms, application-code: 8.6s)
+  └─ ƒ GetOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a", undefined) in 6556ms ..//app/dashboard/actions/order.ts
+ POST /dashboard/staff 200 in 1223ms (next.js: 17ms, proxy.ts: 45ms, application-code: 1161ms)
+  └─ ƒ GetPendingInvites("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 1014ms ..//app/dashboard/actions/invites.ts
+○ Compiling /dashboard/staff/timesheets ...
+ GET /dashboard/staff/timesheets 200 in 52s (next.js: 41s, proxy.ts: 104ms, application-code: 10.4s)
+ POST /dashboard/staff/timesheets 200 in 3.9s (next.js: 37ms, proxy.ts: 1928ms, application-code: 1929ms)
+  └─ ƒ GetUnreadTicketCounts() in 564ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/staff/timesheets 200 in 1247ms (next.js: 47ms, proxy.ts: 161ms, application-code: 1039ms)
+  └─ ƒ GetTimesheetResources("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 575ms ..//app/dashboard/actions/timesheets.ts
+ POST /dashboard/staff/timesheets 200 in 688ms (next.js: 32ms, proxy.ts: 59ms, application-code: 596ms)
+  └─ ƒ GetTimesheets("org_34LN9aMJGO4jNllGTvHH4CLB5gq", {"dateFrom":"2026-08-08T21:00:00.000Z","dateTo":"2026-08-15T20:59:59.999Z","locationIds":["8835e749-9bbf-4405-b4a4-7f28a56f990a"]}) in 230ms ..//app/dashboard/actions/timesheets.ts
+ POST /dashboard/staff/timesheets 200 in 1729ms (next.js: 33ms, proxy.ts: 59ms, application-code: 1637ms)
+  └─ ƒ GetTimesheets("org_34LN9aMJGO4jNllGTvHH4CLB5gq", {"dateFrom":"2026-07-15T21:00:00.000Z","dateTo":"2026-08-14T20:59:59.999Z","locationIds":["8835e749-9bbf-4405-b4a4-7f28a56f990a"]}) in 459ms ..//app/dashboard/actions/timesheets.ts
+○ Compiling /[...slug] ...
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 48s (next.js: 35.8s, proxy.ts: 101ms, application-code: 12.5s)
+ POST /dashboard/staff/timesheets 200 in 6.8s (next.js: 527ms, proxy.ts: 4.8s, application-code: 1556ms)
+  └─ ƒ GetUnreadTicketCounts() in 730ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/staff/timesheets 200 in 2.9s (next.js: 36ms, proxy.ts: 61ms, application-code: 2.9s)
+ GET /dashboard/staff 200 in 826ms (next.js: 291ms, proxy.ts: 64ms, application-code: 471ms)
+ POST /dashboard/staff 200 in 1781ms (next.js: 39ms, proxy.ts: 62ms, application-code: 1680ms)
+  └─ ƒ GetUserInfo() in 639ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/staff 200 in 857ms (next.js: 39ms, proxy.ts: 82ms, application-code: 736ms)
+  └─ ƒ GetMerchantRoles() in 378ms ..//app/dashboard/actions/staff-invite.ts
+ POST /dashboard/staff 200 in 1481ms (next.js: 27ms, proxy.ts: 52ms, application-code: 1402ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1050ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/staff 200 in 1264ms (next.js: 31ms, proxy.ts: 50ms, application-code: 1182ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 810ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 28.2s (next.js: 112ms, proxy.ts: 301ms, application-code: 27.8s)
+  └─ ƒ GetOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a", undefined) in 25059ms ..//app/dashboard/actions/order.ts
+ POST /dashboard/staff 200 in 1764ms (next.js: 94ms, proxy.ts: 176ms, application-code: 1494ms)
+  └─ ƒ GetPendingInvites("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 1071ms ..//app/dashboard/actions/invites.ts
+ POST /dashboard/staff 200 in 1951ms (next.js: 30ms, proxy.ts: 53ms, application-code: 1867ms)
+  └─ ƒ checkInviteEmail("haidar.saleh@lau.edu", "org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 1531ms ..//app/dashboard/actions/check-invite-email.ts
+ POST /dashboard/staff 200 in 885ms (next.js: 44ms, proxy.ts: 69ms, application-code: 772ms)
+  └─ ƒ GetUnreadTicketCounts() in 443ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/staff 200 in 1879ms (next.js: 34ms, proxy.ts: 76ms, application-code: 1768ms)
+  └─ ƒ GetStaffMember("d80242e5-1cff-4960-b4a8-a5083040789f") in 1361ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 1100ms (next.js: 33ms, proxy.ts: 56ms, application-code: 1011ms)
+  └─ ƒ GetMerchantRoles() in 479ms ..//app/dashboard/actions/staff-invite.ts
+ POST /dashboard/staff 200 in 2.7s (next.js: 43ms, proxy.ts: 86ms, application-code: 2.5s)
+  └─ ƒ GetAuditLogs("org_34LN9aMJGO4jNllGTvHH4CLB5gq", {"staff_profile_id":"214d350d-5c38-4c62-a0fa-c430cbb6f993"}, 20) in 2245ms ..//app/dashboard/actions/audit-logs.ts
+ POST /dashboard/staff 200 in 1697ms (next.js: 79ms, proxy.ts: 131ms, application-code: 1487ms)
+  └─ ƒ GetMerchantRoles() in 1040ms ..//app/dashboard/actions/staff-invite.ts
+ POST /dashboard/staff 200 in 898ms (next.js: 36ms, proxy.ts: 73ms, application-code: 788ms)
+  └─ ƒ GetMerchantRoles() in 429ms ..//app/dashboard/actions/staff-invite.ts
+○ Compiling /[...slug] ...
+ GET /dashboard/staff/timesheets 200 in 18.7s (next.js: 151ms, proxy.ts: 16.9s, application-code: 1595ms)
+ POST /dashboard/staff 200 in 19.3s (next.js: 158ms, proxy.ts: 17.4s, application-code: 1682ms)
+  └─ ƒ GetUnreadTicketCounts() in 646ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/staff/timesheets 200 in 673ms (next.js: 36ms, proxy.ts: 68ms, application-code: 569ms)
+  └─ ƒ GetTimesheetResources("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 319ms ..//app/dashboard/actions/timesheets.ts
+ POST /dashboard/staff/timesheets 200 in 2.3s (next.js: 15ms, proxy.ts: 368ms, application-code: 1879ms)
+  └─ ƒ GetTimesheets("org_34LN9aMJGO4jNllGTvHH4CLB5gq", {"dateFrom":"2026-08-08T21:00:00.000Z","dateTo":"2026-08-15T20:59:59.999Z","locationIds":["8835e749-9bbf-4405-b4a4-7f28a56f990a"]}) in 1643ms ..//app/dashboard/actions/timesheets.ts
+ POST /dashboard/staff/timesheets 200 in 1979ms (next.js: 43ms, proxy.ts: 74ms, application-code: 1862ms)
+  └─ ƒ GetTimesheets("org_34LN9aMJGO4jNllGTvHH4CLB5gq", {"dateFrom":"2026-07-15T21:00:00.000Z","dateTo":"2026-08-14T20:59:59.999Z","locationIds":["8835e749-9bbf-4405-b4a4-7f28a56f990a"]}) in 1402ms ..//app/dashboard/actions/timesheets.ts
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 2.6s (next.js: 171ms, proxy.ts: 76ms, application-code: 2.3s)
+ GET /dashboard/staff/timesheets 200 in 5.7s (next.js: 1198ms, proxy.ts: 208ms, application-code: 4.3s)
+ GET /dashboard/staff/timesheets 200 in 1107ms (next.js: 129ms, proxy.ts: 176ms, application-code: 802ms)
+ GET /dashboard/staff/timesheets 200 in 779ms (next.js: 53ms, proxy.ts: 84ms, application-code: 641ms)
+ POST /dashboard/staff/timesheets 200 in 6.8s (next.js: 263ms, proxy.ts: 4.7s, application-code: 1815ms)
+  └─ ƒ GetUserInfo() in 1220ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/staff/timesheets 200 in 578ms (next.js: 15ms, proxy.ts: 42ms, application-code: 522ms)
+  └─ ƒ GetUnreadTicketCounts() in 319ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/staff/timesheets 200 in 2.2s (next.js: 17ms, proxy.ts: 48ms, application-code: 2.1s)
+ GET /dashboard/staff 200 in 735ms (next.js: 229ms, proxy.ts: 89ms, application-code: 417ms)
+ POST /dashboard/staff 200 in 1337ms (next.js: 38ms, proxy.ts: 68ms, application-code: 1231ms)
+  └─ ƒ GetMerchantRoles() in 566ms ..//app/dashboard/actions/staff-invite.ts
+ POST /dashboard/staff 200 in 1751ms (next.js: 29ms, proxy.ts: 48ms, application-code: 1673ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1214ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/staff 200 in 1117ms (next.js: 31ms, proxy.ts: 46ms, application-code: 1040ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 663ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 11.7s (next.js: 37ms, proxy.ts: 67ms, application-code: 11.6s)
+  └─ ƒ GetOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a", undefined) in 8400ms ..//app/dashboard/actions/order.ts
+ POST /dashboard/staff 200 in 1389ms (next.js: 39ms, proxy.ts: 73ms, application-code: 1277ms)
+  └─ ƒ GetPendingInvites("org_34LN9aMJGO4jNllGTvHH4CLB5gq") in 924ms ..//app/dashboard/actions/invites.ts
+ POST /dashboard/staff 200 in 1426ms (next.js: 40ms, proxy.ts: 81ms, application-code: 1305ms)
+  └─ ƒ GetStaffMember("d80242e5-1cff-4960-b4a8-a5083040789f") in 946ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/staff 200 in 829ms (next.js: 41ms, proxy.ts: 60ms, application-code: 727ms)
+  └─ ƒ GetMerchantRoles() in 367ms ..//app/dashboard/actions/staff-invite.ts
+ POST /dashboard/staff 200 in 1416ms (next.js: 68ms, proxy.ts: 101ms, application-code: 1246ms)
+  └─ ƒ GetMerchantRoles() in 695ms ..//app/dashboard/actions/staff-invite.ts
+○ Compiling /dashboard/schedules ...
+ GET /dashboard/schedules 200 in 62s (next.js: 58s, proxy.ts: 259ms, application-code: 4.2s)
+○ Compiling /sign-in/[[...sign-in]] ...
+ POST /sign-in 200 in 2.7min (next.js: 94s, proxy.ts: 62s, application-code: 5.9s)
+○ Compiling /sign-in/[[...sign-in]] ...
+ GET /dashboard/schedules 200 in 51s (next.js: 26.5s, proxy.ts: 8.0s, application-code: 16.3s)
+ GET /dashboard/schedules 200 in 51s (next.js: 26.7s, proxy.ts: 7.8s, application-code: 16.4s)
+ POST /sign-in 200 in 44s (next.js: 26.8s, proxy.ts: 222ms, application-code: 16.9s)
+ POST /dashboard/schedules 200 in 2.2s (next.js: 35ms, proxy.ts: 83ms, application-code: 2.0s)
+  └─ ƒ GetUserInfo() in 710ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/schedules 200 in 528ms (next.js: 31ms, proxy.ts: 69ms, application-code: 428ms)
+  └─ ƒ getImpersonationContext() in 26ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules 200 in 729ms (next.js: 35ms, proxy.ts: 61ms, application-code: 634ms)
+  └─ ƒ GetUnreadTicketCounts() in 273ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules 200 in 718ms (next.js: 101ms, proxy.ts: 65ms, application-code: 553ms)
+  └─ ƒ getImpersonationContext() in 12ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules 200 in 1701ms (next.js: 45ms, proxy.ts: 61ms, application-code: 1595ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1129ms ..//app/dashboard/actions/get-locations.ts
+○ Compiling /dashboard/schedules/templates ...
+ GET /dashboard/schedules/templates 200 in 75s (next.js: 68s, proxy.ts: 60ms, application-code: 6.6s)
+ GET /dashboard/schedules/templates 200 in 1513ms (next.js: 48ms, proxy.ts: 597ms, application-code: 868ms)
+○ Compiling /dashboard/schedules/templates/[templateId] ...
+ GET /dashboard/schedules/templates/5cb4e713-b281-4446-a31a-8ff490b913fa 200 in 85s (next.js: 80s, proxy.ts: 158ms, application-code: 4.5s)
+ GET /dashboard/schedules/templates/5cb4e713-b281-4446-a31a-8ff490b913fa 200 in 4.1s (next.js: 2.8s, proxy.ts: 205ms, application-code: 1073ms)
+ POST /dashboard/schedules/templates/5cb4e713-b281-4446-a31a-8ff490b913fa 200 in 5.0s (next.js: 178ms, proxy.ts: 162ms, application-code: 4.6s)
+  └─ ƒ GetUnreadTicketCounts() in 2299ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/5cb4e713-b281-4446-a31a-8ff490b913fa 200 in 1737ms (next.js: 99ms, proxy.ts: 73ms, application-code: 1565ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 693ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/schedules/templates/5cb4e713-b281-4446-a31a-8ff490b913fa 200 in 1328ms (next.js: 95ms, proxy.ts: 69ms, application-code: 1163ms)
+  └─ ƒ GetUnreadTicketCounts() in 577ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/5cb4e713-b281-4446-a31a-8ff490b913fa 200 in 1519ms (next.js: 83ms, proxy.ts: 448ms, application-code: 988ms)
+  └─ ƒ GetUnreadTicketCounts() in 566ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/schedules 200 in 1595ms (next.js: 573ms, proxy.ts: 137ms, application-code: 885ms)
+○ Compiling /dashboard/schedules/[scheduleId] ...
+ GET /dashboard/schedules/898ca65c-7e71-470d-81cf-c2678be89316 200 in 95s (next.js: 89s, proxy.ts: 53ms, application-code: 5.6s)
+ POST /dashboard/schedules/898ca65c-7e71-470d-81cf-c2678be89316 200 in 3.2s (next.js: 83ms, proxy.ts: 189ms, application-code: 2.9s)
+  └─ ƒ GetUnreadTicketCounts() in 700ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/schedules/898ca65c-7e71-470d-81cf-c2678be89316 200 in 939ms (next.js: 64ms, proxy.ts: 67ms, application-code: 807ms)
+ POST /dashboard/schedules/898ca65c-7e71-470d-81cf-c2678be89316 200 in 2.3s (next.js: 106ms, proxy.ts: 123ms, application-code: 2.0s)
+  └─ ƒ GetUserInfo() in 594ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/schedules/898ca65c-7e71-470d-81cf-c2678be89316 200 in 2.4s (next.js: 210ms, proxy.ts: 170ms, application-code: 2.0s)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1030ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/schedules/898ca65c-7e71-470d-81cf-c2678be89316 200 in 1383ms (next.js: 121ms, proxy.ts: 77ms, application-code: 1185ms)
+  └─ ƒ GetUnreadTicketCounts() in 570ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/898ca65c-7e71-470d-81cf-c2678be89316 200 in 1563ms (next.js: 127ms, proxy.ts: 470ms, application-code: 966ms)
+  └─ ƒ GetUnreadTicketCounts() in 461ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/898ca65c-7e71-470d-81cf-c2678be89316 200 in 1438ms (next.js: 86ms, proxy.ts: 150ms, application-code: 1202ms)
+  └─ ƒ GetUnreadTicketCounts() in 633ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/898ca65c-7e71-470d-81cf-c2678be89316 200 in 1245ms (next.js: 81ms, proxy.ts: 56ms, application-code: 1108ms)
+  └─ ƒ GetUnreadTicketCounts() in 468ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/schedules 200 in 1326ms (next.js: 581ms, proxy.ts: 57ms, application-code: 688ms)
+ GET /dashboard/schedules/templates 200 in 1109ms (next.js: 456ms, proxy.ts: 54ms, application-code: 599ms)
+○ Compiling /dashboard/schedules/templates/create ...
+ GET /dashboard/schedules/templates/create 200 in 70s (next.js: 66s, proxy.ts: 98ms, application-code: 3.7s)
+ GET /dashboard/schedules/templates/create 200 in 4.2s (next.js: 30ms, proxy.ts: 3.7s, application-code: 542ms)
+ POST /dashboard/schedules/templates/create 200 in 3.8s (next.js: 39ms, proxy.ts: 59ms, application-code: 3.7s)
+  └─ ƒ GetUserInfo() in 2539ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/schedules/templates/create 200 in 3.6s (next.js: 42ms, proxy.ts: 38ms, application-code: 3.5s)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 3049ms ..//app/dashboard/actions/unified-staff.ts
+○ Compiling /_error ...
+ GET /dashboard/schedules 200 in 38.3s (next.js: 3.5s, proxy.ts: 12.6s, application-code: 22.1s)
+ POST /dashboard/schedules/templates/create 200 in 38.7s (next.js: 712ms, proxy.ts: 1828ms, application-code: 36.2s)
+  └─ ƒ GetUnreadTicketCounts() in 25280ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/schedules/templates/create 200 in 3.8s (next.js: 262ms, proxy.ts: 122ms, application-code: 3.4s)
+ GET /dashboard/schedules/templates/create 500 in 43s (next.js: 31.5s, proxy.ts: 11.0s, application-code: 628ms)
+ GET /dashboard/schedules/templates/create 500 in 43s (next.js: 31.5s, proxy.ts: 11.0s, application-code: 631ms)
+ GET /dashboard/schedules/templates/create 200 in 9.7s (next.js: 23ms, proxy.ts: 40ms, application-code: 9.6s)
+▲ Next.js 16.2.12 (webpack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.115:3001
+- Environments: .env
+✓ Ready in 1907ms
+○ Compiling /instrumentation ...
+- Experiments (use with caution):
+  · clientTraceMetadata
+  · serverActions
+  ✓ useTypeScriptCli
+
+○ Compiling proxy ...
+Attention: Clerk collects telemetry data from its SDKs when connected to development instances.
+The data collected is used to inform Clerk's product roadmap.
+To learn more, including how to opt-out from the telemetry program, visit: https://clerk.com/docs/telemetry.
+
+○ Compiling /dashboard/schedules/templates/create ...
+ GET /dashboard/schedules/templates/create 200 in 93s (next.js: 64s, proxy.ts: 14.0s, application-code: 15.4s)
+○ Compiling /sign-in/[[...sign-in]] ...
+○ Compiling /dashboard/schedules ...
+ POST /dashboard/schedules 200 in 51s (next.js: 41s, proxy.ts: 1084ms, application-code: 9.2s)
+  └─ ƒ getImpersonationContext() in 17ms ..//lib/admin/impersonation.ts
+ GET /dashboard/schedules 200 in 51s (next.js: 39.7s, proxy.ts: 1413ms, application-code: 9.8s)
+ POST /sign-in 200 in 2.4min (next.js: 65s, proxy.ts: 94ms, application-code: 79s)
+ POST /dashboard/schedules 200 in 184ms (next.js: 21ms, proxy.ts: 49ms, application-code: 114ms)
+  └─ ƒ getImpersonationContext() in 5ms ..//lib/admin/impersonation.ts
+ GET /dashboard/schedules 200 in 2.9s (next.js: 17ms, proxy.ts: 40ms, application-code: 2.9s)
+ GET /dashboard/schedules 200 in 275ms (next.js: 22ms, proxy.ts: 36ms, application-code: 217ms)
+ POST /dashboard/schedules 200 in 5.4s (next.js: 440ms, proxy.ts: 730ms, application-code: 4.2s)
+  └─ ƒ GetUnreadTicketCounts() in 3549ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules 200 in 700ms (next.js: 36ms, proxy.ts: 68ms, application-code: 596ms)
+  └─ ƒ GetUserInfo() in 413ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/schedules 200 in 1455ms (next.js: 35ms, proxy.ts: 56ms, application-code: 1365ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1194ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/schedules 200 in 1837ms (next.js: 68ms, proxy.ts: 100ms, application-code: 1670ms)
+  └─ ƒ GetSchedules("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1343ms ..//app/dashboard/actions/schedules.ts
+○ Compiling /dashboard/schedules/templates ...
+ GET /dashboard/schedules/templates 200 in 32.4s (next.js: 27.6s, proxy.ts: 58ms, application-code: 4.7s)
+ POST /dashboard/schedules/templates 200 in 2.4s (next.js: 38ms, proxy.ts: 88ms, application-code: 2.3s)
+  └─ ƒ GetUnreadTicketCounts() in 1042ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/schedules/templates/create 200 in 537ms (next.js: 190ms, proxy.ts: 43ms, application-code: 304ms)
+ POST /dashboard/schedules/templates/create 200 in 1834ms (next.js: 28ms, proxy.ts: 61ms, application-code: 1745ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1186ms ..//app/dashboard/actions/unified-staff.ts
+○ Compiling /dashboard/schedules/templates/[templateId] ...
+ GET /dashboard/schedules/templates/fe5a0da4-7aa2-4510-b2a0-70c3baebf9e2 200 in 65s (next.js: 60s, proxy.ts: 63ms, application-code: 4.9s)
+ GET /dashboard/schedules/templates/fe5a0da4-7aa2-4510-b2a0-70c3baebf9e2 200 in 1209ms (next.js: 91ms, proxy.ts: 702ms, application-code: 415ms)
+ POST /dashboard/schedules/templates/fe5a0da4-7aa2-4510-b2a0-70c3baebf9e2 200 in 2.9s (next.js: 78ms, proxy.ts: 68ms, application-code: 2.8s)
+  └─ ƒ GetUserInfo() in 846ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/schedules/templates/fe5a0da4-7aa2-4510-b2a0-70c3baebf9e2 200 in 2.0s (next.js: 42ms, proxy.ts: 52ms, application-code: 1948ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1598ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/schedules/templates/fe5a0da4-7aa2-4510-b2a0-70c3baebf9e2 200 in 1000ms (next.js: 74ms, proxy.ts: 54ms, application-code: 873ms)
+  └─ ƒ GetUnreadTicketCounts() in 562ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/schedules/templates/create 200 in 2.1s (next.js: 251ms, proxy.ts: 1376ms, application-code: 468ms)
+ POST /dashboard/schedules/templates/create 200 in 1519ms (next.js: 55ms, proxy.ts: 250ms, application-code: 1214ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 875ms ..//app/dashboard/actions/unified-staff.ts
+ GET /dashboard/schedules 200 in 757ms (next.js: 242ms, proxy.ts: 114ms, application-code: 402ms)
+ GET /dashboard/schedules/templates 200 in 641ms (next.js: 173ms, proxy.ts: 47ms, application-code: 421ms)
+ GET /dashboard/schedules/templates/create 200 in 471ms (next.js: 29ms, proxy.ts: 56ms, application-code: 385ms)
+ POST /dashboard/schedules/templates/create 200 in 2.4s (next.js: 62ms, proxy.ts: 114ms, application-code: 2.2s)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1403ms ..//app/dashboard/actions/unified-staff.ts
+○ Compiling /[...slug] ...
+ GET /dashboard/schedules/templates/create 200 in 18.3s (next.js: 324ms, proxy.ts: 9.2s, application-code: 8.7s)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 62s (next.js: 57s, proxy.ts: 73ms, application-code: 4.8s)
+ POST /dashboard/schedules/templates/create 200 in 1881ms (next.js: 28ms, proxy.ts: 123ms, application-code: 1730ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 935ms ..//app/dashboard/actions/unified-staff.ts
+ GET /dashboard/schedules/templates/create 200 in 4.1s (next.js: 78ms, proxy.ts: 165ms, application-code: 3.9s)
+ GET /dashboard/schedules/templates/create 200 in 1730ms (next.js: 39ms, proxy.ts: 140ms, application-code: 1550ms)
+ POST /dashboard/schedules/templates/create 200 in 2.3s (next.js: 54ms, proxy.ts: 303ms, application-code: 1898ms)
+  └─ ƒ GetUserInfo() in 1366ms ..//app/manage/actions/get-user-info.ts
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 4.1s (next.js: 225ms, proxy.ts: 72ms, application-code: 3.8s)
+ POST /dashboard/schedules/templates/create 200 in 2.1s (next.js: 302ms, proxy.ts: 716ms, application-code: 1123ms)
+  └─ ƒ getImpersonationContext() in 187ms ..//lib/admin/impersonation.ts
+○ Compiling /_error ...
+ GET /dashboard/onlie-ordering 404 in 20.2s (next.js: 104ms, proxy.ts: 141ms, application-code: 19.9s)
+○ Compiling /sign-in/[[...sign-in]] ...
+ POST /sign-in 200 in 13.6s (next.js: 13.1s, proxy.ts: 64ms, application-code: 443ms)
+ POST /dashboard/schedules/templates/create 200 in 1746ms (next.js: 467ms, proxy.ts: 65ms, application-code: 1215ms)
+  └─ ƒ getImpersonationContext() in 15ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules/templates/create 200 in 1835ms (next.js: 23ms, proxy.ts: 60ms, application-code: 1752ms)
+  └─ ƒ GetUnreadTicketCounts() in 1439ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 372ms (next.js: 29ms, proxy.ts: 48ms, application-code: 295ms)
+  └─ ƒ getImpersonationContext() in 7ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules/templates/create 200 in 2.7s (next.js: 82ms, proxy.ts: 120ms, application-code: 2.5s)
+  └─ ƒ GetUserInfo() in 1995ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/schedules/templates/create 200 in 18.5s (next.js: 31ms, proxy.ts: 55ms, application-code: 18.4s)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 17882ms ..//app/dashboard/actions/unified-staff.ts
+○ Compiling /dashboard/online-ordering ...
+ POST /dashboard/schedules/templates/create 200 in 10.0s (next.js: 45ms, proxy.ts: 90ms, application-code: 9.8s)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 9076ms ..//app/dashboard/actions/get-locations.ts
+ GET /dashboard/online-ordering 200 in 101s (next.js: 91s, proxy.ts: 78ms, application-code: 9.7s)
+○ Compiling /sign-in/[[...sign-in]] ...
+ POST /dashboard/schedules/templates/create 200 in 2.2s (next.js: 283ms, proxy.ts: 45ms, application-code: 1918ms)
+  └─ ƒ GetUnreadTicketCounts() in 898ms ..//app/dashboard/actions/support.ts
+ POST /sign-in 200 in 11.9s (next.js: 9.2s, proxy.ts: 54ms, application-code: 2.7s)
+ GET /dashboard/schedules/templates/create 200 in 2.6s (next.js: 40ms, proxy.ts: 84ms, application-code: 2.5s)
+ GET /dashboard/schedules/templates/create 200 in 3.3s (next.js: 35ms, proxy.ts: 64ms, application-code: 3.2s)
+○ Compiling /dashboard/online-ordering ...
+○ Compiling /[...slug] ...
+ POST /dashboard/online-ordering 200 in 23.9s (next.js: 18.0s, proxy.ts: 80ms, application-code: 5.8s)
+  └─ ƒ GetUserInfo() in 4670ms ..//app/manage/actions/get-user-info.ts
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 32.8s (next.js: 24.4s, proxy.ts: 1344ms, application-code: 7.1s)
+ POST /dashboard/online-ordering 200 in 12.0s (next.js: 134ms, proxy.ts: 10.7s, application-code: 1177ms)
+  └─ ƒ getImpersonationContext() in 214ms ..//lib/admin/impersonation.ts
+○ Compiling /_error ...
+ POST /dashboard/online-ordering 200 in 11.6s (next.js: 36ms, proxy.ts: 127ms, application-code: 11.4s)
+  └─ ƒ GetUnreadTicketCounts() in 9859ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/online-ordering 200 in 5.6s (next.js: 326ms, proxy.ts: 122ms, application-code: 5.2s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 4392ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 318ms (next.js: 18ms, proxy.ts: 37ms, application-code: 263ms)
+  └─ ƒ getImpersonationContext() in 4ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 1707ms (next.js: 17ms, proxy.ts: 41ms, application-code: 1649ms)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1335ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 2.0s (next.js: 20ms, proxy.ts: 33ms, application-code: 1969ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1646ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/online-ordering 200 in 3.3s (next.js: 18ms, proxy.ts: 51ms, application-code: 3.2s)
+  └─ ƒ getOrderOutStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2987ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/schedules/templates/create 200 in 82s (next.js: 233ms, proxy.ts: 111ms, application-code: 82s)
+  └─ ƒ GetUserInfo() in 81095ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/schedules/templates/create 200 in 899ms (next.js: 190ms, proxy.ts: 63ms, application-code: 645ms)
+  └─ ƒ getImpersonationContext() in 6ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules/templates/create 200 in 1712ms (next.js: 20ms, proxy.ts: 56ms, application-code: 1636ms)
+  └─ ƒ GetUnreadTicketCounts() in 1111ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 538ms (next.js: 24ms, proxy.ts: 54ms, application-code: 460ms)
+  └─ ƒ getImpersonationContext() in 3ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules/templates/create 200 in 2.4s (next.js: 53ms, proxy.ts: 101ms, application-code: 2.3s)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1927ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/schedules/templates/create 200 in 2.0s (next.js: 16ms, proxy.ts: 28ms, application-code: 1972ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1676ms ..//app/dashboard/actions/get-locations.ts
+ GET /dashboard/schedules/templates 200 in 9.4s (next.js: 581ms, proxy.ts: 128ms, application-code: 8.7s)
+ POST /dashboard/online-ordering 200 in 3.4s (next.js: 53ms, proxy.ts: 72ms, application-code: 3.2s)
+  └─ ƒ GetUnreadTicketCounts() in 2608ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/online-ordering 200 in 1702ms (next.js: 53ms, proxy.ts: 84ms, application-code: 1565ms)
+  └─ ƒ getOrderNotificationAuditLog("8835e749-9bbf-4405-b4a4-7f28a56f990a", 50) in 1030ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 2.9s (next.js: 39ms, proxy.ts: 66ms, application-code: 2.8s)
+  └─ ƒ getOrderNotificationAuditLog("8835e749-9bbf-4405-b4a4-7f28a56f990a", 50) in 2234ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 1833ms (next.js: 48ms, proxy.ts: 66ms, application-code: 1719ms)
+  └─ ƒ getPushChannelsHistory("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a", {}) in 1117ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/online-ordering 200 in 4.1s (next.js: 40ms, proxy.ts: 78ms, application-code: 4.0s)
+  └─ ƒ listRecentTestOrders({"limit":10,"locationId":"8835e749-9bbf-4405-b4a4-7f28a56f990a"}) in 3216ms ..//app/dashboard/actions/orderout-test-order.ts
+ POST /dashboard/online-ordering 200 in 2.1s (next.js: 66ms, proxy.ts: 125ms, application-code: 1884ms)
+  └─ ƒ getOrderOutSyncedMenus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1311ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/online-ordering 200 in 3.3s (next.js: 37ms, proxy.ts: 63ms, application-code: 3.2s)
+  └─ ƒ getRecentOrderOutOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2561ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/online-ordering 200 in 3.4s (next.js: 116ms, proxy.ts: 82ms, application-code: 3.2s)
+  └─ ƒ getOrderOutWebhookHealth("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2518ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/online-ordering 200 in 4.3s (next.js: 53ms, proxy.ts: 71ms, application-code: 4.2s)
+  └─ ƒ getQrAnalyticsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a", 30) in 3646ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 924ms (next.js: 35ms, proxy.ts: 56ms, application-code: 833ms)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 413ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 7.8s (next.js: 48ms, proxy.ts: 75ms, application-code: 7.7s)
+  └─ ƒ getQrTableManagerSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 7213ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 1239ms (next.js: 36ms, proxy.ts: 63ms, application-code: 1140ms)
+  └─ ƒ GetUnreadTicketCounts() in 421ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/online-ordering 200 in 2.3s (next.js: 59ms, proxy.ts: 81ms, application-code: 2.2s)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1798ms ..//app/dashboard/online-ordering/actions.ts
+○ Compiling /_error ...
+ POST /dashboard/online-ordering 200 in 17.1s (next.js: 164ms, proxy.ts: 7.1s, application-code: 9.8s)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 7017ms ..//app/dashboard/online-ordering/actions.ts
+ GET /dashboard/online-ordering 200 in 13.0s (next.js: 2.6s, proxy.ts: 280ms, application-code: 10.1s)
+ GET /dashboard/schedules/templates/create 200 in 13.0s (next.js: 2.1s, proxy.ts: 10.1s, application-code: 747ms)
+ GET /dashboard/online-ordering 200 in 11.8s (next.js: 163ms, proxy.ts: 137ms, application-code: 11.5s)
+ GET /dashboard/schedules/templates/create 200 in 11.8s (next.js: 997ms, proxy.ts: 224ms, application-code: 10.6s)
+ POST /dashboard/online-ordering 200 in 25.6s (next.js: 107ms, proxy.ts: 1842ms, application-code: 23.7s)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 19161ms ..//app/dashboard/online-ordering/actions.ts
+ GET /dashboard/schedules/templates/create 200 in 28.4s (next.js: 118ms, proxy.ts: 115ms, application-code: 28.1s)
+○ Compiling /[...slug] ...
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 2.8min (next.js: 2.4min, proxy.ts: 7.6s, application-code: 13.5s)
+○ Compiling /sign-in/[[...sign-in]] ...
+ POST /sign-in 200 in 57s (next.js: 55s, proxy.ts: 81ms, application-code: 1538ms)
+ POST /sign-in 200 in 23.0s (next.js: 125ms, proxy.ts: 3.4s, application-code: 19.4s)
+ POST /dashboard/online-ordering 200 in 19.1s (next.js: 492ms, proxy.ts: 16.8s, application-code: 1844ms)
+○ Compiling /_error ...
+ POST /dashboard/schedules/templates/create 200 in 1302ms (next.js: 311ms, proxy.ts: 217ms, application-code: 773ms)
+  └─ ƒ getImpersonationContext() in 31ms ..//lib/admin/impersonation.ts
+ GET /dashboard/online-ordering 200 in 21.1s (next.js: 1552ms, proxy.ts: 608ms, application-code: 19.0s)
+ POST /dashboard/schedules/templates/create 200 in 7.7s (next.js: 118ms, proxy.ts: 148ms, application-code: 7.5s)
+  └─ ƒ GetUnreadTicketCounts() in 5789ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 1686ms (next.js: 132ms, proxy.ts: 78ms, application-code: 1475ms)
+  └─ ƒ getImpersonationContext() in 7ms ..//lib/admin/impersonation.ts
+ POST /sign-in 200 in 2.7s (next.js: 443ms, proxy.ts: 47ms, application-code: 2.2s)
+ GET /dashboard/schedules/templates/create 200 in 3.3s (next.js: 129ms, proxy.ts: 695ms, application-code: 2.5s)
+ POST /dashboard/schedules/templates/create 200 in 4.2s (next.js: 48ms, proxy.ts: 59ms, application-code: 4.1s)
+  └─ ƒ GetUserInfo() in 3508ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/schedules/templates/create 200 in 2.8s (next.js: 48ms, proxy.ts: 58ms, application-code: 2.7s)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2065ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/schedules/templates/create 200 in 9.0s (next.js: 52ms, proxy.ts: 108ms, application-code: 8.8s)
+ GET /dashboard/schedules/templates/create 200 in 10.0s (next.js: 32ms, proxy.ts: 545ms, application-code: 9.4s)
+○ Compiling /[...slug] ...
+ POST /dashboard/online-ordering 200 in 8.2s (next.js: 326ms, proxy.ts: 204ms, application-code: 7.7s)
+  └─ ƒ GetUserInfo() in 3313ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/online-ordering 200 in 9.3s (next.js: 571ms, proxy.ts: 7.4s, application-code: 1348ms)
+  └─ ƒ getImpersonationContext() in 10ms ..//lib/admin/impersonation.ts
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 51s (next.js: 41s, proxy.ts: 1060ms, application-code: 8.5s)
+ POST /dashboard/online-ordering 200 in 1263ms (next.js: 38ms, proxy.ts: 62ms, application-code: 1163ms)
+  └─ ƒ GetUnreadTicketCounts() in 590ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/online-ordering 200 in 2.2s (next.js: 41ms, proxy.ts: 60ms, application-code: 2.1s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1491ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 838ms (next.js: 33ms, proxy.ts: 55ms, application-code: 751ms)
+  └─ ƒ getImpersonationContext() in 178ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 6.3s (next.js: 105ms, proxy.ts: 196ms, application-code: 6.0s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 3028ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 4.2s (next.js: 109ms, proxy.ts: 99ms, application-code: 4.0s)
+ GET /dashboard/online-ordering 200 in 5.1s (next.js: 85ms, proxy.ts: 605ms, application-code: 4.4s)
+ POST /dashboard/schedules/templates/create 200 in 1819ms (next.js: 284ms, proxy.ts: 123ms, application-code: 1412ms)
+  └─ ƒ GetUserInfo() in 846ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/schedules/templates/create 200 in 602ms (next.js: 43ms, proxy.ts: 78ms, application-code: 481ms)
+  └─ ƒ getImpersonationContext() in 5ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules/templates/create 200 in 1055ms (next.js: 41ms, proxy.ts: 90ms, application-code: 924ms)
+  └─ ƒ GetUnreadTicketCounts() in 499ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 572ms (next.js: 34ms, proxy.ts: 59ms, application-code: 480ms)
+  └─ ƒ getImpersonationContext() in 14ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules/templates/create 200 in 1538ms (next.js: 32ms, proxy.ts: 47ms, application-code: 1459ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 975ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/schedules/templates/create 200 in 3.1s (next.js: 30ms, proxy.ts: 55ms, application-code: 3.1s)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 2554ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/online-ordering 200 in 4.4s (next.js: 109ms, proxy.ts: 296ms, application-code: 4.0s)
+  └─ ƒ GetUserInfo() in 641ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/online-ordering 200 in 426ms (next.js: 26ms, proxy.ts: 51ms, application-code: 349ms)
+  └─ ƒ getImpersonationContext() in 16ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 1336ms (next.js: 30ms, proxy.ts: 46ms, application-code: 1260ms)
+  └─ ƒ GetUnreadTicketCounts() in 800ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/online-ordering 200 in 3.6s (next.js: 32ms, proxy.ts: 47ms, application-code: 3.5s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 3070ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 458ms (next.js: 30ms, proxy.ts: 48ms, application-code: 380ms)
+  └─ ƒ getImpersonationContext() in 10ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 2.7s (next.js: 33ms, proxy.ts: 59ms, application-code: 2.6s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2225ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 1368ms (next.js: 30ms, proxy.ts: 47ms, application-code: 1291ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 899ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/online-ordering 200 in 1163ms (next.js: 28ms, proxy.ts: 46ms, application-code: 1089ms)
+  └─ ƒ getOrderOutStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 721ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/schedules/templates/create 200 in 2.1s (next.js: 50ms, proxy.ts: 79ms, application-code: 1940ms)
+  └─ ƒ GetUnreadTicketCounts() in 1375ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 2.2s (next.js: 42ms, proxy.ts: 956ms, application-code: 1249ms)
+  └─ ƒ GetUnreadTicketCounts() in 643ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 1231ms (next.js: 34ms, proxy.ts: 44ms, application-code: 1153ms)
+  └─ ƒ GetUnreadTicketCounts() in 562ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 1267ms (next.js: 32ms, proxy.ts: 56ms, application-code: 1179ms)
+  └─ ƒ GetUnreadTicketCounts() in 632ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 1468ms (next.js: 37ms, proxy.ts: 400ms, application-code: 1031ms)
+  └─ ƒ GetUnreadTicketCounts() in 613ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/online-ordering 200 in 2.4s (next.js: 36ms, proxy.ts: 70ms, application-code: 2.3s)
+  └─ ƒ getQrAnalyticsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a", 30) in 1698ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 4.0s (next.js: 173ms, proxy.ts: 358ms, application-code: 3.4s)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 422ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 3.1s (next.js: 31ms, proxy.ts: 50ms, application-code: 3.1s)
+  └─ ƒ getQrTableManagerSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2731ms ..//app/dashboard/online-ordering/actions.ts
+ GET /dashboard/schedules/templates/create 200 in 933ms (next.js: 68ms, proxy.ts: 72ms, application-code: 792ms)
+ GET /dashboard/online-ordering 200 in 941ms (next.js: 421ms, proxy.ts: 109ms, application-code: 410ms)
+ POST /dashboard/online-ordering 200 in 1506ms (next.js: 43ms, proxy.ts: 82ms, application-code: 1381ms)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 776ms ..//app/dashboard/online-ordering/actions.ts
+ GET /dashboard/schedules/templates/create 200 in 1855ms (next.js: 44ms, proxy.ts: 91ms, application-code: 1719ms)
+ GET /dashboard/online-ordering 200 in 2.3s (next.js: 34ms, proxy.ts: 45ms, application-code: 2.3s)
+ POST /dashboard/schedules/templates/create 200 in 2.1s (next.js: 85ms, proxy.ts: 126ms, application-code: 1895ms)
+  └─ ƒ GetUserInfo() in 666ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/schedules/templates/create 200 in 827ms (next.js: 51ms, proxy.ts: 69ms, application-code: 706ms)
+  └─ ƒ getImpersonationContext() in 5ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules/templates/create 200 in 1321ms (next.js: 99ms, proxy.ts: 134ms, application-code: 1089ms)
+  └─ ƒ GetUnreadTicketCounts() in 260ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 1186ms (next.js: 59ms, proxy.ts: 80ms, application-code: 1047ms)
+  └─ ƒ getImpersonationContext() in 5ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules/templates/create 200 in 1624ms (next.js: 47ms, proxy.ts: 175ms, application-code: 1401ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 792ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/schedules/templates/create 200 in 2.0s (next.js: 69ms, proxy.ts: 132ms, application-code: 1826ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 826ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/online-ordering 200 in 3.5s (next.js: 557ms, proxy.ts: 1289ms, application-code: 1682ms)
+  └─ ƒ GetUserInfo() in 643ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/online-ordering 200 in 406ms (next.js: 30ms, proxy.ts: 44ms, application-code: 333ms)
+  └─ ƒ getImpersonationContext() in 2ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 865ms (next.js: 35ms, proxy.ts: 46ms, application-code: 784ms)
+  └─ ƒ GetUnreadTicketCounts() in 370ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/online-ordering 200 in 1458ms (next.js: 19ms, proxy.ts: 32ms, application-code: 1407ms)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1088ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 537ms (next.js: 38ms, proxy.ts: 58ms, application-code: 442ms)
+  └─ ƒ getImpersonationContext() in 17ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 1308ms (next.js: 22ms, proxy.ts: 44ms, application-code: 1242ms)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 891ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 1268ms (next.js: 30ms, proxy.ts: 35ms, application-code: 1203ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 804ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/online-ordering 200 in 1291ms (next.js: 36ms, proxy.ts: 51ms, application-code: 1204ms)
+  └─ ƒ getOrderOutStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 827ms ..//app/dashboard/actions/orderout.ts
+ GET /dashboard/schedules/templates/create 200 in 12.0s (next.js: 52ms, proxy.ts: 495ms, application-code: 11.4s)
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 12.9s (next.js: 3.3s, proxy.ts: 387ms, application-code: 9.2s)
+ POST /dashboard/online-ordering 200 in 5.8s (next.js: 62ms, proxy.ts: 77ms, application-code: 5.7s)
+  └─ ƒ getQrAnalyticsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a", 30) in 5088ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 926ms (next.js: 131ms, proxy.ts: 56ms, application-code: 740ms)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 367ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 2.7s (next.js: 21ms, proxy.ts: 50ms, application-code: 2.6s)
+  └─ ƒ getQrTableManagerSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2219ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 2.1s (next.js: 96ms, proxy.ts: 123ms, application-code: 1903ms)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 828ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 1409ms (next.js: 36ms, proxy.ts: 49ms, application-code: 1324ms)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 750ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 1966ms (next.js: 39ms, proxy.ts: 47ms, application-code: 1879ms)
+  └─ ƒ getPushChannelsHistory("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a", {}) in 1224ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/online-ordering 200 in 2.2s (next.js: 50ms, proxy.ts: 103ms, application-code: 2.0s)
+  └─ ƒ listRecentTestOrders({"limit":10,"locationId":"8835e749-9bbf-4405-b4a4-7f28a56f990a"}) in 1411ms ..//app/dashboard/actions/orderout-test-order.ts
+ POST /dashboard/online-ordering 200 in 15.3s (next.js: 36ms, proxy.ts: 61ms, application-code: 15.2s)
+  └─ ƒ getOrderOutSyncedMenus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 13869ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/online-ordering 200 in 28.4s (next.js: 1333ms, proxy.ts: 2.8s, application-code: 24.2s)
+  └─ ƒ getRecentOrderOutOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 19504ms ..//app/dashboard/actions/orderout.ts
+○ Compiling /sign-in/[[...sign-in]] ...
+ POST /sign-in 200 in 55s (next.js: 39.6s, proxy.ts: 195ms, application-code: 15.5s)
+ POST /sign-in 200 in 55s (next.js: 39.6s, proxy.ts: 138ms, application-code: 15.5s)
+ GET /dashboard/schedules/templates/create 200 in 56s (next.js: 39.2s, proxy.ts: 1505ms, application-code: 15.6s)
+○ Compiling /[...slug] ...
+ POST /dashboard/online-ordering 200 in 6.7s (next.js: 210ms, proxy.ts: 31ms, application-code: 6.5s)
+  └─ ƒ getOrderNotificationAuditLog("8835e749-9bbf-4405-b4a4-7f28a56f990a", 50) in 4237ms ..//app/dashboard/online-ordering/actions.ts
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 82s (next.js: 70s, proxy.ts: 367ms, application-code: 11.2s)
+ POST /sign-in 200 in 10.3s (next.js: 577ms, proxy.ts: 91ms, application-code: 9.7s)
+ GET /dashboard/online-ordering 200 in 4.4s (next.js: 60ms, proxy.ts: 74ms, application-code: 4.3s)
+ POST /dashboard/online-ordering 200 in 16.2s (next.js: 635ms, proxy.ts: 222ms, application-code: 15.3s)
+  └─ ƒ getOrderNotificationAuditLog("8835e749-9bbf-4405-b4a4-7f28a56f990a", 50) in 12092ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/schedules/templates/create 200 in 15.5s (next.js: 397ms, proxy.ts: 74ms, application-code: 15.0s)
+  └─ ƒ GetUserInfo() in 12899ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/schedules/templates/create 200 in 1039ms (next.js: 78ms, proxy.ts: 189ms, application-code: 772ms)
+  └─ ƒ getImpersonationContext() in 8ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 4.3s (next.js: 96ms, proxy.ts: 1754ms, application-code: 2.4s)
+  └─ ƒ GetUserInfo() in 1694ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/online-ordering 200 in 2.9s (next.js: 75ms, proxy.ts: 153ms, application-code: 2.7s)
+  └─ ƒ getImpersonationContext() in 35ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules/templates/create 200 in 8.9s (next.js: 68ms, proxy.ts: 191ms, application-code: 8.6s)
+  └─ ƒ GetUnreadTicketCounts() in 7148ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 561ms (next.js: 43ms, proxy.ts: 78ms, application-code: 440ms)
+  └─ ƒ getImpersonationContext() in 5ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 10.2s (next.js: 2.1s, proxy.ts: 1681ms, application-code: 6.4s)
+  └─ ƒ GetUnreadTicketCounts() in 3154ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 4.5s (next.js: 83ms, proxy.ts: 82ms, application-code: 4.3s)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 3849ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/online-ordering 200 in 4.7s (next.js: 39ms, proxy.ts: 47ms, application-code: 4.6s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 4041ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 600ms (next.js: 29ms, proxy.ts: 95ms, application-code: 476ms)
+  └─ ƒ getImpersonationContext() in 3ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules/templates/create 200 in 3.3s (next.js: 27ms, proxy.ts: 47ms, application-code: 3.2s)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 2726ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/online-ordering 200 in 3.4s (next.js: 34ms, proxy.ts: 44ms, application-code: 3.3s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2728ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 1803ms (next.js: 47ms, proxy.ts: 67ms, application-code: 1689ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 863ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/online-ordering 200 in 1154ms (next.js: 37ms, proxy.ts: 60ms, application-code: 1057ms)
+  └─ ƒ getOrderOutStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 509ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/online-ordering 200 in 5.5s (next.js: 53ms, proxy.ts: 99ms, application-code: 5.3s)
+  └─ ƒ getQrAnalyticsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a", 30) in 4734ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 1535ms (next.js: 35ms, proxy.ts: 53ms, application-code: 1447ms)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 945ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 4.8s (next.js: 40ms, proxy.ts: 70ms, application-code: 4.7s)
+  └─ ƒ getQrTableManagerSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 4025ms ..//app/dashboard/online-ordering/actions.ts
+○ Compiling /sign-in/[[...sign-in]] ...
+ GET /dashboard/schedules/templates/create 200 in 56s (next.js: 38.6s, proxy.ts: 2.4s, application-code: 14.8s)
+ POST /dashboard/online-ordering 200 in 3.7s (next.js: 486ms, proxy.ts: 162ms, application-code: 3.0s)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1756ms ..//app/dashboard/online-ordering/actions.ts
+ POST /sign-in 200 in 58s (next.js: 39.6s, proxy.ts: 62ms, application-code: 18.5s)
+ POST /dashboard/online-ordering 200 in 1313ms (next.js: 26ms, proxy.ts: 41ms, application-code: 1246ms)
+  └─ ƒ GetUnreadTicketCounts() in 969ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/online-ordering 200 in 2.4s (next.js: 33ms, proxy.ts: 66ms, application-code: 2.3s)
+  └─ ƒ getQrTableManagerSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2026ms ..//app/dashboard/online-ordering/actions.ts
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 66s (next.js: 35.7s, proxy.ts: 5.6s, application-code: 24.5s)
+ GET /dashboard/online-ordering 200 in 475ms (next.js: 33ms, proxy.ts: 94ms, application-code: 348ms)
+ POST /dashboard/online-ordering 200 in 6.5s (next.js: 132ms, proxy.ts: 1185ms, application-code: 5.2s)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 4127ms ..//app/dashboard/online-ordering/actions.ts
+ GET /dashboard/schedules/templates/create 200 in 11.8s (next.js: 571ms, proxy.ts: 5.4s, application-code: 5.8s)
+ POST /dashboard/online-ordering 200 in 15.2s (next.js: 3.4s, proxy.ts: 216ms, application-code: 11.6s)
+  └─ ƒ getPushChannelsHistory("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a", {}) in 9700ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/online-ordering 200 in 3.8s (next.js: 37ms, proxy.ts: 61ms, application-code: 3.7s)
+  └─ ƒ listRecentTestOrders({"limit":10,"locationId":"8835e749-9bbf-4405-b4a4-7f28a56f990a"}) in 3193ms ..//app/dashboard/actions/orderout-test-order.ts
+ POST /dashboard/online-ordering 200 in 1936ms (next.js: 36ms, proxy.ts: 66ms, application-code: 1834ms)
+  └─ ƒ getOrderOutSyncedMenus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1302ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/online-ordering 200 in 1456ms (next.js: 50ms, proxy.ts: 66ms, application-code: 1340ms)
+  └─ ƒ getRecentOrderOutOrders("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 757ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/online-ordering 200 in 4.4s (next.js: 36ms, proxy.ts: 62ms, application-code: 4.3s)
+  └─ ƒ getOrderOutWebhookHealth("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 3685ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/online-ordering 200 in 9.3s (next.js: 32ms, proxy.ts: 60ms, application-code: 9.2s)
+  └─ ƒ sendOrderOutTestOrder({"deliveryCompany":"OrderOut","forceSend":false,"itemCount":"random","...":"2 items not stringified"}) in 8454ms ..//app/dashboard/actions/orderout-test-order.ts
+ POST /dashboard/online-ordering 200 in 846ms (next.js: 35ms, proxy.ts: 47ms, application-code: 764ms)
+  └─ ƒ GetUnreadTicketCounts() in 245ms ..//app/dashboard/actions/support.ts
+▲ Next.js 16.2.12 (webpack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.115:3001
+- Environments: .env
+✓ Ready in 2.1s
+○ Compiling /instrumentation ...
+- Experiments (use with caution):
+  · clientTraceMetadata
+  · serverActions
+  ✓ useTypeScriptCli
+
+○ Compiling proxy ...
+Attention: Clerk collects telemetry data from its SDKs when connected to development instances.
+The data collected is used to inform Clerk's product roadmap.
+To learn more, including how to opt-out from the telemetry program, visit: https://clerk.com/docs/telemetry.
+
+○ Compiling /dashboard/online-ordering ...
+ GET /dashboard/online-ordering 200 in 2.9min (next.js: 2.3min, proxy.ts: 7.6s, application-code: 27.7s)
+ GET /dashboard/schedules/templates/create 200 in 5.1s (next.js: 132ms, proxy.ts: 4.3s, application-code: 739ms)
+○ Compiling /[...slug] ...
+ POST /dashboard/schedules/templates/create 200 in 30.5s (next.js: 361ms, proxy.ts: 10.1s, application-code: 20.0s)
+ GET /dashboard/schedules/templates/create 200 in 21.2s (next.js: 11.9s, proxy.ts: 6.6s, application-code: 2.6s)
+○ Compiling /dashboard/online-ordering ...
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 79s (next.js: 46s, proxy.ts: 80ms, application-code: 33.1s)
+ POST /dashboard/online-ordering 200 in 22.4s (next.js: 20.3s, proxy.ts: 83ms, application-code: 2.1s)
+  └─ ƒ GetUserInfo() in 476ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/online-ordering 200 in 409ms (next.js: 42ms, proxy.ts: 102ms, application-code: 264ms)
+  └─ ƒ getImpersonationContext() in 18ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 1266ms (next.js: 48ms, proxy.ts: 85ms, application-code: 1132ms)
+  └─ ƒ GetUnreadTicketCounts() in 829ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 1136ms (next.js: 241ms, proxy.ts: 91ms, application-code: 805ms)
+  └─ ƒ GetUserInfo() in 417ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/schedules/templates/create 200 in 271ms (next.js: 33ms, proxy.ts: 51ms, application-code: 187ms)
+  └─ ƒ getImpersonationContext() in 4ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 5.7s (next.js: 32ms, proxy.ts: 58ms, application-code: 5.7s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 5417ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 318ms (next.js: 34ms, proxy.ts: 45ms, application-code: 239ms)
+  └─ ƒ getImpersonationContext() in 49ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules/templates/create 200 in 1886ms (next.js: 31ms, proxy.ts: 57ms, application-code: 1798ms)
+  └─ ƒ GetUnreadTicketCounts() in 1571ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/schedules/templates/create 200 in 419ms (next.js: 55ms, proxy.ts: 60ms, application-code: 303ms)
+  └─ ƒ getImpersonationContext() in 8ms ..//lib/admin/impersonation.ts
+ POST /dashboard/schedules/templates/create 200 in 3.4s (next.js: 36ms, proxy.ts: 58ms, application-code: 3.3s)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 3079ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/schedules/templates/create 200 in 5.0s (next.js: 33ms, proxy.ts: 87ms, application-code: 4.9s)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 4649ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/online-ordering 200 in 9.7s (next.js: 61ms, proxy.ts: 80ms, application-code: 9.6s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 9319ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 3.3s (next.js: 241ms, proxy.ts: 55ms, application-code: 3.1s)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1661ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/online-ordering 200 in 2.3s (next.js: 33ms, proxy.ts: 65ms, application-code: 2.2s)
+  └─ ƒ getOrderOutStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1956ms ..//app/dashboard/actions/orderout.ts
+○ Compiling /dashboard/schedules/templates ...
+ GET /dashboard/schedules/templates 200 in 87s (next.js: 58s, proxy.ts: 305ms, application-code: 28.7s)
+ GET /dashboard/schedules/templates/create 200 in 6.8s (next.js: 370ms, proxy.ts: 5.2s, application-code: 1278ms)
+ GET /dashboard/online-ordering 200 in 6.8s (next.js: 919ms, proxy.ts: 5.2s, application-code: 679ms)
+ GET /dashboard/online-ordering 200 in 7.5s (next.js: 1483ms, proxy.ts: 1128ms, application-code: 4.9s)
+ POST /dashboard/schedules/templates/create 200 in 11.3s (next.js: 328ms, proxy.ts: 976ms, application-code: 10.0s)
+  └─ ƒ GetUnreadTicketCounts() in 7091ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/online-ordering 200 in 6.3s (next.js: 1460ms, proxy.ts: 280ms, application-code: 4.6s)
+  └─ ƒ getOrderOutStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2231ms ..//app/dashboard/actions/orderout.ts
+ GET /dashboard/online-ordering 200 in 17.9s (next.js: 51ms, proxy.ts: 114ms, application-code: 17.8s)
+ GET /dashboard/online-ordering 200 in 18.0s (next.js: 55ms, proxy.ts: 7.2s, application-code: 10.7s)
+○ Compiling /dashboard/schedules/templates ...
+ POST /dashboard/schedules/templates 200 in 33.9s (next.js: 20.4s, proxy.ts: 10.5s, application-code: 2.9s)
+  └─ ƒ GetUserInfo() in 1983ms ..//app/manage/actions/get-user-info.ts
+○ Compiling /[...slug] ...
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 37.7s (next.js: 21.1s, proxy.ts: 1929ms, application-code: 14.7s)
+○ Compiling /dashboard/schedules ...
+ GET /dashboard/schedules 200 in 57s (next.js: 42s, proxy.ts: 214ms, application-code: 14.4s)
+○ Compiling /sign-in/[[...sign-in]] ...
+ POST /sign-in 200 in 56s (proxy.ts: 14.2s)
+ POST /dashboard/online-ordering 200 in 7.4s (next.js: 934ms, proxy.ts: 1247ms, application-code: 5.3s)
+  └─ ƒ GetUserInfo() in 2055ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/online-ordering 200 in 656ms (next.js: 55ms, proxy.ts: 97ms, application-code: 504ms)
+  └─ ƒ getImpersonationContext() in 11ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 1316ms (next.js: 44ms, proxy.ts: 77ms, application-code: 1194ms)
+  └─ ƒ GetUnreadTicketCounts() in 440ms ..//app/dashboard/actions/support.ts
+ POST /sign-in 200 in 104s (next.js: 48s, proxy.ts: 55s, application-code: 1027ms)
+ POST /dashboard/online-ordering 200 in 536ms (next.js: 42ms, proxy.ts: 69ms, application-code: 425ms)
+  └─ ƒ getImpersonationContext() in 24ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 4.1s (next.js: 34ms, proxy.ts: 49ms, application-code: 4.0s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 3273ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 1705ms (next.js: 43ms, proxy.ts: 99ms, application-code: 1563ms)
+  └─ ƒ GetUnreadTicketCounts() in 1127ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/online-ordering 200 in 967ms (next.js: 65ms, proxy.ts: 99ms, application-code: 803ms)
+  └─ ƒ getImpersonationContext() in 65ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 15.1s (next.js: 49ms, proxy.ts: 525ms, application-code: 14.5s)
+ POST /dashboard/schedules 200 in 2.1s (next.js: 403ms, proxy.ts: 226ms, application-code: 1421ms)
+  └─ ƒ GetUserInfo() in 978ms ..//app/manage/actions/get-user-info.ts
+ GET /dashboard/online-ordering 200 in 15.4s (next.js: 47ms, proxy.ts: 66ms, application-code: 15.3s)
+ GET /dashboard/online-ordering 200 in 1990ms (next.js: 165ms, proxy.ts: 949ms, application-code: 875ms)
+ POST /dashboard/online-ordering 200 in 16.9s (next.js: 39ms, proxy.ts: 61ms, application-code: 16.8s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 15715ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/schedules 200 in 794ms (next.js: 71ms, proxy.ts: 147ms, application-code: 576ms)
+  └─ ƒ getImpersonationContext() in 6ms ..//lib/admin/impersonation.ts
+○ Compiling /[...slug] ...
+ GET /dashboard/schedules 200 in 13.8s (next.js: 45ms, proxy.ts: 9.2s, application-code: 4.6s)
+ POST /dashboard/schedules 200 in 59s (next.js: 48s, proxy.ts: 206ms, application-code: 11.3s)
+  └─ ƒ GetUnreadTicketCounts() in 7647ms ..//app/dashboard/actions/support.ts
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 60s (next.js: 48s, proxy.ts: 118ms, application-code: 12.0s)
+ POST /dashboard/schedules 200 in 1257ms (next.js: 96ms, proxy.ts: 332ms, application-code: 829ms)
+  └─ ƒ getImpersonationContext() in 29ms ..//lib/admin/impersonation.ts
+ GET /.well-known/appspecific/com.chrome.devtools.json 404 in 3.8s (next.js: 248ms, proxy.ts: 976ms, application-code: 2.6s)
+ POST /dashboard/schedules 200 in 3.4s (next.js: 101ms, proxy.ts: 1356ms, application-code: 1923ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1257ms ..//app/dashboard/actions/get-locations.ts
+○ Compiling /dashboard/schedules/[scheduleId] ...
+ POST /dashboard/online-ordering 200 in 2.7s (next.js: 638ms, proxy.ts: 60ms, application-code: 1965ms)
+  └─ ƒ GetUserInfo() in 727ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/online-ordering 200 in 1670ms (next.js: 29ms, proxy.ts: 43ms, application-code: 1598ms)
+  └─ ƒ GetUserInfo() in 919ms ..//app/manage/actions/get-user-info.ts
+ POST /dashboard/online-ordering 200 in 589ms (next.js: 19ms, proxy.ts: 34ms, application-code: 537ms)
+  └─ ƒ getImpersonationContext() in 6ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 1008ms (next.js: 33ms, proxy.ts: 78ms, application-code: 898ms)
+  └─ ƒ getImpersonationContext() in 17ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 1029ms (next.js: 39ms, proxy.ts: 58ms, application-code: 933ms)
+  └─ ƒ GetUnreadTicketCounts() in 288ms ..//app/dashboard/actions/support.ts
+ POST /dashboard/online-ordering 200 in 1032ms (next.js: 24ms, proxy.ts: 72ms, application-code: 935ms)
+  └─ ƒ GetUnreadTicketCounts() in 420ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/schedules/898ca65c-7e71-470d-81cf-c2678be89316 200 in 63s (next.js: 55s, proxy.ts: 77ms, application-code: 8.1s)
+ POST /dashboard/online-ordering 200 in 10.3s (next.js: 101ms, proxy.ts: 7.7s, application-code: 2.5s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2211ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 2.9s (next.js: 29ms, proxy.ts: 436ms, application-code: 2.5s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 1898ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 335ms (next.js: 19ms, proxy.ts: 36ms, application-code: 280ms)
+  └─ ƒ getImpersonationContext() in 2ms ..//lib/admin/impersonation.ts
+ POST /dashboard/online-ordering 200 in 735ms (next.js: 50ms, proxy.ts: 72ms, application-code: 614ms)
+  └─ ƒ getImpersonationContext() in 7ms ..//lib/admin/impersonation.ts
+ GET /_next/static/chunks/app/dashboard/schedules/%5BscheduleId%5D/ReorderContext.mjs.map 404 in 12.1s (next.js: 190ms, application-code: 11.9s)
+ POST /dashboard/online-ordering 200 in 13.7s (next.js: 76ms, proxy.ts: 390ms, application-code: 13.3s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 13026ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/schedules/898ca65c-7e71-470d-81cf-c2678be89316 200 in 4.2s (next.js: 351ms, proxy.ts: 2.4s, application-code: 1442ms)
+  └─ ƒ GetUnifiedStaffView("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 806ms ..//app/dashboard/actions/unified-staff.ts
+ POST /dashboard/online-ordering 200 in 14.6s (next.js: 112ms, proxy.ts: 9.5s, application-code: 5.1s)
+  └─ ƒ getOnlineOrderingSettings("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 3889ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 2000ms (next.js: 71ms, proxy.ts: 44ms, application-code: 1884ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 1606ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/online-ordering 200 in 1223ms (next.js: 28ms, proxy.ts: 90ms, application-code: 1105ms)
+  └─ ƒ GetLocations("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "user_36u15MkVGaCOwWexx9cWWlrF1Vw") in 860ms ..//app/dashboard/actions/get-locations.ts
+ POST /dashboard/online-ordering 200 in 1240ms (next.js: 30ms, proxy.ts: 48ms, application-code: 1161ms)
+  └─ ƒ getOrderOutStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 543ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/online-ordering 200 in 27.9s (next.js: 147ms, proxy.ts: 206ms, application-code: 27.6s)
+  └─ ƒ getOrderOutStatus("org_34LN9aMJGO4jNllGTvHH4CLB5gq", "8835e749-9bbf-4405-b4a4-7f28a56f990a") in 21362ms ..//app/dashboard/actions/orderout.ts
+ POST /dashboard/schedules/898ca65c-7e71-470d-81cf-c2678be89316 200 in 11.6s (next.js: 141ms, proxy.ts: 10.3s, application-code: 1184ms)
+  └─ ƒ GetUnreadTicketCounts() in 600ms ..//app/dashboard/actions/support.ts
+ GET /dashboard/schedules/templates 200 in 9.5s (next.js: 945ms, proxy.ts: 448ms, application-code: 8.1s)
+ GET /dashboard/schedules/templates 200 in 17.6s (next.js: 6.9s, proxy.ts: 8.6s, application-code: 2.1s)
+ GET /dashboard/online-ordering 200 in 9.7s (next.js: 8.2s, proxy.ts: 514ms, application-code: 956ms)
+ GET /dashboard/online-ordering 200 in 2.0s (next.js: 50ms, proxy.ts: 986ms, application-code: 976ms)
+ POST /dashboard/online-ordering 200 in 4.1s (next.js: 37ms, proxy.ts: 60ms, application-code: 4.0s)
+  └─ ƒ getQrAnalyticsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a", 30) in 1723ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 1078ms (next.js: 70ms, proxy.ts: 80ms, application-code: 928ms)
+  └─ ƒ getQrGuestAlertsSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 300ms ..//app/dashboard/online-ordering/actions.ts
+ POST /dashboard/online-ordering 200 in 3.7s (next.js: 40ms, proxy.ts: 121ms, application-code: 3.6s)
+  └─ ƒ getQrTableManagerSnapshot("8835e749-9bbf-4405-b4a4-7f28a56f990a") in 2426ms ..//app/dashboard/online-ordering/actions.ts
+○ Compiling /dashboard/kiosk ...
+ GET /dashboard/kiosk 200 in 86s (next.js: 77s, proxy.ts: 63ms, application-code: 9.2s)
+○ Compiling /dashboard/customers ...
+ GET /dashboard/customers 200 in 9.4min (next.js: 9.1min, proxy.ts: 719ms, application-code: 12.6s)
+[?25h

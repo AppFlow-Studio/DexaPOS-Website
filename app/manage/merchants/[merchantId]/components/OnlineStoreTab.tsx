@@ -991,7 +991,7 @@ export function OnlineStoreTab({
                                         <div className="space-y-2">
                                             <Label htmlFor="storeSlug">Store URL Slug</Label>
                                             <div className="flex">
-                                                <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-sm text-muted-foreground">
+                                                <span className="inline-flex items-center rounded-l-full border border-r-0 border-input bg-muted pl-4 pr-3 text-sm text-muted-foreground">
                                                     /sites/
                                                 </span>
                                                 <Input

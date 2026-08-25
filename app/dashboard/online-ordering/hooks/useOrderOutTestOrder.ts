@@ -1,7 +1,6 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import {
   sendOrderOutTestOrder,
   listRecentTestOrders,
@@ -20,17 +19,7 @@ export function useSendOrderOutTestOrder(locationId: string) {
       sendOrderOutTestOrder({ ...input, locationId }),
     onSuccess: (result) => {
       if (!result.success) {
-        toast.error(result.error || "Failed to send test order");
         return;
-      }
-      if (result.stored_in_dlq) {
-        toast.success("Test payload stored in DLQ", {
-          description: result.message || "Webhook processed in fallback path",
-        });
-      } else {
-        toast.success("Test order created", {
-          description: result.testOrderNumber,
-        });
       }
       queryClient.invalidateQueries({
         queryKey: ["orderout-test-orders", locationId],
@@ -41,9 +30,7 @@ export function useSendOrderOutTestOrder(locationId: string) {
         queryKey: ["orderout-recent-orders"],
       });
     },
-    onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Failed to send test order");
-    },
+    onError: (err) => {},
   });
 }
 

@@ -3,11 +3,11 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
-import { MapPin, ChevronRight, CheckCircle2, ArrowRight } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { MapPin, CheckCircle2, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { PageShell, PageHeader, Panel } from "@/components/dashboard/shell";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useGatedLocationId, useGatedLocation } from "@/stores/location-store";
 import { formatMoney } from "./lib/constants";
@@ -145,164 +145,163 @@ export default function TipsPage() {
     );
   };
 
-  // Location guard
-  if (selectedLocationId === "all") {
-    return (
-      <div className="space-y-6">
-        <div>
-          <nav className="flex items-center gap-1.5 text-sm text-muted-foreground mb-3">
-            <span>Reports</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-            <span className="text-foreground font-medium">Tip Distribution</span>
-          </nav>
-          <h1 className="text-2xl font-bold">Tip Distribution</h1>
-        </div>
-        <Card className="p-6 border-yellow-200 bg-yellow-50">
-          <div className="flex items-start gap-3">
-            <MapPin className="w-5 h-5 text-yellow-600 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-yellow-900">Select a Location</h3>
-              <p className="text-sm text-yellow-800 mt-1">
-                Tip distribution is location-specific. Please select a specific location
-                from the top navigation to manage tips for that location.
-              </p>
-            </div>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
+  const isAllLocations = selectedLocationId === "all";
   const locationName = selectedLocation?.name || "Location";
 
   return (
-    <div className="space-y-6">
-      {/* PAGE HEADER */}
-      <div>
-        <nav className="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
-          <span>Reports</span>
-          <ChevronRight className="w-3.5 h-3.5" />
-          <span className="text-foreground font-medium">Tip Distribution</span>
-        </nav>
-        <h1 className="text-2xl font-bold">Tip Distribution</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Manage tip distribution for {locationName}
-        </p>
-      </div>
-
-      {/* ATTENTION BANNER — orphaned shifts + unclosed days */}
-      <AttentionBanner
-        orphanedShifts={orphanedShifts}
-        unclosedDays={unclosedDays}
-        onForceClockOut={handleForceClockOut}
-        onCloseOutDay={handleCloseOutDay}
-        isForceClockOutLoading={forceClockOutMutation.isPending}
+    <PageShell>
+      <PageHeader
+        title="Tip Distribution"
+        subtitle={isAllLocations ? undefined : `Manage tip distribution for ${locationName}`}
       />
 
-      {/* TABS */}
-      <Tabs defaultValue="today">
-        <TabsList>
-          <TabsTrigger value="today">Today</TabsTrigger>
-          <TabsTrigger value="approval" className="gap-1.5">
-            Needs Approval
-            {needsApproval.length > 0 && (
-              <Badge className="bg-amber-500 text-white text-[10px] px-1.5 py-0 min-w-[18px] h-[18px] rounded-full">
-                {needsApproval.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
-        </TabsList>
-
-        {/* TODAY TAB */}
-        <TabsContent value="today" className="space-y-6 mt-4">
-          <TodayHeader
-            date={todayDate}
-            locationName={locationName}
-            summary={summary ?? null}
-            isLoading={summaryLoading}
-            staffStillClockedIn={staffStillClockedIn}
-            undeclaredStaffCount={undeclaredStaff.length}
-            onCloseOut={() => setCloseOutOpen(true)}
-            isClosingOut={calculateMutation.isPending}
+      {isAllLocations ? (
+        <div className="flex items-start gap-3 rounded-2xl border-0 bg-amber-500/10 p-6 dark:bg-amber-400/10">
+          <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="min-w-0">
+            <h2 className="font-semibold text-amber-800 dark:text-amber-300">Select a location</h2>
+            <p className="mt-1 text-sm text-amber-800/90 dark:text-amber-300/90">
+              Tip distribution is location-specific. Choose a specific location
+              from the top navigation to manage tips for that location.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* ATTENTION BANNER — orphaned shifts + unclosed days */}
+          <AttentionBanner
+            orphanedShifts={orphanedShifts}
+            unclosedDays={unclosedDays}
+            onForceClockOut={handleForceClockOut}
+            onCloseOutDay={handleCloseOutDay}
+            isForceClockOutLoading={forceClockOutMutation.isPending}
           />
 
-          {/* Previous session banner */}
-          {lastCutoff && (
-            <Card className="p-3 border-green-200 bg-green-50 dark:bg-green-950/20 dark:border-green-900/30">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-green-600" />
-                  <div className="text-sm">
-                    <span className="font-medium text-green-800 dark:text-green-200">
-                      Session {lastCutoff.sequenceNumber} closed
-                    </span>
-                    <span className="text-green-700 dark:text-green-300 ml-1">
-                      — {formatMoney(lastCutoff.totalDistributed)} distributed
-                    </span>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-green-700 hover:text-green-800 h-7 text-xs"
-                  onClick={() => router.push(`/dashboard/tips/${lastCutoff.sessionId}`)}
+          {/* TABS */}
+          <Tabs defaultValue="today">
+            <div className="w-full min-w-0 overflow-x-auto scroll-smooth pb-1">
+              <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                <TabsTrigger
+                  value="today"
+                  className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
                 >
-                  View <ArrowRight className="w-3 h-3 ml-1" />
-                </Button>
-              </div>
-            </Card>
-          )}
+                  Today
+                </TabsTrigger>
+                <TabsTrigger
+                  value="approval"
+                  className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground gap-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                >
+                  Needs Approval
+                  {needsApproval.length > 0 && (
+                    <span className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full border-0 bg-muted/60 px-1.5 text-[10px] font-medium tabular-nums">
+                      {needsApproval.length}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="history"
+                  className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                >
+                  History
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-          <ActiveShiftsPanel shifts={shifts} isLoading={shiftsLoading} />
+            {/* TODAY TAB */}
+            <TabsContent value="today" className="space-y-6 mt-4">
+              <TodayHeader
+                date={todayDate}
+                locationName={locationName}
+                summary={summary ?? null}
+                isLoading={summaryLoading}
+                staffStillClockedIn={staffStillClockedIn}
+                undeclaredStaffCount={undeclaredStaff.length}
+                onCloseOut={() => setCloseOutOpen(true)}
+                isClosingOut={calculateMutation.isPending}
+              />
 
-          {/* Projected Distribution */}
-          <ProjectedDistributionPanel
-            clerkOrgId={clerkOrgId}
-            locationId={locationId}
-            sessionDate={todayDate}
+              {/* Previous session banner. `flex-wrap`, not `justify-between`
+                  on a rigid row: the action drops beneath the message at 320px
+                  instead of overflowing. */}
+              {lastCutoff && (
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border-0 bg-emerald-500/10 px-4 py-3 dark:bg-emerald-400/10">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <p className="min-w-0 text-sm text-emerald-800 dark:text-emerald-300">
+                      <span className="font-medium">
+                        Session {lastCutoff.sequenceNumber} closed
+                      </span>
+                      <span className="ml-1 tabular-nums">
+                        — {formatMoney(lastCutoff.totalDistributed)} distributed
+                      </span>
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 shrink-0 rounded-full px-3 text-[0.8125rem] font-medium text-emerald-800 hover:bg-emerald-500/15 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-200"
+                    onClick={() => router.push(`/dashboard/tips/${lastCutoff.sessionId}`)}
+                  >
+                    View <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+
+              <ActiveShiftsPanel shifts={shifts} isLoading={shiftsLoading} />
+
+              {/* Projected Distribution */}
+              <ProjectedDistributionPanel
+                clerkOrgId={clerkOrgId}
+                locationId={locationId}
+                sessionDate={todayDate}
+              />
+
+              <ConfigSummaryPanel clerkOrgId={clerkOrgId} locationId={locationId} />
+            </TabsContent>
+
+            {/* NEEDS APPROVAL TAB */}
+            <TabsContent value="approval" className="mt-4">
+              <Panel padded>
+                <NeedsApprovalTable
+                  sessions={needsApproval}
+                  isLoading={approvalLoading}
+                  onVoid={handleVoidFromApproval}
+                />
+              </Panel>
+            </TabsContent>
+
+            {/* HISTORY TAB */}
+            <TabsContent value="history" className="mt-4">
+              <Panel padded>
+                <HistoryTable clerkOrgId={clerkOrgId} locationId={locationId} />
+              </Panel>
+            </TabsContent>
+          </Tabs>
+
+          {/* DIALOGS */}
+          <CloseOutDialog
+            open={closeOutOpen}
+            onOpenChange={(open) => {
+              setCloseOutOpen(open);
+              if (!open) setCloseOutTargetDate(undefined);
+            }}
+            undeclaredStaff={undeclaredStaff}
+            onConfirm={handleCloseOut}
+            isLoading={calculateMutation.isPending}
+            targetDate={closeOutTargetDate}
           />
 
-          <ConfigSummaryPanel clerkOrgId={clerkOrgId} locationId={locationId} />
-        </TabsContent>
-
-        {/* NEEDS APPROVAL TAB */}
-        <TabsContent value="approval" className="mt-4">
-          <NeedsApprovalTable
-            sessions={needsApproval}
-            isLoading={approvalLoading}
-            onVoid={handleVoidFromApproval}
+          <VoidDialog
+            open={voidDialogOpen}
+            onOpenChange={(open) => {
+              setVoidDialogOpen(open);
+              if (!open) setVoidingSession(null);
+            }}
+            onConfirm={handleVoidConfirm}
+            isLoading={voidMutation.isPending}
           />
-        </TabsContent>
-
-        {/* HISTORY TAB */}
-        <TabsContent value="history" className="mt-4">
-          <HistoryTable clerkOrgId={clerkOrgId} locationId={locationId} />
-        </TabsContent>
-      </Tabs>
-
-      {/* DIALOGS */}
-      <CloseOutDialog
-        open={closeOutOpen}
-        onOpenChange={(open) => {
-          setCloseOutOpen(open);
-          if (!open) setCloseOutTargetDate(undefined);
-        }}
-        undeclaredStaff={undeclaredStaff}
-        onConfirm={handleCloseOut}
-        isLoading={calculateMutation.isPending}
-        targetDate={closeOutTargetDate}
-      />
-
-      <VoidDialog
-        open={voidDialogOpen}
-        onOpenChange={(open) => {
-          setVoidDialogOpen(open);
-          if (!open) setVoidingSession(null);
-        }}
-        onConfirm={handleVoidConfirm}
-        isLoading={voidMutation.isPending}
-      />
-    </div>
+        </>
+      )}
+    </PageShell>
   );
 }

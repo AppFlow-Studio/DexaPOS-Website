@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useSalesSummaryReport } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
-import { SummaryCard } from './SummaryCard'
+import { ChannelCard, SummaryCard, SummaryCardRow } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
@@ -41,6 +41,7 @@ export function SalesSummaryReport({
     orderSource
   )
   const [searchQuery, setSearchQuery] = useState('')
+  const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<string>>(() => new Set(['grossSales', 'discounts', 'tax', 'tips', 'refunds']))
   const rows = useMemo(() => data?.rows ?? [], [data?.rows])
   const channelRows = useMemo(
     () => data?.byChannel ?? [],
@@ -118,6 +119,17 @@ export function SalesSummaryReport({
     },
   ]
 
+  const columnConfig = [
+    { id: 'date', label: 'Date', locked: true },
+    { id: 'orderCount', label: 'Orders' },
+    { id: 'grossSales', label: 'Gross Sales' },
+    { id: 'discounts', label: 'Discounts' },
+    { id: 'netSales', label: 'Net Sales', locked: true },
+    { id: 'tax', label: 'Tax' },
+    { id: 'tips', label: 'Tips' },
+    { id: 'refunds', label: 'Refunds' },
+  ] as const
+
   const exportColumns = [
     { key: 'date' as const, header: 'Date' },
     { key: 'orderCount' as const, header: 'Orders' },
@@ -173,50 +185,9 @@ export function SalesSummaryReport({
   ]
 
   return (
-    <div className="space-y-4">
-      <ReportToolbar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        filteredCount={filteredData.length}
-        totalCount={rows.length}
-        data={filteredData}
-        exportColumns={exportColumns}
-        filename={`Sales Summary - ${formatReportDateRange(dateFrom, dateTo)}`}
-        searchPlaceholder="Search by date (e.g., Mon, Jan 15)..."
-        merchantName={merchantName}
-        locationName={locationName}
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        summaryCards={summaryCardsData}
-      />
-
-      <div>
-        <h3 className="mb-3 text-sm font-semibold text-foreground">
-          Sales by Channel
-        </h3>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {channelRows.map((channel) => {
-            const Icon = channelIcons[channel.channel]
-            return (
-              <SummaryCard
-                key={channel.channel}
-                label={channel.label}
-                value={formatCurrency(channel.net)}
-                description={`${channel.orders.toLocaleString()} orders | ${formatCurrency(channel.avgTicket)} avg`}
-                icon={<Icon className="h-5 w-5" />}
-                className={
-                  orderSource === channel.channel
-                    ? 'border-[#0C4FD1] bg-blue-50 dark:bg-blue-950/20'
-                    : undefined
-                }
-              />
-            )
-          })}
-        </div>
-      </div>
-
+    <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <SummaryCardRow>
         <SummaryCard
           label="Total Net Sales"
           value={formatCurrency(totalNetSales)}
@@ -232,12 +203,54 @@ export function SalesSummaryReport({
           value={formatCurrency(avgOrderValue)}
           icon={<TrendingUp className="h-5 w-5" />}
         />
-      </div>
+      </SummaryCardRow>
+
+      {channelRows.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-medium text-muted-foreground">
+            Sales by Channel
+          </h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {channelRows.map((channel) => {
+              const Icon = channelIcons[channel.channel]
+              return (
+                <ChannelCard
+                  key={channel.channel}
+                  label={channel.label}
+                  value={formatCurrency(channel.net)}
+                  meta={`${channel.orders.toLocaleString()} orders · ${formatCurrency(channel.avgTicket)} avg`}
+                  icon={<Icon className="h-5 w-5" />}
+                  dimmed={orderSource !== null && orderSource !== channel.channel}
+                />
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <ReportToolbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        filteredCount={filteredData.length}
+        totalCount={rows.length}
+        data={filteredData}
+        exportColumns={exportColumns}
+        filename={`Sales Summary - ${formatReportDateRange(dateFrom, dateTo)}`}
+        searchPlaceholder="Search by date (e.g., Mon, Jan 15)..."
+        merchantName={merchantName}
+        locationName={locationName}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        summaryCards={summaryCardsData}
+        columnConfig={columnConfig as any}
+        hiddenColumns={hiddenColumnIds}
+        onColumnVisibilityChange={setHiddenColumnIds}
+      />
 
       {rows.length === 0 ? (
         <Empty description="No sales data for selected period" />
       ) : (
-        <ReportDataTable columns={columns} data={filteredData} />
+        <ReportDataTable columns={columns} data={filteredData} hiddenColumnIds={hiddenColumnIds} />
       )}
     </div>
   )

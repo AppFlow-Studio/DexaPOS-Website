@@ -1,6 +1,11 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import {
   getStationsForLocation,
   getStationsForMerchant,
@@ -209,6 +214,24 @@ export function useNextStationNumber(locationId: string, stationType: StationTyp
 // ============================================================================
 
 /**
+ * Invalidate every query that reads station rows.
+ *
+ * `invalidateQueries` matches by key *prefix*, so `["stations"]` reaches
+ * `["stations", "location", …]` and `["stations", "merchant", …]` — but
+ * `useStationsWithHeartbeats` is keyed `["stations-with-heartbeats", …]`, a
+ * different first element rather than a nested one. It therefore never matched,
+ * and the stations table (which reads that query) stayed stale until a manual
+ * page refresh refetched it.
+ *
+ * Both roots live here so a new mutation gets the full set from one call, and
+ * so a new station-reading query only has to be added in one place.
+ */
+function invalidateStationQueries(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ["stations"] });
+  queryClient.invalidateQueries({ queryKey: ["stations-with-heartbeats"] });
+}
+
+/**
  * Hook to create a new station
  */
 export function useCreateStation() {
@@ -230,7 +253,7 @@ export function useCreateStation() {
     },
     onSuccess: (data) => {
       // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: ["stations"] });
+      invalidateStationQueries(queryClient);
       toast.success("Station created successfully");
     },
     onError: (error: Error) => {
@@ -260,7 +283,7 @@ export function useUpdateStation() {
       return result.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["stations"] });
+      invalidateStationQueries(queryClient);
       toast.success("Station updated successfully");
     },
     onError: (error: Error) => {
@@ -290,7 +313,7 @@ export function useDeactivateStation() {
       return result.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["stations"] });
+      invalidateStationQueries(queryClient);
       toast.success(`${data?.station_name} has been deactivated`);
     },
     onError: (error: Error) => {
@@ -314,7 +337,7 @@ export function useReactivateStation() {
       return result.data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["stations"] });
+      invalidateStationQueries(queryClient);
       toast.success(`${data?.station_name} has been reactivated`);
     },
     onError: (error: Error) => {
@@ -338,7 +361,7 @@ export function useDeleteStation() {
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["stations"] });
+      invalidateStationQueries(queryClient);
       toast.success("Station deleted successfully");
     },
     onError: (error: Error) => {
@@ -362,7 +385,7 @@ export function useDeleteMultipleStations() {
       return result;
     },
     onSuccess: (_, stationIds) => {
-      queryClient.invalidateQueries({ queryKey: ["stations"] });
+      invalidateStationQueries(queryClient);
       toast.success(`${stationIds.length} station(s) deleted successfully`);
     },
     onError: (error: Error) => {

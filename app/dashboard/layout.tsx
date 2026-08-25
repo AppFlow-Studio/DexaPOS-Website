@@ -51,7 +51,7 @@ import {
   LogOut,
   Utensils,
   CircleSlash,
-  Coffee,
+  Armchair,
   Receipt,
   Calendar,
   MapPin,
@@ -74,6 +74,7 @@ import {
   DollarSign,
   CalendarClock,
   ShieldAlert,
+  Percent,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -105,6 +106,7 @@ import {
 import { ImpersonationBanner } from "@/components/dashboard/ImpersonationBanner";
 import { ImpersonationHydrator } from "@/components/dashboard/ImpersonationHydrator";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { ReadOnlyNotificationBell } from "@/components/notifications/ReadOnlyNotificationBell";
 import { GetUnreadTicketCounts } from "./actions/support";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import type { BottomNavTab, MoreNavItem } from "@/components/dashboard/MobileBottomNav";
@@ -132,10 +134,14 @@ const navMain = [
       {
         title: "Tables",
         url: "/dashboard/tables",
-        icon: Coffee,
+        icon: Armchair,
         items: [
-          { title: "Tables", url: "/dashboard/tables" },
-          { title: "Service Charge", url: "/dashboard/tables/service-charge" },
+          { title: "Tables", url: "/dashboard/tables", icon: Armchair },
+          {
+            title: "Service Charge",
+            url: "/dashboard/tables/service-charge",
+            icon: Percent,
+          },
         ],
       },
       {
@@ -159,7 +165,7 @@ const navMain = [
         icon: List,
       },
       {
-        title: "86'd Items",
+        title: "Out of stock",
         url: "/dashboard/menu/out-of-stock",
         icon: CircleSlash,
       },
@@ -241,46 +247,57 @@ const navMain = [
           {
             title: "Financial Information",
             url: "/dashboard/reports/financials",
+            icon: Banknote,
           },
           {
             title: "Compare Locations",
             url: "/dashboard/reports/comparison",
+            icon: GitCompare,
           },
           {
             title: "Orders",
             url: "/dashboard/orders/reports",
+            icon: ShoppingCart,
           },
           {
             title: "Sales By Items",
             url: "/dashboard/reports/sales-by-items",
+            icon: List,
           },
           {
             title: "Cash Management",
             url: "/dashboard/reports/cash-management",
+            icon: DollarSign,
           },
           {
             title: "Voids & Refunds",
             url: "/dashboard/reports/voids",
+            icon: CircleSlash,
           },
           {
             title: "Online Ordering",
             url: "/dashboard/reports/online-ordering",
+            icon: Globe,
           },
           {
             title: "Cash Drawers",
             url: "/dashboard/reports/cash-drawers",
+            icon: Receipt,
           },
           {
             title: "Tax Report",
             url: "/dashboard/reports/tax",
+            icon: Percent,
           },
           {
             title: "Kitchen Performance",
             url: "/dashboard/reports/kitchen-performance",
+            icon: Flame,
           },
           {
             title: "Discrepancy",
             url: "/dashboard/reports/discrepancy",
+            icon: ShieldAlert,
           },
         ],
       },
@@ -309,8 +326,8 @@ const navMain = [
         url: "/dashboard/tips",
         icon: DollarSign,
         items: [
-          { title: "Tip Distribution", url: "/dashboard/tips" },
-          { title: "My Tips", url: "/dashboard/tips/my-tips" },
+          { title: "Tip Distribution", url: "/dashboard/tips", icon: Users },
+          { title: "My Tips", url: "/dashboard/tips/my-tips", icon: User },
         ],
       },
       {
@@ -329,7 +346,7 @@ const navFooter = [
     icon: Settings,
   },
   {
-    title: "Get Help",
+    title: "Support",
     url: "/dashboard/support",
     icon: MessageCircle,
   },
@@ -431,6 +448,7 @@ function MerchantSidebar() {
                                         }
                                       >
                                         <Link href="/dashboard/orders">
+                                          <ShoppingCart className="h-3 w-3" />
                                           <span>Orders</span>
                                         </Link>
                                       </SidebarMenuSubButton>
@@ -479,25 +497,33 @@ function MerchantSidebar() {
                           return (
                             <SidebarMenuItem key={menuItem.title}>
                               <Collapsible defaultOpen={isReportsOpen} className="group">
-                                <div className="flex items-center">
+                                {/* Expand-only, like Orders/Tables/Tips/Settings:
+                                    the whole row toggles rather than navigating.
+                                    The landing page is reachable from the
+                                    "General" sub-item below. */}
+                                <CollapsibleTrigger asChild>
                                   <SidebarMenuButton
-                                    asChild
                                     isActive={isReportsActive}
-                                    className="flex-1"
+                                    className="w-full"
                                   >
-                                    <Link href={menuItem.url}>
-                                      <menuItem.icon className="h-4 w-4" />
-                                      <span>{menuItem.title}</span>
-                                    </Link>
+                                    <menuItem.icon className="h-4 w-4" />
+                                    <span>{menuItem.title}</span>
+                                    <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
                                   </SidebarMenuButton>
-                                  <CollapsibleTrigger asChild>
-                                    <button className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent transition-colors shrink-0">
-                                      <ChevronRight className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
-                                    </button>
-                                  </CollapsibleTrigger>
-                                </div>
+                                </CollapsibleTrigger>
                                 <CollapsibleContent>
                                   <SidebarMenuSub>
+                                    <SidebarMenuSubItem>
+                                      <SidebarMenuSubButton
+                                        asChild
+                                        isActive={pathname === menuItem.url}
+                                      >
+                                        <Link href={menuItem.url}>
+                                          <BarChart3 className="h-3 w-3" />
+                                          <span>General</span>
+                                        </Link>
+                                      </SidebarMenuSubButton>
+                                    </SidebarMenuSubItem>
                                     {/* @ts-ignore */}
                                     {menuItem.items &&
                                       menuItem.items.map((subItem) => (
@@ -507,6 +533,9 @@ function MerchantSidebar() {
                                             isActive={pathname === subItem.url}
                                           >
                                             <Link href={subItem.url}>
+                                              {subItem.icon && (
+                                                <subItem.icon className="h-3 w-3" />
+                                              )}
                                               <span>{subItem.title}</span>
                                             </Link>
                                           </SidebarMenuSubButton>
@@ -551,6 +580,9 @@ function MerchantSidebar() {
                                             isActive={pathname === subItem.url}
                                           >
                                             <Link href={subItem.url}>
+                                              {subItem.icon && (
+                                                <subItem.icon className="h-3 w-3" />
+                                              )}
                                               <span>{subItem.title}</span>
                                             </Link>
                                           </SidebarMenuSubButton>
@@ -591,6 +623,9 @@ function MerchantSidebar() {
                                             isActive={pathname === subItem.url}
                                           >
                                             <Link href={subItem.url}>
+                                              {subItem.icon && (
+                                                <subItem.icon className="h-3 w-3" />
+                                              )}
                                               <span>{subItem.title}</span>
                                             </Link>
                                           </SidebarMenuSubButton>
@@ -665,6 +700,7 @@ function MerchantSidebar() {
                       }
                     >
                       <Link href="/dashboard/settings">
+                        <Settings className="h-3 w-3" />
                         <span>General</span>
                       </Link>
                     </SidebarMenuSubButton>
@@ -760,7 +796,7 @@ function MerchantSidebar() {
               </CollapsibleContent>
             </Collapsible>
           </SidebarMenuItem>
-          {/* Get Help */}
+          {/* Support */}
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
@@ -768,7 +804,7 @@ function MerchantSidebar() {
             >
               <Link href="/dashboard/support">
                 <MessageCircle className="h-4 w-4" />
-                <span>Get Help</span>
+                <span>Support</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -809,7 +845,6 @@ function MerchantSidebar() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/dashboard/profile">
                   <User className="mr-2 h-4 w-4" />
@@ -822,7 +857,6 @@ function MerchantSidebar() {
                   Settings
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Log out
@@ -1317,43 +1351,92 @@ export default function MerchantDashboardLayout({
     { id: "staff", label: "Staff", icon: Users, url: "/dashboard/staff" },
   ];
 
-  // Mirror the sidebar's singular-"Location" label for the mobile menu; the
-  // locations page renders the single-store detail itself.
+  // Every page the sidebar can reach, flattened in sidebar order — nothing
+  // expands on mobile, so sub-items (Service Charge, the report pages, My Tips)
+  // are listed inline rather than hidden behind a disclosure. The account rows
+  // (Settings, Support, Profile) close the list, mirroring the sidebar footer.
+  //
+  // Keep in step with `navMain` above; a page added there needs a row here or
+  // it becomes unreachable on a phone.
   const dashboardMoreItems: MoreNavItem[] = [
+    // Operations — "Home"/"Orders" already have bottom-bar tabs.
     {
       title: activeLocationCount === 1 ? "Location" : "Locations",
       url: "/dashboard/locations",
       icon: MapPin,
     },
-    { title: "Tables", url: "/dashboard/tables", icon: Coffee },
+    { title: "Tables", url: "/dashboard/tables", icon: Armchair },
+    { title: "Service Charge", url: "/dashboard/tables/service-charge", icon: Percent },
     { title: "Reservations", url: "/dashboard/reservations", icon: CalendarClock },
-    { title: "Schedules", url: "/dashboard/schedules", icon: Calendar },
+
+    // Menus & Products — "Menus" has a bottom-bar tab.
     { title: "Items", url: "/dashboard/menu/items", icon: List },
+    { title: "Out of stock", url: "/dashboard/menu/out-of-stock", icon: CircleSlash },
     { title: "Categories", url: "/dashboard/menu/categories", icon: Tag },
     { title: "Discounts", url: "/dashboard/discounts", icon: Banknote },
     { title: "Modifiers", url: "/dashboard/menu/modifiers", icon: Layers },
+
+    // Management — "Staff" has a bottom-bar tab.
+    { title: "Schedules", url: "/dashboard/schedules", icon: Calendar },
     { title: "Online Ordering", url: "/dashboard/online-ordering", icon: Globe },
+    { title: "Kiosk", url: "/dashboard/kiosk", icon: MonitorPlay },
     { title: "Customers", url: "/dashboard/customers", icon: User },
     { title: "Inventory", url: "/dashboard/inventory", icon: Package },
     { title: "Subscriptions", url: "/dashboard/subscriptions", icon: FileText },
     { title: "Devices", url: "/dashboard/devices", icon: Monitor },
     { title: "Cash Drawers", url: "/dashboard/cash-drawers", icon: Banknote },
     { title: "Audit Logs", url: "/dashboard/audit-logs", icon: GitCompare },
+
+    // Reports — the landing page then each report, in sidebar order.
     { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
+    { title: "Financial Information", url: "/dashboard/reports/financials", icon: Banknote },
+    { title: "Compare Locations", url: "/dashboard/reports/comparison", icon: GitCompare },
+    { title: "Order Reports", url: "/dashboard/orders/reports", icon: ShoppingCart },
+    { title: "Sales By Items", url: "/dashboard/reports/sales-by-items", icon: List },
+    { title: "Cash Management", url: "/dashboard/reports/cash-management", icon: DollarSign },
+    { title: "Voids & Refunds", url: "/dashboard/reports/voids", icon: CircleSlash },
+    { title: "Online Ordering Report", url: "/dashboard/reports/online-ordering", icon: Globe },
+    { title: "Cash Drawer Reports", url: "/dashboard/reports/cash-drawers", icon: Receipt },
+    { title: "Tax Report", url: "/dashboard/reports/tax", icon: Percent },
+    { title: "Kitchen Performance", url: "/dashboard/reports/kitchen-performance", icon: Flame },
+    { title: "Discrepancy", url: "/dashboard/reports/discrepancy", icon: ShieldAlert },
+
+    // Financial
     { title: "Transactions", url: "/dashboard/transactions", icon: Receipt },
     { title: "Invoices", url: "/dashboard/invoices", icon: FileText },
     { title: "Payments", url: "/dashboard/payments", icon: CreditCard },
-    { title: "Tips", url: "/dashboard/tips", icon: DollarSign },
+    { title: "Tip Distribution", url: "/dashboard/tips", icon: Users },
+    { title: "My Tips", url: "/dashboard/tips/my-tips", icon: User },
     { title: "TSYS Disputes", url: "/dashboard/payments/disputes", icon: ShieldAlert },
+
+    // Account — matches the sidebar footer.
     { title: "Settings", url: "/dashboard/settings", icon: Settings },
-    { title: "Get Help", url: "/dashboard/support", icon: MessageCircle },
+    { title: "Support", url: "/dashboard/support", icon: MessageCircle },
+    { title: "Profile", url: "/dashboard/profile", icon: User },
   ];
 
+  // h-svh + max-h-svh + min-h-0 + overflow-hidden caps the shell at the
+  // viewport. All four are load-bearing:
+  //
+  //   • The provider ships `min-h-svh` (sidebar.tsx). `min-height` beats a
+  //     smaller `height` regardless of source order, so `h-svh` alone does NOT
+  //     cap it — `min-h-0` is what actually removes the floor.
+  //   • `max-h-svh` then makes the cap explicit rather than relying on `h-svh`
+  //     surviving future edits to the primitive.
+  //
+  // Without this the wrapper grows past the viewport (the impersonation banner
+  // sits inside <main> alongside the header and the scroll container), the
+  // window scrolls as well, and you get two scrollbars with dead space under
+  // the content. #main-content below is the single intended scroll container.
   return (
-    <SidebarProvider className="dashboard-sidebar-theme">
+    <SidebarProvider className="dashboard-sidebar-theme h-svh max-h-svh min-h-0 overflow-hidden">
       <ImpersonationHydrator />
       <MerchantSidebar />
-      <main aria-label="Dashboard content" className="flex-1 flex flex-col min-w-0 bg-background">
+      {/* h-svh + min-h-0 constrain this column to the viewport so #main-content
+          below can actually scroll. Without the floor, `flex-1` lets the scroll
+          container grow to fit its content — it never scrolls, the window
+          scrolls instead, and any `position: sticky` inside it never triggers. */}
+      <main aria-label="Dashboard content" className="h-svh max-h-svh min-h-0 flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
         <ImpersonationBanner />
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
           <SidebarTrigger className="-ml-1 hidden sm:flex" />
@@ -1376,9 +1459,10 @@ export default function MerchantDashboardLayout({
               href="/dashboard/support"
               queryKey="merchant-unread-ticket-counts"
             />
+            <ReadOnlyNotificationBell />
           </div>
         </header>
-        <div id="main-content" className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6">{children}</div>
+        <div id="main-content" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6">{children}</div>
       </main>
       <MobileBottomNav tabs={dashboardBottomTabs} moreItems={dashboardMoreItems} />
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />

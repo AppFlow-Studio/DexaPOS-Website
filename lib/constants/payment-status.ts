@@ -36,72 +36,35 @@ interface BadgeStyle {
 }
 
 /**
- * Color palette for payment-status badges. Deliberately a different mapping
- * from the order-status badge so the two columns are visually distinct.
+ * Status is never colour-coded (UI-DESIGN-SYSTEM §4.6b / D-12): every payment
+ * status renders as the same neutral pill and the *word* carries the meaning.
+ *
+ * The `{dot,text,bg}` shape is kept so existing consumers keep compiling, but
+ * every status now resolves to the same neutral triple. Note these classes are
+ * only generated because they are also written literally in a `.tsx` — this is
+ * a `.ts` file and Tailwind does not scan it (C7).
  */
-export const PAYMENT_STATUS_STYLES: Record<PaymentStatus, BadgeStyle> = {
-  paid: {
-    dot: "bg-emerald-500",
-    text: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-900/20",
-  },
-  captured: {
-    dot: "bg-emerald-500",
-    text: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-900/20",
-  },
-  authorized: {
-    dot: "bg-blue-500",
-    text: "text-blue-700 dark:text-blue-400",
-    bg: "bg-blue-50 dark:bg-blue-900/20",
-  },
-  pending: {
-    dot: "bg-amber-500",
-    text: "text-amber-700 dark:text-amber-400",
-    bg: "bg-amber-50 dark:bg-amber-900/20",
-  },
-  processing: {
-    dot: "bg-amber-500",
-    text: "text-amber-700 dark:text-amber-400",
-    bg: "bg-amber-50 dark:bg-amber-900/20",
-  },
-  partial: {
-    dot: "bg-violet-500",
-    text: "text-violet-700 dark:text-violet-400",
-    bg: "bg-violet-50 dark:bg-violet-900/20",
-  },
-  partially_refunded: {
-    dot: "bg-violet-500",
-    text: "text-violet-700 dark:text-violet-400",
-    bg: "bg-violet-50 dark:bg-violet-900/20",
-  },
-  refunded: {
-    dot: "bg-rose-500",
-    text: "text-rose-700 dark:text-rose-400",
-    bg: "bg-rose-50 dark:bg-rose-900/20",
-  },
-  failed: {
-    dot: "bg-rose-500",
-    text: "text-rose-700 dark:text-rose-400",
-    bg: "bg-rose-50 dark:bg-rose-900/20",
-  },
-  declined: {
-    dot: "bg-rose-500",
-    text: "text-rose-700 dark:text-rose-400",
-    bg: "bg-rose-50 dark:bg-rose-900/20",
-  },
-  void: {
-    dot: "bg-gray-400",
-    text: "text-gray-600 dark:text-gray-400",
-    bg: "bg-gray-50 dark:bg-gray-800/30",
-  },
+const NEUTRAL_STYLE: BadgeStyle = {
+  dot: "bg-muted-foreground/60",
+  text: "text-muted-foreground",
+  bg: "bg-muted/60",
 };
 
-const FALLBACK_STYLE: BadgeStyle = {
-  dot: "bg-gray-400",
-  text: "text-gray-600 dark:text-gray-400",
-  bg: "bg-gray-50 dark:bg-gray-800/30",
+export const PAYMENT_STATUS_STYLES: Record<PaymentStatus, BadgeStyle> = {
+  paid: NEUTRAL_STYLE,
+  captured: NEUTRAL_STYLE,
+  authorized: NEUTRAL_STYLE,
+  pending: NEUTRAL_STYLE,
+  processing: NEUTRAL_STYLE,
+  partial: NEUTRAL_STYLE,
+  partially_refunded: NEUTRAL_STYLE,
+  refunded: NEUTRAL_STYLE,
+  failed: NEUTRAL_STYLE,
+  declined: NEUTRAL_STYLE,
+  void: NEUTRAL_STYLE,
 };
+
+const FALLBACK_STYLE: BadgeStyle = NEUTRAL_STYLE;
 
 /** Label for a payment status, with a humanized fallback for unknown values. */
 export function getPaymentStatusLabel(status: string | null | undefined): string {

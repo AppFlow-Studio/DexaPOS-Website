@@ -70,11 +70,11 @@ export function ReceiveTransferDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px] p-0 gap-0 overflow-hidden">
-        <DialogHeader className="space-y-0 border-b bg-gradient-to-br from-emerald-500/10 via-background to-background px-6 py-5">
+      <DialogContent className="flex h-[min(680px,calc(100dvh-1rem))] max-h-[90vh] flex-col gap-0 overflow-hidden bg-card p-0 sm:max-w-[560px]">
+        <DialogHeader className="shrink-0 space-y-0 px-5 py-5 pr-14 sm:px-6 sm:pr-16">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/15 ring-1 ring-emerald-500/20">
-              <PackageCheck className="h-5 w-5 text-emerald-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60">
+              <PackageCheck className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <DialogTitle className="text-lg">
@@ -89,7 +89,7 @@ export function ReceiveTransferDialog({
           </div>
         </DialogHeader>
 
-        <div className="max-h-[55vh] space-y-3 overflow-y-auto px-6 py-5">
+        <div className="thin-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4 sm:px-6">
           {isLoading ? (
             <>
               {[...Array(3)].map((_, i) => (
@@ -109,7 +109,7 @@ export function ReceiveTransferDialog({
                 return (
                   <div
                     key={item.id}
-                    className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border px-3 py-2.5"
+                    className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-2xl border-0 bg-muted/50 px-3 py-2.5"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">
@@ -150,7 +150,7 @@ export function ReceiveTransferDialog({
               ) && (
                 <Badge
                   variant="outline"
-                  className="border-amber-500/50 bg-amber-50 text-amber-600 dark:bg-amber-950/30"
+                  className="bg-muted/60 text-muted-foreground"
                 >
                   Quantities differ from sent — discrepancies will be logged.
                 </Badge>
@@ -159,7 +159,7 @@ export function ReceiveTransferDialog({
           )}
         </div>
 
-        <DialogFooter className="border-t bg-muted/30 px-6 py-4">
+        <DialogFooter className="shrink-0 bg-card px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
           <Button
             type="button"
             variant="outline"
@@ -170,7 +170,7 @@ export function ReceiveTransferDialog({
           <Button
             onClick={handleSubmit}
             disabled={isPending || isLoading || !isValid}
-            className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700"
+            className="gap-2"
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Confirm Receipt

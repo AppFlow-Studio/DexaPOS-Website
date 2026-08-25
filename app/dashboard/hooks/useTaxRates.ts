@@ -158,18 +158,13 @@ export function useUpsertTaxRate() {
         },
         onSuccess: (result, variables) => {
             if (result.success) {
-                toast.success('Tax rate saved successfully')
                 // Invalidate queries
                 queryClient.invalidateQueries({ queryKey: ['tax-rates', selectedLocationId] })
                 queryClient.invalidateQueries({ queryKey: ['tax-rate-for-category', selectedLocationId, variables.taxCategory] })
                 queryClient.invalidateQueries({ queryKey: ['effective-item-tax'] })
-            } else {
-                toast.error(result.error || 'Failed to save tax rate')
             }
         },
-        onError: (error: Error) => {
-            toast.error(error.message || 'Failed to save tax rate')
-        },
+        onError: (error: Error) => {},
     })
 }
 

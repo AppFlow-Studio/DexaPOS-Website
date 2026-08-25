@@ -99,6 +99,7 @@ export function QuickAddCustomerDialog({
               placeholder="Full name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              className="h-9 rounded-full border-0 bg-muted/60 px-3 text-sm shadow-none focus-visible:bg-background"
             />
           </div>
           <div className="space-y-1.5">
@@ -109,6 +110,7 @@ export function QuickAddCustomerDialog({
               placeholder="customer@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className="h-9 rounded-full border-0 bg-muted/60 px-3 text-sm shadow-none focus-visible:bg-background"
             />
           </div>
           <div className="space-y-1.5">
@@ -125,10 +127,18 @@ export function QuickAddCustomerDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={loading}>
+          <Button
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            onClick={handleCreate}
+            disabled={loading}
+          >
             {loading ? "Creating..." : "Add Customer"}
           </Button>
         </DialogFooter>

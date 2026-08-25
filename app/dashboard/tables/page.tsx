@@ -4,6 +4,7 @@ import * as React from 'react'
 import { useLocationStore, useGatedLocationId } from '@/stores/location-store'
 import { LocationListView } from '@/components/dashboard/tables/LocationListView'
 import { RuntimeTablesView } from '@/components/dashboard/tables/RuntimeTablesView'
+import { PageHeader, PageShell } from '@/components/dashboard/shell'
 
 export default function TablesPage() {
     const { selectedLocationId, setSelectedLocation } = useLocationStore()
@@ -28,9 +29,13 @@ export default function TablesPage() {
 
     if (!effectiveLocationId) {
         return (
-            <div className="container mx-auto py-6">
+            <PageShell>
+                <PageHeader
+                    title="Tables"
+                    subtitle="Manage floor plans and table layouts for your locations"
+                />
                 <LocationListView onLocationSelect={handleLocationSelect} />
-            </div>
+            </PageShell>
         )
     }
 

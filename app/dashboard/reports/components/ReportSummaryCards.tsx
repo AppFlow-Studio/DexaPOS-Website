@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 import { OrderAnalytics } from "@/app/dashboard/actions/order-analytics";
 import { DollarSign, ShoppingCart, TrendingUp, CreditCard } from "lucide-react";
 
@@ -13,11 +13,11 @@ export function ReportSummaryCards({
 }: ReportSummaryCardsProps) {
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
-        ))}
-      </div>
+      <Panel padded>
+        <StatRow columns={4}>
+          {[1, 2, 3, 4].map((i) => <StatTile key={i} label="Loading" value="" isLoading />)}
+        </StatRow>
+      </Panel>
     );
   }
 
@@ -63,19 +63,18 @@ export function ReportSummaryCards({
   cards[0].value = `$${totalSalesInRange.toFixed(2)}`;
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <Panel padded>
+      <StatRow columns={4}>
       {cards.map((card) => (
-        <Card key={card.title}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-            <card.icon className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{card.value}</div>
-            <p className="text-xs text-muted-foreground">{card.description}</p>
-          </CardContent>
-        </Card>
+        <StatTile
+          key={card.title}
+          label={card.title}
+          value={card.value}
+          meta={card.description}
+          icon={<card.icon />}
+        />
       ))}
-    </div>
+      </StatRow>
+    </Panel>
   );
 }

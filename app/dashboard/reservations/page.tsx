@@ -1,14 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  PageShell,
+  PageHeader,
+  Panel,
+  StatRow,
+  StatTile,
+  LocationIndicator,
+} from "@/components/dashboard/shell";
+import { DatePopover } from "@/components/ui/date-popover";
+import {
+  DEFAULT_RESERVATION_TIMEZONE,
+  zonedToday,
+} from "@/lib/reservations/local-time";
 import { useReservations } from "@/app/dashboard/hooks/useReservations";
-import { useGatedLocationId } from "@/stores/location-store";
+import { useGatedLocationId, useGatedLocation } from "@/stores/location-store";
 import ReservationCard from "./components/ReservationCard";
 import CreateReservationDialog from "./components/CreateReservationDialog";
 import ReservationDetailSheet from "./components/ReservationDetailSheet";
@@ -37,17 +47,22 @@ function addDays(dateStr: string, days: number): string {
 }
 
 export default function ReservationsPage() {
-  const today = new Date().toISOString().split("T")[0];
+  // Gated resolver: single-active-location accounts (locked to 'all' scope)
+  // resolve to their one location. Only treat as "all locations" when no
+  // concrete location is resolvable (multi-location on 'all').
+  const isAllLocations = !useGatedLocationId();
+  const gatedLocation = useGatedLocation();
+
+  // "Today" is the LOCATION's calendar date. Using the UTC date here opened the
+  // page on tomorrow every evening for US venues, and then defaulted new
+  // bookings to that wrong date.
+  const timeZone = gatedLocation?.timezone ?? DEFAULT_RESERVATION_TIMEZONE;
+  const today = zonedToday(timeZone);
   const [selectedDate, setSelectedDate] = useState(today);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedReservation, setSelectedReservation] =
     useState<Reservation | null>(null);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
-
-  // Gated resolver: single-active-location accounts (locked to 'all' scope)
-  // resolve to their one location. Only treat as "all locations" when no
-  // concrete location is resolvable (multi-location on 'all').
-  const isAllLocations = !useGatedLocationId();
 
   const { data: reservations, isLoading, error } =
     useReservations(selectedDate);
@@ -68,75 +83,109 @@ export default function ReservationsPage() {
   const history = (reservations ?? []).filter((r) =>
     HISTORY_STATUSES.includes(r.status)
   );
+  const covers = active.reduce((sum, r) => sum + (r.party_size ?? 0), 0);
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-2">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              Reservations
-            </h1>
-          </div>
-        </div>
+    <PageShell>
+      <PageHeader
+        title="Reservations"
+        subtitle="Track bookings, arrivals and seating for the selected day"
+        indicator={
+          <LocationIndicator
+            isAllLocations={isAllLocations}
+            locationName={gatedLocation?.name}
+          />
+        }
+        actions={
+          <Button
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            onClick={() => setCreateDialogOpen(true)}
+            disabled={isAllLocations}
+          >
+            <Plus className="h-4 w-4" />
+            New Reservation
+          </Button>
+        }
+      />
 
-        <Button
-          size="lg"
-          className="rounded-2xl px-5"
-          onClick={() => setCreateDialogOpen(true)}
-          disabled={isAllLocations}
-        >
-          <Plus className="h-4 w-4" />
-          New Reservation
-        </Button>
-      </div>
-
-      <Card className="rounded-[24px] border-border/70 bg-background/95 py-0 shadow-sm">
-        <CardContent className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="text-lg font-semibold text-foreground">
+      <Panel className="border-0 rounded-[28px]">
+        <div className="flex flex-col gap-4 px-6 pt-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <div className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
               {displayDate}
             </div>
-            <div className="text-sm text-muted-foreground">
-              {active.length} active reservations
-            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {isToday ? "Today" : "Selected day"}
+            </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2 rounded-2xl border border-border/70 bg-muted/30 p-2 min-w-0">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 items-center gap-1 rounded-full bg-muted/60 p-1">
               <Button
                 variant="ghost"
                 size="icon"
-                className="rounded-xl shrink-0"
+                aria-label="Previous day"
+                className="size-8 shrink-0 rounded-full"
                 onClick={() => setSelectedDate(addDays(selectedDate, -1))}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <div className="flex-1 min-w-0 px-2 text-center font-medium text-foreground truncate">
-                {displayDate}
-              </div>
+              <Button
+                variant="ghost"
+                className="h-8 shrink-0 rounded-full px-3 text-[0.8125rem] font-medium"
+                onClick={() => setSelectedDate(today)}
+                disabled={isToday}
+              >
+                Today
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="rounded-xl shrink-0"
+                aria-label="Next day"
+                className="size-8 shrink-0 rounded-full"
                 onClick={() => setSelectedDate(addDays(selectedDate, 1))}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
 
-            <Input
-              type="date"
+            <DatePopover
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="h-11 w-full rounded-2xl border-border/70 bg-background sm:w-44"
+              onChange={(value) => setSelectedDate(value ?? today)}
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:w-48"
             />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        <div className="px-6 py-6">
+          <StatRow
+            columns={3}
+            className="sm:divide-x-0 [&>*]:sm:pl-0"
+          >
+            <StatTile
+              label="Active"
+              value={active.length}
+              meta="Pending through seated"
+              isLoading={isLoading}
+            />
+            <StatTile
+              label="Expected Covers"
+              value={covers}
+              meta="Guests across active bookings"
+              isLoading={isLoading}
+            />
+            <StatTile
+              label="History"
+              value={history.length}
+              meta="Completed, cancelled and no-shows"
+              isLoading={isLoading}
+            />
+          </StatRow>
+        </div>
+      </Panel>
 
       {isAllLocations && (
-        <Alert className="rounded-2xl border-border/70">
+        <Alert className="rounded-[20px] border-0 bg-muted/60">
           <AlertDescription>
             Select a specific location to view reservations.
           </AlertDescription>
@@ -146,11 +195,11 @@ export default function ReservationsPage() {
       {!isAllLocations && (
         <>
           {isLoading ? (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 2xl:grid-cols-3">
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="h-44 animate-pulse rounded-[24px] border border-border/70 bg-muted/40"
+                  className="h-44 animate-pulse rounded-[28px] border-0 bg-muted/60"
                 />
               ))}
             </div>
@@ -161,33 +210,44 @@ export default function ReservationsPage() {
               </AlertDescription>
             </Alert>
           ) : (reservations ?? []).length === 0 ? (
-            <Card className="rounded-[24px] border-border/70 bg-background/95 py-0 shadow-sm">
-              <CardContent className="px-6 py-14 text-center text-muted-foreground">
-                No reservations for this date.
-              </CardContent>
-            </Card>
+            <Panel className="border-0 rounded-[28px]">
+              <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+                <span className="inline-flex size-11 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
+                  <CalendarDays className="h-5 w-5" />
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  No reservations for this date.
+                </p>
+                <Button
+                  variant="outline"
+                  className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                  onClick={() => setCreateDialogOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  New Reservation
+                </Button>
+              </div>
+            </Panel>
           ) : (
             <div className="space-y-6">
               {active.length > 0 && (
                 <section className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold text-foreground">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                         Active Reservations
                       </h2>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         Current and upcoming guests.
                       </p>
                     </div>
-                    <Badge
-                      variant="secondary"
-                      className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-sm text-emerald-100 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-100"
-                    >
+                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 tabular-nums dark:bg-emerald-900/20 dark:text-emerald-400">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
                       {active.length}
-                    </Badge>
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 2xl:grid-cols-3">
                     {active.map((r) => (
                       <ReservationCard
                         key={r.id}
@@ -204,24 +264,21 @@ export default function ReservationsPage() {
 
               {history.length > 0 && (
                 <section className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold text-foreground">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                         History
                       </h2>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="mt-1 text-sm text-muted-foreground">
                         Completed, cancelled, and no-show reservations.
                       </p>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className="rounded-full border border-slate-500/20 bg-slate-500/10 px-3 py-1 text-sm text-slate-200 dark:border-slate-400/20 dark:bg-slate-400/10 dark:text-slate-200"
-                    >
+                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground tabular-nums">
                       {history.length}
-                    </Badge>
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 2xl:grid-cols-3">
                     {history.map((r) => (
                       <ReservationCard
                         key={r.id}
@@ -245,6 +302,7 @@ export default function ReservationsPage() {
         onOpenChange={setCreateDialogOpen}
         defaultDate={selectedDate}
         existingReservations={reservations ?? []}
+        timeZone={timeZone}
       />
 
       <ReservationDetailSheet
@@ -253,6 +311,6 @@ export default function ReservationsPage() {
         reservation={selectedReservation}
         date={selectedDate}
       />
-    </div>
+    </PageShell>
   );
 }

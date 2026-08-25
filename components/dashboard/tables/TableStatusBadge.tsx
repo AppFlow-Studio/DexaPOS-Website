@@ -2,79 +2,39 @@
 
 import * as React from 'react'
 import { TableStatus } from '@/types/floor-plan'
-import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { tableStatusLabel, tableStatusStyle } from '@/lib/constants/table-status'
 
 interface TableStatusBadgeProps {
     status: TableStatus | null
     className?: string
 }
 
+/**
+ * A table's status as a soft-tinted pill with a colour dot.
+ *
+ * Replaces the previous solid `bg-green-500` / `bg-blue-500` fills: at badge
+ * size a saturated block competes with the page's headings and the floor-plan
+ * canvas beside it. The dot carries the colour coding, the tint carries the
+ * grouping, and the label stays readable in both themes.
+ *
+ * Colours come from `lib/constants/table-status.ts`, the same `BadgeStyle`
+ * shape used by payment-status badges.
+ */
 export function TableStatusBadge({ status, className }: TableStatusBadgeProps) {
-    const getStatusConfig = (status: TableStatus | null) => {
-        if (!status || status === 'available') {
-            return {
-                label: 'Available',
-                variant: 'default' as const,
-                className: 'bg-green-500 hover:bg-green-600',
-            }
-        }
-
-        switch (status) {
-            case 'seated':
-            case 'ordered':
-            case 'served':
-            case 'check_presented':
-                return {
-                    label: 'In Use',
-                    variant: 'default' as const,
-                    className: 'bg-blue-500 hover:bg-blue-600',
-                }
-            case 'cleaning':
-                return {
-                    label: 'Needs Cleaning',
-                    variant: 'destructive' as const,
-                    className: 'bg-red-500 hover:bg-red-600',
-                }
-            case 'paid':
-                return {
-                    label: 'Overtime',
-                    variant: 'secondary' as const,
-                    className: 'bg-yellow-500 hover:bg-yellow-600 text-yellow-950',
-                }
-            case 'reserved':
-                return {
-                    label: 'Reserved',
-                    variant: 'outline' as const,
-                    className: '',
-                }
-            case 'blocked':
-                return {
-                    label: 'Blocked',
-                    variant: 'secondary' as const,
-                    className: 'bg-gray-500 hover:bg-gray-600',
-                }
-            case 'not_in_service':
-                return {
-                    label: 'Not in Service',
-                    variant: 'outline' as const,
-                    className: '',
-                }
-            default:
-                return {
-                    label: status,
-                    variant: 'secondary' as const,
-                    className: '',
-                }
-        }
-    }
-
-    const config = getStatusConfig(status)
+    const style = tableStatusStyle(status)
 
     return (
-        <Badge variant={config.variant} className={cn(config.className, className)}>
-            {config.label}
-        </Badge>
+        <span
+            className={cn(
+                'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
+                style.bg,
+                style.text,
+                className
+            )}
+        >
+            <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', style.dot)} />
+            {tableStatusLabel(status)}
+        </span>
     )
 }
-

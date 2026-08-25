@@ -1,17 +1,17 @@
 "use client";
 
 import * as React from "react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { toast } from "sonner";
 import {
-  BottomSheet,
-  BottomSheetTrigger,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
-} from "@/components/ui/bottom-sheet";
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +31,13 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import {
+  roundedFields,
+  roundedSelectContent,
+  roundedPhoneInput,
+  phoneInputFilledVars,
+  pillButton,
+} from "@/components/dashboard/locations/LocationPanelSection";
+import {
   User,
   Mail,
   Shield,
@@ -39,7 +46,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Users,
-  Building2,
   Lock,
   DollarSign,
   UserCheck,
@@ -67,6 +73,11 @@ interface InviteUserWizardProps {
   onSuccess?: () => void;
   children?: React.ReactNode;
   defaultLocationId?: string;
+  /**
+   * Set when the wizard is opened from another modal (for example, the location
+   * detail Team tab) so it paints above the parent dialog.
+   */
+  elevated?: boolean;
 }
 
 type Step = "type" | "details" | "role" | "locations" | "pos_config" | "review";
@@ -111,6 +122,7 @@ export function InviteUserWizard({
   onSuccess,
   children,
   defaultLocationId,
+  elevated,
 }: InviteUserWizardProps) {
   const clerkOrgId = useClerkOrgId();
   const { data: userInfo } = useUserInfo();
@@ -363,7 +375,7 @@ export function InviteUserWizard({
     hourlyRate.trim() !== "" ||
     employmentType !== null;
 
-  // Called by the footer Cancel button AND the BottomSheet "X" button.
+  // Called by the footer Cancel button and the dialog close button.
   const handleRequestClose = () => {
     if (isFormDirty) {
       setShowDiscardConfirm(true);
@@ -463,17 +475,18 @@ export function InviteUserWizard({
   };
 
   return (
-    <BottomSheet open={open} onOpenChange={handleSheetOpenChange}>
-      {children && <BottomSheetTrigger asChild>{children}</BottomSheetTrigger>}
-      <BottomSheetContent
-        className="w-full"
-        height="95"
+    <Dialog open={open} onOpenChange={handleSheetOpenChange}>
+      {children && <DialogTrigger asChild>{children}</DialogTrigger>}
+      <DialogContent
+        elevation={elevated ? "above-sheet" : "default"}
+        overlayClassName="bg-background/60 backdrop-blur-md"
+        className="flex h-[92vh] max-h-[92vh] w-full max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-3xl border bg-card p-0 max-sm:h-dvh max-sm:max-h-none max-sm:overflow-hidden max-sm:rounded-none max-sm:border-0 sm:max-w-5xl"
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <div className="flex h-full min-w-0">
           {/* Left Sidebar - Steps (hidden on mobile; header shows current step) */}
-          <div className="hidden lg:flex w-64 shrink-0 border-r bg-muted/30 p-6 flex-col">
+          <div className="hidden lg:flex w-64 shrink-0 bg-muted/30 p-6 flex-col">
             <div className="space-y-1">
               {STEPS.map((step, index) => {
                 const isActive = step.key === currentStep;
@@ -484,7 +497,7 @@ export function InviteUserWizard({
                   <div
                     key={step.key}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
+                      "flex items-center gap-3 px-3 py-2.5 rounded-full transition-colors",
                       isActive && "bg-primary text-primary-foreground",
                       isCompleted && !isActive && "bg-primary/10 text-primary",
                       !isAccessible && "opacity-50 cursor-not-allowed",
@@ -522,8 +535,8 @@ export function InviteUserWizard({
 
           {/* Main Content */}
           <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-            <BottomSheetHeader className="border-b">
-              <BottomSheetTitle>
+            <DialogHeader className="shrink-0 border-b-0 px-4 pb-4 pt-5 pr-14 text-left sm:px-6">
+              <DialogTitle className="text-[1.0625rem] font-semibold">
                 {currentStep === "type" && "Choose staff type"}
                 {currentStep === "details" &&
                   `Add ${staffType === "clerk" ? "dashboard user" : "POS staff"}`}
@@ -533,8 +546,8 @@ export function InviteUserWizard({
                 {currentStep === "pos_config" && "POS configuration"}
                 {currentStep === "review" &&
                   `Review and ${staffType === "clerk" ? "send invite" : "create staff"}`}
-              </BottomSheetTitle>
-              <BottomSheetDescription>
+              </DialogTitle>
+              <DialogDescription>
                 {currentStep === "type" &&
                   "Select whether this person needs dashboard access or POS-only access."}
                 {currentStep === "details" &&
@@ -547,10 +560,10 @@ export function InviteUserWizard({
                   "Configure PIN and employment details for POS access."}
                 {currentStep === "review" &&
                   "Review all details before proceeding."}
-              </BottomSheetDescription>
-            </BottomSheetHeader>
+              </DialogDescription>
+            </DialogHeader>
 
-            <BottomSheetBody className="flex-1 overflow-y-auto max-h-[calc(98vh-200px)]">
+            <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
               {isLoading ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center space-y-2">
@@ -559,7 +572,9 @@ export function InviteUserWizard({
                   </div>
                 </div>
               ) : (
-                <div className="py-6 space-y-6">
+                /* Field rounding rides on the wrapper so the shared
+                   Input/Select primitives stay untouched elsewhere. */
+                <div className={cn("py-6 space-y-6", roundedFields)}>
                   {/* Step 0: Staff Type Selection */}
                   {currentStep === "type" && (
                     <div className="space-y-4">
@@ -576,10 +591,10 @@ export function InviteUserWizard({
                           {/* Clerk Staff Option */}
                           <div
                             className={cn(
-                              "flex items-start gap-4 p-4 rounded-lg border-2 transition-all cursor-pointer",
+                              "flex items-start gap-4 p-4 rounded-xl border transition-all cursor-pointer",
                               staffType === "clerk"
                                 ? "border-primary bg-primary/5"
-                                : "border-muted hover:border-primary/50",
+                                : "border-transparent bg-muted/50 hover:bg-muted",
                             )}
                             onClick={() => setStaffType("clerk")}
                           >
@@ -609,10 +624,10 @@ export function InviteUserWizard({
                           {/* POS Staff Option */}
                           <div
                             className={cn(
-                              "flex items-start gap-4 p-4 rounded-lg border-2 transition-all cursor-pointer",
+                              "flex items-start gap-4 p-4 rounded-xl border transition-all cursor-pointer",
                               staffType === "pos"
                                 ? "border-primary bg-primary/5"
-                                : "border-muted hover:border-primary/50",
+                                : "border-transparent bg-muted/50 hover:bg-muted",
                             )}
                             onClick={() => setStaffType("pos")}
                           >
@@ -663,10 +678,10 @@ export function InviteUserWizard({
                                 {/* Direct Creation Option */}
                                 <div
                                   className={cn(
-                                    "flex items-start gap-4 p-4 rounded-lg border-2 transition-all cursor-pointer",
+                                    "flex items-start gap-4 p-4 rounded-xl border transition-all cursor-pointer",
                                     creationMethod === "direct"
                                       ? "border-primary bg-primary/5"
-                                      : "border-muted hover:border-primary/50",
+                                      : "border-transparent bg-muted/50 hover:bg-muted",
                                   )}
                                   onClick={() => setCreationMethod("direct")}
                                 >
@@ -679,14 +694,14 @@ export function InviteUserWizard({
                                     htmlFor="method-direct"
                                     className="flex-1 cursor-pointer"
                                   >
-                                    <div className="flex items-center gap-2">
-                                      <UserCheck className="h-4 w-4" />
+                                    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-2 sm:flex sm:flex-wrap">
+                                      <UserCheck className="h-4 w-4 shrink-0" />
                                       <span className="font-medium">
                                         Create Account Immediately
                                       </span>
                                       <Badge
-                                        variant="outline"
-                                        className="text-xs"
+                                        variant="secondary"
+                                        className="col-start-2 w-fit rounded-full border-transparent bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground sm:col-start-auto"
                                       >
                                         Recommended
                                       </Badge>
@@ -702,10 +717,10 @@ export function InviteUserWizard({
                                 {/* Invitation Option */}
                                 <div
                                   className={cn(
-                                    "flex items-start gap-4 p-4 rounded-lg border-2 transition-all cursor-pointer",
+                                    "flex items-start gap-4 p-4 rounded-xl border transition-all cursor-pointer",
                                     creationMethod === "invitation"
                                       ? "border-primary bg-primary/5"
-                                      : "border-muted hover:border-primary/50",
+                                      : "border-transparent bg-muted/50 hover:bg-muted",
                                   )}
                                   onClick={() =>
                                     setCreationMethod("invitation")
@@ -720,8 +735,8 @@ export function InviteUserWizard({
                                     htmlFor="method-invitation"
                                     className="flex-1 cursor-pointer"
                                   >
-                                    <div className="flex items-center gap-2">
-                                      <Mail className="h-4 w-4" />
+                                    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 sm:flex">
+                                      <Mail className="h-4 w-4 shrink-0" />
                                       <span className="font-medium">
                                         Send Email Invitation
                                       </span>
@@ -810,6 +825,8 @@ export function InviteUserWizard({
                           id="phone"
                           value={phone}
                           onChange={setPhone}
+                          className={roundedPhoneInput}
+                          style={phoneInputFilledVars}
                         />
                       </div>
                     </div>
@@ -826,7 +843,7 @@ export function InviteUserWizard({
 
                       {/* Role restriction information */}
                       {currentUserLevel > 0 && currentUserRole && (
-                        <div className="rounded-lg border bg-muted/30 p-3">
+                        <div className="rounded-xl bg-muted/50 p-3">
                           <div className="flex items-start gap-2">
                             <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                             <p className="text-xs text-muted-foreground">
@@ -851,10 +868,10 @@ export function InviteUserWizard({
                             <div
                               key={role.code}
                               className={cn(
-                                "flex items-start gap-4 p-4 rounded-lg border-2 transition-all cursor-pointer",
+                                "flex items-start gap-4 p-4 rounded-xl border transition-all cursor-pointer",
                                 selectedRoleCode === role.code
                                   ? "border-primary bg-primary/5"
-                                  : "border-muted hover:border-primary/50",
+                                  : "border-transparent bg-muted/50 hover:bg-muted",
                               )}
                               onClick={() => setSelectedRoleCode(role.code)}
                             >
@@ -869,7 +886,7 @@ export function InviteUserWizard({
                               >
                                 <div className="font-medium">
                                   {role.name}{" "}
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge variant="secondary" className="rounded-full border-transparent bg-muted text-muted-foreground text-xs font-medium px-2.5 py-0.5">
                                     {role.code}
                                   </Badge>
                                 </div>
@@ -878,12 +895,12 @@ export function InviteUserWizard({
                                     "No description available"}
                                 </div>
                                 <div className="flex items-center gap-2 mt-2">
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge variant="secondary" className="rounded-full border-transparent bg-muted text-muted-foreground text-xs font-medium px-2.5 py-0.5">
                                     Level {role.level}
                                   </Badge>
                                   <Badge
                                     variant="secondary"
-                                    className="text-xs"
+                                    className="rounded-full text-xs font-medium px-2.5 py-0.5"
                                   >
                                     {role.level_type}
                                   </Badge>
@@ -901,13 +918,12 @@ export function InviteUserWizard({
                     <div className="space-y-4">
                       {isAdminRole ? (
                         /* ── Admin / Owner: auto-assigned, show info banner ── */
-                        <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-                          <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+                        <div className="rounded-xl bg-muted/60 p-4">
                           <div>
-                            <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                            <p className="text-sm font-medium">
                               Auto-assigned to all locations
                             </p>
-                            <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                            <p className="mt-1 text-sm text-muted-foreground">
                               Owners and Admins automatically receive access to
                               all {locations.length} location
                               {locations.length !== 1 ? "s" : ""}. Any new
@@ -924,13 +940,12 @@ export function InviteUserWizard({
                       )}
                       <div className="space-y-2">
                         {locations.length === 0 ? (
-                          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
-                            <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                          <div className="rounded-xl bg-muted/60 p-4">
                             <div>
-                              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                              <p className="text-sm font-medium">
                                 No locations set up yet
                               </p>
-                              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+                              <p className="mt-1 text-sm text-muted-foreground">
                                 This staff member will be added to your merchant account without a location assignment. You can assign them to a location once you create one.
                               </p>
                             </div>
@@ -944,12 +959,12 @@ export function InviteUserWizard({
                               <div
                                 key={location.id}
                                 className={cn(
-                                  "flex items-center gap-4 p-4 rounded-lg border-2 transition-all",
+                                  "grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-3 rounded-xl border p-4 transition-all sm:flex sm:items-center sm:gap-4",
                                   isAdminRole
                                     ? "cursor-default border-primary/40 bg-primary/5 opacity-80"
                                     : isSelected
                                       ? "cursor-pointer border-primary bg-primary/5"
-                                      : "cursor-pointer border-muted hover:border-primary/50",
+                                      : "cursor-pointer border-transparent bg-muted/50 hover:bg-muted",
                                 )}
                                 onClick={() =>
                                   !isAdminRole && toggleLocation(location.id)
@@ -962,7 +977,7 @@ export function InviteUserWizard({
                                     !isAdminRole && toggleLocation(location.id)
                                   }
                                 />
-                                <div className="flex-1">
+                                <div className="min-w-0 flex-1">
                                   <div className="font-medium">
                                     {location.name}
                                   </div>
@@ -977,11 +992,11 @@ export function InviteUserWizard({
                                   </div>
                                 </div>
                                 {isSelected && (
-                                  <div className="flex items-center gap-2">
+                                  <div className="col-start-2 flex items-center gap-2 sm:col-start-auto">
                                     {primaryLocationId === location.id ? (
                                       <Badge
-                                        variant="default"
-                                        className="text-xs"
+                                        variant="secondary"
+                                        className="rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
                                       >
                                         Primary
                                       </Badge>
@@ -989,6 +1004,7 @@ export function InviteUserWizard({
                                       <Button
                                         variant="outline"
                                         size="sm"
+                                        className="whitespace-nowrap rounded-full px-4"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setPrimary(location.id);
@@ -1014,7 +1030,7 @@ export function InviteUserWizard({
                         <>
                           {/* Enable POS Access Toggle for Clerk */}
                           <div className="space-y-4">
-                            <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                            <div className="flex items-center justify-between p-4 rounded-xl bg-muted/50">
                               <div className="flex-1">
                                 <Label
                                   htmlFor="enablePos"
@@ -1098,7 +1114,7 @@ export function InviteUserWizard({
                             )}
 
                             {autoGeneratePin && (
-                              <div className="rounded-lg border bg-muted/30 p-3">
+                              <div className="rounded-xl bg-muted/50 p-3">
                                 <p className="text-sm text-muted-foreground">
                                   A 4-digit PIN will be automatically generated
                                   and shown after creation
@@ -1126,7 +1142,7 @@ export function InviteUserWizard({
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select employment type" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className={roundedSelectContent}>
                                   <SelectItem value="full-time">
                                     Full-time
                                   </SelectItem>
@@ -1184,7 +1200,7 @@ export function InviteUserWizard({
                           variant={
                             staffType === "clerk" ? "default" : "secondary"
                           }
-                          className="gap-1"
+                          className="rounded-full gap-1 text-xs font-medium px-2.5 py-0.5"
                         >
                           {staffType === "clerk" ? (
                             <Mail className="h-3 w-3" />
@@ -1198,7 +1214,7 @@ export function InviteUserWizard({
                       </div>
 
                       {/* User Info */}
-                      <div className="p-4 rounded-lg border bg-muted/30">
+                      <div className="p-4 rounded-xl bg-muted/50">
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                             <span className="text-lg font-semibold text-primary">
@@ -1240,12 +1256,12 @@ export function InviteUserWizard({
                       {/* POS-specific details */}
                       {(staffType === "pos" ||
                         (staffType === "clerk" && enablePosAccess)) && (
-                          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                          <div className="rounded-xl bg-muted/50 p-4 space-y-3">
                             <div className="font-medium text-sm flex items-center gap-2">
                               <Lock className="h-4 w-4" />
                               POS Configuration
                               {staffType === "clerk" && (
-                                <Badge variant="outline" className="text-xs">
+                                <Badge variant="secondary" className="rounded-full border-transparent bg-muted text-muted-foreground text-xs font-medium px-2.5 py-0.5">
                                   Optional
                                 </Badge>
                               )}
@@ -1267,8 +1283,8 @@ export function InviteUserWizard({
                                     Employment:
                                   </span>
                                   <Badge
-                                    variant="outline"
-                                    className="text-xs capitalize"
+                                    variant="secondary"
+                                    className="rounded-full border-transparent bg-muted text-muted-foreground text-xs font-medium px-2.5 py-0.5 capitalize"
                                   >
                                     {employmentType.replace("-", " ")}
                                   </Badge>
@@ -1306,7 +1322,7 @@ export function InviteUserWizard({
                             return (
                               <div
                                 key={location.id}
-                                className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30"
+                                className="flex items-center gap-3 p-3 rounded-xl bg-muted/50"
                               >
                                 <MapPin className="h-4 w-4 text-muted-foreground" />
                                 <div className="flex-1">
@@ -1314,8 +1330,8 @@ export function InviteUserWizard({
                                     {location.name}
                                     {isPrimary && (
                                       <Badge
-                                        variant="default"
-                                        className="text-xs"
+                                        variant="secondary"
+                                        className="rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
                                       >
                                         Primary
                                       </Badge>
@@ -1340,19 +1356,23 @@ export function InviteUserWizard({
                   )}
                 </div>
               )}
-            </BottomSheetBody>
+            </div>
 
-            <BottomSheetFooter className="border-t flex flex-col items-center justify-between">
-              <div className="flex items-center justify-between w-full">
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" onClick={handleRequestClose}>
+            <DialogFooter className="shrink-0 border-t-0 bg-background px-3 py-4 sm:px-6">
+              <div className="flex w-full min-w-0 items-center justify-between gap-1">
+                <div className="flex min-w-0 items-center gap-0 sm:gap-2">
+                  <Button
+                    variant="ghost"
+                    className={cn(pillButton, "max-sm:gap-1 max-sm:px-2")}
+                    onClick={handleRequestClose}
+                  >
                     Cancel
                   </Button>
                   <Button
                     variant="ghost"
                     onClick={handleBack}
                     disabled={currentStepIndex === 0}
-                    className="gap-2"
+                    className={cn(pillButton, "max-sm:gap-1 max-sm:px-2")}
                   >
                     <ChevronLeft className="h-4 w-4" />
                     Back
@@ -1366,7 +1386,10 @@ export function InviteUserWizard({
                     inviteClerkStaff.isPending ||
                     createClerkUserDirectly.isPending
                   }
-                  className="gap-2"
+                  className={cn(
+                    pillButton,
+                    "shrink-0 max-sm:gap-1 max-sm:px-2",
+                  )}
                 >
                   {currentStepIndex === STEPS.length - 1 ? (
                     <>
@@ -1385,31 +1408,42 @@ export function InviteUserWizard({
                   )}
                 </Button>
               </div>
-            </BottomSheetFooter>
+            </DialogFooter>
           </div>
         </div>
 
-        {/* Discard confirmation — rendered inside the sheet so it stacks above it */}
-        {showDiscardConfirm && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 rounded-t-[20px]">
-            <div className="bg-background rounded-lg border shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">
-              <div className="space-y-2">
-                <h3 className="text-lg font-semibold">
-                  Discard staff creation?
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  All entered information will be lost.
-                </p>
-              </div>
+        {/* Nested Radix dialog: it registers as a branch of the outer dialog
+            so its buttons receive clicks, and its overlay dims the whole
+            viewport — the staff page behind the wizard fades too. */}
+        <DialogPrimitive.Root
+          open={showDiscardConfirm}
+          onOpenChange={(open) => {
+            if (!open) setShowDiscardConfirm(false);
+          }}
+        >
+          <DialogPrimitive.Portal>
+            <DialogPrimitive.Overlay className="fixed inset-0 z-[220] bg-black/50" />
+            <DialogPrimitive.Content
+              className="fixed top-1/2 left-1/2 z-[220] w-full max-w-sm -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-3xl border bg-background p-6 shadow-lg"
+              onInteractOutside={(e) => e.preventDefault()}
+            >
+              <DialogPrimitive.Title className="text-lg font-semibold">
+                Discard staff creation?
+              </DialogPrimitive.Title>
+              <DialogPrimitive.Description className="text-sm text-muted-foreground">
+                All entered information will be lost.
+              </DialogPrimitive.Description>
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
+                  className="rounded-full px-4"
                   onClick={() => setShowDiscardConfirm(false)}
                 >
                   Keep editing
                 </Button>
                 <Button
                   variant="destructive"
+                  className="rounded-full px-4"
                   onClick={() => {
                     setShowDiscardConfirm(false);
                     onOpenChange(false);
@@ -1418,10 +1452,10 @@ export function InviteUserWizard({
                   Discard
                 </Button>
               </div>
-            </div>
-          </div>
-        )}
-      </BottomSheetContent>
-    </BottomSheet>
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -120,6 +120,10 @@ export interface FlatItem {
     is_global: boolean;
   }>;
 
+  // Effective item availability across active locations. Populated only for
+  // the all-locations library view; null means the lookup was unavailable.
+  available_locations: Array<{ id: string; name: string }> | null;
+
   // Stock info
   stock_tracking_mode: string | null;
   current_stock: number | null;
@@ -331,17 +335,43 @@ export async function updateModifierItem(params: UpdateModifierItemParams) {
   return { success: true, level: "global" };
 }
 
+/**
+ * Keep the first occurrence of each `id`, preserving order.
+ *
+ * The library RPC joins through tables that carry no uniqueness guarantee on
+ * their logical key (`category_items` is one row per item/category/menu,
+ * `location_item_overrides` has only a PK on `id`), so rows can repeat. React
+ * keys off these ids, so duplicates must not reach the UI.
+ */
+function dedupeById<T extends { id?: string | null }>(rows: unknown): T[] {
+  if (!Array.isArray(rows)) return [];
+  const seen = new Set<string>();
+  const unique: T[] = [];
+
+  for (const row of rows as T[]) {
+    const id = row?.id;
+    if (!id) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    unique.push(row);
+  }
+
+  return unique;
+}
+
 export async function getItemsForLocationFlat(
   merchantId: string,
   locationId?: string | null,
 ) {
   const supabase = createServerSupabaseClient();
+  const effectiveLocationId =
+    !locationId || locationId === "all" ? null : locationId;
 
   // Use the new Items Library-specific RPC function ( Only show L2 Prices)
   // This excludes category prices (L3, L4) from the effective_price cascade
   const { data, error } = await supabase.rpc("get_items_for_location_library", {
     p_merchant_id: merchantId,
-    p_location_id: locationId || null,
+    p_location_id: effectiveLocationId,
   });
 
   if (error) {
@@ -354,7 +384,7 @@ export async function getItemsForLocationFlat(
   }
 
   // Transform to FlatItem type
-  const items: FlatItem[] = data.map((item: any) => ({
+  const items: FlatItem[] = dedupeById<any>(data).map((item: any) => ({
     id: item.id,
     name: item.name,
     description: item.description,
@@ -395,8 +425,13 @@ export async function getItemsForLocationFlat(
     // Location override details (L2)
     location_override: item.location_override,
 
-    // Categories this item belongs to
-    categories: item.categories || [],
+    // Categories this item belongs to.
+    // category_items holds one row per (item, category, menu), so an item in the
+    // same category across two menus comes back duplicated. Dedupe by id.
+    categories: dedupeById(item.categories),
+
+    // Enriched below when viewing every location.
+    available_locations: null,
 
     // Stock info
     stock_tracking_mode: item.stock_tracking_mode || null,
@@ -407,6 +442,54 @@ export async function getItemsForLocationFlat(
 
     modifier_groups: item.modifier_groups || [],
   }));
+
+  if (effectiveLocationId === null && items.length > 0) {
+    const itemIds = items.map((item) => item.id);
+    const [locationsResult, overridesResult] = await Promise.all([
+      supabase
+        .from("locations")
+        .select("id, name")
+        .eq("merchant_id", merchantId)
+        .eq("is_active", true)
+        .order("name"),
+      supabase
+        .from("location_item_overrides")
+        .select("menu_item_id, location_id, is_available")
+        .in("menu_item_id", itemIds),
+    ]);
+
+    if (locationsResult.error || overridesResult.error) {
+      console.error("getItemsForLocationFlat availability lookup error:", {
+        locations: locationsResult.error?.message,
+        overrides: overridesResult.error?.message,
+      });
+    } else {
+      const activeLocations = locationsResult.data || [];
+      const availabilityOverrides = new Map<string, boolean | null>();
+
+      for (const override of overridesResult.data || []) {
+        availabilityOverrides.set(
+          `${override.menu_item_id}:${override.location_id}`,
+          override.is_available,
+        );
+      }
+
+      for (const item of items) {
+        const eligibleLocations = item.location_id
+          ? activeLocations.filter(
+              (location) => location.id === item.location_id,
+            )
+          : activeLocations;
+
+        item.available_locations = eligibleLocations.filter((location) => {
+          const override = availabilityOverrides.get(
+            `${item.id}:${location.id}`,
+          );
+          return override ?? item.base_availability;
+        });
+      }
+    }
+  }
 
   return {
     success: true,

@@ -65,3 +65,6 @@ tasks/T-21-responsive-layout.md
 .playwright-mcp/
 # Orderout documentation
 /orderout-docs*
+
+# Valor sandbox probe scripts (local dev tooling, not product code)
+/valor-*.ts

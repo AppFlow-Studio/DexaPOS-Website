@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,6 @@ import {
   DollarSign,
   TrendingUp,
   TrendingDown,
-  AlertTriangle,
   Info,
   ChevronRight,
   MapPin,
@@ -52,12 +51,11 @@ import {
   AuditLogWithLocation,
   AuditCategory,
   CATEGORY_LABELS,
-  CATEGORY_COLORS,
-  SEVERITY_COLORS,
   AUDIT_CATEGORIES,
 } from "@/types/audit-log";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ActivityLogSheetProps {
   open: boolean;
@@ -158,67 +156,62 @@ export function ActivityLogSheet({
   const logs = logsResponse?.data || [];
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-xl px-4">
-        <SheetHeader className="pb-4 border-b">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-500/20 to-violet-500/5 border border-violet-500/10">
-              <Clock className="h-5 w-5 text-violet-500" />
-            </div>
-            <div>
-              <SheetTitle>Activity Log</SheetTitle>
-              <SheetDescription>
-                Recent actions and changes at your location
-              </SheetDescription>
-            </div>
-          </div>
-        </SheetHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-dvh w-full max-w-none flex-col gap-0 overflow-hidden max-sm:overflow-hidden rounded-none bg-card p-0 sm:h-[min(800px,calc(100dvh-2rem))] sm:max-w-4xl sm:rounded-3xl">
+        <DialogHeader className="bg-card px-5 py-5 pr-14 text-left sm:px-6 sm:pr-16">
+          <DialogTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-muted-foreground" />
+            Activity log
+          </DialogTitle>
+          <DialogDescription>
+            Recent inventory and purchasing activity for the selected location.
+          </DialogDescription>
+        </DialogHeader>
 
-        {/* Filters */}
-        <div className="py-4 space-y-3 border-b">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
+        <section className="shrink-0 bg-card px-4 py-4 sm:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search activity..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
+                className="h-10 pl-10 focus-visible:ring-1"
               />
             </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => refetch()}
-              disabled={isFetching}
-            >
-              <RefreshCw
-                className={cn("h-4 w-4", isFetching && "animate-spin")}
-              />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Filter className="hidden h-4 w-4 text-muted-foreground sm:block" />
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="h-10 min-w-0 flex-1 rounded-full bg-muted/45 shadow-none sm:w-[200px] sm:flex-none">
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {AUDIT_CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {CATEGORY_LABELS[cat]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 shrink-0 rounded-full"
+                onClick={() => refetch()}
+                disabled={isFetching}
+              >
+                <RefreshCw
+                  className={cn("h-4 w-4", isFetching && "animate-spin")}
+                />
+                <span className="sr-only">Refresh activity</span>
+              </Button>
+            </div>
           </div>
+        </section>
 
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="All Categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {AUDIT_CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {CATEGORY_LABELS[cat]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Activity List */}
-        <ScrollArea className="h-[calc(100vh-220px)] w-full min-w-0 [&_[data-slot=scroll-area-viewport]>div]:!block [&_[data-slot=scroll-area-viewport]>div]:!w-full">
-          <div className="py-4 space-y-3 px-1 w-full min-w-0">
+        <ScrollArea className="min-h-0 w-full min-w-0 flex-1 bg-card [&_[data-slot=scroll-area-viewport]>div]:!block [&_[data-slot=scroll-area-viewport]>div]:!w-full">
+          <div className="w-full min-w-0 space-y-3 p-4 sm:p-6">
             {isLoading ? (
               // Loading skeletons
               Array.from({ length: 5 }).map((_, i) => (
@@ -246,61 +239,62 @@ export function ActivityLogSheet({
             )}
           </div>
         </ScrollArea>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
+}
+
+// Turns a snake_case field name into a readable label, e.g. "reorder_point" -> "Reorder point"
+function formatFieldLabel(field: string): string {
+  const words = field.split("_").join(" ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function formatFieldValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
 }
 
 // Individual log item component
 function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
   const [expanded, setExpanded] = useState(false);
-
-  const ActionIcon =
-    ACTION_ICONS[log.action] ||
-    (log.action_category === "inventory"
-      ? Package
-      : log.action_category === "purchase_order"
-      ? ShoppingCart
-      : log.action_category === "expense"
-      ? DollarSign
-      : Info);
+  const isMobile = useIsMobile();
+  // The chevron/expand interaction is desktop & tablet only — on mobile the
+  // card is flat with no details drill-down.
+  const canExpand = !isMobile;
 
   const isStockUpdate = log.action === "inventory.stock_updated";
+  const isItemUpdate = log.action === "inventory.item_updated";
   const changeAmount = log.metadata?.change_amount as number | undefined;
   const isIncrease = changeAmount && changeAmount > 0;
 
+  // Fields that changed between before/after, for the item-updated diff block.
+  const changedFields = isItemUpdate && log.changes?.before && log.changes?.after
+    ? Object.keys(log.changes.after).filter((key) => {
+        if (key === "updated_at") return false;
+        const before = log.changes!.before![key];
+        const after = log.changes!.after![key];
+        return JSON.stringify(before) !== JSON.stringify(after);
+      })
+    : [];
+
+  const Wrapper = canExpand ? "button" : "div";
+
   return (
-    <div
+    <Wrapper
+      type={canExpand ? "button" : undefined}
+      aria-expanded={canExpand ? expanded : undefined}
       className={cn(
-        "w-full min-w-0 rounded-lg border p-3 transition-all hover:shadow-sm cursor-pointer",
-        expanded ? "bg-muted/30" : "hover:bg-muted/20"
+        "w-full min-w-0 rounded-2xl border-0 p-4 text-left transition-colors",
+        canExpand &&
+          "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        canExpand && expanded ? "bg-muted/50" : "bg-muted/25",
+        canExpand && !expanded && "hover:bg-muted/40"
       )}
-      onClick={() => setExpanded(!expanded)}
+      onClick={canExpand ? () => setExpanded(!expanded) : undefined}
     >
       <div className="flex items-start gap-3">
-        {/* Icon */}
-        <div
-          className={cn(
-            "p-2 rounded-lg shrink-0",
-            log.severity === "warning"
-              ? "bg-amber-500/10"
-              : log.severity === "critical"
-              ? "bg-red-500/10"
-              : "bg-primary/10"
-          )}
-        >
-          <ActionIcon
-            className={cn(
-              "h-4 w-4",
-              log.severity === "warning"
-                ? "text-amber-500"
-                : log.severity === "critical"
-                ? "text-red-500"
-                : "text-primary"
-            )}
-          />
-        </div>
-
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 min-w-0">
@@ -309,10 +303,7 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
             </span>
             <Badge
               variant="outline"
-              className={cn(
-                "text-xs shrink-0",
-                CATEGORY_COLORS[log.action_category as AuditCategory]
-              )}
+              className="shrink-0 bg-muted/60 text-xs text-muted-foreground"
             >
               {CATEGORY_LABELS[log.action_category as AuditCategory] ||
                 log.action_category}
@@ -327,12 +318,7 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
             {isStockUpdate && changeAmount !== undefined && (
               <Badge
                 variant="outline"
-                className={cn(
-                  "gap-1 text-xs",
-                  isIncrease
-                    ? "text-emerald-600 border-emerald-200"
-                    : "text-red-600 border-red-200"
-                )}
+                className="gap-1 bg-muted/60 text-xs text-muted-foreground"
               >
                 {isIncrease ? (
                   <TrendingUp className="h-3 w-3" />
@@ -364,20 +350,22 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
           </div>
         </div>
 
-        <ChevronRight
-          className={cn(
-            "h-4 w-4 text-muted-foreground transition-transform shrink-0",
-            expanded && "rotate-90"
-          )}
-        />
+        {canExpand && (
+          <ChevronRight
+            className={cn(
+              "h-4 w-4 text-muted-foreground transition-transform shrink-0",
+              expanded && "rotate-90"
+            )}
+          />
+        )}
       </div>
 
-      {/* Expanded details */}
-      {expanded && (
-        <div className="mt-3 pt-3 border-t space-y-3">
+      {/* Expanded details — desktop & tablet only */}
+      {canExpand && expanded && (
+        <div className="mt-3 space-y-3 pt-3">
           {/* Reason - for all logs that have it */}
           {log.changes?.reason && (
-            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-muted/50">
+            <div className="flex items-start gap-2 rounded-2xl bg-muted/60 p-2.5">
               <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs text-muted-foreground">Reason</p>
@@ -386,17 +374,45 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
             </div>
           )}
 
+          {/* Item Updated Details — field-by-field before/after diff */}
+          {isItemUpdate && changedFields.length > 0 && (
+            <div className="space-y-2">
+              {changedFields.map((field) => (
+                <div
+                  key={field}
+                  className="flex items-center gap-3 rounded-2xl bg-muted/60 p-2.5"
+                >
+                  <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground">
+                      {formatFieldLabel(field)}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium tabular-nums truncate">
+                        {formatFieldValue(log.changes!.before?.[field])}
+                      </span>
+                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <span className="text-sm font-medium tabular-nums truncate">
+                        {formatFieldValue(log.changes!.after?.[field])}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Stock Update Details */}
           {log.action === "inventory.stock_updated" && log.changes && (
             <div className="space-y-2">
-              <div className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50">
+              <div className="flex items-center gap-3 rounded-2xl bg-muted/60 p-2.5">
                 <Package className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-red-600">
+                  <span className="text-sm font-medium tabular-nums">
                     {String(log.changes.before?.stock ?? "?")}
                   </span>
                   <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium text-emerald-600">
+                  <span className="text-sm font-medium tabular-nums">
                     {String(log.changes.after?.stock ?? "?")}
                   </span>
                   <span className="text-xs text-muted-foreground">
@@ -411,11 +427,11 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
           {log.action === "purchase_order.paid" && log.changes?.after && (
             <div className="grid grid-cols-2 gap-2">
               {log.changes.after.amount !== undefined && (
-                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30">
-                  <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
+                <div className="flex items-center gap-2 rounded-2xl bg-muted/60 p-2.5">
+                  <DollarSign className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <div>
                     <p className="text-xs text-muted-foreground">Amount</p>
-                    <p className="text-sm font-semibold text-emerald-600">
+                    <p className="text-sm font-semibold tabular-nums">
                       ${Number(log.changes.after.amount).toFixed(2)}
                     </p>
                   </div>
@@ -453,11 +469,11 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
           {/* Purchase Order Delivery Details */}
           {log.action === "purchase_order.received" && log.changes?.after && (
             <div className="grid grid-cols-2 gap-2">
-              <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/30">
-                <CheckCircle className="h-4 w-4 text-blue-600 shrink-0" />
+              <div className="flex items-center gap-2 rounded-2xl bg-muted/60 p-2.5">
+                <CheckCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div>
                   <p className="text-xs text-muted-foreground">Status</p>
-                  <p className="text-sm font-medium text-blue-600">Received</p>
+                  <p className="text-sm font-medium">Received</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50">
@@ -498,11 +514,11 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
                 </div>
               )}
               {log.changes.after.total_amount !== undefined && (
-                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30">
-                  <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
+                <div className="flex items-center gap-2 rounded-2xl bg-muted/60 p-2.5">
+                  <DollarSign className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <div>
                     <p className="text-xs text-muted-foreground">Total</p>
-                    <p className="text-sm font-semibold text-emerald-600">
+                    <p className="text-sm font-semibold tabular-nums">
                       ${Number(log.changes.after.total_amount).toFixed(2)}
                     </p>
                   </div>
@@ -527,6 +543,6 @@ function ActivityLogItem({ log }: { log: AuditLogWithLocation }) {
           )}
         </div>
       )}
-    </div>
+    </Wrapper>
   );
 }

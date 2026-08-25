@@ -201,10 +201,14 @@ function PureAffectsTag({
   }
 
   if (variant === "inline") {
+    // No `whitespace-nowrap`: labels embed location and menu names, which can be
+    // long enough ("affects test menu at Joes Downtown Brooklyn Updated only")
+    // to overflow a narrow container. `min-w-0` lets the text block shrink so
+    // the label wraps inside the pill instead of pushing past its parent.
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap",
+          "inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium",
           colors.bg,
           colors.border,
           colors.text,
@@ -212,8 +216,8 @@ function PureAffectsTag({
         )}
         aria-label={`Affects ${label}`}
       >
-        {!hideIcon && <Icon className="h-2.5 w-2.5" />}
-        <span>
+        {!hideIcon && <Icon className="h-2.5 w-2.5 shrink-0" />}
+        <span className="min-w-0 break-words">
           {effectivePrefix}
           {label}
         </span>

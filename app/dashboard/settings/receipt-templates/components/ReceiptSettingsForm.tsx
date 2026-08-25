@@ -1,7 +1,6 @@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import { TEMPLATE_FIELD_VISIBILITY } from "../constants";
 import type { TemplateType, ReceiptTemplateFormData } from "../types";
 
@@ -64,11 +63,14 @@ export function ReceiptSettingsForm({
     visibility.show_ready_by_time;
 
   return (
-    <div className="space-y-6">
+    // No `<Separator>` between sections (§5.5) — a rule across a flat surface
+    // reads as a seam. Spacing carries the separation instead, so the rhythm
+    // is wider than it would be with dividers.
+    <div className="min-w-0 space-y-10">
       {/* Branding Section */}
       {showBrandingSection && (
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
             Branding
           </h3>
 
@@ -83,7 +85,7 @@ export function ReceiptSettingsForm({
             <Label className="text-sm font-medium">Header Text</Label>
             <Textarea
               placeholder="Custom header text (e.g. address, phone)..."
-              className="resize-none text-sm"
+              className="resize-none border-0 bg-muted/60 text-sm shadow-none"
               rows={2}
               value={formState.header_text}
               onChange={(e) => onChange({ header_text: e.target.value })}
@@ -94,7 +96,7 @@ export function ReceiptSettingsForm({
             <Label className="text-sm font-medium">Footer Text</Label>
             <Textarea
               placeholder="Custom footer text (e.g. return policy, thank you message)..."
-              className="resize-none text-sm"
+              className="resize-none border-0 bg-muted/60 text-sm shadow-none"
               rows={2}
               value={formState.footer_text}
               onChange={(e) => onChange({ footer_text: e.target.value })}
@@ -103,12 +105,10 @@ export function ReceiptSettingsForm({
         </div>
       )}
 
-      {showBrandingSection && showContentSection && <Separator />}
-
       {/* Content Section */}
       {showContentSection && (
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
             Content
           </h3>
 
@@ -159,12 +159,10 @@ export function ReceiptSettingsForm({
         </div>
       )}
 
-      {showContentSection && showExtrasSection && <Separator />}
-
       {/* Extras Section */}
       {showExtrasSection && (
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
             Extras
           </h3>
 
@@ -188,14 +186,10 @@ export function ReceiptSettingsForm({
         </div>
       )}
 
-      {(showContentSection || showExtrasSection) && showKitchenSection && (
-        <Separator />
-      )}
-
       {/* Kitchen Section */}
       {showKitchenSection && (
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <h3 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
             Kitchen
           </h3>
 

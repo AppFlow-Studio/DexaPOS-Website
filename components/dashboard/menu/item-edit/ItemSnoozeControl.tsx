@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { CircleSlash, RotateCcw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DateTimePopover } from "@/components/dashboard/menu/DateTimePopover";
 import { useGatedLocationId } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { isActivelySnoozed, snoozeLabel } from "@/lib/snooze";
@@ -32,7 +32,7 @@ import {
  * modifier toggle share the exact same semantics.
  */
 
-/** Current local time as a value for <input type="datetime-local"> (min bound). */
+/** Current local time in the value format expected by the date/time picker. */
 function nowLocalInput(): string {
   const d = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
   return d.toISOString().slice(0, 16);
@@ -69,7 +69,7 @@ export function ItemSnoozeControl({
     return (
       <div
         className={cn(
-          "rounded-lg border border-dashed p-3 text-xs text-muted-foreground",
+          "rounded-2xl border-0 bg-muted/60 p-3 text-xs text-muted-foreground shadow-none",
           className,
         )}
       >
@@ -113,18 +113,18 @@ export function ItemSnoozeControl({
     return (
       <div
         className={cn(
-          "flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3",
+          "flex items-center justify-between gap-3 rounded-2xl border-0 bg-amber-50 p-3 shadow-none dark:bg-amber-900/20",
           className,
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
-          <CircleSlash className="h-4 w-4 shrink-0 text-amber-600" />
+          <CircleSlash className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-amber-800">
+            <p className="truncate text-sm font-medium text-amber-800 dark:text-amber-200">
               {snoozeLabel(snoozedUntil)}
             </p>
             {snooze?.snooze_reason ? (
-              <p className="truncate text-xs text-amber-700">
+              <p className="truncate text-xs text-amber-700 dark:text-amber-300">
                 {snooze.snooze_reason}
               </p>
             ) : null}
@@ -152,13 +152,18 @@ export function ItemSnoozeControl({
   }
 
   return (
-    <div className={cn("space-y-3 rounded-lg border p-3", className)}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <p className="text-sm font-medium">Out of stock (86)</p>
-          <p className="text-xs text-muted-foreground">
-            Temporarily hide from POS, online ordering, and delivery apps at this
-            location.
+    <div
+      className={cn(
+        "space-y-4 rounded-3xl border-0 bg-muted/50 p-4 shadow-none sm:p-5",
+        className,
+      )}
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-semibold">Pause sales temporarily</p>
+          <p className="max-w-md text-sm leading-5 text-muted-foreground">
+            Hide this item from POS, online orders, and delivery apps at this
+            location. Choose when it becomes available again.
           </p>
         </div>
         <Button
@@ -167,7 +172,7 @@ export function ItemSnoozeControl({
           size="sm"
           disabled={busy}
           onClick={() => setOpen((v) => !v)}
-          className="shrink-0"
+          className="h-10 w-full shrink-0 rounded-full px-5 sm:h-9 sm:w-auto"
         >
           {busy ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -221,21 +226,19 @@ export function ItemSnoozeControl({
             </Button>
           </div>
 
-          <div className="flex items-end gap-2">
-            <div className="flex-1 space-y-1">
+          <div className="flex min-w-0 flex-wrap items-end gap-2">
+            <div className="min-w-0 flex-1 basis-[12rem] space-y-1">
               <label
                 htmlFor={`snooze-until-${menuItemId}`}
                 className="text-xs font-medium text-muted-foreground"
               >
                 Custom — out of stock until
               </label>
-              <Input
+              <DateTimePopover
                 id={`snooze-until-${menuItemId}`}
-                type="datetime-local"
                 min={nowLocalInput()}
                 value={customValue}
-                onChange={(e) => setCustomValue(e.target.value)}
-                className="h-9"
+                onChange={setCustomValue}
               />
             </div>
             <Button
@@ -243,6 +246,7 @@ export function ItemSnoozeControl({
               size="sm"
               disabled={busy || !customValue}
               onClick={applyCustom}
+              className="shrink-0"
             >
               Set
             </Button>

@@ -21,10 +21,12 @@ export default async function KioskLocationsPage() {
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-6 pb-10">
-      <div className="rounded-md border bg-background p-4 shadow-sm">
+      <div className="rounded-2xl border-0 bg-white px-6 py-5 shadow-sm dark:bg-card">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Kiosk</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-[#0C4FD1] dark:text-[#6CA0FF]">
+            Kiosk
+          </h1>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
             Configure templates, branding, behavior, payment pairing, and station bindings per location.
           </p>
         </div>
@@ -43,7 +45,10 @@ export default async function KioskLocationsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {result.data.map((location) => (
-            <Card key={location.id} className="overflow-hidden shadow-sm transition hover:border-primary/40 hover:shadow">
+            <Card
+              key={location.id}
+              className="overflow-hidden rounded-2xl border-0 bg-white shadow-sm transition-shadow hover:shadow-md dark:bg-card"
+            >
               <CardHeader className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -57,7 +62,7 @@ export default async function KioskLocationsPage() {
                   </Badge>
                 </div>
               </CardHeader>
-              <CardContent className="flex items-center justify-between gap-3 border-t bg-muted/20 py-3">
+              <CardContent className="flex items-center justify-between gap-3 bg-white py-3 dark:bg-card">
                 <div className="text-sm text-muted-foreground">
                   {location.totalProfileCount === 0
                     ? "No profiles yet"

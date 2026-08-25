@@ -9,8 +9,6 @@ interface OrderStatusWatcherProps {
   sessionToken?: string | null;
   /** Called when a decision (accepted/declined/cancelled) arrives, so the caller can refresh. */
   onDecision?: (status: string) => void;
-  /** Statuses for which the watcher should NOT show a toast (caller handles it directly). */
-  silentStatuses?: string[];
 }
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;

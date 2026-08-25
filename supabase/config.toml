@@ -443,3 +443,30 @@ entrypoint = "./functions/process-abandoned-carts/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/process-online-payment/index.ts"
+
+# Internal billing functions authenticate service-role bearer tokens or the
+# x-internal-secret header in _shared/internal-billing-auth.ts.
+[functions.billing-charge-subscription]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billing-charge-subscription/index.ts"
+
+[functions.billing-generate-monthly-invoices]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billing-generate-monthly-invoices/index.ts"
+
+[functions.billing-handle-failure]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billing-handle-failure/index.ts"
+
+[functions.billing-mark-paid]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billing-mark-paid/index.ts"
+
+[functions.billing-suspend-overdue]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billing-suspend-overdue/index.ts"

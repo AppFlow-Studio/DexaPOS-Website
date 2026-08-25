@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,7 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Landmark, Loader2, Lock, ShieldCheck, ShieldAlert } from 'lucide-react'
+import { Landmark, Loader2, Lock, Pencil, Plus, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import {
@@ -31,6 +30,7 @@ import {
   type LocationBankingProfileSummary,
   type PayoutFrequency,
 } from '@/app/dashboard/actions/location-banking-profiles'
+import { roundedFields, roundedSelectContent } from './LocationPanelSection'
 
 interface LocationBankingProfileCardProps {
   clerkOrgId: string
@@ -213,8 +213,8 @@ export function LocationBankingProfileCard({
     <Badge
       variant={profile.is_verified ? 'default' : 'secondary'}
       className={cn(
-        'inline-flex items-center gap-1',
-        profile.is_verified ? 'bg-green-600 hover:bg-green-600' : '',
+        'shrink-0 inline-flex items-center gap-1 rounded-full text-xs font-medium px-2.5 py-0.5',
+        profile.is_verified ? 'bg-emerald-600 hover:bg-emerald-600' : '',
       )}
     >
       {profile.is_verified ? (
@@ -225,92 +225,101 @@ export function LocationBankingProfileCard({
       {profile.is_verified ? 'Verified' : 'Pending verification'}
     </Badge>
   ) : (
-    <Badge variant="outline">Not configured</Badge>
+    <Badge
+      variant="secondary"
+      className="shrink-0 rounded-full border-transparent bg-muted text-muted-foreground text-xs font-medium px-2.5 py-0.5"
+    >
+      Not configured
+    </Badge>
   )
 
   return (
     <>
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Landmark className="h-4 w-4" />
-                Banking & Payouts
-              </CardTitle>
-              <CardDescription>
-                Where this location receives payouts. Account numbers are tokenized — only the
-                last 4 digits are kept.
-              </CardDescription>
+      <div className="overflow-hidden rounded-2xl bg-card px-6 py-8 ring-1 ring-border/50">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+              <Landmark className="h-[1.125rem] w-[1.125rem] shrink-0" />
+              <span>Banking &amp; Payouts</span>
             </div>
-            {verificationBadge}
+            <p className="mt-1 text-sm text-muted-foreground">
+              Where this location receives payouts. Account numbers are tokenized — only the
+              last 4 digits are kept.
+            </p>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {profile ? (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Bank</p>
-                  <p className="font-medium">{profile.bank_name}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Account Holder
-                  </p>
-                  <p className="font-medium">{profile.account_holder_name}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Account</p>
-                  <p className="font-medium font-mono">
-                    {accountTypeLabel[profile.account_type]} ····
-                    {profile.account_number_last_four}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Routing</p>
-                  <p className="font-medium font-mono">····{profile.routing_number_last_four}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Payout</p>
-                  <p className="font-medium">{formatPayoutSchedule(profile)}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Minimum Payout
-                  </p>
-                  <p className="font-medium">
-                    ${Number(profile.minimum_payout_amount).toFixed(2)}
-                  </p>
-                </div>
-              </div>
+          {verificationBadge}
+        </div>
 
-              <div className="flex items-center justify-end">
-                <Button variant="outline" onClick={() => setOpen(true)}>
-                  Edit Banking Details
-                </Button>
+        {profile ? (
+          <>
+            <div className="mt-5">
+              <div className="flex items-center justify-between gap-4 py-2.5">
+                <span className="text-[0.9375rem] text-muted-foreground">Bank</span>
+                <span className="text-sm truncate">{profile.bank_name}</span>
               </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-10 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                <Landmark className="h-5 w-5 text-muted-foreground" />
+              <div className="flex items-center justify-between gap-4 py-2.5">
+                <span className="text-[0.9375rem] text-muted-foreground">Account holder</span>
+                <span className="text-sm truncate">{profile.account_holder_name}</span>
               </div>
-              <p className="mt-3 font-medium">No banking profile yet</p>
-              <p className="text-sm text-muted-foreground max-w-sm mt-1">
-                Add a bank account to receive payouts for this location. Required before enabling
-                online ordering payouts.
-              </p>
-              <Button className="mt-4" onClick={() => setOpen(true)}>
-                Add Banking Profile
+              <div className="flex items-center justify-between gap-4 py-2.5">
+                <span className="text-[0.9375rem] text-muted-foreground">Account</span>
+                <span className="text-sm font-mono tabular-nums">
+                  {accountTypeLabel[profile.account_type]} ····
+                  {profile.account_number_last_four}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4 py-2.5">
+                <span className="text-[0.9375rem] text-muted-foreground">Routing</span>
+                <span className="text-sm font-mono tabular-nums">
+                  ····{profile.routing_number_last_four}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4 py-2.5">
+                <span className="text-[0.9375rem] text-muted-foreground">Payout</span>
+                <span className="text-sm">{formatPayoutSchedule(profile)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-4 py-2.5">
+                <span className="text-[0.9375rem] text-muted-foreground">Minimum payout</span>
+                <span className="text-sm tabular-nums">
+                  ${Number(profile.minimum_payout_amount).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              <Button size="sm" className="gap-2 rounded-full px-4" onClick={() => setOpen(true)}>
+                <Pencil className="h-4 w-4" />
+                Edit banking details
               </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </>
+        ) : (
+          <div className="mt-5 flex flex-col items-center justify-center rounded-xl bg-muted/40 py-10 text-center">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10">
+              <Landmark className="h-5 w-5 text-primary" />
+            </div>
+            <p className="mt-3 text-[1.0625rem] font-medium leading-tight tracking-[-0.01em]">
+              No banking profile yet
+            </p>
+            <p className="text-sm text-muted-foreground max-w-sm mt-1.5">
+              Add a bank account to receive payouts for this location. Required before enabling
+              online ordering payouts.
+            </p>
+            <Button size="sm" className="mt-5 gap-2 rounded-full px-4" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Add banking profile
+            </Button>
+          </div>
+        )}
+      </div>
 
       <Dialog open={open} onOpenChange={(next) => !saving && setOpen(next)}>
-        <DialogContent className="sm:max-w-lg">
+        {/* Softer corners to match the rounded-2xl cards on the page; the
+            field overrides ride on the dialog so the shared Input/Select
+            primitives stay untouched elsewhere. */}
+        <DialogContent
+          className={cn('sm:max-w-lg sm:rounded-2xl border-0 shadow-xl', roundedFields)}
+        >
           <DialogHeader>
             <DialogTitle>{hasProfile ? 'Edit Banking Profile' : 'Add Banking Profile'}</DialogTitle>
             <DialogDescription>
@@ -320,7 +329,7 @@ export function LocationBankingProfileCard({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-lg border bg-muted/40 p-3">
+          <div className="rounded-xl bg-muted/50 p-3">
             <div className="flex items-start gap-2">
               <Lock className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
               <p className="text-xs text-muted-foreground">
@@ -364,8 +373,10 @@ export function LocationBankingProfileCard({
               >
                 <label
                   className={cn(
-                    'flex items-center gap-2 rounded-lg border p-3 cursor-pointer transition-colors',
-                    accountType === 'checking' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50',
+                    'flex items-center gap-2 rounded-xl border p-3 cursor-pointer transition-colors',
+                    accountType === 'checking'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-transparent bg-muted/50 hover:bg-muted',
                   )}
                 >
                   <RadioGroupItem value="checking" />
@@ -373,8 +384,10 @@ export function LocationBankingProfileCard({
                 </label>
                 <label
                   className={cn(
-                    'flex items-center gap-2 rounded-lg border p-3 cursor-pointer transition-colors',
-                    accountType === 'savings' ? 'border-primary bg-primary/5' : 'hover:bg-muted/50',
+                    'flex items-center gap-2 rounded-xl border p-3 cursor-pointer transition-colors',
+                    accountType === 'savings'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-transparent bg-muted/50 hover:bg-muted',
                   )}
                 >
                   <RadioGroupItem value="savings" />
@@ -449,7 +462,7 @@ export function LocationBankingProfileCard({
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={roundedSelectContent}>
                     <SelectItem value="daily">Daily</SelectItem>
                     <SelectItem value="weekly">Weekly</SelectItem>
                     <SelectItem value="monthly">Monthly</SelectItem>
@@ -483,7 +496,7 @@ export function LocationBankingProfileCard({
                   <SelectTrigger>
                     <SelectValue placeholder="Select day" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={roundedSelectContent}>
                     {dayOfWeekOptions.map((d) => (
                       <SelectItem key={d.value} value={String(d.value)}>
                         {d.label}
@@ -501,7 +514,7 @@ export function LocationBankingProfileCard({
                   <SelectTrigger>
                     <SelectValue placeholder="Select day" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={roundedSelectContent}>
                     {Array.from({ length: 28 }, (_, i) => {
                       const day = String(i + 1)
                       return (
@@ -521,10 +534,15 @@ export function LocationBankingProfileCard({
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>
+            <Button
+              variant="outline"
+              className="rounded-full px-4"
+              onClick={() => setOpen(false)}
+              disabled={saving}
+            >
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={!canSave}>
+            <Button className="rounded-full px-4" onClick={handleSave} disabled={!canSave}>
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-1 animate-spin" />

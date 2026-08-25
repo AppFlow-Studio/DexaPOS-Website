@@ -76,33 +76,47 @@ export function FiltersPanel({
     <div className="flex items-center gap-2">
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-2">
+          <Button variant="outline" size="sm" className="gap-2 rounded-full">
             <Filter className="h-4 w-4" />
             Filters
             {activeFilterCount > 0 && (
               <Badge
                 variant="secondary"
-                className="ml-1 h-5 w-5 p-0 justify-center"
+                className="ml-1 h-5 w-5 justify-center rounded-full p-0"
               >
                 {activeFilterCount}
               </Badge>
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-80" align="start">
+        <PopoverContent
+          className="w-80 rounded-3xl border-border/60 p-5 shadow-xl"
+          align="start"
+        >
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="font-medium">Filters</h4>
-              {activeFilterCount > 0 && (
+              <div className="flex items-center gap-1">
+                {activeFilterCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 rounded-full px-2 text-xs"
+                    onClick={clearFilters}
+                  >
+                    Clear all
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-xs"
-                  onClick={clearFilters}
+                  size="icon-sm"
+                  className="rounded-full"
+                  onClick={() => setIsOpen(false)}
+                  aria-label="Close filters"
                 >
-                  Clear all
+                  <X className="h-4 w-4" />
                 </Button>
-              )}
+              </div>
             </div>
 
             {/* Roles Filter */}
@@ -118,7 +132,7 @@ export function FiltersPanel({
                         : "outline"
                     }
                     size="sm"
-                    className="h-7 text-xs capitalize"
+                    className="h-7 rounded-full px-3 text-xs capitalize"
                     onClick={() => toggleRole(role)}
                   >
                     {role}
@@ -142,7 +156,7 @@ export function FiltersPanel({
                         : "outline"
                     }
                     size="sm"
-                    className="h-7 text-xs capitalize"
+                    className="h-7 rounded-full px-3 text-xs capitalize"
                     onClick={() => toggleStatus(status)}
                   >
                     {status}
@@ -157,11 +171,11 @@ export function FiltersPanel({
                 <Label className="text-xs text-muted-foreground">
                   Employees ({selectedFilters.employees.length} selected)
                 </Label>
-                <div className="max-h-32 overflow-auto space-y-1 border rounded-lg p-2">
+                <div className="max-h-32 space-y-1 overflow-auto rounded-2xl border p-2">
                   {employees.map((emp) => (
                     <div
                       key={emp.id}
-                      className="flex items-center gap-2 p-1 hover:bg-muted/50 rounded"
+                      className="flex items-center gap-2 rounded-xl p-1.5 hover:bg-muted/50"
                     >
                       <Checkbox
                         id={emp.id}
@@ -190,7 +204,7 @@ export function FiltersPanel({
             <Badge
               key={role}
               variant="secondary"
-              className="gap-1 text-xs capitalize"
+              className="gap-1 rounded-full text-xs capitalize"
             >
               {role}
               <X
@@ -203,7 +217,7 @@ export function FiltersPanel({
             <Badge
               key={status}
               variant="secondary"
-              className="gap-1 text-xs capitalize"
+              className="gap-1 rounded-full text-xs capitalize"
             >
               {status}
               <X
@@ -213,7 +227,7 @@ export function FiltersPanel({
             </Badge>
           ))}
           {selectedFilters.employees.length > 0 && (
-            <Badge variant="secondary" className="gap-1 text-xs">
+            <Badge variant="secondary" className="gap-1 rounded-full text-xs">
               {selectedFilters.employees.length} employee(s)
               <X
                 className="h-3 w-3 cursor-pointer"

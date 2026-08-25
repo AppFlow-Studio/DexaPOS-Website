@@ -28,37 +28,44 @@ export function PrepStationCard({
   onToggleActive,
 }: PrepStationCardProps) {
   return (
-    <div className="flex items-start justify-between p-4 border rounded-lg bg-card gap-4">
-      <div className="flex items-start gap-3 min-w-0 flex-1">
-        {/* Color swatch */}
+    <div className="flex min-w-0 items-start justify-between gap-4 rounded-2xl border-0 bg-muted/45 p-4">
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        {/* The swatch is functional colour encoding (§4.6b exception 2) — it is
+            the station's identity on the KDS, not a status hue. */}
         <div
-          className="h-8 w-8 rounded-full border-2 border-background shadow-sm flex-shrink-0 mt-0.5"
+          className="mt-0.5 h-8 w-8 shrink-0 rounded-full"
           style={{ backgroundColor: station.color }}
         />
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">{station.name}</span>
             {station.item_count > 0 && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge
+                variant="secondary"
+                className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium tabular-nums text-foreground"
+              >
                 {station.item_count} item{station.item_count !== 1 ? "s" : ""}
               </Badge>
             )}
             {!station.is_active && (
-              <Badge variant="outline" className="text-xs text-muted-foreground">
+              <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-muted-foreground">
                 Inactive
               </Badge>
             )}
           </div>
-          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <span className="text-xs text-muted-foreground">Categories:</span>
             {assignedCategories.length === 0 ? (
-              <span className="text-xs text-muted-foreground italic">
+              <span className="text-xs italic text-muted-foreground">
                 None assigned
               </span>
             ) : (
               assignedCategories.map((name) => (
-                <Badge key={name} variant="outline" className="text-xs">
+                <Badge
+                  key={name}
+                  className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground"
+                >
                   {name}
                 </Badge>
               ))
@@ -67,7 +74,7 @@ export function PrepStationCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <Switch
           checked={station.is_active}
           onCheckedChange={() => onToggleActive(station)}
@@ -76,7 +83,7 @@ export function PrepStationCard({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full p-0">
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>

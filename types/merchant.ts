@@ -133,6 +133,17 @@ export interface MerchantSettingsUpdate {
   dba_name?: string | null
   business_type?: string | null
   ein_last_four?: string | null
+  // Owner / contact + business address — required for Valor boarding.
+  owner_first_name?: string | null
+  owner_last_name?: string | null
+  owner_email?: string | null
+  owner_phone?: string | null
+  business_address_line1?: string | null
+  business_address_line2?: string | null
+  business_city?: string | null
+  business_state?: string | null
+  business_postal_code?: string | null
+  business_country?: string | null
 }
 
 export interface ToggleLocationResult {

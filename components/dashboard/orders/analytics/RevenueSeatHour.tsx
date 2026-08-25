@@ -1,6 +1,7 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
+import { CHART_CURSOR_FILL, CHART_GRID, CHART_TICK } from './AnalyticsPrimitives'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
 import { DollarSign } from 'lucide-react'
@@ -48,12 +49,12 @@ export function RevenueSeatHour({ data, isLoading }: RevenueSeatHourProps) {
           <div className="w-full h-[280px]">
             <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                 <BarChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <CartesianGrid vertical={false} {...CHART_GRID} />
                   <XAxis
                     dataKey="hour"
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 11 }}
+                    tick={{ ...CHART_TICK, fontSize: 11 }}
                     angle={-45}
                     textAnchor="end"
                     height={60}
@@ -61,16 +62,16 @@ export function RevenueSeatHour({ data, isLoading }: RevenueSeatHourProps) {
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12 }}
+                    tick={CHART_TICK}
                     tickFormatter={(value) => `$${value.toFixed(0)}`}
                   />
                   <ChartTooltip
-                    cursor={{ fill: 'rgba(0, 0, 0, 0.1)' }}
+                    cursor={{ fill: CHART_CURSOR_FILL }}
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-white dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-700 shadow-lg">
-                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
+                          <div className="rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg">
+                            <p className="mb-2 text-[0.8125rem] font-medium text-muted-foreground">
                               {label}
                             </p>
                             <div className="space-y-1">
@@ -78,10 +79,10 @@ export function RevenueSeatHour({ data, isLoading }: RevenueSeatHourProps) {
                                 if (item.dataKey === 'revpash') {
                                   return (
                                     <div key={index} className="flex items-center justify-between gap-2">
-                                      <span className="text-xs text-slate-700 dark:text-slate-300">
+                                      <span className="text-[0.8125rem] text-muted-foreground">
                                         RevPASH:
                                       </span>
-                                      <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                      <span className="text-[0.8125rem] tabular-nums">
                                         ${Number(item.value).toFixed(2)}
                                       </span>
                                     </div>

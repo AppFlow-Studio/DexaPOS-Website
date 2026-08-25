@@ -14,6 +14,7 @@ import {
 import { isValidEmail, normalizeEmail } from "@/lib/utils/email";
 import { findEmailConflict } from "@/app/manage/actions/email-duplicates";
 import { emailConflictMessage } from "@/lib/utils/email";
+import { getCurrentUserMerchantRole } from "./role-check";
 
 // ============================================================================
 // GET OPERATIONS
@@ -592,7 +593,32 @@ export async function RestoreLocation(locationId: string) {
     return { error: "Location ID is required" };
   }
 
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (!roleInfo?.isOwnerOrAdmin) {
+    return { error: "Only merchant owners and admins can activate locations" };
+  }
+
   const supabase = createServerSupabaseClient();
+
+  const { data: targetLocation, error: targetError } = await supabase
+    .from("locations")
+    .select("merchant_id, is_active")
+    .eq("id", locationId)
+    .maybeSingle();
+
+  if (
+    targetError ||
+    !targetLocation ||
+    targetLocation.merchant_id !== roleInfo.merchantId
+  ) {
+    return { error: "Location not found" };
+  }
+
+  // Treat retries as a successful no-op so a replay cannot create a second,
+  // inaccurate activation audit event.
+  if (targetLocation.is_active) {
+    return { success: true };
+  }
 
   const { data, error } = await supabase.rpc("restore_location", {
     p_location_id: locationId,
@@ -608,23 +634,15 @@ export async function RestoreLocation(locationId: string) {
     return { error: result.error };
   }
 
-  const { data: locationData } = await supabase
-    .from("locations")
-    .select("merchant_id")
-    .eq("id", locationId)
-    .single();
-
-  if (locationData) {
-    await LogAuditEvent({
-      merchantId: locationData.merchant_id,
-      action: `Restored Location: ${result.name}`,
-      actionCategory: "settings",
-      resourceType: "location",
-      resourceId: locationId,
-      resourceName: result.name ?? locationId,
-      changes: { before: { is_active: false }, after: { is_active: true } },
-    });
-  }
+  await LogAuditEvent({
+    merchantId: targetLocation.merchant_id,
+    action: `Activated Location: ${result.name}`,
+    actionCategory: "settings",
+    resourceType: "location",
+    resourceId: locationId,
+    resourceName: result.name ?? locationId,
+    changes: { before: { is_active: false }, after: { is_active: true } },
+  });
 
   return { success: true };
 }

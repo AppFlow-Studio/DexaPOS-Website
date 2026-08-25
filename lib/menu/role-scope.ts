@@ -38,6 +38,10 @@ export function effectiveScopeForRole(
   if (role.isOwnerOrAdmin || role.isMember) return ctx;
   if (!role.isManager) return ctx;
 
+  // A location-item override is already anchored to a concrete branch. It is
+  // not the category-level L3 scope that managers normally route down from.
+  if (ctx.scopeType === "location-item") return ctx;
+
   if (ctx.level === 1 && selectedLocationName) {
     return { level: 2, locationName: selectedLocationName };
   }
@@ -67,6 +71,7 @@ export function canEditAtScope(
   if (role.isMember) return false;
   if (role.isOwnerOrAdmin) return true;
   if (role.isManager) {
+    if (ctx.scopeType === "location-item") return true;
     // Location-scoped levels only.
     return ctx.level === 2 || ctx.level === 4 || ctx.level === 5;
   }

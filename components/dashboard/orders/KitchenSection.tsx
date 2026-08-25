@@ -306,10 +306,12 @@ function CourseCard({ course }: { course: CourseGroup }) {
   const lastCompletedStr = formatShortTime(course.lastCompletedAt);
   const isCompleted = course.overallStatus.label === "Completed";
 
+  // No outline — the course reads as a tinted surface, with the header
+  // separated from its items by spacing rather than a rule.
   return (
-    <div className="rounded-lg border overflow-hidden">
+    <div className="rounded-2xl bg-muted/30 overflow-hidden">
       {/* Course header: "Course 1 — Appetizers" with "COMPLETED ✅" */}
-      <div className="flex items-center justify-between px-3 py-2.5 bg-muted/30 border-b">
+      <div className="flex items-center justify-between px-3 py-2.5">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-foreground">

@@ -10,16 +10,25 @@ import {
   OrderItemModifier,
   OrderResponse,
   OrderFilters,
+  OrderOverviewRecord,
+  OrderPageOptions,
 } from "@/types/order-management";
 import { deliveryPlatformMatchValues } from "@/lib/orderout/platform";
+import type { PaginatedResult } from "@/types/pagination";
+import {
+  buildPaginationMeta,
+  emptyPaginatedResult,
+  normalizePagination,
+} from "@/lib/pagination";
 
-export async function GetOrders(
+async function getOrdersResult(
   clerkOrgId: string,
   locationId?: string | null,
-  filters?: OrderFilters
-): Promise<OrderResponse[]> {
+  filters?: OrderFilters,
+  pagination?: OrderPageOptions,
+): Promise<PaginatedResult<OrderResponse>> {
   if (!clerkOrgId) {
-    return [];
+    return emptyPaginatedResult(pagination);
   }
 
   const supabase = createServerSupabaseClient();
@@ -33,8 +42,15 @@ export async function GetOrders(
 
   if (merchantError || !merchant) {
     console.error("[GetOrders] Error getting merchant:", merchantError);
-    return [];
+    return emptyPaginatedResult(pagination);
   }
+
+  const normalizedPagination = normalizePagination(pagination);
+  const search = pagination?.search?.replace(/[,%()]/g, " ").trim();
+  const hasPaymentMethodFilter = Boolean(filters?.paymentMethod?.length);
+  const paymentsRelation = hasPaymentMethodFilter
+    ? "order_payments!inner(*)"
+    : "order_payments(*)";
 
   // Build query with location filtering
   let query = supabase
@@ -48,8 +64,9 @@ export async function GetOrders(
                 *
             )
             ),
-            order_payments(*)
-            `
+            ${paymentsRelation}
+            `,
+      pagination ? { count: "exact" } : undefined,
     )
     .eq("merchant_id", merchant.id);
 
@@ -116,13 +133,45 @@ export async function GetOrders(
     if (filters.amountRange?.max !== undefined) {
       query = query.lte("total_amount", filters.amountRange.max);
     }
+
+    if (filters.paymentMethod && filters.paymentMethod.length > 0) {
+      query = query.in(
+        "order_payments.payment_method",
+        filters.paymentMethod,
+      );
+    }
   }
 
-  const { data, error } = await query.order("created_at", { ascending: false });
+  if (search) {
+    const pattern = `%${search}%`;
+    query = query.or(
+      [
+        `display_number.ilike.${pattern}`,
+        `order_number.ilike.${pattern}`,
+        `customer_name.ilike.${pattern}`,
+        `customer_email.ilike.${pattern}`,
+      ].join(","),
+    );
+  }
+
+  const sortBy = pagination?.sortBy ?? "created_at";
+  const ascending = pagination?.sortDirection === "asc";
+  query = query
+    .order(sortBy, { ascending, nullsFirst: false })
+    .order("id", { ascending: false });
+
+  if (pagination) {
+    query = query.range(
+      normalizedPagination.offset,
+      normalizedPagination.offset + normalizedPagination.pageSize - 1,
+    );
+  }
+
+  const { data, error, count } = await query;
 
   if (error) {
     console.error("[GetOrders] Error getting orders:", error);
-    return [];
+    return emptyPaginatedResult(pagination);
   }
 
   let result = (data as OrderResponse[]) || [];
@@ -213,21 +262,75 @@ export async function GetOrders(
     }
   }
 
-  // In-memory filter for Payment Method
-  if (filters?.paymentMethod && filters.paymentMethod.length > 0) {
-    result = result.filter((order) => {
-      // If order has no payments, it doesn't match a specific payment method filter
-      if (!order.order_payments || order.order_payments.length === 0)
-        return false;
+  return {
+    data: result,
+    pagination: buildPaginationMeta(count ?? result.length, pagination),
+  };
+}
 
-      // Check if any of the order's payments match the selected methods
-      return order.order_payments.some((payment) =>
-        filters.paymentMethod?.includes(payment.payment_method)
-      );
-    });
+export async function GetOrders(
+  clerkOrgId: string,
+  locationId?: string | null,
+  filters?: OrderFilters,
+): Promise<OrderResponse[]> {
+  return (await getOrdersResult(clerkOrgId, locationId, filters)).data;
+}
+
+export async function GetOrdersPage(
+  clerkOrgId: string,
+  locationId: string | null | undefined,
+  filters: OrderFilters | undefined,
+  pagination: OrderPageOptions,
+): Promise<PaginatedResult<OrderResponse>> {
+  return getOrdersResult(clerkOrgId, locationId, filters, pagination);
+}
+
+export async function GetOrderOverviewRecords(
+  clerkOrgId: string,
+  locationId?: string | null,
+  dateRange?: OrderFilters["dateRange"],
+): Promise<OrderOverviewRecord[]> {
+  if (!clerkOrgId) return [];
+
+  const supabase = createServerSupabaseClient();
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) {
+    console.error("[GetOrderOverviewRecords] Error getting merchant:", merchantError);
+    return [];
   }
 
-  return result;
+  let query = supabase
+    .from("orders")
+    .select(
+      "status, payment_status, total_amount, order_type, table_number, created_at",
+    )
+    .eq("merchant_id", merchant.id);
+
+  if (locationId && locationId !== "all") {
+    query = query.eq("location_id", locationId);
+  }
+
+  if (dateRange?.from) {
+    query = query.gte("created_at", dateRange.from.toISOString());
+  }
+  if (dateRange?.to) {
+    const toDate = new Date(dateRange.to);
+    toDate.setHours(23, 59, 59, 999);
+    query = query.lte("created_at", toDate.toISOString());
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false });
+  if (error) {
+    console.error("[GetOrderOverviewRecords] Error getting overview rows:", error);
+    return [];
+  }
+
+  return (data as OrderOverviewRecord[]) || [];
 }
 
 /**

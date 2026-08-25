@@ -13,7 +13,6 @@ import {
   Search,
 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -170,43 +169,33 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
     mutationFn: (id: string) => retryDeadLetterEntry(id),
     onSuccess: (result) => {
       if (!result.success) {
-        toast.error(result.error || 'Retry refused')
         return
-      }
-      if (result.resolved) {
-        toast.success('Retry succeeded, entry resolved')
-      } else {
-        toast.warning(`Retry did not resolve${result.error ? ` (${result.error})` : ''}`)
       }
       invalidateAll()
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Retry failed'),
+    onError: (err) => {},
   })
 
   const resolveMutation = useMutation({
     mutationFn: (id: string) => resolveDeadLetterEntry(id),
     onSuccess: (result) => {
       if (!result.success) {
-        toast.error(result.error || 'Resolve failed')
         return
       }
-      toast.success('Marked as resolved')
       invalidateAll()
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Resolve failed'),
+    onError: (err) => {},
   })
 
   const abandonMutation = useMutation({
     mutationFn: (args: { id: string; reason: string }) => abandonDeadLetterEntry(args.id, args.reason),
     onSuccess: (result) => {
       if (!result.success) {
-        toast.error(result.error || 'Abandon failed')
         return
       }
-      toast.success('Marked as abandoned')
       invalidateAll()
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Abandon failed'),
+    onError: (err) => {},
   })
 
   // ── Abandon dialog ─────────────────────────────────────────────────────────
@@ -224,7 +213,6 @@ export function DeadLetterQueueTable({ canMutate }: Props) {
   function submitAbandon() {
     if (!abandonTarget) return
     if (!abandonReason.trim()) {
-      toast.error('Reason is required')
       return
     }
     abandonMutation.mutate(

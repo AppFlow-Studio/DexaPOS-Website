@@ -1981,6 +1981,7 @@ CREATE TABLE public.merchant_billing_profiles (
   platform_billing_config_id uuid,
   location_id uuid,
   billing_email text,
+  processor text NOT NULL DEFAULT 'nmi'::text CHECK (processor = ANY (ARRAY['nmi'::text, 'valor'::text])),
   CONSTRAINT merchant_billing_profiles_pkey PRIMARY KEY (id),
   CONSTRAINT merchant_billing_profiles_platform_billing_config_id_fkey FOREIGN KEY (platform_billing_config_id) REFERENCES public.platform_billing_provider_configs(id),
   CONSTRAINT merchant_billing_profiles_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
@@ -2040,6 +2041,38 @@ CREATE TABLE public.merchant_plan_subscriptions (
   CONSTRAINT merchant_plan_subscriptions_pkey PRIMARY KEY (id),
   CONSTRAINT merchant_plan_subscriptions_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT merchant_plan_subscriptions_plan_id_fkey FOREIGN KEY (plan_id) REFERENCES public.subscription_plans(id)
+);
+CREATE TABLE public.merchant_processor_accounts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  merchant_id uuid NOT NULL,
+  location_id uuid,
+  processor text NOT NULL CHECK (processor = ANY (ARRAY['nmi'::text, 'valor'::text])),
+  purpose text NOT NULL CHECK (purpose = ANY (ARRAY['online_order'::text, 'subscription'::text, 'invoice'::text])),
+  valor_merchant_id text,
+  valor_store_id text,
+  valor_epi text,
+  valor_appid text,
+  valor_appkey_encrypted text,
+  valor_customer_profile_id text,
+  valor_payment_profile_id text,
+  fee_schedule_id text,
+  disc_rate_percent numeric CHECK (disc_rate_percent IS NULL OR (disc_rate_percent >= 0::numeric AND disc_rate_percent <= 100::numeric)),
+  residual_bps integer CHECK (residual_bps IS NULL OR residual_bps >= 0),
+  surcharge_percent numeric CHECK (surcharge_percent IS NULL OR (surcharge_percent >= 0::numeric AND surcharge_percent <= 100::numeric)),
+  pricing_owner text NOT NULL DEFAULT 'dexa'::text CHECK (pricing_owner = 'dexa'::text),
+  nmi_merchant_id text,
+  nmi_customer_vault_id text,
+  webhook_secret_encrypted text,
+  is_primary boolean NOT NULL DEFAULT false,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT merchant_processor_accounts_pkey PRIMARY KEY (id),
+  CONSTRAINT merchant_processor_accounts_id_merchant_key UNIQUE (id, merchant_id),
+  CONSTRAINT merchant_processor_accounts_scope_key UNIQUE NULLS NOT DISTINCT (merchant_id, location_id, processor, purpose),
+  CONSTRAINT fee_schedule_required_for_merchant_purposes CHECK (processor <> 'valor'::text OR (purpose <> ALL (ARRAY['online_order'::text, 'invoice'::text])) OR NOT is_active OR (fee_schedule_id IS NOT NULL AND disc_rate_percent IS NOT NULL AND residual_bps IS NOT NULL AND surcharge_percent IS NOT NULL)),
+  CONSTRAINT merchant_processor_accounts_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id) ON DELETE CASCADE,
+  CONSTRAINT merchant_processor_accounts_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id) ON DELETE CASCADE
 );
 CREATE TABLE public.merchant_subscription_services (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -2196,12 +2229,14 @@ CREATE TABLE public.online_order_payment_intents (
   tax numeric,
   tip numeric,
   delivery_fee numeric,
+  merchant_processor_account_id uuid,
   CONSTRAINT online_order_payment_intents_pkey PRIMARY KEY (id),
   CONSTRAINT online_order_payment_intents_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id),
   CONSTRAINT online_order_payment_intents_merchant_id_fkey FOREIGN KEY (merchant_id) REFERENCES public.merchants(id),
   CONSTRAINT online_order_payment_intents_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
   CONSTRAINT online_order_payment_intents_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.online_order_sessions(id),
-  CONSTRAINT online_order_payment_intents_store_config_id_fkey FOREIGN KEY (store_config_id) REFERENCES public.online_store_config(id)
+  CONSTRAINT online_order_payment_intents_store_config_id_fkey FOREIGN KEY (store_config_id) REFERENCES public.online_store_config(id),
+  CONSTRAINT online_order_payment_intents_processor_account_fkey FOREIGN KEY (merchant_processor_account_id, merchant_id) REFERENCES public.merchant_processor_accounts(id, merchant_id) ON DELETE SET NULL
 );
 CREATE TABLE public.online_order_sessions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

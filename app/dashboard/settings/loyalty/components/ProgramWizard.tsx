@@ -22,7 +22,6 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DateTimePicker } from '@/components/ui/date-time-picker';
 import { ChevronLeft, ChevronRight, Star, Coffee, Hash, Loader2, Gift, Target, Flame } from 'lucide-react';
@@ -30,6 +29,7 @@ import { useMenuItems } from '../../../hooks/useMenuItems';
 import { useCategories } from '../../../hooks/useCategories';
 import { useLocations } from '../../../hooks/useLocations';
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.';
+import { useClerkOrgId } from '@/app/dashboard/hooks/useLocationScoped';
 import { useIsSingleLocation } from '@/stores/location-store';
 import type { LoyaltyProgram, LoyaltyProgramInsert } from '../../../actions/loyalty-programs';
 
@@ -135,9 +135,8 @@ export function ProgramWizard({
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
 
-  // Fetch user info to get clerkOrgId
   const { data: userInfo } = useUserInfo();
-  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
+  const clerkOrgId = useClerkOrgId();
 
   // Fetch menu items and categories
   const { data: menuItems = [], isLoading: itemsLoading } = useMenuItems(clerkOrgId || '');
@@ -250,48 +249,35 @@ export function ProgramWizard({
   // Step 1: Type Selection
   const renderStep1 = () => (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Visits */}
-        <Card
-          className={`p-4 cursor-pointer transition-all ${
-            formData.program_type === 'visits' ? 'border-primary bg-primary/5' : 'hover:border-primary'
-          }`}
-          onClick={() => setFormData({ ...formData, program_type: 'visits' })}
-        >
-          <div className="flex flex-col items-center text-center gap-3">
-            <Hash className="h-8 w-8 text-purple-500" />
-            <h4 className="font-semibold">Visits</h4>
-            <p className="text-sm text-muted-foreground">Reward after X visits.</p>
-          </div>
-        </Card>
-
-        {/* Points */}
-        <Card
-          className={`p-4 cursor-pointer transition-all ${
-            formData.program_type === 'points' ? 'border-primary bg-primary/5' : 'hover:border-primary'
-          }`}
-          onClick={() => setFormData({ ...formData, program_type: 'points' })}
-        >
-          <div className="flex flex-col items-center text-center gap-3">
-            <Star className="h-8 w-8 text-yellow-500" />
-            <h4 className="font-semibold">Points</h4>
-            <p className="text-sm text-muted-foreground">Earn points per $ spent.</p>
-          </div>
-        </Card>
-
-        {/* Punch Card */}
-        <Card
-          className={`p-4 cursor-pointer transition-all ${
-            formData.program_type === 'punch_card' ? 'border-primary bg-primary/5' : 'hover:border-primary'
-          }`}
-          onClick={() => setFormData({ ...formData, program_type: 'punch_card' })}
-        >
-          <div className="flex flex-col items-center text-center gap-3">
-            <Coffee className="h-8 w-8 text-orange-500" />
-            <h4 className="font-semibold">Punch Card</h4>
-            <p className="text-sm text-muted-foreground">Buy X, get 1 free.</p>
-          </div>
-        </Card>
+      {/* Selection is a ring on a muted tile, not a `--primary` border: the
+          primary token is violet, not the brand blue (C5), and a border here
+          would be the only one on the panel. */}
+      <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-3">
+        {(
+          [
+            { type: 'visits', icon: Hash, title: 'Visits', blurb: 'Reward after X visits.' },
+            { type: 'points', icon: Star, title: 'Points', blurb: 'Earn points per $ spent.' },
+            { type: 'punch_card', icon: Coffee, title: 'Punch Card', blurb: 'Buy X, get 1 free.' },
+          ] as const
+        ).map(({ type, icon: Icon, title, blurb }) => (
+          <button
+            key={type}
+            type="button"
+            aria-pressed={formData.program_type === type}
+            onClick={() => setFormData({ ...formData, program_type: type })}
+            className={`min-w-0 cursor-pointer rounded-2xl border-0 p-4 text-left shadow-none transition-colors ${
+              formData.program_type === type
+                ? 'bg-muted ring-1 ring-border'
+                : 'bg-muted/45 hover:bg-muted'
+            }`}
+          >
+            <div className="flex flex-col items-center gap-3 text-center">
+              <Icon className="h-8 w-8 text-muted-foreground" />
+              <h4 className="font-semibold">{title}</h4>
+              <p className="text-sm text-muted-foreground">{blurb}</p>
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -299,7 +285,7 @@ export function ProgramWizard({
   // Step 2: Basic Config
   const renderStep2 = () => (
     <div className="space-y-4">
-      <div className="rounded-lg border border-blue-200 dark:border-blue-900/40 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm text-blue-900 dark:text-blue-300">
+      <div className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 text-sm text-muted-foreground shadow-none">
         <p className="font-medium mb-1">📢 {isSingleLocation ? "Loyalty Program" : "Merchant-Wide Program"}</p>
         <p>
           {isSingleLocation
@@ -333,7 +319,7 @@ export function ProgramWizard({
 
       {/* Points specific */}
       {formData.program_type === 'points' && (
-        <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
+        <div className="min-w-0 space-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
           <h4 className="font-semibold text-sm">Points Configuration</h4>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-2">
@@ -387,7 +373,7 @@ export function ProgramWizard({
 
       {/* Visits specific */}
       {formData.program_type === 'visits' && (
-        <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
+        <div className="min-w-0 space-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
           <h4 className="font-semibold text-sm">Visits Configuration</h4>
           <div className="space-y-2">
             <Label htmlFor="visits">Visits to earn reward *</Label>
@@ -408,7 +394,7 @@ export function ProgramWizard({
 
       {/* Punch Card specific */}
       {formData.program_type === 'punch_card' && (
-        <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
+        <div className="min-w-0 space-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
           <h4 className="font-semibold text-sm">Punch Card Configuration</h4>
           <div className="space-y-3">
             <Label>Target Type *</Label>
@@ -689,15 +675,29 @@ export function ProgramWizard({
   // Step 4: Advanced Settings
   const renderStep4 = () => (
     <Tabs defaultValue="rules" className="w-full">
-      <TabsList className="grid w-full grid-cols-3">
-        <TabsTrigger value="rules">Rules</TabsTrigger>
-        <TabsTrigger value="schedule">Schedule</TabsTrigger>
-        <TabsTrigger value="display">Display</TabsTrigger>
-      </TabsList>
+      {/* §4.5 pill rail. Classes are literal, not {TOKEN} — Tailwind does not
+          scan `.ts` (C7). */}
+      <div className="w-full min-w-0 overflow-x-auto pb-1">
+        <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+          {[
+            { value: 'rules', label: 'Rules' },
+            { value: 'schedule', label: 'Schedule' },
+            { value: 'display', label: 'Display' },
+          ].map((t) => (
+            <TabsTrigger
+              key={t.value}
+              value={t.value}
+              className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+            >
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
 
       {/* Rules Tab */}
       <TabsContent value="rules" className="space-y-4 py-4">
-        <div className="space-y-3 border rounded-lg p-4 bg-muted/50">
+        <div className="min-w-0 space-y-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
           <div className="flex items-center justify-between">
             <Label htmlFor="auto-enroll" className="cursor-pointer">
               Auto-enroll customers
@@ -713,7 +713,7 @@ export function ProgramWizard({
           <p className="text-xs text-muted-foreground">Auto-enroll when customer identified at POS</p>
         </div>
 
-        <div className="space-y-3 border rounded-lg p-4 bg-muted/50">
+        <div className="min-w-0 space-y-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
           <div className="flex items-center justify-between">
             <Label htmlFor="earn-disc" className="cursor-pointer">
               Earn on discounted orders
@@ -728,7 +728,7 @@ export function ProgramWizard({
           </div>
         </div>
 
-        <div className="space-y-3 border rounded-lg p-4 bg-muted/50">
+        <div className="min-w-0 space-y-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
           <div className="flex items-center justify-between">
             <Label htmlFor="stackable" className="cursor-pointer">
               Stackable rewards
@@ -775,12 +775,12 @@ export function ProgramWizard({
           </div>
         </div>
 
-        <div className="space-y-4 border rounded-lg p-4 bg-muted/30">
+        <div className="min-w-0 space-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
           <h4 className="font-semibold text-sm">Exclusions (Optional)</h4>
 
           <div className="space-y-3">
             <Label>Exclude Categories</Label>
-            <div className="border rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto bg-card dark:bg-muted/30">
+            <div className="thin-scrollbar min-w-0 max-h-40 space-y-2 overflow-y-auto rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
               {categoriesLoading ? (
                 <div className="flex items-center justify-center py-4 text-muted-foreground">
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -823,7 +823,7 @@ export function ProgramWizard({
 
           <div className="space-y-3">
             <Label>Exclude Menu Items</Label>
-            <div className="border rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto bg-card dark:bg-muted/30">
+            <div className="thin-scrollbar min-w-0 max-h-40 space-y-2 overflow-y-auto rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
               {itemsLoading ? (
                 <div className="flex items-center justify-center py-4 text-muted-foreground">
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -876,6 +876,8 @@ export function ProgramWizard({
               value={formData.starts_at}
               onChange={(value) => setFormData({ ...formData, starts_at: value })}
               placeholder="No start date"
+              className="border-0 bg-muted/60 shadow-none"
+              compactCalendar
             />
           </div>
           <div className="space-y-2">
@@ -885,6 +887,9 @@ export function ProgramWizard({
               value={formData.ends_at}
               onChange={(value) => setFormData({ ...formData, ends_at: value })}
               placeholder="No end date"
+              className="border-0 bg-muted/60 shadow-none"
+              align="end"
+              compactCalendar
             />
           </div>
         </div>
@@ -897,7 +902,7 @@ export function ProgramWizard({
             <Label>Locations (optional)</Label>
             <p className="text-xs text-muted-foreground mt-1">Leave all unchecked to apply to all locations</p>
           </div>
-          <div className="border rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto">
+          <div className="thin-scrollbar min-w-0 max-h-40 space-y-2 overflow-y-auto rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
             {locationsLoading ? (
               <div className="flex items-center justify-center py-4 text-muted-foreground">
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -969,34 +974,37 @@ export function ProgramWizard({
               <SelectTrigger id="icon">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent side="top" position="popper">
+                {/* The glyph is the choice being made; the hue was decoration
+                    on top of it (§4.6b). Colour lives on the program's own
+                    `display_color` swatch below, not here. */}
                 <SelectItem value="star">
                   <div className="flex items-center gap-2">
-                    <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                    <Star className="h-4 w-4" />
                     Star
                   </div>
                 </SelectItem>
                 <SelectItem value="coffee">
                   <div className="flex items-center gap-2">
-                    <Coffee className="h-4 w-4 text-amber-600" />
+                    <Coffee className="h-4 w-4" />
                     Coffee
                   </div>
                 </SelectItem>
                 <SelectItem value="gift">
                   <div className="flex items-center gap-2">
-                    <Gift className="h-4 w-4 text-pink-500" />
+                    <Gift className="h-4 w-4" />
                     Gift
                   </div>
                 </SelectItem>
                 <SelectItem value="fire">
                   <div className="flex items-center gap-2">
-                    <Flame className="h-4 w-4 text-red-500" />
+                    <Flame className="h-4 w-4" />
                     Fire
                   </div>
                 </SelectItem>
                 <SelectItem value="target">
                   <div className="flex items-center gap-2">
-                    <Target className="h-4 w-4 text-cyan-500" />
+                    <Target className="h-4 w-4" />
                     Target
                   </div>
                 </SelectItem>
@@ -1012,22 +1020,25 @@ export function ProgramWizard({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden">
-        <DialogHeader>
+      {/* Wizard — full screen below `sm` (§13.1). The dialog clips and the body
+          below is the only scroller, so the bar tracks the panel edge. */}
+      <DialogContent className="thin-scrollbar flex h-dvh max-h-dvh w-screen max-w-none flex-col overflow-y-auto overscroll-contain rounded-none sm:h-auto sm:max-h-[85vh] sm:w-full sm:max-w-2xl sm:rounded-3xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{isEditing ? 'Edit Program' : 'Create Loyalty Program'}</DialogTitle>
           <DialogDescription>
-            Step {step} of {stepTitles.length}: {stepTitles[step - 1]}
+            Step <span className="tabular-nums">{step}</span> of{' '}
+            <span className="tabular-nums">{stepTitles.length}</span>: {stepTitles[step - 1]}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-4">
+        <div className="min-w-0 space-y-0 py-4 [&_input]:border-0 [&_input]:bg-muted/60 [&_input]:shadow-none [&_textarea]:border-0 [&_textarea]:bg-muted/60 [&_textarea]:shadow-none [&_[data-slot=select-trigger]]:border-0 [&_[data-slot=select-trigger]]:bg-muted/60 [&_[data-slot=select-trigger]]:shadow-none">
           {step === 1 && renderStep1()}
           {step === 2 && renderStep2()}
           {step === 3 && renderStep3()}
           {step === 4 && renderStep4()}
         </div>
 
-        <DialogFooter className="flex justify-between">
+        <DialogFooter className="flex shrink-0 justify-center gap-2 sm:justify-center">
           <Button variant="outline" onClick={handleBack} disabled={step === 1}>
             <ChevronLeft className="h-4 w-4 mr-2" />
             Back

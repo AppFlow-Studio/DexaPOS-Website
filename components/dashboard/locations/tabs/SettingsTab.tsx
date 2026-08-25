@@ -1,8 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { Location } from '@/types/merchant_locations'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import {
+    LocationPanelSection,
+    roundedFields,
+    pillButton,
+} from '../LocationPanelSection'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -84,25 +88,16 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
             if (result.error) {
                 // Revert on error
                 setIsAcceptingOrders(isAcceptingOrders)
-                toast.error('Update Failed', { description: result.error })
                 return
             }
 
             const newStatus = result.data?.is_accepting_orders
             setIsAcceptingOrders(newStatus ?? !isAcceptingOrders)
 
-            toast.success(newStatus ? 'Now Accepting Orders' : 'Stopped Accepting Orders', {
-                description: newStatus
-                    ? 'Customers can now place orders at this location.'
-                    : 'This location is no longer accepting new orders.',
-                icon: newStatus ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4" />,
-            })
-
             queryClient.invalidateQueries({ queryKey: ['locations'] })
             onUpdate?.()
         } catch (error) {
             setIsAcceptingOrders(isAcceptingOrders)
-            toast.error('Update Failed', { description: 'An unexpected error occurred' })
         } finally {
             setIsTogglingOrders(false)
         }
@@ -117,10 +112,8 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
             })
             if (result.error) {
                 setUseMerchantDefaults(!checked)
-                toast.error('Update Failed', { description: result.error })
                 return
             }
-            toast.success(checked ? 'Using Organization Defaults' : 'Using Custom Pricing')
             void Promise.all([
                 queryClient.invalidateQueries({ queryKey: ['locations'] }),
                 queryClient.invalidateQueries({ queryKey: ['merchant-pricing-defaults'] }),
@@ -181,18 +174,14 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
     return (
         <div className="space-y-4">
             {/* Accepting Orders Toggle */}
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <ShoppingCart className="h-4 w-4" />
-                        Order Settings
-                    </CardTitle>
-                    <CardDescription>Control whether this location accepts orders</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                            <p className="font-medium">Accept Orders</p>
+            <LocationPanelSection
+                icon={ShoppingCart}
+                title="Order Settings"
+                description="Control whether this location accepts orders"
+            >
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0 space-y-0.5">
+                            <p className="text-[0.9375rem]">Accept Orders</p>
                             <p className="text-sm text-muted-foreground">
                                 {isAcceptingOrders
                                     ? 'Customers can currently place orders here'
@@ -200,7 +189,7 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                                 }
                             </p>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 shrink-0">
                             {isTogglingOrders && (
                                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                             )}
@@ -212,64 +201,53 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                         </div>
                     </div>
                     {!isActive && (
-                        <p className="text-sm text-amber-600 mt-3 flex items-center gap-1">
-                            <AlertTriangle className="h-4 w-4" />
+                        <p className="text-sm text-amber-600 mt-3 flex items-center gap-1.5">
+                            <AlertTriangle className="h-4 w-4 shrink-0" />
                             Location must be active to accept orders
                         </p>
                     )}
-                </CardContent>
-            </Card>
+            </LocationPanelSection>
 
             {/* Menu Configuration (Read-only) */}
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                        {location.uses_global_menu ? (
-                            <Globe className="h-4 w-4" />
-                        ) : (
-                            <Layers className="h-4 w-4" />
-                        )}
-                        Menu Configuration
-                    </CardTitle>
-                    <CardDescription>How this location manages its menu</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                            <p className="font-medium">
-                                {location.uses_global_menu ? 'Using Global Menu' : 'Custom Menu'}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                                {location.uses_global_menu
-                                    ? 'This location uses the merchant\'s main menu'
-                                    : 'This location has its own custom menu setup'
-                                }
-                            </p>
-                        </div>
-                        <Badge variant="outline">
-                            {location.uses_global_menu ? 'Global' : 'Custom'}
-                        </Badge>
+            <LocationPanelSection
+                icon={location.uses_global_menu ? Globe : Layers}
+                title="Menu Configuration"
+                description="How this location manages its menu"
+                action={
+                    <Badge variant="secondary" className="rounded-full border-transparent bg-muted text-muted-foreground text-xs font-medium px-2.5 py-0.5">
+                        {location.uses_global_menu ? 'Global' : 'Custom'}
+                    </Badge>
+                }
+            >
+                    <div className="space-y-0.5">
+                        <p className="text-[0.9375rem]">
+                            {location.uses_global_menu ? 'Using Global Menu' : 'Custom Menu'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            {location.uses_global_menu
+                                ? 'This location uses the merchant\'s main menu'
+                                : 'This location has its own custom menu setup'
+                            }
+                        </p>
                     </div>
-                </CardContent>
-            </Card>
+            </LocationPanelSection>
 
             <LocationTaxComplianceCard location={location} onUpdated={onUpdate} />
 
             {/* Location Status */}
-            <Card>
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <Power className="h-4 w-4" />
-                        Location Status
-                    </CardTitle>
-                    <CardDescription>Active locations are visible to staff and customers</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                            <p className="font-medium flex items-center gap-2">
+            <LocationPanelSection
+                icon={Power}
+                title="Location Status"
+                description="Active locations are visible to staff and customers"
+            >
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0 space-y-0.5">
+                            <p className="text-[0.9375rem] flex items-center gap-2">
                                 {isActive ? 'Active' : 'Inactive'}
-                                <Badge variant={isActive ? "default" : "secondary"}>
+                                <Badge
+                                    variant={isActive ? "default" : "secondary"}
+                                    className="rounded-full text-xs font-medium px-2.5 py-0.5"
+                                >
                                     {isActive ? 'Live' : 'Offline'}
                                 </Badge>
                             </p>
@@ -281,53 +259,50 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                             </p>
                         </div>
                         <Button
+                            size="sm"
                             variant={isActive ? "outline" : "default"}
+                            className={cn(pillButton, 'shrink-0')}
                             onClick={() => isActive ? setShowDeactivateDialog(true) : handleDeactivate()}
                             disabled={isDeactivating}
                         >
                             {isDeactivating ? (
-                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                             ) : isActive ? (
-                                <Power className="h-4 w-4 mr-1" />
+                                <Power className="h-4 w-4" />
                             ) : (
-                                <CheckCircle className="h-4 w-4 mr-1" />
+                                <CheckCircle className="h-4 w-4" />
                             )}
                             {isActive ? 'Deactivate' : 'Activate'}
                         </Button>
                     </div>
-                </CardContent>
-            </Card>
+            </LocationPanelSection>
 
             {/* Danger Zone */}
-            <Card className="border-destructive/50">
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2 text-destructive">
-                        <AlertTriangle className="h-4 w-4" />
-                        Danger Zone
-                    </CardTitle>
-                    <CardDescription>Irreversible actions that affect this location</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                            <p className="font-medium">Delete Location</p>
+            <LocationPanelSection
+                icon={AlertTriangle}
+                title="Danger Zone"
+                description="Irreversible actions that affect this location"
+                tone="destructive"
+            >
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0 space-y-0.5">
+                            <p className="text-[0.9375rem]">Delete Location</p>
                             <p className="text-sm text-muted-foreground">
                                 Permanently remove this location and all associated data
                             </p>
                         </div>
-                        <Button variant="destructive" size="sm" disabled>
+                        <Button variant="destructive" size="sm" className={cn(pillButton, 'shrink-0')} disabled>
                             Delete Location
                         </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-3">
+                    <p className="text-sm text-muted-foreground mt-3">
                         * Deletion is only available from the main locations page
                     </p>
-                </CardContent>
-            </Card>
+            </LocationPanelSection>
 
             {/* Deactivate Confirmation Dialog */}
             <Dialog open={showDeactivateDialog} onOpenChange={setShowDeactivateDialog}>
-                <DialogContent elevation="above-sheet">
+                <DialogContent elevation="above-sheet" className={cn('sm:rounded-2xl border-0 shadow-xl', roundedFields)}>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <AlertTriangle className="h-5 w-5 text-amber-500" />
@@ -357,6 +332,7 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                     <DialogFooter>
                         <Button
                             variant="outline"
+                            className="rounded-full px-4"
                             onClick={() => {
                                 setShowDeactivateDialog(false)
                                 setConfirmName('')
@@ -367,6 +343,7 @@ export function SettingsTab({ location, onUpdate, onClose }: SettingsTabProps) {
                         </Button>
                         <Button
                             variant="destructive"
+                            className="rounded-full px-4"
                             onClick={handleDeactivate}
                             disabled={isDeactivating || confirmName.toLowerCase() !== location.name.toLowerCase()}
                         >

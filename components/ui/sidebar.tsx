@@ -369,6 +369,11 @@ function SidebarSeparator({
   )
 }
 
+// The nav overflows on most viewports, so this always scrolls. It used to paint
+// a permanent 12px slate bar, which read as a second scrollbar sitting right
+// beside the page's own. Now the track is hidden and the thumb only fades in
+// while the pointer is over the sidebar — the scroll still works, it just isn't
+// a competing piece of chrome at rest.
 function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -376,18 +381,14 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
       data-sidebar="content"
       className={cn(
         "flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
-        "scrollbar-thin scrollbar-track-transparent",
-        "scrollbar-thumb-slate-500/70 hover:scrollbar-thumb-slate-400/85",
-        "[scrollbar-color:rgba(100,116,139,0.72)_transparent]",
-        "[&::-webkit-scrollbar]:w-3",
-        "[&::-webkit-scrollbar-thumb]:rounded-full",
-        "[&::-webkit-scrollbar-thumb]:border-[3px]",
-        "[&::-webkit-scrollbar-thumb]:border-solid",
-        "[&::-webkit-scrollbar-thumb]:border-transparent",
-        "[&::-webkit-scrollbar-thumb]:bg-slate-500/70",
-        "[&::-webkit-scrollbar-thumb]:bg-clip-padding",
-        "[&::-webkit-scrollbar-thumb:hover]:bg-slate-400/85",
+        "[scrollbar-width:thin] [scrollbar-color:transparent_transparent]",
+        "hover:[scrollbar-color:rgba(100,116,139,0.5)_transparent]",
+        "[&::-webkit-scrollbar]:w-1.5",
         "[&::-webkit-scrollbar-track]:bg-transparent",
+        "[&::-webkit-scrollbar-thumb]:rounded-full",
+        "[&::-webkit-scrollbar-thumb]:bg-transparent",
+        "[&::-webkit-scrollbar-thumb]:transition-colors",
+        "hover:[&::-webkit-scrollbar-thumb]:bg-slate-500/50",
         className
       )}
       {...props}

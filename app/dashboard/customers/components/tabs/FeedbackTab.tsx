@@ -58,9 +58,9 @@ export function FeedbackTab({ customer }: FeedbackTabProps) {
   return (
     <div className="space-y-6">
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
-          <CardContent className="pt-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Card className="rounded-2xl border-0 bg-muted/60 shadow-none">
+          <CardContent className="p-4">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Avg Rating</p>
             <div className="flex items-center gap-2 mt-2">
               <Star className="h-6 w-6 text-yellow-400 fill-yellow-400 drop-shadow-md" />
@@ -68,14 +68,14 @@ export function FeedbackTab({ customer }: FeedbackTabProps) {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
-          <CardContent className="pt-4">
+        <Card className="rounded-2xl border-0 bg-muted/60 shadow-none">
+          <CardContent className="p-4">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Reviews</p>
             <p className="text-2xl font-bold mt-2">{stats.totalReviews}</p>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
-          <CardContent className="pt-4">
+        <Card className="rounded-2xl border-0 bg-muted/60 shadow-none">
+          <CardContent className="p-4">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Food Avg</p>
             <div className="flex items-center gap-2 mt-2">
               <Star className="h-6 w-6 text-yellow-400 fill-yellow-400 drop-shadow-md" />
@@ -83,8 +83,8 @@ export function FeedbackTab({ customer }: FeedbackTabProps) {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
-          <CardContent className="pt-4">
+        <Card className="rounded-2xl border-0 bg-muted/60 shadow-none">
+          <CardContent className="p-4">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Service Avg</p>
             <div className="flex items-center gap-2 mt-2">
               <Star className="h-6 w-6 text-yellow-400 fill-yellow-400 drop-shadow-md" />

@@ -102,8 +102,8 @@ export function CreateCountDialog({
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-teal-500/20 to-teal-500/5 border border-teal-500/10">
-              <ClipboardList className="h-5 w-5 text-teal-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60">
+              <ClipboardList className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <DialogTitle>New Inventory Count</DialogTitle>
@@ -157,7 +157,7 @@ export function CreateCountDialog({
           </div>
 
           {scope === "categories" && (
-            <div className="space-y-1.5 max-h-44 overflow-y-auto rounded-lg border p-3">
+            <div className="thin-scrollbar max-h-44 space-y-1.5 overflow-y-auto rounded-2xl border-0 bg-muted/40 p-3">
               {categories.length === 0 && (
                 <p className="text-sm text-muted-foreground">
                   No categories found on your inventory items.
@@ -178,11 +178,11 @@ export function CreateCountDialog({
             </div>
           )}
 
-          <div className="p-3 rounded-lg bg-muted/50 flex items-center justify-between">
+          <div className="flex items-center justify-between rounded-2xl bg-muted/60 p-3">
             <span className="text-sm text-muted-foreground">
               Items in this count
             </span>
-            <span className="font-semibold">{itemCount}</span>
+            <span className="font-semibold tabular-nums">{itemCount}</span>
           </div>
         </form>
 

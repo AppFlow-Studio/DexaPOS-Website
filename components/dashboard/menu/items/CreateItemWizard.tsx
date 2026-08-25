@@ -29,7 +29,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { CdnImageUploadField } from "@/components/ui/cdn-image-upload-field";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -158,6 +157,30 @@ export function CreateItemWizard({
     fileNamePrefix: "item",
   });
   const draftHydratedRef = React.useRef(false);
+  const sectionTabsScrollRef = React.useRef<HTMLDivElement>(null);
+  const keepSelectedSectionVisible = React.useCallback((value: string) => {
+    requestAnimationFrame(() => {
+      const scroller = sectionTabsScrollRef.current;
+      const trigger = scroller?.querySelector<HTMLElement>(
+        `[data-item-section="${value}"]`,
+      );
+      if (!scroller || !trigger) return;
+
+      const scrollerRect = scroller.getBoundingClientRect();
+      const triggerRect = trigger.getBoundingClientRect();
+      const centeredLeft =
+        scroller.scrollLeft +
+        triggerRect.left -
+        scrollerRect.left -
+        (scrollerRect.width - triggerRect.width) / 2;
+      const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
+
+      scroller.scrollTo({
+        left: Math.max(0, Math.min(centeredLeft, maxScrollLeft)),
+        behavior: "smooth",
+      });
+    });
+  }, []);
   const draftKey = React.useMemo(() => {
     const scopeKey = isAllLocations ? "global" : selectedLocationId ?? "location-none";
     return merchantId
@@ -541,14 +564,23 @@ export function CreateItemWizard({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* The dialog itself must NOT scroll: it owns `rounded-3xl`, and a scrollbar on
+          the rounded element renders in its padding box — i.e. visually outside the
+          corner. Instead this is a fixed-height flex column (header / scrolling body /
+          footer) with `overflow-hidden`, so the rounded frame clips the body's
+          scrollbar and header+footer stay put without needing `sticky`. */}
       <DialogContent
-        overlayClassName="bg-slate-950/40 backdrop-blur-md"
-        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-x-hidden overflow-y-auto max-h-[92vh] rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-5xl xl:max-w-6xl"
+        overlayClassName="bg-background/60 backdrop-blur-md"
+        // `max-sm:overflow-hidden` overrides the base `max-sm:overflow-y-auto` —
+        // see the note in NewEditItemFormSheet: on mobile the base scrolls the
+        // dialog itself and sets `h-dvh`, which with the inner scroll body gave
+        // two scrollbars and dead space below the footer.
+        className="flex max-h-[92vh] w-full max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-3xl border bg-card p-0 max-sm:h-dvh max-sm:max-h-none max-sm:overflow-hidden sm:max-w-5xl xl:max-w-6xl"
       >
-        <div className="flex flex-col min-w-0">
-          <DialogHeader className="sticky top-0 z-10 border-b border-border/70 bg-background/95 px-4 sm:px-6 py-5 pr-14 text-left sm:text-left">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <DialogHeader className="shrink-0 px-4 py-5 pr-14 text-left sm:px-6 sm:text-left">
             <div className="space-y-2">
-              <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
+              <DialogTitle className="flex items-center gap-2 text-[1.75rem] font-semibold tracking-[-0.02em]">
                 New Menu Item
               </DialogTitle>
               <DialogDescription className="max-w-[60ch] text-sm leading-6">
@@ -557,21 +589,24 @@ export function CreateItemWizard({
             </div>
           </DialogHeader>
 
-          <div className="flex flex-col lg:flex-row w-full min-w-0">
+          {/* Body. On desktop each column scrolls independently so the preview
+              does not ride along with the form; below `lg` the columns stack and
+              the single left pane carries the scroll. */}
+          <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden lg:flex-row">
             {/* LEFT COLUMN - FORM */}
-            <div className="flex-1 px-4 sm:px-6 py-5 min-w-0 overflow-x-hidden">
+            <div className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6">
               {/* Context Banner */}
-              <div className="mb-6 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                <div className="flex items-center gap-2 text-sm">
-                  <MapPin className="h-4 w-4 text-primary" />
+              <div className="mb-6 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <MapPin className="h-4 w-4 shrink-0 text-primary" />
                   <span className="font-medium">Creating for:</span>
-                  <Badge variant="outline" className="bg-background">
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-background px-2.5 py-0.5 text-xs font-medium">
                     {isSingleLocation
                       ? "Your menu"
                       : isAllLocations
                         ? "All Locations (Global)"
                         : "This Location"}
-                  </Badge>
+                  </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   {isSingleLocation
@@ -581,44 +616,45 @@ export function CreateItemWizard({
                       : "This item will be specific to this location only."}
                 </p>
                 {isDualPricing && !isAllLocations && (
-                  <div className="mt-2 text-xs flex items-center gap-1.5 text-blue-700 font-medium">
-                    <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-                    Dual Pricing Enabled at {dualPricingPercentage}%
+                  <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-400">
+                    <div className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-blue-500" />
+                    Dual Pricing Enabled at{" "}
+                    <span className="tabular-nums">{dualPricingPercentage}%</span>
                   </div>
                 )}
               </div>
 
-              <Tabs defaultValue="general" className="w-full">
-                <TabsList className="w-full justify-start mb-6 bg-transparent border-b rounded-none h-auto p-0 gap-6 overflow-x-auto">
-                  <TabsTrigger
-                    value="general"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 shrink-0"
-                  >General</TabsTrigger>
-                  <TabsTrigger
-                    value="pricing"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 shrink-0"
-                  >Pricing</TabsTrigger>
-                  <TabsTrigger
-                    value="modifiers"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 shrink-0"
-                  >Modifiers</TabsTrigger>
-                  <TabsTrigger
-                    value="categories"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 shrink-0"
-                  >Categories</TabsTrigger>
-                  <TabsTrigger
-                    value="recipe"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 shrink-0"
-                  >Recipe</TabsTrigger>
-                  <TabsTrigger
-                    value="tax"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 shrink-0"
-                  >Tax &amp; Fees</TabsTrigger>
-                  <TabsTrigger
-                    value="availability"
-                    className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-0 py-2 shrink-0"
-                  >Availability</TabsTrigger>
-                </TabsList>
+              <Tabs
+                defaultValue="general"
+                className="w-full"
+                onValueChange={keepSelectedSectionVisible}
+              >
+                {/* Classes are literal, not {TOKEN} — see C7. */}
+                <div
+                  ref={sectionTabsScrollRef}
+                  className="no-scrollbar mb-6 w-full min-w-0 overflow-x-auto pb-1"
+                >
+                  <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                    {[
+                      { value: "general", label: "General" },
+                      { value: "pricing", label: "Pricing" },
+                      { value: "modifiers", label: "Modifiers" },
+                      { value: "categories", label: "Categories" },
+                      { value: "recipe", label: "Recipe" },
+                      { value: "tax", label: "Tax & Fees" },
+                      { value: "availability", label: "Availability" },
+                    ].map((t) => (
+                      <TabsTrigger
+                        key={t.value}
+                        value={t.value}
+                        data-item-section={t.value}
+                        className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                      >
+                        {t.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </div>
 
                 {/* GENERAL TAB */}
                 <TabsContent value="general" className="space-y-6 mt-0">
@@ -636,9 +672,10 @@ export function CreateItemWizard({
                         placeholder="e.g. Americano"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
+                        className="h-9 text-[0.8125rem]"
                       />
                       {errors.name && (
-                        <p className="text-sm text-red-500">{errors.name}</p>
+                        <p className="text-sm text-destructive">{errors.name}</p>
                       )}
                     </div>
 
@@ -647,13 +684,13 @@ export function CreateItemWizard({
                       <label className="text-sm font-medium">Description</label>
                       <Textarea
                         placeholder="Espresso shots with hot water..."
-                        className="resize-none"
+                        className="resize-none rounded-2xl border-0 bg-muted/60 text-[0.8125rem] shadow-none focus-visible:bg-background"
                         rows={3}
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                       />
                       {errors.description && (
-                        <p className="text-sm text-red-500">{errors.description}</p>
+                        <p className="text-sm text-destructive">{errors.description}</p>
                       )}
                     </div>
 
@@ -682,24 +719,28 @@ export function CreateItemWizard({
                           type="color"
                           value={cardBgColor || "#ffffff"}
                           onChange={(e) => setCardBgColor(e.target.value)}
-                          className="h-9 w-12 rounded border cursor-pointer"
+                          className="h-9 w-12 cursor-pointer rounded-full border-0 bg-transparent"
                         />
                         <Input
                           placeholder="#ffffff"
-                          className="flex-1"
+                          className="h-9 flex-1 text-[0.8125rem]"
                           value={cardBgColor}
                           onChange={(e) => setCardBgColor(e.target.value)}
                         />
                         {cardBgColor && (
-                          <Button type="button" size="sm" variant="ghost" onClick={() => setCardBgColor("")}>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 shrink-0 rounded-full border-0 bg-muted/60 text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground"
+                            onClick={() => setCardBgColor("")}
+                          >
                             <X className="h-3 w-3" />
                           </Button>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">Custom background color for the POS menu card</p>
                     </div>
-
-                    <Separator className="my-4" />
 
                     {/* Allergens */}
                     <div className="space-y-2">
@@ -780,14 +821,13 @@ export function CreateItemWizard({
                       dualPricingPercentage={dualPricingPercentage}
                     />
                     {errors.price && (
-                      <p className="text-sm text-red-500">{errors.price}</p>
+                      <p className="text-sm text-destructive">{errors.price}</p>
                     )}
                     {errors.cashPrice && (
-                      <p className="text-sm text-red-500">{errors.cashPrice}</p>
+                      <p className="text-sm text-destructive">{errors.cashPrice}</p>
                     )}
-                    <Separator />
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between rounded-lg border p-4">
+                      <div className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                         <div className="space-y-0.5">
                           <label className="text-base font-medium flex items-center gap-2">
                             <Truck className="h-4 w-4" /> Use Delivery Price
@@ -800,12 +840,12 @@ export function CreateItemWizard({
                         <div className="space-y-2">
                           <label className="text-sm font-medium">Delivery Price</label>
                           <div className="relative">
-                            <Truck className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Truck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                             <Input
                               type="number"
                               step="0.01"
                               min="0"
-                              className="pl-9"
+                              className="h-9 pl-9 text-[0.8125rem] tabular-nums"
                               placeholder="e.g. 12.99"
                               value={deliveryPrice ?? ""}
                               onChange={(e) =>
@@ -834,10 +874,10 @@ export function CreateItemWizard({
                             .map((group) => (
                               <div
                                 key={group.id}
-                                className="flex items-center justify-between p-3 rounded-lg border bg-background group hover:border-primary/50 transition-colors"
+                                className="group flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-3 shadow-none transition-colors hover:bg-muted"
                               >
                                 <div className="flex items-center gap-3">
-                                  <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
+                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background">
                                     <Layers className="h-4 w-4 text-muted-foreground" />
                                   </div>
                                   <div>
@@ -862,17 +902,15 @@ export function CreateItemWizard({
                       )}
                     </div>
 
-                    <Separator />
-
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <h4 className="text-sm font-medium text-muted-foreground">Available Groups</h4>
                         {modifierGroups.length > 3 && (
                           <div className="relative w-50">
-                            <Search className="absolute left-2 top-2 h-3 w-3 text-muted-foreground" />
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground/50" />
                             <Input
                               placeholder="Search..."
-                              className="h-8 pl-7 text-xs"
+                              className="h-8 pl-8 text-xs"
                               value={modifierSearch}
                               onChange={(e) => setModifierSearch(e.target.value)}
                             />
@@ -881,7 +919,7 @@ export function CreateItemWizard({
                       </div>
 
                       {modifierGroups.length === 0 ? (
-                        <div className="p-4 rounded-lg border bg-muted/30 text-center">
+                        <div className="rounded-2xl border-0 bg-muted/60 p-4 text-center shadow-none">
                           <Sliders className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                           <p className="text-sm text-muted-foreground">
                             No modifier groups available. Create modifier groups first.
@@ -894,10 +932,10 @@ export function CreateItemWizard({
                             .map((group) => (
                               <div
                                 key={group.id}
-                                className="flex items-center justify-between p-2 rounded-lg border border-dashed hover:bg-muted/50 transition-colors"
+                                className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-2 shadow-none transition-colors hover:bg-muted"
                               >
                                 <div className="flex items-center gap-3">
-                                  <div className="h-8 w-8 rounded bg-muted/50 flex items-center justify-center">
+                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-background">
                                     <Sliders className="h-4 w-4 text-muted-foreground opacity-50" />
                                   </div>
                                   <div>
@@ -905,10 +943,10 @@ export function CreateItemWizard({
                                     <div className="flex items-center gap-2">
                                       <span
                                         className={cn(
-                                          "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium",
+                                          "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium",
                                           group.is_required
-                                            ? "bg-red-50 text-red-600 border-red-200"
-                                            : "bg-blue-50 text-blue-600 border-blue-200",
+                                            ? "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
+                                            : "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400",
                                         )}
                                       >
                                         {group.is_required ? "Required" : "Optional"}
@@ -943,7 +981,7 @@ export function CreateItemWizard({
 
                 {/* RECIPE TAB */}
                 <TabsContent value="recipe" className="space-y-6 mt-0">
-                  <div className="flex flex-col items-center justify-center p-12 text-center bg-muted/20 border border-dashed rounded-lg">
+                  <div className="flex flex-col items-center justify-center rounded-2xl border-0 bg-muted/60 p-12 text-center shadow-none">
                     <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
                       <Lock className="h-6 w-6 text-muted-foreground" />
                     </div>
@@ -956,7 +994,7 @@ export function CreateItemWizard({
 
                 {/* TAX TAB */}
                 <TabsContent value="tax" className="space-y-6 mt-0">
-                  <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                     <div className="space-y-0.5">
                       <label className="text-base font-medium">Tax Exempt</label>
                       <p className="text-sm text-muted-foreground">No tax will be applied to this item</p>
@@ -970,7 +1008,10 @@ export function CreateItemWizard({
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        {/* Opens upward: this is the last field in the Tax & Fees
+                            tab, so a downward menu is clipped by the dialog's
+                            `overflow-hidden` scroll container. */}
+                        <SelectContent side="top" align="start">
                           {TAX_CATEGORIES.map((cat) => (
                             <SelectItem key={cat.value} value={cat.value}>
                               {cat.label}
@@ -984,7 +1025,7 @@ export function CreateItemWizard({
 
                 {/* AVAILABILITY TAB */}
                 <TabsContent value="availability" className="space-y-6 mt-0">
-                  <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                     <div className="space-y-0.5">
                       <label className="text-base font-medium">Available</label>
                       <p className="text-sm text-muted-foreground">Item is available for purchase</p>
@@ -1002,7 +1043,7 @@ export function CreateItemWizard({
                           <label
                             key={channel.id}
                             className={cn(
-                              "flex flex-col items-center gap-2 p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-all",
+                              "flex cursor-pointer flex-col items-center gap-2 rounded-2xl border-0 bg-muted/60 p-3 shadow-none transition-colors hover:bg-muted",
                               isChecked
                                 ? "border-primary bg-primary/5 ring-1 ring-primary"
                                 : "text-muted-foreground",
@@ -1033,7 +1074,9 @@ export function CreateItemWizard({
                       <SelectTrigger>
                         <SelectValue placeholder="Select tracking mode" />
                       </SelectTrigger>
-                      <SelectContent>
+                      {/* Opens upward: last field in the Availability tab, so a
+                          downward menu is clipped by the scroll container. */}
+                      <SelectContent side="top" align="start">
                         {STOCK_MODES.map((mode) => (
                           <SelectItem key={mode.value} value={mode.value}>
                             {mode.label}
@@ -1047,7 +1090,7 @@ export function CreateItemWizard({
 
                 {/* CATEGORIES TAB */}
                 <TabsContent value="categories" className="space-y-6 mt-0">
-                  <div className="space-y-4 rounded-xl border border-border/70 bg-background p-4">
+                  <div className="space-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                     <div className="flex items-center gap-2">
                       <Tag className="h-4 w-4 text-blue-500" />
                       <label className="text-sm font-medium">Categories</label>
@@ -1066,7 +1109,7 @@ export function CreateItemWizard({
                     )}
 
                     {accessibleCategories.length === 0 ? (
-                      <div className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                      <div className="rounded-2xl border-0 bg-muted/60 px-4 py-6 text-center text-sm text-muted-foreground shadow-none">
                         <Tag className="mx-auto mb-2 h-8 w-8 opacity-50" />
                         <p>No categories available in this scope.</p>
                         <p className="mt-1 text-xs">
@@ -1088,10 +1131,10 @@ export function CreateItemWizard({
                                 type="button"
                                 onClick={() => handleToggleCategory(category.id)}
                                 className={cn(
-                                  "rounded-full border px-3 py-1.5 text-sm font-medium transition-all hover:scale-[1.02] active:scale-[0.99]",
+                                  "rounded-full border-0 px-3 py-1.5 text-sm font-medium shadow-none transition-colors",
                                   isSelected
-                                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                                    : "border-border bg-background hover:border-primary/40 hover:bg-muted/40",
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
                                 )}
                               >
                                 {category.name}
@@ -1117,7 +1160,7 @@ export function CreateItemWizard({
             </div>
 
             {/* RIGHT COLUMN - PREVIEW */}
-            <div className="hidden min-h-0 w-90 shrink-0 overflow-y-auto border-l border-border/70 bg-muted/10 px-6 py-5 lg:block">
+            <div className="thin-scrollbar hidden min-h-0 w-90 shrink-0 overflow-y-auto bg-muted/30 px-6 py-5 lg:block">
               <div className="space-y-8 pb-4">
                 <div className="flex items-center gap-2 mb-4 text-sm font-medium text-muted-foreground">
                   <Monitor className="h-4 w-4" /> POS Preview
@@ -1197,19 +1240,19 @@ export function CreateItemWizard({
             </div>
           </div>
 
-          <DialogFooter className="sticky bottom-0 z-10 border-t border-border/70 bg-background/95 px-4 sm:px-6 py-4 sm:justify-end gap-2">
+          <DialogFooter className="shrink-0 gap-2 bg-card px-4 py-4 sm:justify-end sm:px-6">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isSaving}
-              className="w-full sm:w-auto"
+              className="h-9 w-full rounded-full px-4 text-[0.8125rem] font-medium shadow-sm sm:w-auto"
             >
               Cancel
             </Button>
             <Button
               onClick={handleCreateItem}
               disabled={isSaving}
-              className="w-full sm:w-auto"
+              className="h-9 w-full rounded-full px-4 text-[0.8125rem] font-medium sm:w-auto"
             >
               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Item

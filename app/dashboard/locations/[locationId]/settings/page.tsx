@@ -1,7 +1,6 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
 import { auth } from '@clerk/nextjs/server'
+import { PageHeader, PageShell } from '@/components/dashboard/shell'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { getEffectiveClerkOrgId } from '@/lib/admin/merchant-context'
 import { LocationTaxComplianceCard } from '@/components/dashboard/locations/LocationTaxComplianceCard'
@@ -93,22 +92,13 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
     : null
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Location Tax & Banking</h1>
-          <p className="text-muted-foreground">
-            {location.name} {location.city ? `- ${location.city}, ${location.state}` : ''}
-          </p>
-        </div>
-        <Link
-          href="/dashboard/locations"
-          className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Locations
-        </Link>
-      </div>
+    <PageShell width="narrow">
+      <PageHeader
+        title="Location Tax & Banking"
+        subtitle={`${location.name}${location.city ? ` · ${location.city}, ${location.state}` : ''}`}
+        backHref="/dashboard/locations"
+        backLabel="Back to Locations"
+      />
 
       <LocationTaxComplianceCard location={location as Location} />
 
@@ -131,7 +121,7 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
         }
         locationEmail={(location as { email?: string | null }).email ?? null}
       />
-    </div>
+    </PageShell>
   )
 }
 

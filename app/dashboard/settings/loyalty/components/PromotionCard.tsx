@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -22,17 +21,19 @@ interface PromotionCardProps {
   isToggling?: boolean;
 }
 
-// Map promo type to icon component
+// Map promo type to icon component. The icons are neutral: a per-type hue here
+// is decorative, not functional encoding, and nine of them turn the list into a
+// colour key the user has to learn (§4.6b). The glyph carries the type.
 const PROMO_ICONS: Record<string, React.ReactNode> = {
-  happy_hour: <Clock className="h-5 w-5 text-orange-500" />,
-  birthday: <Cake className="h-5 w-5 text-pink-500" />,
-  first_visit: <PartyPopper className="h-5 w-5 text-purple-500" />,
-  comeback: <RotateCcw className="h-5 w-5 text-cyan-500" />,
-  referral: <Share2 className="h-5 w-5 text-emerald-500" />,
-  seasonal: <Snowflake className="h-5 w-5 text-blue-400" />,
-  threshold: <Banknote className="h-5 w-5 text-green-600" />,
-  bogo: <HandshakeIcon className="h-5 w-5 text-rose-500" />,
-  bundle: <Package className="h-5 w-5 text-indigo-500" />,
+  happy_hour: <Clock className="h-5 w-5" />,
+  birthday: <Cake className="h-5 w-5" />,
+  first_visit: <PartyPopper className="h-5 w-5" />,
+  comeback: <RotateCcw className="h-5 w-5" />,
+  referral: <Share2 className="h-5 w-5" />,
+  seasonal: <Snowflake className="h-5 w-5" />,
+  threshold: <Banknote className="h-5 w-5" />,
+  bogo: <HandshakeIcon className="h-5 w-5" />,
+  bundle: <Package className="h-5 w-5" />,
 };
 
 export function PromotionCard({
@@ -106,42 +107,44 @@ export function PromotionCard({
   const icon = PROMO_ICONS[promotion.promo_type];
 
   return (
-    <Card className="overflow-hidden">
-      <div className="flex items-center justify-between gap-2 p-4">
-        <div className="flex items-start gap-4 flex-1 min-w-0">
+    <div className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-start gap-4">
           {/* Icon */}
-          <div className="text-muted-foreground mt-0.5 shrink-0">
+          <div className="mt-0.5 shrink-0 text-muted-foreground">
             {icon || <Snowflake className="h-5 w-5" />}
           </div>
 
           {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-base truncate">{promotion.name}</h3>
-              <Badge variant="outline" className="shrink-0">
+          <div className="min-w-0 flex-1">
+            {/* Wraps rather than truncating: at 320px the badge would otherwise
+                squeeze the name down to a single word. */}
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <h3 className="min-w-0 text-base font-semibold">{promotion.name}</h3>
+              <Badge className="w-fit shrink-0 rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground">
                 {getPromoTypeLabel()}
               </Badge>
             </div>
-            <div className="flex flex-col gap-0.5 text-sm text-muted-foreground min-w-0">
-              <span className="truncate">{getDiscountText()}</span>
-              <span className="text-xs truncate">{getScheduleText()}</span>
+            <div className="flex min-w-0 flex-col gap-0.5 text-sm text-muted-foreground">
+              <span className="truncate tabular-nums">{getDiscountText()}</span>
+              <span className="truncate text-xs tabular-nums">{getScheduleText()}</span>
             </div>
             {promotion.description && (
-              <p className="text-xs text-muted-foreground mt-2">{promotion.description}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{promotion.description}</p>
             )}
           </div>
         </div>
 
         {/* Right side: Toggle + Menu */}
-        <div className="flex items-center gap-1.5 ml-2 shrink-0">
+        <div className="ml-2 flex shrink-0 items-center gap-1.5">
           <div className="flex items-center gap-1.5">
             <Switch
-              checked={promotion.is_active}
+              checked={Boolean(promotion.is_active)}
               onCheckedChange={(checked) => onToggle(promotion.id, checked)}
               disabled={isToggling}
               aria-label="Toggle promotion"
             />
-            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap hidden sm:inline">
+            <span className="hidden whitespace-nowrap text-xs font-medium text-muted-foreground sm:inline">
               {promotion.is_active ? 'Active' : 'Inactive'}
             </span>
           </div>
@@ -149,7 +152,7 @@ export function PromotionCard({
           {/* Dropdown Menu */}
           <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full p-0">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -175,6 +178,6 @@ export function PromotionCard({
           </DropdownMenu>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

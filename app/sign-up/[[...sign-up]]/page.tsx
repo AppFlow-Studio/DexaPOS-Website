@@ -1,8 +1,17 @@
-import { SignUp, Show } from '@clerk/nextjs'
-import { Shield, MailCheck } from 'lucide-react'
+import type { Metadata } from 'next'
+import { Show } from '@clerk/nextjs'
+import { MailCheck, PlayCircle } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
+import { AuthBrandPanel } from '../../sign-in/brand-panel'
+import { ThemedSignUp } from '../../sign-in/clerk-form'
 
 type SearchParams = Record<string, string | string[] | undefined>
+
+export const metadata: Metadata = {
+    title: 'Create your account',
+    description: 'Finish setting up your DexaPOS account.',
+}
 
 export default async function SignUpPage({
     searchParams,
@@ -15,106 +24,123 @@ export default async function SignUpPage({
     const hasInvitationTicket = typeof ticket === 'string' && ticket.length > 0
 
     return (
-        <div className="max-h-screen h-[100vh] items-center justify-center w-full flex">
-            <div className="flex h-full w-full items-center justify-center flex-col bg-background">
-                <div className="max-w-md mx-auto w-full h-full items-center flex flex-col justify-center">
-                    {/* Logo */}
-                    <div className="flex items-center gap-3 mb-12">
-                        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                            <Shield className="w-5 h-5 text-primary-foreground" />
-                        </div>
-                        <span className="text-xl font-semibold text-foreground">DexaPOS</span>
+        // Mirrors /sign-in exactly. The two pages had drifted into different
+        // shells (`h-[100vh]` vs `min-h-screen`, Shield icon vs logo, different
+        // radii), which read as two different products mid-flow.
+        <div className="flex min-h-[100dvh] w-full bg-background">
+            <main className="flex w-full flex-col justify-center overflow-y-auto px-5 py-10 sm:px-10 lg:w-1/2 xl:w-[45%]">
+                <div className="mx-auto flex w-full max-w-sm flex-col">
+                    <div className="mb-8 flex items-center gap-2.5 lg:hidden">
+                        <Image
+                            src="/dexalogolight.png"
+                            alt=""
+                            width={36}
+                            height={36}
+                            priority
+                            className="h-9 w-9 rounded-lg object-contain dark:hidden"
+                        />
+                        <Image
+                            src="/dexalogodark.png"
+                            alt=""
+                            width={36}
+                            height={36}
+                            priority
+                            className="hidden h-9 w-9 rounded-lg object-contain dark:block"
+                        />
+                        <span className="text-lg font-semibold tracking-tight text-foreground">
+                            DexaPOS
+                        </span>
                     </div>
 
                     <Show when="signed-out">
                         {hasInvitationTicket ? (
                             <>
                                 <div className="mb-8">
-                                    <h1 className="text-3xl font-semibold text-foreground mb-2">
-                                        Finish setting up your account.
+                                    <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+                                        Finish setting up your account
                                     </h1>
-                                    <p className="text-muted-foreground">
+                                    <p className="mt-2 text-muted-foreground">
                                         You&apos;ve been invited to DexaPOS. Complete the form below to get started.
                                     </p>
                                 </div>
 
-                                <div className="mb-6">
-                                    <SignUp
-                                        appearance={{
-                                            elements: {
-                                                formButtonPrimary: 'bg-foreground hover:bg-foreground/90 text-background',
-                                                card: 'shadow-none border-0 bg-transparent',
-                                                headerTitle: 'hidden',
-                                                headerSubtitle: 'hidden',
-                                                socialButtonsBlockButton: 'border-border hover:bg-muted/50',
-                                                formFieldInput: 'border-border focus:border-primary',
-                                                footerActionLink: 'text-primary hover:text-primary/80',
-                                                identityPreviewText: 'text-muted-foreground',
-                                                formFieldLabel: 'text-foreground',
-                                                formFieldInputShowPasswordButton: 'text-muted-foreground hover:text-foreground',
-                                                formResendCodeLink: 'text-primary hover:text-primary/80',
-                                                otpCodeFieldInput: 'border-border focus:border-primary',
-                                                formFieldSuccessText: 'text-green-600',
-                                                formFieldErrorText: 'text-destructive',
-                                                alertText: 'text-destructive',
-                                                formHeaderTitle: 'text-foreground',
-                                                formHeaderSubtitle: 'text-muted-foreground',
-                                                formButton: 'w-full',
-                                                identityPreview: 'bg-muted/50 border-border',
-                                                formFieldWarningText: 'text-yellow-600',
-                                            }
-                                        }}
-                                    />
-                                </div>
+                                <ThemedSignUp />
 
-                                <div className="text-center">
-                                    <p className="text-muted-foreground text-sm">
-                                        Already have an account?{' '}
-                                        <Link href="/sign-in" className="text-primary hover:text-primary/80 font-medium">
-                                            Sign in
-                                        </Link>
-                                    </p>
-                                </div>
+                                <p className="mt-8 border-t border-border pt-6 text-sm text-muted-foreground">
+                                    Already have an account?{' '}
+                                    <Link
+                                        href="/sign-in"
+                                        className="font-medium text-primary underline-offset-4 hover:underline"
+                                    >
+                                        Sign in
+                                    </Link>
+                                </p>
                             </>
                         ) : (
-                            <div className="bg-card border border-border rounded-xl p-8 shadow-sm w-full text-center">
-                                <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <MailCheck className="w-6 h-6 text-muted-foreground" />
+                            // No ticket: the visitor cannot self-serve at all, so
+                            // this state's whole job is to explain why and hand
+                            // them the two ways forward.
+                            <>
+                                <div className="mb-6 flex h-11 w-11 items-center justify-center rounded-full bg-muted">
+                                    <MailCheck className="h-5 w-5 text-muted-foreground" />
                                 </div>
-                                <h1 className="text-2xl font-semibold text-card-foreground mb-2">
-                                    Access by invitation only
+                                <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+                                    Access is by invitation
                                 </h1>
-                                <p className="text-muted-foreground mb-6">
-                                    DexaPOS accounts are created by your administrator. If you&apos;re expecting an invite, check your email for the link.
+                                <p className="mt-2 text-muted-foreground">
+                                    DexaPOS accounts are created by your administrator. If you&apos;re
+                                    expecting an invite, check your email for the link — it may have
+                                    landed in spam.
                                 </p>
+
+                                <Link
+                                    href="/contact"
+                                    className="mt-7 inline-flex w-full items-center justify-center rounded-xl bg-foreground px-4 py-3 font-medium text-background transition-colors hover:bg-foreground/90"
+                                >
+                                    Request an invitation
+                                </Link>
+                                {/* These visitors cannot get in at all, so the
+                                    demo is the one thing they can actually do
+                                    right now. */}
+                                <Link
+                                    href="/demo"
+                                    className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-4 py-3 font-medium text-foreground transition-colors hover:bg-muted/60"
+                                >
+                                    <PlayCircle className="h-4 w-4" />
+                                    Try the live demo
+                                </Link>
                                 <Link
                                     href="/sign-in"
-                                    className="inline-flex items-center justify-center px-4 py-2 bg-foreground text-background rounded-lg font-medium hover:bg-foreground/90 transition-colors"
+                                    className="mt-3 inline-flex w-full items-center justify-center rounded-xl px-4 py-3 font-medium text-muted-foreground transition-colors hover:text-foreground"
                                 >
                                     Back to sign in
                                 </Link>
-                            </div>
+                            </>
                         )}
                     </Show>
 
                     <Show when="signed-in">
-                        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-                            <h2 className="text-xl font-semibold text-card-foreground mb-2">
-                                You&apos;re already signed in.
-                            </h2>
-                            <p className="text-muted-foreground mb-4">
-                                Head over to your dashboard to continue.
-                            </p>
-                            <Link
-                                href="/sign-in"
-                                className="inline-flex items-center justify-center px-4 py-2 bg-foreground text-background rounded-lg font-medium hover:bg-foreground/90 transition-colors"
-                            >
-                                Continue
-                            </Link>
-                        </div>
+                        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+                            You&apos;re already signed in
+                        </h1>
+                        <p className="mt-2 text-muted-foreground">
+                            Head over to your dashboard to continue.
+                        </p>
+                        <Link
+                            href="/dashboard"
+                            className="mt-7 inline-flex w-full items-center justify-center rounded-xl bg-foreground px-4 py-3 font-medium text-background transition-colors hover:bg-foreground/90"
+                        >
+                            Continue to dashboard
+                        </Link>
                     </Show>
+
+                    <p className="mt-10 text-xs text-muted-foreground">
+                        © {new Date().getFullYear()} DexaPOS. All rights reserved.
+                    </p>
                 </div>
-            </div>
+            </main>
+
+            <AuthBrandPanel />
         </div>
     )
 }
