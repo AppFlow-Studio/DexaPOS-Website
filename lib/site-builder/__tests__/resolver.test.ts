@@ -540,6 +540,61 @@ describe("get_menus_for_location_lite fallback", () => {
     expect(items.map((i) => i.id)).toEqual(["i1"]);
   });
 
+  // A dropped connection reaches supabase-js through the same error channel as a
+  // query Postgres refused, so the wrapper used to name an RPC that was never
+  // reached — "get_menus_for_location_lite failed: TypeError: fetch failed" reads
+  // as a missing migration when the real answer is that the network went away.
+  it("names the network, not the RPC, when the connection never completed", async () => {
+    const { client, called } = rpcClient({
+      get_menus_for_location_lite: {
+        data: null,
+        // What supabase-js actually hands back when undici throws: a message,
+        // and no code, because nothing answered.
+        error: { code: "", message: "TypeError: fetch failed" },
+      },
+      get_menus_for_location: { data: oneItem, error: null },
+    });
+
+    await expect(createSupabaseResolverSources(client).fetchMenuItems(CTX)).rejects.toThrow(
+      /could not reach the database/,
+    );
+
+    // Still no fallback: an unreachable database is not a missing function, and
+    // asking a second time down the same dead socket answers nothing.
+    expect(called).toEqual(["get_menus_for_location_lite"]);
+  });
+
+  it("keeps naming the RPC when the database did answer", async () => {
+    const { client } = rpcClient({
+      get_menus_for_location_lite: {
+        data: null,
+        error: { code: "42501", message: "permission denied" },
+      },
+    });
+
+    await expect(createSupabaseResolverSources(client).fetchMenuItems(CTX)).rejects.toThrow(
+      /get_menus_for_location_lite failed: permission denied/,
+    );
+  });
+
+  it("separates the two for locations as well", async () => {
+    const clientFor = (error: unknown) =>
+      ({
+        rpc: async () => ({ data: null, error: null }),
+        from: () => ({ select: () => ({ in: async () => ({ data: null, error }) }) }),
+      }) as never;
+
+    await expect(
+      createSupabaseResolverSources(clientFor({ code: "", message: "TypeError: fetch failed" }))
+        .fetchLocations([LOCATION_ID]),
+    ).rejects.toThrow(/could not reach the database/);
+
+    await expect(
+      createSupabaseResolverSources(clientFor({ code: "42501", message: "permission denied" }))
+        .fetchLocations([LOCATION_ID]),
+    ).rejects.toThrow(/location fetch failed: permission denied/);
+  });
+
   it("does NOT fall back on a real failure — it reports it", async () => {
     const { client, called } = rpcClient({
       get_menus_for_location_lite: {

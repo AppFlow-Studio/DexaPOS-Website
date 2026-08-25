@@ -105,12 +105,67 @@ export function createSupabaseResolverSources(
         : await supabase.from("locations").select(LOCATION_COLUMNS).in("id", ids);
 
       if (error) {
-        throw new Error(`location fetch failed: ${error.message}`);
+        throw sourceError(error, "location fetch");
       }
 
       return (Array.isArray(data) ? data : []).map(mapLocation);
     },
   };
+}
+
+/**
+ * Whether this error is the transport failing rather than the database answering.
+ *
+ * supabase-js reports both through one channel, so a dropped connection arrives
+ * looking exactly like a query that ran and failed. The wrappers below then name
+ * an RPC that was never actually reached — which is how `TypeError: fetch failed`
+ * ends up reading as `get_menus_for_location_lite failed` and sends whoever is
+ * looking at it hunting for a missing migration.
+ *
+ * Worth separating because the two have opposite fixes: one is "apply the
+ * migration" or "grant the permission", the other is "check the network".
+ *
+ * Matched on the message because that is all there is to go on. PostgREST sets
+ * `code` for anything Postgres answered — `PGRST202`, `42501`, `23505` — and
+ * leaves it empty when undici threw before any reply existed.
+ */
+const TRANSPORT_FAILURES = [
+  "fetch failed",
+  "socket hang up",
+  "econnrefused",
+  "econnreset",
+  "enotfound",
+  "etimedout",
+  "eai_again",
+] as const;
+
+function isUnreachable(error: { code?: string | null; message?: string | null }): boolean {
+  // A code means Postgres or PostgREST produced this, so the request arrived.
+  if (error.code) return false;
+
+  const message = (error.message ?? "").toLowerCase();
+  return TRANSPORT_FAILURES.some((hint) => message.includes(hint));
+}
+
+/**
+ * The error to throw for a failed source read, saying which of the two it is.
+ *
+ * `attempted` names the thing that was tried, and is kept in the unreachable
+ * message too — knowing *what* could not be fetched still matters, it just is
+ * no longer phrased as though that call had run and been rejected.
+ */
+function sourceError(
+  error: { code?: string | null; message?: string | null },
+  attempted: string,
+): Error {
+  if (isUnreachable(error)) {
+    return new Error(
+      `could not reach the database — the ${attempted} request never completed ` +
+        `(${error.message}). Check the network and whether the Supabase project is awake.`,
+    );
+  }
+
+  return new Error(`${attempted} failed: ${error.message}`);
 }
 
 /**
@@ -150,7 +205,7 @@ async function fetchMenuTree(
   if (!lite.error) return lite.data;
 
   if (lite.error.code !== FUNCTION_NOT_FOUND) {
-    throw new Error(`get_menus_for_location_lite failed: ${lite.error.message}`);
+    throw sourceError(lite.error, "get_menus_for_location_lite");
   }
 
   if (!warnedAboutLiteFallback) {
@@ -163,7 +218,7 @@ async function fetchMenuTree(
 
   const full = await supabase.rpc("get_menus_for_location", args);
   if (full.error) {
-    throw new Error(`get_menus_for_location failed: ${full.error.message}`);
+    throw sourceError(full.error, "get_menus_for_location");
   }
   return full.data;
 }
