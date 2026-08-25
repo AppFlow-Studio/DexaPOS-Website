@@ -1,13 +1,15 @@
 import { createClient } from 'npm:@supabase/supabase-js'
 import { createSale, createVaultSale } from '../_shared/nmi.ts'
 import { sendSubscriptionInvoicePaymentEmail } from '../_shared/payment-emails.ts'
+import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
+import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-internal-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -26,6 +28,9 @@ function toAmount(value: unknown): number {
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
+  if (!(await isAuthorizedInternalBillingRequest(req))) {
+    return jsonResponse({ success: false, error: 'Unauthorized' }, 401)
+  }
 
   try {
     const body = await req.json().catch(() => ({})) as {
@@ -369,6 +374,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
         p_status: 'failed',
         p_error_message: failureMessage,
       })
+
+      try {
+        await notifySubscriptionPaymentFailure({
+          supabase,
+          invoiceId: invoice.id,
+          paymentAttemptCount: nextAttemptCount,
+          failureMessage,
+        })
+      } catch (notificationError) {
+        console.error(
+          '[billing-charge-subscription] Failed to deliver payment failure notifications:',
+          notificationError,
+        )
+      }
 
       return jsonResponse(
         {

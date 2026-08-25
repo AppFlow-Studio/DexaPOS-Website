@@ -310,6 +310,14 @@ Single index for active ticket streams and their source trackers.
 - Website-created support tickets immediately request the same idempotent
   notification endpoint used by the Supabase trigger; POS and direct inserts
   remain covered by `pg_net`.
+- Website-created merchant replies, HQ replies, developer updates, and private
+  notes now request that same message-level idempotent endpoint immediately
+  after the message is saved. The database trigger remains the primary path;
+  the application request is a non-blocking fallback and cannot duplicate a
+  delivery because `message_id` is unique in the delivery ledger.
+- The HQ and merchant support inboxes now render the existing per-ticket unread
+  counts, while the shared header support badge continues to show the aggregate
+  unread total and refresh through Realtime.
 - `20260806160000_support_ticket_email_assignment_consistency.sql` aligns the
   dashboard unassigned metric with HQ email assignees.
 - New-ticket attempts are recorded in
@@ -322,9 +330,10 @@ Single index for active ticket streams and their source trackers.
   `supabase/migrations/20260729140000_hq_support_ticket_email_assignees.sql`.
 - Platform Admin receives `hq.support.view` and `hq.support.manage` through the
   companion role-permission migration.
-- Local implementation is complete. Migration/Vault configuration,
-  cross-scope RLS checks, cross-source ticket/reply/private-note email checks,
-  and staging QA remain.
+- Local implementation is complete. No additional migration was introduced by
+  the message-fallback/unread-inbox hardening. Existing migration/Vault
+  configuration, cross-scope RLS checks, cross-source
+  ticket/reply/private-note email checks, and staging QA remain.
 
 ## Stream T: [Reporting - Kiosk] Website Channel-Segmented Reports
 
@@ -548,5 +557,30 @@ Single index for active ticket streams and their source trackers.
 - `docs/features/billing/HANDOFF-2026-07-13-HQ-BILLING-CONTROL-FINAL.md`
 - `docs/features/billing/HANDOFF-2026-07-13-BILLING-CONTROL-REMAINING-POS-ITEMS.md`
 
-7. Next 16 upgrade handoff:
+7. Merchant plan request and notification flow:
+- `docs/features/billing/FEATURE-2026-08-21-MERCHANT-PLAN-REQUEST-NOTIFICATIONS.md`
+- Merchant plan cards submit a dedicated `SUB-xxxxx` billing request without
+  granting merchant-side activation rights or opening a support ticket.
+- HQ can approve and activate or deny with an optional note. Merchant and HQ
+  updates use the read-only application notification feed.
+- Direct HQ assignment creates a read-only merchant update, not a ticket.
+- First-click approval now records the merchant plan subscription ID expected by
+  the request foreign key; it no longer leaves the request pending after the
+  plan and invoice succeed.
+- Billing hardening protects service-role billing functions, sends idempotent
+  merchant/HQ failed-payment alerts, and requires immutable recurring-charge
+  authorization evidence for new merchant plan requests.
+- Merchant tiers and billing history are merchant-wide. Hardware requests are
+  location-scoped and reviewed independently by HQ.
+- Shared staging has all three request/hardware/authorization migrations
+  applied, generated Supabase types are refreshed, and the five hardened
+  billing Edge Functions are deployed and active. Automated tests, focused
+  lint, production build, unauthenticated rejection, and the current Supabase
+  secret-key path are verified in PR #285.
+- Remaining closure work is authenticated merchant/HQ QA, controlled declined
+  payment and idempotency proof, scheduled internal-secret verification,
+  Resend log verification, deployment-secret rotation confirmation, and the
+  recorded sign-off artifact.
+
+8. Next 16 upgrade handoff:
 - `docs/engineering/framework-upgrades/HANDOFF-2026-07-13-NEXT-16-UPGRADE.md`

@@ -1,11 +1,12 @@
 import { createClient } from 'npm:@supabase/supabase-js'
+import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-internal-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -19,6 +20,9 @@ function jsonResponse(body: Record<string, unknown>, status = 200): Response {
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
+  if (!(await isAuthorizedInternalBillingRequest(req))) {
+    return jsonResponse({ success: false, error: 'Unauthorized' }, 401)
+  }
 
   try {
     const body = await req.json() as {

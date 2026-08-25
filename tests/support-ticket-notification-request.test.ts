@@ -5,8 +5,10 @@ vi.mock("@/lib/messaging/app-url", () => ({
   resolveAppUrl: vi.fn(async () => "https://dashboard.example.com"),
 }));
 
-import { requestSupportTicketCreatedNotification } from
-  "@/lib/support/ticket-notification-request";
+import {
+  requestSupportTicketCreatedNotification,
+  requestSupportTicketMessageNotification,
+} from "@/lib/support/ticket-notification-request";
 
 describe("website support ticket notification fallback", () => {
   beforeEach(() => {
@@ -52,5 +54,29 @@ describe("website support ticket notification fallback", () => {
       ok: false,
       error: "INTERNAL_NOTIFICATION_SECRET is not configured",
     });
+  });
+
+  it("uses the idempotent endpoint for a ticket message", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, skipped: "already_sent" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const result = await requestSupportTicketMessageNotification(
+      "22222222-2222-4222-8222-222222222222",
+    );
+
+    expect(result).toEqual({ ok: true, skipped: "already_sent" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://dashboard.example.com/api/internal/support-ticket-created",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          message_id: "22222222-2222-4222-8222-222222222222",
+        }),
+      }),
+    );
   });
 });

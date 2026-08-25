@@ -15,6 +15,15 @@ function formatUsd(amount: number): string {
   }).format(amount)
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
 function hasEmailConfig(): boolean {
   return RESEND_API_KEY.trim().length > 0
 }
@@ -131,6 +140,45 @@ export async function sendSubscriptionInvoicePaymentEmail(params: {
   await sendEmail(
     params.to,
     `Dexa billing receipt - ${params.invoiceNumber}`,
+    html,
+  )
+}
+
+export async function sendSubscriptionPaymentFailedEmail(params: {
+  to: string
+  merchantName: string
+  locationName: string
+  invoiceNumber: string
+  totalAmount: number
+  dueDate: string
+  failureMessage: string
+}): Promise<void> {
+  if (!hasEmailConfig()) {
+    throw new Error('RESEND_API_KEY is not configured')
+  }
+
+  const merchantName = escapeHtml(params.merchantName)
+  const locationName = escapeHtml(params.locationName)
+  const invoiceNumber = escapeHtml(params.invoiceNumber)
+  const failureMessage = escapeHtml(params.failureMessage)
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#111827;">
+      <h2 style="margin-bottom:8px;">Subscription payment failed</h2>
+      <p style="margin:0 0 16px;">We could not process the DEXA POS subscription payment for <strong>${merchantName}</strong>.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;">Location</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;">${locationName}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;">Invoice</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;">${invoiceNumber}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;">Due date</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;">${formatLongDate(params.dueDate)}</td></tr>
+        <tr><td style="padding:8px 0;font-weight:700;">Amount due</td><td style="padding:8px 0;text-align:right;font-weight:700;">${formatUsd(params.totalAmount)}</td></tr>
+      </table>
+      <p style="margin:16px 0;color:#991b1b;"><strong>Processor response:</strong> ${failureMessage}</p>
+      <p style="color:#4b5563;font-size:14px;">Update the merchant payment method and settle the outstanding balance. Continued non-payment may result in POS service deactivation.</p>
+    </div>
+  `
+
+  await sendEmail(
+    params.to,
+    `Action required: Dexa billing payment failed - ${invoiceNumber}`,
     html,
   )
 }
