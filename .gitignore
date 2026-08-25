@@ -65,3 +65,6 @@ tasks/T-21-responsive-layout.md
 .playwright-mcp/
 # Orderout documentation
 /orderout-docs*
+# Personal 1on1 / feedback documents
+docs/*1on1*.docx
+~$*.docx

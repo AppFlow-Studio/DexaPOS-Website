@@ -24,9 +24,9 @@ export default async function DemoPage() {
     <>
       {!hasCmsHero && <section className="page-head">
         <div className="wrap">
-          <div className="eyebrow reveal in">Live Demo</div>
-          <h1 className="reveal in" style={{ transitionDelay: ".1s" }}>See DEXA. The way your team will.</h1>
-          <p className="lede reveal in" style={{ transitionDelay: ".2s" }}>This is the actual DEXA point-of-sale interface, running below in your browser. Tap any tile — Sales, Tables, Kitchen Display, Inventory, Analytics — to see real screens with real data.</p>
+          <Reveal as="div" className="eyebrow reveal">Live Demo</Reveal>
+          <Reveal as="h1" className="reveal" style={{ transitionDelay: ".1s" }}>See DEXA. The way your team will.</Reveal>
+          <Reveal as="p" className="lede reveal" style={{ transitionDelay: ".2s" }}>This is the actual DEXA point-of-sale interface, running below in your browser. Tap any tile — Sales, Tables, Kitchen Display, Inventory, Analytics — to see real screens with real data.</Reveal>
         </div>
       </section>}
 

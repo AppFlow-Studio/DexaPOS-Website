@@ -24,11 +24,13 @@ export default async function Features() {
       {!hasCmsHero && <section className="page-head">
         <div className="wrap">
           <Reveal className="eyebrow reveal">Features</Reveal>
-          <Reveal className="reveal">
-            <h1 style={{ transitionDelay: ".1s" }}>Everything you need. Nothing you don&apos;t.</h1>
+          {/* Delay belongs on the .reveal element — the transition lives there,
+              so a delay on the inner tag would never apply. */}
+          <Reveal as="h1" className="reveal" style={{ transitionDelay: ".1s" }}>
+            Everything you need. Nothing you don&apos;t.
           </Reveal>
-          <Reveal className="reveal">
-            <p className="lede" style={{ transitionDelay: ".2s" }}>Six features that change how you operate. Ten capabilities, one platform.</p>
+          <Reveal as="p" className="lede reveal" style={{ transitionDelay: ".2s" }}>
+            Six features that change how you operate. Ten capabilities, one platform.
           </Reveal>
         </div>
       </section>}

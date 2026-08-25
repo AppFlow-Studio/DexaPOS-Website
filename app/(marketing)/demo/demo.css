@@ -60,7 +60,7 @@
   background: var(--paper);
   border: 1px solid var(--slate-200);
   color: var(--ink);
-  transition: all 0.2s;
+  transition: none;
   cursor: pointer;
   font-family: var(--font);
 }
@@ -172,7 +172,7 @@
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-lg);
   padding: 32px;
-  transition: all 0.2s;
+  transition: none;
 }
 .ann:hover {
   border-color: var(--brand-300);

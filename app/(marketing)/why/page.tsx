@@ -1,3 +1,4 @@
+import { Reveal } from "@/components/marketing/Reveal";
 import type { Metadata } from "next";
 import Link from "next/link";
 import AnimatedCounter from "@/components/marketing/AnimatedCounter";
@@ -60,15 +61,15 @@ export default async function WhyPage() {
     <>
       <section className="page-head">
         <div className="wrap">
-          <div className="eyebrow reveal in">Why DEXA</div>
-          <h1 className="reveal in" style={{ transitionDelay: ".1s" }}>Built different. On purpose.</h1>
-          <p className="lede reveal in" style={{ transitionDelay: ".2s" }}>No multi-year contracts, no captive hardware, no processor lock-in. Here&apos;s how DEXA stacks up against the platforms most operators evaluate — and the questions they ask before switching.</p>
+          <Reveal as="div" className="eyebrow reveal">Why DEXA</Reveal>
+          <Reveal as="h1" className="reveal" style={{ transitionDelay: ".1s" }}>Built different. On purpose.</Reveal>
+          <Reveal as="p" className="lede reveal" style={{ transitionDelay: ".2s" }}>No multi-year contracts, no captive hardware, no processor lock-in. Here&apos;s how DEXA stacks up against the platforms most operators evaluate — and the questions they ask before switching.</Reveal>
         </div>
       </section>
 
       <section className="trust">
         <div className="wrap">
-          <div className="trust-grid reveal-stagger in">
+          <Reveal as="div" className="trust-grid reveal-stagger">
             <div className="trust-stat">
               <div className="trust-stat-value"><AnimatedCounter value={1284} /></div>
               <div className="trust-stat-label">Restaurants on DEXA</div>
@@ -85,30 +86,30 @@ export default async function WhyPage() {
               <div className="trust-stat-value">0<span>-day</span></div>
               <div className="trust-stat-label">Contract minimum</div>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       <section className="why-photo">
         <div className="wrap">
-          <figure className="why-photo-frame reveal in">
+          <Reveal as="figure" className="why-photo-frame reveal">
             <img src="/dexa-hero.png" alt="A DEXA POS terminal running in a working restaurant dining room" />
             <figcaption className="why-photo-cap">
               <p>Your hardware. Your processor. Your terms.</p>
             </figcaption>
-          </figure>
+          </Reveal>
         </div>
       </section>
 
       <section className="comparison">
         <div className="wrap">
-          <div className="section-head center reveal in">
+          <Reveal as="div" className="section-head center reveal">
             <div className="section-eyebrow">The comparison</div>
             <h2 className="section-title">DEXA vs. the rest.</h2>
             <p className="section-sub">An honest side-by-side. Here&apos;s how DEXA stacks up against the platforms most operators evaluate.</p>
-          </div>
+          </Reveal>
 
-          <div className="comp-card reveal in">
+          <Reveal as="div" className="comp-card reveal">
             <div className="comp-head-row">
               <h3>Capability comparison</h3>
               <p>The differences operators care about</p>
@@ -165,19 +166,19 @@ export default async function WhyPage() {
               <div className="comp-cell competitor" style={{ borderBottom: "none" }}>Limited</div>
               <div className="comp-cell competitor" style={{ borderBottom: "none" }}>Per-device</div>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       <section className="why-diff">
         <div className="wrap">
-          <div className="section-head center reveal in">
+          <Reveal as="div" className="section-head center reveal">
             <div className="section-eyebrow">What sets us apart</div>
             <h2 className="section-title">Built different — and here&apos;s why it matters.</h2>
             <p className="section-sub">The table above is the summary. Here&apos;s the substance behind each line — the design decisions that change what your week actually looks like.</p>
-          </div>
+          </Reveal>
 
-          <div className="diff-grid reveal-stagger in">
+          <Reveal as="div" className="diff-grid reveal-stagger">
             <div className="diff-card">
               <div className="diff-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" /></svg></div>
               <h3>Dual pricing, built in</h3>
@@ -208,13 +209,13 @@ export default async function WhyPage() {
               <h3>Month-to-month</h3>
               <p>Software is month-to-month; hardware you own outright. No multi-year lock-in, no early-termination fee, no auto-renewal that needs 90 days&apos; written notice to escape.</p>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       <section className="why-pricing">
         <div className="wrap">
-          <div className="wp-inner reveal in">
+          <Reveal as="div" className="wp-inner reveal">
             <div className="wp-copy">
               <div className="section-eyebrow">Honest pricing</div>
               <h2>Priced to scale.<br />Never to trap.</h2>
@@ -229,17 +230,17 @@ export default async function WhyPage() {
               <div className="wp-plan"><span className="wp-price">$49</span><span className="lbl">/mo</span><span className="add">Additional station</span></div>
               <div className="wp-plan"><span className="wp-price">$39</span><span className="lbl">/mo</span><span className="add">Handheld tablet</span></div>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       <section className="faq-section">
         <div className="wrap">
-          <div className="section-head center reveal in">
+          <Reveal as="div" className="section-head center reveal">
             <div className="section-eyebrow">Common questions</div>
             <h2 className="section-title">The questions operators ask.</h2>
             <p className="section-sub">Honest answers, no marketing spin.</p>
-          </div>
+          </Reveal>
 
           <FaqAccordion items={faqItems} />
         </div>

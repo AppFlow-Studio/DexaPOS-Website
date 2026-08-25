@@ -1,3 +1,4 @@
+import { Reveal } from "@/components/marketing/Reveal";
 import type { Metadata } from "next";
 import Link from "next/link";
 import AnimatedCounter from "@/components/marketing/AnimatedCounter";
@@ -25,7 +26,7 @@ export default async function Home() {
       <section className="hero">
         <div className="wrap">
           <div className="hero-grid">
-            <div className="reveal in">
+            <Reveal as="div" className="reveal">
               <h1>Run a smarter restaurant. <span className="accent">Start to<br />finish.</span></h1>
               <p className="hero-lede">DEXA is the all-in-one point-of-sale platform built for modern restaurants. From the first order to the last receipt, every part of your operation runs on one trusted system — designed for speed, accuracy, and peace of mind.</p>
               <div className="hero-actions">
@@ -49,9 +50,9 @@ export default async function Home() {
                   <span className="hero-trust-label">US-based support</span>
                 </div>
               </div>
-            </div>
+            </Reveal>
 
-            <div className="hero-visual reveal in" style={{ transitionDelay: ".15s" }}>
+            <Reveal as="div" className="hero-visual reveal" style={{ transitionDelay: ".15s" }}>
               <figure className="hero-photo">
                 <img src="/dexa-homehero.png" alt="A DEXA POS station in a café, taking an order at the counter" width={1040} height={676} />
               </figure>
@@ -64,7 +65,7 @@ export default async function Home() {
                   $87.64 · Card · Just now
                 </div>
               </div>
-            </div>
+            </Reveal>
           </div>
         </div>
       </section>
@@ -72,13 +73,13 @@ export default async function Home() {
       {/* VALUE PROPS */}
       <section className="value-props">
         <div className="wrap">
-          <div className="section-head reveal in">
+          <Reveal as="div" className="section-head reveal">
             <div className="section-eyebrow">Why operators choose DEXA</div>
             <h2 className="section-title">Everything your restaurant needs, in one place.</h2>
             <p className="section-sub">Stop juggling six tools to run one restaurant. DEXA brings ordering, payments, kitchen, staff, and reporting together — so you can focus on hospitality.</p>
-          </div>
+          </Reveal>
 
-          <div className="value-grid reveal-stagger in">
+          <Reveal as="div" className="value-grid reveal-stagger">
             <div className="value-card">
               <div className="value-icon">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18" /></svg>
@@ -100,20 +101,20 @@ export default async function Home() {
               <h3>Transparent pricing</h3>
               <p>Cash and card prices on every check. No bundled processor markup, no multi-year hardware lock — keep what you earn.</p>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       {/* EXPLORE */}
       <section className="explore">
         <div className="wrap">
-          <div className="section-head reveal in">
+          <Reveal as="div" className="section-head reveal">
             <div className="section-eyebrow">Explore</div>
             <h2 className="section-title">Take a closer look.</h2>
             <p className="section-sub">Whether you want to see DEXA in action, compare it side-by-side with the platform you have today, or check whether your existing hardware works — start here.</p>
-          </div>
+          </Reveal>
 
-          <div className="explore-grid reveal-stagger in">
+          <Reveal as="div" className="explore-grid reveal-stagger">
             <Link href="/demo" className="explore-card">
               <div className="explore-image" style={{ backgroundImage: "url('/dexa-og.png')" }} />
               <div className="explore-body">
@@ -161,20 +162,20 @@ export default async function Home() {
                 </span>
               </div>
             </Link>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       {/* PROOF */}
       <section className="proof">
         <div className="wrap">
-          <div className="section-head center reveal in">
+          <Reveal as="div" className="section-head center reveal">
             <div className="section-eyebrow">Trusted operations</div>
             <h2 className="section-title" style={{ color: "var(--paper)" }}>A platform restaurants run on every day.</h2>
             <p className="section-sub" style={{ color: "rgba(255,255,255,0.70)" }}>From single-location food trucks to 50-unit groups, DEXA scales with your business.</p>
-          </div>
+          </Reveal>
 
-          <div className="proof-grid reveal-stagger in">
+          <Reveal as="div" className="proof-grid reveal-stagger">
             <div className="proof-stat">
               <div className="proof-stat-value"><AnimatedCounter value={1284} /></div>
               <div className="proof-stat-label">Active restaurants</div>
@@ -191,20 +192,20 @@ export default async function Home() {
               <div className="proof-stat-value"><AnimatedCounter value={3.2} /><span>min</span></div>
               <div className="proof-stat-label">Avg support response</div>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       {/* INDUSTRIES */}
       <section className="industries-strip">
         <div className="wrap">
-          <div className="section-head reveal in">
+          <Reveal as="div" className="section-head reveal">
             <div className="section-eyebrow">Built for your concept</div>
             <h2 className="section-title">Whatever you serve, DEXA fits.</h2>
             <p className="section-sub">DEXA configures itself for eight different restaurant concepts, with the right defaults already set for your operation.</p>
-          </div>
+          </Reveal>
 
-          <div className="industry-row reveal-stagger in">
+          <Reveal as="div" className="industry-row reveal-stagger">
             {[
               { name: "Quick-Service", icon: [<path key="a" d="M3 7h18l-2 12H5L3 7z" />, <path key="b" d="M8 7V5a4 4 0 018 0v2" />] },
               { name: "Fine Dining", icon: [<path key="a" d="M5 12V8a7 7 0 0114 0v4" />, <path key="b" d="M3 12h18l-1 9H4l-1-9z" />] },
@@ -222,26 +223,26 @@ export default async function Home() {
                 <div className="industry-tag-name">{industryName}</div>
               </div>
             ))}
-          </div>
+          </Reveal>
 
-          <div style={{ textAlign: "center", marginTop: 48 }} className="reveal in">
+          <Reveal as="div" style={{ textAlign: "center", marginTop: 48 }} className="reveal">
             <Link href="/industries" className="btn btn-secondary">
               See how each concept runs DEXA
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
             </Link>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       {/* COMPARE */}
       <section className="compare-section dark">
         <div className="wrap">
-          <div className="section-head center reveal in">
+          <Reveal as="div" className="section-head center reveal">
             <div className="section-eyebrow">Built Different</div>
             <h2 className="section-title">No lock-in. <span className="gold">On purpose.</span></h2>
             <p className="section-sub">No multi-year contracts, no captive hardware, no processor lock-in. Here&apos;s how DEXA compares to the platforms most operators evaluate before they switch.</p>
-          </div>
-          <div className="compare-scroll reveal in">
+          </Reveal>
+          <Reveal as="div" className="compare-scroll reveal">
             <div className="compare-table">
               <div className="compare-r compare-head">
                 <div className="compare-c">Capability</div>
@@ -272,7 +273,7 @@ export default async function Home() {
                 </div>
               ))}
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 

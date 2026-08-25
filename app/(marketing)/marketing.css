@@ -86,7 +86,11 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
   letter-spacing: -0.003em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
+  /* `clip`, not `hidden`: overflow-x:hidden forces overflow-y to `auto`, which
+     turns this wrapper into a scroll container and stops the sticky nav from
+     ever sticking (it scrolled away with the page). `clip` contains horizontal
+     overflow without creating a scroll container, so position:sticky works. */
+  overflow-x: clip;
 }
 :where(.mk-site) a { color: inherit; text-decoration: none; }
 :where(.mk-site) ul, :where(.mk-site) ol { list-style: none; }
@@ -138,7 +142,15 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 .nav-inner {
   display: flex; align-items: center; justify-content: space-between;
   height: 76px;
+  gap: 20px;
 }
+/* Let the link row absorb the squeeze before anything overlaps. */
+.nav-links { min-width: 0; }
+.nav-actions {
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0;
+}
+.logo { flex-shrink: 0; }
 
 /* DEXA wordmark logo */
 .logo {
@@ -155,11 +167,21 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 .logo:hover { opacity: 0.85; }
 
 .nav-links { display: flex; gap: 40px; align-items: center; }
+/* Six uppercase links + Sign In + a nowrap CTA need ~1100px. Below that the
+   gap tightens first, then the whole row moves into the hamburger at 1100px.
+   Previously the hamburger only appeared at 700px, so between 700-1100px the
+   header items were crushed into one row and visually overlapped. */
+@media (max-width: 1240px) {
+  .nav-links { gap: 26px; }
+}
+@media (max-width: 1130px) {
+  .nav-links { gap: 18px; }
+}
 .nav-links a {
   font-family: var(--font-display);
   font-size: clamp(12px, 0.8vw, 14px);
   font-weight: 500;
-  color: var(--graphite); transition: color 0.2s;
+  color: var(--graphite); transition: none;
   position: relative; padding: 12px 0;
   text-transform: uppercase; letter-spacing: 0.14em;
 }
@@ -179,7 +201,7 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
   font-size: clamp(11px, 1vw, 13px);
   font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.16em;
-  transition: all 0.2s;
+  transition: none;
   border: 1px solid var(--matte-black);
 }
 .nav-cta:hover {
@@ -194,7 +216,7 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
   text-transform: uppercase; letter-spacing: 0.14em;
   color: var(--graphite);
   padding: 6px 10px;
-  transition: color 0.2s;
+  transition: none;
 }
 .nav-signin:hover { color: var(--ink); }
 .menu-toggle { display: none; }
@@ -211,7 +233,7 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
   font-size: clamp(12px, 0.8vw + 0.5rem, 14px);
   font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.16em;
-  transition: all 0.2s; white-space: nowrap;
+  transition: none; white-space: nowrap;
   border: 1px solid transparent;
 }
 .btn-primary {
@@ -224,7 +246,7 @@ btn-request-a-demo{
 .btn-primary:hover {
   background: transparent; color: var(--matte-black);
 }
-.btn-primary svg { transition: transform 0.2s; }
+.btn-primary svg { transition: none; }
 .btn-primary:hover svg { transform: translateX(3px); }
 .btn-secondary {
   background: transparent; color: var(--ink);
@@ -369,7 +391,7 @@ btn-request-a-demo{
 .footer-col a {
   font-family: var(--font-display);
   font-size: 13px; color: rgba(245, 243, 239, 0.72);
-  transition: color 0.2s; font-weight: 400;
+  transition: none; font-weight: 400;
   text-transform: uppercase; letter-spacing: 0.10em;
 }
 .footer-col a:hover { color: var(--muted-gold); }
@@ -394,7 +416,7 @@ btn-request-a-demo{
   width: 40px; height: 40px; border-radius: 50%;
   color: rgba(245, 243, 239, 0.50);
   background: rgba(245, 243, 239, 0.06);
-  transition: color 0.2s, background 0.2s, transform 0.2s;
+  transition: none;
 }
 .footer-social-link:hover {
   color: var(--warm-white);
@@ -402,16 +424,23 @@ btn-request-a-demo{
   transform: translateY(-2px);
 }
 
-/* ───── REVEAL animations ───── */
-.reveal {
+/* ───── REVEAL animations ─────
+   Fail-visible by design. Content is only hidden once JS has confirmed it can
+   reveal it again: the `reveal-ready` class is set on <html> by RevealBoot.
+   If JS never runs, errors, or an element is never observed, text stays
+   visible instead of being stranded at opacity:0 (the Aug 2026 invisible-text
+   bug). Never hide .reveal unconditionally. */
+.reveal { transition: opacity 0.7s ease, transform 0.7s ease; }
+.reveal-stagger > * { transition: opacity 0.6s ease, transform 0.6s ease; }
+
+.reveal-ready .reveal:not(.in) {
   opacity: 0; transform: translateY(24px);
-  transition: opacity 0.7s ease, transform 0.7s ease;
 }
-.reveal.in { opacity: 1; transform: none; }
-.reveal-stagger > * {
+.reveal-ready .reveal-stagger:not(.in) > * {
   opacity: 0; transform: translateY(20px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
 }
+
+.reveal.in { opacity: 1; transform: none; }
 .reveal-stagger.in > * { opacity: 1; transform: none; }
 .reveal-stagger.in > *:nth-child(1) { transition-delay: 0.05s; }
 .reveal-stagger.in > *:nth-child(2) { transition-delay: 0.10s; }
@@ -421,6 +450,24 @@ btn-request-a-demo{
 .reveal-stagger.in > *:nth-child(6) { transition-delay: 0.30s; }
 .reveal-stagger.in > *:nth-child(7) { transition-delay: 0.35s; }
 .reveal-stagger.in > *:nth-child(8) { transition-delay: 0.40s; }
+
+/* Reduced motion: show everything immediately, no movement, no delays. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal-ready .reveal:not(.in),
+  .reveal-ready .reveal-stagger:not(.in) > * {
+    opacity: 1;
+    transform: none;
+  }
+  .reveal,
+  .reveal-stagger > * {
+    transition: none;
+  }
+  .reveal-stagger.in > * { transition-delay: 0s; }
+  .faq-section .faq-a,
+  .faq-section .faq-q-icon,
+  .psec .faq-answer,
+  .psec .faq-item summary::after { transition: none; }
+}
 
 /* ───── CTA STRIP ───── */
 .cta-strip {
@@ -601,7 +648,7 @@ btn-request-a-demo{
   border-radius: var(--radius-lg);
   padding: 36px;
   border: 1px solid var(--slate-200);
-  transition: all 0.3s ease;
+  transition: none;
 }
 .value-card:hover {
   border-color: var(--brand-300);
@@ -641,7 +688,7 @@ btn-request-a-demo{
   background: var(--paper);
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-xl);
-  transition: all 0.3s ease;
+  transition: none;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -679,7 +726,7 @@ btn-request-a-demo{
   display: inline-flex; align-items: center; gap: 8px;
   font-size: 14px; font-weight: 600;
   color: var(--brand-500);
-  transition: gap 0.3s ease;
+  transition: none;
 }
 .explore-card:hover .explore-link { gap: 14px; }
 
@@ -697,28 +744,30 @@ btn-request-a-demo{
   background: radial-gradient(ellipse 700px 350px at 30% 50%, rgba(91, 108, 255, 0.18), transparent 60%);
 }
 .proof .wrap { position: relative; z-index: 1; }
+/* Matches the pricing page trust-stats treatment: no card borders or seams,
+   a single hairline rule above, and white values (number and unit alike). */
 .proof-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 1px;
-  background: rgba(255,255,255,0.10);
-  border-radius: 18px;
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.10);
+  grid-template-columns: repeat(4, 1fr);
+  gap: 32px;
+  padding-top: 56px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  text-align: center;
 }
 .proof-stat {
-  background: var(--ink);
-  padding: 40px 32px;
+  padding: 0;
   text-align: center;
 }
 .proof-stat-value {
-  font-size: 44px; font-weight: 700;
-  color: var(--brand-300); letter-spacing: -0.025em;
-  margin-bottom: 6px; line-height: 1;
+  font-family: var(--font-display);
+  font-size: 44px; font-weight: 600;
+  color: var(--paper); letter-spacing: -0.02em;
+  margin-bottom: 10px; line-height: 1;
 }
-.proof-stat-value span { color: var(--brand-300); }
+.proof-stat-value span { color: inherit; }
 .proof-stat-label {
-  font-size: 13px; color: rgba(255,255,255,0.60);
+  font-size: 13px; color: rgba(255,255,255,0.6);
+  letter-spacing: 0.04em;
   font-weight: 500;
 }
 
@@ -739,7 +788,10 @@ btn-request-a-demo{
   border-radius: var(--radius-md);
   padding: 28px 20px;
   text-align: center;
-  transition: all 0.2s ease;
+  /* Name the properties instead of `all` (which animates every change, in and
+     out) and use a front-loaded curve — `ease` spends most of its time
+     decelerating, which reads as lag even at a short duration. */
+  transition: none;
   cursor: default;
 }
 .industry-tag:hover {
@@ -819,8 +871,8 @@ btn-request-a-demo{
   .value-card, .explore-body { padding: 28px; }
   .hero-trust { gap: 24px; }
   .hero-floating { display: none; }
-  .proof-grid { grid-template-columns: 1fr; }
-  .proof-stat { padding: 32px 24px; }
+  .proof-grid { grid-template-columns: 1fr 1fr; gap: 24px; padding-top: 40px; }
+  .proof-stat-value { font-size: 34px; }
   .compare-table { min-width: 660px; }
 }
 
@@ -832,14 +884,14 @@ btn-request-a-demo{
 .core-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
+  gap: 32px 28px;
 }
 .core-card {
   background: var(--paper);
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-xl);
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: none;
   display: flex;
   flex-direction: column;
 }
@@ -896,13 +948,16 @@ btn-request-a-demo{
   border-radius: var(--radius-xl);
   overflow: hidden;
 }
+/* Feedback (Aug 2026): the capability cards read as "spaced too tightly".
+   The 1px seam is intentional (it forms one bordered block), so the breathing
+   room comes from inside each cell rather than from breaking the grid. */
 .cap {
   background: var(--paper);
-  padding: 36px;
-  transition: background 0.2s;
+  padding: 44px 40px;
+  transition: none;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
 }
 .cap:hover { background: var(--canvas); }
 .cap-head {
@@ -932,14 +987,14 @@ btn-request-a-demo{
 .cap-pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 8px;
-  margin-top: 4px;
+  gap: 8px 10px;
+  margin-top: 8px;
 }
 .cap-pills span {
   font-size: 12px;
   color: var(--slate-700);
   background: var(--slate-100);
-  padding: 4px 11px;
+  padding: 5px 12px;
   border-radius: 999px;
   font-weight: 500;
 }
@@ -1025,17 +1080,23 @@ btn-request-a-demo{
   .section { padding: 80px 0; }
   .page-head { padding: 80px 0 64px; }
 }
-@media (max-width: 700px) {
-  :root { --gutter: 20px; }
-  .logo-img { height: 30px; }
+/* Nav collapses to the hamburger at 1100px — NOT 700px. The inline row cannot
+   fit six uppercase links plus Sign In plus the CTA below ~1100px, which is what
+   caused the mid-width header overlap. Keep these nav rules in this block; the
+   700px block below is for non-nav mobile layout only. */
+@media (max-width: 1100px) {
   .nav-links { display: none; }
   .nav-links.open {
     display: flex; position: absolute;
     top: 76px; left: 0; right: 0;
     flex-direction: column; gap: 0;
+    /* Reset the inline row's centering — as a dropdown the items are
+       full-width and left-aligned, not centered. */
+    align-items: stretch;
     background: var(--warm-white); padding: 16px 20px;
     border-bottom: 1px solid rgba(17, 17, 17, 0.08);
     box-shadow: 0 12px 24px rgba(0,0,0,0.06);
+    z-index: 99;
   }
   .nav-links.open li {
     padding: 0;
@@ -1051,6 +1112,10 @@ btn-request-a-demo{
     width: 44px; height: 44px; border-radius: 6px;
     background: rgba(17, 17, 17, 0.06); color: var(--ink);
   }
+}
+@media (max-width: 700px) {
+  :root { --gutter: 20px; }
+  .logo-img { height: 30px; }
   .nav-cta { padding: 11px 18px; min-height: 44px; font-size: clamp(11px, 2.8vw, 13px); }
   .footer-top { grid-template-columns: 1fr; gap: 32px; }
   .section, .section-tight { padding: 64px 0; }
@@ -1117,7 +1182,7 @@ btn-request-a-demo{
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-xl);
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: none;
   display: flex;
   flex-direction: column;
 }
@@ -1315,7 +1380,7 @@ btn-request-a-demo{
   border-radius: 10px;
   font-size: 15px;
   font-weight: 600;
-  transition: all 0.2s;
+  transition: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1504,7 +1569,7 @@ btn-request-a-demo{
   background: var(--paper);
   border: 1px solid var(--slate-200);
   color: var(--ink);
-  transition: all 0.2s;
+  transition: none;
   cursor: pointer;
   font-family: var(--font);
 }
@@ -1601,7 +1666,7 @@ btn-request-a-demo{
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-lg);
   padding: 32px;
-  transition: all 0.2s;
+  transition: none;
 }
 .ann:hover {
   border-color: var(--brand-300);
@@ -1771,7 +1836,7 @@ btn-request-a-demo{
   line-height: 1.4;
   letter-spacing: -0.01em;
   color: var(--ink);
-  transition: color 0.2s;
+  transition: none;
 }
 .faq-section .faq-q:hover { color: var(--brand-500); }
 .faq-section .faq-q-icon {
@@ -1783,7 +1848,7 @@ btn-request-a-demo{
   display: grid;
   place-items: center;
   color: var(--ink);
-  transition: all 0.3s;
+  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
 }
 .faq-section .faq-item.open .faq-q-icon {
   background: var(--ink);
@@ -1791,11 +1856,16 @@ btn-request-a-demo{
   border-color: var(--ink);
   transform: rotate(45deg);
 }
+/* Animate to the answer's real height: grid-template-rows 0fr -> 1fr
+   transitions smoothly and, unlike a fixed max-height, never clips long
+   answers or makes short ones snap. */
 .faq-section .faq-a {
-  max-height: 0;
+  display: grid;
+  grid-template-rows: 0fr;
   overflow: hidden;
-  transition: max-height 0.4s ease;
+  transition: grid-template-rows 0.38s cubic-bezier(0.4, 0, 0.2, 1);
 }
+.faq-section .faq-a > * { min-height: 0; }
 .faq-section .faq-a-inner {
   padding: 0 0 28px;
   font-size: 15.5px;
@@ -1805,7 +1875,7 @@ btn-request-a-demo{
 }
 .faq-section .faq-a-inner p:not(:last-child) { margin-bottom: 12px; }
 .faq-section .faq-a-inner strong { color: var(--ink); font-weight: 600; }
-.faq-section .faq-item.open .faq-a { max-height: 500px; }
+.faq-section .faq-item.open .faq-a { grid-template-rows: 1fr; }
 
 .trust {
   padding: 96px 0;
@@ -1832,6 +1902,10 @@ btn-request-a-demo{
   margin-bottom: 6px;
   line-height: 1;
 }
+/* Stat values render as one colour: the number and its unit/affix must match.
+   CountUp wraps the number in a <span>, so colouring the span separately split
+   the two apart (purple number, dark unit). Colour the whole value instead. */
+.trust-stat-value,
 .trust-stat-value span { color: var(--brand-500); }
 .trust-stat-label {
   font-size: 13px;
@@ -1869,7 +1943,7 @@ btn-request-a-demo{
 .diff-card {
   background: var(--paper); border: 1px solid var(--slate-200);
   border-radius: var(--radius-lg); padding: 34px 30px;
-  transition: all 0.3s ease;
+  transition: none;
 }
 .diff-card:hover { border-color: var(--brand-300); transform: translateY(-3px); box-shadow: var(--shadow-md); }
 .diff-ic {
@@ -1954,7 +2028,7 @@ btn-request-a-demo{
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-xl);
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: none;
   display: flex;
   flex-direction: column;
 }
@@ -2046,7 +2120,7 @@ btn-request-a-demo{
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-lg);
   padding: 36px;
-  transition: all 0.2s;
+  transition: none;
 }
 .princ:hover {
   border-color: var(--brand-300);
@@ -2130,7 +2204,7 @@ btn-request-a-demo{
   line-height: 1;
   margin-bottom: 6px;
 }
-.compat-stat-num span { color: var(--brand-300); }
+.compat-stat-num span { color: inherit; }
 .compat-stat-label {
   font-size: 12.5px;
   color: rgba(255,255,255,0.60);
@@ -2461,7 +2535,7 @@ btn-request-a-demo{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  transition: none;
   padding: 0;
 }
 .step-btn:hover:not(:disabled) {
@@ -2506,7 +2580,7 @@ btn-request-a-demo{
   inset: 0;
   background: var(--slate-300);
   border-radius: 100px;
-  transition: background 0.25s ease;
+  transition: none;
 }
 .toggle-slider::before {
   content: '';
@@ -2515,7 +2589,7 @@ btn-request-a-demo{
   top: 3px; left: 3px;
   background: var(--paper);
   border-radius: 50%;
-  transition: transform 0.25s ease;
+  transition: none;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 .calc-toggle input:checked ~ .toggle-slider {
@@ -2621,7 +2695,7 @@ btn-request-a-demo{
   letter-spacing: -0.02em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  transition: transform 0.25s ease;
+  transition: none;
 }
 .summary-total .amount.bump {
   transform: scale(1.05);
@@ -2662,7 +2736,7 @@ btn-request-a-demo{
   font-weight: 600;
   text-decoration: none;
   font-size: 15px;
-  transition: all 0.2s ease;
+  transition: none;
 }
 .summary-cta:hover {
   background: var(--brand-500);
@@ -2688,7 +2762,7 @@ btn-request-a-demo{
   padding: 32px 28px;
   display: flex;
   flex-direction: column;
-  transition: all 0.3s ease;
+  transition: none;
   position: relative;
 }
 .price-card:hover {
@@ -2848,7 +2922,7 @@ btn-request-a-demo{
   display: flex;
   flex-direction: column;
   gap: 12px;
-  transition: all 0.25s ease;
+  transition: none;
   position: relative;
   overflow: hidden;
 }
@@ -2860,7 +2934,7 @@ btn-request-a-demo{
   background: var(--brand-500);
   transform: scaleX(0);
   transform-origin: left center;
-  transition: transform 0.3s ease;
+  transition: none;
 }
 .addon-card:hover {
   border-color: var(--brand-300);
@@ -3056,6 +3130,18 @@ btn-request-a-demo{
   gap: 6px;
   font-weight: 600;
 }
+/* Cells with no explicit tone. These previously rendered as a bare text node,
+   so in a row where only some cells were toned the untoned figures fell back to
+   plain body colour and read as a different treatment — the colour
+   inconsistency raised in the Aug 2026 feedback.
+   The wrapper now gives every cell the same box as a toned one (so icon
+   alignment and spacing match); colour is deliberately left inherited so a
+   table with no tones at all stays fully legible rather than turning grey. */
+.psec .compare-table .check-default {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .compare-foot {
   padding: 22px 24px;
   background: var(--slate-50);
@@ -3097,7 +3183,7 @@ btn-request-a-demo{
   display: flex;
   flex-direction: column;
   gap: 22px;
-  transition: all 0.3s ease;
+  transition: none;
   position: relative;
 }
 .testimonial:hover {
@@ -3175,8 +3261,9 @@ btn-request-a-demo{
   line-height: 1;
 }
 .psec.dark .trust-stat .num .prefix,
-.psec.dark .trust-stat .num .suffix {
-  color: var(--brand-400);
+.psec.dark .trust-stat .num .suffix,
+.psec.dark .trust-stat .num span {
+  color: inherit;
 }
 .psec.dark .trust-stat .lbl {
   margin-top: 10px;
@@ -3196,7 +3283,7 @@ btn-request-a-demo{
   border-radius: 14px;
   margin-bottom: 12px;
   overflow: hidden;
-  transition: all 0.2s ease;
+  transition: none;
 }
 .psec .faq-item:hover {
   border-color: var(--brand-200, var(--brand-100));
@@ -3225,21 +3312,42 @@ btn-request-a-demo{
   background-position: center;
   background-size: 14px;
   background-repeat: no-repeat;
-  transition: transform 0.25s ease;
+  transition: transform 0.3s ease;
 }
-.psec .faq-item[open] summary::after {
+.psec .faq-item.is-open summary::after {
   transform: rotate(180deg);
 }
-.psec .faq-item[open] {
+.psec .faq-item.is-open {
   border-color: var(--brand-300);
   box-shadow: 0 8px 24px -12px rgba(91,108,255,0.18);
 }
+/* Smooth open/close for the native <details> FAQ.
+   <details> has no animatable state, so the answer is wrapped in a grid whose
+   row track animates 0fr -> 1fr. The inner padding lives on a child so it is
+   clipped while collapsed instead of holding the panel open. */
 .psec .faq-answer {
-  padding: 0 26px 22px;
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.34s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 14.5px;
   line-height: 1.7;
   color: var(--slate-600);
 }
+/* The grid child must be able to collapse to zero: min-height:0 handles the
+   intrinsic floor, and the padding lives inside it (not on it) so it is clipped
+   by overflow:hidden while collapsed rather than propping the panel open. */
+/* The grid child must collapse to zero, so it carries no padding of its own —
+   min-height:0 removes the intrinsic floor and the spacing is applied to the
+   content inside it, where overflow:hidden can clip it while collapsed. */
+.psec .faq-answer > .faq-answer-inner {
+  min-height: 0;
+  padding: 0;
+}
+.psec .faq-item.is-open .faq-answer { grid-template-rows: 1fr; }
+.psec .faq-answer-inner > * { margin-left: 26px; margin-right: 26px; }
+.psec .faq-answer-inner > :first-child { margin-top: 0; }
+.psec .faq-answer-inner > :last-child { margin-bottom: 22px; }
 .psec .faq-answer p { margin: 0 0 10px; }
 .psec .faq-answer p:last-child { margin-bottom: 0; }
 .psec .faq-answer a {
@@ -3489,7 +3597,7 @@ btn-request-a-demo{
   cursor: text;
   outline: 1px dashed transparent;
   outline-offset: 4px;
-  transition: outline-color 0.14s ease, background-color 0.14s ease;
+  transition: none;
 }
 
 .cms-inline-active [data-cms-editable='true']:hover {

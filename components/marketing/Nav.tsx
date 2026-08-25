@@ -54,7 +54,7 @@ export default function Nav({ settings = DEFAULT_SITE_SETTINGS }: { settings?: S
             </li>
           ))}
         </ul>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div className="nav-actions">
           <Link href="/sign-in" className="nav-signin">Sign In</Link>
           <Link href={cta.href} className="nav-cta" {...siteEditAttrs("nav_cta.label", "Nav CTA", "link", { "data-cms-href-path": "nav_cta.href" })}>{cta.label}</Link>
           <button

@@ -1,3 +1,4 @@
+import { Reveal } from "@/components/marketing/Reveal";
 import type { Metadata } from "next";
 import Link from "next/link";
 import SectionRenderer from "@/components/cms/SectionRenderer";
@@ -23,20 +24,20 @@ export default async function HardwarePage() {
     <>
       <section className="page-head">
         <div className="wrap">
-          <div className="eyebrow reveal in">Hardware</div>
-          <h1 className="reveal in" style={{ transitionDelay: ".1s" }}>Run on the gear that fits your floor.</h1>
-          <p className="lede reveal in" style={{ transitionDelay: ".2s" }}>DEXA is hardware-agnostic by design. iPad, Android, Castles, Dejavoo, Star Micronics, Landi — mix and match. No mandatory devices, no multi-year leases.</p>
+          <Reveal as="div" className="eyebrow reveal">Hardware</Reveal>
+          <Reveal as="h1" className="reveal" style={{ transitionDelay: ".1s" }}>Run on the gear that fits your floor.</Reveal>
+          <Reveal as="p" className="lede reveal" style={{ transitionDelay: ".2s" }}>DEXA is hardware-agnostic by design. iPad, Android, Castles, Dejavoo, Star Micronics, Landi — mix and match. No mandatory devices, no multi-year leases.</Reveal>
         </div>
       </section>
 
       <section className="hw-cats">
         <div className="wrap">
-          <div className="section-head reveal in">
+          <Reveal as="div" className="section-head reveal">
             <div className="section-eyebrow">What you&apos;ll need</div>
             <h2 className="section-title">Four categories. Endless flexibility.</h2>
-          </div>
+          </Reveal>
 
-          <div className="hw-grid reveal-stagger in">
+          <Reveal as="div" className="hw-grid reveal-stagger">
             <div className="hw-card">
               <div className="hw-image" style={{ backgroundImage: "url('/dexa-pos-terminals.png')" }}></div>
               <div className="hw-body">
@@ -91,18 +92,18 @@ export default async function HardwarePage() {
                 </div>
               </div>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       <section className="principles">
         <div className="wrap">
-          <div className="section-head reveal in">
+          <Reveal as="div" className="section-head reveal">
             <div className="section-eyebrow">How it works</div>
             <h2 className="section-title">Three principles that keep your hardware reliable.</h2>
-          </div>
+          </Reveal>
 
-          <div className="princ-grid reveal-stagger in">
+          <Reveal as="div" className="princ-grid reveal-stagger">
             <div className="princ">
               <div className="princ-icon">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 8.5C5 5.5 9 4 12 4s7 1.5 10 4.5" /><path d="M5 12c2-2 4.5-3 7-3s5 1 7 3" /><path d="M8 15.5c1-1 2.5-1.5 4-1.5s3 0.5 4 1.5" /><circle cx="12" cy="19" r="1.5" fill="currentColor" /></svg>
@@ -124,13 +125,13 @@ export default async function HardwarePage() {
               <h3>Cloud sync</h3>
               <p>Terminals replicate to the cloud over secure connections, but the device is authoritative locally. You&apos;ll never lose a transaction to a network outage.</p>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
       <section className="compat">
         <div className="wrap">
-          <div className="compat-card reveal in">
+          <Reveal as="div" className="compat-card reveal">
             <div>
               <h3>Already own gear? You probably keep most of it.</h3>
               <p>Send us a list of your current hardware. We&apos;ll come back with a compatibility report within one business day. Most operators reuse 60–80% of their existing gear when migrating to DEXA.</p>
@@ -157,7 +158,7 @@ export default async function HardwarePage() {
                 <div className="compat-stat-label">Compat report</div>
               </div>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
