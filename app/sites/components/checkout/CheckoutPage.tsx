@@ -25,6 +25,7 @@ import { isValidPhone, normalizePhone } from "@/lib/phone";
 import { PlaceOrderButton } from "./PlaceOrderButton";
 import { OrderConfirmation } from "./OrderConfirmation";
 import { PaymentCardForm, type PaymentCardFormHandle } from "./PaymentCardForm";
+import { PassageCheckout } from "@/lib/payments/valor/passageClient";
 import { ConfirmDialog } from "../ConfirmDialog";
 import {
   type PlaceOrderItem,
@@ -202,6 +203,13 @@ export function CheckoutPage({
   // Payment
   const paymentFormRef = useRef<PaymentCardFormHandle>(null);
   const [tokenizationKey, setTokenizationKey] = useState<string | null>(null);
+  // [C3] Valor Passage.js bootstrap — the storefront rail. The NMI tokenizationKey
+  // above is dormant, populated only under the PAYMENTS_FORCE_NMI kill switch.
+  const [valorBootstrap, setValorBootstrap] = useState<{
+    clientToken: string;
+    epi: string;
+    isDemo: boolean;
+  } | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [payCashInStore, setPayCashInStore] = useState(false);
 
@@ -256,6 +264,7 @@ export function CheckoutPage({
 
     setPaymentError(null);
     setTokenizationKey(null);
+    setValorBootstrap(null);
     fetch(`${SUPABASE_URL}/functions/v1/process-online-payment`, {
       method: "POST",
       headers: {
@@ -268,13 +277,22 @@ export function CheckoutPage({
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.success && data.provider === "nmi") {
+        if (data.success && data.provider === "valor") {
+          // Valor is the storefront rail: Passage.js client token + EPI.
+          setValorBootstrap({
+            clientToken: data.client_token,
+            epi: data.epi,
+            isDemo: Boolean(data.is_demo),
+          });
+        } else if (data.success && data.provider === "nmi") {
+          // Dormant NMI path (PAYMENTS_FORCE_NMI kill switch).
           setTokenizationKey(data.tokenization_key ?? null);
         } else {
           setTokenizationKey(null);
+          setValorBootstrap(null);
           // Don't show error if payment simply isn't configured — just hide the form
           if (data.error?.includes("not configured")) {
-            console.log("NMI payment not configured for this store");
+            console.log("Online payment not configured for this store");
           } else {
             setPaymentError(data.error || "Failed to initialize payment.");
           }
@@ -282,6 +300,7 @@ export function CheckoutPage({
       })
       .catch(() => {
         setTokenizationKey(null);
+        setValorBootstrap(null);
         setPaymentError("Failed to connect to payment service.");
       });
   }, [storeConfigId]);
@@ -375,17 +394,26 @@ export function CheckoutPage({
     handlePlaceOrder();
   };
 
-  const handlePlaceOrder = async () => {
+  const handlePlaceOrder = async (valorToken?: string) => {
     const { sessionToken } = useSession.getState();
 
     setLoading(true);
     setPaymentError(null);
 
-    // Step 1: Tokenize card via NMI (skip if no tokenization key — test mode, or cash payment)
+    // Step 1: Obtain the card token. Valor (storefront rail) hands us the token
+    // from Passage.js via onTokenReceived; NMI (dormant kill-switch) tokenizes
+    // imperatively here. Cash needs no token.
     let paymentToken: string | undefined;
     let paymentCardType: string | null = null;
     let paymentCardLastFour: string | null = null;
-    if (tokenizationKey && !payCashInStore) {
+    if (!payCashInStore && valorBootstrap) {
+      if (!valorToken) {
+        setLoading(false);
+        setPaymentError("Please complete your card details.");
+        return;
+      }
+      paymentToken = valorToken;
+    } else if (!payCashInStore && tokenizationKey) {
       try {
         if (!paymentFormRef.current) {
           throw new Error("Payment form not ready. Please wait a moment.");
@@ -707,7 +735,10 @@ export function CheckoutPage({
   const storeIsClosed = _storeOpenEarly === false;
   const zoneBlocked = orderType === "delivery" && selectedAddressId === "new" && zoneCheckState === "invalid";
   const paymentMethodReady =
-    !config?.acceptOnlinePayments || payCashInStore || Boolean(tokenizationKey);
+    !config?.acceptOnlinePayments ||
+    payCashInStore ||
+    Boolean(tokenizationKey) ||
+    Boolean(valorBootstrap);
   const canPlaceOrder =
     firstName.trim().length > 0 &&
     emailValid &&
@@ -866,7 +897,42 @@ export function CheckoutPage({
                     />
                   </div>
                 )}
-                {!payCashInStore && (
+                {!payCashInStore && valorBootstrap && (
+                  <PassageCheckout
+                    clientToken={valorBootstrap.clientToken}
+                    epi={valorBootstrap.epi}
+                    isDemo={valorBootstrap.isDemo}
+                    formAction="/api/valor/passage-callback"
+                    submitText={`Pay $${total.toFixed(2)}`}
+                    onTokenReceived={({ token }) => {
+                      // Passage owns the Pay button, so it can fire before the rest
+                      // of the form is valid — guard, then charge with the token.
+                      if (!canPlaceOrder) {
+                        setPaymentError(
+                          "Please complete your contact and order details above, then tap Pay again."
+                        );
+                        return;
+                      }
+                      void handlePlaceOrder(token);
+                    }}
+                    onError={(e) =>
+                      setPaymentError(e.message ?? "Payment error. Please try again.")
+                    }
+                    unavailableFallback={
+                      <div
+                        className="p-3 rounded-lg text-sm"
+                        style={{
+                          backgroundColor: "color-mix(in srgb, #f59e0b 12%, var(--bg))",
+                          color: "var(--text)",
+                          border: "1px solid #f59e0b",
+                        }}
+                      >
+                        Payment is temporarily unavailable. Please refresh and try again.
+                      </div>
+                    }
+                  />
+                )}
+                {!payCashInStore && !valorBootstrap && tokenizationKey && (
                   <PaymentCardForm
                     ref={paymentFormRef}
                     tokenizationKey={tokenizationKey}
@@ -1006,16 +1072,18 @@ export function CheckoutPage({
                 promoCode={appliedPromo?.code}
                 pricingDisclosureText={pricingDisclosureText}
               />
-              <div className="pt-2">
-                <PlaceOrderButton
-                  layout="inline"
-                  total={total}
-                  loading={loading}
-                  disabled={!canPlaceOrder}
-                  onClick={handleCheckout}
-                  isTestMode={!tokenizationKey && !payCashInStore}
-                />
-              </div>
+              {(payCashInStore || !valorBootstrap) && (
+                <div className="pt-2">
+                  <PlaceOrderButton
+                    layout="inline"
+                    total={total}
+                    loading={loading}
+                    disabled={!canPlaceOrder}
+                    onClick={handleCheckout}
+                    isTestMode={!tokenizationKey && !valorBootstrap && !payCashInStore}
+                  />
+                </div>
+              )}
             </div>
           </aside>
         </div>
@@ -1027,7 +1095,7 @@ export function CheckoutPage({
           loading={loading}
           disabled={!canPlaceOrder}
           onClick={handleCheckout}
-          isTestMode={!tokenizationKey && !payCashInStore}
+          isTestMode={!tokenizationKey && !valorBootstrap && !payCashInStore}
           layout="fixed"
         />
       </div>

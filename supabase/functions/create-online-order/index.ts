@@ -26,6 +26,7 @@ import {
 import {
   createSale,
 } from '../_shared/nmi.ts'
+import { createSale as valorCreateSale } from '../_shared/valor.ts'
 import { sendOnlineOrderPaymentEmail } from '../_shared/payment-emails.ts'
 // ============================================================================
 // ENV
@@ -879,8 +880,91 @@ Deno.serve(async (req: Request): Promise<Response> => {
     null
   let storefrontPaymentConfig: StorefrontPaymentConfig | null = null
   let nmiDeviceCredential: NmiDeviceCredential | null = null
+  // [C3] Valor is the storefront rail (hard-replaces NMI). The NMI resolution
+  // below is dormant and only reached under the PAYMENTS_FORCE_NMI kill switch.
+  let valorCredential: { appId: string; appKey: string; epi: string } | null = null
+  let valorAccountId: string | null = null
+  const forceNmi = Deno.env.get('PAYMENTS_FORCE_NMI') === 'true'
 
-  if (!payCashInStore) {
+  if (!payCashInStore && !forceNmi) {
+    // Resolve the merchant/location's active primary Valor online_order account.
+    const { data: valorRows, error: valorResolveError } = await supabase.rpc(
+      'get_storefront_valor_account',
+      {
+        p_location_id: locationId,
+        p_merchant_id: merchantId,
+      },
+    )
+
+    if (valorResolveError) {
+      logError('PAYMENT_CONFIG', 'Failed to resolve Valor account', valorResolveError)
+      return errorResponse(
+        'Payment configuration is unavailable for this store.',
+        'payment_not_configured',
+        503,
+      )
+    }
+
+    const valorAccount =
+      ((valorRows as Array<{ account_id: string; has_credentials: boolean }> | null) ?? [])[0] ??
+        null
+
+    // Fail closed — no NMI fallback. A store not yet boarded + cut over to Valor
+    // cannot take card online; the storefront hides the card form.
+    if (!valorAccount || !valorAccount.has_credentials) {
+      logError('PAYMENT', 'No provisioned Valor account for this store', {
+        storeConfigId,
+        locationId,
+        merchantId,
+      })
+      return errorResponse(
+        'Online payment is not configured for this store. Please contact the store.',
+        'payment_not_configured',
+        503,
+      )
+    }
+
+    // Decrypt the per-EPI credentials (app key leaves Vault only here, server-side).
+    const { data: credRows, error: credError } = await supabase.rpc(
+      'get_valor_account_credentials',
+      {
+        p_account_id: valorAccount.account_id,
+      },
+    )
+
+    const cred =
+      ((credRows as Array<{
+        valor_appid: string
+        valor_epi: string
+        decrypted_appkey: string
+      }> | null) ?? [])[0] ?? null
+
+    if (credError || !cred?.decrypted_appkey) {
+      logError('PAYMENT_DEVICE', 'Failed to decrypt Valor credentials', credError)
+      return errorResponse(
+        'Payment configuration is unavailable for this store.',
+        'payment_not_configured',
+        503,
+      )
+    }
+
+    valorCredential = { appId: cred.valor_appid, appKey: cred.decrypted_appkey, epi: cred.valor_epi }
+    valorAccountId = valorAccount.account_id
+
+    // Best-effort credential-access audit (merchant-scoped; Valor has no device).
+    await supabase.from('merchant_payment_credential_access_log').insert({
+      merchant_id: merchantId,
+      function_name: 'create-online-order',
+      store_config_id: storeConfigId,
+      actor_user_id: null,
+      metadata: {
+        source: 'storefront_order_submit',
+        provider: 'valor',
+        valor_account_id: valorAccountId,
+        order_type: body.order_type,
+      },
+    })
+  } else if (!payCashInStore) {
     const { data: paymentConfigRows, error: paymentConfigError } = await supabase.rpc(
       'get_storefront_payment_config',
       {
@@ -1071,19 +1155,81 @@ Deno.serve(async (req: Request): Promise<Response> => {
     },
   }
 
-  // ---- Step 10: Charge card payment via NMI ----
-  let nmiChargeDetails: {
+  // ---- Step 10: Charge card payment ----
+  let chargeDetails: {
     transactionId: string
     responseCode: string
     responseMessage: string
     authCode: string
+    rrn: string | null
     cardType: string
     cardLastFour: string
     gatewayFee: number | null
     rawResponse: Record<string, unknown>
   } | null = null
+  let chargedViaValor = false
 
-  if (!payCashInStore && effectivePaymentToken) {
+  if (!payCashInStore && effectivePaymentToken && valorCredential) {
+    // [C3] Charge the Passage.js token via Valor (Direct Sale Token). This runs
+    // AFTER all validation (Steps 3-7) and BEFORE order creation (Step 11): a
+    // decline/error returns here, so no order and no orphaned charge.
+    logEvent('PAYMENT', 'Charging payment token via Valor', {
+      merchantId,
+      referenceId: transactionReferenceId,
+      totalCents,
+    })
+
+    // amount is the grand total (subtotal+tax+tip+delivery+fee); tip/tax ride
+    // along as breakdown. productLines are omitted (charge is amount-driven).
+    const chargeResult = await valorCreateSale(valorCredential, {
+      amountMinor: Math.round(totalCents),
+      token: effectivePaymentToken,
+      invoiceNumber: transactionReferenceId,
+      productLines: [],
+      tipMinor: Math.round(tipCents),
+      taxMinor: Math.round(taxCents),
+      cardholderName: customerName,
+      email: customerEmail ?? undefined,
+      phone: customerPhone ?? undefined,
+      orderDescription: `Online order ${transactionReferenceId}`,
+    })
+
+    if (!chargeResult.success) {
+      const isTransportError = chargeResult.outcome === 'error'
+      const declineMessage = chargeResult.details.responseText
+
+      logError('PAYMENT_CHARGE', 'Valor card charge failed', {
+        outcome: chargeResult.outcome,
+        status: chargeResult.status,
+        details: chargeResult.details,
+      })
+      return errorResponse(
+        declineMessage,
+        isTransportError ? 'payment_gateway_error' : 'payment_declined',
+        isTransportError ? 502 : 402,
+        { responseCode: chargeResult.details.responseCode, responseMessage: declineMessage }
+      )
+    }
+
+    chargedViaValor = true
+    chargeDetails = {
+      transactionId: chargeResult.details.transactionId,
+      responseCode: chargeResult.details.responseCode || '00',
+      responseMessage: chargeResult.details.responseText || 'Approved',
+      authCode: chargeResult.details.authCode,
+      rrn: chargeResult.details.rrn || null,
+      cardType: body.payment_card_type || '',
+      cardLastFour: body.payment_card_last_four || '',
+      gatewayFee: null,
+      rawResponse: chargeResult.body,
+    }
+
+    logEvent('PAYMENT', 'Card charged successfully (Valor)', {
+      transactionId: chargeDetails.transactionId,
+      authCode: chargeDetails.authCode,
+    })
+  } else if (!payCashInStore && effectivePaymentToken) {
+    // NMI charge path — dormant; only reached under the PAYMENTS_FORCE_NMI kill switch.
     logEvent('PAYMENT', 'Charging payment token via NMI', {
       merchantId,
       referenceId: transactionReferenceId,
@@ -1120,11 +1266,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       )
     }
 
-    nmiChargeDetails = {
+    chargeDetails = {
       transactionId: chargeResult.details.transactionId || chargeResult.details.id,
       responseCode: chargeResult.details.responseCode || chargeResult.details.response,
       responseMessage: chargeResult.details.responseText || 'Approved',
       authCode: chargeResult.details.authCode,
+      rrn: null,
       cardType: body.payment_card_type || '',
       cardLastFour: body.payment_card_last_four || '',
       gatewayFee: chargeResult.details.gatewayFee,
@@ -1132,9 +1279,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     logEvent('PAYMENT', 'Card charged successfully', {
-      transactionId: nmiChargeDetails.transactionId,
-      authCode: nmiChargeDetails.authCode,
-      responseCode: nmiChargeDetails.responseCode,
+      transactionId: chargeDetails.transactionId,
+      authCode: chargeDetails.authCode,
+      responseCode: chargeDetails.responseCode,
     })
   }
 
@@ -1297,34 +1444,35 @@ Deno.serve(async (req: Request): Promise<Response> => {
     : {
         payment_method: 'card',
         status: 'captured',
-        terminal_type: 'none',
-        card_type: nmiChargeDetails?.cardType || body.payment_card_type || null,
-        card_last_four: nmiChargeDetails?.cardLastFour || body.payment_card_last_four || null,
-        transaction_id: nmiChargeDetails?.transactionId || null,
+        terminal_type: chargedViaValor ? 'valor' : 'none',
+        card_type: chargeDetails?.cardType || body.payment_card_type || null,
+        card_last_four: chargeDetails?.cardLastFour || body.payment_card_last_four || null,
+        transaction_id: chargeDetails?.transactionId || null,
         reference_number: transactionReferenceId,
-        authorization_code: nmiChargeDetails?.authCode || null,
-        auth_code: nmiChargeDetails?.authCode || null,
-        rrn: null,
-        result_code: nmiChargeDetails?.responseCode || null,
-        result_message: nmiChargeDetails?.responseMessage || null,
+        authorization_code: chargeDetails?.authCode || null,
+        auth_code: chargeDetails?.authCode || null,
+        rrn: chargeDetails?.rrn ?? null,
+        result_code: chargeDetails?.responseCode || null,
+        result_message: chargeDetails?.responseMessage || null,
         batch_number: null,
         approved_at: new Date().toISOString(),
         captured_at: new Date().toISOString(),
-        processor_name: 'nmi',
-        payment_device_id: storefrontPaymentConfig?.device_id ?? null,
-        processor_response: nmiChargeDetails?.rawResponse ?? null,
+        processor_name: chargedViaValor ? 'valor' : 'nmi',
+        payment_device_id: chargedViaValor ? null : (storefrontPaymentConfig?.device_id ?? null),
+        processor_response: chargeDetails?.rawResponse ?? null,
         terminal_response: null,
-        gateway_fee: nmiChargeDetails?.gatewayFee ?? null,
+        gateway_fee: chargeDetails?.gatewayFee ?? null,
         dejavoo_response_code: null,
         dejavoo_response_message: null,
         dejavoo_batch_number: null,
         dejavoo_invoice_number: null,
         metadata: {
           source: 'online_order',
-          provider: 'nmi',
+          provider: chargedViaValor ? 'valor' : 'nmi',
           provider_order_id: transactionReferenceId,
           payment_status_from_source: 'CAPTURED',
-          payment_device_id: storefrontPaymentConfig?.device_id ?? null,
+          payment_device_id: chargedViaValor ? null : (storefrontPaymentConfig?.device_id ?? null),
+          ...(chargedViaValor && valorAccountId ? { valor_account_id: valorAccountId } : {}),
         },
       }
 
@@ -1447,7 +1595,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     orderNumber: orderResult.order_number,
     displayNumber: orderResult.display_number,
     payCashInStore,
-    charged: !!nmiChargeDetails,
+    charged: !!chargeDetails,
     isQrDineIn,
     customerIdForOrder,
     qrTableLabel: session?.table_label ?? null,

@@ -134,6 +134,12 @@ export async function reconcileNmiOrderPayment(orderPaymentId: string): Promise<
       },
     });
 
+    // [C2] Intentionally NOT routed through the PaymentProcessor interface.
+    // This reconciliation path reads NMI-specific transaction attributes
+    // (`condition`, `gatewayFee`) that have no processor-agnostic equivalent,
+    // and Valor's equivalent reconciliation arrives via webhook projection in
+    // C6 rather than a transaction lookup. Generalizing it here would either
+    // pollute the interface or silently drop data.
     const lookup = await getNmiTransaction(
       { apiKey: credential.decrypted_security_key },
       payment.transaction_id
