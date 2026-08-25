@@ -426,8 +426,7 @@ function MerchantSidebar({ inert }: { inert?: boolean }) {
                     src={userInfo?.members?.[0]?.organizations?.imageURL}
                     alt={userInfo?.members?.[0]?.organizations?.name}
                     fill
-                    objectFit="cover"
-                    className="rounded-lg"
+                    className="rounded-lg object-cover"
                   />
                 ) : (
                   <Store className="h-4 w-4 text-primary-foreground" />
