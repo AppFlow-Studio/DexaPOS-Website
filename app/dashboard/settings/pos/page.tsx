@@ -2,13 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,7 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,7 +33,7 @@ import {
   useGatedLocation,
   useGatedLocationId,
 } from "@/stores/location-store";
-import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
   useLocationPosSettings,
   useSaveLocationPosConfig,
@@ -57,6 +49,13 @@ import {
   type PosUiScale,
   type StationPosConfigOverrides,
 } from "@/lib/pos/pos-config";
+import {
+  LocationIndicator,
+  PageHeader,
+  PageShell,
+  Panel,
+  PanelSection,
+} from "@/components/dashboard/shell";
 
 const INHERIT = "__inherit";
 
@@ -74,7 +73,7 @@ function SettingSwitch({
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border p-4">
+    <div className="flex items-center justify-between gap-4 rounded-xl bg-muted/35 p-4">
       <div className="space-y-1">
         <Label htmlFor={id} className="font-medium">
           {label}
@@ -124,8 +123,7 @@ export default function PosSettingsPage() {
   const selectedLocationId = gatedLocationId ?? "all";
   const isAllLocations = !gatedLocationId;
   const selectedLocation = useGatedLocation();
-  const { data: userInfo } = useUserInfo();
-  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
+  const clerkOrgId = useClerkOrgId();
 
   const {
     data,
@@ -212,45 +210,61 @@ export default function PosSettingsPage() {
 
   if (isAllLocations) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            POS Runtime Settings
-          </h2>
-          <p className="text-muted-foreground">
-            Configure location-level POS behavior and station overrides.
-          </p>
-        </div>
+      <PageShell>
+        <PageHeader
+          title="POS defaults"
+          subtitle="Configure location-level POS behavior and station overrides."
+          indicator={<LocationIndicator isAllLocations locationName={null} />}
+        />
 
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+        <Panel padded>
+          <div className="flex min-h-64 flex-col items-center justify-center text-center">
             <MapPin className="mb-4 h-12 w-12 text-muted-foreground" />
             <h3 className="mb-2 text-lg font-semibold">Select a Location</h3>
             <p className="max-w-md text-muted-foreground">
               POS runtime settings are location-specific. Select a location from
               the dashboard location picker to configure its defaults.
             </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </Panel>
+      </PageShell>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-16 w-full" />
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <Skeleton className="h-[520px] w-full" />
-          <Skeleton className="h-[520px] w-full" />
+      <PageShell>
+        <PageHeader
+          title="POS defaults"
+          subtitle="Loading location behavior and station overrides."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+          <Skeleton className="h-[520px] w-full rounded-3xl" />
+          <Skeleton className="h-[520px] w-full rounded-3xl" />
         </div>
-      </div>
+      </PageShell>
     );
   }
 
   if (isError) {
     return (
-      <div className="space-y-6">
+      <PageShell>
+        <PageHeader
+          title="POS defaults"
+          subtitle="Configure location-level POS behavior and station overrides."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
         <Alert variant="destructive">
           <Settings2 className="h-4 w-4" />
           <AlertTitle>Failed to load POS settings</AlertTitle>
@@ -260,33 +274,39 @@ export default function PosSettingsPage() {
               : "An error occurred while loading POS settings."}
           </AlertDescription>
         </Alert>
-      </div>
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-bold tracking-tight">
-              POS Runtime Settings
-            </h2>
-            <Badge variant="secondary">Location defaults</Badge>
-          </div>
-          <p className="text-muted-foreground">
-            Set POS behavior for{" "}
-            <span className="font-medium">{selectedLocation?.name}</span>, then
-            override only display and sound per station.
-          </p>
-        </div>
-        <Button variant="outline" asChild>
-          <Link href="/dashboard/settings/stations">
-            <Monitor className="mr-2 h-4 w-4" />
-            Manage Stations
-          </Link>
-        </Button>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="POS defaults"
+        subtitle="Set location behavior, then override display and sound only where a station needs it."
+        indicator={
+          <LocationIndicator
+            isAllLocations={false}
+            locationName={selectedLocation?.name}
+          />
+        }
+        actions={
+          <>
+            <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground">
+              Location defaults
+            </Badge>
+            <Button
+              variant="outline"
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              asChild
+            >
+              <Link href="/dashboard/settings/stations">
+                <Monitor className="mr-1.5 h-4 w-4" />
+                Manage Stations
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
       <Alert>
         <Settings2 className="h-4 w-4" />
@@ -299,27 +319,20 @@ export default function PosSettingsPage() {
         </AlertDescription>
       </Alert>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Receipt className="h-5 w-5" />
-                    Receipt & Kitchen Ticket Content
-                  </CardTitle>
-                  <CardDescription>
-                    Runtime content switches shared by every POS station at this
-                    location.
-                  </CardDescription>
-                </div>
-                <Badge variant="outline">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <div className="min-w-0 space-y-6">
+          <Panel>
+            <PanelSection
+              icon={Receipt}
+              label="Receipt & Kitchen Ticket Content"
+              caption="Runtime content switches shared by every POS station at this location."
+              action={
+                <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium tabular-nums text-foreground">
                   v{locationConfig._version ?? 0}
                 </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              }
+            >
+            <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
                 <SettingSwitch
                   id="show-tax-breakdown"
@@ -415,20 +428,16 @@ export default function PosSettingsPage() {
                   placeholder="Thank you for your business."
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            </PanelSection>
+          </Panel>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Payment Behavior
-              </CardTitle>
-              <CardDescription>
-                Shared POS payment and split-payment controls for this location.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          <Panel>
+            <PanelSection
+              icon={CreditCard}
+              label="Payment Behavior"
+              caption="Shared POS payment and split-payment controls for this location."
+            >
               <div className="grid gap-3 md:grid-cols-2">
                 <SettingSwitch
                   id="cash-enabled"
@@ -479,20 +488,16 @@ export default function PosSettingsPage() {
                   }
                 />
               </div>
-            </CardContent>
-          </Card>
+            </PanelSection>
+          </Panel>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Monitor className="h-5 w-5" />
-                Location Display & Notifications
-              </CardTitle>
-              <CardDescription>
-                Defaults inherited by every station unless overridden below.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
+          <Panel>
+            <PanelSection
+              icon={Monitor}
+              label="Location Display & Notifications"
+              caption="Defaults inherited by every station unless overridden below."
+            >
+            <div className="space-y-5">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>UI scale</Label>
@@ -544,8 +549,7 @@ export default function PosSettingsPage() {
                 </div>
               </div>
 
-              <Separator />
-
+              {/* Separation by spacing, not a rule (§5.5). */}
               <SettingSwitch
                 id="notification-sounds"
                 label="Notification sounds"
@@ -613,23 +617,19 @@ export default function PosSettingsPage() {
                   Save Location Defaults
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            </PanelSection>
+          </Panel>
         </div>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings2 className="h-5 w-5" />
-                Station Overrides
-              </CardTitle>
-              <CardDescription>
-                Override only UI scale, theme, and notification settings for a
-                single station.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
+        <div className="min-w-0 space-y-6">
+          <Panel>
+            <PanelSection
+              icon={Settings2}
+              label="Station Overrides"
+              caption="Override only UI scale, theme, and notification settings for a single station."
+            >
+            <div className="space-y-5">
               {data?.stations.length ? (
                 <>
                   <div className="space-y-2">
@@ -655,7 +655,7 @@ export default function PosSettingsPage() {
                   </div>
 
                   {selectedStation && (
-                    <div className="rounded-xl border bg-muted/30 p-4">
+                    <div className="min-w-0 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="font-medium">
@@ -678,8 +678,8 @@ export default function PosSettingsPage() {
                   )}
 
                   <div className="space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
+                    <div className="grid min-w-0 gap-4 2xl:grid-cols-2">
+                      <div className="min-w-0 space-y-2">
                         <Label>UI scale override</Label>
                         <Select
                           value={stationOverrides.display?.uiScale ?? INHERIT}
@@ -694,7 +694,7 @@ export default function PosSettingsPage() {
                             )
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full min-w-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -709,7 +709,7 @@ export default function PosSettingsPage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
+                      <div className="min-w-0 space-y-2">
                         <Label>Theme override</Label>
                         <Select
                           value={stationOverrides.display?.appTheme ?? INHERIT}
@@ -724,7 +724,7 @@ export default function PosSettingsPage() {
                             )
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full min-w-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -850,9 +850,8 @@ export default function PosSettingsPage() {
                     </div>
                   </div>
 
-                  <Separator />
-
-                  <div className="space-y-3 rounded-xl border bg-background p-4">
+                  {/* Separation by spacing and a change of fill (§5.5). */}
+                  <div className="min-w-0 space-y-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                     <div className="flex items-center gap-2 font-medium">
                       <Bell className="h-4 w-4" />
                       Effective station config
@@ -887,9 +886,10 @@ export default function PosSettingsPage() {
                     </div>
                   </div>
 
-                  <div className="flex justify-end gap-2">
+                  <div className="flex flex-col gap-2 2xl:flex-row 2xl:justify-end">
                     <Button
                       variant="outline"
+                      className="w-full 2xl:w-auto"
                       disabled={!stationIsDirty || saveStationMutation.isPending}
                       onClick={() => {
                         const next = normalizeStationOverrides(
@@ -903,6 +903,7 @@ export default function PosSettingsPage() {
                       Reset
                     </Button>
                     <Button
+                      className="w-full 2xl:w-auto"
                       disabled={!stationIsDirty || saveStationMutation.isPending}
                       onClick={handleSaveStation}
                     >
@@ -916,35 +917,34 @@ export default function PosSettingsPage() {
                   </div>
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-8 text-center">
+                <div className="flex min-w-0 flex-col items-center justify-center rounded-2xl border-0 bg-muted/60 p-8 text-center shadow-none">
                   <Monitor className="mb-3 h-10 w-10 text-muted-foreground" />
                   <h3 className="font-semibold">No stations configured</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Create stations first, then return here to add per-station
                     display and sound overrides.
                   </p>
-                  <Button className="mt-4" asChild>
+                  <Button
+                    className="mt-4 h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                    asChild
+                  >
                     <Link href="/dashboard/settings/stations">
                       Create Station
                     </Link>
                   </Button>
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+            </PanelSection>
+          </Panel>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Volume2 className="h-5 w-5" />
-                V1 Scope
-              </CardTitle>
-              <CardDescription>
-                These are the controls implemented in the web part of this
-                ticket.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <Panel>
+            <PanelSection
+              icon={Volume2}
+              label="V1 Scope"
+              caption="These are the controls implemented in the web part of this ticket."
+            >
+            <div className="space-y-2 text-sm text-muted-foreground">
               <p>
                 Location-wide: receipt/ticket content, payment methods, split
                 payments, UI defaults, and notification defaults.
@@ -957,10 +957,11 @@ export default function PosSettingsPage() {
                 Hardware assignment, terminal pairing, drawer assignment, and
                 printer routing remain in the existing station settings screens.
               </p>
-            </CardContent>
-          </Card>
+            </div>
+            </PanelSection>
+          </Panel>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

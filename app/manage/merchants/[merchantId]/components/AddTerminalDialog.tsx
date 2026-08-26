@@ -13,12 +13,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Loader2, CreditCard, Eye, EyeOff } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useAdminCreateTerminal } from '@/lib/queries/use-admin-stations'
-import type { CreatePaymentTerminalInput, TerminalType, ApiEnvironment } from '@/app/manage/actions/admin-merchant/payment-terminals'
+import type { CreatePaymentTerminalInput, TerminalType } from '@/app/manage/actions/admin-merchant/payment-terminals'
 import type { Station } from '@/app/manage/actions/admin-merchant/stations'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 
 interface AddTerminalDialogProps {
     open: boolean
@@ -30,17 +29,17 @@ interface AddTerminalDialogProps {
 
 const UNASSIGNED_STATION = '__unassigned__'
 
+const terminalTypeLabel = (type: TerminalType): string =>
+    type === 'valor' ? 'Valor' : 'Castles'
+
 export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, stations }: AddTerminalDialogProps) {
     // Form state
     const [selectedLocationId, setSelectedLocationId] = useState<string>('')
     const [selectedStationId, setSelectedStationId] = useState<string>(UNASSIGNED_STATION)
     const [terminalName, setTerminalName] = useState('')
-    const [terminalType, setTerminalType] = useState<TerminalType>('dejavoo')
-    const [authKey, setAuthKey] = useState('')
-    const [registerId, setRegisterId] = useState('')
-    const [apiEnvironment, setApiEnvironment] = useState<ApiEnvironment>('sandbox')
-    const [signatureThreshold, setSignatureThreshold] = useState(25)
-    const [showAuthKey, setShowAuthKey] = useState(false)
+    const [terminalType, setTerminalType] = useState<TerminalType>('castles')
+    const [serialNumber, setSerialNumber] = useState('')
+    const [valorEpi, setValorEpi] = useState('')
 
     // Mutations
     const createTerminalMutation = useAdminCreateTerminal()
@@ -56,12 +55,9 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
             setSelectedLocationId('')
             setSelectedStationId(UNASSIGNED_STATION)
             setTerminalName('')
-            setTerminalType('dejavoo')
-            setAuthKey('')
-            setRegisterId('')
-            setApiEnvironment('sandbox')
-            setSignatureThreshold(25)
-            setShowAuthKey(false)
+            setTerminalType('castles')
+            setSerialNumber('')
+            setValorEpi('')
         }
     }, [open])
 
@@ -71,27 +67,22 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
     }, [selectedLocationId])
 
     const handleSubmit = async () => {
-        if (!selectedLocationId || !terminalName || !registerId || !authKey) {
-            toast.error('Please fill in all required fields')
+        if (!selectedLocationId || !terminalName.trim()) {
+            toast.error('Please choose a location and enter a terminal name')
             return
         }
 
         const input: CreatePaymentTerminalInput = {
             location_id: selectedLocationId,
             station_id: selectedStationId === UNASSIGNED_STATION ? null : selectedStationId,
-            terminal_name: terminalName,
+            terminal_name: terminalName.trim(),
             terminal_type: terminalType,
-            auth_key: authKey,
-            register_id: registerId,
-            api_environment: apiEnvironment,
-            signature_threshold: signatureThreshold,
+            serial_number: serialNumber.trim() || null,
+            ...(terminalType === 'valor' ? { valor_epi: valorEpi.trim() || null } : {}),
         }
 
         try {
-            const result = await createTerminalMutation.mutateAsync({
-                merchantId,
-                input,
-            })
+            const result = await createTerminalMutation.mutateAsync({ merchantId, input })
 
             if (result.success) {
                 toast.success('Payment terminal created successfully')
@@ -99,28 +90,21 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
             } else {
                 toast.error(result.error || 'Failed to create terminal')
             }
-        } catch (error) {
+        } catch {
             toast.error('Failed to create terminal')
         }
     }
 
-    const canSubmit = selectedLocationId && terminalName.trim() && registerId.trim() && authKey.trim()
+    const canSubmit = Boolean(selectedLocationId && terminalName.trim())
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="w-[calc(100%-1rem)] sm:max-w-[560px] max-h-[92vh] overflow-hidden gap-0 p-0">
                 <DialogHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-amber-50/60 px-6 pt-6 pb-4">
-                    <div className="flex items-start gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 text-amber-700">
-                            <CreditCard className="h-6 w-6" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <DialogTitle className="text-xl">Add Payment Terminal</DialogTitle>
-                            <DialogDescription className="mt-1">
-                                Connect a card terminal to a location and optionally link it to a station.
-                            </DialogDescription>
-                        </div>
-                    </div>
+                    <DialogTitle className="text-xl">Add Payment Terminal</DialogTitle>
+                    <DialogDescription className="mt-1">
+                        Connect a card terminal to a location and optionally link it to a station.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-5 overflow-y-auto px-6 py-5 max-h-[calc(92vh-176px)]">
@@ -148,13 +132,10 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                             </div>
                             <div>
                                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                    Environment
+                                    Type
                                 </p>
-                                <p className={cn(
-                                    'text-sm font-medium',
-                                    apiEnvironment === 'production' ? 'text-amber-700' : 'text-emerald-700'
-                                )}>
-                                    {apiEnvironment === 'production' ? 'Production' : 'Sandbox'}
+                                <p className="text-sm font-medium text-slate-900">
+                                    {terminalTypeLabel(terminalType)}
                                 </p>
                             </div>
                         </div>
@@ -214,81 +195,41 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="dejavoo">Dejavoo</SelectItem>
-                                    <SelectItem value="pax">PAX</SelectItem>
+                                    <SelectItem value="castles">Castles</SelectItem>
+                                    <SelectItem value="valor">Valor</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
 
-                    {/* Register ID & Auth Key */}
+                    {/* Serial Number */}
                     <div className="space-y-2">
-                        <Label htmlFor="register-id">Register ID *</Label>
+                        <Label htmlFor="serial-number">Serial Number</Label>
                         <Input
-                            id="register-id"
-                            placeholder="Register identifier"
-                            value={registerId}
-                            onChange={(e) => setRegisterId(e.target.value)}
+                            id="serial-number"
+                            placeholder="Printed on the terminal (e.g., NCC804380219)"
+                            value={serialNumber}
+                            onChange={(e) => setSerialNumber(e.target.value)}
+                            className="font-mono"
                         />
                         <p className="text-xs text-muted-foreground">
-                            The Register ID provided by your payment processor
+                            Uniquely identifies this physical terminal. Used to track connected devices and reconcile settlements.
                         </p>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="auth-key">Auth Key *</Label>
-                        <div className="relative">
-                            <Input
-                                id="auth-key"
-                                type={showAuthKey ? 'text' : 'password'}
-                                placeholder="Authentication key"
-                                value={authKey}
-                                onChange={(e) => setAuthKey(e.target.value)}
-                                className="pr-10"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowAuthKey(!showAuthKey)}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                            >
-                                {showAuthKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Environment & Threshold */}
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* Valor EPI (Valor only) */}
+                    {terminalType === 'valor' && (
                         <div className="space-y-2">
-                            <Label>API Environment</Label>
-                            <Select value={apiEnvironment} onValueChange={(v) => setApiEnvironment(v as ApiEnvironment)}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="sandbox">Sandbox (Testing)</SelectItem>
-                                    <SelectItem value="production">Production (Live)</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="sig-threshold">Signature Threshold ($)</Label>
+                            <Label htmlFor="valor-epi">Valor EPI</Label>
                             <Input
-                                id="sig-threshold"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                placeholder="25.00"
-                                value={signatureThreshold}
-                                onChange={(e) => setSignatureThreshold(parseFloat(e.target.value) || 0)}
+                                id="valor-epi"
+                                placeholder="Electronic Payment Interface id"
+                                value={valorEpi}
+                                onChange={(e) => setValorEpi(e.target.value)}
+                                className="font-mono"
                             />
-                        </div>
-                    </div>
-
-                    {/* Warning for Production */}
-                    {apiEnvironment === 'production' && (
-                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-                            <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                                <strong>Warning:</strong> You are configuring a production terminal. Real transactions will be processed.
+                            <p className="text-xs text-muted-foreground">
+                                The device EPI Valor sends on its auto-batch webhook. Required to record this terminal&apos;s settlements automatically.
                             </p>
                         </div>
                     )}

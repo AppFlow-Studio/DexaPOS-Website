@@ -20,7 +20,7 @@ export function ItemSummaryCard({ itemId, item }: ItemSummaryCardProps) {
 
   return (
     <div className="sticky top-6 space-y-3">
-      <div className="overflow-hidden rounded-lg border bg-background">
+      <div className="overflow-hidden rounded-2xl border bg-card">
         <div className="aspect-[4/3] w-full bg-muted/40">
           {isValidImageUrl(item?.image) ? (
             <img
@@ -46,7 +46,7 @@ export function ItemSummaryCard({ itemId, item }: ItemSummaryCardProps) {
         </div>
       </div>
 
-      <div className="space-y-2 rounded-lg border bg-background p-3">
+      <div className="space-y-2 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Effective price
         </p>
@@ -73,7 +73,7 @@ export function ItemSummaryCard({ itemId, item }: ItemSummaryCardProps) {
         </Button>
       </div>
 
-      <div className="space-y-2 rounded-lg border bg-background p-3">
+      <div className="space-y-2 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Categories</span>
           <Badge variant="secondary" className="text-[10px]">

@@ -386,8 +386,13 @@ function mapRpcMenuToStorefront(rpcMenu: any): StorefrontMenu | null {
             modifier_groups: modifierGroups,
             allergens: allergens.length ? allergens : undefined,
             dietary_tags: dietaryTags.length ? dietaryTags : undefined,
-            is_new: mi.is_new === true,
-            is_popular: mi.is_popular === true,
+            // Emitted top-level by get_menu_with_categories() as of migration
+            // 20260728120000. The location_override fallback covers an older
+            // RPC revision that only nested is_popular there, so the storefront
+            // keeps working regardless of app/DB deploy ordering.
+            is_new: (mi.is_new ?? mi.location_override?.is_new) === true,
+            is_popular:
+              (mi.is_popular ?? mi.location_override?.is_popular) === true,
           } satisfies StorefrontItem;
         });
 

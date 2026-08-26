@@ -1,0 +1,263 @@
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[GetOrders] Error backfilling order_items: { code: 'PGRST303', details: null, hint: null, message: 'JWT expired' }
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[browser] Failed to fetch RSC payload for http://localhost:3001/dashboard/schedules/templates/fe5a0da4-7aa2-4510-b2a0-70c3baebf9e2. Falling back to browser navigation. TypeError: Failed to fetch (localhost:3001)
+[browser] Failed to fetch RSC payload for http://localhost:3001/dashboard/schedules. Falling back to browser navigation. TypeError: Failed to fetch (localhost:3001)
+[browser] Failed to fetch RSC payload for http://localhost:3001/dashboard/staff/timesheets. Falling back to browser navigation. TypeError: Failed to fetch (localhost:3001)
+[browser] Failed to fetch RSC payload for http://localhost:3001/dashboard/schedules/templates/fe5a0da4-7aa2-4510-b2a0-70c3baebf9e2. Falling back to browser navigation. TypeError: Failed to fetch (localhost:3001)
+[browser] Failed to fetch RSC payload for http://localhost:3001/dashboard/menu/modifiers. Falling back to browser navigation. TypeError: Failed to fetch (localhost:3001)
+[browser] Failed to fetch RSC payload for http://localhost:3001/dashboard/schedules/templates/fe5a0da4-7aa2-4510-b2a0-70c3baebf9e2. Falling back to browser navigation. TypeError: Failed to fetch (localhost:3001)
+[browser] Failed to fetch RSC payload for http://localhost:3001/dashboard/staff. Falling back to browser navigation. TypeError: Failed to fetch (localhost:3001)
+⨯ Error: aborted
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+⚠ Server is approaching the used memory threshold, restarting...
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Uncaught NotFoundError: Failed to execute 'releasePointerCapture' on 'Element': No active pointer with the given id is found.
+[browser] Uncaught NotFoundError: Failed to execute 'releasePointerCapture' on 'Element': No active pointer with the given id is found.
+[browser] Uncaught NotFoundError: Failed to execute 'releasePointerCapture' on 'Element': No active pointer with the given id is found.
+[browser] Uncaught NotFoundError: Failed to execute 'releasePointerCapture' on 'Element': No active pointer with the given id is found.
+[browser] Uncaught NotFoundError: Failed to execute 'releasePointerCapture' on 'Element': No active pointer with the given id is found.
+[browser] Uncaught NotFoundError: Failed to execute 'releasePointerCapture' on 'Element': No active pointer with the given id is found.
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Error: aborted
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+⨯ uncaughtException: Error: aborted
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+⨯ uncaughtException:  Error: aborted
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Failed to proxy https://o4511212537380864.ingest.us.sentry.io/api/4511226223460352/envelope/?o=4511212537380864&p=4511226223460352&r=us&hsts=0 Error: Client network socket disconnected before secure TLS connection was established
+    at ignore-listed frames {
+  code: 'ECONNRESET',
+  path: null,
+  host: 'o4511212537380864.ingest.us.sentry.io',
+  port: 443,
+  localAddress: undefined
+}
+Error: Client network socket disconnected before secure TLS connection was established
+    at ignore-listed frames {
+  code: 'ECONNRESET',
+  path: null,
+  host: 'o4511212537380864.ingest.us.sentry.io',
+  port: 443,
+  localAddress: undefined
+}
+Failed to proxy https://o4511212537380864.ingest.us.sentry.io/api/4511226223460352/envelope/?o=4511212537380864&p=4511226223460352&r=us&hsts=0 Error: Client network socket disconnected before secure TLS connection was established
+    at ignore-listed frames {
+  code: 'ECONNRESET',
+  path: null,
+  host: 'o4511212537380864.ingest.us.sentry.io',
+  port: 443,
+  localAddress: undefined
+}
+Error: Client network socket disconnected before secure TLS connection was established
+    at ignore-listed frames {
+  code: 'ECONNRESET',
+  path: null,
+  host: 'o4511212537380864.ingest.us.sentry.io',
+  port: 443,
+  localAddress: undefined
+}
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+⨯ SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>) {
+  page: '/dashboard/schedules/templates/create'
+}
+⨯ SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>) {
+  page: '/dashboard/schedules/templates/create'
+}
+⚠ Server is approaching the used memory threshold, restarting...
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+⨯ Error: aborted
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+⨯ Error: aborted
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] Encountered a script tag while rendering React component. Scripts inside React components are never executed when rendering on the client. Consider using template tag instead (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template). 
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+Failed to proxy https://o4511212537380864.ingest.us.sentry.io/api/4511226223460352/envelope/?o=4511212537380864&p=4511226223460352&r=us&hsts=0 Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] [Clerk UI] Component renderer did not mount within 10s. Common causes: a failed chunk load, a dev-server misconfiguration (e.g. unresolved lazy-compilation proxy), or a ClerkProvider/mountX call before the page is hydrated. Check the Network tab for stalled or empty requests. 
+    at <unknown> (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js:1:11946) (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js:1:11946)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+Failed to proxy https://o4511212537380864.ingest.us.sentry.io/api/4511226223460352/envelope/?o=4511212537380864&p=4511226223460352&r=us&hsts=0 Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+Failed to proxy https://o4511212537380864.ingest.us.sentry.io/api/4511226223460352/envelope/?o=4511212537380864&p=4511226223460352&r=us&hsts=0 Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+Error: socket hang up
+    at ignore-listed frames {
+  code: 'ECONNRESET'
+}
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] [Clerk UI] Component renderer did not mount within 10s. Common causes: a failed chunk load, a dev-server misconfiguration (e.g. unresolved lazy-compilation proxy), or a ClerkProvider/mountX call before the page is hydrated. Check the Network tab for stalled or empty requests. 
+    at <unknown> (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js:1:11946) (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js:1:11946)
+⚠ Server is approaching the used memory threshold, restarting...
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] [Clerk UI] Component renderer did not mount within 10s. Common causes: a failed chunk load, a dev-server misconfiguration (e.g. unresolved lazy-compilation proxy), or a ClerkProvider/mountX call before the page is hydrated. Check the Network tab for stalled or empty requests. 
+    at <unknown> (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js:1:11946) (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js:1:11946)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] [Clerk UI] Component renderer did not mount within 10s. Common causes: a failed chunk load, a dev-server misconfiguration (e.g. unresolved lazy-compilation proxy), or a ClerkProvider/mountX call before the page is hydrated. Check the Network tab for stalled or empty requests. 
+    at <unknown> (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js:1:11946) (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js:1:11946)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] [Clerk UI] Component renderer did not mount within 10s. Common causes: a failed chunk load, a dev-server misconfiguration (e.g. unresolved lazy-compilation proxy), or a ClerkProvider/mountX call before the page is hydrated. Check the Network tab for stalled or empty requests. 
+    at <unknown> (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js:1:11946) (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js:1:11946)
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+[browser] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js:12:6133)
+[browser] [Clerk UI] Component renderer did not mount within 10s. Common causes: a failed chunk load, a dev-server misconfiguration (e.g. unresolved lazy-compilation proxy), or a ClerkProvider/mountX call before the page is hydrated. Check the Network tab for stalled or empty requests. 
+    at <unknown> (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js:1:11946) (https://liked-ram-76.clerk.accounts.dev/npm/@clerk/ui@1/dist/ui.browser.js:1:11946)
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has legacy prop "objectFit". Did you forget to run the codemod?
+Read more: https://nextjs.org/docs/messages/next-image-upgrade-to-13
+[browser] Image with src "https://hifouuofcaytijrkbvcy.supabase.co/storage/v1/object/public/Organizations-Logos/org_34LN9aMJGO4jNllGTvHH4CLB5gq.png" has "fill" but is missing "sizes" prop. Please add it to improve page performance. Read more: https://nextjs.org/docs/api-reference/next/image#sizes
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher
+⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+Clerk - DEPRECATION WARNING: "createRouteMatcher" is deprecated and will be removed in the next major release.
+Use resource-based auth checks instead. Move auth checks into each page, layout, API route, or Server Function that accesses protected data. Middleware-based auth checks rely on path matching, which can diverge from how Next.js routes requests and leave protected resources reachable. For a migration guide, see: https://clerk.com/docs/guides/development/upgrading/upgrade-guides/migrate-from-create-route-matcher

@@ -708,7 +708,27 @@ export async function GetSalesByItemReport(
     return [];
   }
 
-  return report as SalesByItemReportItem[];
+  // `get_sales_by_item_report_v2` has drifted across environments: some
+  // deployments return a bare jsonb array of item rows, while others return
+  // `{ items: [...], summary: {...} }` with channel-aware fields
+  // (`category_name`, net-only). This action promises a plain array, so
+  // normalize BOTH shapes here — otherwise the component receives an object
+  // and `data.filter()` / `data.reduce()` throw "filter is not a function".
+  const raw = report as unknown;
+  const items: Array<Record<string, unknown>> = Array.isArray(raw)
+    ? (raw as Array<Record<string, unknown>>)
+    : Array.isArray((raw as { items?: unknown } | null)?.items)
+      ? ((raw as { items: Array<Record<string, unknown>> }).items)
+      : [];
+
+  return items.map((r) => ({
+    item_name: String(r.item_name ?? ""),
+    category: String(r.category ?? r.category_name ?? ""),
+    quantity_sold: Number(r.quantity_sold ?? 0),
+    // Newer prod function is net-only (no per-item gross); fall back to net.
+    gross_sales: Number(r.gross_sales ?? r.net_sales ?? 0),
+    net_sales: Number(r.net_sales ?? 0),
+  })) as SalesByItemReportItem[];
 }
 
 /**

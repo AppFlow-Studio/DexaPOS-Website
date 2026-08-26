@@ -1,4 +1,5 @@
 // types/database.types.ts
+import type { PaginationParams } from "@/types/pagination";
 export type OrderStatus =
   | "draft"
   | "pending"
@@ -121,6 +122,27 @@ export interface OrderFilters {
   };
 }
 
+export interface OrderOverviewRecord {
+  status: OrderStatus;
+  payment_status: PaymentStatus;
+  total_amount: number;
+  order_type: OrderType;
+  table_number?: string | null;
+  created_at: string;
+}
+
+export type OrderSortField =
+  | "created_at"
+  | "display_number"
+  | "status"
+  | "total_amount";
+
+export interface OrderPageOptions extends PaginationParams {
+  search?: string;
+  sortBy?: OrderSortField;
+  sortDirection?: "asc" | "desc";
+}
+
 export interface OrderItem {
   id: string;
   order_id: string;
@@ -221,6 +243,12 @@ export interface OrderPayment {
   tip_surcharge_percentage_snapshot?: number;
   // True when this payment was tendered at the cash (discounted) price lane.
   is_cash_priced?: boolean | null;
+  // Processor + settlement context (used by the online Valor refund flow).
+  processor_name?: string | null;
+  refunded_amount?: number | null;
+  is_settled?: boolean | null;
+  settled_at?: string | null;
+  settlement_batch_id?: string | null;
   // Junction table items
   order_payment_items?: OrderPaymentItem[];
 }

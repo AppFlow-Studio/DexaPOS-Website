@@ -3,9 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, Clock, CalendarX, ChevronDown, ChevronUp } from "lucide-react";
 import { format } from "date-fns";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ForceClockOutDialog } from "./ForceClockOutDialog";
 import { formatMoney, formatDate } from "../lib/constants";
 import type { OrphanedShift, UnclosedDay } from "@/app/dashboard/actions/tips";
@@ -38,52 +36,57 @@ export function AttentionBanner({
 
   return (
     <>
-      <Card className="border-amber-300 bg-amber-50/80 dark:bg-amber-950/20 dark:border-amber-800/40">
+      {/* The amber marks the alert on the header strip only. Tinting the whole
+          expanded body floods the panel — in dark mode it reads as a second
+          page background rather than a notice. */}
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-white text-black">
         <button
-          className="w-full flex items-center justify-between px-4 py-3 text-left"
+          className="flex w-full min-w-0 items-center justify-between gap-3 bg-white px-4 py-3.5 text-left transition-colors hover:bg-muted/40"
           onClick={() => setExpanded(!expanded)}
         >
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600" />
-            <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+          <div className="flex min-w-0 items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-black" />
+            <span className="min-w-0 text-sm font-semibold text-black">
               {totalIssues} issue{totalIssues !== 1 ? "s" : ""} need attention
             </span>
           </div>
           {expanded ? (
-            <ChevronUp className="w-4 h-4 text-amber-600" />
+            <ChevronUp className="h-4 w-4 shrink-0 text-black" />
           ) : (
-            <ChevronDown className="w-4 h-4 text-amber-600" />
+            <ChevronDown className="h-4 w-4 shrink-0 text-black" />
           )}
         </button>
 
         {expanded && (
-          <div className="px-4 pb-4 space-y-4">
+          <div className="min-w-0 space-y-5 px-4 pb-4 pt-4">
             {/* Orphaned Shifts */}
             {orphanedShifts.length > 0 && (
               <div className="space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-red-500" />
-                  <span className="text-sm font-medium text-red-700 dark:text-red-300">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 text-sm font-medium text-foreground">
                     {orphanedShifts.length} staff still clocked in from previous days
                   </span>
                 </div>
-                <div className="space-y-1.5 ml-5">
+                {/* Wraps: a rigid label/action row pushes the button off the
+                    right edge once the name and timestamp fill the line. */}
+                <div className="ml-5 space-y-2">
                   {orphanedShifts.map((shift) => (
                     <div
                       key={shift.id}
-                      className="flex items-center justify-between text-sm"
+                      className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-sm"
                     >
-                      <div className="text-amber-800 dark:text-amber-200">
-                        <span className="font-medium">{shift.staffName}</span>
-                        <span className="text-amber-600 dark:text-amber-400 ml-1.5">
-                          — clocked in {format(new Date(shift.clockInTime), "EEE h:mm a")}
+                      <p className="min-w-0 flex-1">
+                        <span className="font-medium text-foreground">{shift.staffName}</span>
+                        <span className="ml-1.5 tabular-nums text-muted-foreground">
+                           clocked in {format(new Date(shift.clockInTime), "EEE h:mm a")}
                           {" "}({Math.round(shift.hoursSinceClockIn)}h ago)
                         </span>
-                      </div>
+                      </p>
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs border-amber-400 text-amber-700 hover:bg-amber-100"
+                        className="h-8 shrink-0 rounded-full px-3 text-[0.8125rem] font-medium shadow-sm"
                         onClick={() => setClockingOutShift(shift)}
                       >
                         Force Clock Out
@@ -97,35 +100,35 @@ export function AttentionBanner({
             {/* Unclosed Days */}
             {unclosedDays.length > 0 && (
               <div className="space-y-2">
-                <div className="flex items-center gap-1.5">
-                  <CalendarX className="w-3.5 h-3.5 text-amber-500" />
-                  <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <CalendarX className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 text-sm font-medium text-foreground">
                     {unclosedDays.length} day{unclosedDays.length !== 1 ? "s" : ""} need tip close-out
                   </span>
                 </div>
-                <div className="space-y-1.5 ml-5">
+                <div className="ml-5 space-y-2">
                   {unclosedDays.map((day, index) => {
                     const isFirstUnclosed = index === 0;
                     return (
                       <div
                         key={day.date}
-                        className="flex items-center justify-between text-sm"
+                        className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-sm"
                       >
-                        <div className="text-amber-800 dark:text-amber-200">
-                          <span className="font-medium">{formatDate(day.date)}</span>
-                          <span className="text-amber-600 dark:text-amber-400 ml-1.5">
-                            — {day.orderCount} orders · {formatMoney(day.totalTips)} tips · {day.shiftCount} staff
+                        <p className="min-w-0 flex-1">
+                          <span className="font-medium text-foreground">{formatDate(day.date)}</span>
+                          <span className="ml-1.5 tabular-nums text-muted-foreground">
+                             {day.orderCount} orders · {formatMoney(day.totalTips)} tips · {day.shiftCount} staff
                           </span>
                           {day.hasOrphanedShifts && (
-                            <Badge variant="outline" className="ml-1.5 text-[10px] border-red-300 text-red-600">
+                            <span className="ml-1.5 inline-flex items-center rounded-full border-0 bg-muted/60 px-2 py-0.5 text-[10px] font-medium">
                               has orphaned shifts
-                            </Badge>
+                            </span>
                           )}
-                        </div>
+                        </p>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-7 text-xs border-amber-400 text-amber-700 hover:bg-amber-100"
+                          className="h-8 shrink-0 rounded-full px-3 text-[0.8125rem] font-medium shadow-sm"
                           disabled={!isFirstUnclosed}
                           onClick={() => onCloseOutDay(day.date)}
                         >
@@ -143,7 +146,7 @@ export function AttentionBanner({
             )}
           </div>
         )}
-      </Card>
+      </div>
 
       <ForceClockOutDialog
         open={!!clockingOutShift}

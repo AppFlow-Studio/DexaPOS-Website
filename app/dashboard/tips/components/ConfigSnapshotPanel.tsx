@@ -27,7 +27,9 @@ export function ConfigSnapshotPanel({ snapshot }: ConfigSnapshotPanelProps) {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="border rounded-lg">
+      {/* §3.1 tier-3: an inset well inside a panel is a tinted `rounded-2xl`
+          surface, not a bordered `rounded-lg` box. */}
+      <div className="overflow-hidden rounded-2xl bg-muted/20">
         <CollapsibleTrigger asChild>
           <button className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/30 transition-colors">
             <div className="flex items-center gap-2">
@@ -50,7 +52,7 @@ export function ConfigSnapshotPanel({ snapshot }: ConfigSnapshotPanelProps) {
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="px-4 pb-4 space-y-4 border-t pt-3">
+          <div className="px-4 pb-4 space-y-4 pt-3">
             <p className="text-xs text-muted-foreground">
               This shows the exact pool and tip-out rules that were active when
               this session was calculated. Even if the configuration has changed
@@ -66,7 +68,7 @@ export function ConfigSnapshotPanel({ snapshot }: ConfigSnapshotPanelProps) {
                 {pools.map((pool: any, i: number) => (
                   <div
                     key={pool.id || i}
-                    className="rounded border px-3 py-2.5 space-y-2"
+                    className="rounded-2xl border-0 bg-muted/60 px-3 py-2.5 space-y-2 shadow-none"
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{pool.name}</span>
@@ -133,7 +135,7 @@ export function ConfigSnapshotPanel({ snapshot }: ConfigSnapshotPanelProps) {
                 {tipOutRules.map((rule: any, i: number) => (
                   <div
                     key={rule.id || i}
-                    className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+                    className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 px-3 py-2 text-sm shadow-none"
                   >
                     <div className="flex items-center gap-1.5">
                       <span className="font-medium">{rule.from_role_code}</span>

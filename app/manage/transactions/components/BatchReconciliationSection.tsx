@@ -30,7 +30,6 @@ import {
   usePlatformSettlementBatchPayments,
   usePlatformSettlementBatches,
 } from '@/lib/queries/use-platform-analytics'
-import { toast } from 'sonner'
 import { PermissionGate } from '@/components/admin/PermissionGate'
 import { ManualBatchoutDialog } from './ManualBatchoutDialog'
 
@@ -85,6 +84,22 @@ function getStatusBadge(status: string) {
   }
 
   return <Badge variant="outline">{status}</Badge>
+}
+
+// How the batch was settled — surfaces auto (Valor webhook / POS auto) vs manual.
+function getOriginBadge(origin?: string | null) {
+  switch (origin) {
+    case 'valor_webhook':
+      return <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700">Auto · Webhook</Badge>
+    case 'pos_auto':
+      return <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700">Auto</Badge>
+    case 'hq_manual':
+      return <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-600">Manual · HQ</Badge>
+    case 'pos_manual':
+      return <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-600">Manual</Badge>
+    default:
+      return null
+  }
 }
 
 function buildBatchExportCsv(batch: PlatformSettlementBatch, rows: PlatformSettlementBatchPayment[]): string {
@@ -300,19 +315,16 @@ export function BatchReconciliationSection({
 
   const handleBatchExport = () => {
     if (!selectedBatch) {
-      toast.info('Select a batch first.')
       return
     }
 
     if (batchPayments.length === 0) {
-      toast.info('No linked payments to export for this batch.')
       return
     }
 
     const csv = buildBatchExportCsv(selectedBatch, batchPayments)
     const filename = `DEXA_Batch_${formatBatchLabel(selectedBatch)}_${selectedBatch.business_date}.csv`
     downloadCsv(csv, filename)
-    toast.success(`Exported ${batchPayments.length.toLocaleString()} payment rows.`)
   }
 
   return (
@@ -478,7 +490,12 @@ export function BatchReconciliationSection({
                   <TableCell className="text-right font-mono">{formatCurrency(batch.tip_amount)}</TableCell>
                   <TableCell className="text-right font-mono">{formatCurrency(batch.refund_amount)}</TableCell>
                   <TableCell className="text-right font-mono">{formatCurrency(batch.net_deposit)}</TableCell>
-                  <TableCell>{getStatusBadge(batch.status)}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {getStatusBadge(batch.status)}
+                      {getOriginBadge(batch.origin)}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
                     {batch.has_discrepancy ? (
                       <Badge variant="outline" className="border-red-300 bg-red-100 text-red-800">

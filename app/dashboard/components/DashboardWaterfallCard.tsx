@@ -4,7 +4,6 @@ import { useState } from "react";
 import { format } from "date-fns";
 import Link from "next/link";
 import {
-  ArrowRight,
   ChevronDown,
   ChevronRight,
   TrendingDown,
@@ -26,9 +25,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { OverviewLinkButton } from "./OverviewSection";
 import type {
   WaterfallReport,
   WaterfallLineItem,
@@ -215,18 +214,15 @@ export function DashboardWaterfallCard({
     <Card className="flex flex-col">
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Receipt className="h-4 w-4" />
+          <CardTitle className="text-[1.0625rem] font-semibold text-[#0C4FD1]! dark:text-[#6CA0FF]! flex items-center gap-2">
+            <Receipt className="h-[1.125rem] w-[1.125rem] shrink-0" />
             Net Collected Statement
           </CardTitle>
-          <CardDescription>Revenue waterfall (last 30 days)</CardDescription>
+          <CardDescription>Revenue waterfall</CardDescription>
         </div>
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/dashboard/reports/financials">
-            Details
-            <ArrowRight className="h-4 w-4 ml-1" />
-          </Link>
-        </Button>
+        <OverviewLinkButton href="/dashboard/reports/financials">
+          Details
+        </OverviewLinkButton>
       </CardHeader>
       <CardContent className="flex-1 space-y-1">
         {/* Revenue Section */}

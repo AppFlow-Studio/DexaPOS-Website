@@ -50,30 +50,30 @@ export function BookingsTab({ customer }: BookingsTabProps) {
   return (
     <>
       {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-3">
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
-          <CardContent className="pt-4">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Bookings</p>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Card className="rounded-2xl border-0 bg-muted/60 shadow-none">
+          <CardContent className="p-4">
+            <p className="text-xs font-bold leading-tight text-muted-foreground uppercase tracking-wider">Total Bookings</p>
             <p className="text-2xl font-bold mt-2">{stats.totalBookings}</p>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
-          <CardContent className="pt-4">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Completed</p>
+        <Card className="rounded-2xl border-0 bg-muted/60 shadow-none">
+          <CardContent className="p-4">
+            <p className="text-xs font-bold leading-tight text-muted-foreground uppercase tracking-wider">Completed</p>
             <p className="text-2xl font-bold mt-2">{stats.completedBookings}</p>
             <p className="text-xs text-muted-foreground mt-1">{stats.completedPct}%</p>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
-          <CardContent className="pt-4">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">No-Shows</p>
+        <Card className="rounded-2xl border-0 bg-muted/60 shadow-none">
+          <CardContent className="p-4">
+            <p className="text-xs font-bold leading-tight text-muted-foreground uppercase tracking-wider">No-Shows</p>
             <p className="text-2xl font-bold mt-2">{stats.noShows}</p>
             <p className="text-xs text-muted-foreground mt-1">{stats.noShowRate}%</p>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-sm bg-white dark:bg-card">
-          <CardContent className="pt-4">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Avg Party Size</p>
+        <Card className="rounded-2xl border-0 bg-muted/60 shadow-none">
+          <CardContent className="p-4">
+            <p className="text-xs font-bold leading-tight text-muted-foreground uppercase tracking-wider">Avg Party Size</p>
             <p className="text-2xl font-bold mt-2">{stats.avgPartySize}</p>
           </CardContent>
         </Card>
@@ -81,11 +81,13 @@ export function BookingsTab({ customer }: BookingsTabProps) {
 
       {/* Sub-tabs */}
       <Tabs value={activeSubTab} onValueChange={(val) => setActiveSubTab(val as any)}>
-        <TabsList className="bg-muted">
-          <TabsTrigger value="reservations">Reservations ({reservations.length})</TabsTrigger>
-          <TabsTrigger value="waitlist">Waitlist ({waitlist.length})</TabsTrigger>
-          <TabsTrigger value="dine">Dine-In ({dineSessions.length})</TabsTrigger>
+        <div className="no-scrollbar overflow-x-auto">
+        <TabsList className="inline-flex h-auto w-max flex-nowrap rounded-full bg-muted/70 p-1">
+          <TabsTrigger className="rounded-full px-4" value="reservations">Reservations ({reservations.length})</TabsTrigger>
+          <TabsTrigger className="rounded-full px-4" value="waitlist">Waitlist ({waitlist.length})</TabsTrigger>
+          <TabsTrigger className="rounded-full px-4" value="dine">Dine-In ({dineSessions.length})</TabsTrigger>
         </TabsList>
+        </div>
 
         {/* Reservations */}
         <TabsContent value="reservations" className="mt-6">
@@ -96,9 +98,9 @@ export function BookingsTab({ customer }: BookingsTabProps) {
           ) : reservations.length === 0 ? (
             <div className="text-center p-8 text-muted-foreground">No reservations</div>
           ) : (
-            <div className="border rounded-lg overflow-x-auto bg-white dark:bg-card">
+            <div className="overflow-x-auto rounded-2xl border-0 bg-muted/35">
               <table className="w-full text-sm">
-                <thead className="bg-muted/30 border-b">
+                <thead className="bg-muted/50 [&_tr]:border-0">
                   <tr>
                     <th className="px-4 py-3 text-left font-medium">Date & Time</th>
                     <th className="px-4 py-3 text-left font-medium">Party Size</th>
@@ -110,7 +112,7 @@ export function BookingsTab({ customer }: BookingsTabProps) {
                 </thead>
                 <tbody>
                   {(reservations as any[]).map((res) => (
-                    <tr key={res.id} className="border-t hover:bg-muted/50">
+                    <tr key={res.id} className="border-0 hover:bg-muted/50">
                       <td className="px-4 py-3 text-sm">
                         {res.reservation_date} {res.reservation_time}
                       </td>
@@ -140,9 +142,9 @@ export function BookingsTab({ customer }: BookingsTabProps) {
           ) : waitlist.length === 0 ? (
             <div className="text-center p-8 text-muted-foreground">No waitlist entries</div>
           ) : (
-            <div className="border rounded-lg overflow-x-auto bg-white dark:bg-card">
+            <div className="overflow-x-auto rounded-2xl border-0 bg-muted/35">
               <table className="w-full text-sm">
-                <thead className="bg-muted/30 border-b">
+                <thead className="bg-muted/50 [&_tr]:border-0">
                   <tr>
                     <th className="px-4 py-3 text-left font-medium">Date</th>
                     <th className="px-4 py-3 text-left font-medium">Party</th>
@@ -154,7 +156,7 @@ export function BookingsTab({ customer }: BookingsTabProps) {
                 </thead>
                 <tbody>
                   {(waitlist as any[]).map((entry) => (
-                    <tr key={entry.id} className="border-t hover:bg-muted/50">
+                    <tr key={entry.id} className="border-0 hover:bg-muted/50">
                       <td className="px-4 py-3 text-sm">{new Date(entry.created_at).toLocaleDateString()}</td>
                       <td className="px-4 py-3 text-sm">{entry.party_size}</td>
                       <td className="px-4 py-3 text-sm">{entry.quoted_wait_minutes} min</td>
@@ -182,9 +184,9 @@ export function BookingsTab({ customer }: BookingsTabProps) {
           ) : dineSessions.length === 0 ? (
             <div className="text-center p-8 text-muted-foreground">No dine-in sessions</div>
           ) : (
-            <div className="border rounded-lg overflow-x-auto bg-white dark:bg-card">
+            <div className="overflow-x-auto rounded-2xl border-0 bg-muted/35">
               <table className="w-full text-sm">
-                <thead className="bg-muted/30 border-b">
+                <thead className="bg-muted/50 [&_tr]:border-0">
                   <tr>
                     <th className="px-4 py-3 text-left font-medium">Date</th>
                     <th className="px-4 py-3 text-left font-medium">Table(s)</th>
@@ -201,7 +203,7 @@ export function BookingsTab({ customer }: BookingsTabProps) {
                       ? Math.round((new Date(session.closed_at).getTime() - new Date(session.seated_at).getTime()) / 60000)
                       : null;
                     return (
-                      <tr key={session.id} className="border-t hover:bg-muted/50">
+                      <tr key={session.id} className="border-0 hover:bg-muted/50">
                         <td className="px-4 py-3 text-sm">{new Date(session.seated_at).toLocaleDateString()}</td>
                         <td className="px-4 py-3 text-sm">{session.table_numbers?.join(", ") || "—"}</td>
                         <td className="px-4 py-3 text-sm">{session.party_size}</td>

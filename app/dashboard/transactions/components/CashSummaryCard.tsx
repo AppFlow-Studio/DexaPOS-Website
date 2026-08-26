@@ -1,7 +1,8 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -46,7 +47,6 @@ function MetricRow({
   varianceValue?: number;
 }) {
   const isPositiveVariance = varianceValue > 0;
-  const isNegativeVariance = varianceValue < 0;
 
   return (
     <div className="flex items-center justify-between py-2">
@@ -69,16 +69,14 @@ function MetricRow({
         <span className="font-mono text-sm tabular-nums">
           {formatCurrency(value)}
         </span>
+        {/* Over/short is stated in words and sign, not colour (D-12) — the
+            merchant needs to know which it is, and green/red alone doesn't
+            survive a colour-blind reader or a greyscale print. */}
         {showVariance && varianceValue !== 0 && (
-          <span
-            className={cn(
-              "ml-2 text-xs font-medium",
-              isPositiveVariance && "text-emerald-500",
-              isNegativeVariance && "text-red-500"
-            )}
-          >
-            {isPositiveVariance ? "+" : ""}
-            {formatCurrency(varianceValue)}
+          <span className="ml-2 text-xs font-medium text-muted-foreground">
+            {isPositiveVariance ? "+" : "−"}
+            {formatCurrency(Math.abs(varianceValue))}{" "}
+            {isPositiveVariance ? "over" : "short"}
           </span>
         )}
       </div>
@@ -96,24 +94,6 @@ export function CashSummaryCard({
   isLoading,
   onViewCashDrawer,
 }: CashSummaryCardProps) {
-  if (isLoading) {
-    return (
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur">
-        <CardHeader className="pb-2">
-          <div className="h-5 w-28 bg-muted animate-pulse rounded" />
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="flex justify-between">
-              <div className="h-4 w-24 bg-muted animate-pulse rounded" />
-              <div className="h-4 w-16 bg-muted animate-pulse rounded" />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    );
-  }
-
   // Calculate completion percentage (100% = no variance)
   const completionPercentage =
     expectedCloseoutCash > 0
@@ -121,69 +101,77 @@ export function CashSummaryCard({
       : 100;
 
   return (
-    <Card className="border-border/60 shadow-none">
-      <CardHeader className="pb-2 flex flex-row items-center justify-between">
-        <CardTitle className="text-base font-bold tracking-tight">
-          Cash Summary
-        </CardTitle>
-        {onViewCashDrawer && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs text-primary h-7 px-2 hover:bg-primary/10"
-            onClick={onViewCashDrawer}
-          >
-            Cash drawer
-            <ChevronRight className="ml-1 h-3.5 w-3.5" />
-          </Button>
+    <Panel>
+      <PanelSection
+        label="Cash Summary"
+        action={
+          onViewCashDrawer && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-[#0C4FD1] dark:text-[#6CA0FF] h-7 px-2 hover:bg-[#0C4FD1]/10"
+              onClick={onViewCashDrawer}
+            >
+              Cash drawer
+              <ChevronRight className="ml-1 h-3.5 w-3.5" />
+            </Button>
+          )
+        }
+      >
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="flex justify-between">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <MetricRow
+              label="Expected closeout cash"
+              value={expectedCloseoutCash}
+              info="The amount of cash that should be in the drawer"
+            />
+            <MetricRow
+              label="Actual closeout cash"
+              value={actualCloseoutCash}
+              info="The actual counted cash in the drawer"
+            />
+            <MetricRow
+              label="Cash overage/shortage"
+              value={cashOverageShortage}
+              showVariance
+              varianceValue={cashOverageShortage}
+            />
+
+            {/* Progress indicator — one brand-blue fill regardless of variance
+                (D-12); the over/short figure above already states direction. */}
+            <div className="py-3">
+              <Progress
+                value={completionPercentage}
+                className="h-1.5 [&>div]:bg-[#0C4FD1] dark:[&>div]:bg-[#6CA0FF]"
+              />
+            </div>
+
+            <MetricRow
+              label="Expected deposit"
+              value={expectedDeposit}
+              info="Amount that should be deposited"
+            />
+            <MetricRow
+              label="Actual deposit"
+              value={actualDeposit}
+              info="Actual amount deposited"
+            />
+            <MetricRow
+              label="Deposit overage/shortage"
+              value={depositOverageShortage}
+            />
+          </>
         )}
-      </CardHeader>
-      <CardContent className="pt-0 space-y-1">
-        <MetricRow
-          label="Expected closeout cash"
-          value={expectedCloseoutCash}
-          info="The amount of cash that should be in the drawer"
-        />
-        <MetricRow
-          label="Actual closeout cash"
-          value={actualCloseoutCash}
-          info="The actual counted cash in the drawer"
-        />
-        <MetricRow
-          label="Cash overage/shortage"
-          value={cashOverageShortage}
-          showVariance
-          varianceValue={cashOverageShortage}
-        />
-
-        {/* Progress indicator */}
-        <div className="py-3">
-          <Progress
-            value={completionPercentage}
-            className={cn(
-              "h-1.5",
-              cashOverageShortage > 0 && "[&>div]:bg-emerald-500",
-              cashOverageShortage < 0 && "[&>div]:bg-red-500",
-              cashOverageShortage === 0 && "[&>div]:bg-primary"
-            )}
-          />
-        </div>
-
-        <MetricRow
-          label="Expected deposit"
-          value={expectedDeposit}
-          info="Amount that should be deposited"
-        />
-        <MetricRow
-          label="Actual deposit"
-          value={actualDeposit}
-          info="Actual amount deposited"
-        />
-        <MetricRow
-          label="Deposit overage/shortage"
-          value={depositOverageShortage}
-        />
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   );
 }

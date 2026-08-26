@@ -1,6 +1,13 @@
 'use client'
 
 import { ChartCard } from './ChartCard'
+import {
+  CHART_GRID,
+  CHART_TICK,
+  ChartTooltipPanel,
+  StatRow,
+  StatTile,
+} from './AnalyticsPrimitives'
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine } from 'recharts'
 import { Clock } from 'lucide-react'
@@ -56,62 +63,45 @@ export function AvgTicketTimeCard({
       {data && !isEmpty && (
         <div className="space-y-4">
           {/* Current Metric */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="space-y-1 bg-blue-50 dark:bg-blue-950 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Current Avg</p>
-              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                {formatTime(currentTime)}
-              </p>
-            </div>
-            <div className="space-y-1 bg-slate-50 dark:bg-slate-900 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Target Alert</p>
-              <p className="text-lg font-bold">{formatTime(benchmark)}</p>
-            </div>
-            <div className="space-y-1 bg-slate-50 dark:bg-slate-900 p-2 rounded">
-              <p className="text-xs text-muted-foreground">Total Items</p>
-              <p className="text-lg font-bold">{data.total_items_processed}</p>
-            </div>
-          </div>
+          <StatRow columns={3}>
+            <StatTile
+              label="Current Avg"
+              value={formatTime(currentTime)}
+            />
+            <StatTile label="Target Alert" value={formatTime(benchmark)} />
+            <StatTile label="Total Items" value={data.total_items_processed} />
+          </StatRow>
 
           {/* Trend Line Chart */}
           <div className="w-full h-[320px]">
             <ChartContainer config={chartConfig} className="aspect-auto w-full h-full">
                 <LineChart data={chartData} margin={{ left: 0, right: 10, top: 5, bottom: 20 }}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <CartesianGrid vertical={false} {...CHART_GRID} />
                   <XAxis
                     dataKey="date"
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12 }}
+                    tick={CHART_TICK}
                   />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fontSize: 12 }}
+                    tick={CHART_TICK}
                     tickFormatter={(value) => `${value.toFixed(0)}m`}
                   />
                   <ChartTooltip
-                    cursor={{ stroke: 'rgba(0, 0, 0, 0.1)', strokeWidth: 2 }}
+                    cursor={{ stroke: 'var(--border)', strokeWidth: 2 }}
                     content={({ active, payload, label }) => {
                       if (active && payload && payload.length) {
                         return (
-                          <div className="bg-white dark:bg-slate-950 p-3 rounded border border-slate-200 dark:border-slate-700 shadow-lg">
-                            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
-                              {label}
-                            </p>
-                            <div className="space-y-1">
-                              {payload.map((item, index) => (
-                                <div key={index} className="flex items-center justify-between gap-2">
-                                  <span className="text-xs text-slate-700 dark:text-slate-300">
-                                    {item.name}:
-                                  </span>
-                                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                                    {formatTime(Number(item.value))}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                          <ChartTooltipPanel
+                            label={label}
+                            items={payload.map((item) => ({
+                              name: item.name,
+                              color: item.color,
+                              value: formatTime(Number(item.value)),
+                            }))}
+                          />
                         )
                       }
                       return null
@@ -121,7 +111,12 @@ export function AvgTicketTimeCard({
                     y={benchmark}
                     stroke={chartConfig.benchmark.color}
                     strokeDasharray="5 5"
-                    label={{ value: 'Target', position: 'right', fontSize: 12, fill: '#9CA3AF' }}
+                    label={{
+                      value: 'Target',
+                      position: 'right',
+                      fontSize: 12,
+                      fill: 'var(--muted-foreground)',
+                    }}
                   />
                   <Line
                     type="monotone"
@@ -132,7 +127,12 @@ export function AvgTicketTimeCard({
                     activeDot={{ r: 6 }}
                     name="Avg Ticket Time"
                   />
-                  <Legend />
+                  <Legend
+                    iconType="circle"
+                    formatter={(value) => (
+                      <span className="text-[0.8125rem] text-muted-foreground">{value}</span>
+                    )}
+                  />
                 </LineChart>
             </ChartContainer>
           </div>

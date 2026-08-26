@@ -313,6 +313,20 @@ missing or delayed `pg_net` request. The database trigger remains in place for
 POS and direct-database ticket creation. If the website cannot confirm the
 request, it preserves the ticket and shows a notification warning.
 
+### Conversation presentation
+
+- The signed-in viewer's own messages render right aligned in the brand color
+  without an avatar.
+- Every other participant renders left aligned in a white bordered bubble with
+  an author avatar, including other DEXA staff, merchants, and carriers.
+- Internal notes remain full-width amber staff-only cards and do not participate
+  in the group-chat alignment.
+- Participant side is derived by comparing `sender_id` with the current Clerk
+  user ID; roles, names, and email domains do not control message position.
+- The Context panel renders only supported metadata. HQ-created tickets show
+  their dashboard source; merchant tickets can show device and app-version
+  context without leaving an empty panel behind.
+
 9. Verify reply/private-note delivery state:
 
 ```sql
@@ -337,9 +351,62 @@ limit 30;
 Expected: one `sent` row for every reply/private note and no delivery row for
 the ticket's initial description message.
 
+## Reply Notification Reliability And Unread Threads
+
+The database trigger remains the primary notification path for every support
+reply and private note. Website message actions now also call the same protected
+endpoint after a successful write, matching the fallback already used for new
+ticket creation. The endpoint claims delivery by `message_id`, so a race between
+the database trigger and website fallback returns `already_processing` or
+`already_sent` instead of sending a duplicate email.
+
+Delivery failure does not roll back a saved message. The merchant or HQ sender
+receives a warning that email delivery could not be confirmed, while the thread
+continues to show the saved message.
+
+The existing `get_unread_ticket_counts()` response already includes per-ticket
+counts. Both inboxes now render those counts on the affected ticket row/card in
+addition to the aggregate header badge. Opening a thread still marks the
+viewer-relevant messages as read, and the existing Realtime subscription
+invalidates the shared unread-count query.
+
+### Files changed for this hardening
+
+- `lib/support/ticket-notification-request.ts`
+- `app/dashboard/actions/support.ts`
+- `app/dashboard/hooks/useSupport.ts`
+- `app/dashboard/support/page.tsx`
+- `app/manage/actions/support.ts`
+- `app/manage/support/page.tsx`
+- `app/manage/support/[ticketId]/page.tsx`
+- `tests/support-ticket-notification-request.test.ts`
+
+### Manual QA
+
+1. Open the HQ support inbox and a merchant account in separate browser
+   sessions.
+2. Send a merchant reply while the HQ session is not viewing that thread.
+3. Confirm the HQ header support badge increments and the exact ticket row
+   shows `1 unread`.
+4. Confirm each configured `SUPPORT_TICKET_NOTIFICATION_EMAILS` recipient gets
+   exactly one reply email.
+5. Open the ticket in HQ. Confirm the unread row badge and aggregate count clear.
+6. Send a public HQ reply. Confirm the merchant header badge and exact ticket
+   card show the unread count, then clear after the merchant opens the thread.
+7. Add a private HQ note. Confirm it remains hidden from the merchant and sends
+   exactly one private-note email to configured recipients.
+8. Run the reply/private-note delivery query above and confirm one `sent` row
+   per message, with no duplicate rows for the same `message_id`.
+
+No new migration is required for this hardening. It depends on the existing
+`20260601120000_support_notifications_unread_counts_and_realtime.sql`,
+`20260601130000_support_tickets_hq_realtime_rls.sql`, and
+`20260729130000_support_ticket_thread_notifications.sql` migrations.
+
 ## Status
 
 Website and migration implementation are complete locally for ticket creation,
-reply, and private-note notifications. Remaining work is staging migration
-application, website/Vault configuration, cross-scope RLS QA, email delivery
-QA, and production promotion through the approved process.
+reply, private-note notifications, application fallback delivery, and
+per-thread unread indicators. Remaining work is confirming the existing
+migrations and Vault values in the target environment, cross-scope RLS QA,
+email delivery QA, and production promotion through the approved process.

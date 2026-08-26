@@ -86,6 +86,28 @@ function getLastFour(maskedNumber: string | null | undefined): string | null {
   return digits.length >= 4 ? digits.slice(-4) : null;
 }
 
+// customCss is handed to NMI as plain declarations and injected into a
+// cross-origin iframe, so CSS variables can't resolve there. Read the storefront
+// theme values on this side and pass concrete colors through.
+function resolveThemeColor(name: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  return value || fallback;
+}
+
+// NMI accepts only plain hex/rgb here — color-mix() and var() would be sent as
+// literal text into the iframe and dropped. Build the focus ring manually.
+function withAlpha(color: string, alpha: number): string {
+  const hex = color.replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return color;
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function loadCollectJs(tokenizationKey: string): Promise<void> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("Collect.js can only load in the browser."));
@@ -188,6 +210,11 @@ export const PaymentCardForm = forwardRef<
 
     let cancelled = false;
 
+    const primaryColor = resolveThemeColor("--primary", "#6366f1");
+    // Matches the "Pay cash in store" card and the other checkout sections,
+    // which all use `1px solid var(--border)`. Fallback is the theme default.
+    const borderColor = resolveThemeColor("--border", "#E5E7EB");
+
     loadCollectJs(tokenizationKey)
       .then(() => {
         if (cancelled || !window.CollectJS) return;
@@ -216,17 +243,39 @@ export const PaymentCardForm = forwardRef<
             },
           },
           styleSniffer: false,
+          // The <input> inside NMI's secure iframe IS the visible field — the
+          // outer wrapper draws no chrome. CollectJS exposes only these five
+          // *Css options and they all target the input; there's no hook for the
+          // iframe body, and it ignores border-radius (corners stay square).
+          customCss: {
+            border: `1px solid ${borderColor} !important`,
+            "border-color": `${borderColor} !important`,
+            outline: "none !important",
+            "box-shadow": "none !important",
+            background: "#ffffff !important",
+            color: "#0f172a",
+            "font-size": "14px",
+            "font-family":
+              "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif",
+            width: "100%",
+            height: "44px",
+            "line-height": "normal",
+            padding: "0 14px",
+            margin: "0",
+            "box-sizing": "border-box",
+          },
           invalidCss: {
             color: "#0f172a",
-            "border-color": "#ef4444",
+            "border-color": "#ef4444 !important",
           },
           validCss: {
             color: "#0f172a",
-            "border-color": "#10b981",
+            "border-color": `${primaryColor} !important`,
           },
           focusCss: {
             color: "#0f172a",
-            "border-color": "#6366f1",
+            "border-color": `${primaryColor} !important`,
+            "box-shadow": `0 0 0 3px ${withAlpha(primaryColor, 0.18)} !important`,
           },
           placeholderCss: {
             color: "#94a3b8",
@@ -402,30 +451,26 @@ export const PaymentCardForm = forwardRef<
     );
   }
 
-  // Themed, flat card entry — matches the surrounding checkout sections (no
-  // nested card/shadow). NMI Collect.js injects secure iframes into the field
-  // slots below. Field chrome is styled here via the "nmi-field" class.
-  const fieldClass =
-    "nmi-field h-11 rounded-xl px-3 bg-[var(--card,#fff)]";
+  // Bare layout slots — no border, no padding, no background. The visible field
+  // chrome is the <input> inside NMI's iframe, styled via customCss above; a
+  // wrapper border would double it up.
+  const fieldClass = "nmi-field h-11";
 
   return (
     <div className={disabled ? "pointer-events-none opacity-60" : ""}>
       <style>{`
+        /* Layout only — the visible border is on the input inside the iframe
+           (see customCss). Do NOT add overflow:hidden here to round the corners:
+           the iframe body has its own margin, so clipping slices the input's top
+           and bottom borders off entirely. */
         .nmi-field {
-          border: 1px solid var(--border, #e2e8f0);
-          transition: border-color .15s ease, box-shadow .15s ease;
+          border: 0;
+          padding: 0;
+          background: transparent;
         }
-        .nmi-field:focus-within {
-          border-color: var(--primary, #6366f1);
-          box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #6366f1) 18%, transparent);
-        }
-        /* NMI injects a secure <iframe> into each slot. It must fill the slot
-           and stay clickable — don't wrap it in a flex/centered container, and
-           don't force a height that fights NMI's own inline sizing. */
         .nmi-field iframe {
           display: block;
           width: 100% !important;
-          height: 100% !important;
           border: 0;
         }
       `}</style>

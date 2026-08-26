@@ -21,7 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Package, Loader2, TrendingUp, TrendingDown } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface StockUpdateDialogProps {
   open: boolean;
@@ -90,8 +89,8 @@ export function StockUpdateDialog({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-500/5 border border-amber-500/10">
-              <Package className="h-5 w-5 text-amber-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60">
+              <Package className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <DialogTitle>Update Stock</DialogTitle>
@@ -104,9 +103,9 @@ export function StockUpdateDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           {/* Current Stock Display */}
-          <div className="p-3 rounded-lg bg-muted/50 flex items-center justify-between">
+          <div className="flex items-center justify-between rounded-2xl bg-muted/60 p-3">
             <span className="text-sm text-muted-foreground">Current Stock</span>
-            <span className="font-semibold">
+            <span className="font-semibold tabular-nums">
               {currentStock} {unitType}
             </span>
           </div>
@@ -132,25 +131,13 @@ export function StockUpdateDialog({
 
           {/* Change Preview */}
           {change !== 0 && (
-            <div
-              className={cn(
-                "p-3 rounded-lg flex items-center gap-2",
-                isIncrease
-                  ? "bg-emerald-50 dark:bg-emerald-950/30"
-                  : "bg-red-50 dark:bg-red-950/30"
-              )}
-            >
+            <div className="flex items-center gap-2 rounded-2xl bg-muted/60 p-3">
               {isIncrease ? (
-                <TrendingUp className="h-4 w-4 text-emerald-600" />
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
               ) : (
-                <TrendingDown className="h-4 w-4 text-red-600" />
+                <TrendingDown className="h-4 w-4 text-muted-foreground" />
               )}
-              <span
-                className={cn(
-                  "text-sm font-medium",
-                  isIncrease ? "text-emerald-700" : "text-red-700"
-                )}
-              >
+              <span className="text-sm font-medium tabular-nums">
                 {isIncrease ? "+" : ""}
                 {change.toFixed(2)} {unitType}{" "}
                 {isIncrease ? "increase" : "decrease"}

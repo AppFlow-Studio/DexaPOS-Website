@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { BellRing, History, ListChecks, Send } from "lucide-react";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { OnlineOrderingSettings } from "../hooks/useOnlineOrderingSettings";
 import {
   sendTestOrderNotification,
@@ -72,15 +73,26 @@ export function NotificationsTab({
   const [sendingEmail, setSendingEmail] = useState(false);
   const [sendingSms, setSendingSms] = useState(false);
 
-  const [audit, setAudit] = useState<AuditEntry[]>([]);
-  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditState, setAuditState] = useState<{
+    locationId: string;
+    entries: AuditEntry[];
+  }>({ locationId: "", entries: [] });
+  const auditLoading = Boolean(locationId) && auditState.locationId !== locationId;
+  const audit = auditState.locationId === locationId ? auditState.entries : [];
 
   useEffect(() => {
     if (!locationId) return;
-    setAuditLoading(true);
+    let cancelled = false;
     getOrderNotificationAuditLog(locationId, 50)
-      .then((res) => setAudit(res.data ?? []))
-      .finally(() => setAuditLoading(false));
+      .then((res) => {
+        if (!cancelled) {
+          setAuditState({ locationId, entries: res.data ?? [] });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [locationId]);
 
   const handleTest = async (channel: "email" | "sms") => {
@@ -99,41 +111,32 @@ export function NotificationsTab({
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Order Confirmation</CardTitle>
-          <CardDescription>
-            What customers receive immediately after placing an order. Customers can opt out at checkout.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label>Send receipt email</Label>
-            <Switch
-              checked={prefs.email_on_order_placed}
-              onCheckedChange={(checked) => setPrefs({ email_on_order_placed: checked })}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <Label>Send confirmation SMS</Label>
-            <Switch
-              checked={prefs.sms_on_order_placed}
-              onCheckedChange={(checked) => setPrefs({ sms_on_order_placed: checked })}
-            />
-          </div>
-        </CardContent>
-      </Card>
+    <Panel>
+      <PanelSection
+        icon={BellRing}
+        label="Order confirmation"
+        caption="Choose what customers receive immediately after placing an order. Customers can opt out at checkout."
+      >
+        <div>
+          <NotificationToggleRow
+            label="Send receipt email"
+            checked={prefs.email_on_order_placed}
+            onCheckedChange={(checked) => setPrefs({ email_on_order_placed: checked })}
+          />
+          <NotificationToggleRow
+            label="Send confirmation SMS"
+            checked={prefs.sms_on_order_placed}
+            onCheckedChange={(checked) => setPrefs({ sms_on_order_placed: checked })}
+          />
+        </div>
+      </PanelSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Status Updates</CardTitle>
-          <CardDescription>
-            Pick which order status changes notify the customer. Each row controls email + SMS independently.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-3 items-center text-sm">
+      <PanelSection
+        icon={ListChecks}
+        label="Status updates"
+        caption="Choose which order status changes notify the customer by email or SMS."
+      >
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-4 gap-y-4 text-sm sm:gap-x-8">
             <div className="font-medium text-muted-foreground">Status</div>
             <div className="font-medium text-muted-foreground">Email</div>
             <div className="font-medium text-muted-foreground">SMS</div>
@@ -148,20 +151,17 @@ export function NotificationsTab({
               />
             ))}
           </div>
-        </CardContent>
-      </Card>
+      </PanelSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Test Notifications</CardTitle>
-          <CardDescription>
-            Sends a sample receipt to your address. The customer-facing template uses your store name + primary color.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
+      <PanelSection
+        icon={Send}
+        label="Test notifications"
+        caption="Send a sample receipt using the customer-facing template for this store."
+      >
+        <div className="grid gap-5 md:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="test-email">Test email</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="test-email"
                 type="email"
@@ -173,6 +173,7 @@ export function NotificationsTab({
                 placeholder="you@merchant.com"
               />
               <Button
+                className="sm:shrink-0"
                 onClick={() => handleTest("email")}
                 disabled={sendingEmail}
               >
@@ -182,7 +183,7 @@ export function NotificationsTab({
           </div>
           <div className="space-y-2">
             <Label htmlFor="test-phone">Test phone</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="test-phone"
                 type="tel"
@@ -194,6 +195,7 @@ export function NotificationsTab({
                 placeholder="+15551234567"
               />
               <Button
+                className="sm:shrink-0"
                 onClick={() => handleTest("sms")}
                 disabled={sendingSms}
               >
@@ -201,27 +203,24 @@ export function NotificationsTab({
               </Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </PanelSection>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Notifications</CardTitle>
-          <CardDescription>
-            Last 50 transactional notifications attempted for this merchant.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <PanelSection
+        icon={History}
+        label="Recent notifications"
+        caption="The last 50 transactional notification attempts for this merchant."
+      >
           {auditLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <p className="py-4 text-sm text-muted-foreground">Loading…</p>
           ) : audit.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No notifications yet.</p>
+            <p className="py-4 text-sm text-muted-foreground">No notifications yet.</p>
           ) : (
-            <div className="space-y-2">
+            <div>
               {audit.map((row) => (
                 <div
                   key={row.id}
-                  className="flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+                  className="flex min-w-0 flex-col gap-3 py-4 text-sm first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex min-w-0 flex-col">
                     <span className="font-medium">
@@ -235,7 +234,7 @@ export function NotificationsTab({
                     ) : null}
                   </div>
                   <Badge
-                    className="shrink-0"
+                    className="shrink-0 capitalize"
                     variant={
                       row.status === "sent"
                         ? "default"
@@ -250,8 +249,24 @@ export function NotificationsTab({
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </PanelSection>
+    </Panel>
+  );
+}
+
+function NotificationToggleRow({
+  label,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
+      <Label className="font-medium text-foreground">{label}</Label>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   );
 }

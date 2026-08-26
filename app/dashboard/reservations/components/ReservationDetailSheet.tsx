@@ -19,26 +19,16 @@ import CancelReservationDialog from './CancelReservationDialog'
 import EditReservationDialog from './EditReservationDialog'
 import type { Reservation } from '@/types/floor-plan'
 import { formatPhoneForDisplay } from '@/lib/phone'
+import {
+  reservationStatusLabel,
+  reservationStatusStyle
+} from '@/lib/constants/reservation-status'
 import { cn } from '@/lib/utils'
 
-const STATUS_COLORS: Record<Reservation['status'], string> = {
-  pending:
-    'border-amber-500/25 bg-amber-500/12 text-amber-100 dark:border-amber-400/25 dark:bg-amber-400/12 dark:text-amber-100',
-  confirmed:
-    'border-sky-500/25 bg-sky-500/12 text-sky-100 dark:border-sky-400/25 dark:bg-sky-400/12 dark:text-sky-100',
-  reminded:
-    'border-fuchsia-500/25 bg-fuchsia-500/12 text-fuchsia-100 dark:border-fuchsia-400/25 dark:bg-fuchsia-400/12 dark:text-fuchsia-100',
-  arrived:
-    'border-orange-500/25 bg-orange-500/12 text-orange-100 dark:border-orange-400/25 dark:bg-orange-400/12 dark:text-orange-100',
-  seated:
-    'border-emerald-500/25 bg-emerald-500/12 text-emerald-100 dark:border-emerald-400/25 dark:bg-emerald-400/12 dark:text-emerald-100',
-  completed:
-    'border-slate-500/25 bg-slate-500/12 text-slate-100 dark:border-slate-400/25 dark:bg-slate-400/12 dark:text-slate-100',
-  no_show:
-    'border-rose-500/25 bg-rose-500/12 text-rose-100 dark:border-rose-400/25 dark:bg-rose-400/12 dark:text-rose-100',
-  cancelled:
-    'border-rose-500/25 bg-rose-500/12 text-rose-100 dark:border-rose-400/25 dark:bg-rose-400/12 dark:text-rose-100'
-}
+// Status colours come from `lib/constants/reservation-status` (D-11) so the
+// sheet, the card and the list can never drift apart. The old local map also
+// used `text-*-100` foregrounds, which are near-white — unreadable on the light
+// tints they were paired with.
 
 type StatusTransition = {
   label: string
@@ -79,11 +69,11 @@ interface ReservationDetailSheetProps {
   date: string
 }
 
-function formatStatus (status: Reservation['status']) {
-  if (status === 'no_show') return 'No-Show'
-  return status.replace('_', ' ')
-}
-
+/**
+ * One labelled figure. Borderless: a grid of bordered boxes inside an already
+ * bordered section read as three competing frames. The tinted inset well
+ * (§3.1) groups them without drawing any lines.
+ */
 function DetailItem ({
   icon: Icon,
   label,
@@ -96,12 +86,14 @@ function DetailItem ({
   if (!value) return null
 
   return (
-    <div className='rounded-xl border border-border/70 bg-card px-3 py-3'>
-      <div className='mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-        <Icon className='h-3.5 w-3.5' />
-        {label}
+    <div className='min-w-0 rounded-2xl border-0 bg-muted/50 px-4 py-3 shadow-none'>
+      <div className='flex items-center gap-1.5 text-sm text-muted-foreground'>
+        <Icon className='h-4 w-4 shrink-0' />
+        <span className='truncate'>{label}</span>
       </div>
-      <div className='text-sm font-medium text-foreground'>{value}</div>
+      <div className='mt-1 truncate text-sm font-medium text-foreground tabular-nums'>
+        {value}
+      </div>
     </div>
   )
 }
@@ -171,9 +163,9 @@ export default function ReservationDetailSheet ({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className='w-full overflow-y-auto border-l border-border/70 bg-background p-0 sm:max-w-[560px]'>
+        <SheetContent className='w-full overflow-y-auto border-0 bg-background p-0 sm:max-w-[560px]'>
           <div className='flex min-h-full flex-col'>
-            <SheetHeader className='border-b border-border/70 bg-background/95 px-6 py-5'>
+            <SheetHeader className='bg-background px-6 pb-2 pt-6'>
               <div className='space-y-4'>
                 <div className='flex items-start justify-between gap-3 pr-8'>
                   <div className='min-w-0 space-y-2'>
@@ -182,7 +174,7 @@ export default function ReservationDetailSheet ({
                         {displayedReservation.party_name}
                       </SheetTitle>
                       {displayedReservation.is_vip && (
-                        <Badge className='border-amber-500/25 bg-amber-500/12 text-amber-100 dark:border-amber-400/25 dark:bg-amber-400/12 dark:text-amber-100'>
+                        <Badge className='shrink-0 gap-1 rounded-full border-0 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 shadow-none dark:bg-amber-900/20 dark:text-amber-400'>
                           <Star className='mr-1 h-3 w-3 fill-current' />
                           VIP
                         </Badge>
@@ -193,14 +185,28 @@ export default function ReservationDetailSheet ({
                     </SheetDescription>
                   </div>
 
-                  <Badge
-                    className={cn(
-                      'border px-2.5 py-1 capitalize shadow-sm',
-                      STATUS_COLORS[displayedReservation.status]
-                    )}
-                  >
-                    {formatStatus(displayedReservation.status)}
-                  </Badge>
+                  {(() => {
+                    const style = reservationStatusStyle(
+                      displayedReservation.status
+                    )
+                    return (
+                      <span
+                        className={cn(
+                          'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
+                          style.bg,
+                          style.text
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'h-1.5 w-1.5 shrink-0 rounded-full',
+                            style.dot
+                          )}
+                        />
+                        {reservationStatusLabel(displayedReservation.status)}
+                      </span>
+                    )
+                  })()}
                 </div>
 
                 <div className='grid gap-3 sm:grid-cols-3'>
@@ -225,9 +231,9 @@ export default function ReservationDetailSheet ({
               </div>
             </SheetHeader>
 
-            <div className='flex-1 space-y-6 bg-muted/10 px-6 py-5'>
-              <section className='space-y-3 rounded-2xl border border-border/70 bg-card p-4'>
-                <div className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+            <div className='flex-1 space-y-6 px-6 py-5'>
+              <section className='space-y-3 rounded-[24px] border-0 bg-card p-5 shadow-none'>
+                <div className='flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]'>
                   Details
                 </div>
                 <div className='grid gap-3 sm:grid-cols-2'>
@@ -266,8 +272,8 @@ export default function ReservationDetailSheet ({
 
               {(displayedReservation.arrived_at ||
                 displayedReservation.seated_at) && (
-                <section className='space-y-3 rounded-2xl border border-border/70 bg-card p-4'>
-                  <div className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                <section className='space-y-3 rounded-[24px] border-0 bg-card p-5 shadow-none'>
+                  <div className='flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]'>
                     Service Timeline
                   </div>
                   <div className='grid gap-3 sm:grid-cols-2'>
@@ -287,14 +293,16 @@ export default function ReservationDetailSheet ({
 
               {(displayedReservation.notes ||
                 displayedReservation.special_requests) && (
-                <section className='space-y-3 rounded-2xl border border-border/70 bg-card p-4'>
-                  <div className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-                    Notes
+                <section className='space-y-3 rounded-[24px] border-0 bg-card p-5 shadow-none'>
+                  {/* The section is named once here; the entries beneath use the
+                      quiet sub-label so "Notes" does not appear twice in a row. */}
+                  <div className='flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]'>
+                    Notes &amp; Requests
                   </div>
-                  <div className='space-y-3'>
+                  <div className='space-y-4'>
                     {displayedReservation.notes && (
-                      <div className='space-y-2'>
-                        <div className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                      <div className='space-y-1'>
+                        <div className='text-sm text-muted-foreground'>
                           Notes
                         </div>
                         <p className='text-sm leading-6 text-foreground'>
@@ -303,8 +311,8 @@ export default function ReservationDetailSheet ({
                       </div>
                     )}
                     {displayedReservation.special_requests && (
-                      <div className='space-y-2'>
-                        <div className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                      <div className='space-y-1'>
+                        <div className='text-sm text-muted-foreground'>
                           Special Requests
                         </div>
                         <p className='text-sm leading-6 text-foreground'>
@@ -317,8 +325,8 @@ export default function ReservationDetailSheet ({
               )}
 
               {displayedReservation.cancellation_reason && (
-                <section className='space-y-3 rounded-2xl border border-border/70 bg-card p-4'>
-                  <div className='text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
+                <section className='space-y-3 rounded-[24px] border-0 bg-card p-5 shadow-none'>
+                  <div className='flex items-center gap-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]'>
                     Cancellation
                   </div>
                   <p className='text-sm leading-6 text-foreground'>
@@ -328,10 +336,10 @@ export default function ReservationDetailSheet ({
               )}
             </div>
 
-            <div className='mt-auto border-t border-border/70 bg-background/95 px-6 py-5'>
+            <div className='mt-auto bg-background px-6 pb-6 pt-2'>
               <div className='space-y-3'>
                 <Button
-                  className='w-full'
+                  className='h-10 w-full rounded-full text-sm font-medium shadow-sm'
                   variant='secondary'
                   onClick={() => setEditDialogOpen(true)}
                 >
@@ -348,7 +356,7 @@ export default function ReservationDetailSheet ({
                     {transitions.map(t => (
                       <Button
                         key={t.status}
-                        className='w-full'
+                        className='h-10 w-full rounded-full text-sm font-medium shadow-sm'
                         variant='outline'
                         disabled={updateStatus.isPending}
                         onClick={() => handleStatusChange(t.status)}
@@ -361,7 +369,7 @@ export default function ReservationDetailSheet ({
                     ))}
                     {canCancel && (
                       <Button
-                        className='w-full'
+                        className='h-10 w-full rounded-full text-sm font-medium shadow-sm'
                         variant='destructive'
                         onClick={() => setCancelDialogOpen(true)}
                       >

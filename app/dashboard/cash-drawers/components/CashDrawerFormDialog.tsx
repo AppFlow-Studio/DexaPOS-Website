@@ -103,8 +103,13 @@ export function CashDrawerFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !isPending && onOpenChange(o)}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      {/* The base `DialogContent` already goes edge-to-edge and `h-dvh` below
+          `sm`, so the sheet only needs the scroll structure: `flex` instead of
+          the base `grid`, and `overflow-hidden` to override the base's
+          `max-sm:overflow-y-auto` — a rounded/clipping panel must never be the
+          scroller itself, or the footer scrolls away with the content. */}
+      <DialogContent className="flex flex-col overflow-hidden max-sm:overflow-hidden sm:max-h-[85dvh] sm:max-w-md p-0">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle>{isEdit ? 'Edit Cash Drawer' : 'Add Cash Drawer'}</DialogTitle>
           <DialogDescription>
             {isEdit
@@ -113,7 +118,9 @@ export function CashDrawerFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        {/* Horizontal padding lives here (not on the panel) so the input focus
+            ring isn't clipped by the scroller's overflow on either side. */}
+        <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-6">
           <div className="space-y-2">
             <Label htmlFor="cd-name">Name</Label>
             <Input
@@ -125,7 +132,10 @@ export function CashDrawerFormDialog({
               autoFocus
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          {/* One column on a phone: "Drawer Number (optional)" and
+              "Station / Register (optional)" both wrap to two lines in a
+              160px half-column at 320px. */}
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="cd-number">Drawer Number (optional)</Label>
               <Input
@@ -164,7 +174,7 @@ export function CashDrawerFormDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 px-6 pb-6">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>

@@ -64,3 +64,24 @@ and immune to this class of bug. Source query strings carry over automatically; 
 capture to lift a query param into a path segment. Keep `permanent: false` for internal routes, as
 browsers cache a 308 indefinitely. Reserve runtime `redirect()` for genuinely conditional
 branching (auth, role), which cannot move to config.
+
+## Dual pricing is a CASH DISCOUNT, not a card surcharge (2026-08-24)
+Context: `lib/pricing.ts` computed cash as `card / (1 + pct/100)` (surcharge model → 28 ÷ 1.04 =
+26.92). The intended model is a cash discount: `cash = card × (1 − pct/100)` (28 × 0.96 = 26.88);
+inverse `card = cash ÷ (1 − pct/100)`.
+Mistake (mine): the user asked "4% off 28 should be 26.88, how did we get 26.92?" and I initially
+*defended* 26.92 as the "more correct" surcharge convention. Their "4% off" wording was the spec —
+they meant a flat discount. Don't argue a plausible alternative model over the number the user
+explicitly stated; confirm which model they want, then match it.
+Rule (FP): the discount lands on exact cent boundaries and binary floats render some as
+26.8799999…, so a naive `Math.floor(x*100)/100` drops a whole cent (→26.87, and 15×0.96 → 14.39).
+Add a sub-cent epsilon before flooring: `Math.floor(raw*100 + 1e-6)/100`. Postgres `numeric` is
+exact decimal, so the SQL side needs NO epsilon — verify each layer empirically (`node -e`, a
+`SELECT floor(...)`), don't assume.
+Rule (surfaces): `lib/pricing.ts` is the single source of truth, but only `PriceInputGroup`
+consumed it. Surfaces that persist prices independently must also derive: `InlinePriceEditor`
+(cascade cells) and the bulk-adjust **RPCs** (`bulk_adjust_menu_item_prices` /
+`bulk_adjust_menu_item_menu_prices` — the JS `computeNewPrice` is preview-only; the real write is
+server-side SQL). A model change to the helper does NOT reach SQL RPCs — grep for the math, don't
+trust the funnel. Base/global price scope has no single location %, so leave global cash to the
+item editor rather than guessing a rate.

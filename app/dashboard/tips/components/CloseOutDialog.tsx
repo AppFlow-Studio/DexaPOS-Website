@@ -75,7 +75,7 @@ export function CloseOutDialog({
           <AlertDialogAction
             onClick={onConfirm}
             disabled={isLoading}
-            className="bg-teal-500 hover:bg-teal-600 text-white"
+            
           >
             {isLoading ? "Calculating..." : "Close Out"}
           </AlertDialogAction>

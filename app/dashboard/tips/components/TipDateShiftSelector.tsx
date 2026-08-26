@@ -22,7 +22,7 @@ export function TipDateShiftSelector({
   onShiftChange,
 }: TipDateShiftSelectorProps) {
   return (
-    <div className="flex flex-wrap items-center gap-3 px-1 py-3 border-b">
+    <div className="flex flex-wrap items-center gap-3 px-1 py-3">
       <div className="flex items-center gap-2">
         <CalendarDays className="w-4 h-4 text-muted-foreground shrink-0" />
         <Input

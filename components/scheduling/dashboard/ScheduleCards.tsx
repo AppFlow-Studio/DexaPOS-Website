@@ -3,7 +3,6 @@
 import { useScheduleStore } from "@/stores/useScheduleStore";
 import { WeeklySchedule, SchedulePeriod } from "@/types/schedule";
 import { format, isBefore, startOfDay, parseISO } from "date-fns";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit2, Trash2, Calendar, Clock, GitBranch } from "lucide-react";
@@ -34,8 +33,6 @@ export function WeeklyScheduleCard({
   );
 
   const isDraftEdit = schedule.status === "draft-edit";
-  const isPublished = schedule.status === "published";
-
   // Check if draft has actual changes
   const hasChanges =
     isDraftEdit && schedule.originalScheduleId
@@ -62,19 +59,19 @@ export function WeeklyScheduleCard({
   };
 
   return (
-    <Card
+    <div
       className={cn(
-        "hover:border-primary/50 transition-colors cursor-pointer",
-        isExpired && "opacity-75 bg-muted/20",
-        hasChanges && "border-yellow-500/50 bg-yellow-500/5"
+        "group min-w-0 max-w-full cursor-pointer rounded-2xl bg-muted/30 px-4 py-4 transition-colors hover:bg-muted/50",
+        isExpired && "opacity-70",
+        hasChanges && "bg-amber-500/10 hover:bg-amber-500/20"
       )}
       onClick={handleClick}
     >
-      <CardContent className="p-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           <div
             className={cn(
-              "h-10 w-10 rounded-full flex items-center justify-center",
+              "flex size-10 shrink-0 items-center justify-center rounded-full",
               isExpired
                 ? "bg-muted text-muted-foreground"
                 : hasChanges
@@ -88,19 +85,19 @@ export function WeeklyScheduleCard({
               <Calendar className="h-5 w-5" />
             )}
           </div>
-          <div>
+          <div className="min-w-0">
             <h3
               className={cn(
-                "font-semibold",
+                "break-words font-semibold sm:truncate",
                 isExpired && "text-muted-foreground"
               )}
             >
               {schedule.name}
             </h3>
-            <div className="text-sm text-muted-foreground flex items-center gap-2">
-              <span>
-                {format(new Date(schedule.startDate), "MMM d")} -{" "}
-                {format(new Date(schedule.endDate), "MMM d, yyyy")}
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <span className="min-w-0 break-words tabular-nums">
+                {format(parseISO(schedule.startDate), "MMM d")} -{" "}
+                {format(parseISO(schedule.endDate), "MMM d, yyyy")}
               </span>
               <Badge
                 variant={
@@ -140,18 +137,18 @@ export function WeeklyScheduleCard({
         </div>
 
         <div
-          className="flex items-center gap-2"
+          className="flex w-full min-w-0 flex-wrap items-center justify-end gap-1 sm:w-auto sm:flex-nowrap"
           onClick={(e) => e.stopPropagation()}
         >
-          <Button variant="ghost" size="icon" onClick={onEdit}>
+          <Button variant="ghost" size="icon-sm" onClick={onEdit} aria-label="Edit schedule dates">
             <Edit2 className="h-4 w-4 text-muted-foreground" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={onDelete}>
+          <Button variant="ghost" size="icon-sm" onClick={onDelete} aria-label="Delete schedule">
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -195,17 +192,16 @@ export function PeriodCard({
   };
 
   return (
-    <Card
+    <div
       className={cn(
-        "w-[280px] flex-shrink-0 hover:border-primary/50 transition-colors cursor-pointer",
-        hasChanges && "border-yellow-500/50 bg-yellow-500/5"
+        "w-[260px] flex-shrink-0 cursor-pointer rounded-2xl bg-muted/40 p-4 transition-colors hover:bg-muted/60 sm:w-[290px]",
+        hasChanges && "bg-amber-500/10 hover:bg-amber-500/20"
       )}
       onClick={handleClick}
     >
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-start">
+        <div className="flex items-start justify-between gap-3">
           <Badge
-            variant="outline"
+            variant="secondary"
             className={cn(
               hasChanges && "border-yellow-500 text-yellow-600 bg-yellow-500/10"
             )}
@@ -215,34 +211,31 @@ export function PeriodCard({
           <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
             <Button
               variant="ghost"
-              size="icon"
-              className="h-6 w-6"
+              size="icon-sm"
               onClick={onEdit}
+              aria-label="Edit schedule period"
             >
               <Edit2 className="h-3 w-3" />
             </Button>
             <Button
               variant="ghost"
-              size="icon"
-              className="h-6 w-6"
+              size="icon-sm"
               onClick={onDelete}
+              aria-label="Delete schedule period"
             >
               <Trash2 className="h-3 w-3 text-destructive" />
             </Button>
           </div>
         </div>
-        <CardTitle className="text-base flex items-center gap-2">
+        <h4 className="mt-3 flex items-center gap-2 truncate font-semibold">
           {hasChanges && <GitBranch className="h-4 w-4 text-yellow-600" />}
           {period.name}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-sm text-muted-foreground flex items-center gap-2">
+        </h4>
+        <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground tabular-nums">
           <Clock className="h-3 w-3" />
-          {format(new Date(period.startDate), "MMM d")} -{" "}
-          {format(new Date(period.endDate), "MMM d, yyyy")}
+          {format(parseISO(period.startDate), "MMM d")} -{" "}
+          {format(parseISO(period.endDate), "MMM d, yyyy")}
         </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }

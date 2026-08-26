@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { toast } from 'sonner'
 import {
   Card,
   CardContent,
@@ -45,13 +44,10 @@ export function OrderOutPushMenuIntegrationCard({
     startTransition(async () => {
       const result = await registerOrderOutPushMenuWebhook()
       if (result.success) {
-        toast.success('push_menu webhook registered with OrderOut')
         setRegistered({
           endpoint: result.endpoint,
           at: new Date().toISOString(),
         })
-      } else {
-        toast.error(result.error || 'Registration failed')
       }
     })
   }

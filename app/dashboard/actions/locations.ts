@@ -7,9 +7,14 @@ import {
   UpdateLocationInput,
 } from "@/types/merchant_locations";
 import { LogAuditEvent } from "./audit-logs";
+import {
+  getEffectiveMerchantContext,
+  UnauthorizedOrgError,
+} from "@/lib/admin/merchant-context";
 import { isValidEmail, normalizeEmail } from "@/lib/utils/email";
 import { findEmailConflict } from "@/app/manage/actions/email-duplicates";
 import { emailConflictMessage } from "@/lib/utils/email";
+import { getCurrentUserMerchantRole } from "./role-check";
 
 // ============================================================================
 // GET OPERATIONS
@@ -457,16 +462,21 @@ export async function UpdateBatchSummaryEmailSettings(
 
   const supabase = createServerSupabaseClient();
 
-  // Scope the location to the caller's merchant.
-  const { data: merchant, error: merchantError } = await supabase
-    .from("merchants")
-    .select("id")
-    .eq("clerk_org_id", clerkOrgId)
-    .single();
-
-  if (merchantError || !merchant) {
-    console.error("[UpdateBatchSummaryEmailSettings] merchant lookup:", merchantError);
-    return { success: false, error: "Merchant not found" };
+  // Resolve the target merchant through the impersonation-aware chokepoint.
+  // A raw `clerk_org_id = clerkOrgId` lookup breaks while an HQ admin is
+  // impersonating a merchant: the page passes the HQ org, so the merchant is
+  // never found ("Merchant not found"). getEffectiveMerchantContext honors the
+  // active impersonation session (from secure cookies) and returns the
+  // impersonated merchant.
+  let merchantId: string;
+  try {
+    ({ merchantId } = await getEffectiveMerchantContext(clerkOrgId || null));
+  } catch (err) {
+    console.error("[UpdateBatchSummaryEmailSettings] merchant context:", err);
+    return {
+      success: false,
+      error: err instanceof UnauthorizedOrgError ? err.message : "Merchant not found",
+    };
   }
 
   const { data: current, error: fetchError } = await supabase
@@ -475,7 +485,7 @@ export async function UpdateBatchSummaryEmailSettings(
       "name, email, merchant_id, batch_summary_email_enabled, batch_summary_email_recipient"
     )
     .eq("id", locationId)
-    .eq("merchant_id", merchant.id)
+    .eq("merchant_id", merchantId)
     .single();
 
   if (fetchError || !current) {
@@ -583,7 +593,32 @@ export async function RestoreLocation(locationId: string) {
     return { error: "Location ID is required" };
   }
 
+  const roleInfo = await getCurrentUserMerchantRole();
+  if (!roleInfo?.isOwnerOrAdmin) {
+    return { error: "Only merchant owners and admins can activate locations" };
+  }
+
   const supabase = createServerSupabaseClient();
+
+  const { data: targetLocation, error: targetError } = await supabase
+    .from("locations")
+    .select("merchant_id, is_active")
+    .eq("id", locationId)
+    .maybeSingle();
+
+  if (
+    targetError ||
+    !targetLocation ||
+    targetLocation.merchant_id !== roleInfo.merchantId
+  ) {
+    return { error: "Location not found" };
+  }
+
+  // Treat retries as a successful no-op so a replay cannot create a second,
+  // inaccurate activation audit event.
+  if (targetLocation.is_active) {
+    return { success: true };
+  }
 
   const { data, error } = await supabase.rpc("restore_location", {
     p_location_id: locationId,
@@ -599,23 +634,15 @@ export async function RestoreLocation(locationId: string) {
     return { error: result.error };
   }
 
-  const { data: locationData } = await supabase
-    .from("locations")
-    .select("merchant_id")
-    .eq("id", locationId)
-    .single();
-
-  if (locationData) {
-    await LogAuditEvent({
-      merchantId: locationData.merchant_id,
-      action: `Restored Location: ${result.name}`,
-      actionCategory: "settings",
-      resourceType: "location",
-      resourceId: locationId,
-      resourceName: result.name ?? locationId,
-      changes: { before: { is_active: false }, after: { is_active: true } },
-    });
-  }
+  await LogAuditEvent({
+    merchantId: targetLocation.merchant_id,
+    action: `Activated Location: ${result.name}`,
+    actionCategory: "settings",
+    resourceType: "location",
+    resourceId: locationId,
+    resourceName: result.name ?? locationId,
+    changes: { before: { is_active: false }, after: { is_active: true } },
+  });
 
   return { success: true };
 }

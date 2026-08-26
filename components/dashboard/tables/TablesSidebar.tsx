@@ -191,28 +191,28 @@ export function TablesSidebar ({
         onValueChange={setActiveTab}
         className='flex flex-col h-full'
       >
-        <TabsList className='m-1 grid w-full grid-cols-4 rounded-md border bg-muted/40 p-0.5'>
+        <TabsList className='m-1 grid w-full grid-cols-4 gap-0.5 rounded-full bg-muted/70 p-1'>
           <TabsTrigger
             value='tables'
-            className='h-6 text-[10px] rounded-sm px-1'
+            className='h-6 rounded-full px-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border'
           >
             Tables
           </TabsTrigger>
           <TabsTrigger
             value='waitlist'
-            className='h-6 text-[10px] rounded-sm px-1'
+            className='h-6 rounded-full px-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border'
           >
             Waitlist
           </TabsTrigger>
           <TabsTrigger
             value='seated'
-            className='h-6 text-[10px] rounded-sm px-1'
+            className='h-6 rounded-full px-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border'
           >
             Seated
           </TabsTrigger>
           <TabsTrigger
             value='history'
-            className='h-6 text-[10px] rounded-sm px-1'
+            className='h-6 rounded-full px-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border'
           >
             History
           </TabsTrigger>
@@ -220,7 +220,7 @@ export function TablesSidebar ({
 
         <div className='flex-1 overflow-hidden'>
           <TabsContent value='tables' className='m-0 h-full flex flex-col'>
-            <div className='px-2 pb-1.5 pt-1 space-y-1.5 border-b bg-background'>
+            <div className='px-2 pb-1.5 pt-1 space-y-1.5 bg-background'>
               <div className='flex gap-1 overflow-x-auto pb-0.5'>
                 <Button
                   size='sm'
@@ -283,10 +283,10 @@ export function TablesSidebar ({
                         key={table.id}
                         onClick={() => onTableClick?.(table.id)}
                         className={cn(
-                          'group rounded-md border px-2 py-1.5 cursor-pointer transition-all overflow-hidden',
+                          'group cursor-pointer overflow-hidden rounded-2xl border-0 px-2 py-1.5 shadow-none transition-colors',
                           isSelected
-                            ? 'bg-primary/10 border-primary/50 shadow-sm'
-                            : 'bg-card border-border hover:border-primary/30'
+                            ? 'bg-primary/10'
+                            : 'bg-muted/50 hover:bg-muted'
                         )}
                       >
                         <div className='flex-1 min-w-0 space-y-0.5'>
@@ -314,7 +314,7 @@ export function TablesSidebar ({
                             </div>
 
                             <div className='flex items-center gap-1 shrink-0'>
-                              <span className='text-[8px] px-1.5 py-0.5 rounded-full border bg-background text-foreground/80 capitalize'>
+                              <span className='text-[8px] px-1.5 py-0.5 rounded-full border-0 bg-background text-foreground/80 capitalize'>
                                 {statusLabel}
                               </span>
                               {billAmount !== null && (

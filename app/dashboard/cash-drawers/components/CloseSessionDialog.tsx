@@ -67,8 +67,10 @@ export function CloseSessionDialog({ open, onOpenChange, clerkOrgId, drawer }: P
 
   return (
     <Dialog open={open} onOpenChange={(o) => !isPending && onOpenChange(o)}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      {/* Header/footer fixed, body the only scroller — see the form dialog.
+          This one has the most content, so it clipped soonest on a phone. */}
+      <DialogContent className="flex flex-col overflow-hidden max-sm:overflow-hidden sm:max-h-[85dvh] sm:max-w-md">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Close Cash Drawer Session</DialogTitle>
           <DialogDescription>
             Enter the counted closing amount. Variance is computed from operations recorded
@@ -76,8 +78,9 @@ export function CloseSessionDialog({ open, onOpenChange, clerkOrgId, drawer }: P
           </DialogDescription>
         </DialogHeader>
 
+        <div className="thin-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto">
         {session && (
-          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <div className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 text-sm shadow-none">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Drawer</span>
               <span className="font-medium">{drawer?.name}</span>
@@ -123,8 +126,9 @@ export function CloseSessionDialog({ open, onOpenChange, clerkOrgId, drawer }: P
             />
           </div>
         </div>
+        </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>

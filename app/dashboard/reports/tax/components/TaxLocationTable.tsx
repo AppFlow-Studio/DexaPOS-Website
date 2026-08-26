@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
 import {
   Download,
   Loader2,
@@ -22,6 +22,22 @@ import {
 import { cn } from "@/lib/utils";
 import type { TaxLocationRow } from "@/app/dashboard/reports/tax/types";
 import { exportToCsv, exportToPdf, formatReportDateRange } from "@/utils/export";
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+/** Location and net liability are the point of this table; the rest are detail. */
+const TABLE_COLUMNS: ReportColumn[] = [
+  { id: "locationName", label: "Location", locked: true },
+  { id: "salesTaxRate", label: "Tax Rate", defaultHidden: true },
+  { id: "taxableSales", label: "Taxable Sales", defaultHidden: true },
+  { id: "grossTax", label: "Gross Tax" },
+  { id: "taxRefunded", label: "Refunded", defaultHidden: true },
+  { id: "netLiability", label: "Net Liability", locked: true },
+];
 
 interface TaxLocationTableProps {
   data: TaxLocationRow[] | undefined;
@@ -36,8 +52,8 @@ type SortDir = "asc" | "desc";
 function SortIcon({ col, active, dir }: { col: SortKey; active: SortKey; dir: SortDir }) {
   if (col !== active) return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1 shrink-0" />;
   return dir === "asc"
-    ? <ArrowUp className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
-    : <ArrowDown className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />;
+    ? <ArrowUp className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />
+    : <ArrowDown className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />;
 }
 
 function fmt(value: number) {
@@ -61,6 +77,14 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
   const [isExporting, setIsExporting] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("netLiability");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [hiddenCols, setHiddenCols] = useState(() =>
+    initialHiddenColumns(TABLE_COLUMNS),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
+  const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
   function handleSort(key: SortKey) {
     if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -105,16 +129,23 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
   }
 
   return (
-    <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
+    <Card className="overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-border/50">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="flex items-center justify-between px-5 pb-4 pt-5">
+        {/* Hidden on mobile — the toolbar is already tight against the
+            Columns and export buttons at that width. */}
+        <div className="hidden items-center gap-2 text-sm text-muted-foreground sm:flex">
           <MapPin className="h-4 w-4" />
           <span className="text-xs font-medium">
             {isLoading ? "Loading…" : `${data?.length ?? 0} location${(data?.length ?? 0) !== 1 ? "s" : ""}`}
           </span>
         </div>
         <div className="flex gap-2">
+          <MobileColumnsButton
+            columns={TABLE_COLUMNS}
+            hidden={hiddenCols}
+            onChange={setHiddenCols}
+          />
           <Button
             variant="outline"
             size="sm"
@@ -141,12 +172,12 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
         </div>
       </div>
 
-      <CardContent className="p-0 overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent border-b border-border/50">
+      <CardContent className="p-0">
+        <Table variant="data">
+          <TableHeader className="[&_tr]:border-0">
+            <TableRow className="hover:bg-transparent">
               <TableHead
-                className="pl-5 text-xs font-semibold text-muted-foreground cursor-pointer select-none"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none"
                 onClick={() => handleSort("locationName")}
               >
                 <div className="flex items-center">
@@ -154,38 +185,46 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                   <SortIcon col="locationName" active={sortKey} dir={sortDir} />
                 </div>
               </TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground text-right">
-                Tax Rate
-              </TableHead>
+              {isColVisible("salesTaxRate") && (
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground text-right">
+                  Tax Rate
+                </TableHead>
+              )}
+              {isColVisible("taxableSales") && (
+                <TableHead
+                  className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
+                  onClick={() => handleSort("taxableSales")}
+                >
+                  <div className="flex items-center justify-end">
+                    Taxable Sales
+                    <SortIcon col="taxableSales" active={sortKey} dir={sortDir} />
+                  </div>
+                </TableHead>
+              )}
+              {isColVisible("grossTax") && (
+                <TableHead
+                  className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
+                  onClick={() => handleSort("grossTax")}
+                >
+                  <div className="flex items-center justify-end">
+                    Gross Tax
+                    <SortIcon col="grossTax" active={sortKey} dir={sortDir} />
+                  </div>
+                </TableHead>
+              )}
+              {isColVisible("taxRefunded") && (
+                <TableHead
+                  className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
+                  onClick={() => handleSort("taxRefunded")}
+                >
+                  <div className="flex items-center justify-end">
+                    Refunded
+                    <SortIcon col="taxRefunded" active={sortKey} dir={sortDir} />
+                  </div>
+                </TableHead>
+              )}
               <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
-                onClick={() => handleSort("taxableSales")}
-              >
-                <div className="flex items-center justify-end">
-                  Taxable Sales
-                  <SortIcon col="taxableSales" active={sortKey} dir={sortDir} />
-                </div>
-              </TableHead>
-              <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
-                onClick={() => handleSort("grossTax")}
-              >
-                <div className="flex items-center justify-end">
-                  Gross Tax
-                  <SortIcon col="grossTax" active={sortKey} dir={sortDir} />
-                </div>
-              </TableHead>
-              <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
-                onClick={() => handleSort("taxRefunded")}
-              >
-                <div className="flex items-center justify-end">
-                  Refunded
-                  <SortIcon col="taxRefunded" active={sortKey} dir={sortDir} />
-                </div>
-              </TableHead>
-              <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right pr-5"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5"
                 onClick={() => handleSort("netLiability")}
               >
                 <div className="flex items-center justify-end">
@@ -198,8 +237,8 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
           <TableBody>
             {isLoading ? (
               Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i} className="border-b border-border/30">
-                  {Array.from({ length: 6 }).map((_, j) => (
+                <TableRow key={i} className="border-0">
+                  {Array.from({ length: visibleColCount }).map((_, j) => (
                     <TableCell key={j} className="py-3.5">
                       <div className="h-4 bg-muted animate-pulse rounded" />
                     </TableCell>
@@ -208,7 +247,7 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
               ))
             ) : !sorted?.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-40 text-center">
+                <TableCell colSpan={visibleColCount} className="h-40 text-center">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <MapPin className="h-7 w-7 opacity-30" />
                     <p className="text-sm font-medium">No location data available</p>
@@ -222,50 +261,53 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                   return (
                     <TableRow
                       key={row.locationId}
-                      className="border-b border-border/30 hover:bg-muted/30 transition-colors"
+                      className="border-0 bg-card/70 transition-colors hover:bg-muted/40"
                     >
                       <TableCell className="pl-5 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <div className="h-7 w-7 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                            <MapPin className="h-3.5 w-3.5 text-indigo-500" />
-                          </div>
-                          <span className="text-sm font-medium">{row.locationName}</span>
-                        </div>
+                        <span className="text-sm font-medium">{row.locationName}</span>
                       </TableCell>
-                      <TableCell className="py-3.5 text-right">
-                        {row.salesTaxRate != null ? (
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                            {(row.salesTaxRate * 100).toFixed(2)}%
+                      {isColVisible("salesTaxRate") && (
+                        <TableCell className="py-3.5 text-right">
+                          {row.salesTaxRate != null ? (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                              {(row.salesTaxRate * 100).toFixed(2)}%
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                      )}
+                      {isColVisible("taxableSales") && (
+                        <TableCell className="py-3.5 text-right text-sm">
+                          {fmt(row.taxableSales)}
+                        </TableCell>
+                      )}
+                      {isColVisible("grossTax") && (
+                        <TableCell className="py-3.5 text-right">
+                          <span className="text-sm font-semibold text-foreground">
+                            {fmt(row.grossTax)}
                           </span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-right text-sm">
-                        {fmt(row.taxableSales)}
-                      </TableCell>
-                      <TableCell className="py-3.5 text-right">
-                        <span className="text-sm font-semibold text-emerald-600">
-                          {fmt(row.grossTax)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-3.5 text-right">
-                        {row.taxRefunded > 0 ? (
-                          <span className="text-sm font-medium text-rose-500">
-                            -{fmt(row.taxRefunded)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
-                      </TableCell>
+                        </TableCell>
+                      )}
+                      {isColVisible("taxRefunded") && (
+                        <TableCell className="py-3.5 text-right">
+                          {row.taxRefunded > 0 ? (
+                            <span className="text-sm font-medium text-foreground">
+                              -{fmt(row.taxRefunded)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell className="py-3.5 pr-5 text-right">
                         <div className="flex flex-col items-end gap-1">
-                          <span className="text-sm font-bold text-blue-600">
+                          <span className="text-sm font-semibold text-foreground">
                             {fmt(row.netLiability)}
                           </span>
                           <div className="w-20 h-1 bg-muted rounded-full overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-blue-400"
+                              className="h-full rounded-full bg-foreground/35"
                               style={{ width: `${barPct}%` }}
                             />
                           </div>
@@ -278,28 +320,39 @@ export function TaxLocationTable({ data, isLoading, dateFrom, dateTo }: TaxLocat
                 {/* Totals row */}
                 {totals && (
                   <TableRow className="border-t-2 border-border bg-muted/30 font-semibold">
-                    <TableCell className="pl-5 py-3.5 text-sm font-bold" colSpan={2}>
+                    {/* Spans Location + Tax Rate, so it narrows to one cell
+                        when the rate column is hidden on mobile. */}
+                    <TableCell
+                      className="pl-5 py-3.5 text-sm font-bold"
+                      colSpan={isColVisible("salesTaxRate") ? 2 : 1}
+                    >
                       Total — All Locations
                     </TableCell>
-                    <TableCell className="py-3.5 text-right text-sm font-bold">
-                      {fmt(totals.taxableSales)}
-                    </TableCell>
-                    <TableCell className="py-3.5 text-right">
-                      <span className="text-sm font-bold text-emerald-600">
-                        {fmt(totals.grossTax)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-3.5 text-right">
-                      {totals.taxRefunded > 0 ? (
-                        <span className="text-sm font-bold text-rose-500">
-                          -{fmt(totals.taxRefunded)}
+                    {isColVisible("taxableSales") && (
+                      <TableCell className="py-3.5 text-right text-sm font-bold">
+                        {fmt(totals.taxableSales)}
+                      </TableCell>
+                    )}
+                    {isColVisible("grossTax") && (
+                      <TableCell className="py-3.5 text-right">
+                        <span className="text-sm font-bold text-foreground">
+                          {fmt(totals.grossTax)}
                         </span>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </TableCell>
+                      </TableCell>
+                    )}
+                    {isColVisible("taxRefunded") && (
+                      <TableCell className="py-3.5 text-right">
+                        {totals.taxRefunded > 0 ? (
+                          <span className="text-sm font-bold text-foreground">
+                            -{fmt(totals.taxRefunded)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell className="py-3.5 pr-5 text-right">
-                      <span className="text-sm font-bold text-blue-600">
+                      <span className="text-sm font-bold text-foreground">
                         {fmt(totals.netLiability)}
                       </span>
                     </TableCell>

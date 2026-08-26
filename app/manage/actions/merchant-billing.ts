@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { createNmiVaultCustomer } from '@/lib/payments/nmi'
+import { getProcessorWithNmiFallback } from '@/lib/payments'
 
 const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID!
 
@@ -434,31 +434,44 @@ export async function saveMerchantBillingCardWithVault(
       }
     }
 
-    const vaultResult = await createNmiVaultCustomer(
-      {
-        apiKey: platformCredential.decrypted_secret.trim(),
-      },
-      {
-        paymentToken,
+    // [C2] Routed through the PaymentProcessor interface. The subscription rail
+    // resolves per merchant, defaulting to NMI until C4 populates
+    // merchant_processor_accounts.
+    const { processor } = await getProcessorWithNmiFallback(
+      merchantId,
+      'subscription',
+      platformCredential.decrypted_secret.trim(),
+    )
+
+    if (!processor.createCustomer) {
+      return {
+        success: false,
+        error: `${processor.name} does not support storing a billing card.`,
+      }
+    }
+
+    const vaultResult = await processor.createCustomer({
+      paymentToken,
+      contact: {
         firstName,
         lastName,
         email: billingEmail,
       },
-    )
+    })
 
-    if (!vaultResult.success || !vaultResult.vault.customerVaultId) {
+    if (!vaultResult.success || !vaultResult.customerVaultId) {
       const debugMessage = formatNmiDebugError({
-        status: vaultResult.status,
-        responseText: vaultResult.details.responseText,
-        body: vaultResult.body,
-        text: vaultResult.text,
+        status: vaultResult.diagnostics?.httpStatus ?? 0,
+        responseText: vaultResult.responseText,
+        body: vaultResult.raw,
+        text: vaultResult.diagnostics?.rawText ?? '',
       })
 
       console.error('[saveMerchantBillingCardWithVault] Vault create rejected:', {
-        status: vaultResult.status,
-        responseText: vaultResult.details.responseText,
-        text: vaultResult.text,
-        body: vaultResult.body,
+        status: vaultResult.diagnostics?.httpStatus ?? 0,
+        responseText: vaultResult.responseText,
+        text: vaultResult.diagnostics?.rawText ?? '',
+        body: vaultResult.raw,
       })
 
       return {
@@ -503,8 +516,8 @@ export async function saveMerchantBillingCardWithVault(
         card_token: null,
         payment_device_id: null,
         platform_billing_config_id: platformCredential.config_id,
-        customer_vault_id: vaultResult.vault.customerVaultId,
-        vault_initial_transaction_id: vaultResult.vault.initialTransactionId || null,
+        customer_vault_id: vaultResult.customerVaultId,
+        vault_initial_transaction_id: vaultResult.initialTransactionId,
         is_primary: true,
         is_verified: true,
         verified_at: new Date().toISOString(),

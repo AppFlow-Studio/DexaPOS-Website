@@ -453,6 +453,9 @@ export const adminKeys = {
   merchantTerminalStats: (merchantId: string, locationId?: string | null) =>
     [...adminKeys.merchants(), merchantId, 'terminal-stats', locationId] as const,
 
+  merchantConnectedTerminals: (merchantId: string, locationId?: string | null) =>
+    [...adminKeys.merchants(), merchantId, 'connected-terminals', locationId] as const,
+
   merchantTaxRates: (merchantId: string, locationId?: string | null) =>
     [...adminKeys.merchants(), merchantId, 'tax-rates', locationId] as const,
 
@@ -583,4 +586,11 @@ export const adminKeys = {
       'orderout-synced-menus',
       locationId,
     ] as const,
+
+  // ============================================================================
+  // MERCHANT VALOR BOARDING (Admin View)
+  // ============================================================================
+
+  merchantValorBoarding: (merchantId: string) =>
+    [...adminKeys.merchants(), merchantId, 'valor-boarding'] as const,
 }

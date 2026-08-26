@@ -10,6 +10,7 @@ import {
     ChevronDown,
     ChevronUp,
     Trash2,
+    Pencil,
     MoreVertical,
     Zap
 } from 'lucide-react'
@@ -90,7 +91,7 @@ export function ScheduleCard({ schedule, index = 0, onRemove, onEdit }: Schedule
     return (
         <Card
             className={cn(
-                "group transition-all duration-300 hover:shadow-lg overflow-hidden",
+                "group overflow-hidden border-0 transition-all duration-300 hover:shadow-lg",
                 "animate-in fade-in slide-in-from-bottom-4",
                 isLive && "ring-2 ring-green-500/50"
             )}
@@ -109,8 +110,8 @@ export function ScheduleCard({ schedule, index = 0, onRemove, onEdit }: Schedule
                             <Calendar className="h-5 w-5" />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                                <h3 className="font-semibold truncate group-hover:text-primary transition-colors">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="min-w-0 truncate font-semibold transition-colors group-hover:text-primary">
                                     {schedule.name}
                                 </h3>
                                 {isLive && (
@@ -122,20 +123,23 @@ export function ScheduleCard({ schedule, index = 0, onRemove, onEdit }: Schedule
                                         Live
                                     </Badge>
                                 )}
-                            </div>
-                            {schedule.description && (
-                                <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
-                                    {schedule.description}
-                                </p>
-                            )}
-                            <div className="flex items-center gap-2 mt-2">
-                                <Badge variant={schedule.is_active ? "default" : "secondary"} className="text-xs">
-                                    {schedule.is_active ? 'Active' : 'Inactive'}
-                                </Badge>
-                                <span className="text-xs text-muted-foreground">
+                                {!isLive && (
+                                    <Badge
+                                        variant={schedule.is_active ? "default" : "secondary"}
+                                        className="hidden shrink-0 text-xs sm:inline-flex"
+                                    >
+                                        {schedule.is_active ? 'Active' : 'Inactive'}
+                                    </Badge>
+                                )}
+                                <span className="hidden text-xs text-muted-foreground sm:inline">
                                     {activeDaysCount} day{activeDaysCount !== 1 ? 's' : ''} · {timeSlots.length} time slot{timeSlots.length !== 1 ? 's' : ''}
                                 </span>
                             </div>
+                            {schedule.description && (
+                                <p className="mt-0.5 hidden text-sm text-muted-foreground sm:line-clamp-1">
+                                    {schedule.description}
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -149,6 +153,7 @@ export function ScheduleCard({ schedule, index = 0, onRemove, onEdit }: Schedule
                             <DropdownMenuContent align="end">
                                 {onEdit && (
                                     <DropdownMenuItem onClick={onEdit}>
+                                        <Pencil className="mr-2 h-4 w-4" />
                                         Edit Schedule
                                     </DropdownMenuItem>
                                 )}
@@ -165,7 +170,7 @@ export function ScheduleCard({ schedule, index = 0, onRemove, onEdit }: Schedule
 
                 {/* Mini Weekly Calendar */}
                 <div className="px-4 pb-3">
-                    <div className="flex gap-1">
+                    <div className="flex gap-1 sm:justify-start">
                         {DAYS_OF_WEEK.map((day, dayIndex) => {
                             const hasSlots = slotsByDay[dayIndex]?.length > 0
                             const isToday = new Date().getDay() === dayIndex
@@ -174,7 +179,7 @@ export function ScheduleCard({ schedule, index = 0, onRemove, onEdit }: Schedule
                                 <div
                                     key={day}
                                     className={cn(
-                                        "flex-1 text-center py-1.5 px-1 rounded-md text-xs font-medium transition-all duration-300",
+                                        "flex-1 rounded-md px-1 py-1.5 text-center text-xs font-medium transition-all duration-300 sm:w-10 sm:flex-none",
                                         hasSlots
                                             ? "bg-primary/20 text-primary"
                                             : "bg-muted/50 text-muted-foreground",
@@ -262,7 +267,7 @@ export function ScheduleCard({ schedule, index = 0, onRemove, onEdit }: Schedule
                                                             isCurrentSlot
                                                                 ? "bg-green-500 text-white animate-pulse"
                                                                 : slot.is_active
-                                                                    ? "bg-background border shadow-sm"
+                                                                    ? "bg-background shadow-sm"
                                                                     : "bg-muted text-muted-foreground line-through"
                                                         )}
                                                         style={{

@@ -1,6 +1,11 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import {
   GetCustomers,
@@ -31,6 +36,7 @@ import type {
   CustomerProfile,
   CustomerListItem,
 } from "@/types/customer";
+import type { PaginatedResult, PaginationParams } from "@/types/pagination";
 
 // =============================================================================
 // Helper Hook: Get Clerk Org ID
@@ -52,20 +58,20 @@ function useClerkOrgId(): string {
 /**
  * Fetch all customers for the current merchant, optionally filtered by location
  */
-export function useCustomers(options?: {
-  limit?: number;
-  offset?: number;
+export function useCustomers(options?: PaginationParams & {
   orderBy?: "last_order_date" | "lifetime_spend" | "visits" | "created_at";
   ascending?: boolean;
   locationId?: string;
+  search?: string;
 }) {
   const clerkOrgId = useClerkOrgId();
 
-  return useQuery<CustomerListItem[]>({
+  return useQuery<PaginatedResult<CustomerListItem>>({
     queryKey: ["customers", clerkOrgId, options],
     queryFn: () => GetCustomers(clerkOrgId, options),
     enabled: !!clerkOrgId,
     staleTime: 30000, // 30 seconds
+    placeholderData: keepPreviousData,
   });
 }
 

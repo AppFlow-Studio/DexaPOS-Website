@@ -2,8 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Globe, MapPin, Tablet } from "lucide-react";
+import { PageHeader } from "@/components/dashboard/shell";
+import { Globe, MapPin } from "lucide-react";
 import { MenuWithCategories } from "@/types/menu";
+import { useIsSingleLocation } from "@/stores/location-store";
 
 interface MenuHeaderProps {
   menu: MenuWithCategories;
@@ -16,60 +18,52 @@ interface MenuHeaderProps {
 export function MenuHeader({
   menu,
   locationName,
-  onBack,
   onNavigateToMenus,
   onPreview,
 }: MenuHeaderProps) {
+  const isSingleLocation = useIsSingleLocation();
+
+  // Menu scope only has meaning when the merchant can choose among locations.
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div className="flex-1 min-w-0">
-        {/* Breadcrumbs */}
-        <div className="text-sm text-muted-foreground flex items-center gap-2 mb-2">
-          <Button variant="ghost" size="icon" onClick={onBack}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <button
-            type="button"
-            className="hover:underline"
-            onClick={onNavigateToMenus}
-          >
-            Menus
-          </button>
-          <span className="mx-2">/</span>
-          <div className="text-foreground truncate">{menu.name}</div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-2xl font-bold tracking-tight">{menu.name}</h2>
+    <PageHeader
+      title={menu.name}
+      subtitle={menu.description || undefined}
+      backHref="/dashboard/menu"
+      backLabel="Menus"
+      indicator={
+        isSingleLocation ? undefined : (
           <Badge variant={menu.is_location_owned ? "secondary" : "default"}>
             {menu.is_location_owned ? (
-              <div className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5" />
-                <p>{locationName || "Location Menu"}</p>
-              </div>
+                {locationName || "Location Menu"}
+              </span>
             ) : (
-              <div className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5">
                 <Globe className="h-3.5 w-3.5" />
-                <p>Global Menu</p>
-              </div>
+                Global Menu
+              </span>
             )}
           </Badge>
-        </div>
-        {menu.description && (
-          <p className="text-muted-foreground">{menu.description}</p>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-        {onPreview && (
-          <Button variant="outline" onClick={onPreview} className="gap-2">
-            <Tablet className="h-4 w-4" />
-            Preview
-          </Button>
-        )}
-        <Badge variant={menu.is_active ? "default" : "secondary"}>
-          {menu.is_active ? "Active" : "Inactive"}
-        </Badge>
-      </div>
-    </div>
+        )
+      }
+      actions={
+        <>
+          {onPreview && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onPreview}
+              className="h-8 cursor-pointer rounded-full font-medium shadow-sm"
+            >
+              POS Preview
+            </Button>
+          )}
+          <Badge variant={menu.is_active ? "default" : "secondary"}>
+            {menu.is_active ? "Active" : "Inactive"}
+          </Badge>
+        </>
+      }
+    />
   );
 }

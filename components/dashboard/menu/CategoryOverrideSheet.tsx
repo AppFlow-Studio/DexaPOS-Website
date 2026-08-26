@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Tag, MapPin, RotateCcw, Save, Info, Eye, EyeOff, ArrowUp, ArrowDown } from 'lucide-react'
-import { LevelIndicator, EditingContextBanner } from './LevelIndicator'
+import { ScopeBanner } from './ScopeBanner'
 import { CategoriesModel } from '@/types/db-modles'
 
 export interface CategoryOverride {
@@ -133,9 +133,10 @@ export function CategoryOverrideSheet({
                 </SheetHeader>
 
                 <div className="space-y-6 py-6">
-                    {/* Context Banner */}
-                    <EditingContextBanner
-                        level={2}
+                    {/* Context Banner — a category scoped to one branch is
+                        level 3 in the cascade (branch category). */}
+                    <ScopeBanner
+                        level={3}
                         locationName={locationName}
                         categoryName={category.name}
                     />
@@ -167,7 +168,6 @@ export function CategoryOverrideSheet({
                         <div className="flex items-center gap-2">
                             <MapPin className="h-4 w-4 text-blue-500" />
                             <span className="font-medium">Location Override</span>
-                            <LevelIndicator level={2} variant="inline" />
                         </div>
 
                         {/* Visibility Toggle */}

@@ -4,7 +4,7 @@ import {
   buildInvoicePaymentOrderId,
   resolveInvoicePaymentRailForPublicToken,
 } from "@/lib/invoices/payment-rail";
-import { createNmiSale } from "@/lib/payments/nmi";
+import { getProcessorWithNmiFallback, toMinorUnits } from "@/lib/payments";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export interface ChargeInvoiceInput {
@@ -287,30 +287,38 @@ export async function chargeInvoice(
     reason: "invoice public payment initiated",
   });
 
-  const charge = await createNmiSale(
-    {
-      apiKey: rail.apiKey,
-    },
-    {
-      amount: Number(amountDue.toFixed(2)),
-      currency: "USD",
-      paymentToken: input.paymentToken.trim(),
-      industry: "ecommerce",
-      orderId,
-    },
+  // [C2] Routed through the PaymentProcessor interface. Resolves to NMI today
+  // — byte-identical to the previous direct createNmiSale call — and picks up a
+  // Valor account automatically once C4 populates merchant_processor_accounts.
+  const { processor } = await getProcessorWithNmiFallback(
+    inv.merchant_id,
+    "invoice",
+    rail.apiKey,
+    { locationId: inv.location_id },
   );
 
-  const transactionId = charge.details.transactionId || charge.details.id || null;
-  const authCode = charge.details.authCode || null;
-  const responseCode = charge.details.responseCode || charge.details.response || null;
-  const responseText =
-    charge.details.responseText ||
-    (charge.status >= 500
-      ? "Payment service is temporarily unavailable. Please try again."
-      : "Your card was declined. Please try another card.");
+  const charge = await processor.sale({
+    money: {
+      amountMinor: toMinorUnits(Number(amountDue.toFixed(2))),
+      currency: "USD",
+    },
+    paymentToken: input.paymentToken.trim(),
+    industry: "ecommerce",
+    orderId,
+  });
 
-  if (!charge.success) {
-    const nextStatus = charge.status >= 500 ? "failed" : "declined";
+  // The adapter classifies gateway failures (5xx, transport) as `error` and
+  // card refusals as `declined`, so the call site no longer inspects HTTP
+  // status to tell a decline from an outage.
+  const gatewayUnavailable = charge.outcome === "error";
+
+  const transactionId = charge.transactionId;
+  const authCode = charge.authCode;
+  const responseCode = charge.responseCode;
+  const responseText = charge.responseText;
+
+  if (charge.outcome !== "approved") {
+    const nextStatus = gatewayUnavailable ? "failed" : "declined";
 
     const { error: paymentUpdateError } = await supabase
       .from("invoice_payments")
@@ -320,7 +328,7 @@ export async function chargeInvoice(
         authorization_code: authCode,
         card_type: input.cardType?.trim() || null,
         card_last_four: input.cardLastFour?.trim() || null,
-        processor_response: charge.body,
+        processor_response: charge.raw,
         error_code: responseCode,
         error_message: responseText,
         failed_at: now,
@@ -352,7 +360,7 @@ export async function chargeInvoice(
       paymentId,
       invoiceId: inv.id,
       locationId: inv.location_id,
-      eventType: charge.status >= 500 ? "error" : "declined",
+      eventType: gatewayUnavailable ? "error" : "declined",
       previousStatus: "processing",
       newStatus: nextStatus,
       amount: Number(amountDue.toFixed(2)),
@@ -360,13 +368,13 @@ export async function chargeInvoice(
       authCode,
       resultCode: responseCode,
       responseMessage: responseText,
-      rawResponse: charge.body,
-      reason: charge.status >= 500 ? "gateway error" : "gateway decline",
+      rawResponse: charge.raw,
+      reason: gatewayUnavailable ? "gateway error" : "gateway decline",
     });
 
     return {
       success: false,
-      status: charge.status >= 500 ? "error" : "declined",
+      status: gatewayUnavailable ? "error" : "declined",
       message: responseText,
     };
   }
@@ -379,7 +387,7 @@ export async function chargeInvoice(
       authorization_code: authCode,
       card_type: input.cardType?.trim() || null,
       card_last_four: input.cardLastFour?.trim() || null,
-      processor_response: charge.body,
+      processor_response: charge.raw,
       error_code: null,
       error_message: null,
       authorized_at: now,
@@ -406,8 +414,8 @@ export async function chargeInvoice(
     pspReference: transactionId,
     authCode,
     resultCode: responseCode,
-    responseMessage: charge.details.responseText || "Approved",
-    rawResponse: charge.body,
+    responseMessage: charge.responseText || "Approved",
+    rawResponse: charge.raw,
   });
 
   const { error: invoicePaidError } = await supabase

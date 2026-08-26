@@ -1,13 +1,6 @@
 "use client";
 
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import {
   Table,
   TableBody,
   TableCell,
@@ -43,24 +36,24 @@ export function BreakComplianceTable({
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+    <section>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <CardTitle className="text-base">Break & Time Compliance</CardTitle>
-          <CardDescription>
+          <h3 className="font-semibold">Break &amp; time compliance</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
             Monitor labor law compliance and attendance exceptions.
-          </CardDescription>
+          </p>
         </div>
         {onViewAll && (
           <Button variant="ghost" size="sm" className="h-8" onClick={onViewAll}>
             View All
           </Button>
         )}
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div className="mt-4 overflow-x-auto rounded-2xl bg-muted/25">
         <Table>
-          <TableHeader>
-            <TableRow>
+          <TableHeader className="bg-muted/50">
+            <TableRow className="border-0 hover:bg-transparent">
               <TableHead>Employee</TableHead>
               <TableHead className="text-center">Violations</TableHead>
               <TableHead className="text-center">Missed Breaks</TableHead>
@@ -73,7 +66,7 @@ export function BreakComplianceTable({
             {data.map((record, i) => {
               const status = getStatus(record);
               return (
-                <TableRow key={i}>
+                <TableRow key={i} className="border-0 hover:bg-muted/35">
                   <TableCell className="font-medium">{record.name}</TableCell>
                   <TableCell className="text-center">
                     {record.violations > 0 ? (
@@ -135,8 +128,8 @@ export function BreakComplianceTable({
             })}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 

@@ -5,10 +5,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useOrganization } from '@clerk/nextjs'
 import { TableWithSession } from '@/types/floor-plan'
 import { OrderResponse } from '@/types/order-management'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import { Users, Clock, DollarSign, Eye, ArrowRight, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { TableStatusBadge } from './TableStatusBadge'
 import { GetOrderDetails } from '@/app/dashboard/actions/order'
@@ -58,12 +56,12 @@ export function SeatedCard({ table, onViewOrder, onTransfer, onClose }: SeatedCa
     })
 
     return (
-        <Card className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-3">
+        <div className="min-w-0 rounded-2xl border bg-card transition-colors hover:border-primary/30">
+            <div className="px-6 pt-6 pb-3">
                 <div className="flex items-start justify-between">
                     <div className="flex-1">
-                        <CardTitle className="text-base">{table.name}</CardTitle>
-                        <CardDescription className="mt-1 flex items-center gap-4">
+                        <p className="text-[1.0625rem] font-medium leading-tight tracking-[-0.01em]">{table.name}</p>
+                        <div className="mt-1 flex items-center gap-4 text-sm text-muted-foreground">
                             {session.guest_name && (
                                 <span className="font-medium">{session.guest_name}</span>
                             )}
@@ -75,12 +73,12 @@ export function SeatedCard({ table, onViewOrder, onTransfer, onClose }: SeatedCa
                                 <Clock className="h-3 w-3" />
                                 {Math.round(minutesSeated)} min
                             </span>
-                        </CardDescription>
+                        </div>
                     </div>
                     <TableStatusBadge status={session.status} />
                 </div>
-            </CardHeader>
-            <CardContent className="pt-0">
+            </div>
+            <div className="px-6 pb-6">
                 <div className="space-y-3">
                     {/* Order/Bill Information */}
                     {hasOrder && (
@@ -133,7 +131,6 @@ export function SeatedCard({ table, onViewOrder, onTransfer, onClose }: SeatedCa
                                             </span>
                                         </div>
                                     )}
-                                    <Separator />
                                     <div className="flex items-center justify-between text-base font-semibold">
                                         <span className="flex items-center gap-1">
                                             <DollarSign className="h-4 w-4" />
@@ -160,8 +157,8 @@ export function SeatedCard({ table, onViewOrder, onTransfer, onClose }: SeatedCa
                                     {/* Order Items - Collapsible */}
                                     {orderDetails.order_items && orderDetails.order_items.length > 0 && (
                                         <Collapsible open={isItemsExpanded} onOpenChange={setIsItemsExpanded}>
-                                            <div className="mt-2 pt-2 border-t">
-                                                <CollapsibleTrigger className="w-full flex items-center justify-between text-left hover:bg-accent rounded-md p-2 -m-2 transition-colors">
+                                            <div className="mt-2 pt-2">
+                                                <CollapsibleTrigger className="w-full flex items-center justify-between text-left -m-2 rounded-xl p-2 transition-colors hover:bg-accent">
                                                     <p className="text-xs text-muted-foreground">
                                                         {orderDetails.order_items.length} item
                                                         {orderDetails.order_items.length !== 1 ? 's' : ''}
@@ -176,7 +173,7 @@ export function SeatedCard({ table, onViewOrder, onTransfer, onClose }: SeatedCa
                                                     {orderDetails.order_items.map((item: OrderItem & { order_item_modifiers?: OrderItemModifier[] }) => (
                                                         <div
                                                             key={item.id}
-                                                            className="border rounded-lg p-3 space-y-2 bg-muted/30"
+                                                            className="space-y-2 rounded-2xl border-0 p-3 bg-muted/50 shadow-none"
                                                         >
                                                             <div className="flex items-start justify-between">
                                                                 <div className="flex-1">
@@ -251,13 +248,13 @@ export function SeatedCard({ table, onViewOrder, onTransfer, onClose }: SeatedCa
 
                     {/* Guest Notes */}
                     {session.guest_notes && (
-                        <div className="pt-2 border-t">
+                        <div className="pt-2">
                             <p className="text-sm text-muted-foreground">{session.guest_notes}</p>
                         </div>
                     )}
 
                     {/* Actions */}
-                    <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+                    <div className="mt-3 flex items-center gap-2 pt-3">
                         {hasOrder && onViewOrder && (
                             <Button
                                 variant="outline"
@@ -287,8 +284,8 @@ export function SeatedCard({ table, onViewOrder, onTransfer, onClose }: SeatedCa
                         )}
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     )
 }
 

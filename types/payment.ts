@@ -192,6 +192,9 @@ export interface SettlementBatchRecord {
   processor_fees: number;
   net_deposit: number;
   status: BatchStatus;
+  processor?: string;
+  /** How the batch was settled: pos_manual | pos_auto | valor_webhook | hq_manual. */
+  origin?: string | null;
   raw_response?: Record<string, any>;
   created_at: string;
   updated_at: string;

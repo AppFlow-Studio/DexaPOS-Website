@@ -75,8 +75,8 @@ function SortableItemRow({ item, index }: SortableItemRowProps) {
         {index + 1}
       </span>
 
-      {/* Item Image/Placeholder */}
-      <div className="w-10 h-10 rounded-md bg-muted/50 flex items-center justify-center overflow-hidden shrink-0">
+      {/* Item image/placeholder — hidden on mobile to keep the row compact. */}
+      <div className="hidden w-10 h-10 rounded-md bg-muted/50 sm:flex items-center justify-center overflow-hidden shrink-0">
         {menuItem.image ? (
           <img
             src={menuItem.image}

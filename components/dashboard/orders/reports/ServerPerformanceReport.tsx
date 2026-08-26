@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useStaffPerformance } from '@/app/dashboard/hooks/useOrderAnalytics'
 import { ReportDataTable } from './ReportDataTable'
 import { ReportToolbar } from './ReportToolbar'
-import { SummaryCard } from './SummaryCard'
+import { SummaryCard, SummaryCardRow } from './SummaryCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Empty } from '@/components/ui/empty'
 import { formatReportDateRange } from '@/utils/export'
@@ -27,6 +27,7 @@ export function ServerPerformanceReport({
 }: ServerPerformanceReportProps) {
   const { data, isLoading } = useStaffPerformance(dateFrom, dateTo)
   const [searchQuery, setSearchQuery] = useState('')
+  const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<string>>(() => new Set(['order_count', 'total_sales', 'total_tips', 'tables_turned']))
 
   const filteredData = useMemo(() => {
     if (!data?.leaderboard) return []
@@ -91,6 +92,17 @@ export function ServerPerformanceReport({
     },
   ]
 
+  const columnConfig = [
+    { id: 'staff_name', label: 'Server Name', locked: true },
+    { id: 'order_count', label: 'Orders' },
+    { id: 'total_sales', label: 'Total Sales' },
+    { id: 'avg_check_size', label: 'Avg Check', locked: true },
+    { id: 'total_tips', label: 'Total Tips' },
+    { id: 'avg_tip_pct', label: 'Tip %', locked: true },
+    { id: 'tables_turned', label: 'Tables Turned' },
+    { id: 'avg_table_turn_minutes', label: 'Avg Turn Time (min)', locked: true },
+  ]
+
   const exportColumns = [
     { key: 'staff_name' as const, header: 'Server Name' },
     { key: 'order_count' as const, header: 'Orders' },
@@ -142,7 +154,21 @@ export function ServerPerformanceReport({
   ]
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Summary Cards */}
+      <SummaryCardRow columns={2}>
+        <SummaryCard
+          label="Top Server"
+          value={topServerName}
+          icon={<ShoppingBag className="h-5 w-5" />}
+        />
+        <SummaryCard
+          label="Total Tips"
+          value={formatCurrency(totalTips)}
+          icon={<DollarSign className="h-5 w-5" />}
+        />
+      </SummaryCardRow>
+
       <ReportToolbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -157,23 +183,12 @@ export function ServerPerformanceReport({
         dateFrom={dateFrom}
         dateTo={dateTo}
         summaryCards={summaryCardsData}
+        columnConfig={columnConfig}
+        hiddenColumns={hiddenColumnIds}
+        onColumnVisibilityChange={setHiddenColumnIds}
       />
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <SummaryCard
-          label="Top Server"
-          value={topServerName}
-          icon={<ShoppingBag className="h-5 w-5" />}
-        />
-        <SummaryCard
-          label="Total Tips"
-          value={formatCurrency(totalTips)}
-          icon={<DollarSign className="h-5 w-5" />}
-        />
-      </div>
-
-      <ReportDataTable columns={columns} data={filteredData} />
+      <ReportDataTable columns={columns} data={filteredData} hiddenColumnIds={hiddenColumnIds} />
     </div>
   )
 }

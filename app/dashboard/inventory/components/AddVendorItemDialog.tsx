@@ -158,17 +158,30 @@ export function AddVendorItemDialog({
                   value={selectedItemId}
                   onValueChange={setSelectedItemId}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full min-w-0 [&>span]:min-w-0 [&>span]:truncate">
                     <SelectValue placeholder="Select an item..." />
                   </SelectTrigger>
-                  <SelectContent className="z-[220]">
+                  <SelectContent
+                    avoidCollisions
+                    collisionPadding={16}
+                    className="z-[220] max-h-[min(15rem,var(--radix-select-content-available-height))] w-(--radix-select-trigger-width)"
+                  >
                     {availableItems.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        <div className="flex items-center gap-2">
-                          <Package className="h-4 w-4 text-muted-foreground" />
-                          <span>{item.name}</span>
+                      <SelectItem
+                        key={item.id}
+                        value={item.id}
+                        className="[&>span:last-child]:w-full [&>span:last-child]:min-w-0"
+                      >
+                        <div className="flex w-full min-w-0 items-center gap-2">
+                          <Package className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate">
+                            {item.name}
+                          </span>
                           {item.sku && (
-                            <Badge variant="outline" className="text-xs ml-1">
+                            <Badge
+                              variant="outline"
+                              className="text-xs ml-1 shrink-0"
+                            >
                               {item.sku}
                             </Badge>
                           )}

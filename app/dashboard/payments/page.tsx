@@ -6,22 +6,9 @@ import {
   useSelectedLocation,
 } from "@/stores/location-store";
 import { usePayments } from "../hooks/usePayments";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import {
-  CreditCard,
-  MapPin,
-  Globe,
-  RefreshCcwDot,
-  CalendarDays,
-} from "lucide-react";
+import { CreditCard, RefreshCcwDot } from "lucide-react";
 import { Empty } from "@/components/ui/empty";
 import { PaymentStats } from "./components/PaymentStats";
 import { PaymentCharts } from "./components/PaymentCharts";
@@ -35,6 +22,17 @@ import { PaymentMethod, PaymentStatus } from "@/types/order-management";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { BatchesView } from "./components/BatchesView";
 import { Layers } from "lucide-react";
+import {
+  PageShell,
+  PageHeader,
+  Panel,
+  PanelSection,
+  LocationIndicator,
+} from "@/components/dashboard/shell";
+import {
+  DateRangePicker,
+  DatePreset,
+} from "@/components/dashboard/orders/DateRangePicker";
 
 export function computePaymentSummary(
   payments: PaymentRecord[]
@@ -166,6 +164,7 @@ export default function PaymentsPage() {
   const isAllLocations = useIsAllLocations();
 
   // Date range state — default to last 30 days
+  const [preset, setPreset] = useState<DatePreset>("last_30_days");
   const [dateFrom, setDateFrom] = useState<Date>(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -177,6 +176,13 @@ export default function PaymentsPage() {
     d.setHours(23, 59, 59, 999);
     return d;
   });
+
+  const handleDateRangeChange = (from: Date | null, to: Date | null) => {
+    if (from && to) {
+      setDateFrom(from);
+      setDateTo(to);
+    }
+  };
 
   const filters: PaymentFilters = useMemo(
     () => ({
@@ -199,69 +205,50 @@ export default function PaymentsPage() {
   );
 
   return (
-    <main className="space-y-6 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight">Payments</h1>
-            {isAllLocations ? (
-              <Badge variant="outline" className="gap-1">
-                <Globe className="h-3 w-3" />
-                All Locations
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="gap-1">
-                <MapPin className="h-3 w-3" />
-                {selectedLocation?.name}
-              </Badge>
-            )}
-          </div>
-          <p className="text-muted-foreground">
-            View and manage all payment transactions
-          </p>
-        </div>
-        <div className="flex w-full items-start gap-2 sm:w-auto sm:flex-shrink-0">
-          {/* Simple date range inputs */}
-          <CalendarDays className="mt-2 h-4 w-4 flex-shrink-0 text-muted-foreground sm:mt-1.5" />
-          <div className="flex flex-1 flex-col gap-1.5 text-sm sm:flex-row sm:items-center">
-            <input
-              type="date"
-              value={dateFrom.toISOString().slice(0, 10)}
-              onChange={(e) => {
-                const d = new Date(e.target.value + "T00:00:00");
-                if (!isNaN(d.getTime())) setDateFrom(d);
-              }}
-              className="w-full min-w-0 rounded-md border bg-background px-2 py-1 text-sm sm:w-auto"
-            />
-            <span className="hidden text-muted-foreground sm:inline">to</span>
-            <input
-              type="date"
-              value={dateTo.toISOString().slice(0, 10)}
-              onChange={(e) => {
-                const d = new Date(e.target.value + "T23:59:59.999");
-                if (!isNaN(d.getTime())) setDateTo(d);
-              }}
-              className="w-full min-w-0 rounded-md border bg-background px-2 py-1 text-sm sm:w-auto"
-            />
-          </div>
-        </div>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Payments"
+        subtitle="View and manage all payment transactions"
+        indicator={
+          <LocationIndicator
+            isAllLocations={isAllLocations}
+            locationName={selectedLocation?.name}
+          />
+        }
+        actions={
+          <DateRangePicker
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateRangeChange={handleDateRangeChange}
+            preset={preset}
+            onPresetChange={setPreset}
+            triggerClassName="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+          />
+        }
+      />
 
       {/* Tabs */}
       <Tabs defaultValue="payments">
-        <TabsList>
-          <TabsTrigger value="payments">
-            <CreditCard className="h-4 w-4" />
-            Payments
-          </TabsTrigger>
-          <TabsTrigger value="batches">
-            <Layers className="h-4 w-4" />
-            Batches
-          </TabsTrigger>
-        </TabsList>
+        <div className="w-full min-w-0 overflow-x-auto pb-1">
+          <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+            <TabsTrigger
+              value="payments"
+              className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+            >
+              <CreditCard className="h-4 w-4" />
+              Payments
+            </TabsTrigger>
+            <TabsTrigger
+              value="batches"
+              className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+            >
+              <Layers className="h-4 w-4" />
+              Batches
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        <TabsContent value="payments" className="space-y-6">
+        <TabsContent value="payments" className="mt-6 space-y-6">
           {/* Stats Cards */}
           <PaymentStats summary={summary} isLoading={paymentsLoading} />
 
@@ -269,22 +256,20 @@ export default function PaymentsPage() {
           <PaymentCharts summary={summary} isLoading={paymentsLoading} />
 
           {/* Payments Table */}
-          <Card className="min-w-0">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>All Payments</CardTitle>
+          <Panel>
+            <PanelSection
+              label="All Payments"
+              action={
                 <Button
                   variant="outline"
-                  className="hover:bg-accent hover:text-accent-foreground cursor-pointer"
                   size="sm"
                   onClick={async () => await refetchPayments()}
                 >
                   <RefreshCcwDot className="h-4 w-4 mr-2" />
                   Refresh
                 </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="min-w-0">
+              }
+            >
               {paymentsLoading && paymentsList.length === 0 ? (
                 <div className="space-y-2">
                   <Skeleton className="h-10 w-full" />
@@ -303,14 +288,14 @@ export default function PaymentsPage() {
                   isLoading={paymentsLoading}
                 />
               )}
-            </CardContent>
-          </Card>
+            </PanelSection>
+          </Panel>
         </TabsContent>
 
-        <TabsContent value="batches">
+        <TabsContent value="batches" className="mt-6">
           <BatchesView paymentFilters={filters} />
         </TabsContent>
       </Tabs>
-    </main>
+    </PageShell>
   );
 }

@@ -95,8 +95,8 @@ export function SendInvoiceDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-1">
-          {/* Email channel */}
-          <div className="rounded-lg border p-3 space-y-3">
+          {/* Email channel — a borderless inset well, not an outlined box (§3.1). */}
+          <div className="space-y-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
             <label className="flex items-center gap-2.5 cursor-pointer">
               <Checkbox
                 checked={emailOn}
@@ -110,12 +110,14 @@ export function SendInvoiceDialog({
                 <Label className="text-xs text-muted-foreground">
                   Recipient email
                 </Label>
+                {/* Sits on a tinted well, so the field takes the card fill to
+                    stay legible against it rather than the usual muted one. */}
                 <Input
                   type="email"
                   placeholder="customer@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-9 text-sm"
+                  className="h-9 rounded-full border-0 bg-card px-3 text-sm shadow-none focus-visible:bg-background"
                 />
                 {!invoice.customer?.email && (
                   <p className="text-xs text-muted-foreground">
@@ -127,7 +129,7 @@ export function SendInvoiceDialog({
           </div>
 
           {/* SMS channel */}
-          <div className="rounded-lg border p-3 space-y-3">
+          <div className="space-y-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
             <label className="flex items-center gap-2.5 cursor-pointer">
               <Checkbox checked={smsOn} onCheckedChange={(v) => setSmsOn(!!v)} />
               <MessageSquare className="h-4 w-4 text-muted-foreground" />
@@ -143,7 +145,7 @@ export function SendInvoiceDialog({
                   placeholder="(555) 123-4567"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="h-9 text-sm"
+                  className="h-9 rounded-full border-0 bg-card px-3 text-sm shadow-none focus-visible:bg-background"
                 />
                 {!invoice.customer?.phone && (
                   <p className="text-xs text-muted-foreground">
@@ -168,10 +170,18 @@ export function SendInvoiceDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
-          <Button onClick={handleSend} disabled={!canSend}>
+          <Button
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            onClick={handleSend}
+            disabled={!canSend}
+          >
             <Send className={cn("h-4 w-4 mr-2", sendInvoice.isPending && "animate-pulse")} />
             {sendInvoice.isPending ? "Sending…" : "Send"}
           </Button>

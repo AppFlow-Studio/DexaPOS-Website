@@ -21,7 +21,7 @@ import {
   XCircle,
   Sparkles,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { StatRow, StatTile } from "@/components/dashboard/shell";
 import { useLocationStore, useSelectedLocation } from "@/stores/location-store";
 import {
   useTransfers,
@@ -36,16 +36,6 @@ import {
 import { CreateTransferDialog, TransferPickItem } from "./CreateTransferDialog";
 import { ReceiveTransferDialog } from "./ReceiveTransferDialog";
 import { TransferStatus } from "../../actions/transfers";
-
-const STATUS_STYLES: Record<TransferStatus, string> = {
-  draft: "bg-secondary text-secondary-foreground",
-  in_transit:
-    "border-blue-500/50 text-blue-600 bg-blue-50 dark:bg-blue-950/30",
-  received:
-    "border-emerald-500/50 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30",
-  cancelled:
-    "border-rose-500/50 text-rose-600 bg-rose-50 dark:bg-rose-950/30",
-};
 
 const STATUS_LABELS: Record<TransferStatus, string> = {
   draft: "Draft",
@@ -101,23 +91,13 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6 px-4 py-6 sm:px-6">
       {/* Summary + actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-4">
-          <div className="rounded-xl border bg-card px-5 py-3">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              In Transit
-            </p>
-            <p className="text-2xl font-bold text-blue-600">{inTransitCount}</p>
-          </div>
-          <div className="rounded-xl border bg-card px-5 py-3">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              Total Transfers
-            </p>
-            <p className="text-2xl font-bold">{transfers.length}</p>
-          </div>
-        </div>
+        <StatRow columns={2} className="flex-1">
+          <StatTile label="In transit" value={inTransitCount} meta="Currently moving" />
+          <StatTile label="Total transfers" value={transfers.length} meta="All transfer records" />
+        </StatRow>
         <Button className="gap-2" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
           New Transfer
@@ -126,13 +106,13 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
 
       {/* Par-level reorder suggestion */}
       {shortfalls.length > 0 && (
-        <div className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-50/60 px-5 py-4 dark:bg-amber-950/20 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-2xl border-0 bg-muted/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/15">
-              <Sparkles className="h-4 w-4 text-amber-600" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-background">
+              <Sparkles className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              <p className="text-sm font-semibold">
                 {shortfalls.length} item{shortfalls.length !== 1 ? "s" : ""}{" "}
                 below par level
               </p>
@@ -144,7 +124,7 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
           </div>
           <Button
             variant="outline"
-            className="gap-2 border-amber-500/40"
+            className="gap-2"
             disabled={generatePOs.isPending}
             onClick={() => generatePOs.mutate()}
           >
@@ -172,10 +152,15 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
+        <>
+          {/* Wide-screen table */}
+          <Table
+            variant="data"
+            containerClassName="hidden lg:block"
+            className="min-w-[820px]"
+          >
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow className="hover:bg-transparent">
                 <TableHead>Transfer #</TableHead>
                 <TableHead>Route</TableHead>
                 <TableHead>Status</TableHead>
@@ -186,8 +171,7 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
             </TableHeader>
             <TableBody>
               {transfers.map((t) => {
-                const isDestination =
-                  t.to_location_id === selectedLocationId;
+                const isDestination = t.to_location_id === selectedLocationId;
                 const isSource = t.from_location_id === selectedLocationId;
                 return (
                   <TableRow key={t.id}>
@@ -197,22 +181,22 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
                     <TableCell>
                       <div className="flex items-center gap-1.5 text-sm">
                         <span>{t.from_location?.name ?? "—"}</span>
-                        <ArrowRightLeft className="h-3 w-3 text-muted-foreground" />
+                        <ArrowRightLeft className="h-3 w-3 shrink-0 text-muted-foreground" />
                         <span>{t.to_location?.name ?? "—"}</span>
                       </div>
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant="outline"
-                        className={cn(STATUS_STYLES[t.status])}
+                        variant="secondary"
+                        className="w-fit rounded-full border-0 px-2.5 text-xs font-medium"
                       >
                         {STATUS_LABELS[t.status]}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right tabular-nums">
                       {t.items_count ?? 0}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                    <TableCell className="whitespace-nowrap tabular-nums text-muted-foreground">
                       {new Date(t.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
@@ -220,7 +204,7 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="gap-1.5"
+                          className="h-8 gap-1.5 rounded-full px-3"
                           onClick={() => {
                             setReceiveTransferId(t.id);
                             setReceiveOpen(true);
@@ -234,7 +218,7 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="gap-1.5 text-rose-600"
+                          className="h-8 gap-1.5 rounded-full px-3 text-rose-600"
                           disabled={cancelTransfer.isPending}
                           onClick={() => cancelTransfer.mutate(t.id)}
                         >
@@ -259,7 +243,90 @@ export function TransfersTab({ items, isAllLocations }: TransfersTabProps) {
               })}
             </TableBody>
           </Table>
-        </div>
+
+          {/* Phones and tablets use cards instead of a horizontally scrolling table. */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+            {transfers.map((t) => {
+              const isDestination = t.to_location_id === selectedLocationId;
+              const isSource = t.from_location_id === selectedLocationId;
+              return (
+                <article
+                  key={t.id}
+                  className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
+                >
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-sm font-semibold">
+                        {t.transfer_number}
+                      </p>
+                      <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                        {new Date(t.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className="shrink-0 rounded-full border-0 px-2.5 text-xs font-medium"
+                    >
+                      {STATUS_LABELS[t.status]}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-5 grid min-w-0 grid-cols-2 gap-x-4 gap-y-4">
+                    <div className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Route
+                      </p>
+                      <p className="mt-0.5 break-words text-sm font-medium leading-snug">
+                        {t.from_location?.name ?? "—"}
+                        <ArrowRightLeft className="mx-1.5 inline h-3 w-3 align-middle text-muted-foreground" />
+                        {t.to_location?.name ?? "—"}
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Items
+                      </p>
+                      <p className="mt-0.5 text-sm font-medium tabular-nums">
+                        {t.items_count ?? 0}
+                      </p>
+                    </div>
+                  </div>
+
+                  {t.status === "in_transit" && (isDestination || isSource) && (
+                    <div className="mt-5 flex items-center justify-end gap-2 pt-1">
+                      {isDestination && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1.5 rounded-full px-3"
+                          onClick={() => {
+                            setReceiveTransferId(t.id);
+                            setReceiveOpen(true);
+                          }}
+                        >
+                          <PackageCheck className="h-3.5 w-3.5" />
+                          Receive
+                        </Button>
+                      )}
+                      {isSource && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 gap-1.5 rounded-full px-3 text-rose-600"
+                          disabled={cancelTransfer.isPending}
+                          onClick={() => cancelTransfer.mutate(t.id)}
+                        >
+                          <XCircle className="h-3.5 w-3.5" />
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </>
       )}
 
       <CreateTransferDialog

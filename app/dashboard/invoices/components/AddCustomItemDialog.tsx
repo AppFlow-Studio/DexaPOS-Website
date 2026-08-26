@@ -83,17 +83,20 @@ export function AddCustomItemDialog({
               placeholder="e.g. Consulting service"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              className="h-9 rounded-full border-0 bg-muted/60 px-3 text-sm shadow-none focus-visible:bg-background"
             />
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="custom-desc">Description (optional)</Label>
+            {/* Textareas are `rounded-2xl`; every other field is a pill (§4.2). */}
             <Textarea
               id="custom-desc"
               placeholder="Brief description..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
+              className="rounded-2xl border-0 bg-muted/60 text-sm shadow-none focus-visible:bg-background"
             />
           </div>
 
@@ -111,6 +114,7 @@ export function AddCustomItemDialog({
                   const v = parseInt(e.target.value, 10);
                   setQuantity(Number.isNaN(v) || v < 1 ? "1" : String(v));
                 }}
+                className="h-9 rounded-full border-0 bg-muted/60 px-3 text-sm shadow-none focus-visible:bg-background"
               />
             </div>
             <div className="space-y-1.5">
@@ -125,11 +129,13 @@ export function AddCustomItemDialog({
                 placeholder="0.00"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
+                className="h-9 rounded-full border-0 bg-muted/60 px-3 text-sm shadow-none focus-visible:bg-background"
               />
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-md border px-3 py-2">
+          {/* Inset well, on the radius scale — was `rounded-md border` (§3.1). */}
+          <div className="flex items-center justify-between rounded-2xl border-0 bg-muted/60 px-3 py-2 shadow-none">
             <div className="space-y-0.5">
               <Label htmlFor="custom-to-go">To Go</Label>
               <p className="text-xs text-muted-foreground">
@@ -145,10 +151,18 @@ export function AddCustomItemDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
-          <Button onClick={handleAdd} disabled={!name.trim() || !price}>
+          <Button
+            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            onClick={handleAdd}
+            disabled={!name.trim() || !price}
+          >
             Add Item
           </Button>
         </DialogFooter>

@@ -1,9 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import {
+  CHART_GRID,
+  CHART_TICK,
+  Panel,
+  StatRow,
+  StatTile,
+} from "@/components/dashboard/shell";
 import {
   DollarSign,
   AlertTriangle,
@@ -26,7 +31,7 @@ import {
 import { useInventoryKpis, useCogsReport } from "../hooks/useInventoryReports";
 import type { DateRange } from "../../actions/inventory-reports";
 
-const TEAL = "#2DD4BF";
+const BLUE = "#3B82F6";
 
 function fmtMoney(n: number): string {
   return `$${n.toLocaleString("en-US", {
@@ -38,50 +43,6 @@ function fmtMoney(n: number): string {
 function shortWeek(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function StatCard({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-  iconClassName,
-  isLoading,
-}: {
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  icon: React.ElementType;
-  iconClassName?: string;
-  isLoading?: boolean;
-}) {
-  return (
-    <Card className="relative overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5">
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            {isLoading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <p className="text-3xl font-bold tracking-tight">{value}</p>
-            )}
-            {subtitle && (
-              <p className="text-xs text-muted-foreground">{subtitle}</p>
-            )}
-          </div>
-          <div className={cn("p-3 rounded-xl", iconClassName || "bg-primary/10")}>
-            <Icon
-              className={cn(
-                "h-6 w-6",
-                iconClassName ? "text-white" : "text-primary",
-              )}
-            />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
 }
 
 interface InventoryDashboardTabProps {
@@ -131,44 +92,39 @@ export function InventoryDashboardTab({
     .map((i) => ({ name: i.name, cogs: i.cogs }));
 
   return (
-    <div className="p-6 space-y-6">
-      {/* KPI cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Inventory Value"
+    <div className="space-y-8 px-4 py-6 sm:px-6">
+      <StatRow columns={4}>
+        <StatTile
+          label="Inventory value"
           value={kpis ? fmtMoney(kpis.inventory_value) : "$0.00"}
-          subtitle="Stock on hand at cost"
-          icon={DollarSign}
-          iconClassName="bg-emerald-500"
+          meta="Stock on hand at cost"
+          icon={<DollarSign />}
           isLoading={kpiLoading}
         />
-        <StatCard
-          title="Low Stock"
+        <StatTile
+          label="Low stock"
           value={kpis?.low_stock_count ?? 0}
-          subtitle="Items at or below reorder point"
-          icon={AlertTriangle}
-          iconClassName="bg-amber-500"
+          meta="At or below reorder point"
+          icon={<AlertTriangle />}
           isLoading={kpiLoading}
         />
-        <StatCard
-          title="Today's Waste"
+        <StatTile
+          label="Today’s waste"
           value={kpis ? fmtMoney(kpis.today_waste_cost) : "$0.00"}
-          subtitle="Estimated cost logged today"
-          icon={Trash2}
-          iconClassName="bg-rose-500"
+          meta="Estimated cost logged today"
+          icon={<Trash2 />}
           isLoading={kpiLoading}
         />
-        <StatCard
-          title="Open Purchase Orders"
+        <StatTile
+          label="Open purchase orders"
           value={kpis?.open_po_count ?? 0}
-          subtitle={
+          meta={
             kpis ? `${fmtMoney(kpis.open_po_amount)} pending` : "0 pending"
           }
-          icon={ShoppingCart}
-          iconClassName="bg-sky-500"
+          icon={<ShoppingCart />}
           isLoading={kpiLoading}
         />
-      </div>
+      </StatRow>
 
       {kpiRes?.error && (
         <p className="text-sm text-rose-600">{kpiRes.error}</p>
@@ -177,8 +133,7 @@ export function InventoryDashboardTab({
       {/* Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* COGS trend */}
-        <Card>
-          <CardContent className="p-6">
+        <Panel nested className="border-0 bg-muted/40 p-5 sm:p-6">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
               <h3 className="font-semibold">COGS Trend — Last 4 Weeks</h3>
@@ -194,23 +149,23 @@ export function InventoryDashboardTab({
                 <AreaChart data={trendData} margin={{ left: 8, right: 8, top: 8 }}>
                   <defs>
                     <linearGradient id="cogsFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={TEAL} stopOpacity={0.3} />
-                      <stop offset="95%" stopColor={TEAL} stopOpacity={0} />
+                      <stop offset="5%" stopColor={BLUE} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={BLUE} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" strokeOpacity={0.1} />
-                  <XAxis dataKey="week" tickLine={false} axisLine={false} fontSize={12} />
+                  <CartesianGrid vertical={false} {...CHART_GRID} />
+                  <XAxis dataKey="week" tickLine={false} axisLine={false} tick={CHART_TICK} />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    fontSize={12}
+                    tick={CHART_TICK}
                     tickFormatter={(v) => `$${v}`}
                   />
                   <Tooltip formatter={(v: number) => fmtMoney(v)} />
                   <Area
                     type="monotone"
                     dataKey="cogs"
-                    stroke={TEAL}
+                    stroke={BLUE}
                     strokeWidth={2}
                     fill="url(#cogsFill)"
                     name="COGS"
@@ -218,12 +173,10 @@ export function InventoryDashboardTab({
                 </AreaChart>
               </ResponsiveContainer>
             )}
-          </CardContent>
-        </Card>
+        </Panel>
 
         {/* Top 5 items by cost */}
-        <Card>
-          <CardContent className="p-6">
+        <Panel nested className="border-0 bg-muted/40 p-5 sm:p-6">
             <div className="flex items-center gap-2 mb-4">
               <DollarSign className="h-4 w-4 text-muted-foreground" />
               <h3 className="font-semibold">Top 5 Items by Cost (30 days)</h3>
@@ -241,12 +194,12 @@ export function InventoryDashboardTab({
                   layout="vertical"
                   margin={{ left: 8, right: 16, top: 8 }}
                 >
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" strokeOpacity={0.1} />
+                  <CartesianGrid horizontal={false} {...CHART_GRID} />
                   <XAxis
                     type="number"
                     tickLine={false}
                     axisLine={false}
-                    fontSize={12}
+                    tick={CHART_TICK}
                     tickFormatter={(v) => `$${v}`}
                   />
                   <YAxis
@@ -254,16 +207,15 @@ export function InventoryDashboardTab({
                     dataKey="name"
                     tickLine={false}
                     axisLine={false}
-                    fontSize={12}
+                    tick={CHART_TICK}
                     width={110}
                   />
                   <Tooltip formatter={(v: number) => fmtMoney(v)} />
-                  <Bar dataKey="cogs" fill={TEAL} radius={[0, 4, 4, 0]} name="COGS" />
+                  <Bar dataKey="cogs" fill={BLUE} radius={[0, 4, 4, 0]} name="COGS" />
                 </BarChart>
               </ResponsiveContainer>
             )}
-          </CardContent>
-        </Card>
+        </Panel>
       </div>
     </div>
   );

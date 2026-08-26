@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Panel, PanelSection, StatRow, StatTile } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -161,8 +160,8 @@ export function MenuOrderOutTab({
   if (!isConfigured) {
     return (
       <div className="space-y-4">
-        <Card>
-          <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
+        <Panel>
+          <div className="flex flex-col items-center gap-4 px-6 py-10 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
               <Plug className="h-7 w-7 text-muted-foreground" />
             </div>
@@ -174,7 +173,7 @@ export function MenuOrderOutTab({
               </p>
             </div>
 
-            <div className="w-full max-w-sm rounded-lg border bg-muted/40 p-4 text-left">
+            <div className="w-full max-w-sm rounded-2xl border-0 bg-muted/60 p-4 text-left shadow-none">
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Setup steps
               </p>
@@ -207,14 +206,14 @@ export function MenuOrderOutTab({
               </ol>
             </div>
 
-            <Button asChild>
+            <Button asChild className="rounded-full">
               <Link href="/dashboard/online-ordering">
                 Go to Online Ordering
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </Panel>
       </div>
     );
   }
@@ -230,55 +229,49 @@ export function MenuOrderOutTab({
 
   return (
     <div className="space-y-4">
-      {/* Section 1: Sync Status Card */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Sync Status</CardTitle>
-          <SyncStatusBadge lastSync={lastSync ?? null} />
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <p className="text-xs text-muted-foreground">OrderOut Menu ID</p>
-              <p className="text-sm font-medium">
-                {ooMenuId ? (
-                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
-                    {ooMenuId}
-                  </code>
-                ) : (
-                  <span className="text-muted-foreground">-</span>
-                )}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Last Synced</p>
-              <p className="text-sm font-medium">
-                {lastSync?.completedAt
+      {/* Section 1: Sync Status */}
+      <Panel>
+        <PanelSection
+          label="Sync Status"
+          action={<SyncStatusBadge lastSync={lastSync ?? null} />}
+        >
+          <StatRow columns={3}>
+            <StatTile
+              label="Last Synced"
+              value={
+                lastSync?.completedAt
                   ? formatTimeAgo(lastSync.completedAt)
-                  : "Never"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Items Synced</p>
-              <p className="text-sm font-medium">
-                {lastSync?.itemsSynced ?? 0}
-                {(lastSync?.itemsFailed ?? 0) > 0 && (
-                  <span className="text-destructive ml-1">
-                    ({lastSync?.itemsFailed} failed)
+                  : "Never"
+              }
+            />
+            <StatTile
+              label="Items Synced"
+              value={lastSync?.itemsSynced ?? 0}
+              meta={
+                (lastSync?.itemsFailed ?? 0) > 0 ? (
+                  <span className="text-destructive">
+                    {lastSync?.itemsFailed} failed
                   </span>
-                )}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Syncs</p>
-              <p className="text-sm font-medium">
-                {syncStatus?.totalSyncs ?? 0}
-              </p>
-            </div>
-          </div>
+                ) : undefined
+              }
+            />
+            <StatTile label="Total Syncs" value={syncStatus?.totalSyncs ?? 0} />
+          </StatRow>
 
-        </CardContent>
-      </Card>
+          {/* An opaque identifier, not a figure — stays a code string rather
+              than becoming a fourth tabular-nums tile. */}
+          <div className="mt-6 flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">OrderOut Menu ID</span>
+            {ooMenuId ? (
+              <code className="rounded-full bg-muted/60 px-2.5 py-0.5 font-mono text-xs">
+                {ooMenuId}
+              </code>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </div>
+        </PanelSection>
+      </Panel>
 
       {/* Section 1.5: verify a 86 actually reached the delivery apps. */}
       <OrderOutLiveMenuCheck clerkOrgId={clerkOrgId} locationId={locationId} />
@@ -315,11 +308,8 @@ export function MenuOrderOutTab({
       {/* (Publish + changes-pending live in OnlineMenuControlCard above.) */}
 
       {/* Section 3: Sync History Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Sync History</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection label="Sync History">
           {syncHistory.length === 0 ? (
             <Empty
               icon={Clock}
@@ -327,7 +317,7 @@ export function MenuOrderOutTab({
               description="This menu hasn't been synced to OrderOut yet."
             />
           ) : (
-            <Table>
+            <Table variant="data" className="min-w-[720px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[180px]">Date</TableHead>
@@ -342,44 +332,39 @@ export function MenuOrderOutTab({
                 {syncHistory.map((sync) => (
                   <React.Fragment key={sync.id}>
                     <TableRow
-                      className={
-                        sync.errorDetails
-                          ? "cursor-pointer hover:bg-muted/50"
-                          : ""
-                      }
+                      className={sync.errorDetails ? "cursor-pointer" : ""}
                       onClick={() => sync.errorDetails && toggleRow(sync.id)}
                     >
                       <TableCell className="text-sm">
                         {new Date(sync.createdAt).toLocaleString()}
                       </TableCell>
                       <TableCell>
+                        {/* Soft tint + icon, not a solid saturated fill (D-11).
+                            Classes literal, not from a .ts module — see C7. */}
                         {sync.status === "success" && (
-                          <Badge
-                            variant="default"
-                            className="bg-green-600 text-xs"
-                          >
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                            <CheckCircle2 className="h-3 w-3" />
                             Success
-                          </Badge>
+                          </span>
                         )}
                         {sync.status === "failed" && (
-                          <Badge variant="destructive" className="text-xs">
-                            <XCircle className="h-3 w-3 mr-1" />
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                            <XCircle className="h-3 w-3" />
                             Failed
-                          </Badge>
+                          </span>
                         )}
                         {sync.status === "pending" && (
-                          <Badge variant="secondary" className="text-xs">
-                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" />
                             Pending
-                          </Badge>
+                          </span>
                         )}
                         {!["success", "failed", "pending"].includes(
                           sync.status
                         ) && (
-                          <Badge variant="secondary" className="text-xs">
+                          <span className="inline-flex items-center rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                             {sync.status}
-                          </Badge>
+                          </span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -409,7 +394,7 @@ export function MenuOrderOutTab({
                     {sync.errorDetails && expandedRows.has(sync.id) && (
                       <TableRow key={`${sync.id}-error`}>
                         <TableCell colSpan={6}>
-                          <p className="text-xs text-destructive bg-destructive/10 rounded p-2">
+                          <p className="rounded-2xl bg-destructive/10 p-3 text-xs text-destructive">
                             {sync.errorDetails}
                           </p>
                         </TableCell>
@@ -420,47 +405,54 @@ export function MenuOrderOutTab({
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
       {/* Section 4: Payload Preview (collapsible) */}
       {lastPayloadSnapshot && (
-        <Card>
-          <CardHeader
-            className="cursor-pointer"
-            onClick={() => setShowPayload(!showPayload)}
+        <Panel className="rounded-[2rem]">
+          <PanelSection
+            label={
+              <button
+                type="button"
+                aria-expanded={showPayload}
+                onClick={() => setShowPayload(!showPayload)}
+                className="flex w-full items-center justify-between gap-3 text-left"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <Code className="h-[1.125rem] w-[1.125rem] shrink-0" />
+                  <span className="truncate">Last Synced Payload</span>
+                </span>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted/60 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                  {showPayload ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </span>
+              </button>
+            }
           >
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Code className="h-4 w-4" />
-                Last Synced Payload
-              </CardTitle>
-              {showPayload ? (
-                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              )}
-            </div>
-          </CardHeader>
-          {showPayload && (
-            <CardContent>
-              <p className="text-xs text-muted-foreground mb-2">
-                The JSON payload that was last sent to OrderOut for this menu.
-              </p>
-              <pre className="text-xs bg-muted p-3 rounded-md overflow-auto max-h-96 font-mono">
-                Sync ID: {lastPayloadSnapshot.id}
-                {"\n"}Menu Name: {lastPayloadSnapshot.menuName || menuName}
-                {"\n"}Items Synced: {lastPayloadSnapshot.itemsSynced}
-                {"\n"}Synced At:{" "}
-                {lastPayloadSnapshot.completedAt
-                  ? new Date(lastPayloadSnapshot.completedAt).toLocaleString()
-                  : "N/A"}
-                {"\n"}OrderOut Menu ID:{" "}
-                {lastPayloadSnapshot.ooMenuId || "Not available"}
-              </pre>
-            </CardContent>
-          )}
-        </Card>
+            {showPayload && (
+              <>
+                <p className="text-xs text-muted-foreground mb-2">
+                  The JSON payload that was last sent to OrderOut for this menu.
+                </p>
+                <pre className="max-h-96 overflow-auto rounded-2xl bg-muted/60 p-4 font-mono text-xs">
+                  Sync ID: {lastPayloadSnapshot.id}
+                  {"\n"}Menu Name: {lastPayloadSnapshot.menuName || menuName}
+                  {"\n"}Items Synced: {lastPayloadSnapshot.itemsSynced}
+                  {"\n"}Synced At:{" "}
+                  {lastPayloadSnapshot.completedAt
+                    ? new Date(lastPayloadSnapshot.completedAt).toLocaleString()
+                    : "N/A"}
+                  {"\n"}OrderOut Menu ID:{" "}
+                  {lastPayloadSnapshot.ooMenuId || "Not available"}
+                </pre>
+              </>
+            )}
+          </PanelSection>
+        </Panel>
       )}
 
       {/* Publish Confirmation — names the exact menu that will go live so a
@@ -557,23 +549,23 @@ export function OnlineMenuControlCard({
 }) {
   if (state === "this") {
     return (
-      <Card className="border-green-500/40 bg-green-50/60 dark:bg-green-950/20">
-        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <Panel className="border-0 bg-green-50/60 dark:bg-green-950/20">
+        <div className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             <Star className="mt-0.5 h-5 w-5 shrink-0 fill-amber-400 text-amber-500" />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm font-semibold">This is your online menu</p>
-                <Badge variant="default" className="bg-green-600">
-                  <CheckCircle2 className="mr-1 h-3 w-3" /> Online menu
-                </Badge>
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                  <CheckCircle2 className="h-3 w-3" /> Online menu
+                </span>
               </div>
               <p className="text-xs text-muted-foreground">
                 Your online store and delivery apps serve this menu ({itemCount}{" "}
                 items). Edits to any item anywhere — price, name, out of stock —
                 show up here; publish to push them live.
                 {hasChanges ? (
-                  <span className="font-medium text-amber-700">
+                  <span className="font-medium text-amber-700 dark:text-amber-400">
                     {" "}
                     Changes are waiting to publish.
                   </span>
@@ -583,7 +575,7 @@ export function OnlineMenuControlCard({
           </div>
           <Button
             size="sm"
-            className="shrink-0"
+            className="shrink-0 rounded-full"
             onClick={onPublish}
             disabled={isPublishing}
           >
@@ -598,21 +590,23 @@ export function OnlineMenuControlCard({
                 ? "Publish changes"
                 : "Re-publish"}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     );
   }
 
   if (state === "other") {
     return (
-      <Card className="border-muted-foreground/20">
-        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <Panel>
+        <div className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             <Star className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
             <div className="min-w-0">
               <p className="text-sm font-semibold">
                 Online orders use{" "}
-                <span className="text-primary">
+                {/* Brand accent literal, not `text-primary` — that token is
+                    violet, not the brand blue (C5). */}
+                <span className="text-[#0C4FD1] dark:text-[#6CA0FF]">
                   {primaryMenuName ?? "another menu"}
                 </span>
               </p>
@@ -625,7 +619,7 @@ export function OnlineMenuControlCard({
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             {onlineMenuHref && (
-              <Button asChild size="sm" variant="outline">
+              <Button asChild size="sm" variant="outline" className="rounded-full">
                 <Link href={onlineMenuHref}>
                   Go to online menu
                   <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
@@ -635,22 +629,22 @@ export function OnlineMenuControlCard({
             <Button
               size="sm"
               variant="ghost"
-              className="text-muted-foreground"
+              className="rounded-full text-muted-foreground"
               onClick={onMakeOnline}
               disabled={isPublishing}
             >
               Make this the online menu
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </Panel>
     );
   }
 
   // state === "none"
   return (
-    <Card className="border-blue-500/40 bg-blue-50/60 dark:bg-blue-950/20">
-      <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <Panel className="border-0 bg-blue-50/60 dark:bg-blue-950/20">
+      <div className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <Upload className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
           <div className="min-w-0">
@@ -667,7 +661,7 @@ export function OnlineMenuControlCard({
         </div>
         <Button
           size="sm"
-          className="shrink-0 bg-blue-600 text-white hover:bg-blue-700"
+          className="shrink-0 rounded-full bg-blue-600 text-white hover:bg-blue-700"
           onClick={onMakeOnline}
           disabled={isPublishing}
         >
@@ -678,7 +672,7 @@ export function OnlineMenuControlCard({
           )}
           Make this my online menu
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   );
 }
