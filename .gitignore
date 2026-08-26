@@ -54,6 +54,10 @@ ADM-006-007-STATUS.md
 # Claude Code local settings (machine-specific paths and personal permissions)
 .claude/settings.local.json
 
+# Agent skill packs (installed per-machine, not product code)
+.claude/skills/
+/.agents/
+
 # Sprint planning / personal task notes
 tasks/sprint2-awdi-tickets.md
 tasks/T-21-responsive-layout.md
