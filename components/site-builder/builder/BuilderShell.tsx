@@ -149,7 +149,12 @@ export default function BuilderShell({
   useEscapeClosesDrawer(store);
 
   return (
-    <EditorTopBar store={store} clerkOrgId={clerkOrgId} locationId={locationId}>
+    <EditorTopBar
+      store={store}
+      clerkOrgId={clerkOrgId}
+      locationId={locationId}
+      subdomain={site.subdomain}
+    >
       <div className="flex h-full min-h-0">
         {/* Left, as Owner's is. The canvas keeps its position on screen when the
             drawer opens, so opening one does not shift the thing being edited. */}

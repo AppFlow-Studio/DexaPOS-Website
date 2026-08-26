@@ -18,12 +18,28 @@ const TONES: Record<StatusTone, string> = {
   draft: "bg-muted text-muted-foreground",
 };
 
-export interface StatusAction {
+interface StatusActionBase {
   label: string;
   icon?: React.ReactNode;
   destructive?: boolean;
-  onSelect: () => void;
 }
+
+/**
+ * An entry in the pill's menu: either something that happens here, or
+ * somewhere to go.
+ *
+ * A union rather than two optional fields, so an action carrying both — which
+ * has no sensible meaning, and would silently do one of them — cannot be
+ * written in the first place.
+ *
+ * `href` renders a real anchor rather than a handler calling `window.open`,
+ * which is what lets a merchant middle-click or copy the link out of the menu.
+ * Every one of these leaves the dashboard for the public site, so they open in
+ * a new tab and carry `rel="noopener"`.
+ */
+export type StatusAction =
+  | (StatusActionBase & { onSelect: () => void; href?: never })
+  | (StatusActionBase & { href: string; onSelect?: never });
 
 /**
  * A status that is also the control for changing it.
@@ -87,9 +103,19 @@ export default function StatusPill({
             key={action.label}
             variant={action.destructive ? "destructive" : "default"}
             onSelect={action.onSelect}
+            asChild={!!action.href}
           >
-            {action.icon}
-            {action.label}
+            {action.href ? (
+              <a href={action.href} target="_blank" rel="noopener noreferrer">
+                {action.icon}
+                {action.label}
+              </a>
+            ) : (
+              <>
+                {action.icon}
+                {action.label}
+              </>
+            )}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

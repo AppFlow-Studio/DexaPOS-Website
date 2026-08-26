@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Globe2, Loader2, PencilLine, TriangleAlert } from "lucide-react";
+import { Check, Copy, ExternalLink, Globe2, Loader2, PencilLine, TriangleAlert } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -17,13 +17,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SITE_DOMAIN, siteOrigin } from "@/lib/site-builder/public-url";
 import {
   MAX_SUBDOMAIN_LENGTH,
   checkSubdomain,
   slugifySubdomain,
 } from "@/lib/site-builder/reserved-subdomains";
-
-const SITE_DOMAIN = "dexaposai.com";
 
 /**
  * Claiming the address the built site is served at.
@@ -57,6 +56,7 @@ export default function WebAddressCard({
   const [claimed, setClaimed] = useState(subdomain);
   const [editing, setEditing] = useState(!subdomain);
   const [confirming, setConfirming] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const trimmed = value.trim().toLowerCase();
@@ -68,6 +68,28 @@ export default function WebAddressCard({
   // decision as picking a free one, and the difference is invisible unless
   // something says so. Claiming a first address is not interrupted.
   const attemptSave = () => (claimed ? setConfirming(true) : save());
+
+  /**
+   * The full origin on the clipboard, not the bare hostname.
+   *
+   * A merchant pastes this into a message, a bio or a QR generator, and
+   * `joes.dexaposai.com` is not a link in most of those places until something
+   * guesses a scheme for it. `https://` makes it one everywhere.
+   *
+   * `navigator.clipboard` needs a secure context and permission, and rejects
+   * rather than throwing synchronously — an unhandled rejection here would
+   * leave the button silently claiming nothing happened.
+   */
+  const copyAddress = async () => {
+    if (!claimed) return;
+    try {
+      await navigator.clipboard.writeText(siteOrigin(claimed));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy — your browser blocked clipboard access.");
+    }
+  };
 
   const save = () => {
     setConfirming(false);
@@ -100,14 +122,40 @@ export default function WebAddressCard({
       <CardContent className="space-y-3">
         {!editing && claimed ? (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3.5 py-3">
-            <span className="flex items-center gap-2 font-mono text-sm">
+            {/*
+              A real link, because this was a <span> — a merchant wanting to look
+              at their own website had to read the address off the screen and
+              type it back into a browser. The check mark stays outside it: it
+              reports that the address is claimed, which is not part of the
+              address and should not be part of what a click targets.
+            */}
+            <span className="flex min-w-0 items-center gap-2 text-sm">
               <Check className="size-4 shrink-0 text-emerald-600" />
-              {claimed}.{SITE_DOMAIN}
+              <a
+                href={siteOrigin(claimed)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="truncate font-mono underline-offset-4 hover:underline"
+              >
+                {claimed}.{SITE_DOMAIN}
+              </a>
+              <ExternalLink aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
             </span>
-            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-              <PencilLine className="size-3.5" />
-              Change
-            </Button>
+            <span className="flex shrink-0 items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label="Copy web address"
+                onClick={() => copyAddress()}
+              >
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                <PencilLine className="size-3.5" />
+                Change
+              </Button>
+            </span>
           </div>
         ) : (
           <>

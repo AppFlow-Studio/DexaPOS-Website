@@ -1,6 +1,6 @@
 "use client";
 
-import { CloudOff, FileText, Palette, Plus, Rocket, Trash2 } from "lucide-react";
+import { CloudOff, ExternalLink, FileText, Palette, Plus, Rocket, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -10,6 +10,7 @@ import { DeletePage } from "@/app/dashboard/website/actions/pages";
 import { PublishPage, UnpublishPage } from "@/app/dashboard/website/actions/publish";
 import { Button } from "@/components/ui/button";
 import type { MerchantSiteRow, SitePageSummary } from "@/lib/site-builder/db-types";
+import { sitePublicUrl } from "@/lib/site-builder/public-url";
 import { websiteRoutes } from "../routes";
 import DataCard from "../shell/DataCard";
 import ConfirmByTyping from "../shell/ConfirmByTyping";
@@ -114,13 +115,28 @@ export default function PagesScreen({
    * The home page is the site's root, so neither destructive option is offered
    * for it: `UnpublishPage` would take it down like any other page and break
    * every link the merchant has ever shared, and `DeletePage` refuses `is_home`
-   * server-side anyway. A published home page therefore has no menu at all —
-   * which is why `StatusPill` reserves the chevron's space rather than shrinking.
+   * server-side anyway. Its menu is therefore `View` alone once published, and
+   * nothing at all before then — which is why `StatusPill` reserves the
+   * chevron's space rather than shrinking.
    */
   const buildActions = (page: SitePageSummary): StatusAction[] | undefined => {
     const actions: StatusAction[] = [];
 
     if (page.published_version_id) {
+      /*
+        The address the page actually lives at, which until now the product
+        never told the merchant anywhere. Absent rather than disabled when no
+        subdomain is claimed: there is no public address to open yet, and the
+        card below the list is already the one thing saying so.
+      */
+      if (website?.subdomain) {
+        actions.push({
+          label: "View",
+          icon: <ExternalLink />,
+          href: sitePublicUrl(website.subdomain, page.path),
+        });
+      }
+
       if (!page.is_home) {
         actions.push({
           label: "Unpublish",

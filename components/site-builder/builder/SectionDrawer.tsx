@@ -67,6 +67,14 @@ export interface DrawerSite {
   id: string;
   nav: NavItem[];
   pages: NavPageOption[];
+  /**
+   * The claimed web address, or null when the merchant has not chosen one.
+   *
+   * Not used by the drawer itself — it is what the top bar needs to build a
+   * link to the live page, and this is already the site-wide object travelling
+   * beside the page.
+   */
+  subdomain: string | null;
 }
 
 export default function SectionDrawer({

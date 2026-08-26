@@ -1,6 +1,15 @@
 "use client";
 
-import { ArrowRight, CircleAlert, Eye, Hammer, Info, Loader2, Rocket } from "lucide-react";
+import {
+  ArrowRight,
+  CircleAlert,
+  ExternalLink,
+  Eye,
+  Hammer,
+  Info,
+  Loader2,
+  Rocket,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -8,6 +17,7 @@ import { PublishPage } from "@/app/dashboard/website/actions/publish";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { diffDocuments } from "@/lib/site-builder/diff";
+import { sitePublicUrl } from "@/lib/site-builder/public-url";
 import { SECTION_REGISTRY } from "@/lib/site-builder/sections/registry";
 import { validatePage, type ValidationIssue } from "@/lib/site-builder/validate";
 import { cn } from "@/lib/utils";
@@ -33,17 +43,30 @@ export default function EditorTopBar({
   store,
   clerkOrgId,
   locationId,
+  subdomain,
   children,
 }: {
   store: BuilderStore;
   clerkOrgId: string;
   locationId: string;
+  /** The site's claimed web address, or null while it has none. */
+  subdomain: string | null;
   children: React.ReactNode;
 }) {
   const page = store((s) => s.page);
   const mode = store((s) => s.mode);
   const setMode = store((s) => s.setMode);
   const openPageSettings = store((s) => s.openPageSettings);
+
+  /*
+    Where this page can be seen for real, once both halves exist: something
+    published, and an address to serve it at. Read from the store rather than a
+    prop so it appears the moment Publish succeeds — `markPublished` sets
+    `publishedAt`, and a merchant who has just published is exactly who wants
+    to go and look.
+  */
+  const liveUrl =
+    subdomain && page.publishedAt ? sitePublicUrl(subdomain, page.path) : null;
 
   return (
     <OverlayChrome
@@ -54,7 +77,21 @@ export default function EditorTopBar({
       onTitleClick={mode === "build" ? openPageSettings : undefined}
       closeHref={websiteRoutes.pages(locationId)}
       centre={<ModeSwitch mode={mode} onChange={setMode} />}
-      action={<PublishButton store={store} clerkOrgId={clerkOrgId} locationId={locationId} />}
+      action={
+        <div className="flex items-center gap-2">
+          {/* Quiet, and to the left of Publish: looking at the live page is a
+              detour from the job, not the job. */}
+          {liveUrl && (
+            <Button variant="ghost" size="sm" asChild>
+              <a href={liveUrl} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="size-4" />
+                <span className="hidden sm:inline">View</span>
+              </a>
+            </Button>
+          )}
+          <PublishButton store={store} clerkOrgId={clerkOrgId} locationId={locationId} />
+        </div>
+      }
     >
       {children}
     </OverlayChrome>

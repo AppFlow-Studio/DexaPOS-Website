@@ -157,6 +157,7 @@ export default async function EditorRoute({
       site={{
         id: websiteResult.data.id,
         nav: navItems,
+        subdomain: websiteResult.data.subdomain,
         pages: pages.map((p) => ({
           title: p.title,
           path: p.path,
