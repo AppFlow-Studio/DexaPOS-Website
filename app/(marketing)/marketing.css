@@ -192,6 +192,7 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
   left: 0; right: 0; bottom: -22px;
   height: 2px; background: var(--muted-gold);
 }
+.nav-mobile-cta-item { display: none; }
 .nav-cta {
   display: inline-flex; align-items: center; gap: 8px;
   background: var(--matte-black); color: var(--warm-white);
@@ -219,6 +220,7 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
   transition: none;
 }
 .nav-signin:hover { color: var(--ink); }
+.nav-signin-icon { display: none; width: 21px; height: 21px; }
 .menu-toggle { display: none; }
 @media (hover: none) and (pointer: coarse) {
   .btn, .nav-cta, .menu-toggle, button, input, select, textarea, a { cursor: default; }
@@ -280,9 +282,13 @@ btn-request-a-demo{
   border-bottom: 1px solid rgba(17, 17, 17, 0.08);
   position: relative;
 }
+/* Page headers are centred (matching .section-head.center). The accent bar
+   centres with the text instead of hugging the left gutter. */
+.page-head { text-align: center; }
 .page-head::after {
   content: ''; position: absolute;
-  left: 32px; bottom: -1px;
+  left: 50%; transform: translateX(-50%);
+  bottom: -1px;
   width: 64px; height: 2px;
   background: var(--muted-gold);
 }
@@ -294,16 +300,15 @@ btn-request-a-demo{
   margin-bottom: 28px;
   text-transform: uppercase; letter-spacing: 0.20em;
 }
-.page-head .eyebrow::before {
-  content: ''; width: 28px; height: 1px;
-  background: var(--muted-gold);
-}
+/* No leading dash when centred — it makes the eyebrow look off-axis. */
+.page-head .eyebrow::before { display: none; }
 .page-head h1 {
   font-family: var(--font-display);
   font-size: clamp(48px, 6.5vw, 84px);
   line-height: 0.98; letter-spacing: 0.005em;
   color: var(--ink); font-weight: 800;
   max-width: 980px; margin-bottom: 28px;
+  margin-left: auto; margin-right: auto;
   text-transform: uppercase;
 }
 .page-head .lede {
@@ -311,6 +316,7 @@ btn-request-a-demo{
   font-size: 19px; line-height: 1.6;
   color: var(--graphite);
   max-width: 680px; font-weight: 300;
+  margin-left: auto; margin-right: auto;
   text-transform: none; letter-spacing: 0;
 }
 
@@ -374,6 +380,9 @@ btn-request-a-demo{
   color: var(--warm-white);
   border-radius: 4px;
 }
+.footer-brand { text-align: center; }
+.footer-brand .logo { width: 100%; justify-content: center; }
+.footer-brand .footer-tag { margin-left: auto; margin-right: auto; }
 .footer .logo-img { height: 32px; }
 .footer-tag {
   font-family: var(--font);
@@ -536,28 +545,37 @@ btn-request-a-demo{
 }
 .hero h1 .accent,
 .cms-hero h1 .accent { color: var(--brand-500); }
+/* Hero text is centred within its own column (the photo keeps the other
+   column). max-widths stay, so long lines still wrap at a readable measure —
+   auto margins centre the block rather than letting it hug the left edge. */
+.hero-grid > :first-child,
+.hero .hero-copy { text-align: center; }
 .hero-lede {
   font-size: 19px;
   line-height: 1.6;
   color: var(--slate-600);
   max-width: 540px;
   margin-bottom: 40px;
+  margin-left: auto;
+  margin-right: auto;
   font-weight: 400;
 }
 .hero-actions {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
+  justify-content: center;
   margin-bottom: 56px;
 }
 .hero-trust {
   display: flex;
   gap: 36px;
   flex-wrap: wrap;
+  justify-content: center;
   padding-top: 32px;
   border-top: 1px solid var(--slate-200);
 }
-.hero-trust-item { display: flex; flex-direction: column; gap: 4px; }
+.hero-trust-item { display: flex; flex-direction: column; gap: 4px; align-items: center; }
 .hero-trust-num {
   font-size: 24px; font-weight: 700;
   color: var(--ink); letter-spacing: -0.02em;
@@ -801,6 +819,10 @@ btn-request-a-demo{
 .industry-tag-icon {
   color: var(--brand-500);
   margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
 }
 .industry-tag-name {
   font-size: 14px; font-weight: 600;
@@ -825,13 +847,18 @@ btn-request-a-demo{
   border-radius: 16px;
   overflow: hidden;
 }
-.compare-r { display: grid; grid-template-columns: 1.5fr repeat(4, 1fr); }
+.compare-r {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(4, minmax(0, 1fr));
+}
 .compare-r + .compare-r { border-top: 1px solid rgba(255,255,255,0.08); }
 .compare-c {
   padding: 17px 22px;
+  min-width: 0;
   font-family: var(--font);
   font-size: 14.5px; font-weight: 400;
   display: flex; align-items: center; gap: 8px;
+  overflow-wrap: anywhere;
   color: rgba(245,243,239,0.62);
   text-transform: none; letter-spacing: 0;
 }
@@ -858,6 +885,11 @@ btn-request-a-demo{
 /* ───── HOME: Responsive overrides ───── */
 @media (max-width: 1024px) {
   .hero-grid { grid-template-columns: 1fr; gap: 56px; }
+  .hero-grid > :first-child { width: 100%; text-align: center; }
+  .hero h1,
+  .hero-lede { margin-left: auto; margin-right: auto; text-align: center; }
+  .cms-hero .hero-grid > :first-child > div { text-align: center !important; }
+  .cms-hero .hero-grid h1 { text-align: center; }
   .hero-floating { left: 16px; bottom: 16px; }
   .value-grid { grid-template-columns: 1fr; }
   .explore-grid { grid-template-columns: 1fr; }
@@ -866,7 +898,10 @@ btn-request-a-demo{
 }
 @media (max-width: 700px) {
   .hero { padding: 56px 0 80px; }
+  .hero-grid { display: flex; flex-direction: column; }
+  .hero-visual { order: -1; width: 100%; }
   .value-props, .explore, .industries-strip { padding: 72px 0; }
+  .explore-grid { display: flex; flex-direction: column; }
   .industry-row { grid-template-columns: 1fr 1fr; }
   .value-card, .explore-body { padding: 28px; }
   .hero-trust { gap: 24px; }
@@ -1106,17 +1141,79 @@ btn-request-a-demo{
     line-height: 44px;
     border-bottom: 1px solid rgba(17, 17, 17, 0.06);
   }
+  .nav-links.open a.current::after { display: none; }
   .nav-links.open li:last-child a { border: none; }
   .menu-toggle {
     display: grid; place-items: center;
     width: 44px; height: 44px; border-radius: 6px;
     background: rgba(17, 17, 17, 0.06); color: var(--ink);
   }
+  .nav-signin {
+    width: 40px; height: 40px; padding: 0;
+    justify-content: center;
+  }
+  .nav-signin-icon { display: block; }
+  .nav-signin-label { display: none; }
+}
+@media (min-width: 901px) and (max-width: 1100px) {
+  .nav-inner { height: 64px; gap: 12px; }
+  .logo-img { height: 24px; }
+  .nav-links,
+  .nav-links.open {
+    display: flex;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+  .nav-links.open li a {
+    min-height: 0;
+    padding: 12px 0;
+    line-height: normal;
+    border: 0;
+  }
+  .nav-links a {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .nav-actions { gap: 10px; }
+  .nav-cta {
+    display: inline-flex;
+    min-height: 36px;
+    padding: 8px 12px;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+  .menu-toggle { display: none; }
 }
 @media (max-width: 700px) {
   :root { --gutter: 20px; }
-  .logo-img { height: 30px; }
-  .nav-cta { padding: 11px 18px; min-height: 44px; font-size: clamp(11px, 2.8vw, 13px); }
+  .nav-inner { height: 64px; gap: 12px; }
+  .logo-img { height: 24px; }
+  .nav-actions { gap: 8px; }
+  .nav-cta { display: none; }
+  .nav-signin {
+    width: 40px; height: 40px; padding: 0;
+    justify-content: center;
+  }
+  .nav-signin-icon { display: block; }
+  .nav-signin-label { display: none; }
+  .menu-toggle { width: 40px; height: 40px; }
+  .nav-links.open { top: 64px; }
+  .nav-links.open .nav-mobile-cta-item { display: block; padding-top: 12px; }
+  .nav-links.open .nav-mobile-cta {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 48px; padding: 0 18px;
+    background: var(--matte-black); color: var(--warm-white);
+    border: 1px solid var(--matte-black); border-radius: 2px;
+    font-weight: 600;
+  }
   .footer-top { grid-template-columns: 1fr; gap: 32px; }
   .section, .section-tight { padding: 64px 0; }
   .proof, .cta-strip, .capabilities, .principles,
@@ -1512,17 +1609,19 @@ btn-request-a-demo{
   padding: 56px 0 96px;
   background: var(--paper);
 }
+/* Centred: heading/lede and the action buttons stack and centre rather than
+   sitting on opposite ends of a space-between row. NOTE: demo.css carries a
+   duplicate of these rules — keep both in sync. */
 .demo-meta {
   display: flex;
-  justify-content: space-between;
-  align-items: end;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
   margin-bottom: 28px;
-  flex-wrap: wrap;
-  gap: 16px;
+  gap: 20px;
 }
 .demo-meta-left {
-  flex: 1;
-  min-width: 280px;
+  min-width: 0;
 }
 .demo-meta-eyebrow {
   display: inline-flex;
@@ -1535,10 +1634,8 @@ btn-request-a-demo{
   margin-bottom: 14px;
   text-transform: uppercase;
 }
-.demo-meta-eyebrow::before {
-  content: ''; width: 24px; height: 1px;
-  background: var(--brand-500);
-}
+/* No leading dash when centred — it pulls the eyebrow off-axis. */
+.demo-meta-eyebrow::before { display: none; }
 .demo-meta h2 {
   font-size: clamp(28px, 3.4vw, 38px);
   line-height: 1.1;
@@ -1552,11 +1649,15 @@ btn-request-a-demo{
   line-height: 1.55;
   color: var(--slate-600);
   max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .demo-meta-actions {
   display: flex;
   gap: 10px;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 .demo-action-btn {
   display: inline-flex;
@@ -1578,6 +1679,23 @@ btn-request-a-demo{
   transform: translateY(-1px);
 }
 .demo-action-btn svg { color: var(--brand-500); }
+.demo-action-label-mobile { display: none; }
+.demo-meta-actions a.demo-action-btn {
+  min-height: 56px;
+  padding: 16px 30px;
+  background: var(--matte-black);
+  border-color: var(--matte-black);
+  color: var(--warm-white);
+  font-size: 15px;
+  font-weight: 600;
+  animation: demo-cta-color 3.2s ease-in-out infinite;
+}
+.demo-meta-actions a.demo-action-btn svg { color: currentColor; }
+
+@keyframes demo-cta-color {
+  0%, 100% { background-color: var(--matte-black); border-color: var(--matte-black); }
+  50% { background-color: var(--brand-600); border-color: var(--brand-600); }
+}
 .device-frame {
   background: var(--ink);
   border-radius: 20px;
@@ -1627,7 +1745,7 @@ btn-request-a-demo{
 }
 .pos-iframe {
   width: 100%;
-  height: 760px;
+  height: clamp(560px, calc(100vh - 180px), 760px);
   border: 0;
   display: block;
 }
@@ -1700,9 +1818,17 @@ btn-request-a-demo{
   .multi-image { min-height: 320px; aspect-ratio: 16/9; }
   .contact-grid { grid-template-columns: 1fr; gap: 48px; }
   .form-card { padding: 36px 28px; }
-  .pos-iframe { height: 680px; }
   .ann-grid { grid-template-columns: 1fr; }
-  .device-url { margin: 0 8px; }
+}
+@media (max-width: 900px) {
+  .demo-section { padding: 48px 0; }
+  .demo-meta { margin-bottom: 0; }
+  .demo-meta-left,
+  .demo-action-btn-secondary,
+  .device-frame,
+  .demo-section .demo-hint { display: none; }
+  .demo-action-label-default { display: none; }
+  .demo-action-label-mobile { display: inline; }
 }
 @media (max-width: 700px) {
   .ind-body { padding: 28px; }
@@ -1718,6 +1844,10 @@ btn-request-a-demo{
   .device-url { font-size: 10.5px; padding: 4px 10px; margin-left: 4px; }
   .demo-meta-actions { width: 100%; }
   .pos-iframe { height: 680px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-meta-actions a.demo-action-btn { animation: none; }
 }
 
 /* ───── WHY DEXA (fallback) ───── */
@@ -1994,12 +2124,18 @@ btn-request-a-demo{
 
 @media (max-width: 1024px) {
   .comp-card { padding: 36px 28px; }
-  .comp-table { grid-template-columns: 1.4fr 1fr 1fr; }
-  .comp-table > :nth-child(5n+4),
-  .comp-table > :nth-child(5n+5) { display: none; }
   .trust-grid { grid-template-columns: 1fr 1fr; }
   .diff-grid { grid-template-columns: 1fr 1fr; }
   .wp-inner { grid-template-columns: 1fr; gap: 36px; padding: 44px; }
+  .wp-copy { text-align: center; }
+  .wp-copy .section-eyebrow { justify-content: center; }
+  .wp-copy p { margin-left: auto; margin-right: auto; }
+  .wp-copy .btn {
+    display: flex;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+  }
 }
 @media (max-width: 700px) {
   .comp-card { padding: 28px 20px; }
@@ -2007,6 +2143,8 @@ btn-request-a-demo{
   .comp-row-feature { font-size: 13px; }
   .comp-cell { font-size: 11.5px; padding: 14px 4px; }
   .faq-section .faq-q { font-size: 16px; gap: 16px; }
+  .faq-section .faq-item:not(.open) .faq-a { display: none; }
+  .faq-section .faq-item.open .faq-a { display: grid; }
   .trust-grid { grid-template-columns: 1fr; }
   .why-diff { padding: 72px 0; }
   .diff-grid { grid-template-columns: 1fr; }
@@ -3345,11 +3483,16 @@ btn-request-a-demo{
   padding: 0;
 }
 .psec .faq-item.is-open .faq-answer { grid-template-rows: 1fr; }
-.psec .faq-answer-inner > * { margin-left: 26px; margin-right: 26px; }
+.psec .faq-answer-inner > * { margin-left: 34px; margin-right: 26px; }
 .psec .faq-answer-inner > :first-child { margin-top: 0; }
-.psec .faq-answer-inner > :last-child { margin-bottom: 22px; }
-.psec .faq-answer p { margin: 0 0 10px; }
-.psec .faq-answer p:last-child { margin-bottom: 0; }
+/* Note the longhands: a `margin` shorthand here would reset the left/right
+   indent set above, since this selector is more specific. */
+.psec .faq-answer p { margin-top: 0; margin-bottom: 10px; }
+/* The bottom gap must out-specify `.faq-answer p:last-child` (0,2,2), so it is
+   written on `.faq-answer-inner > :last-child` with the same weight. Keep it as
+   a margin on the content — padding on .faq-answer-inner would prop the
+   collapsed panel open instead of animating to zero height. */
+.psec .faq-answer .faq-answer-inner > :last-child { margin-bottom: 22px; }
 .psec .faq-answer a {
   color: var(--brand-600);
   font-weight: 600;
@@ -3403,10 +3546,9 @@ btn-request-a-demo{
     padding: 18px 20px;
     font-size: 14.5px;
   }
-  .psec .faq-answer {
-    padding: 0 20px 18px;
-    font-size: 14px;
-  }
+  .psec .faq-answer { font-size: 14px; }
+  .psec .faq-answer-inner > * { margin-left: 26px; margin-right: 20px; }
+  .psec .faq-answer .faq-answer-inner > :last-child { margin-bottom: 18px; }
 }
 
 /* CMS-rendered public sections */
@@ -3531,6 +3673,9 @@ btn-request-a-demo{
   gap: 24px;
 }
 
+.cms-cards-grid-images { grid-template-columns: 1fr; }
+.cms-cards-grid-images.cms-cards-grid-two-columns { grid-template-columns: 1fr 1fr; }
+
 .cms-cards-grid .card-image {
   width: 100%;
   height: 180px;
@@ -3539,6 +3684,11 @@ btn-request-a-demo{
 }
 
 @media (max-width: 700px) {
+  .cms-cards-grid-images {
+    display: flex;
+    flex-direction: column;
+  }
+
   .cms-hero,
   .cms-rich-text,
   .cms-image,
@@ -3554,6 +3704,83 @@ btn-request-a-demo{
 }
 
 /* Inline CMS preview */
+
+/* Shared informational-card alignment. Keep this near the end of the marketing
+   stylesheet so CMS and page-specific card variants follow the same treatment. */
+.page-head > .wrap > .eyebrow,
+.cms-hero .section-eyebrow {
+  display: none;
+}
+
+.mk-site :is(
+  .value-card,
+  .explore-body,
+  .core-body,
+  .cap,
+  .hw-body,
+  .princ,
+  .ind-body,
+  .ann,
+  .diff-card,
+  .price-card,
+  .addon-card,
+  .testimonial
+) {
+  text-align: center;
+}
+
+.mk-site :is(
+  .value-icon,
+  .core-icon,
+  .princ-icon,
+  .ann-icon,
+  .diff-ic,
+  .price-card .icon,
+  .addon-icon
+) {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.mk-site :is(.cap-head, .addon-head, .testimonial-author) {
+  justify-content: center;
+}
+
+.mk-site .addon-head {
+  flex-direction: column;
+  align-items: center;
+}
+
+.mk-site .addon-meta-col {
+  align-items: center;
+}
+
+.mk-site .addon-tag {
+  align-self: center;
+}
+
+.mk-site :is(
+  .cap-pills,
+  .hw-models,
+  .ind-pills,
+  .cms-card-tags,
+  .testimonial .stars
+) {
+  justify-content: center;
+}
+
+.mk-site .explore-link {
+  justify-content: center;
+}
+
+.mk-site .price-card .price-row {
+  justify-content: center;
+}
+
+.mk-site .price-card .feat-list {
+  text-align: left;
+}
+
 .cms-inline-toolbar {
   position: fixed;
   left: 50%;
@@ -3800,4 +4027,261 @@ btn-request-a-demo{
 @media (max-width: 640px) {
   .cms-image-library-backdrop { padding: 12px; }
   .cms-image-library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ==========================================================================
+   Mobile: center all headings and body copy in the page flow.
+   Scoped to .mk-site so the dashboard is never affected. Excludes the CMS
+   editor chrome, comparison tables (column alignment carries their meaning),
+   and form controls, which stay left-aligned for readability.
+   ========================================================================== */
+@media (max-width: 700px) {
+  .mk-site :is(h1, h2, h3, h4, h5, h6, p, li, blockquote, figcaption),
+  .mk-site :is(.eyebrow, .section-eyebrow, .multi-eyebrow, .demo-meta-eyebrow),
+  .mk-site :is(.calc-label, .row-label, .compat-stat-label, .hero-trust-label,
+                .multi-stat-label, .proof-stat-label, .trust-stat-label) {
+    text-align: center;
+  }
+
+  /* Flex rows ignore text-align, so center them on the main axis instead. */
+  .mk-site :is(.included-item, .hero-trust-item, .step-list li, .capabilities li) {
+    justify-content: center;
+  }
+
+  /* Exception: .included-grid stays multi-column on mobile (pricing.css keeps
+     it at 2 columns), and centering each cell independently reads as ragged.
+     Keep the items left-aligned and center the grid as one block instead. */
+  .mk-site .included-grid {
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .mk-site .included-grid .included-item {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  /* Fixed-size icon tiles stacked above card text are block boxes: text-align
+     cannot move them, so center them with auto inline margins. .cap-icon is
+     excluded — it sits inside a horizontal row already centered above. */
+  .mk-site :is(.value-icon, .core-icon, .addon-icon, .princ-icon, .ann-icon) {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Constrained measure blocks must center themselves, not just their text. */
+  .mk-site :is(h1, h2, h3, p)[class*="lead"],
+  .mk-site :is(.section-head, .cms-rich-text) {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Opt-outs: editor chrome, tables, and form controls keep their alignment. */
+  .mk-site :is(.cms-inline-toolbar, .cms-inline-panel, .cms-image-library)
+    :is(h1, h2, h3, h4, h5, h6, p, li, span),
+  .mk-site :is(.comp-table, .compare-table)
+    :is(h1, h2, h3, h4, h5, h6, p, li,
+        .comp-row-feature, .compare-row-label, .compare-col-label),
+  .mk-site :is(input, textarea, select, label, option) {
+    text-align: left;
+  }
+}
+
+/* ==========================================================================
+   Mobile competitor switcher (components/marketing/CompareSwitch.tsx)
+
+   Every comparison table on the site has the same shape: a row-label column,
+   DEXA, then N competitors. Five columns cannot fit a phone, and horizontal
+   scrolling hides the comparison that is the whole point of the section. At and
+   below 1024px the competitor columns therefore collapse to one selectable column.
+
+   Contract: the wrapper is .cmp-switchable[data-active-col], and every header
+   and body cell carries data-col — 0 = row label, 1 = DEXA, 2+ = competitors.
+   Desktop renders the full table; only these rules hide anything.
+   ========================================================================== */
+.cmp-switch { display: none; }
+
+@media (max-width: 1024px) {
+  .cmp-switch {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 10px 12px;
+    margin: 0 0 20px;
+  }
+  .cmp-switch-label {
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--slate-500);
+  }
+  .cmp-switch-opts {
+    display: inline-flex;
+    gap: 2px;
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--slate-100);
+    border: 1px solid var(--slate-200);
+    max-width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .cmp-switch-btn {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--slate-500);
+    padding: 9px 15px;
+    min-height: 40px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .cmp-switch-btn[aria-pressed="true"] {
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Dark sections (home "Built Different") need the inverse palette. */
+  .cmp-switchable[data-tone="dark"] .cmp-switch-label { color: rgba(245,243,239,0.55); }
+  .cmp-switchable[data-tone="dark"] .cmp-switch-opts {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.12);
+  }
+  .cmp-switchable[data-tone="dark"] .cmp-switch-btn { color: rgba(245,243,239,0.62); }
+  .cmp-switchable[data-tone="dark"] .cmp-switch-btn[aria-pressed="true"] {
+    background: rgba(255,255,255,0.14);
+    color: var(--warm-white);
+    box-shadow: none;
+  }
+
+  /* Hide every competitor column. Listed explicitly rather than via :not() so
+     these stay one class + one attribute less specific than the un-hide rules
+     below, which have to win. */
+  .cmp-switchable[data-active-col] [data-col="2"],
+  .cmp-switchable[data-active-col] [data-col="3"],
+  .cmp-switchable[data-active-col] [data-col="4"],
+  .cmp-switchable[data-active-col] [data-col="5"],
+  .cmp-switchable[data-active-col] [data-col="6"] { display: none; }
+
+  /* ...then restore the selected one. `display` differs per cell type, so this
+     needs one rule per type rather than a single generic un-hide. */
+  .cmp-switchable[data-active-col="2"] .compare-c[data-col="2"],
+  .cmp-switchable[data-active-col="3"] .compare-c[data-col="3"],
+  .cmp-switchable[data-active-col="4"] .compare-c[data-col="4"],
+  .cmp-switchable[data-active-col="5"] .compare-c[data-col="5"],
+  .cmp-switchable[data-active-col="6"] .compare-c[data-col="6"] { display: flex; }
+
+  .cmp-switchable[data-active-col="2"] :is(.comp-th, .comp-cell)[data-col="2"],
+  .cmp-switchable[data-active-col="3"] :is(.comp-th, .comp-cell)[data-col="3"],
+  .cmp-switchable[data-active-col="4"] :is(.comp-th, .comp-cell)[data-col="4"],
+  .cmp-switchable[data-active-col="5"] :is(.comp-th, .comp-cell)[data-col="5"],
+  .cmp-switchable[data-active-col="6"] :is(.comp-th, .comp-cell)[data-col="6"] { display: block; }
+
+  .cmp-switchable[data-active-col="2"] :is(th, td)[data-col="2"],
+  .cmp-switchable[data-active-col="3"] :is(th, td)[data-col="3"],
+  .cmp-switchable[data-active-col="4"] :is(th, td)[data-col="4"],
+  .cmp-switchable[data-active-col="5"] :is(th, td)[data-col="5"],
+  .cmp-switchable[data-active-col="6"] :is(th, td)[data-col="6"] { display: table-cell; }
+
+  /* Three visible columns: label, DEXA, selected competitor. */
+  .cmp-switchable .compare-r {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.2fr) minmax(0, 1fr);
+  }
+  .cmp-switchable .compare-table { min-width: 0; }
+  .cmp-switchable .compare-scroll { overflow-x: visible; margin-top: 28px; }
+  .cmp-switchable .comp-table { grid-template-columns: 1.15fr 1.2fr 1fr; }
+
+  /* Three columns on a phone leaves little room per cell. Tighten the cells and
+     let words break on their own boundaries — the dark table's default
+     overflow-wrap: anywhere splits mid-word ("Config / urable"). */
+  .cmp-switchable .compare-c {
+    padding: 14px 11px;
+    font-size: 13.5px;
+    gap: 6px;
+    overflow-wrap: break-word;
+  }
+  .cmp-switchable .compare-head .compare-c { font-size: 11px; }
+  .cmp-switchable .compare-c.feat { font-size: 12.5px; }
+
+  /* pricing.css gives that table a 800px min-width and a scrolling card below
+     900px — the switcher replaces that fallback. */
+  .cmp-switchable .compare-card { overflow-x: visible; }
+  .cmp-switchable .compare-card .compare-table,
+  .cmp-switchable .compare-card .compare-foot { min-width: 0; }
+  /* A long uppercase heading ("SQUARE FOR RESTAURANTS") is one unbreakable word
+     wider than its column, and the table clips its overflow. */
+  .cmp-switchable .compare-card .compare-table :is(th, td) {
+    overflow-wrap: break-word;
+    letter-spacing: 0.04em;
+  }
+
+  /* The pricing table is a real <table> with a fixed colgroup. Hidden cells are
+     simply absent, so the three visible cells always map to the first three
+     <col> elements — resize those and zero the trailing pair. */
+  .cmp-switchable .compare-card .compare-table .compare-col-label { width: 42%; }
+  .cmp-switchable .compare-card .compare-table .compare-col-dexa { width: 29%; }
+  .cmp-switchable .compare-card .compare-table .compare-col-toast { width: 29%; }
+  .cmp-switchable .compare-card .compare-table .compare-col-square,
+  .cmp-switchable .compare-card .compare-table .compare-col-clover { width: 0; }
+}
+
+/* Narrow phones: the pill row can no longer sit beside its label, and a long
+   competitor name ("Square for Restaurants") wraps raggedly. Stack the label
+   and give every option an equal share of the width instead. */
+@media (max-width: 480px) {
+  .cmp-switch {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .cmp-switch-label { text-align: center; }
+  .cmp-switch-opts {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .cmp-switch-btn {
+    padding: 9px 6px;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  /* Three columns at 320px: pull the cell padding in so values are not flush
+     against the column rules. */
+  .cmp-switchable .compare-c { padding: 13px 9px; font-size: 13px; }
+  .cmp-switchable .compare-card .compare-table :is(th, td) {
+    padding: 12px 9px;
+    font-size: 12.5px;
+  }
+  .cmp-switchable .compare-table .dexa-col .check-yes {
+    max-width: 100%;
+  }
+  .cmp-switchable .compare-table .dexa-col .pricing-cell-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .cmp-switchable .compare-table .dexa-col .pricing-cell-value .cmp-unit {
+    white-space: normal;
+  }
+}
+
+/* "/mo*" is wide enough to wrap "$0-$69/mo*" in a switched-down pricing column.
+   The tail is a separate span (see withCompactUnit in SectionRenderer) so it can
+   be dropped to "/m" here without changing the cell's text content. */
+.cmp-unit { white-space: nowrap; }
+.cmp-unit-tail { display: inline; }
+
+@media (max-width: 1024px) {
+  .cmp-switchable .cmp-unit-tail { display: none; }
 }

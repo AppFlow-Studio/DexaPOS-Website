@@ -1,4 +1,6 @@
+import { Fragment } from "react";
 import { Reveal } from "@/components/marketing/Reveal";
+import CompareSwitch from "@/components/marketing/CompareSwitch";
 import type { Metadata } from "next";
 import Link from "next/link";
 import AnimatedCounter from "@/components/marketing/AnimatedCounter";
@@ -6,6 +8,16 @@ import FaqAccordion from "@/components/marketing/FaqAccordion";
 import SectionRenderer from "@/components/cms/SectionRenderer";
 import { getCmsPage } from "@/lib/cms/get-cms-page";
 import "./why.css";
+
+const COMPARISON_ROWS = [
+  ["Dual pricing", "Built in", "Add-on", "Workaround", "3rd-party"],
+  ["Hardware choice", "Open", "Toast only", "Square only", "Clover only"],
+  ["Payment processor", "Configurable", "Toast Pay", "Square only", "Locked"],
+  ["Offline mode", "Full", "Limited", "Limited", "Limited"],
+  ["Cash audit log", "Automatic", "Manual", "Manual", "Manual"],
+  ["Contract length", "Month-to-month", "2–3 yr", "Variable", "Variable"],
+  ["Multi-location", "Unlimited", "Tier-based", "Limited", "Per-device"],
+];
 
 export async function generateMetadata(): Promise<Metadata> {
   const cms = await getCmsPage("/why");
@@ -115,57 +127,32 @@ export default async function WhyPage() {
               <p>The differences operators care about</p>
             </div>
 
-            <div className="comp-table">
-              <div className="comp-th feature-col">Capability</div>
-              <div className="comp-th dexa-col">DEXA</div>
-              <div className="comp-th">Toast</div>
-              <div className="comp-th">Square</div>
-              <div className="comp-th">Clover</div>
+            <CompareSwitch competitors={["Toast", "Square", "Clover"]}>
+              <div className="comp-table">
+                <div className="comp-th feature-col" data-col="0">Capability</div>
+                <div className="comp-th dexa-col" data-col="1">DEXA</div>
+                <div className="comp-th" data-col="2">Toast</div>
+                <div className="comp-th" data-col="3">Square</div>
+                <div className="comp-th" data-col="4">Clover</div>
 
-              <div className="comp-row-feature">Dual pricing</div>
-              <div className="comp-cell" style={{ borderBottom: "1px solid var(--slate-100)" }}><span style={{ background: "var(--brand-50)", color: "var(--brand-500)", padding: "5px 12px", borderRadius: "6px", fontWeight: 600, fontSize: "12.5px" }}>Built in</span></div>
-              <div className="comp-cell competitor">Add-on</div>
-              <div className="comp-cell competitor">Workaround</div>
-              <div className="comp-cell competitor">3rd-party</div>
+                {COMPARISON_ROWS.map(([feat, dexa, toast, square, clover], rowIndex) => {
+                  const isLast = rowIndex === COMPARISON_ROWS.length - 1;
+                  const edge = isLast ? { borderBottom: "none" } : undefined;
 
-              <div className="comp-row-feature">Hardware choice</div>
-              <div className="comp-cell" style={{ borderBottom: "1px solid var(--slate-100)" }}><span style={{ background: "var(--brand-50)", color: "var(--brand-500)", padding: "5px 12px", borderRadius: "6px", fontWeight: 600, fontSize: "12.5px" }}>Open</span></div>
-              <div className="comp-cell competitor">Toast only</div>
-              <div className="comp-cell competitor">Square only</div>
-              <div className="comp-cell competitor">Clover only</div>
-
-              <div className="comp-row-feature">Payment processor</div>
-              <div className="comp-cell" style={{ borderBottom: "1px solid var(--slate-100)" }}><span style={{ background: "var(--brand-50)", color: "var(--brand-500)", padding: "5px 12px", borderRadius: "6px", fontWeight: 600, fontSize: "12.5px" }}>Configurable</span></div>
-              <div className="comp-cell competitor">Toast Pay</div>
-              <div className="comp-cell competitor">Square only</div>
-              <div className="comp-cell competitor">Locked</div>
-
-              <div className="comp-row-feature">Offline mode</div>
-              <div className="comp-cell" style={{ borderBottom: "1px solid var(--slate-100)" }}><span style={{ background: "var(--brand-50)", color: "var(--brand-500)", padding: "5px 12px", borderRadius: "6px", fontWeight: 600, fontSize: "12.5px" }}>Full</span></div>
-              <div className="comp-cell competitor">Limited</div>
-              <div className="comp-cell competitor">Limited</div>
-              <div className="comp-cell competitor">Limited</div>
-
-              <div className="comp-row-feature">Cash audit log</div>
-              <div className="comp-cell" style={{ borderBottom: "1px solid var(--slate-100)" }}><span style={{ background: "var(--brand-50)", color: "var(--brand-500)", padding: "5px 12px", borderRadius: "6px", fontWeight: 600, fontSize: "12.5px" }}>Automatic</span></div>
-              <div className="comp-cell competitor">Manual</div>
-              <div className="comp-cell competitor">Manual</div>
-              <div className="comp-cell competitor">Manual</div>
-
-              <div className="comp-row-feature">Contract length</div>
-              <div className="comp-cell" style={{ borderBottom: "1px solid var(--slate-100)" }}><span style={{ background: "var(--brand-50)", color: "var(--brand-500)", padding: "5px 12px", borderRadius: "6px", fontWeight: 600, fontSize: "12.5px" }}>Month-to-month</span></div>
-              <div className="comp-cell competitor">2–3 yr</div>
-              <div className="comp-cell competitor">Variable</div>
-              <div className="comp-cell competitor">Variable</div>
-
-              <div className="comp-row" style={{ borderBottom: "none" }}>
-                <div className="comp-row-feature" style={{ borderBottom: "none" }}>Multi-location</div>
+                  return (
+                    <Fragment key={feat}>
+                      <div className="comp-row-feature" data-col="0" style={edge}>{feat}</div>
+                      <div className="comp-cell" data-col="1" style={edge ?? { borderBottom: "1px solid var(--slate-100)" }}>
+                        <span className="comp-pill">{dexa}</span>
+                      </div>
+                      <div className="comp-cell competitor" data-col="2" style={edge}>{toast}</div>
+                      <div className="comp-cell competitor" data-col="3" style={edge}>{square}</div>
+                      <div className="comp-cell competitor" data-col="4" style={edge}>{clover}</div>
+                    </Fragment>
+                  );
+                })}
               </div>
-              <div className="comp-cell" style={{ borderBottom: "none" }}><span style={{ background: "var(--brand-50)", color: "var(--brand-500)", padding: "5px 12px", borderRadius: "6px", fontWeight: 600, fontSize: "12.5px" }}>Unlimited</span></div>
-              <div className="comp-cell competitor" style={{ borderBottom: "none" }}>Tier-based</div>
-              <div className="comp-cell competitor" style={{ borderBottom: "none" }}>Limited</div>
-              <div className="comp-cell competitor" style={{ borderBottom: "none" }}>Per-device</div>
-            </div>
+            </CompareSwitch>
           </Reveal>
         </div>
       </section>

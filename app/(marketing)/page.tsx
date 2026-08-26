@@ -1,3 +1,4 @@
+import CompareSwitch from "@/components/marketing/CompareSwitch";
 import { Reveal } from "@/components/marketing/Reveal";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -73,7 +74,7 @@ export default async function Home() {
       {/* VALUE PROPS */}
       <section className="value-props">
         <div className="wrap">
-          <Reveal as="div" className="section-head reveal">
+          <Reveal as="div" className="section-head center reveal">
             <div className="section-eyebrow">Why operators choose DEXA</div>
             <h2 className="section-title">Everything your restaurant needs, in one place.</h2>
             <p className="section-sub">Stop juggling six tools to run one restaurant. DEXA brings ordering, payments, kitchen, staff, and reporting together — so you can focus on hospitality.</p>
@@ -108,7 +109,7 @@ export default async function Home() {
       {/* EXPLORE */}
       <section className="explore">
         <div className="wrap">
-          <Reveal as="div" className="section-head reveal">
+          <Reveal as="div" className="section-head center reveal">
             <div className="section-eyebrow">Explore</div>
             <h2 className="section-title">Take a closer look.</h2>
             <p className="section-sub">Whether you want to see DEXA in action, compare it side-by-side with the platform you have today, or check whether your existing hardware works — start here.</p>
@@ -199,7 +200,7 @@ export default async function Home() {
       {/* INDUSTRIES */}
       <section className="industries-strip">
         <div className="wrap">
-          <Reveal as="div" className="section-head reveal">
+          <Reveal as="div" className="section-head center reveal">
             <div className="section-eyebrow">Built for your concept</div>
             <h2 className="section-title">Whatever you serve, DEXA fits.</h2>
             <p className="section-sub">DEXA configures itself for eight different restaurant concepts, with the right defaults already set for your operation.</p>
@@ -242,38 +243,40 @@ export default async function Home() {
             <h2 className="section-title">No lock-in. <span className="gold">On purpose.</span></h2>
             <p className="section-sub">No multi-year contracts, no captive hardware, no processor lock-in. Here&apos;s how DEXA compares to the platforms most operators evaluate before they switch.</p>
           </Reveal>
-          <Reveal as="div" className="compare-scroll reveal">
-            <div className="compare-table">
-              <div className="compare-r compare-head">
-                <div className="compare-c">Capability</div>
-                <div className="compare-c dexa">DEXA</div>
-                <div className="compare-c">Toast</div>
-                <div className="compare-c">Square</div>
-                <div className="compare-c">Clover</div>
-              </div>
-              {[
-                ["Dual pricing", "Built in", "Add-on", "Workaround", "3rd-party"],
-                ["Hardware choice", "Open", "Toast only", "Square only", "Clover only"],
-                ["Payment processor", "Configurable", "Toast Pay", "Square only", "Locked"],
-                ["Offline mode", "Full", "Limited", "Limited", "Locked"],
-                ["Cash audit log", "Automatic", "Manual", "Limited", "Limited"],
-                ["Contract length", "Month-to-month", "2–3 years", "Variable", "Variable"],
-                ["Multi-location", "Unlimited", "Tier-based", "Variable", "Per-device"],
-              ].map(([feat, dexa, toast, square, clover]) => (
-                <div className="compare-r" key={feat}>
-                  <div className="compare-c feat">{feat}</div>
-                  <div className="compare-c dexa">
-                    <span className="ck">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                    </span> {dexa}
-                  </div>
-                  <div className="compare-c">{toast}</div>
-                  <div className="compare-c">{square}</div>
-                  <div className="compare-c">{clover}</div>
+          <CompareSwitch competitors={["Toast", "Square", "Clover"]} tone="dark">
+            <Reveal as="div" className="compare-scroll reveal">
+              <div className="compare-table">
+                <div className="compare-r compare-head">
+                  <div className="compare-c" data-col="0">Capability</div>
+                  <div className="compare-c dexa" data-col="1">DEXA</div>
+                  <div className="compare-c" data-col="2">Toast</div>
+                  <div className="compare-c" data-col="3">Square</div>
+                  <div className="compare-c" data-col="4">Clover</div>
                 </div>
-              ))}
-            </div>
-          </Reveal>
+                {[
+                  ["Dual pricing", "Built in", "Add-on", "Workaround", "3rd-party"],
+                  ["Hardware choice", "Open", "Toast only", "Square only", "Clover only"],
+                  ["Payment processor", "Configurable", "Toast Pay", "Square only", "Locked"],
+                  ["Offline mode", "Full", "Limited", "Limited", "Locked"],
+                  ["Cash audit log", "Automatic", "Manual", "Limited", "Limited"],
+                  ["Contract length", "Month-to-month", "2–3 years", "Variable", "Variable"],
+                  ["Multi-location", "Unlimited", "Tier-based", "Variable", "Per-device"],
+                ].map(([feat, dexa, toast, square, clover]) => (
+                  <div className="compare-r" key={feat}>
+                    <div className="compare-c feat" data-col="0">{feat}</div>
+                    <div className="compare-c dexa" data-col="1">
+                      <span className="ck">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                      </span> {dexa}
+                    </div>
+                    <div className="compare-c" data-col="2">{toast}</div>
+                    <div className="compare-c" data-col="3">{square}</div>
+                    <div className="compare-c" data-col="4">{clover}</div>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+          </CompareSwitch>
         </div>
       </section>
 
