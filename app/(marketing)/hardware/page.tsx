@@ -32,7 +32,7 @@ export default async function HardwarePage() {
 
       <section className="hw-cats">
         <div className="wrap">
-          <Reveal as="div" className="section-head reveal">
+          <Reveal as="div" className="section-head center reveal">
             <div className="section-eyebrow">What you&apos;ll need</div>
             <h2 className="section-title">Four categories. Endless flexibility.</h2>
           </Reveal>
@@ -98,7 +98,7 @@ export default async function HardwarePage() {
 
       <section className="principles">
         <div className="wrap">
-          <Reveal as="div" className="section-head reveal">
+          <Reveal as="div" className="section-head center reveal">
             <div className="section-eyebrow">How it works</div>
             <h2 className="section-title">Three principles that keep your hardware reliable.</h2>
           </Reveal>

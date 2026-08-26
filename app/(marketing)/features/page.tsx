@@ -41,7 +41,7 @@ export default async function Features() {
         <>
           <section className="core">
             <div className="wrap">
-              <Reveal className="section-head reveal">
+              <Reveal className="section-head center reveal">
                 <div className="section-eyebrow">The essentials</div>
                 <h2 className="section-title">What you&apos;ll notice on day one.</h2>
               </Reveal>
@@ -113,7 +113,7 @@ export default async function Features() {
 
           <section className="capabilities">
             <div className="wrap">
-              <Reveal className="section-head reveal">
+              <Reveal className="section-head center reveal">
                 <div className="section-eyebrow">Full capability surface</div>
                 <h2 className="section-title">Ten focused areas. One platform.</h2>
                 <p className="section-sub">Configurable per location, per station, per role.</p>

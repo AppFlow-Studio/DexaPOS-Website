@@ -35,7 +35,7 @@
   align-items: center;
 }
 .pricing-hero .eyebrow {
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 10px;
   font-size: 11px;
@@ -567,7 +567,8 @@
 }
 .price-card .pill-feat {
   position: absolute;
-  top: -12px; left: 28px;
+  top: -12px; left: 50%;
+  transform: translateX(-50%);
   background: var(--brand-500);
   color: var(--paper);
   font-size: 11px;
@@ -1127,10 +1128,15 @@
 }
 .psec .faq-answer > .faq-answer-inner { min-height: 0; padding: 0; }
 .psec .faq-item.is-open .faq-answer { grid-template-rows: 1fr; }
-.psec .faq-answer-inner > * { margin-left: 26px; margin-right: 26px; }
+.psec .faq-answer-inner > * { margin-left: 34px; margin-right: 26px; }
 .psec .faq-answer-inner > :first-child { margin-top: 0; }
-.psec .faq-answer-inner > :last-child { margin-bottom: 22px; }
-.psec .faq-answer p { margin: 0 0 10px; }
+/* Must out-specify `.faq-answer p:last-child` (0,2,2) below, hence the extra
+   `.faq-answer`. Kept as a margin on the content, not padding on the wrapper —
+   padding there would prop the collapsed panel open. */
+.psec .faq-answer .faq-answer-inner > :last-child { margin-bottom: 22px; }
+/* Longhands, not the `margin` shorthand: this selector outranks
+   `.faq-answer-inner > *`, so a shorthand would wipe out the left indent. */
+.psec .faq-answer p { margin-top: 0; margin-bottom: 10px; }
 .psec .faq-answer p:last-child { margin-bottom: 0; }
 .psec .faq-answer a {
   color: var(--brand-600);
@@ -1163,6 +1169,34 @@
     grid-template-columns: repeat(2, 1fr);
     gap: 28px;
   }
+  .psec .compare-card {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .psec .compare-table,
+  .psec .compare-foot {
+    min-width: 800px;
+  }
+}
+@media (min-width: 901px) and (max-width: 1100px) {
+  .pricing-hero { padding: 84px 0 72px; }
+  .pricing-hero .wrap {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
+    gap: 32px;
+  }
+  .hero-preview { padding: 24px; }
+}
+@media (max-width: 1440px) {
+  .pricing-hero .wrap > .reveal:first-child { text-align: center; }
+  .pricing-hero .eyebrow { justify-content: center; }
+  .pricing-hero .lede { margin-left: auto; margin-right: auto; }
+  .pricing-hero .hero-cta,
+  .pricing-hero .hero-trust { justify-content: center; }
+  .summary-savings {
+    justify-content: center;
+    text-align: center;
+  }
 }
 @media (max-width: 700px) {
   .pricing-hero {
@@ -1188,8 +1222,8 @@
     font-size: 14.5px;
   }
   .psec .faq-answer { font-size: 14px; }
-  .psec .faq-answer-inner > * { margin-left: 20px; margin-right: 20px; }
-  .psec .faq-answer-inner > :last-child { margin-bottom: 18px; }
+  .psec .faq-answer-inner > * { margin-left: 26px; margin-right: 20px; }
+  .psec .faq-answer .faq-answer-inner > :last-child { margin-bottom: 18px; }
 }
 @media (max-width: 390px) {
   .pricing-hero { padding: 64px 0 48px; }

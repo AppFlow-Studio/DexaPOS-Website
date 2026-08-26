@@ -263,9 +263,11 @@ select {
   .form-card { padding: 28px 20px; }
   .form-card h2, .side-content h2 { font-size: 24px; }
   .side-footer-item { font-size: 15px; }
+  .contact-section .step { grid-template-columns: 1fr; gap: 0; }
+  .contact-section .step-num { display: none; }
 }
 @media (max-width: 390px) {
   .form-card { padding: 24px 16px; }
   .side-content h2 { font-size: 22px; }
-  .step { grid-template-columns: 40px 1fr; gap: 14px; }
+  .step { grid-template-columns: 1fr; gap: 0; }
 }

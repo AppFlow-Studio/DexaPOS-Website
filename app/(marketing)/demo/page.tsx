@@ -48,7 +48,7 @@ export default async function DemoPage() {
           <section className="annotations">
             <div className="wrap">
               <Reveal className="reveal">
-                <div className="section-head">
+                <div className="section-head center">
                   <div className="section-eyebrow">What you&apos;re seeing</div>
                   <h2 className="section-title">Three things to notice as you click around.</h2>
                 </div>

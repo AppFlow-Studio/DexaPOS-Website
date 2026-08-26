@@ -158,9 +158,31 @@
 
 @media (max-width: 1024px) {
   .ind-row { grid-template-columns: 1fr; }
-  .multi-card { grid-template-columns: 1fr; }
-  .multi-content { padding: 40px 32px; }
+  .multi-card { grid-template-columns: minmax(0, 1fr); width: 100%; }
+  .multi-content { padding: 40px 32px; min-width: 0; max-width: 100%; text-align: center; }
+  .multi-eyebrow { justify-content: center; max-width: 100%; }
+  .multi-card h2,
+  .multi-card p {
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .multi-stats,
+  .multi-stat { min-width: 0; max-width: 100%; }
+  .multi-card .btn {
+    max-width: 100%;
+    white-space: normal;
+    justify-content: center;
+    text-align: center;
+  }
   .multi-image { min-height: 320px; aspect-ratio: 16/9; }
+  .multi-image .cms-cover-image {
+    object-fit: contain !important;
+    object-position: center;
+    transform: scale(0.88);
+  }
 }
 @media (max-width: 700px) {
   .ind-body { padding: 28px; }
@@ -168,7 +190,7 @@
   .multi-content { padding: 32px 24px; }
   .multi-card h2 { font-size: 26px; }
   .multi-stats { grid-template-columns: 1fr; }
-  .multi-image { min-height: 240px; }
+  .multi-image { display: none; }
 }
 @media (max-width: 390px) {
   .ind-body { padding: 24px 18px; }
