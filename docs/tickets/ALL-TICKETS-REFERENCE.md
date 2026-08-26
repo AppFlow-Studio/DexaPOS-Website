@@ -542,6 +542,40 @@ Single index for active ticket streams and their source trackers.
   visibility cannot reconstruct old dropped rows, and category-name trimming
   is deferred because it changes routing despite the instrumentation-only scope.
 
+## Stream Y: Valor Complete Integration
+
+1. Implementation and staging-closure plan:
+- `docs/features/payments/PLAN-2026-08-25-VALOR-COMPLETE-INTEGRATION.md`
+
+2. Source ticket:
+- `[Valor] Complete Integration - Online Payments, Invoices, SaaS Monthly Billing`
+- Notion page ID: `3c68280c-1b1d-8106-8352-ee19b4b32807`
+
+3. Scope notes:
+- HQ boarding, storefront sale/tip, web refund/void, and settlement webhook code
+  are integrated into the latest preview baseline.
+- Storefront migration/deployment/provisioning and sandbox E2E remain open.
+- Valor merchant-invoice code is complete: location-aware processor resolution,
+  Passage tokenization, matching server charge, provider persistence, NMI
+  fallback, idempotency, and transport-failure cleanup. Sandbox QA remains.
+- Valor SaaS monthly billing remains contract-blocked because Dexa and Valor
+  cannot both own recurrence. The current implementation fails closed when a
+  Valor `subscription` account is selected instead of silently charging NMI;
+  `PAYMENTS_FORCE_NMI=true` remains available as the emergency rollback.
+- The existing NMI subscription lifecycle now has merchant payment-method
+  recovery links, tenant-scoped **Pay now**, retry scheduling and a protected
+  due-invoice worker, single-claim duplicate protection, HQ grace-period
+  controls, and grace-aware suspension.
+- Billing recovery deployment requires
+  `20260826120000_subscription_billing_grace_and_retry_foundation.sql` before
+  deploying the updated/new billing workers. No migration was executed during
+  the website implementation.
+- Universal paid-feature enforcement and merchant add-on requests remain open:
+  the catalog exists and QR has a specific gate, but no canonical cross-product
+  entitlement map currently defines every web/POS feature boundary.
+- The migration collision is resolved by the uniquely named
+  `20260824153907_c3_storefront_valor_account_resolver.sql`.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.

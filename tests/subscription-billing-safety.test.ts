@@ -11,6 +11,9 @@ const merchantOverview = read(
 const migration = read(
   'supabase/migrations/20260824140000_subscription_authorizations_and_failure_notifications.sql',
 )
+const graceRetryMigration = read(
+  'supabase/migrations/20260826120000_subscription_billing_grace_and_retry_foundation.sql',
+)
 const internalAuth = read(
   'supabase/functions/_shared/internal-billing-auth.ts',
 )
@@ -25,6 +28,7 @@ const protectedBillingFunctions = [
   'billing-suspend-overdue',
   'billing-mark-paid',
   'billing-generate-monthly-invoices',
+  'billing-retry-due-invoices',
 ].map((name) => read(`supabase/functions/${name}/index.ts`))
 
 describe('subscription billing safety and authorization contract', () => {
@@ -89,5 +93,49 @@ describe('subscription billing safety and authorization contract', () => {
       'notifySubscriptionPaymentFailure',
     )
   })
-})
 
+  it('does not silently charge NMI when Valor owns the SaaS billing rail', () => {
+    expect(merchantActions).toBeTruthy()
+    const merchantBilling = read('app/manage/actions/merchant-billing.ts')
+    expect(merchantBilling).toContain("'subscription'")
+    expect(merchantBilling).toContain(
+      "subscriptionProcessorAccount?.processor === 'valor'",
+    )
+    expect(protectedBillingFunctions[0]).toContain(
+      "code: 'valor_subscription_contract_pending'",
+    )
+    expect(protectedBillingFunctions[0]).toContain(
+      ".eq('purpose', 'subscription')",
+    )
+    expect(protectedBillingFunctions[0]).toContain(
+      "Deno.env.get('PAYMENTS_FORCE_NMI') === 'true'",
+    )
+  })
+
+  it('allows only the signed-in merchant to retry its payable invoice', () => {
+    expect(merchantActions).toContain(
+      'export async function payMerchantSubscriptionInvoice',
+    )
+    expect(merchantActions).toContain(".eq('merchant_id', merchantId)")
+    expect(merchantActions).toContain("!['open', 'failed'].includes(invoice.status)")
+    expect(merchantOverview).toContain('Update payment method')
+    expect(merchantOverview).toContain('Pay now')
+  })
+
+  it('persists retry scheduling and enforces HQ grace periods during suspension', () => {
+    const chargeFunction = protectedBillingFunctions[0]
+    const suspendFunction = protectedBillingFunctions[2]
+    const retryWorker = protectedBillingFunctions[5]
+
+    expect(graceRetryMigration).toContain('grace_period_ends_at timestamptz')
+    expect(graceRetryMigration).toContain('next_retry_at timestamptz')
+    expect(graceRetryMigration).toContain(
+      'idx_subscription_invoices_retry_due',
+    )
+    expect(chargeFunction).toContain('invoice_claim_conflict')
+    expect(chargeFunction).toContain('resolveSubscriptionRetrySchedule')
+    expect(suspendFunction).toContain('grace_period_ends_at')
+    expect(retryWorker).toContain(".eq('status', 'failed')")
+    expect(retryWorker).toContain(".lte('next_retry_at'")
+  })
+})

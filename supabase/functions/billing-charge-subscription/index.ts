@@ -3,6 +3,7 @@ import { createSale, createVaultSale } from '../_shared/nmi.ts'
 import { sendSubscriptionInvoicePaymentEmail } from '../_shared/payment-emails.ts'
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
 import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
+import { resolveSubscriptionRetrySchedule } from '../_shared/subscription-retry-policy.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -84,6 +85,48 @@ Deno.serve(async (req: Request): Promise<Response> => {
           error: `Invoice status ${invoice.status} cannot be charged manually.`,
         },
         400,
+      )
+    }
+
+    const { data: processorAccounts, error: processorAccountError } = await supabase
+      .from('merchant_processor_accounts')
+      .select('id, location_id, processor')
+      .eq('merchant_id', invoice.merchant_id)
+      .eq('purpose', 'subscription')
+      .eq('is_active', true)
+      .eq('is_primary', true)
+
+    if (processorAccountError) {
+      console.error(
+        '[billing-charge-subscription] Processor account resolution error:',
+        processorAccountError,
+      )
+      return jsonResponse(
+        {
+          success: false,
+          error: 'Subscription payment processor configuration is unavailable.',
+          code: 'processor_account_unavailable',
+        },
+        502,
+      )
+    }
+
+    const selectedProcessorAccount =
+      processorAccounts?.find((account) => account.location_id === invoice.location_id) ??
+      processorAccounts?.find((account) => account.location_id === null) ??
+      null
+
+    const forceNmi = Deno.env.get('PAYMENTS_FORCE_NMI') === 'true'
+
+    if (selectedProcessorAccount?.processor === 'valor' && !forceNmi) {
+      return jsonResponse(
+        {
+          success: false,
+          error:
+            'Valor SaaS billing is awaiting recurring-schedule and webhook configuration.',
+          code: 'valor_subscription_contract_pending',
+        },
+        409,
       )
     }
 
@@ -286,20 +329,31 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const nextAttemptCount = Number(invoice.payment_attempt_count || 0) + 1
 
-    const { error: processingError } = await supabase
+    const { data: claimedInvoice, error: processingError } = await supabase
       .from('subscription_invoices')
       .update({
         status: 'processing',
         payment_attempt_count: nextAttemptCount,
         last_payment_attempt_at: now,
         last_payment_error: null,
+        next_retry_at: null,
         updated_at: now,
       })
       .eq('id', invoice.id)
+      .in('status', ['open', 'failed'])
+      .select('id')
+      .maybeSingle()
 
-    if (processingError) {
+    if (processingError || !claimedInvoice) {
       console.error('[billing-charge-subscription] Processing update error:', processingError)
-      return jsonResponse({ success: false, error: processingError.message }, 500)
+      return jsonResponse(
+        {
+          success: false,
+          error: processingError?.message || 'Invoice is already being processed.',
+          code: 'invoice_claim_conflict',
+        },
+        processingError ? 500 : 409,
+      )
     }
 
     const charge = billingProfile.customer_vault_id?.trim()
@@ -330,6 +384,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         charge.body.message?.toString() ||
         charge.text ||
         'Charge failed'
+      const retrySchedule = resolveSubscriptionRetrySchedule(
+        nextAttemptCount,
+        new Date(now),
+      )
 
       await supabase
         .from('subscription_invoices')
@@ -337,6 +395,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
           status: 'failed',
           last_payment_attempt_at: now,
           last_payment_error: failureMessage,
+          next_retry_at: retrySchedule.nextRetryAt,
+          retry_exhausted_at: retrySchedule.retryExhaustedAt,
           nmi_response: charge.body,
           updated_at: now,
         })
@@ -415,6 +475,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         nmi_response: charge.body,
         last_payment_attempt_at: now,
         last_payment_error: null,
+        next_retry_at: null,
+        retry_exhausted_at: null,
         updated_at: now,
       })
       .eq('id', invoice.id)

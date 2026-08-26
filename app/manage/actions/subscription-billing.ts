@@ -148,6 +148,10 @@ export interface MerchantSubscriptionRecord {
   trial_ends_at: string | null
   canceled_at: string | null
   cancel_reason: string | null
+  grace_period_ends_at: string | null
+  grace_reason: string | null
+  grace_extended_at: string | null
+  grace_extended_by: string | null
   billing_profile_id: string | null
   billing_method: 'ach' | 'card' | null
   metadata: Record<string, unknown>
@@ -187,6 +191,8 @@ export interface SubscriptionInvoiceRecord {
   payment_attempt_count: number
   last_payment_attempt_at: string | null
   last_payment_error: string | null
+  next_retry_at: string | null
+  retry_exhausted_at: string | null
   nmi_transaction_id: string | null
   nmi_response: Record<string, unknown> | null
   line_items: Array<Record<string, unknown>>
@@ -1983,11 +1989,118 @@ export async function getMerchantSubscriptions(
     throw new Error('Failed to load merchant subscriptions.')
   }
 
-  return ((data ?? []) as MerchantSubscriptionRecord[]).map((row) => ({
-    ...row,
-    station_count: Number(row.station_count || 0),
-    monthly_amount: Number(row.monthly_amount || 0),
-  }))
+  const serviceRole = createServiceRoleClient() as any
+  const { data: graceRows, error: graceError } = await serviceRole
+    .from('merchant_subscriptions')
+    .select(
+      'id, grace_period_ends_at, grace_reason, grace_extended_at, grace_extended_by',
+    )
+    .eq('merchant_id', merchantId)
+
+  if (graceError && graceError.code !== '42703') {
+    console.error('[getMerchantSubscriptions] Grace lookup error:', graceError)
+    throw new Error('Failed to load subscription grace periods.')
+  }
+
+  const graceBySubscriptionId = new Map(
+    (graceRows ?? []).map((row: any) => [row.id, row]),
+  )
+
+  return ((data ?? []) as MerchantSubscriptionRecord[]).map((row) => {
+    const grace = graceBySubscriptionId.get(row.id)
+    return {
+      ...row,
+      station_count: Number(row.station_count || 0),
+      monthly_amount: Number(row.monthly_amount || 0),
+      grace_period_ends_at: grace?.grace_period_ends_at ?? null,
+      grace_reason: grace?.grace_reason ?? null,
+      grace_extended_at: grace?.grace_extended_at ?? null,
+      grace_extended_by: grace?.grace_extended_by ?? null,
+    }
+  })
+}
+
+export async function setMerchantSubscriptionGracePeriod(params: {
+  subscriptionId: string
+  gracePeriodEndsAt: string | null
+  reason: string
+}): Promise<{ success: boolean; error?: string }> {
+  const { userId } = await assertHQPermission('system.billing.manage')
+  const subscriptionId = params.subscriptionId?.trim()
+  const reason = params.reason?.trim()
+
+  if (!subscriptionId) {
+    return { success: false, error: 'Subscription is required.' }
+  }
+  if (!reason || reason.length < 5) {
+    return {
+      success: false,
+      error: 'Enter a reason of at least 5 characters for the audit log.',
+    }
+  }
+
+  const gracePeriodEndsAt = params.gracePeriodEndsAt
+    ? new Date(params.gracePeriodEndsAt)
+    : null
+  if (gracePeriodEndsAt && Number.isNaN(gracePeriodEndsAt.getTime())) {
+    return { success: false, error: 'Grace-period end is invalid.' }
+  }
+  if (gracePeriodEndsAt && gracePeriodEndsAt.getTime() <= Date.now()) {
+    return { success: false, error: 'Grace-period end must be in the future.' }
+  }
+
+  const serviceRole = createServiceRoleClient() as any
+  const { data: subscription, error: lookupError } = await serviceRole
+    .from('merchant_subscriptions')
+    .select('id, merchant_id, location_id, grace_period_ends_at')
+    .eq('id', subscriptionId)
+    .maybeSingle()
+
+  if (lookupError || !subscription) {
+    return { success: false, error: 'Subscription not found.' }
+  }
+
+  const now = new Date().toISOString()
+  const nextGraceEnd = gracePeriodEndsAt?.toISOString() ?? null
+  const { error: updateError } = await serviceRole
+    .from('merchant_subscriptions')
+    .update({
+      grace_period_ends_at: nextGraceEnd,
+      grace_reason: reason,
+      grace_extended_at: now,
+      grace_extended_by: userId ?? null,
+      updated_at: now,
+    })
+    .eq('id', subscriptionId)
+
+  if (updateError) {
+    console.error('[setMerchantSubscriptionGracePeriod] update error:', updateError)
+    return { success: false, error: updateError.message }
+  }
+
+  await serviceRole.rpc('log_subscription_billing_event', {
+    p_action: nextGraceEnd ? 'subscription_grace_extended' : 'subscription_grace_cleared',
+    p_merchant_id: subscription.merchant_id,
+    p_location_id: subscription.location_id,
+    p_resource_type: 'merchant_subscription',
+    p_resource_name: subscriptionId,
+    p_resource_id: subscriptionId,
+    p_changes: {
+      grace_period_ends_at: {
+        old: subscription.grace_period_ends_at,
+        new: nextGraceEnd,
+      },
+      reason,
+    },
+    p_metadata: {
+      source: 'hq_subscription_workspace',
+      actor_user_id: userId ?? null,
+    },
+  })
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath('/dashboard/subscriptions')
+  return { success: true }
 }
 
 export async function upsertMerchantSubscription(
@@ -2387,14 +2500,45 @@ export async function getSubscriptionInvoices(
     throw new Error('Failed to load subscription invoices.')
   }
 
-  return ((data ?? []) as SubscriptionInvoiceRecord[]).map((row) => ({
+  let invoices = ((data ?? []) as SubscriptionInvoiceRecord[]).map((row) => ({
     ...row,
     station_count_snapshot: Number(row.station_count_snapshot || 0),
     subtotal: Number(row.subtotal || 0),
     card_surcharge: Number(row.card_surcharge || 0),
     total_amount: Number(row.total_amount || 0),
     payment_attempt_count: Number(row.payment_attempt_count || 0),
+    next_retry_at: row.next_retry_at ?? null,
+    retry_exhausted_at: row.retry_exhausted_at ?? null,
   }))
+
+  if (invoices.length > 0) {
+    const serviceRole = createServiceRoleClient() as any
+    const { data: retryRows, error: retryError } = await serviceRole
+      .from('subscription_invoices')
+      .select('id, next_retry_at, retry_exhausted_at')
+      .in(
+        'id',
+        invoices.map((invoice) => invoice.id),
+      )
+
+    if (retryError && retryError.code !== '42703') {
+      console.error('[getSubscriptionInvoices] Retry lookup error:', retryError)
+      throw new Error('Failed to load invoice retry schedules.')
+    }
+
+    const retryByInvoiceId = new Map(
+      (retryRows ?? []).map((row: any) => [row.id, row]),
+    )
+    invoices = invoices.map((invoice) => ({
+      ...invoice,
+      next_retry_at:
+        retryByInvoiceId.get(invoice.id)?.next_retry_at ?? null,
+      retry_exhausted_at:
+        retryByInvoiceId.get(invoice.id)?.retry_exhausted_at ?? null,
+    }))
+  }
+
+  return invoices
 }
 
 export async function getSubscriptionInvoiceDocument(

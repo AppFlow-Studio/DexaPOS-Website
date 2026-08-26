@@ -6,6 +6,7 @@ import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { getProcessorWithNmiFallback } from '@/lib/payments'
+import { resolveProcessorAccount } from '@/lib/payments/resolver'
 
 const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID!
 
@@ -411,6 +412,20 @@ export async function saveMerchantBillingCardWithVault(
     const lastName = rest.join(' ').trim() || 'Cardholder'
 
     const supabase = createServiceRoleClient()
+    const subscriptionProcessorAccount = await resolveProcessorAccount(
+      merchantId,
+      'subscription',
+      { locationId },
+    )
+
+    if (subscriptionProcessorAccount?.processor === 'valor') {
+      return {
+        success: false,
+        error:
+          'Valor SaaS billing is not enabled yet. The recurring schedule and payment-failure webhook contract must be configured before storing this billing card.',
+      }
+    }
+
     const { data: platformCredentialRows, error: platformCredentialError } = await supabase.rpc(
       'get_platform_billing_provider_secret',
       {
@@ -434,9 +449,8 @@ export async function saveMerchantBillingCardWithVault(
       }
     }
 
-    // [C2] Routed through the PaymentProcessor interface. The subscription rail
-    // resolves per merchant, defaulting to NMI until C4 populates
-    // merchant_processor_accounts.
+    // NMI remains the supported recurring card-vault rail. Valor selections are
+    // rejected above until recurrence ownership and webhook handling are defined.
     const { processor } = await getProcessorWithNmiFallback(
       merchantId,
       'subscription',

@@ -35,7 +35,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const { data: overdueInvoices, error } = await supabase
       .from('subscription_invoices')
-      .select('id, subscription_id, merchant_id, location_id, invoice_number, due_date, status')
+      .select('id, subscription_id, merchant_id, location_id, invoice_number, due_date, status, merchant_subscriptions(grace_period_ends_at)')
       .in('status', ['open', 'failed'])
       .lte('due_date', cutoff)
 
@@ -46,6 +46,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const uniqueSubscriptions = new Map<string, { merchant_id: string; location_id: string; invoice_number: string }>()
     for (const invoice of overdueInvoices ?? []) {
+      const subscription = Array.isArray(invoice.merchant_subscriptions)
+        ? invoice.merchant_subscriptions[0]
+        : invoice.merchant_subscriptions
+      const gracePeriodEndsAt = subscription?.grace_period_ends_at
+      if (gracePeriodEndsAt && new Date(gracePeriodEndsAt).getTime() > Date.now()) {
+        continue
+      }
+
       if (!uniqueSubscriptions.has(invoice.subscription_id)) {
         uniqueSubscriptions.set(invoice.subscription_id, {
           merchant_id: invoice.merchant_id,

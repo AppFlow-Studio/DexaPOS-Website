@@ -4,7 +4,11 @@ import {
   buildInvoicePaymentOrderId,
   resolveInvoicePaymentRailForPublicToken,
 } from "@/lib/invoices/payment-rail";
-import { getProcessorWithNmiFallback, toMinorUnits } from "@/lib/payments";
+import {
+  createNmiProcessor,
+  createValorProcessor,
+  toMinorUnits,
+} from "@/lib/payments";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export interface ChargeInvoiceInput {
@@ -217,7 +221,12 @@ export async function chargeInvoice(
     includeSecrets: true,
   });
 
-  if (!rail?.tokenizationKey || !rail.apiKey) {
+  const hasProcessorCredentials =
+    rail?.provider === "valor"
+      ? Boolean(rail.valorCredentials)
+      : Boolean(rail?.apiKey);
+
+  if (!rail || !hasProcessorCredentials) {
     return {
       success: false,
       status: "error",
@@ -229,6 +238,8 @@ export async function chargeInvoice(
     public_token: publicToken,
     bill_type: rail.billType,
     rail_kind: rail.kind,
+    processor: rail.provider,
+    processor_account_id: rail.processorAccountId,
     payment_device_id: rail.paymentDeviceId,
     platform_billing_config_id: rail.platformBillingConfigId,
     webhook_secret_configured: Boolean(rail.webhookSecret),
@@ -242,7 +253,7 @@ export async function chargeInvoice(
       location_id: inv.location_id,
       amount: Number(amountDue.toFixed(2)),
       status: "processing",
-      processor_name: "nmi",
+      processor_name: rail.provider,
       card_token: input.paymentToken.trim(),
       card_type: input.cardType?.trim() || null,
       card_last_four: input.cardLastFour?.trim() || null,
@@ -287,25 +298,65 @@ export async function chargeInvoice(
     reason: "invoice public payment initiated",
   });
 
-  // [C2] Routed through the PaymentProcessor interface. Resolves to NMI today
-  // — byte-identical to the previous direct createNmiSale call — and picks up a
-  // Valor account automatically once C4 populates merchant_processor_accounts.
-  const { processor } = await getProcessorWithNmiFallback(
-    inv.merchant_id,
-    "invoice",
-    rail.apiKey,
-    { locationId: inv.location_id },
-  );
+  // Route through the invoice account selected for this merchant and location.
+  // Legacy merchants continue to use their NMI device fallback.
+  const processor =
+    rail.provider === "valor"
+      ? createValorProcessor(rail.valorCredentials!)
+      : createNmiProcessor({ apiKey: rail.apiKey! });
 
-  const charge = await processor.sale({
-    money: {
-      amountMinor: toMinorUnits(Number(amountDue.toFixed(2))),
-      currency: "USD",
-    },
-    paymentToken: input.paymentToken.trim(),
-    industry: "ecommerce",
-    orderId,
-  });
+  let charge: Awaited<ReturnType<typeof processor.sale>>;
+  try {
+    charge = await processor.sale({
+      money: {
+        amountMinor: toMinorUnits(Number(amountDue.toFixed(2))),
+        currency: "USD",
+      },
+      paymentToken: input.paymentToken.trim(),
+      industry: "ecommerce",
+      orderId,
+    });
+  } catch (error) {
+    const failureMessage = "Payment processor temporarily unavailable.";
+    console.error(`[chargeInvoice] ${rail.provider} sale failed:`, error);
+
+    await supabase
+      .from("invoice_payments")
+      .update({
+        status: "failed",
+        error_message: failureMessage,
+        failed_at: now,
+        metadata: mergeMetadata(insertedPayment.metadata, {
+          ...metadata,
+          order_id: orderId,
+        }),
+      })
+      .eq("id", paymentId);
+
+    await supabase
+      .from("invoices")
+      .update({ status: "payment_failed", updated_at: now })
+      .eq("id", inv.id)
+      .neq("status", "paid");
+
+    await insertInvoicePaymentEventIfMissing(supabase, {
+      paymentId,
+      invoiceId: inv.id,
+      locationId: inv.location_id,
+      eventType: "error",
+      previousStatus: "processing",
+      newStatus: "failed",
+      amount: Number(amountDue.toFixed(2)),
+      responseMessage: failureMessage,
+      reason: `${rail.provider} transport error`,
+    });
+
+    return {
+      success: false,
+      status: "error",
+      message: `${failureMessage} Please try again.`,
+    };
+  }
 
   // The adapter classifies gateway failures (5xx, transport) as `error` and
   // card refusals as `declined`, so the call site no longer inspects HTTP

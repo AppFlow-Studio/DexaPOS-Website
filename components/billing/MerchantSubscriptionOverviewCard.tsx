@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
@@ -48,6 +49,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { PageHeader, PageShell, Panel, PanelSection } from '@/components/dashboard/shell'
 import {
   getMerchantSubscriptionInvoiceDocument,
+  payMerchantSubscriptionInvoice,
   RequestMerchantTierPlan,
   RequestSubscriptionHardware,
   type MerchantBillingLocationViewRecord,
@@ -257,6 +259,7 @@ export function MerchantSubscriptionOverviewCard({
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false)
   const [isInvoicePreviewLoading, setIsInvoicePreviewLoading] = useState(false)
   const [invoiceActionId, setInvoiceActionId] = useState<string | null>(null)
+  const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null)
   const [contactModalMode, setContactModalMode] = useState<'plan' | 'hardware' | null>(null)
   const [selectedRequestedPlanId, setSelectedRequestedPlanId] = useState('')
   const [hasAcceptedPlanAuthorization, setHasAcceptedPlanAuthorization] =
@@ -288,6 +291,9 @@ export function MerchantSubscriptionOverviewCard({
   const billingProfilesByLocationId =
     overviewQuery.data?.billingProfilesByLocationId ?? EMPTY_BILLING_PROFILES
   const primaryBillingProfile = overviewQuery.data?.primaryBillingProfile ?? null
+  const billingSettingsHref = `/dashboard/settings/billing?billingScope=${encodeURIComponent(
+    primaryBillingProfile?.location_id || '__merchant_wide__',
+  )}`
 
   const invoicePreviewHtml = useMemo(
     () => (invoicePreviewDocument ? renderSubscriptionInvoiceHtml(invoicePreviewDocument) : ''),
@@ -450,6 +456,24 @@ export function MerchantSubscriptionOverviewCard({
     } catch (error: any) {
       toast.error(error?.message || 'Failed to download invoice.')
     }
+  }
+
+  const handlePayInvoice = async (invoiceId: string) => {
+    setPayingInvoiceId(invoiceId)
+    const result = await payMerchantSubscriptionInvoice(invoiceId)
+    setPayingInvoiceId(null)
+
+    if (!result.success) {
+      toast.error(result.error || 'The invoice payment could not be completed.')
+      return
+    }
+
+    toast.success(
+      result.status === 'paid'
+        ? 'Invoice paid successfully.'
+        : 'Invoice payment submitted.',
+    )
+    await refresh()
   }
 
   const handleRequestPlan = async () => {
@@ -1008,7 +1032,31 @@ export function MerchantSubscriptionOverviewCard({
 
           {activeSection === 'billing' ? (
             <div className="min-w-0">
+      {transactionSummary.pending > 0 ? (
+        <div className="mb-5 flex flex-col gap-3 rounded-2xl bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div>
+              <div className="font-medium">Outstanding balance: {formatMoney(transactionSummary.pending)}</div>
+              <div className="mt-1 text-sm text-amber-800">
+                Update the saved card if needed, then use Pay now beside an open or failed invoice.
+              </div>
+            </div>
+          </div>
+          <Button asChild size="sm" variant="outline" className="rounded-full border-amber-300 bg-white">
+            <Link href={billingSettingsHref}>Review payment method</Link>
+          </Button>
+        </div>
+      ) : null}
       <PanelSection label="Merchant Payment Method" caption="The primary payment profile used for merchant-wide subscription billing.">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Replace the saved card before retrying a failed or past-due invoice.
+          </p>
+          <Button asChild size="sm" variant="outline" className="rounded-full">
+            <Link href={billingSettingsHref}>Update payment method</Link>
+          </Button>
+        </div>
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Loading payment method...</div>
         ) : (
@@ -1158,10 +1206,34 @@ export function MerchantSubscriptionOverviewCard({
                     </TableCell>
                     <TableCell>
                       Subscription billing for {invoice.location_name}
+                      {invoice.status === 'failed' ? (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {invoice.next_retry_at
+                            ? `Automatic retry scheduled ${formatDate(invoice.next_retry_at)}`
+                            : invoice.retry_exhausted_at
+                              ? 'Automatic retries exhausted. Update the payment method and pay manually.'
+                              : 'Payment failed. Update the payment method or retry manually.'}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{formatMoney(invoice.total_amount)}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {['open', 'failed'].includes(invoice.status) ? (
+                          <Button
+                            size="sm"
+                            className="h-8 rounded-full px-3 text-xs font-medium"
+                            onClick={() => handlePayInvoice(invoice.id)}
+                            disabled={Boolean(payingInvoiceId)}
+                          >
+                            {payingInvoiceId === invoice.id ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <CreditCard className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            Pay now
+                          </Button>
+                        ) : null}
                         <Button
                           size="sm"
                           variant="outline"

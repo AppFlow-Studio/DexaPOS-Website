@@ -79,6 +79,8 @@ export interface MerchantSubscriptionInvoiceViewRecord {
   payment_attempt_count: number
   last_payment_attempt_at: string | null
   last_payment_error: string | null
+  next_retry_at: string | null
+  retry_exhausted_at: string | null
   nmi_transaction_id: string | null
   nmi_response: Record<string, unknown> | null
   line_items: Array<Record<string, unknown>>
@@ -497,7 +499,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     throw new Error('Failed to load provisioned devices.')
   }
 
-  const normalizedInvoices = (
+  let normalizedInvoices = (
     (invoicesResult.data ?? []) as MerchantSubscriptionInvoiceViewRecord[]
   ).map((row) => ({
     ...row,
@@ -506,7 +508,38 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     card_surcharge: toNumber(row.card_surcharge),
     total_amount: toNumber(row.total_amount),
     payment_attempt_count: toNumber(row.payment_attempt_count),
+    next_retry_at: row.next_retry_at ?? null,
+    retry_exhausted_at: row.retry_exhausted_at ?? null,
   }))
+
+  if (normalizedInvoices.length > 0) {
+    const { data: retryRows, error: retryError } = await (serviceRole as any)
+      .from('subscription_invoices')
+      .select('id, next_retry_at, retry_exhausted_at')
+      .in(
+        'id',
+        normalizedInvoices.map((invoice) => invoice.id),
+      )
+
+    if (retryError && retryError.code !== '42703') {
+      console.error(
+        '[getMerchantSubscriptionOverview] retry schedule error:',
+        retryError,
+      )
+      throw new Error('Failed to load invoice retry schedules.')
+    }
+
+    const retryByInvoiceId = new Map(
+      (retryRows ?? []).map((row: any) => [row.id, row]),
+    )
+    normalizedInvoices = normalizedInvoices.map((invoice) => ({
+      ...invoice,
+      next_retry_at:
+        retryByInvoiceId.get(invoice.id)?.next_retry_at ?? null,
+      retry_exhausted_at:
+        retryByInvoiceId.get(invoice.id)?.retry_exhausted_at ?? null,
+    }))
+  }
 
   const stationIds = Array.from(
     new Set(
@@ -1504,6 +1537,107 @@ export async function getMerchantSubscriptionInvoiceDocument(
     return {
       success: false,
       error: error?.message || 'Failed to load invoice document.',
+    }
+  }
+}
+
+export async function payMerchantSubscriptionInvoice(
+  invoiceId: string,
+): Promise<{
+  success: boolean
+  invoiceId?: string
+  status?: string
+  transactionId?: string | null
+  error?: string
+}> {
+  if (!invoiceId?.trim()) {
+    return { success: false, error: 'invoiceId is required.' }
+  }
+
+  try {
+    const { merchantId, serviceRole } = await resolveMerchantForCurrentOrg()
+    const { data: invoice, error: invoiceError } = await serviceRole
+      .from('subscription_invoices')
+      .select('id, status')
+      .eq('id', invoiceId)
+      .eq('merchant_id', merchantId)
+      .maybeSingle()
+
+    if (invoiceError || !invoice) {
+      return { success: false, error: 'Invoice not found.' }
+    }
+
+    if (invoice.status === 'paid') {
+      return {
+        success: true,
+        invoiceId: invoice.id,
+        status: invoice.status,
+        transactionId: null,
+      }
+    }
+
+    if (!['open', 'failed'].includes(invoice.status)) {
+      return {
+        success: false,
+        error: `Invoice cannot be paid while its status is ${invoice.status}.`,
+      }
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!supabaseUrl || !serviceRoleKey) {
+      return {
+        success: false,
+        error: 'Subscription payment service is not configured.',
+      }
+    }
+
+    const response = await fetch(
+      `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/billing-charge-subscription`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${serviceRoleKey}`,
+          apikey: serviceRoleKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ invoice_id: invoice.id }),
+        cache: 'no-store',
+      },
+    )
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      success?: boolean
+      error?: string
+      invoice_id?: string
+      status?: string
+      transaction_id?: string | null
+    }
+
+    if (!response.ok || !payload.success) {
+      return {
+        success: false,
+        error: payload.error || 'The invoice payment could not be completed.',
+      }
+    }
+
+    revalidatePath('/dashboard/subscriptions')
+    revalidatePath('/dashboard/settings/billing')
+
+    return {
+      success: true,
+      invoiceId: payload.invoice_id ?? invoice.id,
+      status: payload.status,
+      transactionId: payload.transaction_id ?? null,
+    }
+  } catch (error) {
+    console.error('[payMerchantSubscriptionInvoice] exception:', error)
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'The invoice payment could not be completed.',
     }
   }
 }

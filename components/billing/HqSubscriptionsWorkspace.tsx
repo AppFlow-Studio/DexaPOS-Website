@@ -71,6 +71,7 @@ import {
   getMerchantSubscriptions,
   getSubscriptionInvoices,
   getSubscriptionServiceAssignments,
+  setMerchantSubscriptionGracePeriod,
   replaceSubscriptionServiceAssignments,
   type BillableServiceRecord,
   type DeviceBillingServiceMappingRecord,
@@ -255,6 +256,15 @@ function formatDate(date: string | null | undefined): string {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+function formatDateTimeLocalInput(value: string | null | undefined): string {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return localDate.toISOString().slice(0, 16)
 }
 
 function statusVariant(status: string): 'default' | 'secondary' | 'outline' | 'destructive' {
@@ -469,6 +479,8 @@ export function HqSubscriptionsWorkspace({
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState(endOfMonthIso())
   const [nextBillingDate, setNextBillingDate] = useState(firstDayNextMonthIso())
   const [trialEndsAt, setTrialEndsAt] = useState('')
+  const [gracePeriodEndsAt, setGracePeriodEndsAt] = useState('')
+  const [graceReason, setGraceReason] = useState('')
   const [invoicePreviewDocument, setInvoicePreviewDocument] = useState<SubscriptionInvoiceDocumentData | null>(null)
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false)
   const [isInvoicePreviewLoading, setIsInvoicePreviewLoading] = useState(false)
@@ -525,6 +537,31 @@ export function HqSubscriptionsWorkspace({
     () => servicePlans.find((plan) => plan.id === selectedServicePlanId) ?? servicePlans[0] ?? null,
     [selectedServicePlanId, servicePlans]
   )
+
+  const saveGracePeriod = (clear = false) => {
+    if (!selectedLocationSubscription) {
+      toast.error('Create the location subscription first.')
+      return
+    }
+
+    startTransition(async () => {
+      const result = await setMerchantSubscriptionGracePeriod({
+        subscriptionId: selectedLocationSubscription.id,
+        gracePeriodEndsAt: clear || !gracePeriodEndsAt
+          ? null
+          : new Date(gracePeriodEndsAt).toISOString(),
+        reason: graceReason,
+      })
+
+      if (!result.success) {
+        toast.error(result.error || 'Failed to update the grace period.')
+        return
+      }
+
+      toast.success(clear ? 'Grace period cleared.' : 'Grace period extended.')
+      refresh()
+    })
+  }
 
   const selectedCatalogService = useMemo(
     () => (selectedCatalogServiceId ? services.find((service) => service.id === selectedCatalogServiceId) ?? null : null),
@@ -818,6 +855,10 @@ export function HqSubscriptionsWorkspace({
             setCurrentPeriodEnd(defaultSubscription.current_period_end)
             setNextBillingDate(defaultSubscription.next_billing_date)
             setTrialEndsAt(defaultSubscription.trial_ends_at?.slice(0, 10) ?? '')
+            setGracePeriodEndsAt(
+              formatDateTimeLocalInput(defaultSubscription.grace_period_ends_at),
+            )
+            setGraceReason(defaultSubscription.grace_reason ?? '')
             setServiceFormState(
               buildInitialServiceFormState(nextServices, nextAssignmentMap[defaultSubscription.id] ?? [])
             )
@@ -827,6 +868,8 @@ export function HqSubscriptionsWorkspace({
             setCurrentPeriodEnd(endOfMonthIso())
             setNextBillingDate(firstDayNextMonthIso())
             setTrialEndsAt('')
+            setGracePeriodEndsAt('')
+            setGraceReason('')
             setServiceFormState(buildInitialServiceFormState(nextServices))
           }
         }
@@ -878,6 +921,12 @@ export function HqSubscriptionsWorkspace({
       setCurrentPeriodEnd(selectedLocationSubscription.current_period_end)
       setNextBillingDate(selectedLocationSubscription.next_billing_date)
       setTrialEndsAt(selectedLocationSubscription.trial_ends_at?.slice(0, 10) ?? '')
+      setGracePeriodEndsAt(
+        formatDateTimeLocalInput(
+          selectedLocationSubscription.grace_period_ends_at,
+        ),
+      )
+      setGraceReason(selectedLocationSubscription.grace_reason ?? '')
       setServiceFormState(buildInitialServiceFormState(services, selectedAssignments))
       return
     }
@@ -887,6 +936,8 @@ export function HqSubscriptionsWorkspace({
     setCurrentPeriodEnd(endOfMonthIso())
     setNextBillingDate(firstDayNextMonthIso())
     setTrialEndsAt('')
+    setGracePeriodEndsAt('')
+    setGraceReason('')
     setServiceFormState(buildInitialServiceFormState(services))
   }, [selectedLocation, selectedLocationSubscription, selectedAssignments, services])
 
@@ -2059,6 +2110,49 @@ export function HqSubscriptionsWorkspace({
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {selectedLocationSubscription ? 'Save Changes' : 'Create Subscription'}
               </Button>
+            </div>
+
+            <div className="grid gap-4 rounded-2xl bg-muted/30 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] md:items-end">
+              <div className="space-y-2">
+                <Label htmlFor="billing-grace-until">Grace period until</Label>
+                <Input
+                  id="billing-grace-until"
+                  type="datetime-local"
+                  value={gracePeriodEndsAt}
+                  onChange={(event) => setGracePeriodEndsAt(event.target.value)}
+                  disabled={!selectedLocationSubscription}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="billing-grace-reason">Reason</Label>
+                <Input
+                  id="billing-grace-reason"
+                  value={graceReason}
+                  onChange={(event) => setGraceReason(event.target.value)}
+                  placeholder="Approved extension or temporary billing exception"
+                  disabled={!selectedLocationSubscription}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => saveGracePeriod(false)}
+                  disabled={isPending || !selectedLocationSubscription || !gracePeriodEndsAt}
+                >
+                  Extend grace
+                </Button>
+                {selectedLocationSubscription?.grace_period_ends_at ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => saveGracePeriod(true)}
+                    disabled={isPending}
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </div>
           <CardDescription>
