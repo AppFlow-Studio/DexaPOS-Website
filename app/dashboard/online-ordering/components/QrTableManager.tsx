@@ -2,7 +2,17 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
-import QRCode from "qrcode";
+import {
+  DEFAULT_BACKGROUND_COLOR,
+  DEFAULT_MODULE_COLOR,
+  parseHexColor,
+} from "@/lib/qr/branding-rules";
+import {
+  renderBrandedQrPngBlob,
+  renderBrandedQrPngDataUrl,
+  renderBrandedQrSvg,
+  type BrandedQrOptions,
+} from "@/lib/qr/render";
 import {
   generateMissingQrCodesForLocation,
   generateQrCodeForTable,
@@ -11,6 +21,7 @@ import {
   type QrTableManagerRow,
   type QrTableManagerSnapshot,
 } from "../actions";
+import { BrandedQrPreview } from "./BrandedQrPreview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,7 +81,26 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
+/**
+ * `merchant` renders the store's own logo and brand colours; `dexa` renders the
+ * neutral Dexa-blue code with no logo, for merchants who would rather not brand
+ * their table tents.
+ */
 type QrBrandMode = "merchant" | "dexa";
+
+const DEXA_BRAND_COLOR = "#0C4FD1";
+
+/**
+ * A branding failure must never leave the merchant with a silently unbranded
+ * code — the ticket calls that out explicitly for the print path. Warnings are
+ * raised once per export rather than per table so a bulk run does not bury the
+ * screen in duplicates.
+ */
+function reportBrandingWarnings(warnings: string[]) {
+  for (const warning of warnings) {
+    toast.warning(warning, { duration: 8000 });
+  }
+}
 
 const neutralQrToastStyle = {
   background: "#e5e7eb",
@@ -265,6 +295,42 @@ export function QrTableManager({
     return `${slugifyFileName(storeName)}-${slugifyFileName(row.tableLabel || "table")}`;
   }
 
+  /**
+   * The branding every export path shares. Deriving it in one place is what
+   * keeps the dashboard preview, the SVG/PNG downloads and the printed table
+   * tent from drifting apart.
+   */
+  const qrBranding = useMemo((): Omit<BrandedQrOptions, "value"> => {
+    if (brandMode === "dexa") {
+      return {
+        logoUrl: null,
+        moduleColor: DEXA_BRAND_COLOR,
+        backgroundColor: DEFAULT_BACKGROUND_COLOR,
+        secondaryColor: null,
+      };
+    }
+
+    return {
+      logoUrl: snapshot?.branding?.logoUrl ?? null,
+      moduleColor: snapshot?.branding?.primaryColor ?? DEFAULT_MODULE_COLOR,
+      backgroundColor:
+        snapshot?.branding?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR,
+      secondaryColor: snapshot?.branding?.secondaryColor ?? null,
+    };
+  }, [brandMode, snapshot?.branding]);
+
+  const hasMerchantLogo = Boolean(snapshot?.branding?.logoUrl);
+
+  /**
+   * The preview needs a real encoded URL so it reflects the true module count
+   * — a placeholder string of a different length would render a different-sized
+   * grid and mislead about how tight the print will be.
+   */
+  const previewQrUrl = useMemo(() => {
+    const firstActive = snapshot?.tables.find((row) => row.qrUrl);
+    return firstActive?.qrUrl ?? null;
+  }, [snapshot?.tables]);
+
   function getBrandTitle() {
     if (brandMode === "dexa") return "DEXA";
     return snapshot?.storeName || locationName || "Store";
@@ -299,15 +365,11 @@ export function QrTableManager({
     }
 
     try {
-      const svg = await QRCode.toString(qrUrl, {
-        type: "svg",
-        errorCorrectionLevel: "Q",
-        margin: 4,
-        color: {
-          dark: "#111827",
-          light: "#FFFFFF",
-        },
+      const { data: svg, warnings } = await renderBrandedQrSvg({
+        ...qrBranding,
+        value: qrUrl,
       });
+      reportBrandingWarnings(warnings);
       downloadBlob(
         new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
         `${getRowFileBaseName(row)}.svg`
@@ -328,17 +390,12 @@ export function QrTableManager({
     }
 
     try {
-      const pngUrl = await QRCode.toDataURL(qrUrl, {
-        errorCorrectionLevel: "Q",
-        margin: 4,
-        width: 1200,
-        color: {
-          dark: "#111827",
-          light: "#FFFFFF",
-        },
+      const { data: blob, warnings } = await renderBrandedQrPngBlob({
+        ...qrBranding,
+        value: qrUrl,
+        sizePx: 1200,
       });
-      const response = await fetch(pngUrl);
-      const blob = await response.blob();
+      reportBrandingWarnings(warnings);
       downloadBlob(blob, `${getRowFileBaseName(row)}.png`);
       toast.success(`PNG downloaded for ${row.tableLabel}`);
     } catch (error) {
@@ -354,15 +411,24 @@ export function QrTableManager({
       throw new Error("QR URL is not ready for this table yet.");
     }
 
-    const qrImage = await QRCode.toDataURL(qrUrl, {
-      errorCorrectionLevel: "Q",
-      margin: 2,
-      width: 1400,
-      color: {
-        dark: "#111827",
-        light: "#FFFFFF",
-      },
+    // The printed tent goes through the same renderer as the on-screen
+    // preview. If this ever forks again, branded-on-screen /
+    // unbranded-on-paper comes straight back.
+    const {
+      data: qrImage,
+      warnings,
+      branding,
+    } = await renderBrandedQrPngDataUrl({
+      ...qrBranding,
+      value: qrUrl,
+      sizePx: 1400,
     });
+    reportBrandingWarnings(warnings);
+
+    // Panel chrome follows the same colour the modules ended up with, so a
+    // fallback to safe defaults degrades the whole sheet coherently rather
+    // than leaving Dexa blue framing a black-and-white code.
+    const chrome = parseHexColor(branding.moduleColor) ?? { r: 12, g: 79, b: 209 };
 
     const doc = new jsPDF({
       orientation: "landscape",
@@ -378,10 +444,10 @@ export function QrTableManager({
     const title = row.tableLabel;
 
     const renderPanel = (originX: number) => {
-      doc.setDrawColor(12, 79, 209);
+      doc.setDrawColor(chrome.r, chrome.g, chrome.b);
       doc.setLineWidth(0.5);
       doc.roundedRect(originX + 8, 10, panelWidth - 16, pageHeight - 20, 4, 4);
-      doc.setFillColor(12, 79, 209);
+      doc.setFillColor(chrome.r, chrome.g, chrome.b);
       doc.roundedRect(originX + 8, 10, panelWidth - 16, 16, 4, 4, "F");
 
       doc.setTextColor(255, 255, 255);
@@ -569,6 +635,31 @@ export function QrTableManager({
           <StatTile label="Generated" value={snapshot?.generatedCount ?? 0} />
           <StatTile label="Active" value={snapshot?.activeCount ?? 0} />
         </StatRow>
+
+        <div className="flex flex-col gap-4 rounded-2xl border bg-muted/40 p-4 sm:flex-row sm:items-center">
+          <BrandedQrPreview value={previewQrUrl} branding={qrBranding} />
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm font-medium">
+              {brandMode === "dexa"
+                ? "Dexa branding"
+                : hasMerchantLogo
+                  ? "Your logo and brand colours"
+                  : "Your brand colours"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {brandMode === "dexa"
+                ? "Codes print in Dexa blue with no logo."
+                : hasMerchantLogo
+                  ? "Every download and printed table tent uses this exact artwork."
+                  : "Add a logo in Online Store settings to place it at the centre of every code."}
+            </p>
+            {brandMode === "merchant" && hasMerchantLogo ? (
+              <p className="text-xs text-muted-foreground">
+                Scan this preview with your phone before printing a full run.
+              </p>
+            ) : null}
+          </div>
+        </div>
 
         {!acceptsDineIn ? (
           <div className="rounded-2xl border-0 bg-muted px-4 py-3 text-sm text-foreground shadow-none">
