@@ -9,6 +9,7 @@ import {
   checkSubdomain,
   slugifySubdomain,
 } from "../reserved-subdomains";
+import { RESERVED_HOSTS } from "../public-url";
 
 /**
  * Sibling of `reserved-paths.test.ts`, and load-bearing for the same reason:
@@ -52,24 +53,23 @@ describe("subdomain format", () => {
   });
 
   /**
-   * The reserved list must be a superset of the labels `proxy.ts` refuses to
-   * treat as store subdomains. A name this list allowed and the proxy refused
+   * The reserved list must be a superset of the labels the router refuses to
+   * treat as brand subdomains. A name this list allowed and the router refused
    * would be an address a merchant could claim, pay attention to, and never
    * reach.
+   *
+   * Imported rather than scraped out of `proxy.ts` with a regular expression,
+   * which is what this was: the set moved into `public-url.ts` so the router
+   * and the links the dashboard hands out would share one definition, and the
+   * regex then matched nothing and failed — correctly, but for the wrong
+   * reason. An import cannot go stale that way.
    */
-  it("covers every label proxy.ts refuses to route", () => {
-    const proxy = readFile("proxy.ts");
-    const reserved = proxy.match(/const RESERVED = new Set\(\[([^\]]*)\]\)/);
-
-    expect(reserved, "could not find the RESERVED set in proxy.ts").not.toBeNull();
-
-    const labels = [...reserved![1].matchAll(/'([^']+)'|"([^"]+)"/g)].map(
-      (m) => m[1] ?? m[2],
-    );
+  it("covers every label the router refuses to route", () => {
+    const labels = [...RESERVED_HOSTS];
 
     expect(labels.length).toBeGreaterThan(0);
     for (const label of labels) {
-      expect(RESERVED_SUBDOMAINS, `proxy.ts reserves "${label}"`).toContain(label);
+      expect(RESERVED_SUBDOMAINS, `the router reserves "${label}"`).toContain(label);
     }
   });
 

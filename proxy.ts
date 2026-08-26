@@ -2,6 +2,8 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+import { SITE_DOMAIN, brandSubdomainFromHost } from '@/lib/site-builder/public-url'
+
 const isInternalTeamRoutes = createRouteMatcher(['/manage(.*)'])
 const isMerchantRoutes = createRouteMatcher(['/dashboard(.*)'])
 const isStorefrontRoutes = createRouteMatcher(['/sites(.*)'])
@@ -49,29 +51,26 @@ const isKnownAppRoute = createRouteMatcher([
   '/trpc(.*)',
 ])
 
+/**
+ * The brand subdomain this Host addresses, or null for anything else.
+ *
+ * One rule, two roots. `{slug}.dexaposai.com` in production — or whatever
+ * NEXT_PUBLIC_ROOT_DOMAIN says, which is the same value the dashboard builds
+ * its links from; the literal that used to be here was a second copy of that
+ * domain, and the two could disagree, so a deployment on another host handed
+ * out addresses this function then refused to route.
+ *
+ * Development keeps `localhost` as its root whatever is configured, so
+ * `joes.localhost:3000` works with no extra setup. What it no longer keeps is a
+ * *separate implementation*: the old dev branch applied neither the reserved
+ * names nor the single-label rule, so the one environment anybody can test in
+ * was the one that did not behave like production.
+ */
 function extractStoreSlug(hostname: string): string | null {
   const hostWithoutPort = hostname.split(':')[0];
+  const root = process.env.NODE_ENV === 'development' ? 'localhost' : SITE_DOMAIN;
 
-  if (process.env.NODE_ENV === 'development') {
-    if (hostWithoutPort === 'localhost') return null;
-    if (hostWithoutPort.endsWith('.localhost')) {
-      return hostWithoutPort.replace('.localhost', '');
-    }
-    return null;
-  }
-
-  // Production: {slug}.dexaposai.com
-  if (hostWithoutPort.endsWith('.dexaposai.com')) {
-    const parts = hostWithoutPort.split('.');
-    // slug.dexaposai.com → ['slug', 'dexaposai', 'com'] (3 parts)
-    if (parts.length !== 3) return null;
-    const subdomain = parts[0];
-    const RESERVED = new Set(['www', 'api', 'app', 'admin', 'mail', 'cdn', 'assets', 'static']);
-    if (RESERVED.has(subdomain)) return null;
-    return subdomain;
-  }
-
-  return null;
+  return brandSubdomainFromHost(hostWithoutPort, root);
 }
 
 type StoreMatch = {
