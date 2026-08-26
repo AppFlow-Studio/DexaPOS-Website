@@ -162,7 +162,7 @@ export default async function ReceiptPage({ params }: PageProps) {
       <div className="min-h-screen bg-neutral-200 flex flex-col items-center justify-start py-6 sm:py-10 px-4 gap-5">
 
         {/* The "paper": flat white, square edges, fine type — like a real printed receipt. */}
-        <div className="receipt-paper w-full max-w-[360px] bg-white shadow-[0_6px_24px_rgba(0,0,0,0.10)] text-neutral-900 px-7 pt-8 pb-7">
+        <div className="receipt-paper w-full  bg-white shadow-[0_6px_24px_rgba(0,0,0,0.10)] text-neutral-900 px-7 pt-8 pb-7">
 
           {/* Status banner — plain, monochrome, no icons */}
           {(isVoided || isRefunded) && (

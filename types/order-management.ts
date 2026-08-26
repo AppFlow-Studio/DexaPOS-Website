@@ -243,6 +243,12 @@ export interface OrderPayment {
   tip_surcharge_percentage_snapshot?: number;
   // True when this payment was tendered at the cash (discounted) price lane.
   is_cash_priced?: boolean | null;
+  // Processor + settlement context (used by the online Valor refund flow).
+  processor_name?: string | null;
+  refunded_amount?: number | null;
+  is_settled?: boolean | null;
+  settled_at?: string | null;
+  settlement_batch_id?: string | null;
   // Junction table items
   order_payment_items?: OrderPaymentItem[];
 }

@@ -106,6 +106,7 @@ import {
 import { ImpersonationBanner } from "@/components/dashboard/ImpersonationBanner";
 import { ImpersonationHydrator } from "@/components/dashboard/ImpersonationHydrator";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { ReadOnlyNotificationBell } from "@/components/notifications/ReadOnlyNotificationBell";
 import { GetUnreadTicketCounts } from "./actions/support";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
 import type { BottomNavTab, MoreNavItem } from "@/components/dashboard/MobileBottomNav";
@@ -1458,6 +1459,7 @@ export default function MerchantDashboardLayout({
               href="/dashboard/support"
               queryKey="merchant-unread-ticket-counts"
             />
+            <ReadOnlyNotificationBell />
           </div>
         </header>
         <div id="main-content" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6">{children}</div>

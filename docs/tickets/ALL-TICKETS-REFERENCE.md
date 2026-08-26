@@ -557,5 +557,30 @@ Single index for active ticket streams and their source trackers.
 - `docs/features/billing/HANDOFF-2026-07-13-HQ-BILLING-CONTROL-FINAL.md`
 - `docs/features/billing/HANDOFF-2026-07-13-BILLING-CONTROL-REMAINING-POS-ITEMS.md`
 
-7. Next 16 upgrade handoff:
+7. Merchant plan request and notification flow:
+- `docs/features/billing/FEATURE-2026-08-21-MERCHANT-PLAN-REQUEST-NOTIFICATIONS.md`
+- Merchant plan cards submit a dedicated `SUB-xxxxx` billing request without
+  granting merchant-side activation rights or opening a support ticket.
+- HQ can approve and activate or deny with an optional note. Merchant and HQ
+  updates use the read-only application notification feed.
+- Direct HQ assignment creates a read-only merchant update, not a ticket.
+- First-click approval now records the merchant plan subscription ID expected by
+  the request foreign key; it no longer leaves the request pending after the
+  plan and invoice succeed.
+- Billing hardening protects service-role billing functions, sends idempotent
+  merchant/HQ failed-payment alerts, and requires immutable recurring-charge
+  authorization evidence for new merchant plan requests.
+- Merchant tiers and billing history are merchant-wide. Hardware requests are
+  location-scoped and reviewed independently by HQ.
+- Shared staging has all three request/hardware/authorization migrations
+  applied, generated Supabase types are refreshed, and the five hardened
+  billing Edge Functions are deployed and active. Automated tests, focused
+  lint, production build, unauthenticated rejection, and the current Supabase
+  secret-key path are verified in PR #285.
+- Remaining closure work is authenticated merchant/HQ QA, controlled declined
+  payment and idempotency proof, scheduled internal-secret verification,
+  Resend log verification, deployment-secret rotation confirmation, and the
+  recorded sign-off artifact.
+
+8. Next 16 upgrade handoff:
 - `docs/engineering/framework-upgrades/HANDOFF-2026-07-13-NEXT-16-UPGRADE.md`

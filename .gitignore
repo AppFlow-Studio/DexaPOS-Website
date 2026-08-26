@@ -68,3 +68,6 @@ tasks/T-21-responsive-layout.md
 # Personal 1on1 / feedback documents
 docs/*1on1*.docx
 ~$*.docx
+
+# Valor sandbox probe scripts (local dev tooling, not product code)
+/valor-*.ts

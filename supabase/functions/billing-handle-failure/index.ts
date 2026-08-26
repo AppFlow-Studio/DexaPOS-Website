@@ -1,11 +1,13 @@
 import { createClient } from 'npm:@supabase/supabase-js'
+import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
+import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-internal-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -19,6 +21,9 @@ function jsonResponse(body: Record<string, unknown>, status = 200): Response {
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
+  if (!(await isAuthorizedInternalBillingRequest(req))) {
+    return jsonResponse({ success: false, error: 'Unauthorized' }, 401)
+  }
 
   try {
     const body = await req.json() as {
@@ -43,13 +48,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return jsonResponse({ success: false, error: 'Invoice not found' }, 404)
     }
 
+    const nextAttemptCount = Number(invoice.payment_attempt_count || 0) + 1
+    const failureMessage = body.error_message ?? 'Charge failed'
     const { error: updateInvoiceError } = await supabase
       .from('subscription_invoices')
       .update({
         status: 'failed',
-        payment_attempt_count: Number(invoice.payment_attempt_count || 0) + 1,
+        payment_attempt_count: nextAttemptCount,
         last_payment_attempt_at: now,
-        last_payment_error: body.error_message ?? 'Charge failed',
+        last_payment_error: failureMessage,
         updated_at: now,
       })
       .eq('id', invoice.id)
@@ -77,14 +84,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_resource_id: invoice.id,
       p_changes: {
         status: 'failed',
-        payment_attempt_count: Number(invoice.payment_attempt_count || 0) + 1,
+        payment_attempt_count: nextAttemptCount,
       },
       p_metadata: {
         source: 'billing-handle-failure',
       },
       p_status: 'failed',
-      p_error_message: body.error_message ?? 'Charge failed',
+      p_error_message: failureMessage,
     })
+
+    try {
+      await notifySubscriptionPaymentFailure({
+        supabase,
+        invoiceId: invoice.id,
+        paymentAttemptCount: nextAttemptCount,
+        failureMessage,
+      })
+    } catch (notificationError) {
+      console.error(
+        '[billing-handle-failure] Failed to deliver payment failure notifications:',
+        notificationError,
+      )
+    }
 
     return jsonResponse({ success: true, invoice_id: invoice.id, subscription_id: invoice.subscription_id })
   } catch (error) {

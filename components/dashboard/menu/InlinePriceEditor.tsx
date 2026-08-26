@@ -14,6 +14,8 @@ import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { UpdateMenuItem } from "@/app/dashboard/actions/menu-items";
 import { updateLocationMenuCategoryItemOverride } from "@/app/dashboard/actions/menu-items-rpc";
 import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSync";
+import { deriveCashPrice } from "@/lib/pricing";
+import { useMerchantPricingStrategies } from "@/app/dashboard/hooks/useMerchantPricingStrategies";
 
 interface InlinePriceEditorProps {
   itemId: string;
@@ -69,6 +71,25 @@ export function InlinePriceEditor({
   const [cashPrice, setCashPrice] = React.useState<string>(
     initialCashPrice != null ? String(initialCashPrice) : "",
   );
+
+  // Once the user edits (or clears) the cash field, stop auto-deriving it from
+  // card — mirrors PriceInputGroup so "leave blank to inherit" is preserved.
+  const [cashTouched, setCashTouched] = React.useState(false);
+
+  // Resolve this scope's location dual-pricing config so a dual location's cash
+  // override tracks card at (1 − pct/100). Global (no-location) scopes have no
+  // single pct, so they don't auto-derive.
+  const { data: stratResp } = useMerchantPricingStrategies(
+    clerkOrgId,
+    !!locationId,
+  );
+  const locStrategy = locationId
+    ? stratResp?.data?.find((s) => s.id === locationId) ?? null
+    : null;
+  const autoDerive =
+    locStrategy?.pricing_strategy === "dual" &&
+    (locStrategy?.dual_pricing_percentage ?? 0) > 0;
+  const dualPct = locStrategy?.dual_pricing_percentage ?? 0;
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -147,7 +168,19 @@ export function InlinePriceEditor({
           min="0"
           inputMode="decimal"
           value={price}
-          onChange={(e) => setPrice(e.target.value)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setPrice(next);
+            // Dual location: keep cash tracking card until the user takes over.
+            if (autoDerive && !cashTouched) {
+              const parsedCard = parseFloat(next);
+              setCashPrice(
+                Number.isFinite(parsedCard) && parsedCard > 0
+                  ? String(deriveCashPrice(parsedCard, dualPct))
+                  : "",
+              );
+            }
+          }}
           className="h-8 text-sm"
           autoFocus
           required
@@ -165,7 +198,10 @@ export function InlinePriceEditor({
           min="0"
           inputMode="decimal"
           value={cashPrice}
-          onChange={(e) => setCashPrice(e.target.value)}
+          onChange={(e) => {
+            setCashPrice(e.target.value);
+            setCashTouched(true);
+          }}
           className="h-8 text-sm"
           placeholder={
             inheritedCashPrice != null
@@ -173,6 +209,11 @@ export function InlinePriceEditor({
               : "Leave blank for default"
           }
         />
+        {autoDerive && (
+          <p className="text-[10px] text-muted-foreground">
+            Auto-set to {dualPct}% off the card price — edit to override.
+          </p>
+        )}
       </div>
       <div className="flex flex-col items-center gap-2 pt-1">
         <AffectsTag ctx={scope} variant="inline" />

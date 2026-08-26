@@ -69,6 +69,7 @@ import type { PermissionCode } from '@/lib/admin/permission-codes'
 import { selectHqOrganization } from '@/lib/admin/hq-identity'
 import { DeviceRegistryCommandPaletteProvider } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { ReadOnlyNotificationBell } from '@/components/notifications/ReadOnlyNotificationBell'
 import { GetUnreadTicketCounts } from '@/app/manage/actions/support'
 import { MobileBottomNav } from '@/components/dashboard/MobileBottomNav'
 import { ImpersonationBanner } from '@/components/dashboard/ImpersonationBanner'
@@ -532,6 +533,7 @@ export default function ManageLayout({
                                 href="/manage/support"
                                 queryKey="hq-unread-ticket-counts"
                             />
+                            <ReadOnlyNotificationBell />
                         </div>
                     </header>
                     <div id="main-content" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6 min-w-0">
