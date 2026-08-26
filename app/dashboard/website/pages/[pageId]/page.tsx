@@ -10,7 +10,11 @@ import BuilderShell from "@/components/site-builder/builder/BuilderShell";
 import type { ResolverSources } from "@/lib/site-builder/bindings/resolve";
 import type { SitePageSummary } from "@/lib/site-builder/db-types";
 import { getResolverSources } from "@/lib/site-builder/request-scope";
-import { loadSampleMenuItemIds, loadSiteContext } from "@/lib/site-builder/site-context";
+import {
+  buildRenderContext,
+  loadSampleMenuItemIds,
+  loadSiteContext,
+} from "@/lib/site-builder/site-context";
 import type { MenuCatalog } from "../menu-catalog";
 import { renderCanvas } from "../render-canvas";
 
@@ -146,6 +150,13 @@ export default async function EditorRoute({
       clerkOrgId={orgId}
       locationId={site.locationId}
       features={site.features}
+      /*
+        Resolved through `buildRenderContext`, which is the same function the
+        canvas and the public site use — so the colours the drawer measures a
+        custom text colour against are the colours it will actually be rendered
+        on, not a second opinion about them.
+      */
+      theme={buildRenderContext(site, "builder").theme}
       page={{
         id: page.id,
         title: page.title,

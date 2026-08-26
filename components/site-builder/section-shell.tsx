@@ -1,5 +1,10 @@
-import type { RenderContext } from "@/lib/site-builder/render-context";
-import type { LinkTarget, SectionStyle } from "@/lib/site-builder/sections/primitives";
+import { isHexColor, tintOn } from "@/lib/site-builder/color";
+import type { RenderContext, ThemeTokens } from "@/lib/site-builder/render-context";
+import type {
+  LinkTarget,
+  SectionStyle,
+  TextTone,
+} from "@/lib/site-builder/sections/primitives";
 import { trackAttrs } from "@/lib/site-builder/tracking";
 import { cn } from "@/lib/utils";
 
@@ -12,15 +17,142 @@ import { cn } from "@/lib/utils";
  * re-publishing anything.
  */
 
-const BACKGROUND_STYLES: Record<
-  NonNullable<SectionStyle["background"]>,
-  { background: string; color: string }
-> = {
-  default: { background: "var(--site-surface)", color: "var(--site-text)" },
-  muted: { background: "var(--site-surface-muted)", color: "var(--site-text)" },
-  brand: { background: "var(--site-brand)", color: "var(--site-brand-contrast)" },
-  dark: { background: "var(--site-surface-dark)", color: "var(--site-text-on-dark)" },
+/** What each backdrop tone paints behind a section. */
+const BACKGROUND_FILLS: Record<Backdrop, string> = {
+  default: "var(--site-surface)",
+  muted: "var(--site-surface-muted)",
+  brand: "var(--site-brand)",
+  dark: "var(--site-surface-dark)",
 };
+
+/**
+ * A section's backdrop, as the text-tone table needs to know it.
+ *
+ * Not quite `SectionStyle["background"]`: a content block over a photograph
+ * darkens itself and is a `dark` backdrop for every purpose that matters here,
+ * even though nothing in its `style` says so.
+ */
+export type Backdrop = NonNullable<SectionStyle["background"]>;
+
+/**
+ * Text colour, resolved from the tone the merchant chose **and the backdrop it
+ * is standing on**.
+ *
+ * Every cell is a pair that clears WCAG AA — the four `--site-text-*` variables
+ * are derived per theme in `themeToCssVars` precisely so this table can be
+ * written as a lookup rather than as a runtime calculation inside fifteen
+ * renderers. `__tests__/text-tone.test.ts` sweeps brand hues through both and
+ * asserts every cell.
+ *
+ * Two cells deserve their reasoning stated:
+ *
+ *  - **`brand` on a `brand` band** falls back to the contrast colour. Brand type
+ *    on a brand fill is invisible by definition, and the merchant asking for it
+ *    means "make this stand out", so the answer is the colour that does.
+ *  - **`muted` never means "faded"** in the CSS sense. It resolves to a real
+ *    colour measured against its own backdrop, not `opacity`, because opacity on
+ *    a photographic background composites against the photo and can land
+ *    anywhere.
+ */
+type NamedTone = Exclude<TextTone, "custom">;
+
+const TEXT_TONE_COLORS: Record<Backdrop, Record<NamedTone, string>> = {
+  default: {
+    default: "var(--site-text)",
+    muted: "var(--site-text-dim)",
+    brand: "var(--site-text-brand)",
+  },
+  // `surfaceMuted` is 5% from `surface`; the foregrounds validated against one
+  // are validated against the other, and the product has always treated them
+  // as the same family.
+  muted: {
+    default: "var(--site-text)",
+    muted: "var(--site-text-dim)",
+    brand: "var(--site-text-brand)",
+  },
+  // Both of the brand band's non-default tones collapse to the contrast colour,
+  // for the same underlying reason: the fill has already used the contrast
+  // budget. Brand type on a brand fill is invisible, and there is no muted
+  // colour left that still clears AA — `themeToCssVars` says so at more length.
+  // A merchant who picks a tone here sees no change, which is better than one
+  // who picks a tone and cannot read the result.
+  brand: {
+    default: "var(--site-brand-contrast)",
+    muted: "var(--site-brand-contrast)",
+    brand: "var(--site-brand-contrast)",
+  },
+  dark: {
+    default: "var(--site-text-on-dark)",
+    muted: "var(--site-text-dim-on-dark)",
+    brand: "var(--site-text-brand-on-dark)",
+  },
+};
+
+/**
+ * What each backdrop is actually painted with, as a colour rather than a token.
+ *
+ * The named tones resolve to CSS variables and never need this. A *custom*
+ * colour does: guarding it means measuring it against the thing behind it, and
+ * `contrastRatio` cannot read a `var()`.
+ */
+function backdropColor(backdrop: Backdrop, theme: ThemeTokens): string {
+  switch (backdrop) {
+    case "muted":
+      return theme.surfaceMuted;
+    case "brand":
+      return theme.brand;
+    case "dark":
+      return theme.surfaceDark;
+    default:
+      return theme.surface;
+  }
+}
+
+/**
+ * The colour a section's copy takes on a given backdrop.
+ *
+ * Exported because five sections paint their own backdrop rather than taking one
+ * from `style.background` — the hero's full-bleed variants, a content block over
+ * a photograph, the scrolling banner, the footer's muted band and the events
+ * strip. They resolve their tone through this so a merchant's choice means the
+ * same thing everywhere, instead of applying to eleven sections and silently
+ * doing nothing on the five that most invite it.
+ *
+ * **The custom colour is guarded here, on every render, not once on save.**
+ * Saving a guarded value would be correct exactly until something moved: the
+ * merchant switches the section to a dark band, or changes their brand colour,
+ * and a hex that was checked against the old backdrop is now checked against
+ * nothing. Re-deriving it costs a few colour conversions and cannot go stale.
+ *
+ * `tintOn` keeps the hue and moves the lightness, so a merchant who asks for
+ * their orange gets their orange — darkened until it reads, if it has to be.
+ * A malformed or missing hex falls back to the default tone rather than
+ * rendering an invalid `color`, which browsers ignore, which would leave the
+ * copy whatever colour it inherited.
+ */
+export function textToneColor(
+  backdrop: Backdrop,
+  style: SectionStyle | undefined,
+  theme: ThemeTokens,
+): string {
+  const tone = style?.textTone ?? "default";
+
+  if (tone === "custom") {
+    // A brand band takes no custom colour, for the reason the table above gives
+    // for the named tones: the fill has already spent the contrast budget, and
+    // a sweep of the hue circle against it finds nothing that clears AA once the
+    // sections fade their copy — not even white. Rather than accept a colour and
+    // quietly render something else entirely, the band keeps its one readable
+    // foreground. The editor does not offer the picker here.
+    if (backdrop === "brand") return TEXT_TONE_COLORS.brand.default;
+
+    const requested = style?.textColor;
+    if (!requested || !isHexColor(requested)) return TEXT_TONE_COLORS[backdrop].default;
+    return tintOn(requested, backdropColor(backdrop, theme));
+  }
+
+  return TEXT_TONE_COLORS[backdrop][tone];
+}
 
 const SPACING_CLASSES: Record<NonNullable<SectionStyle["spacing"]>, string> = {
   compact: "py-8 md:py-10",
@@ -42,8 +174,21 @@ export function sectionClassName(style: SectionStyle | undefined, extra = ""): s
   return ["w-full", spacing, align, hidden, extra].filter(Boolean).join(" ");
 }
 
-export function sectionStyleProps(style: SectionStyle | undefined): React.CSSProperties {
-  return BACKGROUND_STYLES[style?.background ?? "default"];
+/**
+ * `theme` is required rather than optional, and that is load-bearing: a custom
+ * text colour cannot be guarded without knowing what is behind it, and an
+ * optional parameter would let a call site silently skip the guard. The compiler
+ * asks every one of them instead.
+ */
+export function sectionStyleProps(
+  style: SectionStyle | undefined,
+  theme: ThemeTokens,
+): React.CSSProperties {
+  const backdrop = style?.background ?? "default";
+  return {
+    background: BACKGROUND_FILLS[backdrop],
+    color: textToneColor(backdrop, style, theme),
+  };
 }
 
 /**

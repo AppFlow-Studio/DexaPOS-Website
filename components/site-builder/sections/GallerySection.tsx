@@ -54,7 +54,7 @@ export default function GallerySection({ section, ctx }: SectionRenderProps<"gal
   return (
     <section
       className={sectionClassName(section.style)}
-      style={sectionStyleProps(section.style)}
+      style={sectionStyleProps(section.style, ctx.theme)}
     >
       <Container>
         <SectionHeading

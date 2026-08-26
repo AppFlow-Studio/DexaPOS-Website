@@ -38,7 +38,7 @@ export default function LocationSection({
   return (
     <section
       className={sectionClassName(section.style)}
-      style={sectionStyleProps(section.style)}
+      style={sectionStyleProps(section.style, ctx.theme)}
       id="location"
     >
       <Container>

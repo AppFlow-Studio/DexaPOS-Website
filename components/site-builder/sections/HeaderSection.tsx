@@ -40,7 +40,7 @@ export default function HeaderSection({ section, ctx }: SectionRenderProps<"head
     <header
       className={`${positioning} w-full border-b`}
       style={{
-        ...sectionStyleProps(section.style),
+        ...sectionStyleProps(section.style, ctx.theme),
         borderColor: "var(--site-border)",
         ...(transparentOverHero ? { background: "transparent", borderColor: "transparent" } : {}),
       }}

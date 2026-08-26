@@ -83,7 +83,7 @@ export default function PopularItemsSection({
   return (
     <section
       className={sectionClassName(section.style)}
-      style={sectionStyleProps(section.style)}
+      style={sectionStyleProps(section.style, ctx.theme)}
     >
       <Container>
         <SectionHeading

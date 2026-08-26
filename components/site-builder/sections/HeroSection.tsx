@@ -3,7 +3,7 @@ import type { RenderContext } from "@/lib/site-builder/render-context";
 import type { SectionRenderProps } from "@/lib/site-builder/render-context";
 import { fieldAttrsFor } from "../edit-attrs";
 import SiteImage from "../SiteImage";
-import { Container, CtaButton, sectionStyleProps } from "../section-shell";
+import { Container, CtaButton, sectionStyleProps, textToneColor } from "../section-shell";
 
 /**
  * The opening banner, in three variants:
@@ -54,7 +54,7 @@ export default function HeroSection({ section, ctx }: SectionRenderProps<"hero">
 
   if (variant === "bistro") {
     return (
-      <section className="w-full" style={sectionStyleProps(section.style)}>
+      <section className="w-full" style={sectionStyleProps(section.style, ctx.theme)}>
         <Container className="grid items-center gap-10 py-16 md:grid-cols-2 md:py-24">
           <div>
             <h1
@@ -87,7 +87,13 @@ export default function HeroSection({ section, ctx }: SectionRenderProps<"hero">
   return (
     <section
       className={`relative w-full overflow-hidden ${isSpotlight ? "min-h-[70vh]" : "min-h-[52vh]"}`}
-      style={{ background: "var(--site-surface-dark)", color: "var(--site-text-on-dark)" }}
+      style={{
+        background: "var(--site-surface-dark)",
+        // The full-bleed variants are a dark band whatever `style.background`
+        // says, so the tone is resolved against `dark` rather than against a
+        // backdrop this section never uses.
+        color: textToneColor("dark", section.style, ctx.theme),
+      }}
     >
       <HeroMedia
         sectionId={section.id}

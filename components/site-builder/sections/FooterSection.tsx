@@ -2,7 +2,7 @@ import { lookupLocation } from "@/lib/site-builder/bindings/resolved";
 import type { SectionRenderProps } from "@/lib/site-builder/render-context";
 import { SOCIAL_LABELS } from "@/lib/site-builder/site-settings";
 import { fieldAttrsFor } from "../edit-attrs";
-import { Container, resolveHref } from "../section-shell";
+import { Container, resolveHref, textToneColor } from "../section-shell";
 import BusinessHours, { formatAddress } from "./shared/BusinessHours";
 
 /**
@@ -30,7 +30,7 @@ export default function FooterSection({ section, resolved, ctx }: SectionRenderP
       className="w-full border-t"
       style={{
         background: "var(--site-surface-muted)",
-        color: "var(--site-text)",
+        color: textToneColor("muted", section.style, ctx.theme),
         borderColor: "var(--site-border)",
       }}
     >

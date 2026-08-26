@@ -16,7 +16,7 @@ export default function PdfSection({ section, ctx }: SectionRenderProps<"pdf">) 
   const url = file ? ctx.resolveAsset(file.assetId)?.url : null;
 
   return (
-    <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style)}>
+    <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style, ctx.theme)}>
       <Container>
         <SectionHeading
           heading={title}

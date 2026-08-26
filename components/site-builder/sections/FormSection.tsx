@@ -32,7 +32,7 @@ export default function FormSection({ section, ctx }: SectionRenderProps<"form">
     if (ctx.mode !== "builder") return null;
 
     return (
-      <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style)}>
+      <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style, ctx.theme)}>
         <Container>
           <p className="rounded-[var(--site-radius)] border border-dashed p-8 text-center text-sm opacity-60">
             {formId
@@ -45,7 +45,7 @@ export default function FormSection({ section, ctx }: SectionRenderProps<"form">
   }
 
   return (
-    <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style)}>
+    <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style, ctx.theme)}>
       <Container>
         {/*
           The placement's own wording wins over the form's, because the same

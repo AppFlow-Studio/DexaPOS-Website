@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { loadMenuCatalog, type MenuCatalog } from "@/app/dashboard/website/pages/menu-catalog";
 import { renderCanvas } from "@/app/dashboard/website/pages/render-canvas";
 import type { PageDocument } from "@/lib/site-builder/page-document";
+import type { ThemeTokens } from "@/lib/site-builder/render-context";
 import AddSectionModal from "./AddSectionModal";
 import Canvas from "./Canvas";
 import EditorTopBar from "./EditorTopBar";
@@ -45,6 +46,7 @@ export default function BuilderShell({
   clerkOrgId,
   page,
   site,
+  theme,
   publishedDoc = null,
   publishedAt = null,
   features,
@@ -69,6 +71,16 @@ export default function BuilderShell({
    * page rather than inside its document.
    */
   site: DrawerSite;
+  /**
+   * The merchant's resolved theme.
+   *
+   * The drawer needs it for one job the canvas cannot do for it: telling a
+   * merchant that the custom text colour they just picked had to be adjusted to
+   * stay readable. That answer depends on the actual colours behind the section,
+   * so the panel needs the same tokens the renderer resolves against — see
+   * `SectionTextColorControl`.
+   */
+  theme: ThemeTokens;
   publishedDoc?: PageDocument | null;
   publishedAt?: string | null;
   /**
@@ -164,6 +176,7 @@ export default function BuilderShell({
             locationId={locationId}
             clerkOrgId={clerkOrgId}
             site={site}
+            theme={theme}
           />
         )}
         <Canvas store={store} />

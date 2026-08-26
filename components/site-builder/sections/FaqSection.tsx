@@ -47,7 +47,7 @@ export default function FaqSection({ section, ctx }: SectionRenderProps<"faq">) 
   return (
     <section
       className={sectionClassName(style)}
-      style={sectionStyleProps(style)}
+      style={sectionStyleProps(style, ctx.theme)}
       id="faq"
     >
       <Container className="max-w-3xl">

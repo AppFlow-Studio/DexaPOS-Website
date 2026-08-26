@@ -7,7 +7,7 @@
  */
 
 import type { ResolvedMap } from "./bindings/resolved";
-import { readableOn } from "./color";
+import { mutedOn, readableOn, tintOn } from "./color";
 import type { RenderEvent } from "./events/event-map";
 import type { ResolvedForm } from "./forms/form-map";
 import type { SiteBrand, SiteFeatures } from "./site-settings";
@@ -313,7 +313,23 @@ export function createRenderContext(
   };
 }
 
-/** Emits the token set as inline CSS custom properties for the shell element. */
+/**
+ * Emits the token set as inline CSS custom properties for the shell element.
+ *
+ * The four `--site-text-*` variables at the bottom are **derived here rather
+ * than stored**, which is deliberate. They exist for the per-section text tone
+ * (`SectionStyle.textTone`), and every one of them is a fact about a
+ * *foreground/background pair* — "the brand colour, made readable on the dark
+ * band" is not a property of the theme a merchant saved, it is a property of
+ * that colour and that band together. Storing them would mean a theme row could
+ * hold a pair that no longer agrees with itself, which is the bug
+ * `resolveTheme` already has to work around for `brandContrast`.
+ *
+ * Computing them at render costs a few colour conversions once per page and
+ * makes the readability guarantee structural: a section can only ask for a tone,
+ * and every tone it can ask for resolves to something that clears AA on the
+ * backdrop it names. See `__tests__/text-tone.test.ts`, which sweeps the pairs.
+ */
 export function themeToCssVars(theme: ThemeTokens): Record<string, string> {
   return {
     "--site-brand": theme.brand,
@@ -329,5 +345,26 @@ export function themeToCssVars(theme: ThemeTokens): Record<string, string> {
     "--site-font": theme.fontFamily,
     "--site-heading-font": theme.headingFont || theme.fontFamily,
     "--site-radius": theme.radius,
+
+    // The brand colour as *type*, on each of the two backdrop families. A brand
+    // is picked to work as a button fill, where its own contrast is nobody's
+    // problem; `tintOn` keeps the hue and moves the lightness until it reads.
+    "--site-text-brand": tintOn(theme.brand, theme.surface),
+    "--site-text-brand-on-dark": tintOn(theme.brand, theme.surfaceDark),
+    // The `muted` text tone, on each of the three backdrop families.
+    //
+    // Deliberately *not* the stored `textMuted`, which is only correct against
+    // `surface` — it is 36% of the way toward a colour the brand and dark bands
+    // are not — and which carries no headroom for the fade the sections apply to
+    // their own secondary copy. See `mutedOn`.
+    // No `--site-text-dim-on-brand`, and the absence is the finding: a brand
+    // fill spends the whole contrast budget. `brandContrast` on a saturated red
+    // measures barely over AA before anything is done to it, so *any* muting
+    // takes it under — there is no readable de-emphasised colour on that band to
+    // emit. The tone table resolves `muted` to the contrast colour there
+    // instead, which is the honest answer rather than a token that silently
+    // does nothing.
+    "--site-text-dim": mutedOn(theme.text, theme.surface),
+    "--site-text-dim-on-dark": mutedOn(theme.textOnDark, theme.surfaceDark),
   };
 }
