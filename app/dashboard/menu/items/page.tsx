@@ -45,6 +45,7 @@ import { useCategoriesWithItems } from "../../hooks/useCategories";
 import { useModifierGroups } from "../../hooks/useModifierGroups";
 import { useUserInfo } from "../../../manage/hooks/useUserInfo.";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DataPageSkeleton } from "@/components/dashboard/loading/DataPageSkeleton";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Empty } from "@/components/ui/empty";
@@ -1440,7 +1441,7 @@ function CategoryGroup({
 // ============================================================================
 
 export default function MenuItemsPage() {
-  const { data: userInfo } = useUserInfo();
+  const { data: userInfo, isLoading: isUserInfoLoading } = useUserInfo();
   const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -1453,6 +1454,7 @@ export default function MenuItemsPage() {
     isMember,
     isManager,
     assignedLocationIds,
+    isLoading: isPermissionsLoading,
   } = useManagerPermissions();
 
   // Location context
@@ -1479,7 +1481,8 @@ export default function MenuItemsPage() {
         : "";
 
   // Tax rates for current location
-  const { data: taxRatesData } = useLocationTaxRates();
+  const { data: taxRatesData, isLoading: isTaxRatesLoading } =
+    useLocationTaxRates();
   const taxRates = taxRatesData?.data || [];
 
   // Get flat items with categories
@@ -1492,11 +1495,10 @@ export default function MenuItemsPage() {
 
   console.log("itemsData", itemsData?.data?.[0]);
   // Get categories for filtering
-  const { data: categoriesData } = useCategoriesWithItems(
-    clerkOrgId || "",
-    selectedLocationId,
-  );
-  const { data: modifierGroups } = useModifierGroups(clerkOrgId);
+  const { data: categoriesData, isLoading: isCategoriesLoading } =
+    useCategoriesWithItems(clerkOrgId || "", selectedLocationId);
+  const { data: modifierGroups, isLoading: isModifierGroupsLoading } =
+    useModifierGroups(clerkOrgId);
 
   // State
   const [searchTerm, setSearchTerm] = useState("");
@@ -2051,6 +2053,20 @@ export default function MenuItemsPage() {
           />
         </Panel>
       </PageShell>
+    );
+  }
+
+  const isInitialPageLoading =
+    isLoading ||
+    isUserInfoLoading ||
+    isPermissionsLoading ||
+    isCategoriesLoading ||
+    isModifierGroupsLoading ||
+    isTaxRatesLoading;
+
+  if (isInitialPageLoading) {
+    return (
+      <DataPageSkeleton variant="catalog" label="Loading the item library" />
     );
   }
 

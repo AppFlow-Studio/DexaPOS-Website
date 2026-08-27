@@ -542,6 +542,19 @@ Single index for active ticket streams and their source trackers.
   visibility cannot reconstruct old dropped rows, and category-name trimming
   is deferred because it changes routing despite the instrumentation-only scope.
 
+## Stream Z: Dashboard Data Loaders Rollout
+
+1. Ticket and Haidar handoff:
+- `docs/tickets/TICKET-2026-08-26-DATA-PAGE-LOADERS-ROLLOUT.md`
+
+2. Pilot scope:
+- Reusable analytics and catalog skeletons replace fragmented first-load
+  waiting states on `/dashboard/transactions` and `/dashboard/menu/items`.
+- Background refetches retain existing data; mutation-button spinners remain.
+- The handoff lists merchant and HQ rollout priorities, accessibility rules,
+  responsive QA, and acceptance criteria.
+- No query, schema, package, or lockfile changes are part of the pilot.
+
 ## Notes
 
 1. Keep this file updated whenever a new ticket stream starts.
