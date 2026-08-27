@@ -48,6 +48,7 @@ import {
     History,
     LogOut,
     Monitor,
+    MonitorPlay,
     AlertOctagon,
     Receipt,
     CircleDollarSign,
@@ -184,6 +185,12 @@ const navMain: NavGroup[] = [
                 title: 'Support',
                 url: '/manage/support',
                 icon: MessageSquare,
+                requiredPermission: 'hq.support.view',
+            },
+            {
+                title: 'KDS Mirror',
+                url: '/manage/support/kds-mirror',
+                icon: MonitorPlay,
                 requiredPermission: 'hq.support.view',
             }
         ]

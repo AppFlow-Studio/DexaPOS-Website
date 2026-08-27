@@ -59,3 +59,23 @@ Program doc: `Dexa-POS/docs/engineering/performance/db-perf-waves-2026-08-13.md`
 Before trusting any prod-derived definition, run the cross-environment `md5(pg_get_functiondef())`
 comparison in that doc. Wave 2 was drafted from prod and would have silently reverted the
 staging-only #S1-0013 floor-millisecond `ticket_id` fix.
+
+---
+
+## `20260827130000_kds_device_truth.sql.deferred-architecture-b`
+
+Different situation from the two files above — **not** failed agent output.
+
+This is Architecture B (KDS device-truth capture) from the KDS mirror ticket.
+It was written, then deferred by decision before ever being applied. It is
+quarantined here only so `supabase db push` cannot pick it up.
+
+- **Never applied anywhere**, not even a dry run.
+- Inert by design: nothing calls `report_kds_device_events` until the POS app
+  ships an emitter, and that POS change was not made.
+- Its companion, `20260827120000_hq_kds_board_mirror.sql` (Architecture A), IS
+  applied and verified on staging. A stands alone and does not depend on this.
+
+Pick it up by moving it back to `supabase/migrations/` and building the
+`arrived`/`ack` emitter in the POS repo. See
+`docs/features/kds/FEATURE-2026-08-27-HQ-KDS-BOARD-MIRROR.md` for the contract.
