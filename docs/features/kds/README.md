@@ -6,6 +6,8 @@ health contracts shared by the website, POS, and Supabase.
 ## Documents
 
 - [PLAN-2026-08-14-KDS-ROUTING-TRACEABILITY.md](PLAN-2026-08-14-KDS-ROUTING-TRACEABILITY.md) - P0 immutable routing ledger, send-attempt evidence, trace RPC, health view, and POS handoff
+- [FEATURE-2026-08-27-HQ-KDS-BOARD-MIRROR.md](FEATURE-2026-08-27-HQ-KDS-BOARD-MIRROR.md) - HQ mirror of what a station should be showing, plus board snapshots and replay
+- [FEATURE-2026-08-27-HQ-KDS-SEND-LEDGER.md](FEATURE-2026-08-27-HQ-KDS-SEND-LEDGER.md) - HQ send-attempt ledger on the mirror page: did the server receive the send, and did every item apply? (plus the companion "unsent items" view)
 
 ## Maintenance
 
