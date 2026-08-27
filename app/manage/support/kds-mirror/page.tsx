@@ -37,17 +37,23 @@ import { useKdsMirrorRealtime } from "./hooks/useKdsMirrorRealtime";
  */
 const ANCHOR_GRID_MS = 30_000;
 
-function useWindowAnchor() {
+function useWindowAnchor(paused: boolean) {
   const [anchor, setAnchor] = React.useState(
     () => Math.floor(Date.now() / ANCHOR_GRID_MS) * ANCHOR_GRID_MS
   );
 
+  // While scrubbing history the window is frozen: advancing it would shift the
+  // snapshot query key, refetch the list under the user, and the empty-data
+  // blip would clamp the scrubber back to live -- "undoing where I was". Only
+  // advance when following the board, and snap back to "now" on resume.
   React.useEffect(() => {
+    if (paused) return;
+    setAnchor(Math.floor(Date.now() / ANCHOR_GRID_MS) * ANCHOR_GRID_MS);
     const id = window.setInterval(() => {
       setAnchor(Math.floor(Date.now() / ANCHOR_GRID_MS) * ANCHOR_GRID_MS);
     }, ANCHOR_GRID_MS);
     return () => window.clearInterval(id);
-  }, []);
+  }, [paused]);
 
   return anchor;
 }
@@ -68,7 +74,11 @@ function KdsMirrorPageInner() {
 
   const [windowKey, setWindowKey] = React.useState<TimelineWindowKey>("1h");
   const [selectedIndex, setSelectedIndex] = React.useState<number | null>(null);
-  const anchor = useWindowAnchor();
+  const isLive = selectedIndex === null;
+  // Freeze the timeline window while scrubbing history; only advance it when
+  // following the board live. Otherwise the 30s anchor tick refetches the
+  // snapshot list mid-replay and kicks the scrubber back to live.
+  const anchor = useWindowAnchor(!isLive);
 
   const setParams = React.useCallback(
     (next: Record<string, string | null>) => {
@@ -115,7 +125,6 @@ function KdsMirrorPageInner() {
     }
   }, [selectedIndex, snapshotList.length]);
 
-  const isLive = selectedIndex === null;
   const selectedSnapshotId = isLive
     ? null
     : (snapshotList[selectedIndex]?.id ?? null);

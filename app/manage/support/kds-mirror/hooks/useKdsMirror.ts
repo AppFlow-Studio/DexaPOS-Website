@@ -145,6 +145,10 @@ export function useKdsMirrorSnapshots(
       )) ?? [],
     enabled: Boolean(kdsDisplayId) && options?.enabled !== false,
     staleTime: 15 * 1000,
+    // Keep the current list on screen while a refetch (or the anchor
+    // advancing back in live mode) is in flight, so the scrubber position
+    // never blips to an empty list and gets clamped back to live.
+    placeholderData: (previous) => previous,
   });
 }
 
