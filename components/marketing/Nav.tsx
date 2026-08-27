@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { UserRound } from "lucide-react";
 import { DEFAULT_SITE_SETTINGS, SiteSettings } from "@/lib/cms/site-settings-data";
 import OptimizedImage from "@/components/marketing/OptimizedImage";
 
@@ -53,9 +54,22 @@ export default function Nav({ settings = DEFAULT_SITE_SETTINGS }: { settings?: S
               </Link>
             </li>
           ))}
+          <li className="nav-mobile-cta-item">
+            <Link
+              href={cta.href}
+              className="nav-mobile-cta"
+              onClick={() => setOpen(false)}
+              {...siteEditAttrs("nav_cta.label", "Nav CTA", "link", { "data-cms-href-path": "nav_cta.href" })}
+            >
+              {cta.label}
+            </Link>
+          </li>
         </ul>
-        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-          <Link href="/sign-in" className="nav-signin">Sign In</Link>
+        <div className="nav-actions">
+          <Link href="/sign-in" className="nav-signin" aria-label="Sign in">
+            <UserRound className="nav-signin-icon" aria-hidden="true" />
+            <span className="nav-signin-label">Sign In</span>
+          </Link>
           <Link href={cta.href} className="nav-cta" {...siteEditAttrs("nav_cta.label", "Nav CTA", "link", { "data-cms-href-path": "nav_cta.href" })}>{cta.label}</Link>
           <button
             className="menu-toggle"

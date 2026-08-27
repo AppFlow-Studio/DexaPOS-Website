@@ -14,6 +14,7 @@ without hiding ownership.
 | [`inventory/`](inventory/README.md) | Inventory feature planning and remaining work |
 | [`kds/`](kds/README.md) | KDS routing, state, station configuration, traceability, and health |
 | [`location-management/`](location-management/README.md) | Single-location behavior, onboarding, and location UX |
+| [`marketing-site/`](marketing-site/README.md) | Public marketing site (dexaposai.com) layout, motion, and responsive behavior |
 | [`menu-management/`](menu-management/README.md) | Menus, categories, items, modifiers, recipes, and menu sync |
 | [`merchant-management/`](merchant-management/README.md) | Merchant creation, business information, and onboarding |
 | [`online-ordering/`](online-ordering/README.md) | Storefront setup, NMI checkout, OrderOut, and payment-origin operations |

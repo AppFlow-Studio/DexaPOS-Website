@@ -79,6 +79,7 @@ import {
   initialHiddenColumns,
   type ReportColumn,
 } from "@/components/dashboard/reports/MobileColumnsButton";
+import { HardwareHealthTab } from "@/components/dashboard/reports/HardwareHealthTab";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -1259,7 +1260,7 @@ export default function CashDrawerReportsPage() {
     <PageShell>
       <PageHeader
         title="Cash Drawer Reports"
-        subtitle="Session history, variance trends, and No Sale audit logs"
+        subtitle="Session history, variance trends, No Sale audits, and drawer hardware health"
         backHref="/dashboard/reports"
         backLabel="Back to Reports"
         actions={
@@ -1288,6 +1289,7 @@ export default function CashDrawerReportsPage() {
             <TabsTrigger className="shrink-0 whitespace-nowrap rounded-full px-4 py-2" value="sessions">Sessions</TabsTrigger>
             <TabsTrigger className="shrink-0 whitespace-nowrap rounded-full px-4 py-2" value="no-sale">No Sale Audit</TabsTrigger>
             <TabsTrigger className="shrink-0 whitespace-nowrap rounded-full px-4 py-2" value="variance">Variance Trends</TabsTrigger>
+            <TabsTrigger className="shrink-0 whitespace-nowrap rounded-full px-4 py-2" value="hardware">Hardware Health</TabsTrigger>
           </TabsList>
         </ScrollableTabsBar>
 
@@ -1299,6 +1301,9 @@ export default function CashDrawerReportsPage() {
         </TabsContent>
         <TabsContent value="variance" className="mt-6">
           <VarianceTrendsTab dateFrom={queryDateRange.from} dateTo={queryDateRange.to} />
+        </TabsContent>
+        <TabsContent value="hardware" className="mt-6">
+          <HardwareHealthTab dateFrom={queryDateRange.from} dateTo={queryDateRange.to} />
         </TabsContent>
       </Tabs>
     </PageShell>

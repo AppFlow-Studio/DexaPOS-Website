@@ -21671,6 +21671,23 @@ export type Database = {
         }
         Relationships: []
       }
+      v_kds_device_truth_health: {
+        Row: {
+          ack_rate_pct: number | null
+          acked_items: number | null
+          arrived_items: number | null
+          device_reporting: boolean | null
+          display_name: string | null
+          kds_display_id: string | null
+          location_id: string | null
+          merchant_id: string | null
+          observed_at: string | null
+          render_suspect_items: number | null
+          routed_items: number | null
+          unreported_items: number | null
+        }
+        Relationships: []
+      }
       v_location_menu_items: {
         Row: {
           allergens: string[] | null
@@ -24069,6 +24086,18 @@ export type Database = {
         Args: { p_location_id?: string; p_merchant_id: string }
         Returns: Json
       }
+      get_kds_device_truth_for_order: {
+        Args: { p_order_id: string }
+        Returns: Json
+      }
+      get_kds_display_truth_window: {
+        Args: {
+          p_from: string
+          p_kds_display_id: string
+          p_to: string
+        }
+        Returns: Json
+      }
       get_kds_tickets: {
         Args: { p_location_id: string; p_statuses?: string[] }
         Returns: Json
@@ -25646,6 +25675,7 @@ export type Database = {
         Args: { p_merchant_id: string; p_schedule_id: string }
         Returns: boolean
       }
+      purge_kds_device_truth: { Args: never; Returns: Json }
       purge_kds_trace_ledgers: { Args: never; Returns: Json }
       qr_base64url_decode: { Args: { p_value: string }; Returns: string }
       qr_base64url_encode: { Args: { p_value: string }; Returns: string }
@@ -25945,6 +25975,18 @@ export type Database = {
             }
             Returns: Json
           }
+      report_kds_device_events: {
+        Args: {
+          p_app_version?: string
+          p_client_clock_at?: string
+          p_device_origin_id?: string
+          p_events: Json
+          p_idempotency_key?: string
+          p_kds_display_id: string
+          p_snapshot?: Json
+        }
+        Returns: Json
+      }
       request_merchant_suspension: {
         Args: {
           p_force?: boolean
