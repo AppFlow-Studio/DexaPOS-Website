@@ -296,6 +296,17 @@ BEGIN
         SELECT 1 FROM public.order_items oi
          WHERE oi.id = (e->>'order_item_id')::uuid
       )
+      -- order_id is informational (FK ON DELETE SET NULL), but a non-existent
+      -- one would abort the whole batch with a foreign-key violation. Drop the
+      -- row instead; the order_item_id is the correlation key that matters.
+      AND (
+        e->>'order_id' IS NULL
+        OR e->>'order_id' = ''
+        OR EXISTS (
+          SELECT 1 FROM public.orders o
+           WHERE o.id = (e->>'order_id')::uuid
+        )
+      )
     ON CONFLICT (kds_display_id, order_item_id, event_type, client_event_at)
       DO NOTHING;
 
@@ -480,6 +491,214 @@ GRANT EXECUTE ON FUNCTION public.get_kds_device_truth_for_order(uuid)
 
 
 -- ---------------------------------------------------------------------------
+-- 4b. Display truth window -- routed vs seen over time
+-- ---------------------------------------------------------------------------
+-- The order-scoped RPC answers "this ticket"; this one answers "this display,
+-- this window". It FULL OUTER JOINs the server's routing log against the
+-- device's events so BOTH sides of the story are visible:
+--
+--   server routed + device ack                      -> CONFIRMED
+--   server routed + device arrived, no ack           -> RENDER_SUSPECT
+--   server routed + nothing, item active, dev online -> NEVER_SHOWED  <-- the bug
+--   server routed + nothing, device offline at fire  -> OFFLINE (expected)
+--   no routing log + device event exists             -> GHOST (stale cache)
+--
+-- Also returns the raw device-event timeline and the snapshot metadata for the
+-- window, so support can draw the device lane without a second round trip.
+
+CREATE OR REPLACE FUNCTION public.get_kds_display_truth_window(
+  p_kds_display_id uuid,
+  p_from timestamptz,
+  p_to timestamptz
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_merchant_id uuid;
+  v_location_id uuid;
+  v_result jsonb;
+BEGIN
+  -- DESIGN NOTE 1: tenancy is derived from the display, never from the caller.
+  SELECT d.merchant_id, d.location_id
+    INTO v_merchant_id, v_location_id
+    FROM public.kds_displays d
+   WHERE d.id = p_kds_display_id;
+
+  IF v_merchant_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  IF NOT (
+    public.is_dexapos_admin()
+    OR (
+      v_merchant_id = public.user_merchant_id()
+      AND v_location_id = ANY(public.user_location_ids())
+    )
+  ) THEN
+    RAISE EXCEPTION 'KDS display % is not accessible', p_kds_display_id
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF p_from IS NULL OR p_to IS NULL OR p_from > p_to THEN
+    RAISE EXCEPTION 'p_from and p_to are required and p_from must not exceed p_to'
+      USING ERRCODE = '22023';
+  END IF;
+
+  WITH server_rows AS (
+    SELECT krl.order_item_id,
+           krl.order_id,
+           krl.outcome      AS server_outcome,
+           krl.fired_at     AS server_fired_at
+      FROM public.kds_routing_log krl
+     WHERE krl.kds_display_id = p_kds_display_id
+       AND krl.fired_at >= p_from
+       AND krl.fired_at <= p_to
+  ),
+  device_rows AS (
+    SELECT de.order_item_id,
+           de.order_id,
+           bool_or(de.event_type = 'arrived') AS arrived,
+           bool_or(de.event_type = 'ack')     AS acked,
+           count(*)                           AS device_event_count
+      FROM public.kds_device_events de
+     WHERE de.kds_display_id = p_kds_display_id
+       AND de.received_at >= p_from
+       AND de.received_at <= p_to
+     GROUP BY de.order_item_id, de.order_id
+  ),
+  combined AS (
+    SELECT COALESCE(s.order_item_id, d.order_item_id) AS order_item_id,
+           COALESCE(s.order_id, d.order_id)           AS order_id,
+           s.server_outcome,
+           s.server_fired_at,
+           COALESCE(d.arrived, false)                AS arrived,
+           COALESCE(d.acked, false)                  AS acked,
+           COALESCE(d.device_event_count, 0)         AS device_event_count
+      FROM server_rows s
+      FULL OUTER JOIN device_rows d
+        ON d.order_item_id = s.order_item_id
+  ),
+  item_truth AS (
+    SELECT
+      c.order_item_id,
+      c.order_id,
+      o.order_number,
+      COALESCE(oi.open_item_name, oi.item_name) AS item_name,
+      oi.kitchen_status,
+      c.server_outcome,
+      c.server_fired_at,
+      c.arrived,
+      c.acked,
+      c.device_event_count,
+      hb.device_online_at_fire,
+      anydata.has_any_device_data,
+      CASE
+        WHEN NOT anydata.has_any_device_data THEN 'NO_DEVICE_DATA'
+        WHEN c.server_outcome IS NULL          THEN 'GHOST'
+        WHEN c.server_outcome <> 'routed'      THEN 'NOT_ROUTED'
+        WHEN c.acked                           THEN 'CONFIRMED'
+        WHEN c.arrived                         THEN 'RENDER_SUSPECT'
+        WHEN hb.device_online_at_fire IS FALSE THEN 'OFFLINE'
+        ELSE 'NEVER_SHOWED'
+      END AS verdict
+    FROM combined c
+    JOIN public.order_items oi ON oi.id = c.order_item_id
+    LEFT JOIN public.orders o ON o.id = c.order_id
+    CROSS JOIN (
+      -- Same per-display "has the fleet shipped the emitter" gate as the
+      -- order RPC: absence of device evidence is not evidence of a fault.
+      SELECT EXISTS (
+        SELECT 1 FROM public.kds_device_events d2
+         WHERE d2.kds_display_id = p_kds_display_id
+      ) AS has_any_device_data
+    ) anydata
+    LEFT JOIN LATERAL (
+      -- Was the station's device heartbeating within 2 minutes of the fire?
+      SELECT EXISTS (
+        SELECT 1
+          FROM public.device_heartbeats dh
+          JOIN public.kds_displays kd ON kd.id = p_kds_display_id
+         WHERE dh.station_id = kd.station_id
+           AND dh.heartbeat_at BETWEEN c.server_fired_at - interval '2 minutes'
+                                   AND c.server_fired_at + interval '2 minutes'
+      ) AS device_online_at_fire
+    ) hb ON true
+  )
+  SELECT jsonb_build_object(
+    'kds_display_id', p_kds_display_id,
+    'merchant_id', v_merchant_id,
+    'location_id', v_location_id,
+    'window_from', p_from,
+    'window_to', p_to,
+    'has_any_device_data', EXISTS (
+      SELECT 1 FROM public.kds_device_events de
+       WHERE de.kds_display_id = p_kds_display_id
+    ),
+    'summary', COALESCE((
+      SELECT jsonb_object_agg(it.verdict, it.cnt)
+        FROM (
+          SELECT verdict, count(*) AS cnt
+            FROM item_truth
+           GROUP BY verdict
+        ) it
+    ), '{}'::jsonb),
+    'items', COALESCE((
+      SELECT jsonb_agg(row_to_json(x)::jsonb
+                       ORDER BY x.server_fired_at DESC NULLS LAST, x.order_item_id)
+        FROM item_truth x
+    ), '[]'::jsonb),
+    'device_events', COALESCE((
+      SELECT jsonb_agg(row_to_json(x)::jsonb ORDER BY x.received_at)
+        FROM (
+          SELECT de.order_item_id,
+                 de.order_id,
+                 de.event_type,
+                 de.client_event_at,
+                 de.received_at,
+                 de.clock_skew_ms,
+                 de.app_version
+            FROM public.kds_device_events de
+           WHERE de.kds_display_id = p_kds_display_id
+             AND de.received_at >= p_from
+             AND de.received_at <= p_to
+        ) x
+    ), '[]'::jsonb),
+    'snapshots', COALESCE((
+      SELECT jsonb_agg(row_to_json(x)::jsonb ORDER BY x.received_at DESC)
+        FROM (
+          SELECT s.id,
+                 s.received_at,
+                 s.client_captured_at,
+                 s.ticket_count,
+                 s.item_count,
+                 s.payload_hash,
+                 s.clock_skew_ms,
+                 s.app_version
+            FROM public.kds_device_snapshots s
+           WHERE s.kds_display_id = p_kds_display_id
+             AND s.received_at >= p_from
+             AND s.received_at <= p_to
+        ) x
+    ), '[]'::jsonb)
+  ) INTO v_result;
+
+  RETURN v_result;
+END;
+$function$;
+
+COMMENT ON FUNCTION public.get_kds_display_truth_window(uuid, timestamptz, timestamptz) IS
+  'Per display and time window: server-routed vs device-reported items with verdicts, plus the raw device-event and snapshot timeline.';
+
+REVOKE ALL ON FUNCTION public.get_kds_display_truth_window(uuid, timestamptz, timestamptz) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_kds_display_truth_window(uuid, timestamptz, timestamptz)
+  TO authenticated, service_role;
+
+
+-- ---------------------------------------------------------------------------
 -- 5. Fleet health
 -- ---------------------------------------------------------------------------
 
@@ -619,6 +838,7 @@ $schedule$;
 --   SELECT cron.unschedule('kds-device-truth-purge');
 --   DROP VIEW IF EXISTS public.v_kds_device_truth_health;
 --   DROP FUNCTION IF EXISTS public.get_kds_device_truth_for_order(uuid);
+--   DROP FUNCTION IF EXISTS public.get_kds_display_truth_window(uuid, timestamptz, timestamptz);
 --   DROP FUNCTION IF EXISTS public.report_kds_device_events(uuid, jsonb, text, text, timestamptz, jsonb, uuid);
 --   DROP FUNCTION IF EXISTS public.purge_kds_device_truth();
 --   DROP TABLE IF EXISTS public.kds_device_snapshots;

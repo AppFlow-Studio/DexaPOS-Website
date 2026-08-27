@@ -28,7 +28,8 @@ like*.
 
 This is Architecture A of the two-part design: **server reconstruction**.
 Architecture B (device-truth capture, requiring a POS/React Native change) is
-not implemented and is not started. See [Not in this change](#not-in-this-change).
+implemented in [FEATURE-2026-08-27-HQ-KDS-DEVICE-TRUTH.md](./FEATURE-2026-08-27-HQ-KDS-DEVICE-TRUTH.md)
+and is inert until the fleet ships the POS emitter.
 
 ## What shipped
 
@@ -49,7 +50,7 @@ not implemented and is not started. See [Not in this change](#not-in-this-change
       one, so neither does the mirror.
 - [x] `useKdsMirror` (5s polling backstop) and `useKdsMirrorRealtime`
       (`location:<id>:orders` broadcast -> invalidate -> refetch).
-- [x] HQ sidebar entry "KDS Mirror" under the Support group, same permission.
+- [x] HQ sidebar entry "KDS" under the Support group, same permission.
 
 ### P1 - on-arrival snapshots and replay
 
@@ -277,15 +278,19 @@ Full rollback SQL is at the bottom of the migration file.
 
 ## Not in this change
 
-Architecture B - device-truth capture - is not started. It needs a POS/React
-Native change and would add:
-
-- `kds_device_events` / `kds_device_snapshots` append-only tables
-- `report_kds_device_events(...)`, deriving tenancy from `kds_display_id` and
-  never trusting device-claimed merchant/location for RLS
-- diff RPCs and a routed-vs-seen classification
-  (CONFIRMED / RENDER-SUSPECT / NEVER-SHOWED / OFFLINE / GHOST)
-
-The 80/20 is just `arrived` + `ack` per item, piggybacked on the existing
-heartbeat. That alone settles "routed but never seen", which is the question
+Architecture B — device-truth capture — is implemented in
+[FEATURE-2026-08-27-HQ-KDS-DEVICE-TRUTH.md](./FEATURE-2026-08-27-HQ-KDS-DEVICE-TRUTH.md):
+`kds_device_events` / `kds_device_snapshots` append-only ledgers,
+`report_kds_device_events(...)` (tenancy derived from `kds_display_id`, never
+trusting device-claimed merchant/location for RLS), the diff RPCs
+(`get_kds_device_truth_for_order`, `get_kds_display_truth_window`,
+`v_kds_device_truth_health`) and the routed-vs-seen classification
+(CONFIRMED / RENDER_SUSPECT / NEVER_SHOWED / OFFLINE / GHOST). The 80/20 —
+`arrived` + `ack` per item, piggybacked on the existing heartbeat — is wired in
+the POS repo (`services/kds/kdsDeviceTruth.ts`) and is inert until the fleet
+ships it. That alone settles "routed but never seen", which is the question
 this mirror can raise but cannot close.
+
+The one part of the original B plan that did not ship: the POS does not emit
+`kds_device_snapshots` payloads yet (the RPC supports them; the ledger stays
+empty until a later build chooses to).

@@ -62,20 +62,23 @@ staging-only #S1-0013 floor-millisecond `ticket_id` fix.
 
 ---
 
-## `20260827130000_kds_device_truth.sql.deferred-architecture-b`
+## `20260827130000_kds_device_truth.sql` — picked up 2026-08-27
 
-Different situation from the two files above — **not** failed agent output.
+Architecture B (KDS device-truth capture) was picked back up and is no longer
+quarantined. It now lives at `supabase/migrations/20260827130000_kds_device_truth.sql`
+and is ready to be applied ahead of the POS emitter landing in the fleet.
 
-This is Architecture B (KDS device-truth capture) from the KDS mirror ticket.
-It was written, then deferred by decision before ever being applied. It is
-quarantined here only so `supabase db push` cannot pick it up.
+- Finalized from the deferred draft: added the missing
+  `get_kds_display_truth_window(display_id, from, to)` diff RPC and hardened
+  `report_kds_device_events` against non-existent `order_id` values aborting a
+  whole batch.
+- Inert by design until the POS app ships an `arrived`/`ack` emitter — until
+  then `kds_device_events` stays empty and every diff reports `NO_DEVICE_DATA`,
+  which is honest.
+- Companion to `20260827120000_hq_kds_board_mirror.sql` (Architecture A), which
+  is applied and verified on staging. A stands alone and does not depend on
+  this.
 
-- **Never applied anywhere**, not even a dry run.
-- Inert by design: nothing calls `report_kds_device_events` until the POS app
-  ships an emitter, and that POS change was not made.
-- Its companion, `20260827120000_hq_kds_board_mirror.sql` (Architecture A), IS
-  applied and verified on staging. A stands alone and does not depend on this.
-
-Pick it up by moving it back to `supabase/migrations/` and building the
-`arrived`/`ack` emitter in the POS repo. See
-`docs/features/kds/FEATURE-2026-08-27-HQ-KDS-BOARD-MIRROR.md` for the contract.
+The POS emitter work lives in the Dexa-POS repo (`services/kds/kdsDeviceTruth.ts`
+plus the KDS screen and heartbeat hooks). See
+`docs/features/kds/FEATURE-2026-08-27-HQ-KDS-DEVICE-TRUTH.md`.

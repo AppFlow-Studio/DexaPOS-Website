@@ -20,6 +20,12 @@ import { useAdminPermissions } from "@/lib/hooks/useAdminPermissions";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -40,6 +46,11 @@ import {
   type KdsPrepStationSource,
   type KdsRoutingOutcome,
 } from "@/app/dashboard/actions/order-routing-trace";
+import {
+  GetOrderDeviceTruth,
+  type OrderDeviceTruth,
+} from "@/app/dashboard/actions/order-device-truth";
+import { KDSDeviceTruthBody } from "./KDSDeviceTruthBody";
 
 // ---------------------------------------------------------------------------
 // Label + tone maps for the routing enums
@@ -439,6 +450,16 @@ export function KDSRoutingTraceSection({
     staleTime: 30_000,
   });
 
+  // The device lane is what the kitchen displays REPORTED they received and
+  // painted, diffed against the routing trace above. Both run in parallel so
+  // the tab switches instantly once loaded.
+  const { data: deviceTruth, isLoading: deviceIsLoading } = useQuery({
+    queryKey: ["order-device-truth", orderId],
+    queryFn: () => GetOrderDeviceTruth(orderId as string),
+    enabled: !!orderId && enabled,
+    staleTime: 30_000,
+  });
+
   // Only items that were actually fired (have decisions) or need attention.
   const tracedItems = React.useMemo(
     () =>
@@ -448,19 +469,60 @@ export function KDSRoutingTraceSection({
     [trace]
   );
 
-  // Nothing to show for orders that were never sent to the kitchen.
-  if (!isLoading && (!trace || tracedItems.length === 0)) {
+  const [activeTab, setActiveTab] = React.useState<"routing" | "device">(
+    "routing"
+  );
+
+  const hasTrace = tracedItems.length > 0;
+  const hasDevice = (deviceTruth?.items ?? []).length > 0;
+  const doneLoading = !isLoading && !deviceIsLoading;
+
+  // Nothing to show for orders that were never sent to the kitchen and have
+  // no device truth either.
+  if (doneLoading && !hasTrace && !hasDevice) {
     return null;
   }
 
-  const body = isLoading ? (
+  // An order with device truth but no routing trace (a GHOST pattern) should
+  // land on the tab that actually has something to say.
+  const effectiveTab =
+    doneLoading && !hasTrace && hasDevice ? "device" : activeTab;
+
+  const routingBody = isLoading ? (
     <LoadingBody />
   ) : trace ? (
     <TraceBody trace={trace} items={tracedItems} />
-  ) : null;
+  ) : (
+    <p className="text-xs text-muted-foreground">
+      No routing trace for this order.
+    </p>
+  );
+
+  const body = (
+    <Tabs
+      value={effectiveTab}
+      onValueChange={(value) =>
+        setActiveTab(value === "device" ? "device" : "routing")
+      }
+    >
+      <TabsList className="w-fit">
+        <TabsTrigger value="routing">Routing</TabsTrigger>
+        <TabsTrigger value="device">Device view</TabsTrigger>
+      </TabsList>
+      <TabsContent value="routing" className="mt-3">
+        {routingBody}
+      </TabsContent>
+      <TabsContent value="device" className="mt-3">
+        <KDSDeviceTruthBody
+          deviceTruth={deviceTruth as OrderDeviceTruth | null}
+          isLoading={deviceIsLoading}
+        />
+      </TabsContent>
+    </Tabs>
+  );
 
   const description =
-    "Where each fired item was routed across kitchen displays and why.";
+    "Where each fired item was routed, and what the kitchen displays reported rendering.";
 
   if (variant === "sheet") {
     return (
