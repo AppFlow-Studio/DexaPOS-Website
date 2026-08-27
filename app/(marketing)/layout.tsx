@@ -48,6 +48,15 @@ export default async function MarketingLayout({
       className="mk-site"
       style={{ fontFamily: "var(--font)" }}
     >
+      {/* Reveal bootstrap. Runs before paint so scroll-reveal content is hidden
+          without a flash, and — critically — hiding is opt-in: marketing.css only
+          hides un-revealed .reveal elements under .reveal-ready. If this script
+          never runs, content stays visible instead of being stranded invisible. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `try{document.documentElement.classList.add("reveal-ready")}catch(e){}`,
+        }}
+      />
       <Analytics />
       <Nav settings={siteSettings} />
       <main>{children}</main>

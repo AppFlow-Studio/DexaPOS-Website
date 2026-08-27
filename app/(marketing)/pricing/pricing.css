@@ -35,7 +35,7 @@
   align-items: center;
 }
 .pricing-hero .eyebrow {
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 10px;
   font-size: 11px;
@@ -321,7 +321,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
+  transition: none;
   padding: 0;
 }
 .step-btn:hover:not(:disabled) {
@@ -366,7 +366,7 @@
   inset: 0;
   background: var(--slate-300);
   border-radius: 100px;
-  transition: background 0.25s ease;
+  transition: none;
 }
 .toggle-slider::before {
   content: '';
@@ -375,7 +375,7 @@
   top: 3px; left: 3px;
   background: var(--paper);
   border-radius: 50%;
-  transition: transform 0.25s ease;
+  transition: none;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 .calc-toggle input:checked ~ .toggle-slider {
@@ -483,7 +483,7 @@
   letter-spacing: -0.02em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  transition: transform 0.25s ease;
+  transition: none;
 }
 .summary-total .amount.bump {
   transform: scale(1.05);
@@ -524,7 +524,7 @@
   font-weight: 600;
   text-decoration: none;
   font-size: 15px;
-  transition: all 0.2s ease;
+  transition: none;
 }
 .summary-cta:hover {
   background: var(--brand-500);
@@ -552,7 +552,7 @@
   padding: 32px 28px;
   display: flex;
   flex-direction: column;
-  transition: all 0.3s ease;
+  transition: none;
   position: relative;
 }
 .price-card:hover {
@@ -567,7 +567,8 @@
 }
 .price-card .pill-feat {
   position: absolute;
-  top: -12px; left: 28px;
+  top: -12px; left: 50%;
+  transform: translateX(-50%);
   background: var(--brand-500);
   color: var(--paper);
   font-size: 11px;
@@ -716,7 +717,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  transition: all 0.25s ease;
+  transition: none;
   position: relative;
   overflow: hidden;
 }
@@ -728,7 +729,7 @@
   background: var(--brand-500);
   transform: scaleX(0);
   transform-origin: left center;
-  transition: transform 0.3s ease;
+  transition: none;
 }
 .addon-card:hover {
   border-color: var(--brand-300);
@@ -969,7 +970,7 @@
   display: flex;
   flex-direction: column;
   gap: 22px;
-  transition: all 0.3s ease;
+  transition: none;
   position: relative;
 }
 .testimonial:hover {
@@ -1047,9 +1048,11 @@
   letter-spacing: -0.02em;
   line-height: 1;
 }
+/* Number and unit share one colour (white) — see why.css note. */
 .psec.dark .trust-stat .num .prefix,
-.psec.dark .trust-stat .num .suffix {
-  color: var(--brand-400);
+.psec.dark .trust-stat .num .suffix,
+.psec.dark .trust-stat .num span {
+  color: inherit;
 }
 .psec.dark .trust-stat .lbl {
   margin-top: 10px;
@@ -1071,7 +1074,7 @@
   border-radius: 14px;
   margin-bottom: 12px;
   overflow: hidden;
-  transition: all 0.2s ease;
+  transition: none;
 }
 .psec .faq-item:hover {
   border-color: var(--brand-200, var(--brand-100));
@@ -1100,22 +1103,40 @@
   background-position: center;
   background-size: 14px;
   background-repeat: no-repeat;
-  transition: transform 0.25s ease;
+  transition: transform 0.3s ease;
 }
-.psec .faq-item[open] summary::after {
+.psec .faq-item.is-open summary::after {
   transform: rotate(180deg);
 }
-.psec .faq-item[open] {
+.psec .faq-item.is-open {
   border-color: var(--brand-300);
   box-shadow: 0 8px 24px -12px rgba(91,108,255,0.18);
 }
+/* Smooth open/close for the native <details> FAQ. <details> has no animatable
+   state, so the answer is a grid whose row track animates 0fr -> 1fr, which
+   transitions to the real content height. The grid child carries no padding of
+   its own (that would stop it collapsing to zero); spacing lives on the inner
+   wrapper where overflow:hidden clips it while collapsed. */
 .psec .faq-answer {
-  padding: 0 26px 22px;
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.34s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 14.5px;
   line-height: 1.7;
   color: var(--slate-600);
 }
-.psec .faq-answer p { margin: 0 0 10px; }
+.psec .faq-answer > .faq-answer-inner { min-height: 0; padding: 0; }
+.psec .faq-item.is-open .faq-answer { grid-template-rows: 1fr; }
+.psec .faq-answer-inner > * { margin-left: 34px; margin-right: 26px; }
+.psec .faq-answer-inner > :first-child { margin-top: 0; }
+/* Must out-specify `.faq-answer p:last-child` (0,2,2) below, hence the extra
+   `.faq-answer`. Kept as a margin on the content, not padding on the wrapper —
+   padding there would prop the collapsed panel open. */
+.psec .faq-answer .faq-answer-inner > :last-child { margin-bottom: 22px; }
+/* Longhands, not the `margin` shorthand: this selector outranks
+   `.faq-answer-inner > *`, so a shorthand would wipe out the left indent. */
+.psec .faq-answer p { margin-top: 0; margin-bottom: 10px; }
 .psec .faq-answer p:last-child { margin-bottom: 0; }
 .psec .faq-answer a {
   color: var(--brand-600);
@@ -1148,6 +1169,34 @@
     grid-template-columns: repeat(2, 1fr);
     gap: 28px;
   }
+  .psec .compare-card {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .psec .compare-table,
+  .psec .compare-foot {
+    min-width: 800px;
+  }
+}
+@media (min-width: 901px) and (max-width: 1100px) {
+  .pricing-hero { padding: 84px 0 72px; }
+  .pricing-hero .wrap {
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
+    gap: 32px;
+  }
+  .hero-preview { padding: 24px; }
+}
+@media (max-width: 1440px) {
+  .pricing-hero .wrap > .reveal:first-child { text-align: center; }
+  .pricing-hero .eyebrow { justify-content: center; }
+  .pricing-hero .lede { margin-left: auto; margin-right: auto; }
+  .pricing-hero .hero-cta,
+  .pricing-hero .hero-trust { justify-content: center; }
+  .summary-savings {
+    justify-content: center;
+    text-align: center;
+  }
 }
 @media (max-width: 700px) {
   .pricing-hero {
@@ -1172,10 +1221,9 @@
     padding: 18px 20px;
     font-size: 14.5px;
   }
-  .psec .faq-answer {
-    padding: 0 20px 18px;
-    font-size: 14px;
-  }
+  .psec .faq-answer { font-size: 14px; }
+  .psec .faq-answer-inner > * { margin-left: 26px; margin-right: 20px; }
+  .psec .faq-answer .faq-answer-inner > :last-child { margin-bottom: 18px; }
 }
 @media (max-width: 390px) {
   .pricing-hero { padding: 64px 0 48px; }
