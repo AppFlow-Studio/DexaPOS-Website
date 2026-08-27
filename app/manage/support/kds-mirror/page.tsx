@@ -3,13 +3,19 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Monitor } from "lucide-react";
+import { Monitor, PackageX, Send } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   KdsMirrorControls,
   MirrorBlindSpotNotice,
 } from "./components/KdsMirrorControls";
+import { KdsSendLedger, type KdsSendLedgerHandle } from "./components/KdsSendLedger";
+import {
+  KdsUnsentItems,
+  type KdsUnsentItemsHandle,
+} from "./components/KdsUnsentItems";
 import { KdsStationBoard } from "./components/KdsStationBoard";
 import {
   KdsMirrorTimeline,
@@ -67,6 +73,19 @@ function KdsMirrorPageInner() {
   const locationId = searchParams.get("location");
   const displayParam = searchParams.get("display");
   const highlightOrderId = searchParams.get("order");
+
+  // The single Refresh button in the header controls drives all three views:
+  // it invalidates the board, and re-anchors + refetches the send ledger and
+  // the unsent-items view through these handles (neither tab may own a second
+  // refresh button).
+  const ledgerRef = React.useRef<KdsSendLedgerHandle>(null);
+  const unsentRef = React.useRef<KdsUnsentItemsHandle>(null);
+
+  // A deep link to a specific order opens on the send ledger (the order row is
+  // the reason they came); everything else opens on the board.
+  const [activeTab, setActiveTab] = React.useState<
+    "board" | "ledger" | "unsent"
+  >(highlightOrderId ? "ledger" : "board");
 
   // "all" and absent both mean location-wide; normalise to null.
   const displayId =
@@ -145,6 +164,10 @@ function KdsMirrorPageInner() {
       queryKey: kdsMirrorKeys.board(locationId ?? "", displayId),
     });
     void snapshots.refetch();
+    // Re-anchor the ledger + unsent windows to now and refetch their current
+    // windows. No-ops when the tab isn't mounted (ref is null).
+    ledgerRef.current?.refresh();
+    unsentRef.current?.refresh();
   }, [queryClient, locationId, displayId, snapshots]);
 
   return (
@@ -193,62 +216,131 @@ function KdsMirrorPageInner() {
         health={health.data ?? null}
       />
 
-      {liveBoard.isError && (
-        <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
-          Could not load the board:{" "}
-          {liveBoard.error instanceof Error
-            ? liveBoard.error.message
-            : "unknown error"}
-        </p>
-      )}
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          const next =
+            value === "ledger" || value === "unsent" ? value : "board";
+          setActiveTab(next);
+          // Ledger and unsent-items are location-wide views. "Show on board"
+          // and trace deep links write ?order=<id>, which pins them to one
+          // order; drop the param when arriving via a tab so they never
+          // silently show a single order. (Direct deep links still filter on
+          // first load, and both views show an explicit "Show all".)
+          if (next === "ledger" || next === "unsent") {
+            setParams({ order: null });
+          }
+        }}
+        className="flex flex-col gap-4"
+      >
+        <TabsList className="w-fit">
+          <TabsTrigger value="board">Board</TabsTrigger>
+          <TabsTrigger value="ledger">Send ledger</TabsTrigger>
+          <TabsTrigger value="unsent">Unsent items</TabsTrigger>
+        </TabsList>
 
-      {locationId && displayId && (
-        <KdsMirrorTimeline
-          snapshots={snapshotList}
-          isLoading={snapshots.isLoading}
-          selectedIndex={selectedIndex}
-          onSelectIndex={setSelectedIndex}
-          windowKey={windowKey}
-          onWindowChange={(key) => {
-            setWindowKey(key);
-            setSelectedIndex(null);
-          }}
-          isLive={isLive}
-          onReturnToLive={() => setSelectedIndex(null)}
-        />
-      )}
+        <TabsContent value="board" className="flex flex-col gap-4">
+          {liveBoard.isError && (
+            <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+              Could not load the board:{" "}
+              {liveBoard.error instanceof Error
+                ? liveBoard.error.message
+                : "unknown error"}
+            </p>
+          )}
 
-      {locationId && !displayId && (
-        <p className="text-xs text-muted-foreground">
-          Replay is per-station. Pick a specific KDS display to scrub its
-          history.
-        </p>
-      )}
+          {locationId && displayId && (
+            <KdsMirrorTimeline
+              snapshots={snapshotList}
+              isLoading={snapshots.isLoading}
+              selectedIndex={selectedIndex}
+              onSelectIndex={setSelectedIndex}
+              windowKey={windowKey}
+              onWindowChange={(key) => {
+                setWindowKey(key);
+                setSelectedIndex(null);
+              }}
+              isLive={isLive}
+              onReturnToLive={() => setSelectedIndex(null)}
+            />
+          )}
 
-      {!locationId ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
-          <Monitor className="mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="text-sm font-medium">Pick a merchant and location</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Then choose the KDS display the kitchen is complaining about.
-          </p>
-        </div>
-      ) : (
-        <KdsStationBoard
-          tickets={boardTickets}
-          display={selectedDisplay}
-          isLoading={boardLoading}
-          highlightOrderId={highlightOrderId}
-        />
-      )}
+          {locationId && !displayId && (
+            <p className="text-xs text-muted-foreground">
+              Replay is per-station. Pick a specific KDS display to scrub its
+              history.
+            </p>
+          )}
 
-      {!isLive && (
-        <p className="text-xs text-muted-foreground">
-          Viewing a stored snapshot, not the live board. Snapshots are written
-          when items arrive, are marked ready, or are served, and are kept for
-          14 days.
-        </p>
-      )}
+          {!locationId ? (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
+              <Monitor className="mb-3 h-8 w-8 text-muted-foreground" />
+              <p className="text-sm font-medium">Pick a merchant and location</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Then choose the KDS display the kitchen is complaining about.
+              </p>
+            </div>
+          ) : (
+            <KdsStationBoard
+              tickets={boardTickets}
+              display={selectedDisplay}
+              isLoading={boardLoading}
+              highlightOrderId={highlightOrderId}
+            />
+          )}
+
+          {!isLive && (
+            <p className="text-xs text-muted-foreground">
+              Viewing a stored snapshot, not the live board. Snapshots are
+              written when items arrive, are marked ready, or are served, and
+              are kept for 14 days.
+            </p>
+          )}
+        </TabsContent>
+
+        <TabsContent value="ledger" className="flex flex-col gap-4">
+          {locationId ? (
+            <KdsSendLedger
+              ref={ledgerRef}
+              locationId={locationId}
+              orderId={highlightOrderId}
+              onShowOnBoard={(orderId) => {
+                setParams({ order: orderId });
+                setActiveTab("board");
+              }}
+              onClearOrder={() => setParams({ order: null })}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
+              <Send className="mb-3 h-8 w-8 text-muted-foreground" />
+              <p className="text-sm font-medium">Pick a merchant and location</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                The send ledger shows every order-to-kitchen send attempt
+                received from the POS at a location.
+              </p>
+            </div>
+          )}
+        </TabsContent>
+        <TabsContent value="unsent" className="flex flex-col gap-4">
+          {locationId ? (
+            <KdsUnsentItems
+              ref={unsentRef}
+              locationId={locationId}
+              orderId={highlightOrderId}
+              onClearOrder={() => setParams({ order: null })}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
+              <PackageX className="mb-3 h-8 w-8 text-muted-foreground" />
+              <p className="text-sm font-medium">Pick a merchant and location</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                The unsent-items view shows every item still sitting in an
+                order that never fired to the kitchen.
+              </p>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

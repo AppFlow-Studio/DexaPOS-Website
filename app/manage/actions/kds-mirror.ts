@@ -154,6 +154,94 @@ export interface KdsRoutingHealth {
   observed_at: string;
 }
 
+/**
+ * One item inside a send-attempt ledger row: what was requested, and what the
+ * routing log says happened to it.
+ *
+ * - `routed_to` is the list of display names that received the item
+ *   (`outcome = 'routed'` in kds_routing_log). Empty + not dropped means the
+ *   routing log has no decision for this item at all -- the strongest sign of
+ *   a send that never fully applied.
+ * - `dropped` is true when routing hit `no_active_display` / dropped the item.
+ */
+export interface KdsSendLedgerItem {
+  order_item_id: string;
+  item_name: string;
+  quantity: number;
+  kitchen_status: string | null;
+  category_name: string | null;
+  prep_station: string | null;
+  routed_to: string[];
+  dropped: boolean;
+}
+
+/**
+ * One row of the send-attempt ledger: a single POS call to
+ * send_order_to_kitchen_v1, as recorded in kds_send_attempts.
+ *
+ * `partial` is true when `actually_updated_count <> requested_count` -- the
+ * ledger's headline diagnostic. `was_replay` distinguishes a retried call
+ * (same idempotency key) from a first attempt, so "the kitchen got it twice"
+ * reports can be ruled in or out.
+ */
+export interface KdsSendLedgerEntry {
+  id: string;
+  created_at: string;
+  order_id: string;
+  order_number: string | null;
+  order_type: string | null;
+  order_status: string | null;
+  sent_to_kitchen_at: string | null;
+  requested_count: number;
+  actually_updated_count: number;
+  order_item_count: number;
+  item_status: string;
+  station_name: string | null;
+  device_id: string | null;
+  staff_name: string | null;
+  idempotency_key: string | null;
+  was_replay: boolean;
+  partial: boolean;
+  items: KdsSendLedgerItem[];
+}
+
+/**
+ * One item inside an unsent-items row: a non-voided order item whose
+ * `sent_to_kitchen_at` is still null -- it never fired to the kitchen.
+ */
+export interface KdsUnsentItem {
+  order_item_id: string;
+  item_name: string;
+  quantity: number;
+  kitchen_status: string | null;
+  category_name: string | null;
+  prep_station: string | null;
+  created_at: string;
+}
+
+/**
+ * One order that still has unsent items.
+ *
+ * - `fully_unsent` is true when NOTHING on the order fired -- the "forgot to
+ *   send / send never reached the server" case.
+ * - `sent_item_count > 0` alongside unsent items is a partial fire: the order
+ *   reached the kitchen but these items did not.
+ */
+export interface KdsUnsentOrder {
+  order_id: string;
+  order_number: string | null;
+  order_type: string | null;
+  order_status: string | null;
+  order_created_at: string;
+  order_updated_at: string | null;
+  sent_to_kitchen_at: string | null;
+  total_item_count: number;
+  sent_item_count: number;
+  unsent_item_count: number;
+  fully_unsent: boolean;
+  items: KdsUnsentItem[];
+}
+
 export interface SupportMerchantOption {
   id: string;
   name: string;
@@ -470,5 +558,97 @@ export async function hqGetKdsRoutingHealth(
     };
   } catch (err) {
     return fail("hqGetKdsRoutingHealth", err);
+  }
+}
+
+/**
+ * The send-attempt ledger for one location (or one order within it).
+ *
+ * This is the "did the server ever receive the send?" view that the board
+ * mirror cannot answer on its own. A missing row for an order the merchant
+ * swears they fired means the POS never reached the server; a `partial` row
+ * means the sync partially failed; a row whose items all routed means the
+ * fault, if any, is on the KDS device side.
+ *
+ * `orderId` optionally narrows to a single order so a ticket can be chased
+ * without scanning a whole window.
+ */
+export async function hqGetKdsSendLedger(
+  locationId: string,
+  fromIso: string | null,
+  toIso: string | null,
+  orderId?: string | null,
+  limit = 500
+): Promise<ActionResult<KdsSendLedgerEntry[]>> {
+  try {
+    await assertHQPermission("hq.support.view");
+
+    if (!locationId) {
+      return { success: true, error: null, data: [] };
+    }
+
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase.rpc("hq_get_kds_send_ledger_v1", {
+      p_location_id: locationId,
+      p_from: fromIso,
+      p_to: toIso,
+      p_limit: Math.min(Math.max(limit, 1), 500),
+      p_order_id: orderId ?? null,
+    });
+
+    if (error) throw new Error(error.message);
+
+    return {
+      success: true,
+      error: null,
+      data: (data ?? []) as unknown as KdsSendLedgerEntry[],
+    };
+  } catch (err) {
+    return fail("hqGetKdsSendLedger", err);
+  }
+}
+
+/**
+ * Orders at a location that still have items which never fired to the kitchen.
+ *
+ * The mirror image of the send ledger: the ledger proves a send arrived, this
+ * proves an item never left the order. An order with sent_item_count > 0 and
+ * unsent items is a partial fire (the missing items are listed); a fully_unsent
+ * order is either a draft nobody fired or a send that never reached the server.
+ *
+ * `orderId` optionally narrows to a single order.
+ */
+export async function hqGetKdsUnsentItems(
+  locationId: string,
+  fromIso: string | null,
+  toIso: string | null,
+  orderId?: string | null,
+  limit = 500
+): Promise<ActionResult<KdsUnsentOrder[]>> {
+  try {
+    await assertHQPermission("hq.support.view");
+
+    if (!locationId) {
+      return { success: true, error: null, data: [] };
+    }
+
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await supabase.rpc("hq_get_kds_unsent_items_v1", {
+      p_location_id: locationId,
+      p_from: fromIso,
+      p_to: toIso,
+      p_limit: Math.min(Math.max(limit, 1), 500),
+      p_order_id: orderId ?? null,
+    });
+
+    if (error) throw new Error(error.message);
+
+    return {
+      success: true,
+      error: null,
+      data: (data ?? []) as unknown as KdsUnsentOrder[],
+    };
+  } catch (err) {
+    return fail("hqGetKdsUnsentItems", err);
   }
 }

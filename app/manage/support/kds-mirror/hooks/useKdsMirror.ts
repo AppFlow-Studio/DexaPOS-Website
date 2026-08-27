@@ -6,6 +6,8 @@ import {
   hqGetKdsBoardSnapshot,
   hqGetKdsBoardSnapshots,
   hqGetKdsRoutingHealth,
+  hqGetKdsSendLedger,
+  hqGetKdsUnsentItems,
   hqGetLocationKdsDisplays,
   hqGetSupportMerchantById,
   hqGetSupportMerchantLocations,
@@ -15,6 +17,8 @@ import {
   type KdsDisplaySummary,
   type KdsMirrorTicket,
   type KdsRoutingHealth,
+  type KdsSendLedgerEntry,
+  type KdsUnsentOrder,
   type SupportLocationOption,
   type SupportMerchantOption,
 } from "@/app/manage/actions/kds-mirror";
@@ -48,6 +52,34 @@ export const kdsMirrorKeys = {
     ["hq-kds-mirror", "snapshot", snapshotId ?? "none"] as const,
   health: (locationId: string) =>
     ["hq-kds-mirror", "health", locationId] as const,
+  sendLedger: (
+    locationId: string,
+    fromIso: string,
+    toIso: string,
+    orderId: string | null
+  ) =>
+    [
+      "hq-kds-mirror",
+      "send-ledger",
+      locationId,
+      fromIso,
+      toIso,
+      orderId ?? "none",
+    ] as const,
+  unsent: (
+    locationId: string,
+    fromIso: string,
+    toIso: string,
+    orderId: string | null
+  ) =>
+    [
+      "hq-kds-mirror",
+      "unsent",
+      locationId,
+      fromIso,
+      toIso,
+      orderId ?? "none",
+    ] as const,
 };
 
 function unwrap<T>(result: {
@@ -169,5 +201,73 @@ export function useKdsRoutingHealth(locationId: string | null) {
     queryFn: async () => await hqGetKdsRoutingHealth(locationId!).then(unwrap),
     enabled: Boolean(locationId),
     staleTime: 60 * 1000,
+  });
+}
+
+/**
+ * The send-attempt ledger for one location.
+ *
+ * Location-scoped (not display-scoped): a send is a POS action, recorded once
+ * per call, and the routing decisions inside it tell us which displays were
+ * involved. `orderId` narrows the query to one order when the page is
+ * deep-linked from a specific ticket.
+ *
+ * The window bounds are part of the query key, so changing the window refetches
+ * rather than re-filtering stale data.
+ */
+export function useKdsSendLedger(
+  locationId: string | null,
+  fromIso: string,
+  toIso: string,
+  orderId?: string | null
+) {
+  return useQuery<KdsSendLedgerEntry[]>({
+    queryKey: kdsMirrorKeys.sendLedger(
+      locationId ?? "",
+      fromIso,
+      toIso,
+      orderId ?? null
+    ),
+    queryFn: async () =>
+      (await hqGetKdsSendLedger(
+        locationId!,
+        fromIso,
+        toIso,
+        orderId ?? null
+      ).then(unwrap)) ?? [],
+    enabled: Boolean(locationId),
+    staleTime: 15 * 1000,
+  });
+}
+
+/**
+ * Orders with items that never fired to the kitchen, location-scoped.
+ *
+ * Same key/refresh model as the send ledger: window bounds are part of the
+ * query key and the shared Refresh button re-anchors them through the
+ * component's imperative handle.
+ */
+export function useKdsUnsentItems(
+  locationId: string | null,
+  fromIso: string,
+  toIso: string,
+  orderId?: string | null
+) {
+  return useQuery<KdsUnsentOrder[]>({
+    queryKey: kdsMirrorKeys.unsent(
+      locationId ?? "",
+      fromIso,
+      toIso,
+      orderId ?? null
+    ),
+    queryFn: async () =>
+      (await hqGetKdsUnsentItems(
+        locationId!,
+        fromIso,
+        toIso,
+        orderId ?? null
+      ).then(unwrap)) ?? [],
+    enabled: Boolean(locationId),
+    staleTime: 15 * 1000,
   });
 }
