@@ -2,7 +2,7 @@
 -- HQ KDS send ledger (support-facing projection of kds_send_attempts)
 -- =============================================================================
 -- Source: repeated merchant reports of "some items I send are not showing in
--- KDS". The board mirror (20260827120000_hq_kds_board_mirror.sql) answers
+-- KDS". The board mirror (20260827150000_hq_kds_board_mirror.sql) answers
 -- "what does the server say a station should show". This answers the earlier
 -- question: "did the server ever receive the send, from which station, and did
 -- every requested item apply?"

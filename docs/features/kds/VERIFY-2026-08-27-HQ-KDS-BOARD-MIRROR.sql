@@ -1,5 +1,5 @@
 -- =============================================================================
--- Staging verification for 20260827120000_hq_kds_board_mirror.sql
+-- Staging verification for 20260827150000_hq_kds_board_mirror.sql
 -- =============================================================================
 -- Run top to bottom on STAGING after the migration is applied. Every check
 -- prints a verdict column; nothing here mutates business data. Check 6 is the

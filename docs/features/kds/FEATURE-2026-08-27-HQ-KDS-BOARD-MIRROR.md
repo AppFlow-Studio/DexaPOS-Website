@@ -210,7 +210,7 @@ what was rendered.
 
 | Path | Role |
 | --- | --- |
-| `supabase/migrations/20260827120000_hq_kds_board_mirror.sql` | RPCs, snapshot table, capture triggers, retention |
+| `supabase/migrations/20260827150000_hq_kds_board_mirror.sql` | RPCs, snapshot table, capture triggers, retention |
 | `app/manage/actions/kds-mirror.ts` | Server actions, all gated on `hq.support.view` |
 | `app/manage/support/kds-mirror/page.tsx` | Route |
 | `app/manage/support/kds-mirror/components/` | Board, ticket card, controls, timeline |

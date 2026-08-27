@@ -189,11 +189,11 @@ buffer must be a no-op, not a duplicate.
 ### Rollback
 
 See the `ROLLBACK` block at the bottom of
-`supabase/migrations/20260827130000_kds_device_truth.sql`.
+`supabase/migrations/20260827151000_kds_device_truth.sql`.
 
 ## Files
 
-- `supabase/migrations/20260827130000_kds_device_truth.sql` (was quarantined as
+- `supabase/migrations/20260827151000_kds_device_truth.sql` (was quarantined as
   `.deferred-architecture-b`; picked up and finalized — added
   `get_kds_display_truth_window`, hardened the report RPC).
 - `supabase/migrations/_pending_review/README.md` (updated).

@@ -114,19 +114,19 @@ device-claimed merchant.
 
 | # | Migration | What it adds |
 | --- | --- | --- |
-| 1 | `supabase/migrations/20260827120000_hq_kds_board_mirror.sql` | `hq_get_kds_board_mirror_v1`, `hq_get_location_kds_displays_v1`, `kds_board_snapshots` (append-only, RLS + `protect_kds_trace_ledger` guard), deferred-constraint arrival-capture triggers, ready/served capture in `bulk_update_order_item_status_v2`, `capture_kds_board_snapshot(s)`, `hq_get_kds_board_snapshots_v1` / `_snapshot_v1`, pg_cron retention. **Redeclares `bulk_update_order_item_status_v2`** (POS calls this — body copied verbatim from `20260814130000`; must stay behaviour-neutral). Full rollback SQL included at the bottom of the file. |
-| 2 | `supabase/migrations/20260827130000_kds_device_truth.sql` | `kds_device_events` + `kds_device_snapshots` (append-only ledgers, hash-deduped), `report_kds_device_events(...)`, `get_kds_device_truth_for_order`, `get_kds_display_truth_window`, `v_kds_device_truth_health`, `purge_kds_device_truth` + scheduled retention. **Inert on deploy** — no caller until the POS emitter ships. |
-| 3 | `supabase/migrations/20260827170000_hq_kds_send_ledger.sql` | `hq_get_kds_send_ledger_v1(p_location_id, p_from, p_to, p_limit, p_order_id)` — read-only HQ projection of `kds_send_attempts` + `kds_routing_log`, `is_dexapos_admin` gated. |
-| 4 | `supabase/migrations/20260827180000_hq_kds_unsent_items.sql` | `hq_get_kds_unsent_items_v1(...)` — HQ-only view of orders with unsent (non-voided, `sent_to_kitchen_at IS NULL`) items, `is_dexapos_admin` gated. |
+| 1 | `supabase/migrations/20260827150000_hq_kds_board_mirror.sql` | `hq_get_kds_board_mirror_v1`, `hq_get_location_kds_displays_v1`, `kds_board_snapshots` (append-only, RLS + `protect_kds_trace_ledger` guard), deferred-constraint arrival-capture triggers, ready/served capture in `bulk_update_order_item_status_v2`, `capture_kds_board_snapshot(s)`, `hq_get_kds_board_snapshots_v1` / `_snapshot_v1`, pg_cron retention. **Redeclares `bulk_update_order_item_status_v2`** (POS calls this — body copied verbatim from `20260814130000`; must stay behaviour-neutral). Full rollback SQL included at the bottom of the file. |
+| 2 | `supabase/migrations/20260827151000_kds_device_truth.sql` | `kds_device_events` + `kds_device_snapshots` (append-only ledgers, hash-deduped), `report_kds_device_events(...)`, `get_kds_device_truth_for_order`, `get_kds_display_truth_window`, `v_kds_device_truth_health`, `purge_kds_device_truth` + scheduled retention. **Inert on deploy** — no caller until the POS emitter ships. |
+| 3 | `supabase/migrations/20260827152000_hq_kds_send_ledger.sql` | `hq_get_kds_send_ledger_v1(p_location_id, p_from, p_to, p_limit, p_order_id)` — read-only HQ projection of `kds_send_attempts` + `kds_routing_log`, `is_dexapos_admin` gated. |
+| 4 | `supabase/migrations/20260827153000_hq_kds_unsent_items.sql` | `hq_get_kds_unsent_items_v1(...)` — HQ-only view of orders with unsent (non-voided, `sent_to_kitchen_at IS NULL`) items, `is_dexapos_admin` gated. |
 
 ### Migration notes / caveats
 
-- **`20260827120000` is the only migration with POS-visible blast radius**
+- **`20260827150000` is the only migration with POS-visible blast radius**
   (the `bulk_update_order_item_status_v2` redeclaration). Everything else is
   additive and HQ-gated.
 - Snapshot capture is wrapped in `BEGIN ... EXCEPTION WHEN OTHERS` downgraded to
   `WARNING` — a lost snapshot can never fail a send or a bump.
-- `20260827130000` was moved out of `supabase/migrations/_pending_review/`
+- `20260827151000` was moved out of `supabase/migrations/_pending_review/`
   (previously `...deferred-architecture-b`). It has been re-homed to
   `supabase/migrations/` so it ships with this PR — verify it as part of the
   apply, per the `_pending_review/README.md` notes.

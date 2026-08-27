@@ -13,7 +13,7 @@
 // Every read here goes through a SECURITY DEFINER RPC that derives tenancy
 // from the display/order and gates on is_dexapos_admin() (or the owning
 // merchant). assertHQPermission("hq.support.view") is the second half of that
-// check. See 20260827130000_kds_device_truth.sql for the verdict CASE.
+// check. See 20260827151000_kds_device_truth.sql for the verdict CASE.
 //
 // The classification this exists to produce:
 //   server routed + device ack                        -> CONFIRMED

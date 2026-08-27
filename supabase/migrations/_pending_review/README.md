@@ -62,10 +62,10 @@ staging-only #S1-0013 floor-millisecond `ticket_id` fix.
 
 ---
 
-## `20260827130000_kds_device_truth.sql` — picked up 2026-08-27
+## `20260827151000_kds_device_truth.sql` — picked up 2026-08-27
 
 Architecture B (KDS device-truth capture) was picked back up and is no longer
-quarantined. It now lives at `supabase/migrations/20260827130000_kds_device_truth.sql`
+quarantined. It now lives at `supabase/migrations/20260827151000_kds_device_truth.sql`
 and is ready to be applied ahead of the POS emitter landing in the fleet.
 
 - Finalized from the deferred draft: added the missing
@@ -75,7 +75,7 @@ and is ready to be applied ahead of the POS emitter landing in the fleet.
 - Inert by design until the POS app ships an `arrived`/`ack` emitter — until
   then `kds_device_events` stays empty and every diff reports `NO_DEVICE_DATA`,
   which is honest.
-- Companion to `20260827120000_hq_kds_board_mirror.sql` (Architecture A), which
+- Companion to `20260827150000_hq_kds_board_mirror.sql` (Architecture A), which
   is applied and verified on staging. A stands alone and does not depend on
   this.
 

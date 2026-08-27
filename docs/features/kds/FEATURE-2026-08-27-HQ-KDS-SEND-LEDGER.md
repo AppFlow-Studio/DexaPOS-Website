@@ -58,7 +58,7 @@ was already being recorded by the
 ## Unsent items tab (companion view)
 
 The same mirror page also has an **Unsent items** tab (`hq_get_kds_unsent_items_v1`,
-`20260827180000_hq_kds_unsent_items.sql`): the mirror image of the ledger. It
+`20260827153000_hq_kds_unsent_items.sql`): the mirror image of the ledger. It
 lists orders whose non-voided items never fired to the kitchen
 (`order_items.sent_to_kitchen_at IS NULL`), with per-order sent/unsent counts
 and the exact items still sitting unsent. Cancelled/void/refunded/declined

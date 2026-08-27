@@ -1,7 +1,7 @@
 -- =============================================================================
 -- KDS device truth capture (Architecture B, server side)
 -- =============================================================================
--- Companion to 20260827120000_hq_kds_board_mirror.sql.
+-- Companion to 20260827150000_hq_kds_board_mirror.sql.
 --
 -- The mirror reconstructs what the SERVER says a station should show. It
 -- cannot see the screen: a tablet whose socket dropped, whose app crashed, or
