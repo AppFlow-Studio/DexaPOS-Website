@@ -48,6 +48,7 @@ import {
     History,
     LogOut,
     Monitor,
+    MonitorPlay,
     AlertOctagon,
     Receipt,
     CircleDollarSign,
@@ -185,6 +186,12 @@ const navMain: NavGroup[] = [
                 url: '/manage/support',
                 icon: MessageSquare,
                 requiredPermission: 'hq.support.view',
+            },
+            {
+                title: 'KDS',
+                url: '/manage/support/kds-mirror',
+                icon: MonitorPlay,
+                requiredPermission: 'hq.support.view',
             }
         ]
     },
@@ -289,6 +296,29 @@ function AppSidebar() {
             )
         })
     }, [hasAnyPermission])
+
+    // The active nav item is the LONGEST url that matches the current path,
+    // segment-boundary aware. Without longest-match, a nested route like
+    // /manage/support/kds-mirror matches BOTH /manage/support ("Support") and
+    // /manage/support/kds-mirror, lighting up two entries at once. The /manage
+    // dashboard link stays exact-only so child routes never light the
+    // dashboard. /manage/support/<ticket> still highlights "Support" because
+    // no other item matches the ticket path.
+    const activeItemUrl = useMemo(() => {
+        const urls = [
+            ...filteredNavMain.flatMap(group => group.items),
+            ...filteredNavFooter,
+        ]
+            .map(item => item.url)
+            .filter((url): url is string => Boolean(url))
+
+        const matches = urls.filter(url => {
+            if (url === '/manage') return pathname === '/manage'
+            return pathname === url || pathname.startsWith(`${url}/`)
+        })
+        if (matches.length === 0) return null
+        return matches.sort((a, b) => b.length - a.length)[0]
+    }, [pathname, filteredNavMain, filteredNavFooter])
     return (
         <Sidebar variant="inset">
             <SidebarHeader>
@@ -334,10 +364,7 @@ function AppSidebar() {
                                                 <SidebarMenuItem key={item.title}>
                                                     <SidebarMenuButton
                                                         asChild
-                                                        isActive={
-                                                            pathname === item.url ||
-                                                            (item.url !== '/manage' && pathname.startsWith(item.url))
-                                                        }
+                                                        isActive={item.url === activeItemUrl}
                                                     >
                                                         <Link href={item.url}>
                                                             <item.icon className="h-4 w-4" />
