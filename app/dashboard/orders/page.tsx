@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { useOrderOverview, useOrdersPage } from "../hooks/useOrder";
 import { isOrderReportable } from "@/lib/reporting/recognized-order";
+import { DataPageSkeleton } from "@/components/dashboard/loading/DataPageSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ShoppingBag,
@@ -433,6 +434,19 @@ export default function OrdersPage() {
     setIsDetailOpen(false);
     setTimeout(() => setSelectedOrder(null), 200);
   };
+
+  // First paint only: `isLoading` is true solely when no cached page exists,
+  // so filter, sort, and pagination changes keep the current rows visible and
+  // fall through to the per-section `isFetching` affordances below.
+  if (isLoadingOrders || isLoadingStats) {
+    return (
+      <DataPageSkeleton
+        variant="analytics"
+        shell="plain"
+        label="Loading orders"
+      />
+    );
+  }
 
   return (
     <main className="space-y-6 animate-in fade-in duration-500">

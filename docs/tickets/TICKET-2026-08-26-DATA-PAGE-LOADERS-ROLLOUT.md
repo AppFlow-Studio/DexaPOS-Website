@@ -173,31 +173,101 @@ workspaces:
 - Empty-state or error-state redesigns unrelated to loading.
 - Replacing small button/action spinners.
 
+## Workstream A — route audit (recorded decisions)
+
+Method: dev build, Fast 4G + 4× CPU throttle, hard refresh, DOM sampled every
+100 ms during the data-fetch window. Slow 3G was tried first but on a Turbopack
+dev build the unminified bundle download dominates and hides the data wait
+entirely (blank screen before React mounts), so it does not isolate the state
+under test. Production-build Slow 3G runs remain QA's job.
+
+### Priority 1 — merchant
+
+| Route | First-load behaviour observed | Decision |
+| --- | --- | --- |
+| `/dashboard/orders` | Content area **completely blank**, only sidebar chrome | **Converted** → `analytics` |
+| `/dashboard/payments` | Header, tabs and **real KPI values** paint immediately; charts fill in below | Existing loader acceptable |
+| `/dashboard/customers` | Legacy `PageLoader` spinner inside `CustomerList` | **Convert** → `table` (pending) |
+| `/dashboard/invoices` | Row skeletons only; header/stats pop in late | **Convert** → `table` (pending) |
+| `/dashboard/subscriptions` | Server component, no client data wait | No loader required |
+| `/dashboard/reports` | Per-KPI `isLoading`, values arrive piecemeal | **Convert** → `analytics` (pending) |
+| `/dashboard/reports/comparison` | Full control surface instant; heavy query gated behind location selection | No meaningful initial wait |
+| `/dashboard/reports/cash-drawers` | `StatTile` skeletons honour `isLoading`; the `—` and "Not yet loaded" seen afterwards are a **resolved-empty** range, not a loading state | Existing loader acceptable |
+| `/dashboard/menu/categories` | Grid skeletons already section-shaped | **Convert** → `catalog` (pending) |
+| `/dashboard/menu/modifiers` | Grid skeletons already section-shaped | **Convert** → `catalog` (pending) |
+
+> Note on cash-drawers: an initial read flagged the em-dash KPI row as a broken
+> loading state. It is not. `StatTile` does honour `isLoading`; the dashes come
+> from `fmt$(undefined)` once the query has **resolved with no sessions** for the
+> selected range, and "Not yet loaded" is the `LastRefreshed` label for a tab
+> whose query has not run. This is the empty state the ticket requires to stay
+> reachable, so the route is left alone.
+
+### Workstream D — DEXA HQ
+
+All five confirmed legacy `PageLoader` routes are converted; no generic centred
+spinner remains anywhere under `app/`.
+
+| Route | Was | Now |
+| --- | --- | --- |
+| `/manage/users` | `<PageLoader />` | `table`, `shell="plain"` |
+| `/manage/users/[userId]` | `<PageLoader />` | `detail`, `shell="plain"` |
+| `/manage/roles-permissions` | `<PageLoader />` | `table`, `shell="plain"` |
+| `/manage/merchants/[merchantId]` | `<PageLoader message="Loading merchant details..." />` | `detail`, `shell="plain"` |
+| `/manage/subscriptions/[merchantId]` | `<PageLoader message="Loading subscription workspace..." />` | `detail`, `shell="plain"` |
+| `/manage/merchants` | Section skeletons | Acceptable |
+| `/manage/subscriptions` | Section skeletons | Acceptable |
+| `/manage/transactions` | Section skeletons | Acceptable |
+| `/manage/support` | Section skeletons | Acceptable |
+
+### Workstream E — variants added
+
+Both new variants clear the "needed by at least two routes" bar:
+
+- **`table`** — filter bar over record rows: `/manage/users`,
+  `/manage/roles-permissions`, and the pending `/dashboard/customers` and
+  `/dashboard/invoices`.
+- **`detail`** — breadcrumb, identity header, summary strip, tabbed body:
+  `/manage/users/[userId]`, `/manage/merchants/[merchantId]`,
+  `/manage/subscriptions/[merchantId]`.
+
+`shell="plain"` was added because `/manage/*` pages lay themselves out in a
+plain `space-y-6` div inside a layout that already owns `<main>`; wrapping them
+in `PageShell` would nest a second `<main>` landmark.
+
 ## Acceptance criteria
 
 - [x] One reusable, accessible skeleton system exists.
 - [x] `/dashboard/transactions` uses the analytics pilot.
 - [x] `/dashboard/menu/items` uses the catalog pilot.
-- [ ] Every Priority 1 route is audited and its decision is recorded.
+- [x] Every Priority 1 route is audited and its decision is recorded.
+      See "Workstream A — route audit" above.
 - [ ] Every Priority 1 route with a visible initial wait uses an appropriate
       page- or section-shaped skeleton.
 - [ ] Priority 2 merchant routes and listed HQ routes are audited and converted
       where needed.
-- [ ] The five confirmed HQ legacy `PageLoader` routes no longer use the generic
+- [x] The five confirmed HQ legacy `PageLoader` routes no longer use the generic
       centered spinner unless a documented exception is approved.
+      (`grep -rn PageLoader app/` returns only `/dashboard/customers`, which is
+      a Priority 1 conversion still pending.)
 - [ ] Filter, pagination, focus-refetch, and manual-refresh actions preserve
       visible cached data.
 - [ ] Existing empty and error states remain reachable and do not overlap the
       loading state.
-- [ ] Disabled/optional queries cannot leave a route permanently skeletonized.
+- [x] Disabled/optional queries cannot leave a route permanently skeletonized.
+      Regression-guarded in `loading-gate.test.tsx`; converted routes gate only
+      on required, always-enabled queries.
 - [ ] Mutation controls retain local progress feedback and cannot be double
       submitted.
 - [ ] All converted routes pass desktop, tablet, and 360px phone QA without
       horizontal overflow.
 - [ ] All converted loaders expose meaningful assistive status and stop pulsing
       under reduced motion.
-- [ ] Targeted automated tests cover initial loading, cached background refetch,
-      and loader accessibility attributes.
+- [x] Targeted automated tests cover initial loading, cached background refetch,
+      and loader accessibility attributes. 29 tests in
+      `components/dashboard/loading/__tests__/` (`DataPageSkeleton.test.tsx`,
+      `loading-gate.test.tsx`). No new packages: they use `renderToString`
+      under the existing node environment, matching `AffectsTag.test.tsx`.
 - [ ] No package, lockfile, database, or POS changes are included.
 
 ## QA evidence matrix

@@ -2,9 +2,24 @@ import { Panel, PageShell } from '@/components/dashboard/shell'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
+export type DataPageSkeletonVariant =
+  | 'analytics'
+  | 'catalog'
+  | 'table'
+  | 'detail'
+
 type DataPageSkeletonProps = {
-  variant: 'analytics' | 'catalog'
+  variant: DataPageSkeletonVariant
   label: string
+  /**
+   * `page` (default) wraps the skeleton in `PageShell`, matching merchant
+   * dashboard routes. HQ routes under `/manage` lay themselves out with a
+   * plain `space-y-6` div, so they pass `plain` to avoid a second `<main>`.
+   */
+  shell?: 'page' | 'plain'
+  /** Renders the page title/subtitle/action block. HQ detail routes that own
+   * their own breadcrumb pass `false` and get the breadcrumb line instead. */
+  showHeader?: boolean
 }
 
 function LoadingBlock({ className }: { className?: string }) {
@@ -69,7 +84,10 @@ function AnalyticsSkeleton() {
 
       <StatSkeletons />
 
-      <div className="flex gap-2 overflow-hidden rounded-full bg-muted/40 p-1">
+      {/* Scrolls rather than clips: at 360px three pills exceed the row, and a
+          half-cut pill reads as a rendering bug. Matches the real page's
+          scrollable tab strip. */}
+      <div className="flex gap-2 overflow-x-auto rounded-full bg-muted/40 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {Array.from({ length: 3 }).map((_, index) => (
           <LoadingBlock key={index} className="h-9 w-32 shrink-0 rounded-full" />
         ))}
@@ -139,20 +157,133 @@ function CatalogSkeleton() {
   )
 }
 
-export function DataPageSkeleton({ variant, label }: DataPageSkeletonProps) {
+/**
+ * A filter bar over a row-based list. Used by routes whose payload is a table
+ * or a stack of record rows rather than a media grid.
+ */
+function TableSkeleton() {
   return (
-    <PageShell>
-      <div
-        role="status"
-        aria-live="polite"
-        aria-busy="true"
-        data-page-loader={variant}
-        className="space-y-6"
-      >
-        <span className="sr-only">{label}</span>
-        <HeaderSkeleton />
-        {variant === 'analytics' ? <AnalyticsSkeleton /> : <CatalogSkeleton />}
-      </div>
-    </PageShell>
+    <>
+      <StatSkeletons />
+
+      <Panel padded>
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <LoadingBlock className="h-9 w-full rounded-full lg:w-72" />
+            <div className="flex flex-wrap gap-2">
+              <LoadingBlock className="h-9 w-28 rounded-full" />
+              <LoadingBlock className="h-9 w-28 rounded-full" />
+              <LoadingBlock className="h-9 w-24 rounded-full" />
+            </div>
+          </div>
+
+          <div className="min-w-0 space-y-3">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div
+                key={index}
+                className="flex min-w-0 items-center gap-4 rounded-2xl bg-muted/25 px-4 py-4"
+              >
+                <LoadingBlock className="h-9 w-9 shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <LoadingBlock className="h-4 w-40 max-w-full rounded-full" />
+                  <LoadingBlock className="h-3 w-56 max-w-full rounded-full" />
+                </div>
+                <LoadingBlock className="hidden h-6 w-20 shrink-0 rounded-full sm:block" />
+                <LoadingBlock className="h-8 w-8 shrink-0 rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </Panel>
+    </>
   )
+}
+
+/**
+ * A single record workspace: breadcrumb, identity header, summary strip, then
+ * a tabbed body. Matches the HQ merchant/subscription/user detail geometry.
+ */
+function DetailSkeleton() {
+  return (
+    <>
+      <div className="flex min-w-0 items-center gap-2">
+        <LoadingBlock className="h-3 w-20 rounded-full" />
+        <LoadingBlock className="h-3 w-3 rounded-full" />
+        <LoadingBlock className="h-3 w-32 max-w-[40vw] rounded-full" />
+      </div>
+
+      <Panel padded>
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <LoadingBlock className="h-14 w-14 shrink-0 rounded-2xl" />
+            <div className="min-w-0 space-y-2">
+              <LoadingBlock className="h-6 w-48 max-w-[60vw]" />
+              <LoadingBlock className="h-3 w-32 max-w-[44vw] rounded-full" />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <LoadingBlock className="h-9 w-28 rounded-full" />
+            <LoadingBlock className="h-9 w-24 rounded-full" />
+          </div>
+        </div>
+      </Panel>
+
+      <StatSkeletons />
+
+      <Panel padded className="space-y-5">
+        <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <LoadingBlock key={index} className="h-9 w-28 shrink-0 rounded-full" />
+          ))}
+        </div>
+
+        <div className="grid min-w-0 gap-4 md:grid-cols-2">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="min-w-0 space-y-2">
+              <LoadingBlock className="h-3 w-24 rounded-full" />
+              <LoadingBlock className="h-5 w-40 max-w-full rounded-full" />
+            </div>
+          ))}
+        </div>
+      </Panel>
+    </>
+  )
+}
+
+const VARIANT_BODIES: Record<DataPageSkeletonVariant, () => React.JSX.Element> = {
+  analytics: AnalyticsSkeleton,
+  catalog: CatalogSkeleton,
+  table: TableSkeleton,
+  detail: DetailSkeleton,
+}
+
+export function DataPageSkeleton({
+  variant,
+  label,
+  shell = 'page',
+  // `detail` opens with its own breadcrumb + identity header, so the generic
+  // title block would be a second, duplicate header.
+  showHeader = variant !== 'detail',
+}: DataPageSkeletonProps) {
+  const Body = VARIANT_BODIES[variant]
+
+  const content = (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      data-page-loader={variant}
+      className="min-w-0 space-y-6"
+    >
+      <span className="sr-only">{label}</span>
+      {showHeader ? <HeaderSkeleton /> : null}
+      <Body />
+    </div>
+  )
+
+  if (shell === 'plain') {
+    return content
+  }
+
+  return <PageShell>{content}</PageShell>
 }
