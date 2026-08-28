@@ -1,6 +1,9 @@
 import 'server-only'
 
-import { isMenuVisibleOnline } from './menu-channel-visibility'
+import {
+  isMenuVisibleOnline,
+  isMissingMenuVisibilitySchema,
+} from './menu-channel-visibility'
 
 export const ONLINE_VISIBILITY_BLOCK_MESSAGE =
   'This menu is hidden from Online Ordering for the selected location. Enable Online Ordering visibility before designating or publishing it.'
@@ -18,10 +21,15 @@ export async function getMenuOnlineVisibility(
     .maybeSingle()
 
   if (error) {
-    // During staggered deployment, a missing column follows the ticket's
-    // backward-compatible default and remains visible.
-    console.warn('[menu-channel-visibility] Falling back to online visible:', error.message)
-    return true
+    if (isMissingMenuVisibilitySchema(error)) {
+      console.warn(
+        '[menu-channel-visibility] Visibility columns are not deployed; using visible defaults:',
+        error.message,
+      )
+      return true
+    }
+
+    throw new Error(`Unable to verify online menu visibility: ${error.message}`)
   }
 
   return isMenuVisibleOnline(data)
@@ -40,7 +48,10 @@ export async function filterOnlineVisibleMenuIds(
     .eq('location_id', locationId)
     .in('menu_id', menuIds)
 
-  if (error) return menuIds
+  if (error) {
+    if (isMissingMenuVisibilitySchema(error)) return menuIds
+    throw new Error(`Unable to filter online-visible menus: ${error.message}`)
+  }
 
   const hidden = new Set(
     (data ?? [])

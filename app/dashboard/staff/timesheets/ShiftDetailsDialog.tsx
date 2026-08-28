@@ -11,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import { StaffShift } from "@/types/staff";
 
 interface ShiftDetailsDialogProps {
@@ -67,7 +66,7 @@ function DetailCard({
   helper?: string;
 }) {
   return (
-    <div className="rounded-xl border bg-muted/20 p-4">
+    <div className="rounded-xl bg-muted/40 p-4">
       <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {icon}
         {label}
@@ -108,7 +107,7 @@ export function ShiftDetailsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="border-0 bg-white shadow-lg max-sm:h-dvh max-sm:min-h-dvh max-sm:max-h-none sm:max-h-[90vh] sm:max-w-3xl sm:overflow-y-auto">
         <DialogHeader>
           <div className="flex flex-wrap items-center gap-2">
             <DialogTitle>Shift details</DialogTitle>
@@ -153,10 +152,8 @@ export function ShiftDetailsDialog({
           />
         </div>
 
-        <Separator />
-
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border p-4">
+          <div className="rounded-xl bg-muted/40 p-4">
             <h3 className="text-sm font-semibold">Clock times</h3>
             <dl className="mt-3 space-y-3 text-sm">
               <div>
@@ -186,7 +183,7 @@ export function ShiftDetailsDialog({
             </dl>
           </div>
 
-          <div className="rounded-xl border p-4">
+          <div className="rounded-xl bg-muted/40 p-4">
             <h3 className="text-sm font-semibold">Break summary</h3>
             <dl className="mt-3 space-y-3 text-sm">
               <div>
@@ -215,8 +212,8 @@ export function ShiftDetailsDialog({
           </div>
         </div>
 
-        <div className="rounded-xl border">
-          <div className="border-b px-4 py-3">
+        <div className="rounded-xl bg-muted/40">
+          <div className="px-4 pt-4 pb-2">
             <h3 className="text-sm font-semibold">Break log</h3>
           </div>
           {breaks.length === 0 ? (
@@ -224,7 +221,7 @@ export function ShiftDetailsDialog({
               No breaks recorded.
             </p>
           ) : (
-            <div className="divide-y">
+            <div>
               {breaks.map((breakLog, index) => (
                 <div
                   key={breakLog.id || index}
@@ -262,7 +259,7 @@ export function ShiftDetailsDialog({
           )}
         </div>
 
-        <div className="rounded-xl border bg-muted/20 p-4 text-xs text-muted-foreground">
+        <div className="rounded-xl bg-muted/40 p-4 text-xs text-muted-foreground">
           <div className="font-medium text-foreground">Shift ID</div>
           <div className="mt-1 break-all font-mono">{shift.id}</div>
         </div>

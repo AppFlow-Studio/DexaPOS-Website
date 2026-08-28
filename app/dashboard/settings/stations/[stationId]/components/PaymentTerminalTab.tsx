@@ -3,12 +3,12 @@
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+  StationPanel,
+  StationPanelContent,
+  StationPanelDescription,
+  StationPanelHeader,
+  StationPanelTitle,
+} from "./StationPanel";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,8 +88,8 @@ function CapabilityBadge({
       variant="outline"
       className={cn(
         enabled
-          ? "border-green-500/50 bg-green-500/10 text-green-600"
-          : "border-gray-400/50 text-gray-500",
+          ? ""
+          : "",
       )}
     >
       {enabled ? (
@@ -113,7 +113,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
 
   // Create terminal form state
   const [terminalName, setTerminalName] = useState("");
-  const [createType, setCreateType] = useState<TerminalType>("dejavoo");
+  const [createType, setCreateType] = useState<TerminalType>("castles");
   const [authKey, setAuthKey] = useState("");
   const [apiEnvironment, setApiEnvironment] =
     useState<ApiEnvironment>("sandbox");
@@ -139,10 +139,10 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
     [terminals],
   );
 
-  // Check which providers are already registered on this station
-  const hasDejavoo = terminals.some((t) => t.terminal_type === "dejavoo");
+  // Check which providers are already registered on this station. Castles is
+  // the only provider that can currently be added — Valor is not a
+  // `terminal_type` value yet, so it renders as a disabled placeholder.
   const hasCastles = terminals.some((t) => t.terminal_type === "castles");
-  const canAddProvider = !hasDejavoo || !hasCastles;
 
   const linkMutation = useLinkTerminalToStation();
   const unlinkMutation = useUnlinkTerminalFromStation();
@@ -221,7 +221,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
         input: {
           location_id: station.location_id,
           station_id: station.id,
-          terminal_name: terminalName || (isCastlesCreate ? "Castles Terminal" : "Dejavoo Terminal"),
+          terminal_name: terminalName || (isCastlesCreate ? "Castles Terminal" : "Payment Terminal"),
           terminal_type: createType,
           register_id: isCastlesCreate ? "CASTLES" : registerId,
           auth_key: isCastlesCreate ? "CASTLES" : authKey,
@@ -283,13 +283,13 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
 
   if (isLoadingTerminals) {
     return (
-      <Card>
-        <CardContent className="py-12">
+      <StationPanel>
+        <StationPanelContent className="py-12">
           <div className="flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
     );
   }
 
@@ -301,16 +301,16 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
   return (
     <>
       <div className="space-y-6">
-        <Card>
-          <CardHeader>
+        <StationPanel>
+          <StationPanelHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-lg">Payment Terminal</CardTitle>
-                <CardDescription>
+                <StationPanelTitle className="text-lg">Payment Terminal</StationPanelTitle>
+                <StationPanelDescription>
                   {hasTerminals
                     ? `${terminals.length} provider${terminals.length > 1 ? "s" : ""} registered on this station`
                     : "Select a payment terminal provider for this station"}
-                </CardDescription>
+                </StationPanelDescription>
               </div>
               {hasTerminals && (
                 <div className="flex gap-2">
@@ -340,8 +340,8 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                 </div>
               )}
             </div>
-          </CardHeader>
-          <CardContent>
+          </StationPanelHeader>
+          <StationPanelContent>
             {!hasTerminals ? (
               /* ── Empty state: Provider selection ── */
               <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -352,25 +352,36 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                 <p className="text-sm text-muted-foreground max-w-sm mt-2 mb-6">
                   Choose a payment terminal provider to register on this station.
                 </p>
-                <div className="grid gap-4 sm:grid-cols-2 w-full max-w-md">
-                  <button
-                    onClick={() => openCreateDialog("dejavoo")}
-                    className="flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-6 hover:border-primary hover:bg-muted/50 transition-colors cursor-pointer"
-                  >
-                    <Image src="/dejavoo.png" alt="Dejavoo" width={40} height={40} />
-                    <div>
-                      <p className="font-medium">Dejavoo</p>
-                      <p className="text-xs text-muted-foreground">Cloud / SPIN API</p>
-                    </div>
-                  </button>
+                <div className="grid w-full max-w-md gap-4 sm:grid-cols-2">
                   <button
                     onClick={() => openCreateDialog("castles")}
-                    className="flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-6 hover:border-primary hover:bg-muted/50 transition-colors cursor-pointer"
+                    className="flex min-w-0 cursor-pointer flex-col items-center gap-3 rounded-2xl border-0 bg-muted/45 p-6 shadow-none transition-colors hover:bg-muted"
                   >
                     <Image src="/castles.jpg" alt="Castles" width={40} height={40} className="rounded" />
                     <div>
                       <p className="font-medium">Castles</p>
                       <p className="text-xs text-muted-foreground">Local TCP</p>
+                    </div>
+                  </button>
+                  {/* Valor is not selectable yet: `terminal_type` has no `valor`
+                      value, so there is nothing to create. Rendered disabled
+                      rather than omitted so the roadmap is visible. */}
+                  <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    className="flex min-w-0 cursor-not-allowed flex-col items-center gap-3 rounded-2xl border-0 bg-muted/45 p-6 opacity-50 shadow-none"
+                  >
+                    <Image
+                      src="/valorlogo.jpg"
+                      alt="Valor"
+                      width={40}
+                      height={40}
+                      className="rounded grayscale"
+                    />
+                    <div>
+                      <p className="font-medium text-muted-foreground">Valor</p>
+                      <p className="text-xs text-muted-foreground">Coming soon</p>
                     </div>
                   </button>
                 </div>
@@ -406,7 +417,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                           <SelectItem key={t.id} value={t.id}>
                             <div className="flex items-center gap-2">
                               {t.is_active && (
-                                <Circle className="h-2 w-2 fill-green-500 text-green-500" />
+                                <Circle className="h-2 w-2 fill-current" />
                               )}
                               <span>{t.terminal_name}</span>
                               <Badge variant="outline" className="ml-1 text-xs">
@@ -426,11 +437,12 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                 {/* Active Terminal Info */}
                 {activeTerminal && (
                   <>
-                    <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/50 border">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-xl">
-                        {activeTerminal.terminal_type === "dejavoo" ? (
-                          <Image src="/dejavoo.png" alt="Dejavoo" width={32} height={32} />
-                        ) : activeTerminal.terminal_type === "castles" ? (
+                    <div className="flex min-w-0 items-center gap-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
+                      {/* Any terminal_type without its own logo — including
+                          legacy Dejavoo rows — falls through to the generic
+                          card icon rather than rendering a retired brand. */}
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl">
+                        {activeTerminal.terminal_type === "castles" ? (
                           <Image src="/castles.jpg" alt="Castles" width={32} height={32} className="rounded" />
                         ) : (
                           <CreditCard className="h-8 w-8 text-muted-foreground" />
@@ -444,7 +456,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                           {activeTerminal.is_active && hasMultipleTerminals && (
                             <Badge
                               variant="outline"
-                              className="border-blue-500/50 bg-blue-500/10 text-blue-600 text-xs"
+                              className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground"
                             >
                               Active
                             </Badge>
@@ -453,16 +465,16 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                             variant="outline"
                             className={cn(
                               activeTerminal.is_connected
-                                ? "border-green-500/50 bg-green-500/10 text-green-600"
-                                : "border-gray-400/50 text-gray-500",
+                                ? ""
+                                : "",
                             )}
                           >
                             <Circle
                               className={cn(
                                 "mr-1 h-2 w-2",
                                 activeTerminal.is_connected
-                                  ? "fill-green-500 text-green-500"
-                                  : "fill-gray-400 text-gray-400",
+                                  ? "fill-current"
+                                  : "fill-transparent",
                               )}
                             />
                             {activeTerminal.is_connected ? "Online" : "Offline"}
@@ -606,7 +618,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
 
                     {/* Connection Status */}
                     {isActiveTerminalCastles ? (
-                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/30">
+                      <div className="min-w-0 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                         <div className="flex items-start gap-3">
                           <Info className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
                           <div>
@@ -620,7 +632,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                         </div>
                       </div>
                     ) : (
-                      <div className="rounded-lg border p-4 space-y-2">
+                      <div className="min-w-0 space-y-2 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">
                             Status
@@ -678,35 +690,34 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                   </>
                 )}
 
-                {/* Add another provider if slot available */}
-                {canAddProvider && (
-                  <div className="flex gap-3">
-                    {!hasDejavoo && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openCreateDialog("dejavoo")}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Dejavoo
-                      </Button>
-                    )}
-                    {!hasCastles && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openCreateDialog("castles")}
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Castles
-                      </Button>
-                    )}
-                  </div>
-                )}
+                {/* Add another provider. The Valor placeholder always renders,
+                    so this row is never empty. */}
+                <div className="flex flex-wrap gap-3">
+                  {!hasCastles && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                      onClick={() => openCreateDialog("castles")}
+                    >
+                      <Plus className="mr-1.5 h-4 w-4" />
+                      Add Castles
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled
+                    className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" />
+                    Add Valor (Coming soon)
+                  </Button>
+                </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </StationPanelContent>
+        </StationPanel>
       </div>
 
       {/* Link Terminal Dialog */}
@@ -841,7 +852,7 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/30">
+                <div className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
                   <p className="text-xs text-blue-700 dark:text-blue-300">
                     Castles terminals connect via local TCP. Connection testing is done from the POS tablet app, which will refresh serial number and firmware on first successful connection.
                   </p>
@@ -947,8 +958,8 @@ export function PaymentTerminalTab({ station }: PaymentTerminalTabProps) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-yellow-500/10">
-                <AlertTriangle className="h-5 w-5 text-yellow-600" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60">
+                <AlertTriangle className="h-5 w-5 text-muted-foreground" />
               </div>
               <AlertDialogTitle>Unlink Terminal</AlertDialogTitle>
             </div>

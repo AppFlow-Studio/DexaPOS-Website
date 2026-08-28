@@ -446,7 +446,7 @@ export function ScheduleFormSheet({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         overlayClassName="bg-slate-950/40 backdrop-blur-md"
-        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border border-slate-200/80 bg-background/95 p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-3xl"
+        className="w-full max-w-[calc(100vw-1rem)] gap-0 overflow-hidden rounded-[28px] border-0 bg-background p-0 shadow-[0_30px_100px_rgba(15,23,42,0.26)] sm:max-w-2xl"
       >
         {showSuccess ? (
           // Success animation
@@ -465,7 +465,7 @@ export function ScheduleFormSheet({
           </div>
         ) : (
           <div className="flex max-h-[min(92vh,920px)] flex-col">
-            <DialogHeader className="border-b border-border/70 bg-background/95 px-6 py-5 pr-14 text-left sm:text-left">
+            <DialogHeader className="bg-background px-6 py-5 pr-14 text-left sm:text-left">
               <DialogTitle className="flex items-center gap-2 text-[1.625rem] font-semibold tracking-tight">
                 <Calendar className="h-5 w-5" />
                 {mode === "edit" ? "Edit Schedule" : "Create Schedule"}
@@ -481,7 +481,7 @@ export function ScheduleFormSheet({
                   "mt-3 p-3 rounded-lg border flex items-center gap-2",
                   isAllLocations
                     ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800"
-                    : "bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800"
+                    : "border-transparent bg-muted/50"
                 )}
               >
                 {isAllLocations ? (
@@ -498,12 +498,12 @@ export function ScheduleFormSheet({
                   </>
                 ) : (
                   <>
-                    <MapPin className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
                     <div>
-                      <p className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                      <p className="text-sm font-medium text-foreground">
                         Location-Specific Schedule
                       </p>
-                      <p className="text-xs text-purple-600 dark:text-purple-400">
+                      <p className="text-xs text-muted-foreground">
                         Only for:{" "}
                         {selectedLocation?.name || "Selected Location"}
                       </p>
@@ -514,7 +514,7 @@ export function ScheduleFormSheet({
               )}
             </DialogHeader>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+            <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-background px-4 py-5 sm:px-6">
               <div className="space-y-6">
                 {/* Schedule Details */}
                 <BottomSheetSection title="Schedule Details">
@@ -546,7 +546,7 @@ export function ScheduleFormSheet({
 
                 {/* Day Selection */}
                 <BottomSheetSection title="Active Days">
-                  <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                  <div className="grid grid-cols-7 gap-1 sm:flex sm:flex-wrap sm:gap-2">
                     {DAYS_OF_WEEK.map((day, index) => {
                       const isSelected = selectedDays.includes(index);
                       return (
@@ -555,11 +555,11 @@ export function ScheduleFormSheet({
                           type="button"
                           onClick={() => toggleDay(index)}
                           className={cn(
-                            "aspect-square min-w-0 rounded-xl text-xs sm:text-sm font-medium transition-all duration-200",
+                            "aspect-square min-w-0 rounded-xl text-xs font-medium transition-all duration-200 sm:size-14 sm:flex-none",
                             "flex items-center justify-center",
                             "active:scale-95",
                             isSelected
-                              ? "bg-primary text-primary-foreground shadow-md scale-105"
+                              ? "scale-105 bg-[#0C4FD1] text-white shadow-md hover:bg-[#0A43B5]"
                               : "bg-muted/50 text-muted-foreground hover:bg-muted"
                           )}
                         >
@@ -582,7 +582,7 @@ export function ScheduleFormSheet({
                         return (
                           <div
                             key={day}
-                            className="p-4 rounded-xl bg-muted/30 animate-in fade-in slide-in-from-bottom-2"
+                            className="rounded-xl bg-muted/30 p-3 animate-in fade-in slide-in-from-bottom-2"
                             style={{ animationDelay: `${dayIdx * 50}ms` }}
                           >
                             <div className="flex items-center justify-between mb-3">
@@ -651,28 +651,30 @@ export function ScheduleFormSheet({
                               {daySlots.map((slot, slotIdx) => (
                                 <div
                                   key={slot.id}
-                                  className="flex flex-wrap items-center gap-x-2 gap-y-2 animate-in fade-in slide-in-from-left-2"
+                                  className="flex items-start gap-2 animate-in fade-in slide-in-from-left-2 sm:flex-wrap sm:items-center"
                                   style={{
                                     animationDelay: `${slotIdx * 30}ms`,
                                   }}
                                 >
-                                  <TimeInput
-                                    value={slot.start_time}
-                                    onChange={(v) =>
-                                      updateTimeSlot(slot.id, "start_time", v)
-                                    }
-                                    className="flex-1 min-w-[130px]"
-                                  />
-                                  <span className="text-muted-foreground text-sm">
-                                    to
-                                  </span>
-                                  <TimeInput
-                                    value={slot.end_time}
-                                    onChange={(v) =>
-                                      updateTimeSlot(slot.id, "end_time", v)
-                                    }
-                                    className="flex-1 min-w-[130px]"
-                                  />
+                                  <div className="flex min-w-0 flex-1 flex-col gap-2 sm:contents">
+                                    <TimeInput
+                                      value={slot.start_time}
+                                      onChange={(v) =>
+                                        updateTimeSlot(slot.id, "start_time", v)
+                                      }
+                                      className="w-full sm:w-[180px] sm:flex-none"
+                                    />
+                                    <span className="hidden text-sm text-muted-foreground sm:inline">
+                                      to
+                                    </span>
+                                    <TimeInput
+                                      value={slot.end_time}
+                                      onChange={(v) =>
+                                        updateTimeSlot(slot.id, "end_time", v)
+                                      }
+                                      className="w-full sm:w-[180px] sm:flex-none"
+                                    />
+                                  </div>
                                   {daySlots.length > 1 && (
                                     <Button
                                       type="button"
@@ -725,7 +727,7 @@ export function ScheduleFormSheet({
               </div>
             </div>
 
-            <DialogFooter className="border-t border-border/70 bg-background/95 px-6 py-4">
+            <DialogFooter className="bg-background px-6 py-4">
               <div className="flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <Button
                   type="button"
@@ -740,7 +742,7 @@ export function ScheduleFormSheet({
                   type="button"
                   onClick={handleSubmit}
                   disabled={!isValid || isSubmitting}
-                  className="sm:min-w-[180px]"
+                  className="bg-[#0C4FD1] text-white hover:bg-[#0A43B5] sm:min-w-[180px]"
                 >
                   {isSubmitting ? (
                     <>

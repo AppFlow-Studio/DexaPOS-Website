@@ -6,38 +6,72 @@ import { cn } from "@/lib/utils"
 
 type TableProps = React.ComponentProps<"table"> & {
   containerClassName?: string
+  variant?: "default" | "data"
 }
 
-function Table({ className, containerClassName, ...props }: TableProps) {
+const TableVariantContext = React.createContext<TableProps["variant"]>("default")
+
+function Table({
+  className,
+  containerClassName,
+  variant = "default",
+  ...props
+}: TableProps) {
   return (
-    <div
-      data-slot="table-container"
-      className={cn("relative w-full overflow-x-auto", containerClassName)}
-    >
-      <table
-        data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
-        {...props}
-      />
-    </div>
+    <TableVariantContext.Provider value={variant}>
+      <div
+        data-slot="table-container"
+        data-variant={variant}
+        className={cn(
+          // Keep the table width constrained while allowing horizontal scroll when
+          // content or expanded rows are wider than the viewport.
+          "relative w-full min-w-0 overflow-x-auto",
+          variant === "data" && "overflow-x-auto overflow-y-hidden rounded-2xl bg-muted/20",
+          containerClassName
+        )}
+      >
+        <table
+          data-slot="table"
+          className={cn(
+            "w-full caption-bottom text-sm",
+            variant === "data" && "[&_td]:px-3 [&_td]:py-3 [&_th]:px-3",
+            className
+          )}
+          {...props}
+        />
+      </div>
+    </TableVariantContext.Provider>
   )
 }
 
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
+  const variant = React.useContext(TableVariantContext)
+
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      className={cn(
+        "[&_tr]:border-b",
+        variant === "data" && "bg-muted/50",
+        className
+      )}
       {...props}
     />
   )
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
+  const variant = React.useContext(TableVariantContext)
+
   return (
     <tbody
       data-slot="table-body"
-      className={cn("[&_tr:last-child]:border-0", className)}
+      className={cn(
+        "[&_tr:last-child]:border-0",
+        variant === "data" &&
+          "[&_tr]:border-0 [&_tr]:bg-card/70 [&_tr:hover]:bg-muted/40",
+        className
+      )}
       {...props}
     />
   )

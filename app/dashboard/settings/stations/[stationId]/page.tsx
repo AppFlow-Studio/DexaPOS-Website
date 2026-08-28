@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -36,7 +37,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { getStationById, Station } from "@/app/dashboard/actions/stations";
@@ -88,6 +89,16 @@ export default function StationDetailPage() {
   const orgId = useClerkOrgId();
 
   const [activeTab, setActiveTab] = useState("overview");
+  const tabRailRef = useRef<HTMLDivElement>(null);
+
+  // §13.2 — keep the active tab on screen. `block: "nearest"` stops the browser
+  // scrolling the page vertically to the rail as well.
+  useEffect(() => {
+    tabRailRef.current
+      ?.querySelector('[data-state="active"]')
+      ?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, [activeTab]);
+
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [timeFilter, setTimeFilter] = useState("24h");
@@ -170,8 +181,10 @@ export default function StationDetailPage() {
 
   if (!mounted || isLoading) {
     return (
-      <div className="h-96 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="space-y-6">
+        <Skeleton className="h-9 w-40 rounded-full" />
+        <Skeleton className="h-11 w-full max-w-[640px] rounded-full" />
+        <Skeleton className="h-[420px] w-full rounded-3xl" />
       </div>
     );
   }
@@ -179,20 +192,28 @@ export default function StationDetailPage() {
   if (error || !station) {
     return (
       <div className="space-y-6">
-        <Button variant="ghost" asChild>
+        {/* Ghost pill back control, never bordered (§4.4). */}
+        <Button
+          variant="ghost"
+          className="h-9 rounded-full px-4 text-[0.8125rem] font-medium"
+          asChild
+        >
           <Link href="/dashboard/settings/stations">
-            <ChevronLeft className="mr-2 h-4 w-4" />
+            <ChevronLeft className="mr-1.5 h-4 w-4" />
             Back to Stations
           </Link>
         </Button>
-        <div className="flex flex-col items-center justify-center h-64 text-center">
-          <AlertTriangle className="h-12 w-12 text-muted-foreground mb-4" />
+        <div className="flex h-64 flex-col items-center justify-center text-center">
+          <AlertTriangle className="mb-4 h-12 w-12 text-muted-foreground" />
           <h2 className="text-xl font-semibold">Station not found</h2>
-          <p className="text-muted-foreground mt-2">
+          <p className="mt-2 text-muted-foreground">
             The station you&apos;re looking for doesn&apos;t exist or has been
             removed.
           </p>
-          <Button asChild className="mt-4">
+          <Button
+            className="mt-4 h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+            asChild
+          >
             <Link href="/dashboard/settings/stations">View all stations</Link>
           </Button>
         </div>
@@ -220,7 +241,7 @@ export default function StationDetailPage() {
         {/* Title Row */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-muted text-3xl">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-muted/60 text-3xl">
               {getStationTypeIcon(station.station_type)}
             </div>
             <div className="flex flex-col gap-1">
@@ -241,34 +262,37 @@ export default function StationDetailPage() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8"
+                      className="h-8 w-8 rounded-full p-0"
                       onClick={handleSaveName}
                       disabled={updateMutation.isPending}
                     >
                       {updateMutation.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Check className="h-4 w-4 text-green-500" />
+                        <Check className="h-4 w-4" />
                       )}
                     </Button>
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8"
+                      className="h-8 w-8 rounded-full p-0"
                       onClick={handleCancelEditName}
                     >
-                      <X className="h-4 w-4 text-red-500" />
+                      <X className="h-4 w-4" />
                     </Button>
                   </div>
                 ) : (
-                  <div className="group flex items-center gap-2">
-                    <h1 className="text-2xl font-bold">
+                  <div className="group flex min-w-0 items-center gap-2">
+                    {/* Page h1 per §3.2 (D-01). */}
+                    <h1 className="min-w-0 text-[1.75rem] font-semibold tracking-[-0.02em]">
                       {station.station_name}
                     </h1>
+                    {/* Visible at rest: an edit affordance you must hover to
+                        find is one users may never discover (§4.7). */}
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="h-8 w-8 shrink-0 rounded-full p-0"
                       onClick={handleStartEditName}
                     >
                       <Pencil className="h-4 w-4" />
@@ -277,32 +301,25 @@ export default function StationDetailPage() {
                 )}
               </div>
               {/* Type Badge & Status */}
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">
+              {/* One neutral pill per badge (§4.6b) — the word carries the
+                  state; the dot is filled or hollow, never coloured. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground">
                   {getStationTypeLabel(station.station_type)}
                 </Badge>
                 {station.station_code && (
-                  <Badge variant="outline" className="font-mono">
+                  <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 font-mono text-xs font-medium text-foreground">
                     {station.station_code}
                   </Badge>
                 )}
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    isOnline
-                      ? "border-green-500/50 bg-green-500/10 text-green-600"
-                      : "border-gray-400/50 bg-gray-100 text-gray-600",
-                  )}
-                >
+                <Badge className="w-fit rounded-full border-0 bg-muted/60 px-2.5 text-xs font-medium text-foreground">
                   <Circle
                     className={cn(
                       "mr-1 h-2 w-2",
-                      isOnline
-                        ? "fill-green-500 text-green-500"
-                        : "fill-gray-400 text-gray-400",
+                      isOnline ? "fill-current" : "fill-transparent",
                     )}
                   />
-                  {isOnline ? "ONLINE" : "OFFLINE"}
+                  {isOnline ? "Online" : "Offline"}
                 </Badge>
               </div>
             </div>
@@ -311,7 +328,7 @@ export default function StationDetailPage() {
           {/* Actions */}
           <div className="flex items-center gap-2">
             <Select value={timeFilter} onValueChange={setTimeFilter}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="h-9 w-[140px] rounded-full border-0 bg-muted/60 px-3 shadow-none">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -323,19 +340,21 @@ export default function StationDetailPage() {
             </Select>
             <Button
               variant="outline"
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
               onClick={handleRefresh}
               disabled={isRefreshing}
             >
               {isRefreshing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
               ) : (
-                <RefreshCw className="mr-2 h-4 w-4" />
+                <RefreshCw className="mr-1.5 h-4 w-4" />
               )}
               Refresh
             </Button>
             <Button
               variant="outline"
               size="icon"
+              className="h-9 w-9 rounded-full shadow-sm"
               onClick={() => setIsEditDialogOpen(true)}
             >
               <Settings className="h-4 w-4" />
@@ -346,13 +365,13 @@ export default function StationDetailPage() {
 
       {/* Offline Warning Banner */}
       {!isOnline && (
-        <div className="flex items-center gap-3 p-4 rounded-lg bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-300 dark:border-yellow-900">
-          <AlertTriangle className="h-5 w-5 text-yellow-600 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="font-medium text-yellow-800 dark:text-yellow-300">
+        <div className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">
               Station is offline
             </p>
-            <p className="text-sm text-yellow-700 dark:text-yellow-400">
+            <p className="text-sm text-muted-foreground">
               {station.last_heartbeat_at
                 ? `Last seen ${formatDistanceToNow(
                     new Date(station.last_heartbeat_at),
@@ -365,22 +384,31 @@ export default function StationDetailPage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b overflow-x-auto">
-        {getVisibleTabs(station.station_type).map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              "px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap",
-              activeTab === tab.id
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Tabs — pill rail, not the retired underline style (§4.5). Never
+          `overflow-x-hidden`: it would put later tabs out of reach (§13.2). */}
+      <div
+        ref={tabRailRef}
+        className="thin-scrollbar w-full min-w-0 overflow-x-auto pb-1"
+      >
+        <div className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+          {getVisibleTabs(station.station_type).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              data-state={activeTab === tab.id ? "active" : "inactive"}
+              aria-pressed={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium transition-colors",
+                activeTab === tab.id
+                  ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tab Content */}
@@ -430,7 +458,7 @@ export default function StationDetailPage() {
               ? This will remove all associated devices and cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+          <div className="flex min-w-0 items-center gap-3 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
             <span className="text-2xl">
               {getStationTypeIcon(station.station_type)}
             </span>

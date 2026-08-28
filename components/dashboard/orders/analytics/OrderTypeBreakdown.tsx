@@ -111,7 +111,7 @@ export function OrderTypeBreakdown({ data, isLoading }: OrderTypeBreakdownProps)
                 <Legend
                   verticalAlign="bottom"
                   height={36}
-                  wrapperStyle={{ fontSize: 12 }}
+                  wrapperStyle={{ fontSize: 13, color: "var(--muted-foreground)" }}
                   formatter={(value, entry) => {
                     const v = (entry?.payload as { value?: number } | undefined)?.value
                     return `${value}${v != null ? `: ${v}` : ''}`

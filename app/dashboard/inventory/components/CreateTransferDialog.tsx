@@ -137,11 +137,11 @@ export function CreateTransferDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[560px] p-0 gap-0 overflow-hidden">
-        <DialogHeader className="space-y-0 border-b bg-gradient-to-br from-blue-500/10 via-background to-background px-6 py-5">
+      <DialogContent className="flex h-dvh max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none bg-card p-0 max-sm:top-auto max-sm:translate-y-0 sm:h-[min(760px,calc(100dvh-1rem))] sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-[560px] sm:rounded-3xl">
+        <DialogHeader className="shrink-0 space-y-0 px-5 py-5 pr-14 sm:px-6 sm:pr-16">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/15 ring-1 ring-blue-500/20">
-              <ArrowRightLeft className="h-5 w-5 text-blue-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60">
+              <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <DialogTitle className="text-lg">New Stock Transfer</DialogTitle>
@@ -155,41 +155,47 @@ export function CreateTransferDialog({
 
         <form
           onSubmit={handleSubmit}
-          className="max-h-[60vh] space-y-5 overflow-y-auto px-6 py-5"
+          className="thin-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4 sm:px-6"
         >
-          {/* Route */}
-          <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3">
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                From
-              </Label>
-              <div className="flex h-11 items-center rounded-md border bg-muted/40 px-3 text-sm font-medium">
-                {fromLocationName}
-              </div>
+          {/* Route — labels and controls live in separate rows of one grid so
+              the From box and the To trigger always share a baseline, whatever
+              each label wraps to. */}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 gap-y-2">
+            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              From
+            </Label>
+            <span aria-hidden />
+            <Label
+              htmlFor="transfer-destination"
+              className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            >
+              To <span className="text-red-500">*</span>
+            </Label>
+
+            <div className="flex h-11 min-w-0 items-center rounded-2xl border-0 bg-muted/60 px-4 text-sm font-medium">
+              <span className="truncate">{fromLocationName}</span>
             </div>
-            <ArrowRightLeft className="mb-3 h-4 w-4 text-muted-foreground" />
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                To <span className="text-red-500">*</span>
-              </Label>
-              <Select value={toLocationId} onValueChange={setToLocationId}>
-                <SelectTrigger className="h-11 w-full">
-                  <SelectValue placeholder="Select destination" />
-                </SelectTrigger>
-                <SelectContent>
-                  {destinations.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-muted-foreground">
-                      No other locations available.
-                    </div>
-                  )}
-                  {destinations.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
-                      {loc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <ArrowRightLeft className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <Select value={toLocationId} onValueChange={setToLocationId}>
+              <SelectTrigger
+                id="transfer-destination"
+                className="h-11 w-full min-w-0 rounded-2xl border-0 bg-muted/60 shadow-none hover:bg-muted [&>span]:min-w-0 [&>span]:truncate"
+              >
+                <SelectValue placeholder="Select destination" />
+              </SelectTrigger>
+              <SelectContent className="w-(--radix-select-trigger-width)">
+                {destinations.length === 0 && (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                    No other locations available.
+                  </div>
+                )}
+                {destinations.map((loc) => (
+                  <SelectItem key={loc.id} value={loc.id}>
+                    {loc.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Item picker */}
@@ -199,13 +205,15 @@ export function CreateTransferDialog({
             </Label>
             <div className="flex gap-2">
               <Select value={pickItemId} onValueChange={setPickItemId}>
-                <SelectTrigger className="h-11 flex-1">
+                <SelectTrigger className="h-11 min-w-0 flex-1 rounded-2xl border-0 bg-muted/60 shadow-none hover:bg-muted [&>span]:min-w-0 [&>span]:truncate">
                   <SelectValue placeholder="Select an item" />
                 </SelectTrigger>
                 <SelectContent
                   position="popper"
                   sideOffset={4}
-                  className="max-h-60 w-(--radix-select-trigger-width)"
+                  avoidCollisions
+                  collisionPadding={16}
+                  className="max-h-[min(15rem,var(--radix-select-content-available-height))] w-(--radix-select-trigger-width)"
                 >
                   {availableItems.length === 0 && (
                     <div className="px-3 py-6 text-center text-sm text-muted-foreground">
@@ -245,7 +253,7 @@ export function CreateTransferDialog({
 
           {/* Lines */}
           {lines.length > 0 && (
-            <div className="space-y-2 rounded-lg border">
+            <div className="space-y-1 rounded-2xl border-0 bg-muted/40 p-2">
               {lines.map((line) => {
                 const item = itemMap.get(line.inventory_item_id);
                 const onHand = item?.current_stock ?? 0;
@@ -253,7 +261,7 @@ export function CreateTransferDialog({
                 return (
                   <div
                     key={line.inventory_item_id}
-                    className="flex items-center gap-3 border-b px-3 py-2.5 last:border-b-0"
+                    className="flex items-center gap-3 rounded-xl bg-background px-3 py-2.5"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
@@ -276,8 +284,8 @@ export function CreateTransferDialog({
                           )
                         }
                         className={cn(
-                          "h-9 pr-12 text-sm",
-                          over && "border-red-500/60 text-red-600",
+                          "h-9 rounded-xl border-0 bg-muted/60 pr-12 text-sm shadow-none",
+                          over && "bg-red-500/10 text-red-600 ring-1 ring-red-500/40",
                         )}
                       />
                       <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-medium text-muted-foreground">
@@ -319,12 +327,12 @@ export function CreateTransferDialog({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="resize-none"
+              className="resize-none border-0 bg-muted/60 shadow-none focus-visible:bg-muted/40"
             />
           </div>
         </form>
 
-        <DialogFooter className="border-t bg-muted/30 px-6 py-4">
+        <DialogFooter className="shrink-0 bg-card px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:px-6">
           <Button
             type="button"
             variant="outline"

@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import {
   Popover,
   PopoverContent,
@@ -79,23 +78,27 @@ export function PaymentAmountFilter({
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-9 border-dashed">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-9 rounded-full border-0 bg-muted/60 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground"
+        >
           <PlusCircle className="mr-2 h-4 w-4" />
           Amount
           {summary && (
-            <>
-              <Separator orientation="vertical" className="mx-2 h-4" />
-              <Badge
-                variant="secondary"
-                className="rounded-sm px-1 font-normal tabular-nums"
-              >
-                {summary}
-              </Badge>
-            </>
+            <Badge
+              variant="secondary"
+              className="ml-2 rounded-full border-0 px-2 font-normal tabular-nums"
+            >
+              {summary}
+            </Badge>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 space-y-3 p-3" align="start">
+      <PopoverContent
+        className="w-64 space-y-3 rounded-2xl p-3"
+        align="start"
+      >
         <div className="space-y-2">
           <Label htmlFor="amount-min" className="text-xs">
             Minimum

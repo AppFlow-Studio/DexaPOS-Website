@@ -1,10 +1,18 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { subDays } from "date-fns";
-import { CreditCard, FileSpreadsheet } from "lucide-react";
+import {
+  differenceInCalendarDays,
+  endOfDay,
+  startOfDay,
+  subDays,
+} from "date-fns";
+import { CreditCard, FileSpreadsheet, Receipt } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollableTabsBar } from "@/components/dashboard/ScrollableTabsBar";
+import { ReportPanel as Card, ReportPanelContent as CardContent, ReportPanelHeader as CardHeader, ReportPanelTitle as CardTitle } from "@/components/dashboard/reports/ReportPanel";
+import { PageHeader, PageShell, Panel, PanelSection } from "@/components/dashboard/shell";
+import { cn } from "@/lib/utils";
 import {
   useFinancialKPIs,
   useWaterfallReport,
@@ -12,7 +20,10 @@ import {
   useDualPricingComparison,
 } from "../../hooks/useOrderAnalytics";
 import { useOrders } from "../../hooks/useOrder";
-import { FinancialHeroChart } from "@/app/dashboard/transactions/components/FinancialHeroChart";
+import {
+  FinancialHeroChart,
+  type TimeRangeType,
+} from "@/app/dashboard/transactions/components/FinancialHeroChart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReceiptModal } from "@/components/dashboard/orders/ReceiptModal";
 import { OrdersDataTable } from "@/components/dashboard/orders/OrdersDataTable";
@@ -30,6 +41,23 @@ import type { ExportColumn } from "@/utils/export";
 
 type FinancialSummaryRow = { metric: string; amount: number };
 
+type ChartTimeRange = TimeRangeType;
+
+/** Day-spans behind the hero chart's range pills. `days: null` = "All time".
+ *  Inclusive counts, so 7d is today plus the six days before it — matching the
+ *  DateRangePicker's own last_7_days preset exactly. */
+const CHART_RANGE_DAYS: Array<{ value: ChartTimeRange; days: number | null }> = [
+  { value: "7d", days: 7 },
+  { value: "30d", days: 30 },
+  { value: "90d", days: 90 },
+  { value: "180d", days: 180 },
+  { value: "365d", days: 365 },
+  { value: "all", days: null },
+];
+
+/** Far enough back to precede any merchant's first order. */
+const ALL_TIME_START = new Date(2020, 0, 1);
+
 const financialSummaryColumns: ExportColumn<FinancialSummaryRow>[] = [
   { key: "metric", header: "Metric" },
   { key: "amount", header: "Amount", format: (v: number) => `$${v.toFixed(2)}` },
@@ -43,6 +71,8 @@ export default function FinancialsPage() {
   const [preset, setPreset] = useState<DatePreset>("last_30_days");
 
   const [activeTab, setActiveTab] = useState("overview");
+  /** Tabs with no left-column summary render across the full page width. */
+  const isFullWidthTab = activeTab === "transactions" || activeTab === "payments";
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(
     null
   );
@@ -89,6 +119,36 @@ export default function FinancialsPage() {
         payments_collected: stat.net_sales, // Placeholder as backend data is missing
       }));
   }, [dateRange, kpis?.daily_stats]);
+
+  // ─── Hero-chart range bar ↔ page date range ───
+  // The bar is a shortcut onto the same `dateRange` the DateRangePicker owns,
+  // so both controls stay one source of truth. Only 7d/30d have a DatePreset
+  // equivalent; the longer spans are expressed as an explicit custom range.
+  const chartTimeRange = useMemo<ChartTimeRange | undefined>(() => {
+    const days = differenceInCalendarDays(dateRange.to, dateRange.from) + 1;
+    const match = CHART_RANGE_DAYS.find((r) => r.days === days);
+    // No pill is highlighted when the range came from the calendar and doesn't
+    // line up with one of the presets — better than lighting up a wrong pill.
+    return match?.value;
+  }, [dateRange]);
+
+  const handleChartTimeRangeChange = (range: ChartTimeRange) => {
+    const days = CHART_RANGE_DAYS.find((r) => r.value === range)?.days;
+    const to = endOfDay(new Date());
+    const from = startOfDay(
+      // "All" has no fixed span; ALL_TIME_START anchors it far enough back to
+      // cover any merchant's history without an extra round-trip to find it.
+      days == null ? ALL_TIME_START : subDays(to, days - 1)
+    );
+    setDateRange({ from, to });
+    setPreset(
+      range === "7d"
+        ? "last_7_days"
+        : range === "30d"
+        ? "last_30_days"
+        : "custom"
+    );
+  };
 
   if (isLoading && !kpis) {
     return (
@@ -155,22 +215,14 @@ export default function FinancialsPage() {
   ];
 
   return (
-    // Desktop (xl): height-constrained so inner panels scroll. Mobile/tablet: natural height, page scrolls.
-    <div className="flex flex-col xl:flex-row xl:h-[calc(100vh-116px)] w-full max-w-[1920px] mx-auto gap-6 overflow-x-hidden xl:overflow-hidden bg-[#F9FAFB] font-sans pb-4 xl:pb-0">
-      {/* LEFT COLUMN: Controls & Summaries (Scrollable) */}
-      <div className="xl:w-[440px] shrink-0 flex flex-col gap-6 xl:h-full">
-        {/* Fixed Header Section in Left Col */}
-        <div className="shrink-0 space-y-4 px-1">
-          <div className="min-w-0">
-            <h1 className="text-2xl xl:text-3xl font-bold tracking-tight text-[#111827] truncate">
-              Financial Information
-            </h1>
-            <p className="text-gray-500 text-sm mt-1 truncate">
-              {selectedLocation?.name || "All Locations"} • Real-time overview
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-2 w-full sm:flex-row sm:items-center">
+    <PageShell>
+      <PageHeader
+        title="Financial Information"
+        subtitle="Real-time revenue, collections, and transaction overview"
+        backHref="/dashboard/reports"
+        backLabel="Back to Reports"
+        actions={
+          <>
             <DateRangePicker
               dateFrom={dateRange.from}
               dateTo={dateRange.to}
@@ -181,7 +233,6 @@ export default function FinancialsPage() {
               }}
               preset={preset}
               onPresetChange={setPreset}
-              className="w-full"
             />
             <ReportExportButtons
               data={exportRows}
@@ -207,59 +258,60 @@ export default function FinancialsPage() {
               ]}
               disabled={!kpis}
             />
-          </div>
+          </>
+        }
+      />
 
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="w-full"
-          >
-            <TabsList className="bg-white p-1 h-auto rounded-xl shadow-sm border border-gray-200/50 w-full grid grid-cols-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <ScrollableTabsBar activeValue={activeTab}>
+          <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+            {[
+              ["overview", "Overview"],
+              ["waterfall", "Waterfall"],
+              ["transactions", "Transactions"],
+              ["payments", "Payments"],
+            ].map(([value, label]) => (
               <TabsTrigger
-                value="overview"
-                className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2 text-xs font-medium"
+                key={value}
+                value={value}
+                className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
               >
-                Overview
+                {label}
               </TabsTrigger>
-              <TabsTrigger
-                value="waterfall"
-                className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2 text-xs font-medium truncate"
-              >
-                Waterfall
-              </TabsTrigger>
-              <TabsTrigger
-                value="transactions"
-                className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2 text-xs font-medium truncate"
-              >
-                Transactions
-              </TabsTrigger>
-              <TabsTrigger
-                value="payments"
-                className="rounded-lg data-[state=active]:bg-[#6366f1] data-[state=active]:text-white py-2 text-xs font-medium"
-              >
-                Payments
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
+            ))}
+          </TabsList>
+        </ScrollableTabsBar>
+      </Tabs>
+
+      {/* Transactions and Payments have no left-column summary, so the 440px
+          gutter would just squeeze them — they take the full page width. */}
+      <div
+        className={
+          isFullWidthTab
+            ? "grid min-w-0 gap-6"
+            : "grid min-w-0 gap-6 xl:grid-cols-[440px_minmax(0,1fr)]"
+        }
+      >
+      {/* LEFT COLUMN: Controls & Summaries */}
+      <div className={cn("min-w-0 space-y-4", isFullWidthTab && "hidden")}>
 
         {/* Scrollable Summary Cards - Hidden Scrollbar */}
-        <div className="xl:flex-1 overflow-y-auto pr-2 space-y-4 pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+        <div className="space-y-4">
           {activeTab === "overview" && (
             <>
-              <Card className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)] bg-white rounded-2xl overflow-hidden shrink-0">
+              <Card className="shrink-0 overflow-hidden">
                 <CardHeader className="pt-6 px-6 pb-2">
-                  <CardTitle className="text-base font-bold text-gray-900">
+                  <CardTitle>
                     Revenue Summary
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 pt-2 space-y-4">
                   {/* List Items */}
                   <div className="flex justify-between items-center group">
-                    <span className="font-medium text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       Net sales
                     </span>
-                    <span className="font-mono font-bold text-gray-900 text-base">
+                    <span className="font-medium tabular-nums">
                       {summary.net_sales.toLocaleString("en-US", {
                         style: "currency",
                         currency: "USD",
@@ -268,19 +320,19 @@ export default function FinancialsPage() {
                   </div>
 
                   <div className="flex justify-between items-center group">
-                    <span className="font-medium text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       Gratuity
                     </span>
-                    <span className="font-mono font-bold text-gray-900 text-base">
+                    <span className="font-medium tabular-nums">
                       $0.00
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center group">
-                    <span className="font-medium text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       Tax amount
                     </span>
-                    <span className="font-mono font-bold text-gray-900 text-base">
+                    <span className="font-medium tabular-nums">
                       {summary.tax_total.toLocaleString("en-US", {
                         style: "currency",
                         currency: "USD",
@@ -289,10 +341,10 @@ export default function FinancialsPage() {
                   </div>
 
                   <div className="flex justify-between items-center group">
-                    <span className="font-medium text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       Service charge
                     </span>
-                    <span className="font-mono font-bold text-gray-900 text-base">
+                    <span className="font-medium tabular-nums">
                       {serviceCharges.toLocaleString("en-US", {
                         style: "currency",
                         currency: "USD",
@@ -301,10 +353,10 @@ export default function FinancialsPage() {
                   </div>
 
                   <div className="flex justify-between items-center group">
-                    <span className="font-medium text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       Tips
                     </span>
-                    <span className="font-mono font-bold text-gray-900 text-base">
+                    <span className="font-medium tabular-nums">
                       {summary.tip_total.toLocaleString("en-US", {
                         style: "currency",
                         currency: "USD",
@@ -313,10 +365,10 @@ export default function FinancialsPage() {
                   </div>
 
                   <div className="flex justify-between items-center group">
-                    <span className="font-medium text-sm text-[#6366f1]">
+                    <span className="text-sm font-medium text-foreground">
                       Paid in total
                     </span>
-                    <span className="font-mono font-bold text-[#6366f1] text-base">
+                    <span className="font-mono text-base font-bold text-foreground">
                       {totalAmount.toLocaleString("en-US", {
                         style: "currency",
                         currency: "USD",
@@ -324,13 +376,11 @@ export default function FinancialsPage() {
                     </span>
                   </div>
 
-                  <div className="h-px bg-gray-100 w-full my-2" />
-
                   <div className="flex justify-between items-center pt-1">
-                    <span className="font-bold text-base text-gray-900">
+                    <span className="font-semibold">
                       Total amount
                     </span>
-                    <span className="font-mono font-extrabold text-lg text-gray-900">
+                    <span className="text-lg font-semibold tabular-nums">
                       {totalAmount.toLocaleString("en-US", {
                         style: "currency",
                         currency: "USD",
@@ -340,18 +390,18 @@ export default function FinancialsPage() {
                 </CardContent>
               </Card>
 
-              <Card className="border-none shadow-[0_2px_8px_rgba(0,0,0,0.04)] bg-white rounded-2xl overflow-hidden shrink-0">
+              <Card className="shrink-0 overflow-hidden">
                 <CardHeader className="pt-6 px-6 pb-2">
-                  <CardTitle className="text-base font-bold text-gray-900">
+                  <CardTitle>
                     Net Sales Summary
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 pt-2 space-y-4">
                   <div className="flex justify-between items-center group">
-                    <span className="font-medium text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       Gross sales
                     </span>
-                    <span className="font-mono font-bold text-gray-900 text-base">
+                    <span className="font-medium tabular-nums">
                       {summary.gross_sales.toLocaleString("en-US", {
                         style: "currency",
                         currency: "USD",
@@ -360,10 +410,10 @@ export default function FinancialsPage() {
                   </div>
 
                   <div className="flex justify-between items-center group">
-                    <span className="font-medium text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       Discounts
                     </span>
-                    <span className="font-mono font-bold text-red-500 text-base">
+                    <span className="font-mono text-base font-bold text-foreground">
                       -
                       {summary.discounts_total.toLocaleString("en-US", {
                         style: "currency",
@@ -373,10 +423,10 @@ export default function FinancialsPage() {
                   </div>
 
                   <div className="flex justify-between items-center group">
-                    <span className="font-medium text-sm text-gray-500">
+                    <span className="text-sm text-muted-foreground">
                       Refunds
                     </span>
-                    <span className="font-mono font-bold text-gray-900 text-base">
+                    <span className="font-medium tabular-nums">
                       {summary.refunds_total.toLocaleString("en-US", {
                         style: "currency",
                         currency: "USD",
@@ -384,13 +434,11 @@ export default function FinancialsPage() {
                     </span>
                   </div>
 
-                  <div className="h-px bg-gray-100 w-full my-2" />
-
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-                    <span className="font-bold text-base text-gray-900">
+                  <div className="flex items-center justify-between rounded-2xl bg-muted/60 p-4">
+                    <span className="font-semibold">
                       Net sales
                     </span>
-                    <span className="font-mono font-black text-lg text-gray-900">
+                    <span className="text-lg font-semibold tabular-nums">
                       {summary.net_sales.toLocaleString("en-US", {
                         style: "currency",
                         currency: "USD",
@@ -415,18 +463,23 @@ export default function FinancialsPage() {
       {/* RIGHT COLUMN: Fixed Chart Area */}
       <div className="flex-1 h-full min-w-0">
         {activeTab === "overview" && (
-          <div className="h-full w-full rounded-[32px] overflow-hidden shadow-sm bg-white border border-gray-100 relative">
-            <FinancialHeroChart data={chartData} />
+          <div className="relative min-h-[420px] w-full overflow-hidden rounded-3xl border bg-card">
+            <FinancialHeroChart
+              data={chartData}
+              isLoading={isLoading}
+              defaultTimeRange={chartTimeRange}
+              onTimeRangeChange={handleChartTimeRangeChange}
+            />
           </div>
         )}
 
         {activeTab === "waterfall" && (
-          <div className="h-full w-full rounded-[32px] overflow-hidden shadow-sm bg-white border border-gray-100 relative flex flex-col items-center justify-center p-8">
-            <FileSpreadsheet className="w-16 h-16 text-[#6366f1]/20 mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
+          <div className="relative flex min-h-[420px] w-full flex-col items-center justify-center rounded-3xl border bg-card p-8">
+            <FileSpreadsheet className="mb-4 h-16 w-16 text-muted-foreground/25" />
+            <h3 className="mb-2 text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
               Net Collected Statement
             </h3>
-            <p className="text-gray-500 text-center text-sm max-w-md">
+            <p className="max-w-md text-center text-sm text-muted-foreground">
               Click any line item in the waterfall report to expand and see the
               contributing transactions. Use the date picker to adjust the
               reporting period.
@@ -435,29 +488,34 @@ export default function FinancialsPage() {
         )}
 
         {activeTab === "transactions" && (
-          <Card className="h-full w-full border-none shadow-sm bg-white rounded-[32px] overflow-hidden flex flex-col">
-            <CardContent className="p-0 flex-1 overflow-hidden min-h-0 flex flex-col">
-              <div className="flex-1 overflow-auto min-h-0 px-4 pb-4">
-                <OrdersDataTable
-                  data={orders || []}
-                  isLoading={isLoadingOrders}
-                  onOrderClick={handleOrderClick}
-                  hideOrderStatus
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <Panel>
+            <PanelSection
+              icon={Receipt}
+              label="Transactions"
+              caption="Every order in the selected period. Click a row to open its receipt."
+            >
+              <OrdersDataTable
+                data={orders || []}
+                isLoading={isLoadingOrders}
+                onOrderClick={handleOrderClick}
+                hideOrderStatus
+                hideOrderTypeBadge
+              />
+            </PanelSection>
+          </Panel>
         )}
 
         {activeTab === "payments" && (
-          <div className="h-full w-full rounded-[32px] bg-white border border-dashed border-gray-200 flex flex-col items-center justify-center">
-            <CreditCard className="w-16 h-16 text-gray-200 mb-4" />
-            <h3 className="text-xl font-bold text-gray-900">
+          <div className="flex min-h-[420px] w-full flex-col items-center justify-center rounded-3xl border bg-card">
+            <CreditCard className="mb-4 h-16 w-16 text-muted-foreground/30" />
+            <h3 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
               Payments Dashboard
             </h3>
-            <p className="text-gray-500">Detailed analytics coming soon.</p>
+            <p className="text-sm text-muted-foreground">Detailed analytics coming soon.</p>
           </div>
         )}
+      </div>
+
       </div>
 
       {/* Receipt Modal Integration */}
@@ -473,6 +531,6 @@ export default function FinancialsPage() {
           onOpenChange={(open) => !open && setSelectedOrder(null)}
         />
       )}
-    </div>
+    </PageShell>
   );
 }

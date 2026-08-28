@@ -53,6 +53,12 @@ ADM-006-007-STATUS.md
 
 # Claude Code local settings (machine-specific paths and personal permissions)
 .claude/settings.local.json
+.claude/skills*
+.agents/skills*
+
+# Agent skill packs (installed per-machine, not product code)
+.claude/skills/
+/.agents/
 
 # Sprint planning / personal task notes
 tasks/sprint2-awdi-tickets.md
@@ -65,3 +71,9 @@ tasks/T-21-responsive-layout.md
 .playwright-mcp/
 # Orderout documentation
 /orderout-docs*
+# Personal 1on1 / feedback documents
+docs/*1on1*.docx
+~$*.docx
+
+# Valor sandbox probe scripts (local dev tooling, not product code)
+/valor-*.ts

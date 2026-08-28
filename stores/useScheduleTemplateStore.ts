@@ -18,6 +18,9 @@ interface ScheduleTemplateState {
   reset: () => void;
 }
 
+const getBaseTemplateName = (name: string) =>
+  name.replace(/(?:\s*\(Copy(?:\s+\d+)?\))+$/i, "").trim();
+
 export const useScheduleTemplateStore = create<ScheduleTemplateState>()(
   persist(
     (set, get) => ({
@@ -49,14 +52,34 @@ export const useScheduleTemplateStore = create<ScheduleTemplateState>()(
             ),
           })),
         duplicateTemplate: (templateId) => {
-          const templateToDuplicate = get().templates.find(
+          const templates = get().templates;
+          const templateToDuplicate = templates.find(
             (template) => template.id === templateId
           );
           if (templateToDuplicate) {
+            const baseName = getBaseTemplateName(templateToDuplicate.name);
+            const matchingCopies = templates.filter((template) => {
+              const normalizedName = getBaseTemplateName(template.name);
+              return (
+                normalizedName.toLocaleLowerCase() ===
+                  baseName.toLocaleLowerCase() &&
+                template.name.trim().toLocaleLowerCase() !==
+                  baseName.toLocaleLowerCase()
+              );
+            });
+            const highestCopyNumber = matchingCopies.reduce(
+              (highest, template) => {
+                const match = template.name.match(/\(Copy\s+(\d+)\)$/i);
+                return match ? Math.max(highest, Number(match[1])) : highest;
+              },
+              0,
+            );
+            const nextCopyNumber =
+              Math.max(highestCopyNumber, matchingCopies.length) + 1;
             const newTemplate: ScheduleTemplate = {
               ...templateToDuplicate,
               id: crypto.randomUUID(),
-              name: `${templateToDuplicate.name} (Copy)`,
+              name: `${baseName} (Copy ${nextCopyNumber})`,
               shifts: templateToDuplicate.shifts.map((shift) => ({
                 ...shift,
                 tempId: crypto.randomUUID(),
@@ -81,6 +104,33 @@ export const useScheduleTemplateStore = create<ScheduleTemplateState>()(
         templates: state.templates,
         activeTemplateIds: state.activeTemplateIds,
       }),
+      version: 1,
+      migrate: (persistedState, version) => {
+        if (version >= 1) return persistedState as ScheduleTemplateState;
+
+        const state = persistedState as Pick<
+          ScheduleTemplateState,
+          "templates" | "activeTemplateIds"
+        >;
+        const copyCounts = new Map<string, number>();
+
+        return {
+          ...state,
+          templates: (state.templates ?? []).map((template) => {
+            const baseName = getBaseTemplateName(template.name);
+            if (template.name.trim() === baseName) return template;
+
+            const groupKey = baseName.toLocaleLowerCase();
+            const copyNumber = (copyCounts.get(groupKey) ?? 0) + 1;
+            copyCounts.set(groupKey, copyNumber);
+
+            return {
+              ...template,
+              name: `${baseName} (Copy ${copyNumber})`,
+            };
+          }),
+        } as ScheduleTemplateState;
+      },
     }
   )
 );

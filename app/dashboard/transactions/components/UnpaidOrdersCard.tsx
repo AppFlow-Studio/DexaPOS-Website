@@ -1,7 +1,8 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -33,85 +34,73 @@ export function UnpaidOrdersCard({
   isLoading,
   onViewUnpaid,
 }: UnpaidOrdersCardProps) {
-  if (isLoading) {
-    return (
-      <Card className="border-border/60 shadow-none">
-        <CardHeader className="pb-2">
-          <div className="h-5 w-32 bg-muted animate-pulse rounded" />
-        </CardHeader>
-        <CardContent>
-          <div className="h-6 w-24 bg-muted animate-pulse rounded" />
-        </CardContent>
-      </Card>
-    );
-  }
-
   const hasUnpaid = unpaidAmount > 0;
 
   return (
-    <Card
-      className={cn(
-        "border-border/60 shadow-none",
-        hasUnpaid && "bg-amber-50/50 border-amber-200/60 dark:bg-amber-900/10 dark:border-amber-500/20"
-      )}
-    >
-      <CardHeader className="pb-2 flex flex-row items-center justify-between">
-        <div className="flex items-center gap-2">
-          <CardTitle className="text-base font-bold tracking-tight">
+    // No amber alarm tint on the panel (D-12): an outstanding balance is a
+    // normal state, and a whole panel changing colour made it the loudest
+    // thing on the tab. The count and the figure say it.
+    <Panel>
+      <PanelSection
+        label={
+          <span className="flex items-center gap-2">
             Unpaid Orders
-          </CardTitle>
-          {hasUnpaid && (
-            <div className="p-1 rounded-full bg-amber-500/20">
-              <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
-            </div>
-          )}
-        </div>
-        {onViewUnpaid && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs text-primary h-7 px-2 hover:bg-primary/10"
-            onClick={onViewUnpaid}
-          >
-            Unpaid orders
-            <ChevronRight className="ml-1 h-3.5 w-3.5" />
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent className="pt-0">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Unpaid amount</span>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Info className="h-3.5 w-3.5 text-muted-foreground/50 cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent side="right" className="max-w-[200px]">
-                  <p className="text-xs">
-                    Total outstanding balance from unpaid orders
-                  </p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <div className="text-right">
-            <span
-              className={cn(
-                "font-mono text-lg font-bold tabular-nums",
-                hasUnpaid && "text-amber-600"
-              )}
-            >
-              {formatCurrency(unpaidAmount)}
-            </span>
-            {unpaidCount > 0 && (
-              <p className="text-[10px] text-muted-foreground">
-                {unpaidCount} order{unpaidCount !== 1 ? "s" : ""}
-              </p>
+            {hasUnpaid && (
+              <span className="rounded-full bg-muted/60 p-1 text-muted-foreground">
+                <AlertCircle className="h-3.5 w-3.5" />
+              </span>
             )}
+          </span>
+        }
+        action={
+          onViewUnpaid && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-[#0C4FD1] dark:text-[#6CA0FF] h-7 px-2 hover:bg-[#0C4FD1]/10"
+              onClick={onViewUnpaid}
+            >
+              Unpaid orders
+              <ChevronRight className="ml-1 h-3.5 w-3.5" />
+            </Button>
+          )
+        }
+      >
+        {isLoading ? (
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-6 w-24" />
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        ) : (
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 max-w-[70%] items-start gap-2">
+              <span className="min-w-0 break-words text-sm text-muted-foreground">Unpaid amount</span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/50 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-[200px]">
+                    <p className="text-xs">
+                      Total outstanding balance from unpaid orders
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <div className="ml-auto shrink-0 text-right">
+              <span className="font-mono text-lg font-bold tabular-nums">
+                {formatCurrency(unpaidAmount)}
+              </span>
+              {unpaidCount > 0 && (
+                <p className="text-[10px] text-muted-foreground">
+                  {unpaidCount} order{unpaidCount !== 1 ? "s" : ""}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </PanelSection>
+    </Panel>
   );
 }

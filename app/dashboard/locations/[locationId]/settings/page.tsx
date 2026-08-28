@@ -1,8 +1,8 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
 import { auth } from '@clerk/nextjs/server'
+import { PageHeader, PageShell } from '@/components/dashboard/shell'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { getEffectiveClerkOrgId } from '@/lib/admin/merchant-context'
 import { LocationTaxComplianceCard } from '@/components/dashboard/locations/LocationTaxComplianceCard'
 import { LocationBankingProfileCard } from '@/components/dashboard/locations/LocationBankingProfileCard'
 import { LocationBatchEmailCard } from '@/components/dashboard/locations/LocationBatchEmailCard'
@@ -20,6 +20,18 @@ interface LocationSettingsPageProps {
 export default async function LocationSettingsPage({ params }: LocationSettingsPageProps) {
   const { locationId } = await params
   const { orgId } = await auth()
+
+  // Resolve the impersonation-aware org so the merchant-scoped card actions
+  // (banking, batch-out email) target the merchant being viewed. During HQ
+  // impersonation auth().orgId is the HQ org, which would fail merchant lookups.
+  let effectiveOrgId = orgId ?? ''
+  try {
+    effectiveOrgId = await getEffectiveClerkOrgId(orgId ?? null)
+  } catch {
+    // Not impersonating / unresolved — fall back to the session org and let the
+    // card actions surface any access error.
+  }
+
   const supabase = createServerSupabaseClient()
 
   const { data: location, error: locationError } = await supabase
@@ -80,33 +92,24 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
     : null
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Location Tax & Banking</h1>
-          <p className="text-muted-foreground">
-            {location.name} {location.city ? `- ${location.city}, ${location.state}` : ''}
-          </p>
-        </div>
-        <Link
-          href="/dashboard/locations"
-          className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Locations
-        </Link>
-      </div>
+    <PageShell width="narrow">
+      <PageHeader
+        title="Location Tax & Banking"
+        subtitle={`${location.name}${location.city ? ` · ${location.city}, ${location.state}` : ''}`}
+        backHref="/dashboard/locations"
+        backLabel="Back to Locations"
+      />
 
       <LocationTaxComplianceCard location={location as Location} />
 
       <LocationBankingProfileCard
-        clerkOrgId={orgId ?? ''}
+        clerkOrgId={effectiveOrgId}
         locationId={locationId}
         initialProfile={initialProfile}
       />
 
       <LocationBatchEmailCard
-        clerkOrgId={orgId ?? ''}
+        clerkOrgId={effectiveOrgId}
         locationId={locationId}
         initialEnabled={Boolean(
           (location as { batch_summary_email_enabled?: boolean | null })
@@ -118,7 +121,7 @@ export default async function LocationSettingsPage({ params }: LocationSettingsP
         }
         locationEmail={(location as { email?: string | null }).email ?? null}
       />
-    </div>
+    </PageShell>
   )
 }
 

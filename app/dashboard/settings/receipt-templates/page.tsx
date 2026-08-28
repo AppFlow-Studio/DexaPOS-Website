@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -19,7 +18,7 @@ import {
   useGatedLocationId,
   useGatedLocation,
 } from "@/stores/location-store";
-import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
   useReceiptTemplates,
   useUpsertReceiptTemplate,
@@ -30,6 +29,12 @@ import { ReceiptPreview } from "./components/ReceiptPreview";
 import { ReceiptSettingsForm } from "./components/ReceiptSettingsForm";
 import { DEFAULT_TEMPLATE_VALUES, TEMPLATE_TYPES } from "./constants";
 import type { TemplateType, ReceiptTemplateFormData, ReceiptTemplate } from "./types";
+import {
+  LocationIndicator,
+  PageHeader,
+  PageShell,
+  Panel,
+} from "@/components/dashboard/shell";
 
 function formDataFromTemplate(
   templateType: TemplateType,
@@ -66,8 +71,7 @@ export default function ReceiptTemplatesPage() {
   const selectedLocationId = gatedLocationId ?? "all";
   const isAllLocations = !gatedLocationId;
   const selectedLocation = useGatedLocation();
-  const { data: userInfo } = useUserInfo();
-  const clerkOrgId = userInfo?.members?.[0]?.organizations?.id;
+  const clerkOrgId = useClerkOrgId();
 
   // Fetch templates
   const {
@@ -200,79 +204,78 @@ export default function ReceiptTemplatesPage() {
   // "All Locations" prompt
   if (isAllLocations) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Receipt Templates
-          </h2>
-          <p className="text-muted-foreground">
-            Customize receipt layouts for your POS printers
-          </p>
-        </div>
+      <PageShell>
+        <PageHeader
+          title="Receipt templates"
+          subtitle="Customize receipt and ticket layouts for your POS printers."
+          indicator={<LocationIndicator isAllLocations locationName={null} />}
+        />
 
-        <Card>
-          <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-            <MapPin className="h-12 w-12 mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">Select a Location</h3>
-            <p className="text-muted-foreground max-w-md">
+        <Panel padded>
+          <div className="flex min-h-64 flex-col items-center justify-center text-center">
+            <MapPin className="mb-4 h-12 w-12 text-muted-foreground" />
+            <h3 className="mb-2 text-lg font-semibold">Select a Location</h3>
+            <p className="max-w-md text-muted-foreground">
               Receipt templates are location-specific. Please select a location
               from the dropdown above to customize templates for that location.
             </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </Panel>
+      </PageShell>
     );
   }
 
   // Loading state
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Receipt Templates
-          </h2>
-          <p className="text-muted-foreground">
-            Templates for{" "}
-            <span className="font-medium">{selectedLocation?.name}</span>
-          </p>
+      <PageShell>
+        <PageHeader
+          title="Receipt templates"
+          subtitle="Customize receipt and ticket layouts for your POS printers."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
+        <Skeleton className="h-11 w-full max-w-[800px] rounded-full" />
+        <div className="flex min-w-0 flex-col gap-6 lg:flex-row">
+          <Skeleton className="h-[500px] w-full rounded-2xl lg:w-[380px]" />
+          <Skeleton className="h-[400px] flex-1 rounded-3xl" />
         </div>
-        <Skeleton className="h-10 w-full max-w-[800px]" />
-        <div className="flex flex-col lg:flex-row gap-6">
-          <Skeleton className="h-[500px] w-full lg:w-[380px]" />
-          <Skeleton className="h-[400px] flex-1" />
-        </div>
-      </div>
+      </PageShell>
     );
   }
 
   // Error state
   if (isError) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Receipt Templates
-          </h2>
-          <p className="text-muted-foreground">
-            Templates for{" "}
-            <span className="font-medium">{selectedLocation?.name}</span>
-          </p>
-        </div>
-        <Card>
-          <CardContent className="py-12 flex flex-col items-center justify-center text-center">
-            <AlertTriangle className="h-12 w-12 mb-4 text-destructive" />
-            <h3 className="text-lg font-semibold mb-2">
+      <PageShell>
+        <PageHeader
+          title="Receipt templates"
+          subtitle="Customize receipt and ticket layouts for your POS printers."
+          indicator={
+            <LocationIndicator
+              isAllLocations={false}
+              locationName={selectedLocation?.name}
+            />
+          }
+        />
+        <Panel padded>
+          <div className="flex min-h-64 flex-col items-center justify-center text-center">
+            <AlertTriangle className="mb-4 h-12 w-12 text-destructive" />
+            <h3 className="mb-2 text-lg font-semibold">
               Failed to load templates
             </h3>
-            <p className="text-muted-foreground max-w-md">
+            <p className="max-w-md text-muted-foreground">
               {error instanceof Error
                 ? error.message
                 : "An error occurred while loading receipt templates."}
             </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </Panel>
+      </PageShell>
     );
   }
 
@@ -283,61 +286,66 @@ export default function ReceiptTemplatesPage() {
   const showEditor = activeTemplateSaved || customizingTabs.has(activeTab);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">
-          Receipt Templates
-        </h2>
-        <p className="text-muted-foreground">
-          Customize receipt layouts for{" "}
-          <span className="font-medium">{selectedLocation?.name}</span>
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Receipt templates"
+        subtitle="Preview and customize every receipt and kitchen ticket format."
+        indicator={
+          <LocationIndicator
+            isAllLocations={false}
+            locationName={selectedLocation?.name}
+          />
+        }
+      />
 
       {/* Tabs */}
       <TemplateTypeTabs activeTab={activeTab} onChange={handleTabChange} />
 
       {/* Per-tab empty state or editor */}
       {!showEditor ? (
-        <Card>
-          <CardContent className="py-16 flex flex-col items-center justify-center text-center">
-            <Receipt className="h-12 w-12 mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-semibold mb-2">
+        <Panel padded>
+          <div className="flex min-h-72 flex-col items-center justify-center text-center">
+            <Receipt className="mb-4 h-12 w-12 text-muted-foreground" />
+            <h3 className="mb-2 text-lg font-semibold">
               Set Up{" "}
               {TEMPLATE_TYPES.find((t) => t.id === activeTab)?.label ??
                 activeTab}
             </h3>
-            <p className="text-muted-foreground max-w-md mb-6">
+            <p className="mb-6 max-w-md text-muted-foreground">
               This template type hasn&apos;t been configured yet. Use the
               recommended defaults to get started quickly, or customize the
               settings yourself.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <Button
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
                 onClick={handleUseDefault}
                 disabled={upsertMutation.isPending}
               >
                 {upsertMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
                 ) : (
-                  <Check className="h-4 w-4 mr-2" />
+                  <Check className="mr-1.5 h-4 w-4" />
                 )}
                 Use Default
               </Button>
-              <Button variant="outline" onClick={handleCustomize}>
-                <Settings2 className="h-4 w-4 mr-2" />
+              <Button
+                variant="outline"
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                onClick={handleCustomize}
+              >
+                <Settings2 className="mr-1.5 h-4 w-4" />
                 Customize
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </Panel>
       ) : (
-        <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex min-w-0 flex-col gap-6 lg:flex-row">
           {/* Left: Preview */}
-          <div className="lg:w-[380px] lg:shrink-0">
+          <div className="min-w-0 lg:w-[380px] lg:shrink-0">
             <div className="lg:sticky lg:top-6">
-              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              <h3 className="mb-3 text-sm text-muted-foreground">
                 Preview
               </h3>
               <ReceiptPreview
@@ -349,38 +357,37 @@ export default function ReceiptTemplatesPage() {
           </div>
 
           {/* Right: Settings Form */}
-          <div className="flex-1 min-w-0">
-            <Card>
-              <CardContent className="pt-6">
-                <ReceiptSettingsForm
-                  templateType={activeTab}
-                  formState={formState}
-                  onChange={handleFormChange}
-                />
+          <div className="min-w-0 flex-1">
+            <Panel padded>
+              <ReceiptSettingsForm
+                templateType={activeTab}
+                formState={formState}
+                onChange={handleFormChange}
+              />
 
-                {/* Save button */}
-                <div className="mt-6 pt-4 border-t flex items-center justify-between">
-                  {isDirty && (
-                    <p className="text-sm text-muted-foreground">
-                      You have unsaved changes
-                    </p>
-                  )}
-                  <div className="ml-auto">
-                    <Button
-                      onClick={handleSave}
-                      disabled={!isDirty || upsertMutation.isPending}
-                    >
-                      {upsertMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Save className="h-4 w-4 mr-2" />
-                      )}
-                      Save Changes
-                    </Button>
-                  </div>
+              {/* Save row — separated by spacing, not a rule (§5.5). */}
+              <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+                {isDirty && (
+                  <p className="text-sm text-muted-foreground">
+                    You have unsaved changes
+                  </p>
+                )}
+                <div className="ml-auto">
+                  <Button
+                    className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                    onClick={handleSave}
+                    disabled={!isDirty || upsertMutation.isPending}
+                  >
+                    {upsertMutation.isPending ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-1.5 h-4 w-4" />
+                    )}
+                    Save Changes
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </Panel>
           </div>
         </div>
       )}
@@ -406,6 +413,6 @@ export default function ReceiptTemplatesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

@@ -4,7 +4,6 @@ import { useMemo } from 'react'
 import { format } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
 import { Ban, CheckCircle2, Copy, RotateCcw } from 'lucide-react'
-import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -89,7 +88,6 @@ export function DeadLetterDetailSheet({
   function copyId() {
     if (!entry) return
     void navigator.clipboard.writeText(entry.id)
-    toast.success('ID copied')
   }
 
   return (

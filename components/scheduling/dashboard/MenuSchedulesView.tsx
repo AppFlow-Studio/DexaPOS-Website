@@ -1,13 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -39,20 +32,20 @@ import {
   useDeleteScheduleMutation,
   useToggleScheduleActiveMutation,
 } from "@/app/dashboard/hooks/useLocationScopedSchedules";
-import { useLocationStore, useIsSingleLocation } from "@/stores/location-store";
+import { useIsSingleLocation } from "@/stores/location-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { SchedulesModel, ScheduleTimeSlotsModel } from "@/types/db-modles";
 import { DAYS_OF_WEEK } from "@/components/dashboard/menu/ScheduleCard";
 import { AssignMenusSheet } from "./AssignMenusSheet";
 import { DeleteScheduleDialog } from "./DeleteScheduleDialog";
+import { Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 
 type ScheduleWithSlots = SchedulesModel & {
   schedule_time_slots?: ScheduleTimeSlotsModel[];
 };
 
 export function MenuSchedulesView() {
-  const { selectedLocationId } = useLocationStore();
   const isSingleLocation = useIsSingleLocation();
 
   const { data: schedules, isLoading } =
@@ -142,113 +135,83 @@ export function MenuSchedulesView() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Menu Availability
-          </h2>
-          <p className="text-muted-foreground">
-            Control when menus and categories are available
-          </p>
-        </div>
-        <Button onClick={handleCreate}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Schedule
-        </Button>
-      </div>
-
-      {/* Stats */}
-      <div className={cn("grid gap-4", isSingleLocation ? "md:grid-cols-3" : "md:grid-cols-4")}>
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Schedules
-            </CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">
-              {isSingleLocation
-                ? "Menu availability windows"
-                : `${stats.global} global, ${stats.total - stats.global} location-specific`}
+    <div className="animate-in fade-in duration-500">
+      <Panel className="overflow-hidden">
+        <section className="flex flex-col gap-4 px-4 py-5 sm:px-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-primary">
+              Menu availability
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Control when menus and categories are available.
             </p>
-          </CardContent>
-        </Card>
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active</CardTitle>
-            <Power className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {stats.active}
-            </div>
-            <p className="text-xs text-muted-foreground">Currently in use</p>
-          </CardContent>
-        </Card>
-        <Card className="transition-all hover:shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inactive</CardTitle>
-            <PowerOff className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-muted-foreground">
-              {stats.inactive}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Not currently active
-            </p>
-          </CardContent>
-        </Card>
-        {!isSingleLocation && (
-          <Card className="transition-all hover:shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Global</CardTitle>
-              <Globe className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">
-                {stats.global}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Available everywhere
-              </p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+          </div>
+          <Button className="w-full sm:w-auto" onClick={handleCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create schedule
+          </Button>
+        </section>
 
-      {/* Schedules List */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <section className="px-4 py-6 sm:px-6">
+          <StatRow columns={isSingleLocation ? 3 : 4}>
+            <StatTile
+              label="Total schedules"
+              value={stats.total}
+              icon={<Calendar />}
+              meta={
+                isSingleLocation
+                  ? "Menu availability windows"
+                  : `${stats.global} global, ${stats.total - stats.global} location-specific`
+              }
+            />
+            <StatTile
+              label="Active"
+              value={stats.active}
+              icon={<Power className="text-emerald-600" />}
+              meta="Currently in use"
+            />
+            <StatTile
+              label="Inactive"
+              value={stats.inactive}
+              icon={<PowerOff />}
+              meta="Not currently active"
+            />
+            {!isSingleLocation && (
+              <StatTile
+                label="Global"
+                value={stats.global}
+                icon={<Globe className="text-primary" />}
+                meta="Available everywhere"
+              />
+            )}
+          </StatRow>
+        </section>
+
+        <section className="px-4 py-6 sm:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle>All Schedules</CardTitle>
-              <CardDescription>
+              <h3 className="font-semibold">All schedules</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
                 {filteredSchedules.length} schedule
                 {filteredSchedules.length !== 1 ? "s" : ""} found
-              </CardDescription>
+              </p>
             </div>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search schedules..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
+                onChange={(event) => setSearchTerm(event.target.value)}
+                className="h-10 rounded-full border-0 bg-muted/45 pl-10 shadow-none focus-visible:ring-1"
               />
             </div>
           </div>
-        </CardHeader>
 
-        <CardContent>
+          <div className="mt-5">
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-32 w-full" />
+                <Skeleton key={i} className="h-28 w-full rounded-2xl" />
               ))}
             </div>
           ) : filteredSchedules.length === 0 ? (
@@ -267,8 +230,8 @@ export function MenuSchedulesView() {
               action={
                 schedulesList.length === 0 ? (
                   <Button onClick={handleCreate}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Schedule
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create schedule
                   </Button>
                 ) : null
               }
@@ -286,18 +249,17 @@ export function MenuSchedulesView() {
                   <div
                     key={schedule.id}
                     className={cn(
-                      "group p-4 rounded-xl border bg-card transition-all duration-200",
-                      "hover:shadow-md hover:border-primary/30",
+                      "group rounded-2xl bg-muted/30 px-4 py-4 transition-colors duration-200",
+                      "hover:bg-muted/45",
                       "animate-in fade-in slide-in-from-bottom-2"
                     )}
                     style={{
                       animationDelay: `${Math.min(index * 30, 300)}ms`,
                     }}
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-start justify-between gap-3 sm:gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
                           <Calendar
                             className={cn(
                               "h-4 w-4 shrink-0",
@@ -309,43 +271,45 @@ export function MenuSchedulesView() {
                           <h4 className="font-semibold truncate">
                             {schedule.name}
                           </h4>
-                          {!isSingleLocation && (schedule.location_id ? (
-                            <Badge
-                              variant="outline"
-                              className="text-xs bg-purple-50 text-purple-600 border-purple-200"
-                            >
-                              <MapPin className="h-2.5 w-2.5 mr-1" />
-                              Location
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200"
-                            >
-                              <Globe className="h-2.5 w-2.5 mr-1" />
-                              Global
-                            </Badge>
-                          ))}
+                          {!isSingleLocation && (
+                            <span
+                              className="h-0 basis-full sm:hidden"
+                              aria-hidden="true"
+                            />
+                          )}
+                          {!isSingleLocation &&
+                            (schedule.location_id ? (
+                              <Badge variant="secondary" className="text-xs">
+                                <MapPin className="mr-1 h-2.5 w-2.5" />
+                                Location
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="secondary"
+                                className="text-xs"
+                              >
+                                <Globe className="mr-1 h-2.5 w-2.5" />
+                                Global
+                              </Badge>
+                            ))}
                           <Badge
-                            variant={
-                              schedule.is_active ? "default" : "secondary"
-                            }
+                            variant="secondary"
+                            className="border-0 text-xs"
                           >
                             {schedule.is_active ? "Active" : "Inactive"}
                           </Badge>
                         </div>
                         {schedule.description && (
-                          <p className="text-sm text-muted-foreground mb-3">
+                          <p className="mb-3 hidden text-sm text-muted-foreground sm:block">
                             {schedule.description}
                           </p>
                         )}
 
-                        {/* Time slots */}
                         <div className="flex flex-wrap gap-2">
                           {days.length === 0 ? (
                             <Badge
-                              variant="outline"
-                              className="text-xs text-amber-600 bg-amber-50 border-amber-200"
+                              variant="secondary"
+                              className="text-xs"
                             >
                               No time slots
                             </Badge>
@@ -358,8 +322,8 @@ export function MenuSchedulesView() {
                               return (
                                 <Badge
                                   key={day}
-                                  variant="outline"
-                                  className="text-xs"
+                                  variant="secondary"
+                                  className="border-0 bg-background/80 text-xs font-normal"
                                 >
                                   {DAYS_OF_WEEK[day]}: {daySlots.length} slot
                                   {daySlots.length !== 1 ? "s" : ""}
@@ -370,15 +334,15 @@ export function MenuSchedulesView() {
                         </div>
                       </div>
 
-                      {/* Actions */}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 shrink-0"
+                            className="h-9 w-9 shrink-0 rounded-full"
                           >
                             <MoreVertical className="h-4 w-4" />
+                            <span className="sr-only">Open schedule actions</span>
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -425,8 +389,9 @@ export function MenuSchedulesView() {
               })}
             </div>
           )}
-        </CardContent>
-      </Card>
+          </div>
+        </section>
+      </Panel>
 
       {/* Form Sheet */}
       <ScheduleFormSheet

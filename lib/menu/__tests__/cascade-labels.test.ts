@@ -14,26 +14,32 @@ describe("scopeLabel", () => {
     expect(scopeLabel({ level: 1 })).toBe("Everywhere");
   });
 
-  it("returns '{location} override' for L2", () => {
-    expect(scopeLabel({ level: 2, locationName: "Downtown" })).toBe(
-      "Downtown override",
-    );
-  });
-
-  it("returns '{category} category' for L3", () => {
-    expect(scopeLabel({ level: 3, categoryName: "Burgers" })).toBe(
+  it("returns '{category} category' for L2", () => {
+    expect(scopeLabel({ level: 2, categoryName: "Burgers" })).toBe(
       "Burgers category",
     );
   });
 
-  it("returns '{category} at {location}' for L4", () => {
+  it("returns '{category} at {location}' for L3", () => {
     expect(
       scopeLabel({
-        level: 4,
+        level: 3,
         categoryName: "Burgers",
         locationName: "Downtown",
       }),
-    ).toBe("Burgers at Downtown");
+    ).toBe(
+      "Burgers at Downtown",
+    );
+  });
+
+  it("returns '{menu} menu – {category}' for L4", () => {
+    expect(
+      scopeLabel({
+        level: 4,
+        menuName: "Lunch",
+        categoryName: "Burgers",
+      }),
+    ).toBe("Lunch menu – Burgers");
   });
 
   it("returns '{menu} menu at {location}' for L5", () => {
@@ -43,9 +49,9 @@ describe("scopeLabel", () => {
   });
 
   it("handles missing names gracefully", () => {
-    expect(scopeLabel({ level: 2 })).toBe("Location override");
-    expect(scopeLabel({ level: 5 })).toBe("Menu at location");
-    expect(scopeLabel({ level: 4 })).toBe("Category at location");
+    expect(scopeLabel({ level: 2 })).toBe("Category default");
+    expect(scopeLabel({ level: 5 })).toBe("Branch menu");
+    expect(scopeLabel({ level: 4 })).toBe("Menu category");
   });
 });
 
@@ -54,9 +60,9 @@ describe("affectsLabel", () => {
     expect(affectsLabel({ level: 1 })).toBe("all locations");
   });
 
-  it("returns '{location} only' for L2", () => {
-    expect(affectsLabel({ level: 2, locationName: "Downtown" })).toBe(
-      "Downtown only",
+  it("returns '{category} category, all locations' for L2", () => {
+    expect(affectsLabel({ level: 2, categoryName: "Burgers" })).toBe(
+      "Burgers category, all locations",
     );
   });
 
@@ -70,15 +76,27 @@ describe("affectsLabel", () => {
     expect(
       affectsLabel({
         level: 4,
+        menuName: "Lunch",
         categoryName: "Burgers",
-        locationName: "Downtown",
       }),
-    ).toBe("Burgers at Downtown only");
+    ).toBe("Lunch menu – Burgers, all locations");
   });
 
   it("falls back sensibly when names missing", () => {
-    expect(affectsLabel({ level: 2 })).toBe("this location only");
-    expect(affectsLabel({ level: 4 })).toBe("this category at this location only");
+    expect(affectsLabel({ level: 2 })).toBe("this category, all locations");
+    expect(affectsLabel({ level: 3 })).toBe("this category at this branch only");
+    expect(affectsLabel({ level: 4 })).toBe("this menu, all locations");
+  });
+
+  it("describes a location-only item edit without category copy", () => {
+    const label = affectsLabel({
+      level: 3,
+      scopeType: "location-item",
+      locationName: "Downtown Hamra",
+    });
+
+    expect(label).toBe("Downtown Hamra only");
+    expect(label).not.toMatch(/category\s+category/i);
   });
 });
 
@@ -87,9 +105,9 @@ describe("scopeDescription", () => {
     expect(scopeDescription({ level: 1 })).toMatch(/everywhere/i);
   });
 
-  it("mentions location name for L2", () => {
-    expect(scopeDescription({ level: 2, locationName: "Airport" })).toMatch(
-      /Airport/,
+  it("mentions category name for L2", () => {
+    expect(scopeDescription({ level: 2, categoryName: "Appetizers" })).toMatch(
+      /Appetizers/,
     );
   });
 });
@@ -97,10 +115,10 @@ describe("scopeDescription", () => {
 describe("scopeShortName", () => {
   it("returns short developer-style names", () => {
     expect(scopeShortName(1)).toBe("Global");
-    expect(scopeShortName(2)).toBe("Location");
-    expect(scopeShortName(3)).toBe("Category");
-    expect(scopeShortName(4)).toBe("Category @ Location");
-    expect(scopeShortName(5)).toBe("Menu @ Location");
+    expect(scopeShortName(2)).toBe("Global Category");
+    expect(scopeShortName(3)).toBe("Branch Category");
+    expect(scopeShortName(4)).toBe("Global Menu");
+    expect(scopeShortName(5)).toBe("Branch Menu");
   });
 });
 
@@ -136,31 +154,31 @@ describe("deriveScopeFromContext", () => {
     ).toEqual({ level: 1 });
   });
 
-  it("returns L2 for location-selected, no category", () => {
+  it("returns L1 for location-selected, no category", () => {
     expect(
       deriveScopeFromContext({
         isAllLocations: false,
         locationName: "Downtown",
       }),
-    ).toEqual({ level: 2, locationName: "Downtown" });
+    ).toEqual({ level: 1 });
   });
 
-  it("returns L3 for all-locations with category", () => {
+  it("returns L2 for all-locations with category", () => {
     expect(
       deriveScopeFromContext({
         isAllLocations: true,
         categoryName: "Burgers",
       }),
-    ).toEqual({ level: 3, categoryName: "Burgers" });
+    ).toEqual({ level: 2, categoryName: "Burgers" });
   });
 
-  it("returns L4 for location + category", () => {
+  it("returns L3 for location + category", () => {
     const ctx = deriveScopeFromContext({
       isAllLocations: false,
       locationName: "Downtown",
       categoryName: "Burgers",
     });
-    expect(ctx.level).toBe(4);
+    expect(ctx.level).toBe(3);
     expect(ctx.locationName).toBe("Downtown");
     expect(ctx.categoryName).toBe("Burgers");
   });

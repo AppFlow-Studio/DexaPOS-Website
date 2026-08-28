@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+  StationPanel,
+  StationPanelContent,
+  StationPanelDescription,
+  StationPanelHeader,
+  StationPanelTitle,
+} from "./StationPanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Station } from "@/app/dashboard/actions/stations";
@@ -43,7 +43,7 @@ function SignalStrength({ strength }: { strength?: number }) {
           key={bar}
           className={cn(
             "w-1.5 rounded-sm transition-colors",
-            bar <= level ? "bg-green-500" : "bg-muted",
+            bar <= level ? "bg-foreground" : "bg-muted",
             bar === 1 && "h-1.5",
             bar === 2 && "h-2.5",
             bar === 3 && "h-3.5",
@@ -77,32 +77,32 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       {/* Connection Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
+      <StationPanel>
+        <StationPanelHeader>
+          <StationPanelTitle className="text-lg flex items-center gap-2">
             {isOnline ? (
-              <Wifi className="h-5 w-5 text-green-500" />
+              <Wifi className="h-5 w-5 text-muted-foreground" />
             ) : (
-              <WifiOff className="h-5 w-5 text-gray-400" />
+              <WifiOff className="h-5 w-5 text-muted-foreground" />
             )}
             Connection Status
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
+          </StationPanelTitle>
+        </StationPanelHeader>
+        <StationPanelContent className="space-y-6">
           {/* Status Display */}
-          <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/50">
+          <div className="flex min-w-0 items-center gap-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
             <div
               className={cn(
                 "h-14 w-14 rounded-full flex items-center justify-center",
-                isOnline ? "bg-green-500/20" : "bg-gray-200",
+                "bg-muted/60",
               )}
             >
               <Circle
                 className={cn(
                   "h-6 w-6",
                   isOnline
-                    ? "fill-green-500 text-green-500"
-                    : "fill-gray-400 text-gray-400",
+                    ? "fill-current"
+                    : "fill-transparent",
                 )}
               />
             </div>
@@ -164,18 +164,18 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
               </>
             )}
           </Button>
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
 
       {/* Network Details */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
+      <StationPanel>
+        <StationPanelHeader>
+          <StationPanelTitle className="text-lg flex items-center gap-2">
             <Globe className="h-5 w-5" />
             Network Details
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          </StationPanelTitle>
+        </StationPanelHeader>
+        <StationPanelContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-muted-foreground">IP Address</p>
@@ -192,7 +192,7 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
             </div>
           </div>
 
-          <div className="rounded-lg border p-4 bg-muted/30">
+          <div className="min-w-0 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
             <p className="text-sm text-muted-foreground mb-3">
               Network information will be automatically populated when the POS
               app connects to this station.
@@ -201,18 +201,18 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
               <Badge variant="secondary">Awaiting device registration</Badge>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
 
       {/* Sync Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
+      <StationPanel>
+        <StationPanelHeader>
+          <StationPanelTitle className="text-lg flex items-center gap-2">
             <RefreshCw className="h-5 w-5" />
             Sync Status
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          </StationPanelTitle>
+        </StationPanelHeader>
+        <StationPanelContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Sync Role</p>
@@ -238,42 +238,42 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
 
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm">Menu data synced</span>
             </div>
             <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm">Settings synced</span>
             </div>
             <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm">Staff data synced</span>
             </div>
           </div>
 
           {station.sync_role === "leader" && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-900 p-3">
+            <div className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none">
               <p className="text-sm text-blue-700 dark:text-blue-400">
                 As a leader station, this device syncs data to other stations at
                 this location.
               </p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
 
       {/* Troubleshooting */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
+      <StationPanel>
+        <StationPanelHeader>
+          <StationPanelTitle className="text-lg flex items-center gap-2">
             <AlertTriangle className="h-5 w-5" />
             Troubleshooting
-          </CardTitle>
-          <CardDescription>
+          </StationPanelTitle>
+          <StationPanelDescription>
             Common solutions for connection issues
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
+          </StationPanelDescription>
+        </StationPanelHeader>
+        <StationPanelContent className="space-y-3">
           <div className="space-y-2 text-sm">
             <p className="font-medium">If the station is showing offline:</p>
             <ul className="list-disc list-inside text-muted-foreground space-y-1">
@@ -295,8 +295,8 @@ export function StationConnectionTab({ station }: StationConnectionTabProps) {
               </a>
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </StationPanelContent>
+      </StationPanel>
     </div>
   );
 }

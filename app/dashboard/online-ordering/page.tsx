@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useOnlineOrderingSettings,
   type OnlineOrderingSettings,
@@ -9,11 +9,11 @@ import {
 } from "./hooks/useOnlineOrderingSettings";
 import { useGatedLocationId, useGatedLocation } from "@/stores/location-store";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { InfoIcon } from "@/components/ui/info-icon";
 import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, Check, Bell } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,7 +33,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
 import { uploadStoreImage } from "@/lib/storage/actions";
 import { useAuth } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
@@ -48,9 +47,97 @@ import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
 import { buildStoreUrl } from "@/app/sites/lib/store-url";
 import {
+  LocationIndicator,
+  PageHeader,
+  PageShell,
+  Panel,
+  PanelSection,
+} from "@/components/dashboard/shell";
+import {
   getOnlineStoreRequestRequirements,
   saveOnlineStoreRequestRequirements,
 } from "./actions";
+
+function SettingsToggleRow({
+  title,
+  description,
+  checked,
+  onCheckedChange,
+  disabled,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex min-w-0 items-start justify-between gap-4 py-4 first:pt-0 last:pb-0">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <p className="font-medium text-foreground">{title}</p>
+        <InfoIcon tip={description} side="top" asButton />
+      </div>
+      <Switch
+        className="mt-0.5 shrink-0"
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+/**
+ * A colour swatch paired with its hex field.
+ *
+ * `type="color"` is one of the inputs the `Input` primitive legitimately cannot
+ * style (§11.1), so the swatch is a raw element — but it takes the tier-3 inset
+ * material rather than the browser's `rounded border`, and the native chrome is
+ * clipped away so only the colour shows.
+ *
+ * Written once instead of five times: the branding grid repeated this pair for
+ * primary, secondary, accent, background and text.
+ */
+function ColorField({
+  label,
+  value,
+  fallback,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string | null | undefined;
+  /** Shown in the swatch when the value is unset (accent falls back to primary). */
+  fallback?: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  const swatch = value || fallback || "#000000";
+  return (
+    <div className="min-w-0 space-y-2">
+      <Label>{label}</Label>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="relative inline-flex size-9 shrink-0 overflow-hidden rounded-full ring-1 ring-border/60">
+          <input
+            type="color"
+            aria-label={`${label} colour picker`}
+            value={swatch}
+            onChange={(e) => onChange(e.target.value)}
+            // Scaled past its own box so the native swatch chrome (border and
+            // padding, which cannot be styled) is clipped by the parent.
+            className="absolute -inset-2 h-[calc(100%+1rem)] w-[calc(100%+1rem)] cursor-pointer appearance-none border-0 bg-transparent p-0"
+          />
+        </span>
+        <Input
+          value={value ?? ""}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          className="min-w-0 flex-1 font-mono text-[0.8125rem] uppercase"
+        />
+      </div>
+    </div>
+  );
+}
 
 function getStatusTone(status: OnlineStoreSetupStatus) {
   switch (status) {
@@ -97,103 +184,88 @@ function StatusCard({
 }) {
   if (status === "not_requested") {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Request Online Store</CardTitle>
-          <CardDescription>
-            This branch does not manage storefront setup directly anymore. Send a request to HQ and they will review the branch packet before configuring the store.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground">
+      <Panel>
+        <PanelSection
+          icon={Globe}
+          label="Request Online Store"
+          caption="This branch does not manage storefront setup directly anymore. Send a request to HQ and they will review the branch packet before configuring the store."
+        >
+          <div className="space-y-5">
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
             HQ will review the branch compliance and banking details first, then either approve setup, reject with a reason, or continue configuration.
+            </p>
+            <Button onClick={onRequestSetup} disabled={isLoading}>
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
+              Request Setup
+            </Button>
           </div>
-          <Button onClick={onRequestSetup} disabled={isLoading}>
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
-            Request Setup
-          </Button>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
     );
   }
 
   if (status === "pending_review") {
     return (
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <Clock3 className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <CardTitle>Team Is Reviewing Your Request</CardTitle>
-              <CardDescription>
-                HQ is reviewing the online-store request for {locationName}. No additional branch-side setup is needed right now.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
+      <Panel>
+        <PanelSection
+          icon={Clock3}
+          label="Team Is Reviewing Your Request"
+          caption={`HQ is reviewing the online-store request for ${locationName}. No additional branch-side setup is needed right now.`}
+        >
+          <div className="text-sm text-muted-foreground">
           {settings.setupRequestedAt ? (
             <p>Requested on {new Date(settings.setupRequestedAt).toLocaleString()}.</p>
           ) : (
             <p>The request is waiting for HQ review.</p>
           )}
-        </CardContent>
-      </Card>
+          </div>
+        </PanelSection>
+      </Panel>
     );
   }
 
   if (status === "approved") {
     return (
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
-            <div>
-              <CardTitle>Request Approved</CardTitle>
-              <CardDescription>
-                HQ approved the request for {locationName}. Store setup is now in progress and branch-side controls will unlock after HQ finishes setup.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
+      <Panel>
+        <PanelSection
+          icon={CheckCircle2}
+          label="Request Approved"
+          caption={`HQ approved the request for ${locationName}. Store setup is now in progress and branch-side controls will unlock after HQ finishes setup.`}
+        >
+          <div className="text-sm text-muted-foreground">
           {settings.setupApprovedAt ? (
             <p>Approved on {new Date(settings.setupApprovedAt).toLocaleString()}.</p>
           ) : (
             <p>Approved status is active.</p>
           )}
-        </CardContent>
-      </Card>
+          </div>
+        </PanelSection>
+      </Panel>
     );
   }
 
   if (status === "rejected") {
     return (
-      <Card className="border-destructive/40">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <Ban className="h-5 w-5 text-destructive" />
-            <div>
-              <CardTitle>Request Rejected</CardTitle>
-              <CardDescription>
-                HQ rejected the online-store request for {locationName}. Update the branch packet and submit the request again.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
+      <Panel className="border-destructive/35">
+        <PanelSection
+          icon={Ban}
+          label="Request Rejected"
+          caption={`HQ rejected the online-store request for ${locationName}. Update the branch packet and submit the request again.`}
+        >
+          <div className="space-y-5">
+            <div className="border-l-2 border-destructive/50 pl-4 text-sm">
             <p className="font-medium text-foreground">Reason</p>
             <p className="mt-1 text-muted-foreground">
               {settings.setupRejectionReason || "No rejection reason was recorded."}
             </p>
+            </div>
+            <Button variant="outline" onClick={onRequestSetup} disabled={isLoading}>
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
+              Resubmit Request
+            </Button>
           </div>
-          <Button variant="outline" onClick={onRequestSetup} disabled={isLoading}>
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
-            Resubmit Request
-          </Button>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
     );
   }
 
@@ -241,6 +313,25 @@ function CompletedSetupPanel({
   const [showOrderOutForm, setShowOrderOutForm] = useState(false);
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [hoursModalOpen, setHoursModalOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("store");
+  const sectionRailRef = useRef<HTMLDivElement>(null);
+  const sectionTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  useEffect(() => {
+    const rail = sectionRailRef.current;
+    const trigger = sectionTriggerRefs.current[activeSection];
+    if (!rail || !trigger) return;
+
+    const railRect = rail.getBoundingClientRect();
+    const triggerRect = trigger.getBoundingClientRect();
+    const centeredOffset =
+      triggerRect.left - railRect.left - (railRect.width - triggerRect.width) / 2;
+
+    rail.scrollTo({
+      left: Math.max(0, rail.scrollLeft + centeredOffset),
+      behavior: "smooth",
+    });
+  }, [activeSection]);
 
   const locationDefaults = useMemo(() => {
     return {
@@ -263,7 +354,6 @@ function CompletedSetupPanel({
         assetType,
       });
       if (!result.success || !result.url) {
-        toast.error(result.error || "Failed to upload image");
         return;
       }
 
@@ -271,24 +361,21 @@ function CompletedSetupPanel({
       if (assetType === "hero") onUpdate({ heroImageUrl: result.url });
       if (assetType === "favicon") onUpdate({ faviconUrl: result.url });
       if (assetType === "og") onUpdate({ ogImageUrl: result.url });
-      toast.success("Image uploaded");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to upload image");
     } finally {
       setUploading((prev) => ({ ...prev, [assetType]: false }));
     }
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Online Ordering</h2>
-          <p className="text-muted-foreground">
-            Branch maintenance for <span className="font-medium text-foreground">{locationName}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+    <PageShell>
+      <PageHeader
+        title="Online Ordering"
+        subtitle="Manage how customers discover, place, and receive orders from this location."
+        indicator={
+          <LocationIndicator isAllLocations={false} locationName={locationName} />
+        }
+        actions={
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
           {settings.enabled && storeUrl ? (
             <Button variant="outline" size="sm" asChild>
               <Link href={storeUrl} target="_blank" rel="noopener noreferrer">
@@ -308,152 +395,156 @@ function CompletedSetupPanel({
               </Button>
             </>
           ) : null}
-        </div>
-      </div>
+          </div>
+        }
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Store Status</CardTitle>
-          <CardDescription>
-            HQ finished the storefront setup. Branch admins can now maintain non-payment storefront details only.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-medium text-foreground">{settings.storeName}</p>
-              <p>{storeUrl || "No storefront URL configured"}</p>
-            </div>
-            <div className="flex items-center justify-between gap-3 sm:justify-end">
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={settings.enabled}
-                  onCheckedChange={(checked) => onUpdate({ enabled: checked })}
-                  disabled={isSaving}
-                />
-                <span className="text-sm text-muted-foreground">
-                  {settings.enabled ? "Live" : "Disabled"}
-                </span>
-              </div>
+      <Panel>
+        <PanelSection
+          icon={Store}
+          label="Store status"
+          caption="HQ has completed setup. Branch admins can maintain storefront operations while payment configuration remains protected."
+          action={
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={settings.enabled}
+                onCheckedChange={(checked) => onUpdate({ enabled: checked })}
+                disabled={isSaving}
+                aria-label={settings.enabled ? "Disable online store" : "Enable online store"}
+              />
               <Badge variant={settings.enabled ? "default" : "secondary"}>
                 {settings.enabled ? "Live" : "Disabled"}
               </Badge>
             </div>
+          }
+        >
+          <div className="grid gap-4 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div className="min-w-0">
+              <p className="font-medium text-foreground">{settings.storeName}</p>
+              <p className="mt-1 break-all text-muted-foreground">
+                {storeUrl || "No storefront URL configured"}
+              </p>
+            </div>
+            {settings.setupCompletedAt ? (
+              <p className="text-xs text-muted-foreground">
+                Setup completed {new Date(settings.setupCompletedAt).toLocaleString()}
+              </p>
+            ) : null}
           </div>
-          {settings.setupCompletedAt ? (
-            <p>HQ completed setup on {new Date(settings.setupCompletedAt).toLocaleString()}.</p>
-          ) : null}
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
-      <Tabs defaultValue="store" className="space-y-6">
-        <div className="overflow-x-auto">
-          <TabsList className="w-max justify-start">
-            <TabsTrigger value="store" className="gap-2">
-              <Store className="h-4 w-4" />
-              Store Info
-            </TabsTrigger>
-            <TabsTrigger value="branding" className="gap-2">
-              <Palette className="h-4 w-4" />
-              Branding
-            </TabsTrigger>
-            <TabsTrigger value="ordering" className="gap-2">
-              <Truck className="h-4 w-4" />
-              Ordering
-            </TabsTrigger>
-            <TabsTrigger value="orderout" className="gap-2">
-              <Plug className="h-4 w-4" />
-              OrderOut
-            </TabsTrigger>
-            <TabsTrigger value="notifications" className="gap-2">
-              <Bell className="h-4 w-4" />
-              Notifications
-            </TabsTrigger>
+      <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-6">
+        {/* Canonical pill rail (DS-CTL-05). The previous rail was a bordered
+            `bg-card` track whose active tab was carried by text colour alone —
+            on a card-coloured track that reads as a link, not a selected tab.
+            The active pill now lifts to `bg-background` with a hairline ring.
+            Classes are literal, not `{TOKEN}` — C7. */}
+        <div ref={sectionRailRef} className="w-full min-w-0 overflow-x-auto pb-1">
+          <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+            {(
+              [
+                { value: "store", label: "Store Info", Icon: Store },
+                { value: "branding", label: "Branding", Icon: Palette },
+                { value: "ordering", label: "Ordering", Icon: Truck },
+                { value: "orderout", label: "OrderOut", Icon: Plug },
+                { value: "notifications", label: "Notifications", Icon: Bell },
+              ] as const
+            ).map(({ value, label, Icon }) => (
+              <TabsTrigger
+                key={value}
+                ref={(node) => {
+                  sectionTriggerRefs.current[value] = node;
+                }}
+                value={value}
+                className="shrink-0 gap-2 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </div>
 
         <TabsContent value="store" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <Globe className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <CardTitle>Store Details</CardTitle>
-                  <CardDescription>
-                    Payment credentials and tips are managed by HQ only.
-                  </CardDescription>
+          <Panel>
+            <PanelSection
+              icon={Globe}
+              label="Store details"
+              caption="Keep customer-facing contact information current. Payment credentials and tips are managed by HQ."
+            >
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-2">
+                  <div className="flex min-h-7 items-center">
+                    <Label htmlFor="merchant-online-store-name">Store Name</Label>
+                  </div>
+                  <Input
+                    id="merchant-online-store-name"
+                    value={settings.storeName}
+                    onChange={(event) => onUpdate({ storeName: event.target.value })}
+                    placeholder="Store name shown on the storefront."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex min-h-7 items-center gap-1.5">
+                    <Label htmlFor="merchant-online-store-slug">Store URL</Label>
+                    <InfoIcon
+                      tip="Store URL changes are handled by HQ because they affect storefront payment configuration and reconciliation."
+                      side="top"
+                      asButton
+                    />
+                  </div>
+                  <Input
+                    id="merchant-online-store-slug"
+                    value={storeUrl || ""}
+                    readOnly
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="merchant-online-store-description">Store Description</Label>
+                  <Textarea
+                    id="merchant-online-store-description"
+                    value={settings.description}
+                    onChange={(event) => onUpdate({ description: event.target.value })}
+                    placeholder="Short description shown on your storefront."
+                    className="border-0 bg-muted/60 shadow-none focus-visible:bg-background focus-visible:border-transparent"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="merchant-online-store-phone">Store Phone</Label>
+                  <Input
+                    id="merchant-online-store-phone"
+                    value={settings.phone}
+                    onChange={(event) => onUpdate({ phone: event.target.value })}
+                    placeholder="(555) 555-5555"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="merchant-online-store-email">Store Email</Label>
+                  <Input
+                    id="merchant-online-store-email"
+                    value={settings.email}
+                    onChange={(event) => onUpdate({ email: event.target.value })}
+                    placeholder="orders@merchant.com"
+                  />
+                </div>
+                <div className="border-l-2 border-[#0C4FD1]/30 pl-4 text-sm leading-6 text-muted-foreground md:col-span-2">
+                  Tips and payment credentials are restricted to HQ. If you need to change those values, contact HQ support.
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="merchant-online-store-name">Store Name</Label>
-                <Input
-                  id="merchant-online-store-name"
-                  value={settings.storeName}
-                  onChange={(event) => onUpdate({ storeName: event.target.value })}
-                  placeholder="Store name shown on the storefront."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="merchant-online-store-slug">Store URL</Label>
-                <Input
-                  id="merchant-online-store-slug"
-                  value={storeUrl || ""}
-                  readOnly
-                />
-                <p className="text-xs text-muted-foreground">
-                  Store URL changes are handled by HQ because they affect storefront payment configuration and reconciliation.
-                </p>
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="merchant-online-store-description">Store Description</Label>
-                <Textarea
-                  id="merchant-online-store-description"
-                  value={settings.description}
-                  onChange={(event) => onUpdate({ description: event.target.value })}
-                  placeholder="Short description shown on your storefront."
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="merchant-online-store-phone">Store Phone</Label>
-                <Input
-                  id="merchant-online-store-phone"
-                  value={settings.phone}
-                  onChange={(event) => onUpdate({ phone: event.target.value })}
-                  placeholder="(555) 555-5555"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="merchant-online-store-email">Store Email</Label>
-                <Input
-                  id="merchant-online-store-email"
-                  value={settings.email}
-                  onChange={(event) => onUpdate({ email: event.target.value })}
-                  placeholder="orders@merchant.com"
-                />
-              </div>
-              <div className="rounded-lg border bg-muted/40 p-4 text-sm text-muted-foreground md:col-span-2">
-                Tips and payment credentials are restricted to HQ. If you need to change those values, contact HQ support.
-              </div>
-            </CardContent>
-          </Card>
+            </PanelSection>
+          </Panel>
         </TabsContent>
 
         <TabsContent value="branding" className="space-y-6">
 
           {/* Store Template */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <LayoutTemplate className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <CardTitle>Store Template</CardTitle>
-                  <CardDescription>Choose the layout style for your online store</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
+          <Panel>
+            <PanelSection
+              icon={LayoutTemplate}
+              label="Store Template"
+              caption="Choose the layout style for your online store"
+            >
               <div className="grid grid-cols-2 gap-4">
                 {([
                   {
@@ -678,144 +769,115 @@ function CompletedSetupPanel({
                     type="button"
                     onClick={() => onUpdate({ templateId: opt.value })}
                     className={cn(
-                      "relative rounded-xl border-2 text-left transition-all hover:border-primary/50 overflow-hidden group",
+                      // Tier-2 radius (§3.1) and a single-width border: `border-2`
+                      // made the unselected card heavier than the panel holding it.
+                      // Selection is carried by the brand accent, not `--primary`,
+                      // which is violet (C5).
+                      "group relative overflow-hidden rounded-2xl border text-left transition-colors",
                       settings.templateId === opt.value
-                        ? "border-primary ring-1 ring-primary/20"
-                        : "border-border bg-background"
+                        ? "border-[#0C4FD1] ring-1 ring-[#0C4FD1]/25 dark:border-[#6CA0FF] dark:ring-[#6CA0FF]/25"
+                        : "border-border/60 bg-card hover:border-[#0C4FD1]/40 dark:hover:border-[#6CA0FF]/40"
                     )}
+                    aria-pressed={settings.templateId === opt.value}
                   >
                     {/* thumbnail */}
                     <div
                       className={cn(
-                        "w-full aspect-video flex items-center justify-center overflow-hidden transition-colors",
-                        settings.templateId === opt.value ? "bg-primary/5" : "bg-muted/40 group-hover:bg-muted/60"
+                        "flex aspect-video w-full items-center justify-center overflow-hidden transition-colors",
+                        settings.templateId === opt.value
+                          ? "bg-[#0C4FD1]/5 dark:bg-[#6CA0FF]/10"
+                          : "bg-muted/40 group-hover:bg-muted/60"
                       )}
                     >
-                      <div className="w-full h-full">{opt.preview}</div>
+                      <div className="h-full w-full">{opt.preview}</div>
                     </div>
                     {/* label row */}
-                    <div className="px-3 py-2.5 relative">
+                    <div className="relative px-3 py-2.5">
                       {settings.templateId === opt.value && (
-                        <div className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary">
-                          <Check className="h-3 w-3 text-white" />
+                        <div className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#0C4FD1] dark:bg-[#6CA0FF]">
+                          <Check className="h-3 w-3 text-white dark:text-[#0b1220]" />
                         </div>
                       )}
-                      <p className="text-sm font-semibold pr-6">{opt.label}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground leading-snug">{opt.description}</p>
+                      <p className="pr-6 text-sm font-semibold">{opt.label}</p>
+                      <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{opt.description}</p>
                     </div>
                   </button>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </PanelSection>
+          </Panel>
 
           {/* Colors, Font & Images */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Branding</CardTitle>
-              <CardDescription>Colors, fonts, and store images.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+          <Panel>
+            <PanelSection
+              icon={Palette}
+              label="Branding"
+              caption="Colors, fonts, and store images."
+            >
+              <div className="space-y-6">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Font</Label>
-                  <select
+                  <div className="flex items-center gap-1.5">
+                    <Label htmlFor="merchant-online-store-font">Font</Label>
+                    <InfoIcon
+                      tip="Font options are sourced from the fonts supported by the storefront."
+                      side="top"
+                      asButton
+                    />
+                  </div>
+                  {/* Was a raw `<select>` with browser chrome (§11.1) — the
+                      primitive brings the pill trigger and themed panel. */}
+                  <Select
                     value={settings.fontFamily || "DM Sans"}
-                    onChange={(e) => onUpdate({ fontFamily: e.target.value })}
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                    onValueChange={(value) => onUpdate({ fontFamily: value })}
                   >
-                    {Object.keys(FONT_GOOGLE_URLS).map((font) => (
-                      <option key={font} value={font}>
-                        {font}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-muted-foreground">
-                    Font options are sourced from storefront supported Google Fonts.
-                  </p>
+                    <SelectTrigger
+                      id="merchant-online-store-font"
+                      className="w-full"
+                    >
+                      <SelectValue placeholder="Select a font" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(FONT_GOOGLE_URLS).map((font) => (
+                        <SelectItem key={font} value={font}>
+                          {font}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Primary Color</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.primaryColor}
-                      onChange={(e) => onUpdate({ primaryColor: e.target.value })}
-                      className="h-10 w-14 rounded border"
-                    />
-                    <Input
-                      value={settings.primaryColor}
-                      onChange={(e) => onUpdate({ primaryColor: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Secondary Color</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.secondaryColor}
-                      onChange={(e) => onUpdate({ secondaryColor: e.target.value })}
-                      className="h-10 w-14 rounded border"
-                    />
-                    <Input
-                      value={settings.secondaryColor}
-                      onChange={(e) => onUpdate({ secondaryColor: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label>Accent Color</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.accentColor || settings.primaryColor}
-                      onChange={(e) => onUpdate({ accentColor: e.target.value })}
-                      className="h-10 w-14 rounded border"
-                    />
-                    <Input
-                      value={settings.accentColor || ""}
-                      onChange={(e) => onUpdate({ accentColor: e.target.value })}
-                      placeholder="Optional"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Background</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.backgroundColor}
-                      onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
-                      className="h-10 w-14 rounded border"
-                    />
-                    <Input
-                      value={settings.backgroundColor}
-                      onChange={(e) => onUpdate({ backgroundColor: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Text</Label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={settings.textColor}
-                      onChange={(e) => onUpdate({ textColor: e.target.value })}
-                      className="h-10 w-14 rounded border"
-                    />
-                    <Input
-                      value={settings.textColor}
-                      onChange={(e) => onUpdate({ textColor: e.target.value })}
-                    />
-                  </div>
-                </div>
+              {/* One grid for all five swatches — they were split across a
+                  2-up and a 3-up row, so the fields didn't line up. */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <ColorField
+                  label="Primary Color"
+                  value={settings.primaryColor}
+                  onChange={(primaryColor) => onUpdate({ primaryColor })}
+                />
+                <ColorField
+                  label="Secondary Color"
+                  value={settings.secondaryColor}
+                  onChange={(secondaryColor) => onUpdate({ secondaryColor })}
+                />
+                <ColorField
+                  label="Accent Color"
+                  value={settings.accentColor}
+                  fallback={settings.primaryColor}
+                  placeholder="Optional"
+                  onChange={(accentColor) => onUpdate({ accentColor })}
+                />
+                <ColorField
+                  label="Background"
+                  value={settings.backgroundColor}
+                  onChange={(backgroundColor) => onUpdate({ backgroundColor })}
+                />
+                <ColorField
+                  label="Text"
+                  value={settings.textColor}
+                  onChange={(textColor) => onUpdate({ textColor })}
+                />
               </div>
 
               {/* Row 1: Logo, Favicon, OG Image — uniform 80×80 */}
@@ -829,12 +891,14 @@ function CompletedSetupPanel({
                 ).map(({ key, label, url, assetType }) => (
                   <div key={key} className="space-y-2">
                     <Label>{label}</Label>
+                    {/* Tier-3 inset (§3.1): borderless muted well, `rounded-2xl`.
+                        `rounded-lg` + `border` is off the radius scale. */}
                     {url ? (
-                      <div className="flex h-20 w-full sm:w-20 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+                      <div className="flex h-20 w-full items-center justify-center overflow-hidden rounded-2xl border-0 bg-muted/60 shadow-none sm:w-20">
                         <img src={url} alt={`${label} preview`} className="h-full w-full object-contain" />
                       </div>
                     ) : (
-                      <div className="flex h-20 w-full sm:w-20 items-center justify-center rounded-lg border bg-muted text-xs text-muted-foreground">
+                      <div className="flex h-20 w-full items-center justify-center rounded-2xl border-0 bg-muted/60 text-xs text-muted-foreground shadow-none sm:w-20">
                         None
                       </div>
                     )}
@@ -854,11 +918,11 @@ function CompletedSetupPanel({
               <div className="space-y-2">
                 <Label>Hero Image</Label>
                 {settings.heroImageUrl ? (
-                  <div className="overflow-hidden rounded-lg border bg-muted">
+                  <div className="overflow-hidden rounded-2xl border-0 bg-muted/60 shadow-none">
                     <img src={settings.heroImageUrl} alt="Hero preview" className="h-48 w-full object-cover" />
                   </div>
                 ) : (
-                  <div className="flex h-48 items-center justify-center rounded-lg border bg-muted text-sm text-muted-foreground">
+                  <div className="flex h-48 items-center justify-center rounded-2xl border-0 bg-muted/60 text-sm text-muted-foreground shadow-none">
                     No hero image
                   </div>
                 )}
@@ -870,72 +934,51 @@ function CompletedSetupPanel({
                 />
                 {uploading.hero && <p className="text-xs text-muted-foreground">Uploading…</p>}
               </div>
-            </CardContent>
-          </Card>
+              </div>
+            </PanelSection>
+          </Panel>
         </TabsContent>
 
         <TabsContent value="ordering" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Ordering</CardTitle>
-              <CardDescription>Pickup/delivery and operational thresholds.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <p className="font-medium">Pickup</p>
-                    <p className="text-sm text-muted-foreground">Allow customers to place pickup orders.</p>
-                  </div>
-                  <Switch
-                    checked={settings.pickupEnabled}
-                    onCheckedChange={(checked) => onUpdate({ pickupEnabled: checked })}
-                    disabled={isSaving}
-                  />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <p className="font-medium">Delivery</p>
-                    <p className="text-sm text-muted-foreground">Allow delivery orders when enabled.</p>
-                  </div>
-                  <Switch
-                    checked={settings.deliveryEnabled}
-                    onCheckedChange={(checked) => onUpdate({ deliveryEnabled: checked })}
-                    disabled={isSaving}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <div>
-                  <p className="font-medium">Separate Online / Delivery Pricing</p>
-                  <p className="text-sm text-muted-foreground">
-                    When on, online orders use each item&apos;s delivery price (lets you
-                    charge more online to cover fees). When off, online orders use the
-                    regular menu price — no online upcharge.
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.deliveryPricingEnabled !== false}
-                  onCheckedChange={(checked) => onUpdate({ deliveryPricingEnabled: checked })}
+          <Panel>
+            <PanelSection
+              icon={Truck}
+              label="Ordering and fulfillment"
+              caption="Manage fulfillment methods, operational thresholds, and QR table ordering."
+            >
+              <div className="space-y-6">
+              <div>
+                <SettingsToggleRow
+                  title="Pickup"
+                  description="Allow customers to place pickup orders."
+                  checked={settings.pickupEnabled}
+                  onCheckedChange={(checked) => onUpdate({ pickupEnabled: checked })}
+                  disabled={isSaving}
+                />
+                <SettingsToggleRow
+                  title="Delivery"
+                  description="Allow customers to place delivery orders."
+                  checked={settings.deliveryEnabled}
+                  onCheckedChange={(checked) => onUpdate({ deliveryEnabled: checked })}
                   disabled={isSaving}
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <div>
-                  <p className="font-medium">Auto-Accept Orders</p>
-                  <p className="text-sm text-muted-foreground">
-                    Automatically accept incoming online orders and send them straight to the kitchen.
-                    When off, each order must be manually accepted from the POS first.
-                  </p>
-                </div>
-                <Switch
-                  checked={settings.autoAcceptOrders}
-                  onCheckedChange={(checked) => onUpdate({ autoAcceptOrders: checked })}
-                  disabled={isSaving}
-                />
-              </div>
+              <SettingsToggleRow
+                title="Separate online and delivery pricing"
+                description="Use each item's delivery price online instead of the regular menu price."
+                checked={settings.deliveryPricingEnabled !== false}
+                onCheckedChange={(checked) => onUpdate({ deliveryPricingEnabled: checked })}
+                disabled={isSaving}
+              />
+
+              <SettingsToggleRow
+                title="Auto-accept orders"
+                description="Send incoming online orders directly to the kitchen. When off, the POS must accept each order first."
+                checked={settings.autoAcceptOrders}
+                onCheckedChange={(checked) => onUpdate({ autoAcceptOrders: checked })}
+                disabled={isSaving}
+              />
 
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
@@ -1005,17 +1048,17 @@ function CompletedSetupPanel({
                 </div>
               </div>
 
-              <div className="rounded-xl border border-[#0C4FD1]/20 bg-[#0C4FD1]/5 p-4">
+              <div className="pt-6">
                 <div className="flex flex-col gap-4">
                   <div>
-                    <h3 className="text-sm font-semibold text-[#0C4FD1]">QR Table Ordering</h3>
+                    <h3 className="text-base font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">QR Table Ordering</h3>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Scan-to-order settings for dine-in QR. These controls stay on the existing online-ordering surface; QR codes, analytics, and deeper billing gates remain separate work.
                     </p>
                   </div>
 
                   {!qrGate.entitled ? (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <div className="border-l-2 border-amber-500 bg-amber-50/60 px-4 py-3 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
                       <p className="font-medium">QR Table Ordering is locked for this branch</p>
                       <p className="mt-1">
                         {qrGate.reason ??
@@ -1023,42 +1066,36 @@ function CompletedSetupPanel({
                       </p>
                     </div>
                   ) : qrGate.hasServiceOverride ? (
-                    <div className="rounded-lg border border-[#0C4FD1]/20 bg-background px-4 py-3 text-sm text-muted-foreground">
+                    <div className="border-l-2 border-[#0C4FD1]/40 pl-4 text-sm leading-6 text-muted-foreground">
                       HQ override is active for this location through the QR Table Ordering service assignment.
                     </div>
                   ) : null}
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="flex items-center justify-between rounded-lg border bg-background p-4">
-                      <div>
-                        <p className="font-medium">Enable QR Table Ordering</p>
-                        <p className="text-sm text-muted-foreground">
-                          Allow guests to scan a table QR and place pay-before-kitchen dine-in orders.
-                        </p>
-                      </div>
-                      <Switch
-                        checked={settings.acceptsDineIn}
-                        onCheckedChange={(checked) => onUpdate({ acceptsDineIn: checked })}
-                        disabled={qrEnableSwitchDisabled}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between rounded-lg border bg-background p-4">
-                      <div>
-                        <p className="font-medium">QR Kill Switch</p>
-                        <p className="text-sm text-muted-foreground">
-                          Stop new QR scans immediately without turning off the rest of online ordering.
-                        </p>
-                      </div>
-                      <Switch
-                        checked={settings.qrKillSwitch}
-                        onCheckedChange={(checked) => onUpdate({ qrKillSwitch: checked })}
-                        disabled={qrControlsLocked}
-                      />
-                    </div>
+                  <div>
+                    <SettingsToggleRow
+                      title="Enable QR table ordering"
+                      description="Allow guests to scan a table QR and place pay-before-kitchen dine-in orders."
+                      checked={settings.acceptsDineIn}
+                      onCheckedChange={(checked) => onUpdate({ acceptsDineIn: checked })}
+                      disabled={qrEnableSwitchDisabled}
+                    />
+                    <SettingsToggleRow
+                      title="QR kill switch"
+                      description="Stop new QR scans immediately without disabling the rest of online ordering."
+                      checked={settings.qrKillSwitch}
+                      onCheckedChange={(checked) => onUpdate({ qrKillSwitch: checked })}
+                      disabled={qrControlsLocked}
+                    />
+                    <SettingsToggleRow
+                      title="Geofence check"
+                      description="Reserve on-premise location validation for QR scans when tighter verification is needed."
+                      checked={settings.qrGeofenceEnabled}
+                      onCheckedChange={(checked) => onUpdate({ qrGeofenceEnabled: checked })}
+                      disabled={qrControlsLocked}
+                    />
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="grid gap-5 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Fulfillment Mode</Label>
                       <Select
@@ -1092,31 +1129,22 @@ function CompletedSetupPanel({
                       />
                     </div>
 
-                    <div className="flex items-center justify-between rounded-lg border bg-background p-4">
-                      <div>
-                        <p className="font-medium">Geofence Check</p>
-                        <p className="text-sm text-muted-foreground">
-                          Reserve geofence enforcement for QR scans when you want tighter on-premise validation later.
-                        </p>
-                      </div>
-                      <Switch
-                        checked={settings.qrGeofenceEnabled}
-                        onCheckedChange={(checked) => onUpdate({ qrGeofenceEnabled: checked })}
-                        disabled={qrControlsLocked}
-                      />
-                    </div>
                   </div>
 
-                  <div className="rounded-lg border bg-background p-3 text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Required tier: <span className="font-medium text-foreground">{qrGate.requiredPlanName ?? qrGate.requiredPlanCode ?? "Not configured"}</span>
                     {qrGate.currentPlanName ? (
                       <>
                         {" "}· Current tier: <span className="font-medium text-foreground">{qrGate.currentPlanName}</span>
                       </>
                     ) : null}
-                  </div>
+                  </p>
                 </div>
               </div>
+
+              </div>
+            </PanelSection>
+          </Panel>
 
               <QrTableManager
                 locationId={selectedLocationId}
@@ -1134,25 +1162,24 @@ function CompletedSetupPanel({
               />
 
               <QrGuestAlertsPanel locationId={selectedLocationId} />
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Store Hours</CardTitle>
-              <CardDescription>Set the days and times your store accepts online orders.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => setHoursModalOpen(true)}
-              >
-                <Clock3 className="h-4 w-4" />
-                Edit Operating Hours
-              </Button>
-            </CardContent>
-          </Card>
+          <Panel>
+            <PanelSection
+              icon={Clock3}
+              label="Store hours"
+              caption="Set the days and times this location accepts online orders."
+              action={
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => setHoursModalOpen(true)}
+                >
+                  <Clock3 className="h-4 w-4" />
+                  Edit Operating Hours
+                </Button>
+              }
+            />
+          </Panel>
 
           <HoursConfigModal
             open={hoursModalOpen}
@@ -1168,16 +1195,17 @@ function CompletedSetupPanel({
         </TabsContent>
 
         <TabsContent value="orderout" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>OrderOut</CardTitle>
-              <CardDescription>
-                Connect delivery channels (UberEats/DoorDash/etc) via OrderOut for this location.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          <div>
               {!orgId ? (
-                <div className="text-sm text-muted-foreground">Missing Clerk org context.</div>
+                <Panel>
+                  <PanelSection
+                    icon={Plug}
+                    label="OrderOut"
+                    caption="Connect delivery channels such as Uber Eats, DoorDash, and Grubhub for this location."
+                  >
+                    <p className="text-sm text-muted-foreground">Missing Clerk organization context.</p>
+                  </PanelSection>
+                </Panel>
               ) : (
                 <OrderOutTab
                   clerkOrgId={orgId}
@@ -1191,8 +1219,7 @@ function CompletedSetupPanel({
                   locationDefaults={locationDefaults as any}
                 />
               )}
-            </CardContent>
-          </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-6">
@@ -1203,7 +1230,7 @@ function CompletedSetupPanel({
           />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageShell>
   );
 }
 
@@ -1242,25 +1269,35 @@ export default function OnlineOrderingPage() {
 
   if (isAllLocations) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-          <Building2 className="mb-4 h-12 w-12 text-muted-foreground" />
-          <h3 className="text-lg font-semibold">Select a Specific Location</h3>
-          <p className="mt-2 max-w-md text-sm text-muted-foreground">
-            Online-store requests are managed per location. Choose a branch from the location selector first.
-          </p>
-        </CardContent>
-      </Card>
+      <PageShell>
+        <PageHeader
+          title="Online Ordering"
+          subtitle="Manage storefront setup, fulfillment, integrations, and customer notifications."
+          indicator={<LocationIndicator isAllLocations locationName={null} />}
+        />
+        <Panel>
+          <PanelSection
+            icon={Building2}
+            label="Select a specific location"
+            caption="Online-store requests and settings are managed per location. Choose a branch from the location selector first."
+          />
+        </Panel>
+      </PageShell>
     );
   }
 
   if (!selectedLocationId || !selectedLocation) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          Select a location to manage online ordering.
-        </CardContent>
-      </Card>
+      <PageShell>
+        <PageHeader title="Online Ordering" />
+        <Panel>
+          <PanelSection
+            icon={Building2}
+            label="Location unavailable"
+            caption="Select a location to manage online ordering."
+          />
+        </Panel>
+      </PageShell>
     );
   }
 
@@ -1268,19 +1305,33 @@ export default function OnlineOrderingPage() {
 
   if (isLoading && !currentSettings) {
     return (
-      <div className="flex h-72 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
+      <PageShell>
+        <PageHeader
+          title="Online Ordering"
+          indicator={<LocationIndicator isAllLocations={false} locationName={selectedLocation.name} />}
+        />
+        <Panel className="flex h-56 items-center justify-center" aria-label="Loading online ordering settings">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </Panel>
+      </PageShell>
     );
   }
 
   if (!currentSettings) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-muted-foreground">
-          Failed to load online-store settings for this branch.
-        </CardContent>
-      </Card>
+      <PageShell>
+        <PageHeader
+          title="Online Ordering"
+          indicator={<LocationIndicator isAllLocations={false} locationName={selectedLocation.name} />}
+        />
+        <Panel>
+          <PanelSection
+            icon={AlertTriangle}
+            label="Settings unavailable"
+            caption="Failed to load online-store settings for this branch."
+          />
+        </Panel>
+      </PageShell>
     );
   }
 
@@ -1289,7 +1340,6 @@ export default function OnlineOrderingPage() {
   async function openRequirements(locationId: string) {
     const req = await getOnlineStoreRequestRequirements(locationId);
     if (!req.success) {
-      toast.error(req.error || "Failed to load required fields");
       return;
     }
     setRequirementsMissing(req.missing);
@@ -1310,7 +1360,6 @@ export default function OnlineOrderingPage() {
       return;
     }
 
-    toast.error((result as any)?.error || "Failed to request setup");
   }
 
   async function handleSaveRequirements(locationId: string) {
@@ -1344,25 +1393,21 @@ export default function OnlineOrderingPage() {
 
       const saveResult = await saveOnlineStoreRequestRequirements(formData);
       if (!saveResult.success) {
-        toast.error(saveResult.error || "Failed to save required information");
         return;
       }
 
       const req = await getOnlineStoreRequestRequirements(locationId);
       if (!req.success) {
-        toast.error(req.error || "Failed to refresh requirements");
         return;
       }
 
       if (req.complete) {
         setRequirementsOpen(false);
         setRequirementsMissing(null);
-        toast.success("Information saved. Submitting request...");
         await handleRequestSetup(locationId);
       } else {
         setRequirementsMissing(req.missing);
         setRequirementsDraft((req.values as any) || {});
-        toast.error("Some required fields are still missing.");
       }
     } finally {
       setRequirementsSaving(false);
@@ -1371,14 +1416,17 @@ export default function OnlineOrderingPage() {
 
   if (status !== "setup_completed") {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-bold tracking-tight">Online Ordering</h2>
-          <Badge variant={getStatusTone(status)}>{getStatusLabel(status)}</Badge>
-        </div>
-        <p className="text-muted-foreground">
-          Branch: <span className="font-medium text-foreground">{selectedLocation.name}</span>
-        </p>
+      <PageShell>
+        <PageHeader
+          title="Online Ordering"
+          subtitle="Request and track storefront setup for this location."
+          indicator={
+            <div className="flex flex-wrap items-center gap-2">
+              <LocationIndicator isAllLocations={false} locationName={selectedLocation.name} />
+              <Badge variant={getStatusTone(status)}>{getStatusLabel(status)}</Badge>
+            </div>
+          }
+        />
         <StatusCard
           status={status}
           settings={currentSettings}
@@ -1586,7 +1634,7 @@ export default function OnlineOrderingPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageShell>
     );
   }
 

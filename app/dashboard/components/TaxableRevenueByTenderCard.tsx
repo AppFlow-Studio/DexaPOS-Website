@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -8,17 +7,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
-  ArrowRight,
   Landmark,
   Banknote,
   CreditCard,
   ShieldOff,
 } from "lucide-react";
+import { OverviewLinkButton } from "./OverviewSection";
 import type { TaxableRevenueByTenderReport } from "@/app/dashboard/actions/order-analytics";
 
 // ============================================================================
@@ -90,12 +88,12 @@ export function TaxableRevenueByTenderCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <Landmark className="h-4 w-4" />
+        <CardTitle className="text-[1.0625rem] font-semibold text-[#0C4FD1]! dark:text-[#6CA0FF]! flex items-center gap-2">
+          <Landmark className="h-[1.125rem] w-[1.125rem] shrink-0" />
           Taxable Revenue by Tender Type
         </CardTitle>
         <CardDescription>
-          Tax collected split by Cash vs. Card — last 30 days
+          Tax collected split by Cash vs. Card
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -220,12 +218,9 @@ export function TaxableRevenueByTenderCard({
           <span className="text-xs text-muted-foreground">
             {rows.length} tax rate{rows.length !== 1 ? "s" : ""}
           </span>
-          <Button variant="link" size="sm" className="h-auto p-0" asChild>
-            <Link href="/dashboard/reports/financials">
-              View financial reports
-              <ArrowRight className="h-3.5 w-3.5 ml-1" />
-            </Link>
-          </Button>
+          <OverviewLinkButton href="/dashboard/reports/financials">
+            View financial reports
+          </OverviewLinkButton>
         </div>
       </CardContent>
     </Card>

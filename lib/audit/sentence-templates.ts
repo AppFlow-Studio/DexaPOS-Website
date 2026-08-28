@@ -506,34 +506,8 @@ export const CATEGORY_ICON_NAMES: Record<string, string> = {
 };
 
 // ─── Severity Styling ─────────────────────────────────────────────────────────
-
-export const SEVERITY_BORDER_CLASS: Record<string, string> = {
-  info: "border-l-transparent",
-  warning: "border-l-amber-400",
-  critical: "border-l-red-500",
-  error: "border-l-red-500",
-};
-
-export const SEVERITY_ICON_COLOR: Record<string, string> = {
-  info: "text-primary",
-  warning: "text-amber-500",
-  critical: "text-red-500",
-  error: "text-red-500",
-};
-
-export const SEVERITY_ICON_BG: Record<string, string> = {
-  info: "bg-primary/10",
-  warning: "bg-amber-100 dark:bg-amber-900/20",
-  critical: "bg-red-100 dark:bg-red-900/20",
-  error: "bg-red-100 dark:bg-red-900/20",
-};
-
-export const SEVERITY_CARD_BG: Record<string, string> = {
-  info: "",
-  warning: "bg-amber-50/40 dark:bg-amber-950/10",
-  critical: "bg-red-50/40 dark:bg-red-950/10",
-  error: "bg-red-50/40 dark:bg-red-950/10",
-};
+// Moved to lib/constants/audit-severity.ts — a BadgeStyle {dot,text,bg} triple
+// matching the rest of the app's status badges (see UI-DESIGN-SYSTEM.md §4.6b).
 
 // ─── Relative Time ────────────────────────────────────────────────────────────
 

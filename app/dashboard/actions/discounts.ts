@@ -12,6 +12,8 @@ import {
 import { discountFormSchema } from "@/lib/validations/discount";
 import { LogAuditEvent } from "./audit-logs";
 import { resolveImpersonationFromCookies } from "@/lib/admin/impersonation";
+import type { PaginationParams } from "@/types/pagination";
+import { buildPaginationMeta, normalizePagination } from "@/lib/pagination";
 
 type MutationResult<T> =
   | { success: true; data: T }
@@ -123,14 +125,18 @@ function buildPayload(input: DiscountFormInput, merchantId: string) {
   };
 }
 
-export async function listDiscounts(filters: DiscountListFilters = {}) {
+export async function listDiscounts(
+  filters: DiscountListFilters = {},
+  pagination?: PaginationParams,
+) {
   try {
     const supabase = createServerSupabaseClient();
     const merchantId = await getMerchantIdFromSession();
+    const normalizedPagination = normalizePagination(pagination);
 
     let query = supabase
       .from("discounts")
-      .select("*, menu_item_discounts (menu_item_id)")
+      .select("*, menu_item_discounts (menu_item_id)", { count: "exact" })
       .eq("merchant_id", merchantId);
 
     // Location scoping: when a specific location is selected, include both
@@ -158,21 +164,84 @@ export async function listDiscounts(filters: DiscountListFilters = {}) {
     const sortBy = filters.sortBy ?? "display_order";
     const ascending = filters.sortDir !== "desc";
 
-    const { data, error } = await query
-      .order(sortBy, { ascending })
-      .order("created_at", { ascending: false });
+    query = query.order(sortBy, { ascending });
+    if (sortBy !== "created_at") {
+      query = query.order("created_at", { ascending: false });
+    }
+
+    const { data, error, count } = await query
+      .order("id", { ascending: false })
+      .range(
+        normalizedPagination.offset,
+        normalizedPagination.offset + normalizedPagination.pageSize - 1,
+      );
 
     if (error) {
       throw error;
     }
 
-    return { success: true, data: (data || []) as Discount[] };
+    return {
+      success: true,
+      data: (data || []) as Discount[],
+      pagination: buildPaginationMeta(count ?? 0, pagination),
+    };
   } catch (error) {
     console.error("[listDiscounts] error", error);
     return {
       success: false,
       error:
         error instanceof Error ? error.message : "Failed to fetch discounts",
+    };
+  }
+}
+
+export async function getDiscountStats(locationId?: string | null) {
+  try {
+    const supabase = createServerSupabaseClient();
+    const merchantId = await getMerchantIdFromSession();
+
+    let query = supabase
+      .from("discounts")
+      .select("is_active, start_date, end_date")
+      .eq("merchant_id", merchantId);
+
+    if (locationId && locationId !== "all") {
+      query = query.or(`location_id.is.null,location_id.eq.${locationId}`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const stats = {
+      total: data?.length ?? 0,
+      active: 0,
+      scheduled: 0,
+      expired: 0,
+    };
+
+    for (const discount of data ?? []) {
+      if (discount.end_date && discount.end_date < today) {
+        stats.expired += 1;
+        continue;
+      }
+
+      if (!discount.is_active) continue;
+
+      if (discount.start_date && discount.start_date > today) {
+        stats.scheduled += 1;
+      } else {
+        stats.active += 1;
+      }
+    }
+
+    return { success: true, data: stats };
+  } catch (error) {
+    console.error("[getDiscountStats] error", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to fetch discount stats",
     };
   }
 }

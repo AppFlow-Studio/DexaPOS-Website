@@ -1,7 +1,10 @@
 "use server";
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { filterMenusVisibleOnline } from "@/lib/menu/menu-channel-visibility";
+import {
+  filterMenusVisibleOnline,
+  isMissingMenuVisibilitySchema,
+} from "@/lib/menu/menu-channel-visibility";
 import { Site, SiteThemeConfig, OnlineOrderingConfig } from "@/types/site";
 import {
   StorefrontMenu,
@@ -288,10 +291,18 @@ async function fetchMenus(
     .eq("location_id", locationId);
 
   if (visibilityError) {
-    console.warn(
-      "Menu online visibility unavailable; using backward-compatible visible defaults:",
-      visibilityError.message,
-    );
+    if (isMissingMenuVisibilitySchema(visibilityError)) {
+      console.warn(
+        "Menu visibility columns are not deployed; using visible defaults:",
+        visibilityError.message,
+      );
+    } else {
+      console.error(
+        "Unable to enforce online menu visibility; returning no storefront menus:",
+        visibilityError.message,
+      );
+      return [];
+    }
   }
 
   const applyOnlineVisibility = (menus: StorefrontMenu[]) =>
@@ -404,8 +415,13 @@ function mapRpcMenuToStorefront(rpcMenu: any): StorefrontMenu | null {
             modifier_groups: modifierGroups,
             allergens: allergens.length ? allergens : undefined,
             dietary_tags: dietaryTags.length ? dietaryTags : undefined,
-            is_new: mi.is_new === true,
-            is_popular: mi.is_popular === true,
+            // Emitted top-level by get_menu_with_categories() as of migration
+            // 20260728120000. The location_override fallback covers an older
+            // RPC revision that only nested is_popular there, so the storefront
+            // keeps working regardless of app/DB deploy ordering.
+            is_new: (mi.is_new ?? mi.location_override?.is_new) === true,
+            is_popular:
+              (mi.is_popular ?? mi.location_override?.is_popular) === true,
           } satisfies StorefrontItem;
         });
 

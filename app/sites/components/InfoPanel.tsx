@@ -98,7 +98,9 @@ function formatTimeRange(from: string, to: string): string {
   return `${formatTime(from)} – ${formatTime(to)}`;
 }
 
-const border = "1px solid #E5E7EB";
+// Cards are borderless — they read as grouped blocks via spacing and rounding
+// alone. Kept as a const so every card stays consistent.
+const border = "none";
 const muted: React.CSSProperties = { color: "#6B7280" };
 const label: React.CSSProperties = { color: "#9CA3AF", fontSize: "0.7rem", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.06em" };
 
@@ -217,7 +219,7 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
           {/* Ordering Options */}
           {showOrderingOptions && (
             <div className="p-5" style={{ border, borderRadius: "16px", backgroundColor: "#fff" }}>
-              <div className="flex items-center gap-2 mb-4" style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "12px" }}>
+              <div className="flex items-center gap-2 mb-4">
                 <ShoppingBag className="h-4 w-4" style={{ color: "#9ca3af" }} />
                 <h3 className="text-sm font-semibold" style={{ color: "#111827" }}>Ordering Options</h3>
               </div>
@@ -301,7 +303,7 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
 
         {/* RIGHT: Hours */}
         <div className="p-5" style={{ border, borderRadius: "16px", backgroundColor: "#fff" }}>
-          <div className="flex items-center gap-2 mb-4" style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "12px" }}>
+          <div className="flex items-center gap-2 mb-4">
             <Clock className="h-4 w-4" style={{ color: "#9ca3af" }} />
             <h3 className="text-sm font-semibold" style={{ color: "#111827" }}>Store Hours</h3>
           </div>

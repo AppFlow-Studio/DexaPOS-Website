@@ -144,7 +144,7 @@ export function WaitlistPanel ({
         </Button>
       </AddToWaitlistWizard>
       {waitlist.map(entry => (
-        <Card key={entry.id} className='hover:shadow-md transition-shadow border-border/70'>
+        <Card key={entry.id} className='rounded-2xl border-border/70 shadow-none transition-colors hover:border-primary/30'>
           <CardHeader className='pb-3'>
             <div className='flex items-start justify-between'>
               <div className='flex-1'>
@@ -174,7 +174,7 @@ export function WaitlistPanel ({
           </CardHeader>
           <CardContent className='pt-0'>
             <div className='space-y-2.5'>
-              <div className='flex items-center justify-between text-sm rounded-md bg-muted/40 px-2 py-1.5'>
+              <div className='flex items-center justify-between text-sm rounded-full bg-muted/40 px-2.5 py-1.5'>
                 <span className='text-muted-foreground'>Quoted wait</span>
                 <span className='font-medium'>{getDisplayedWaitTime(entry)}</span>
               </div>

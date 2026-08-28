@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, Loader2, MessageSquareText, RefreshCw, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
 import {
   getQrGuestAlertsSnapshot,
   resolveQrGuestAlertAction,
@@ -112,18 +112,12 @@ export function QrGuestAlertsPanel({
   }, [hasAlerts, openCount]);
 
   return (
-    <Card>
-      <CardHeader className="space-y-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <BellRing className="h-5 w-5 text-primary" />
-              Open QR Guest Alerts
-            </CardTitle>
-            <CardDescription>
-              Staff-side verification surface for the guest `Call your server` flow, with realtime invalidation and a polling fallback.
-            </CardDescription>
-          </div>
+    <Panel>
+      <PanelSection
+        icon={BellRing}
+        label="Open QR guest alerts"
+        caption="Respond to active Call your server requests with realtime updates and a polling fallback."
+        action={
           <div className="flex items-center gap-2" role="status" aria-live="polite">
             {headerBadge}
             <Button
@@ -141,9 +135,8 @@ export function QrGuestAlertsPanel({
               Refresh
             </Button>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
+        }
+      >
         {isLoading ? (
           <div
             className="flex items-center gap-2 text-sm text-muted-foreground"
@@ -208,7 +201,7 @@ export function QrGuestAlertsPanel({
             ))}
           </ul>
         )}
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   );
 }

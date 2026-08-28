@@ -56,6 +56,7 @@ BEGIN
   RETURN NEW;
 END
 $$;
+
 -- ============================================================================
 -- TABLE
 -- ============================================================================
@@ -128,19 +129,23 @@ CREATE TABLE IF NOT EXISTS public.merchant_processor_accounts (
   CONSTRAINT merchant_processor_accounts_location_id_fkey
     FOREIGN KEY (location_id) REFERENCES public.locations(id) ON DELETE CASCADE
 );
+
 COMMENT ON TABLE public.merchant_processor_accounts IS
   'Per-merchant/purpose payment processor accounts (NMI + Valor). Routing table '
   'for lib/payments; boarding writes it via service role, RLS is read-for-owner.';
+
 -- Hot path: resolver reads active rows by (merchant_id, purpose).
 CREATE INDEX IF NOT EXISTS idx_mpa_merchant_purpose_active
   ON public.merchant_processor_accounts (merchant_id, purpose)
   WHERE is_active;
+
 -- At most one active PRIMARY per (merchant, location, purpose) — the guarantee
 -- selectAccount() relies on to avoid ambiguity across processors.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mpa_primary_scope
   ON public.merchant_processor_accounts (merchant_id, location_id, purpose)
   NULLS NOT DISTINCT
   WHERE (is_active AND is_primary);
+
 -- ============================================================================
 -- TRIGGERS
 -- ============================================================================
@@ -151,19 +156,23 @@ CREATE TRIGGER enforce_mpa_location_merchant
   BEFORE INSERT OR UPDATE OF merchant_id, location_id
   ON public.merchant_processor_accounts
   FOR EACH ROW EXECUTE FUNCTION public.enforce_mpa_location_merchant();
+
 DROP TRIGGER IF EXISTS update_merchant_processor_accounts_updated_at
   ON public.merchant_processor_accounts;
 CREATE TRIGGER update_merchant_processor_accounts_updated_at
   BEFORE UPDATE ON public.merchant_processor_accounts
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
 -- ============================================================================
 -- GRANTS + RLS
 -- ============================================================================
 
 GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
   ON public.merchant_processor_accounts TO authenticated, service_role;
+
 ALTER TABLE public.merchant_processor_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.merchant_processor_accounts FORCE ROW LEVEL SECURITY;
+
 -- READ: HQ admins, the merchant's own owner/admin/manager, and the merchant's
 -- carrier org. Writes are HQ-only (boarding runs through the service role,
 -- which bypasses RLS).
@@ -191,19 +200,23 @@ CREATE POLICY mpa_select_access ON public.merchant_processor_accounts
         AND (cr.organization_type)::text = 'carrier'::text
     )
   );
+
 DROP POLICY IF EXISTS mpa_hq_admin_insert ON public.merchant_processor_accounts;
 CREATE POLICY mpa_hq_admin_insert ON public.merchant_processor_accounts
   FOR INSERT TO authenticated
   WITH CHECK (is_dexapos_admin());
+
 DROP POLICY IF EXISTS mpa_hq_admin_update ON public.merchant_processor_accounts;
 CREATE POLICY mpa_hq_admin_update ON public.merchant_processor_accounts
   FOR UPDATE TO authenticated
   USING (is_dexapos_admin())
   WITH CHECK (is_dexapos_admin());
+
 DROP POLICY IF EXISTS mpa_hq_admin_delete ON public.merchant_processor_accounts;
 CREATE POLICY mpa_hq_admin_delete ON public.merchant_processor_accounts
   FOR DELETE TO authenticated
   USING (is_dexapos_admin());
+
 -- ============================================================================
 -- DISCRIMINATOR + FK ON EXISTING TABLES
 -- ============================================================================
@@ -212,6 +225,7 @@ CREATE POLICY mpa_hq_admin_delete ON public.merchant_processor_accounts
 -- incumbent so existing rows are unambiguous.
 ALTER TABLE public.merchant_billing_profiles
   ADD COLUMN IF NOT EXISTS processor text NOT NULL DEFAULT 'nmi';
+
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint
@@ -223,10 +237,12 @@ DO $$ BEGIN
       CHECK (processor = ANY (ARRAY['nmi'::text, 'valor'::text]));
   END IF;
 END $$;
+
 -- New online-order intents reference the processor account they were charged
 -- through. Composite FK (with merchant_id) prevents cross-merchant references.
 ALTER TABLE public.online_order_payment_intents
   ADD COLUMN IF NOT EXISTS merchant_processor_account_id uuid;
+
 DO $$ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint

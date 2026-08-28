@@ -33,6 +33,7 @@ import {
   Package,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DatePopover } from "@/components/ui/date-popover";
 import { WasteReason, LogWasteInput } from "../../actions/waste";
 
 export interface WastePickItem {
@@ -121,12 +122,11 @@ export function LogWasteDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden flex flex-col max-sm:h-dvh sm:max-h-[90vh]">
-        {/* Header band */}
-        <DialogHeader className="shrink-0 space-y-0 border-b bg-gradient-to-br from-red-500/10 via-background to-background px-6 py-5">
+      <DialogContent className="flex h-dvh max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden rounded-none bg-card p-0 max-sm:top-auto max-sm:translate-y-0 sm:h-[min(760px,calc(100dvh-1rem))] sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-[520px] sm:rounded-3xl">
+        <DialogHeader className="shrink-0 space-y-0 px-5 py-5 pr-14 sm:px-6 sm:pr-16">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-500/15 ring-1 ring-red-500/20">
-              <Trash2 className="h-5 w-5 text-red-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/60">
+              <Trash2 className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <DialogTitle className="text-lg">Log Waste</DialogTitle>
@@ -139,7 +139,7 @@ export function LogWasteDialog({
 
         <form
           onSubmit={handleSubmit}
-          className="flex-1 min-h-0 space-y-5 overflow-y-auto px-6 py-5"
+          className="thin-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4 sm:px-6"
         >
           {/* Item picker */}
           <div className="space-y-2">
@@ -147,13 +147,15 @@ export function LogWasteDialog({
               Inventory Item <span className="text-red-500">*</span>
             </Label>
             <Select value={itemId} onValueChange={setItemId}>
-              <SelectTrigger className="h-11 w-full">
+              <SelectTrigger className="h-11 w-full min-w-0 rounded-2xl border-0 bg-muted/60 shadow-none hover:bg-muted [&>span]:min-w-0 [&>span]:truncate">
                 <SelectValue placeholder="Select an item to log waste against" />
               </SelectTrigger>
               <SelectContent
                 position="popper"
                 sideOffset={4}
-                className="max-h-[70vh] min-h-105 w-(--radix-select-trigger-width)"
+                avoidCollisions
+                collisionPadding={16}
+                className="max-h-[min(20rem,var(--radix-select-content-available-height))] w-(--radix-select-trigger-width)"
               >
                 {items.length === 0 && (
                   <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -179,8 +181,8 @@ export function LogWasteDialog({
 
             {/* Selected item preview */}
             {selectedItem && (
-              <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-3 py-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-background ring-1 ring-border">
+              <div className="flex items-center gap-3 rounded-2xl border-0 bg-muted/60 px-3 py-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-background">
                   <Package className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -226,7 +228,7 @@ export function LogWasteDialog({
                   placeholder="0"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  className="h-11 pr-14 text-base font-medium"
+                  className="h-11 rounded-2xl border-0 bg-muted/60 pr-14 text-base font-medium shadow-none"
                 />
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
                   {selectedItem?.unit_type ?? "units"}
@@ -250,13 +252,12 @@ export function LogWasteDialog({
               >
                 Waste Date
               </Label>
-              <Input
+              <DatePopover
                 id="waste-date"
-                type="date"
                 value={wasteDate}
                 max={todayISO()}
-                onChange={(e) => setWasteDate(e.target.value)}
-                className="h-11"
+                onChange={(v) => setWasteDate(v ?? todayISO())}
+                className="h-11 rounded-2xl border-0 bg-muted/60 shadow-none hover:bg-muted"
               />
             </div>
           </div>
@@ -289,8 +290,8 @@ export function LogWasteDialog({
                     className={cn(
                       "flex flex-col items-center gap-1.5 rounded-lg border px-1 py-2.5 text-center text-xs font-medium transition-all",
                       active
-                        ? "border-red-500/40 bg-red-500/10 text-red-600 ring-1 ring-red-500/20"
-                        : "border-border bg-background text-muted-foreground hover:border-foreground/20 hover:text-foreground",
+                        ? "border-transparent bg-background text-foreground shadow-sm ring-1 ring-border"
+                        : "border-transparent bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
@@ -317,18 +318,18 @@ export function LogWasteDialog({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="resize-none"
+              className="resize-none border-0 bg-muted/60 shadow-none focus-visible:bg-muted/40"
             />
           </div>
         </form>
 
         {/* Footer with cost summary */}
-        <DialogFooter className="shrink-0 flex-row items-center justify-between gap-3 border-t bg-muted/30 px-6 py-4 sm:justify-between">
+        <DialogFooter className="shrink-0 flex-row items-center justify-between gap-3 bg-card px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4 sm:justify-between sm:px-6">
           <div>
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
               Estimated Cost
             </p>
-            <p className="text-xl font-bold tabular-nums text-red-600">
+            <p className="text-xl font-medium tabular-nums">
               ${estimatedCost.toFixed(2)}
             </p>
           </div>
@@ -343,7 +344,7 @@ export function LogWasteDialog({
             <Button
               onClick={handleSubmit}
               disabled={isPending || !isValid}
-              className="gap-2 bg-red-600 text-white hover:bg-red-700"
+              className="gap-2"
             >
               {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Log Waste

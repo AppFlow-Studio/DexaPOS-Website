@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
+import { ReportPanel as Card, ReportPanelContent as CardContent } from "@/components/dashboard/reports/ReportPanel";
 import {
   ChevronLeft,
   ChevronRight,
@@ -33,6 +33,25 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { TaxBreakdownRow } from "@/app/dashboard/reports/tax/types";
 import { exportToCsv, exportToPdf, formatReportDateRange } from "@/utils/export";
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from "@/components/dashboard/reports/MobileColumnsButton";
+import { useIsMobile } from "@/hooks/use-mobile";
+
+/** Nine columns is the widest report table, so most default to hidden on mobile. */
+const TABLE_COLUMNS: ReportColumn[] = [
+  { id: "createdAt", label: "Date", locked: true },
+  { id: "orderNumber", label: "Order #" },
+  { id: "orderType", label: "Type", defaultHidden: true },
+  { id: "subtotal", label: "Subtotal", defaultHidden: true },
+  { id: "taxAmount", label: "Tax", locked: true },
+  { id: "taxRate", label: "Rate", defaultHidden: true },
+  { id: "paymentMethod", label: "Payment", defaultHidden: true },
+  { id: "pricingMode", label: "Pricing", defaultHidden: true },
+  { id: "taxRefunded", label: "Refunded", defaultHidden: true },
+];
 
 // Exported so page.tsx can manage sort state at the top level
 export type SortKey = "createdAt" | "subtotal" | "taxAmount" | "taxRate" | "taxRefunded";
@@ -77,13 +96,7 @@ const PAYMENT_METHODS = [
   { value: "card_dvpaylite", label: "Card (DVPay)" },
 ];
 
-const ORDER_TYPE_COLORS: Record<string, string> = {
-  dine_in:  { bg: "bg-indigo-50",  text: "text-indigo-600" },
-  takeout:  { bg: "bg-amber-50",   text: "text-amber-600" },
-  delivery: { bg: "bg-emerald-50", text: "text-emerald-600" },
-  online:   { bg: "bg-blue-50",    text: "text-blue-600" },
-  catering: { bg: "bg-rose-50",    text: "text-rose-600" },
-} as any;
+const ORDER_TYPE_STYLE = "bg-muted/60 text-muted-foreground";
 
 function fmt(value: number) {
   return `$${value.toFixed(2)}`;
@@ -113,9 +126,9 @@ function SortIcon({
       <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/40 ml-1 shrink-0" />
     );
   return dir === "asc" ? (
-    <ArrowUp className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
+    <ArrowUp className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />
   ) : (
-    <ArrowDown className="h-3.5 w-3.5 text-primary ml-1 shrink-0" />
+    <ArrowDown className="h-3.5 w-3.5 text-[#0C4FD1] dark:text-[#6CA0FF] ml-1 shrink-0" />
   );
 }
 
@@ -149,6 +162,14 @@ export function TaxBreakdownTable({
   onSort,
 }: TaxBreakdownTableProps) {
   const [isExporting, setIsExporting] = useState(false);
+  const [hiddenCols, setHiddenCols] = useState(() =>
+    initialHiddenColumns(TABLE_COLUMNS),
+  );
+  const isMobile = useIsMobile();
+
+  /** Column hiding only applies at mobile widths; desktop always shows all. */
+  const isColVisible = (id: string) => !isMobile || !hiddenCols.has(id);
+  const visibleColCount = TABLE_COLUMNS.filter((c) => isColVisible(c.id)).length;
 
   const totalPages = Math.ceil(count / pageSize);
   const hasFilters = filterOrderType !== "all" || filterPaymentMethod !== "all";
@@ -200,12 +221,12 @@ export function TaxBreakdownTable({
   }
 
   return (
-    <Card className="border-none shadow-[0_2px_12px_rgba(0,0,0,0.06)] bg-card rounded-2xl overflow-hidden">
+    <Card className="overflow-hidden">
       {/* Toolbar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center justify-between px-5 pt-5 pb-4 border-b border-border/50">
-        <div className="flex flex-wrap gap-2">
+      <div className="flex min-w-0 flex-col justify-between gap-3 px-5 pb-4 pt-5 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-wrap gap-2">
           <Select value={filterOrderType} onValueChange={onFilterOrderType}>
-            <SelectTrigger className="h-9 w-44 text-sm rounded-lg bg-muted/40 border-0 focus:ring-1">
+            <SelectTrigger className="h-9 w-44 border-0 bg-muted/60 text-[0.8125rem] shadow-none">
               <SelectValue placeholder="Order type" />
             </SelectTrigger>
             <SelectContent>
@@ -221,7 +242,7 @@ export function TaxBreakdownTable({
             value={filterPaymentMethod}
             onValueChange={onFilterPaymentMethod}
           >
-            <SelectTrigger className="h-9 w-44 text-sm rounded-lg bg-muted/40 border-0 focus:ring-1">
+            <SelectTrigger className="h-9 w-44 border-0 bg-muted/60 text-[0.8125rem] shadow-none">
               <SelectValue placeholder="Payment method" />
             </SelectTrigger>
             <SelectContent>
@@ -249,10 +270,15 @@ export function TaxBreakdownTable({
           )}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-muted-foreground">
-            {isLoading ? "Loading…" : `${count.toLocaleString()} orders`}
-          </span>
+        {/* Wraps instead of overflowing the card on a phone. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {/* Row 1: Columns + CSV. Row 2: order count + PDF. The count is
+              ordered between CSV and PDF so it wraps down beside PDF. */}
+          <MobileColumnsButton
+            columns={TABLE_COLUMNS}
+            hidden={hiddenCols}
+            onChange={setHiddenCols}
+          />
           <Button
             variant="outline"
             size="sm"
@@ -266,7 +292,7 @@ export function TaxBreakdownTable({
           <Button
             variant="outline"
             size="sm"
-            className="h-8 text-xs gap-1.5"
+            className="order-2 h-8 text-xs gap-1.5"
             onClick={handleExportPdf}
             disabled={!data?.length || isExporting}
           >
@@ -280,12 +306,12 @@ export function TaxBreakdownTable({
         </div>
       </div>
 
-      <CardContent className="p-0 overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent border-b border-border/50">
+      <CardContent className="p-0">
+        <Table variant="data">
+          <TableHeader className="[&_tr]:border-0">
+            <TableRow className="hover:bg-transparent">
               <TableHead
-                className="pl-5 text-xs font-semibold text-muted-foreground cursor-pointer select-none"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none"
                 onClick={() => onSort("createdAt")}
               >
                 <div className="flex items-center">
@@ -293,23 +319,29 @@ export function TaxBreakdownTable({
                   <SortIcon col="createdAt" active={sortKey} dir={sortDir} />
                 </div>
               </TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">
-                Order #
-              </TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">
-                Type
-              </TableHead>
+              {isColVisible("orderNumber") && (
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">
+                  Order #
+                </TableHead>
+              )}
+              {isColVisible("orderType") && (
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">
+                  Type
+                </TableHead>
+              )}
+              {isColVisible("subtotal") && (
+                <TableHead
+                  className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
+                  onClick={() => onSort("subtotal")}
+                >
+                  <div className="flex items-center justify-end">
+                    Subtotal
+                    <SortIcon col="subtotal" active={sortKey} dir={sortDir} />
+                  </div>
+                </TableHead>
+              )}
               <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
-                onClick={() => onSort("subtotal")}
-              >
-                <div className="flex items-center justify-end">
-                  Subtotal
-                  <SortIcon col="subtotal" active={sortKey} dir={sortDir} />
-                </div>
-              </TableHead>
-              <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
+                className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
                 onClick={() => onSort("taxAmount")}
               >
                 <div className="flex items-center justify-end">
@@ -318,50 +350,58 @@ export function TaxBreakdownTable({
                 </div>
               </TableHead>
               {/* taxRate is a computed field — sort applies to current page only */}
-              <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right"
-                onClick={() => onSort("taxRate")}
-                title="Sorting applies to the current page only"
-              >
-                <div className="flex items-center justify-end">
-                  Rate
-                  <SortIcon col="taxRate" active={sortKey} dir={sortDir} />
-                  {sortKey === "taxRate" && (
-                    <span className="ml-1 text-[9px] text-muted-foreground/60 font-normal leading-none">
-                      pg
-                    </span>
-                  )}
-                </div>
-              </TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">
-                Payment
-              </TableHead>
-              <TableHead className="text-xs font-semibold text-muted-foreground">
-                Pricing
-              </TableHead>
+              {isColVisible("taxRate") && (
+                <TableHead
+                  className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right"
+                  onClick={() => onSort("taxRate")}
+                  title="Sorting applies to the current page only"
+                >
+                  <div className="flex items-center justify-end">
+                    Rate
+                    <SortIcon col="taxRate" active={sortKey} dir={sortDir} />
+                    {sortKey === "taxRate" && (
+                      <span className="ml-1 text-[9px] text-muted-foreground/60 font-normal leading-none">
+                        pg
+                      </span>
+                    )}
+                  </div>
+                </TableHead>
+              )}
+              {isColVisible("paymentMethod") && (
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">
+                  Payment
+                </TableHead>
+              )}
+              {isColVisible("pricingMode") && (
+                <TableHead className="text-[0.8125rem] font-normal text-muted-foreground">
+                  Pricing
+                </TableHead>
+              )}
               {/* taxRefunded is a joined field — sort applies to current page only */}
-              <TableHead
-                className="text-xs font-semibold text-muted-foreground cursor-pointer select-none text-right pr-5"
-                onClick={() => onSort("taxRefunded")}
-                title="Sorting applies to the current page only"
-              >
-                <div className="flex items-center justify-end">
-                  Refunded
-                  <SortIcon col="taxRefunded" active={sortKey} dir={sortDir} />
-                  {sortKey === "taxRefunded" && (
-                    <span className="ml-1 text-[9px] text-muted-foreground/60 font-normal leading-none">
-                      pg
-                    </span>
-                  )}
-                </div>
-              </TableHead>
+              {isColVisible("taxRefunded") && (
+                <TableHead
+                  className="text-[0.8125rem] font-normal text-muted-foreground cursor-pointer select-none text-right pr-5"
+                  onClick={() => onSort("taxRefunded")}
+                  title="Sorting applies to the current page only"
+                >
+                  <div className="flex items-center justify-end">
+                    Refunded
+                    <SortIcon col="taxRefunded" active={sortKey} dir={sortDir} />
+                    {sortKey === "taxRefunded" && (
+                      <span className="ml-1 text-[9px] text-muted-foreground/60 font-normal leading-none">
+                        pg
+                      </span>
+                    )}
+                  </div>
+                </TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i} className="border-b border-border/30">
-                  {Array.from({ length: 9 }).map((_, j) => (
+                <TableRow key={i} className="border-0">
+                  {Array.from({ length: visibleColCount }).map((_, j) => (
                     <TableCell key={j} className="py-3.5">
                       <div className="h-4 bg-muted animate-pulse rounded" />
                     </TableCell>
@@ -370,7 +410,7 @@ export function TaxBreakdownTable({
               ))
             ) : !sorted?.length ? (
               <TableRow>
-                <TableCell colSpan={9} className="h-48 text-center">
+                <TableCell colSpan={visibleColCount} className="h-48 text-center">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <Receipt className="h-8 w-8 opacity-30" />
                     <p className="text-sm font-medium">
@@ -392,72 +432,78 @@ export function TaxBreakdownTable({
               </TableRow>
             ) : (
               sorted.map((row) => {
-                const typeStyle =
-                  ORDER_TYPE_COLORS[row.orderType] ?? {
-                    bg: "bg-muted",
-                    text: "text-muted-foreground",
-                  };
                 return (
                   <TableRow
                     key={row.orderId}
-                    className="border-b border-border/30 hover:bg-muted/30 transition-colors"
+                    className="border-0 bg-card/70 transition-colors hover:bg-muted/40"
                   >
                     <TableCell className="pl-5 py-3.5 text-xs text-muted-foreground whitespace-nowrap">
                       {format(new Date(row.createdAt), "MM/dd/yy HH:mm")}
                     </TableCell>
-                    <TableCell className="py-3.5 font-mono text-xs font-medium">
-                      #{row.orderNumber}
-                    </TableCell>
-                    <TableCell className="py-3.5">
-                      <span
-                        className={cn(
-                          "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium",
-                          typeStyle.bg,
-                          typeStyle.text
-                        )}
-                      >
-                        {fmtOrderType(row.orderType)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-3.5 text-right text-sm font-medium">
-                      {fmt(row.subtotal)}
-                    </TableCell>
+                    {isColVisible("orderNumber") && (
+                      <TableCell className="py-3.5 font-mono text-xs font-medium">
+                        #{row.orderNumber}
+                      </TableCell>
+                    )}
+                    {isColVisible("orderType") && (
+                      <TableCell className="py-3.5">
+                        <span
+                          className={cn(
+                            "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium",
+                            ORDER_TYPE_STYLE
+                          )}
+                        >
+                          {fmtOrderType(row.orderType)}
+                        </span>
+                      </TableCell>
+                    )}
+                    {isColVisible("subtotal") && (
+                      <TableCell className="py-3.5 text-right text-sm font-medium">
+                        {fmt(row.subtotal)}
+                      </TableCell>
+                    )}
                     <TableCell className="py-3.5 text-right">
-                      <span className="text-sm font-semibold text-emerald-600">
+                      <span className="text-sm font-semibold text-foreground">
                         {fmt(row.taxAmount)}
                       </span>
                     </TableCell>
-                    <TableCell className="py-3.5 text-right text-xs text-muted-foreground">
-                      {row.taxRate.toFixed(2)}%
-                    </TableCell>
-                    <TableCell className="py-3.5 text-sm">
-                      {fmtPayment(row.paymentMethod)}
-                    </TableCell>
-                    <TableCell className="py-3.5">
-                      {row.pricingMode ? (
-                        <span
-                          className={cn(
-                            "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium capitalize",
-                            row.pricingMode === "cash"
-                              ? "bg-amber-50 text-amber-600"
-                              : "bg-muted text-muted-foreground"
-                          )}
-                        >
-                          {row.pricingMode}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-3.5 text-right pr-5">
-                      {row.taxRefunded > 0 ? (
-                        <span className="text-sm font-medium text-rose-500">
-                          -{fmt(row.taxRefunded)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </TableCell>
+                    {isColVisible("taxRate") && (
+                      <TableCell className="py-3.5 text-right text-xs text-muted-foreground">
+                        {row.taxRate.toFixed(2)}%
+                      </TableCell>
+                    )}
+                    {isColVisible("paymentMethod") && (
+                      <TableCell className="py-3.5 text-sm">
+                        {fmtPayment(row.paymentMethod)}
+                      </TableCell>
+                    )}
+                    {isColVisible("pricingMode") && (
+                      <TableCell className="py-3.5">
+                        {row.pricingMode ? (
+                          <span
+                            className={cn(
+                              "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium capitalize",
+                              "bg-muted/60 text-muted-foreground"
+                            )}
+                          >
+                            {row.pricingMode}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
+                    )}
+                    {isColVisible("taxRefunded") && (
+                      <TableCell className="py-3.5 text-right pr-5">
+                        {row.taxRefunded > 0 ? (
+                          <span className="text-sm font-medium text-foreground">
+                            -{fmt(row.taxRefunded)}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })
@@ -468,7 +514,7 @@ export function TaxBreakdownTable({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between px-5 py-3.5 border-t border-border/50">
+        <div className="flex items-center justify-between px-5 py-3.5">
           <p className="text-xs text-muted-foreground">
             Page {page + 1} of {totalPages} · {count.toLocaleString()} orders
           </p>
@@ -476,7 +522,7 @@ export function TaxBreakdownTable({
             <Button
               variant="outline"
               size="sm"
-              className="h-8 w-8 p-0 rounded-lg"
+              className="h-8 w-8 p-0"
               onClick={() => onPageChange(page - 1)}
               disabled={page === 0}
             >
@@ -485,7 +531,7 @@ export function TaxBreakdownTable({
             <Button
               variant="outline"
               size="sm"
-              className="h-8 w-8 p-0 rounded-lg"
+              className="h-8 w-8 p-0"
               onClick={() => onPageChange(page + 1)}
               disabled={page >= totalPages - 1}
             >

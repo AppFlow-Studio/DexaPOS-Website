@@ -1,7 +1,6 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Panel, PanelSection } from '@/components/dashboard/shell'
 import { Tag, EyeOff } from 'lucide-react'
 import { MenuCategory } from '@/types/menu'
 import { Switch } from '@/components/ui/switch'
@@ -56,17 +55,21 @@ export function HiddenCategoriesCard({ menuId, hiddenCategories, selectedLocatio
 
 
     return (
-        <Card className="border-amber-200 bg-amber-50/40">
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <EyeOff className="h-4 w-4 text-amber-600" />
-                    Hidden at this location
-                </CardTitle>
-                <CardDescription>These categories are turned off via location overrides.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2">
+        /* Amber tint carries the "hidden" meaning — keep it, but with the dark
+           variant the original omitted (C4). */
+        <Panel className="border-0 bg-amber-50/60 dark:bg-amber-950/20">
+            <PanelSection
+                label={
+                    <span className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                        <EyeOff className="h-[1.125rem] w-[1.125rem] shrink-0" />
+                        Hidden at this location
+                    </span>
+                }
+                caption="These categories are turned off via location overrides."
+                className="space-y-2"
+            >
                 {hiddenCategories.map((c) => (
-                    <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg bg-background">
+                    <div key={c.id} className="flex items-center justify-between gap-3 rounded-2xl border-0 bg-background p-3 shadow-none">
                         <div className="flex items-center gap-3">
                             <Tag className="h-4 w-4 text-muted-foreground" />
                             <div>
@@ -82,8 +85,8 @@ export function HiddenCategoriesCard({ menuId, hiddenCategories, selectedLocatio
                         />
                     </div>
                 ))}
-            </CardContent>
-        </Card>
+            </PanelSection>
+        </Panel>
     )
 }
 

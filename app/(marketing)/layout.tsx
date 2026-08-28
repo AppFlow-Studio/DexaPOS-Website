@@ -1,24 +1,9 @@
 import type { Metadata } from "next";
-import { Barlow, Barlow_Condensed } from "next/font/google";
 import "./marketing.css";
 import Nav from "@/components/marketing/Nav";
 import Footer from "@/components/marketing/Footer";
 import Analytics from "@/components/marketing/Analytics";
 import { getSiteSettings } from "@/lib/cms/site-settings";
-
-const barlow = Barlow({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-barlow",
-  display: "swap",
-});
-
-const barlowCondensed = Barlow_Condensed({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-barlow-condensed",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: {
@@ -60,9 +45,18 @@ export default async function MarketingLayout({
 
   return (
     <div
-      className={`mk-site ${barlow.variable} ${barlowCondensed.variable}`}
+      className="mk-site"
       style={{ fontFamily: "var(--font)" }}
     >
+      {/* Reveal bootstrap. Runs before paint so scroll-reveal content is hidden
+          without a flash, and — critically — hiding is opt-in: marketing.css only
+          hides un-revealed .reveal elements under .reveal-ready. If this script
+          never runs, content stays visible instead of being stranded invisible. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `try{document.documentElement.classList.add("reveal-ready")}catch(e){}`,
+        }}
+      />
       <Analytics />
       <Nav settings={siteSettings} />
       <main>{children}</main>

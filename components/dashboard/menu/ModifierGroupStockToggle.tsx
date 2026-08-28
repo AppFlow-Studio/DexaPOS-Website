@@ -62,7 +62,7 @@ export function ModifierGroupStockToggle({
   if (!gatedLocationId) {
     return (
       <span className={cn("text-[11px] text-muted-foreground", className)}>
-        Select a location to 86
+        Select a location to manage stock
       </span>
     );
   }
@@ -131,11 +131,17 @@ export function ModifierGroupStockToggle({
         ) : (
           <>
             <CircleSlash className="mr-1 h-3.5 w-3.5" />
-            86 whole group
+            Mark group out of stock
           </>
         )}
       </Button>
-      {open && <SnoozeDurationButtons onPick={do86} disabled={busy} />}
+      {open && (
+        <SnoozeDurationButtons
+          onPick={do86}
+          disabled={busy}
+          className="justify-center sm:justify-end"
+        />
+      )}
     </div>
   );
 }

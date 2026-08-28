@@ -5,7 +5,7 @@
 - Contract: `[POS/Web - Menu Management] Per-location menu visibility by platform`
 - Website implementer: Ali Dika
 - Branch: `feat/menu-channel-visibility-web`
-- Status: code complete; shared migration deployment, generated types, and manual QA pending
+- Status: code complete and reconciled with current preview; shared migration deployment, generated types, and manual QA pending
 
 ## Source
 
@@ -21,7 +21,7 @@ The authoritative migration remains in the POS repository:
 
 `utils/supabase/migrations/20260821120000_menu_channel_visibility.sql`
 
-It must be deployed before write-path QA. Reads treat missing rows, properties, and null values as visible for backward compatibility.
+It must be deployed before write-path QA. Missing rows, missing visibility columns, and null values use visible defaults for backward compatibility. Unexpected authorization, network, and query failures fail closed so a hidden online menu cannot be exposed.
 
 ## Implemented
 
@@ -34,6 +34,8 @@ It must be deployed before write-path QA. Reads treat missing rows, properties, 
 7. Removed online-hidden menus from hosted storefront menu results.
 8. Invalidated menu and online-ordering query families after saves.
 9. Added tests for independent combinations, defaults, online exclusion, and location isolation.
+10. Reconciled the feature with the current preview menu redesign while retaining its borderless tiles, responsive table, and all-location availability column.
+11. Hardened storefront and OrderOut reads so only the expected missing-column deployment case defaults to visible; all other visibility-query failures block publication or return no storefront menus.
 
 `Whole Menu` remains an ordinary merchant-created menu. Delivery providers are integrations, not additional visibility switches.
 
@@ -57,10 +59,11 @@ It must be deployed before write-path QA. Reads treat missing rows, properties, 
 
 ## Automated Verification
 
-- Focused Vitest: 1 file passed, 7 tests passed.
-- Changed-file ESLint: no new findings; existing React compiler findings remain in the large menu pages.
-- Full TypeScript: blocked by malformed generated `.next/dev/types` while the dev server is active.
-- Isolated TypeScript: no ticket-file errors; existing unrelated menu form/category errors remain.
+- Focused Vitest: 1 file passed, 9 tests passed.
+- Targeted ESLint: passed for the actions, helpers, tests, visibility control, merged menu list, and Settings tab.
+- Large menu-page ESLint: existing React compiler/effect findings remain unchanged on preview.
+- Full TypeScript: still fails on the preview branch's existing project-wide Clerk, Deno, form, and generated-type backlog. No new visibility-helper, list, Settings, storefront, or action errors were found. The existing menu creation form resolver errors remain.
+- Next.js production build: passed on Next.js 16.2.12 after merging the current `dexaposwebsite-preview` branch.
 
 ## Manual QA
 
@@ -105,5 +108,5 @@ Expected: one independently configurable row per location. Saving channel visibi
 ## Remaining Work
 
 1. Deploy the POS-owned shared migration through the approved database process.
-2. Regenerate `app/database.types.ts` from the migrated environment; do not hand-edit generated types.
+2. Regenerate `database.types.ts` from the migrated environment; do not hand-edit generated types.
 3. Run the full manual QA matrix and attach storefront, OrderOut, POS, and kiosk evidence.

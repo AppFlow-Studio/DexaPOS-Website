@@ -1,7 +1,7 @@
 "use client";
 
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -25,11 +25,22 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, UserPlus, X } from "lucide-react";
+import { CalendarDays, Loader2, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCreateCustomer } from "../hooks/useCustomers";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { isValidPhone, normalizePhone } from "@/lib/phone";
+import { Calendar } from "@/components/ui/calendar";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { format } from "date-fns";
 
 const SUGGESTED_TAGS = [
   "VIP",
@@ -60,6 +71,68 @@ const DIETARY_PREFERENCES = [
   "Dairy-Free",
   "Shellfish Allergy",
 ];
+
+const MUTED_FIELD_CLASS =
+  "border-0 bg-muted/60 shadow-none focus-visible:ring-1";
+const NONE_VALUE = "__none__";
+
+function parseDateValue(value: string) {
+  if (!value) return undefined;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+function CustomerDatePicker({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = parseDateValue(value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-9 w-full justify-between bg-muted/60 px-4 font-normal hover:bg-muted"
+        >
+          <span className={selected ? "text-foreground" : "text-muted-foreground"}>
+            {selected ? format(selected, "MMM d, yyyy") : placeholder}
+          </span>
+          <CalendarDays className="h-4 w-4 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        sideOffset={8}
+        className="w-[min(20rem,calc(100vw-2rem))] border-0 bg-white p-0 shadow-lg dark:bg-popover"
+      >
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(date) => {
+            onChange(date ? format(date, "yyyy-MM-dd") : "");
+            if (date) setOpen(false);
+          }}
+          captionLayout="dropdown"
+          startMonth={new Date(1900, 0)}
+          endMonth={new Date()}
+          classNames={{
+            dropdown_root: "relative rounded-full border-0 bg-muted px-3 py-1",
+          }}
+          autoFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const createCustomerSchema = z.object({
   // Contact
@@ -205,11 +278,11 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden border-0 bg-white p-0 dark:bg-background max-sm:h-dvh max-sm:max-h-none max-sm:w-screen max-sm:max-w-none max-sm:overflow-hidden max-sm:rounded-none sm:max-w-[600px]">
+        <DialogHeader className="shrink-0 px-4 pb-5 pt-6 sm:px-7 sm:pt-7">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-500/20 to-violet-500/5 border border-violet-500/10">
-              <UserPlus className="h-5 w-5 text-violet-500" />
+            <div className="rounded-xl bg-muted/60 p-2.5">
+              <UserPlus className="h-5 w-5 text-muted-foreground" />
             </div>
             <div className="flex-1">
               <DialogTitle>New Customer</DialogTitle>
@@ -221,7 +294,8 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 mt-2">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+            <div className="thin-scrollbar min-h-0 flex-1 space-y-8 overflow-y-auto px-4 py-6 sm:px-7">
             {/* Contact Section */}
             <div>
               <h3 className="font-semibold text-base mb-2">Contact <span className="text-destructive">*</span></h3>
@@ -233,7 +307,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormItem>
                       <FormLabel>Name <span className="text-destructive">*</span></FormLabel>
                       <FormControl>
-                        <Input placeholder="Full name" {...field} />
+                        <Input className={MUTED_FIELD_CLASS} placeholder="Full name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -246,7 +320,16 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormItem>
                       <FormLabel>Phone <span className="text-destructive">*</span></FormLabel>
                       <FormControl>
-                        <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} />
+                        <PhoneInput
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          className="[&_.react-international-phone-country-selector-button]:!border-0 [&_.react-international-phone-country-selector-button]:!bg-muted/60 [&_.react-international-phone-input]:!border-0 [&_.react-international-phone-input]:!bg-muted/60"
+                          style={{
+                            "--react-international-phone-border-color": "transparent",
+                            "--react-international-phone-background-color": "color-mix(in oklab, var(--muted) 60%, transparent)",
+                          } as CSSProperties}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -259,7 +342,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input type="email" placeholder="email@example.com" {...field} />
+                        <Input className={MUTED_FIELD_CLASS} type="email" placeholder="email@example.com" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -272,7 +355,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormItem>
                       <FormLabel>Address</FormLabel>
                       <FormControl>
-                        <Input placeholder="Street address" {...field} />
+                        <Input className={MUTED_FIELD_CLASS} placeholder="Street address" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -292,7 +375,11 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormItem>
                       <FormLabel>Birthday</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} />
+                        <CustomerDatePicker
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          placeholder="Select birthday"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -305,7 +392,11 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormItem>
                       <FormLabel>Anniversary</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} />
+                        <CustomerDatePicker
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          placeholder="Select anniversary"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -318,7 +409,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormItem>
                       <FormLabel>Company Name</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., Acme Corp" {...field} />
+                        <Input className={MUTED_FIELD_CLASS} placeholder="e.g., Acme Corp" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -338,13 +429,18 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormItem>
                       <FormLabel>VIP Level</FormLabel>
                       <FormControl>
-                        <select className="w-full border rounded px-2 py-2" {...field}>
+                        <Select value={field.value || "None"} onValueChange={field.onChange}>
+                          <SelectTrigger className="w-full border-0 bg-muted/60 shadow-none focus:ring-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="border-0 bg-white dark:bg-popover">
                           {VIP_LEVELS.map((level) => (
-                            <option key={level} value={level}>
+                            <SelectItem key={level} value={level}>
                               {level}
-                            </option>
+                            </SelectItem>
                           ))}
-                        </select>
+                          </SelectContent>
+                        </Select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -357,13 +453,21 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormItem>
                       <FormLabel>Preferred Seating</FormLabel>
                       <FormControl>
-                        <select className="w-full border rounded px-2 py-2" {...field}>
+                        <Select
+                          value={field.value || NONE_VALUE}
+                          onValueChange={(value) => field.onChange(value === NONE_VALUE ? "" : value)}
+                        >
+                          <SelectTrigger className="w-full border-0 bg-muted/60 shadow-none focus:ring-1">
+                            <SelectValue placeholder="None" />
+                          </SelectTrigger>
+                          <SelectContent className="border-0 bg-white dark:bg-popover">
                           {SEATING_PREFERENCES.map((seating) => (
-                            <option key={seating} value={seating}>
-                              {seating || "(None)"}
-                            </option>
+                            <SelectItem key={seating || NONE_VALUE} value={seating || NONE_VALUE}>
+                              {seating || "None"}
+                            </SelectItem>
                           ))}
-                        </select>
+                          </SelectContent>
+                        </Select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -376,7 +480,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormItem>
                       <FormLabel>Preferred Table</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., Booth 3" {...field} />
+                        <Input className={MUTED_FIELD_CLASS} placeholder="e.g., Booth 3" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -387,12 +491,11 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                 <label className="text-sm font-medium mb-2 block">Dietary Preferences</label>
                 <div className="flex flex-wrap gap-3">
                   {DIETARY_PREFERENCES.map((pref) => (
-                    <label key={pref} className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
+                    <label key={pref} className="flex items-center gap-2 rounded-xl bg-muted/60 px-3 py-2.5">
+                      <Checkbox
                         checked={dietaryPrefs.includes(pref)}
-                        onChange={() => handleToggleDietaryPref(pref)}
-                        className="w-4 h-4"
+                        onCheckedChange={() => handleToggleDietaryPref(pref)}
+                        className="border-0 bg-background shadow-none"
                       />
                       <span className="text-sm">{pref}</span>
                     </label>
@@ -407,6 +510,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormLabel>Allergy Notes</FormLabel>
                     <FormControl>
                       <Textarea
+                        className={MUTED_FIELD_CLASS}
                         placeholder="e.g., Severe peanut allergy — alert kitchen"
                         rows={2}
                         {...field}
@@ -429,7 +533,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormItem>
                       <FormLabel>Preferred Language</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., English" {...field} />
+                        <Input className={MUTED_FIELD_CLASS} placeholder="e.g., English" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -439,9 +543,13 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                   control={form.control}
                   name="email_opt_in"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center gap-2 mt-2">
+                    <FormItem className="flex flex-row items-center gap-3 rounded-xl bg-muted/60 px-3 py-3">
                       <FormControl>
-                        <input type="checkbox" checked={field.value} onChange={e => field.onChange(e.target.checked)} />
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => field.onChange(checked === true)}
+                          className="border-0 bg-background shadow-none"
+                        />
                       </FormControl>
                       <FormLabel className="mb-0">Email Opt-In</FormLabel>
                       <FormMessage />
@@ -452,9 +560,13 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                   control={form.control}
                   name="sms_opt_in"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center gap-2 mt-2">
+                    <FormItem className="flex flex-row items-center gap-3 rounded-xl bg-muted/60 px-3 py-3">
                       <FormControl>
-                        <input type="checkbox" checked={field.value} onChange={e => field.onChange(e.target.checked)} />
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => field.onChange(checked === true)}
+                          className="border-0 bg-background shadow-none"
+                        />
                       </FormControl>
                       <FormLabel className="mb-0">SMS Opt-In</FormLabel>
                       <FormMessage />
@@ -465,9 +577,13 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                   control={form.control}
                   name="receipt_via_email"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center gap-2 mt-2">
+                    <FormItem className="flex flex-row items-center gap-3 rounded-xl bg-muted/60 px-3 py-3">
                       <FormControl>
-                        <input type="checkbox" checked={field.value} onChange={e => field.onChange(e.target.checked)} />
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => field.onChange(checked === true)}
+                          className="border-0 bg-background shadow-none"
+                        />
                       </FormControl>
                       <FormLabel className="mb-0">Receipt via Email</FormLabel>
                       <FormMessage />
@@ -478,9 +594,13 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                   control={form.control}
                   name="receipt_via_sms"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center gap-2 mt-2">
+                    <FormItem className="flex flex-row items-center gap-3 rounded-xl bg-muted/60 px-3 py-3">
                       <FormControl>
-                        <input type="checkbox" checked={field.value} onChange={e => field.onChange(e.target.checked)} />
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => field.onChange(checked === true)}
+                          className="border-0 bg-background shadow-none"
+                        />
                       </FormControl>
                       <FormLabel className="mb-0">Receipt via SMS</FormLabel>
                       <FormMessage />
@@ -501,7 +621,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                       <Badge
                         key={tag}
                         variant="secondary"
-                        className="gap-1 pr-1"
+                        className="gap-1 border-0 pr-1"
                       >
                         {formatTagForDisplay(tag)}
                         <button
@@ -526,11 +646,11 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                         handleAddTag(tagInput);
                       }
                     }}
-                    className="flex-1"
+                    className={`${MUTED_FIELD_CLASS} flex-1`}
                   />
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => handleAddTag(tagInput)}
                     disabled={!tagInput.trim()}
@@ -546,7 +666,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                         key={tag}
                         type="button"
                         onClick={() => handleAddTag(tag)}
-                        className="text-xs px-2 py-0.5 rounded-full border border-dashed border-muted-foreground/30 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+                        className="rounded-full border-0 bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
                       >
                         + {formatTagForDisplay(tag)}
                       </button>
@@ -562,6 +682,7 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                     <FormLabel>Notes</FormLabel>
                     <FormControl>
                       <Textarea
+                        className={MUTED_FIELD_CLASS}
                         placeholder="Any notes about this customer..."
                         rows={2}
                         {...field}
@@ -572,11 +693,12 @@ export function CreateCustomerDialog({ open, onOpenChange }: CreateCustomerDialo
                 )}
               />
             </div>
+            </div>
 
-            <DialogFooter className="pt-2">
+            <DialogFooter className="shrink-0 bg-white px-4 py-5 dark:bg-background sm:px-7">
               <Button
                 type="button"
-                variant="outline"
+                variant="ghost"
                 onClick={() => handleClose(false)}
               >
                 Cancel

@@ -33,7 +33,7 @@
   display: grid;
   grid-template-columns: 1.8fr 1fr 1fr 1fr 1fr;
   gap: 12px;
-  align-items: center;
+  align-items: stretch;
 }
 .comp-th {
   font-size: 11.5px;
@@ -125,7 +125,7 @@
   line-height: 1.4;
   letter-spacing: -0.01em;
   color: var(--ink);
-  transition: color 0.2s;
+  transition: none;
 }
 .faq-section .faq-q:hover { color: var(--brand-500); }
 .faq-section .faq-q-icon {
@@ -137,7 +137,7 @@
   display: grid;
   place-items: center;
   color: var(--ink);
-  transition: all 0.3s;
+  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
 }
 .faq-section .faq-item.open .faq-q-icon {
   background: var(--ink);
@@ -145,11 +145,15 @@
   border-color: var(--ink);
   transform: rotate(45deg);
 }
+/* Animate to the answer real height: grid-template-rows 0fr -> 1fr. The old
+   fixed max-height clipped long answers and made short ones snap. */
 .faq-section .faq-a {
-  max-height: 0;
+  display: grid;
+  grid-template-rows: 0fr;
   overflow: hidden;
-  transition: max-height 0.4s ease;
+  transition: grid-template-rows 0.38s cubic-bezier(0.4, 0, 0.2, 1);
 }
+.faq-section .faq-a > * { min-height: 0; }
 .faq-section .faq-a-inner {
   padding: 0 0 28px;
   font-size: 15.5px;
@@ -159,7 +163,7 @@
 }
 .faq-section .faq-a-inner p:not(:last-child) { margin-bottom: 12px; }
 .faq-section .faq-a-inner strong { color: var(--ink); font-weight: 600; }
-.faq-section .faq-item.open .faq-a { max-height: 500px; }
+.faq-section .faq-item.open .faq-a { grid-template-rows: 1fr; }
 
 /* TRUST INDICATORS */
 .trust {
@@ -175,8 +179,15 @@
   border-radius: var(--radius-xl);
   overflow: hidden;
 }
-.trust-stat {
+/* Scoped to .trust-grid on purpose. This page CSS is a per-route chunk, but
+   after a client-side navigation it stays in the document — so a bare
+   `.trust-stat { background: var(--paper) }` painted white boxes over the
+   pricing page dark stats (white text on white). Keep page-specific
+   backgrounds scoped to their own container. */
+.trust-grid .trust-stat {
   background: var(--paper);
+}
+.trust-stat {
   padding: 36px 28px;
   text-align: center;
 }
@@ -188,6 +199,9 @@
   margin-bottom: 6px;
   line-height: 1;
 }
+/* Number and unit must render as ONE colour. CountUp wraps the number in a
+   <span>, so colouring the span alone split the value in two. */
+.trust-stat-value,
 .trust-stat-value span { color: var(--brand-500); }
 .trust-stat-label {
   font-size: 13px;
@@ -223,28 +237,24 @@
 
 @media (max-width: 1024px) {
   .comp-card { padding: 36px 28px; }
-  .comp-table {
-    grid-template-columns: 1.4fr 1fr 1fr;
-  }
-  .comp-table > :nth-child(5n+4),
-  .comp-table > :nth-child(5n+5) { display: none; }
   .trust-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 700px) {
   .comp-card { padding: 28px 20px; }
-  .comp-table { grid-template-columns: 1.2fr 1fr 1fr; gap: 6px; }
+  .comp-table { gap: 6px; }
   .comp-row-feature { font-size: clamp(13px, 0.9rem, 14px); padding: 14px 0; }
   .comp-cell { font-size: clamp(12px, 0.8rem, 13px); padding: 14px 4px; }
   .comp-th { font-size: clamp(10px, 0.7rem, 11.5px); }
   .faq-section .faq-q { font-size: 16px; gap: 16px; padding: 22px 0; }
   .faq-section .faq-a-inner { font-size: 15px; }
+  .faq-section .faq-item:not(.open) .faq-a { display: none; }
+  .faq-section .faq-item.open .faq-a { display: grid; }
   .trust-grid { grid-template-columns: 1fr; }
   .trust-stat-value { font-size: 32px; }
 }
 @media (max-width: 390px) {
   .comp-card { padding: 20px 14px; }
-  .comp-table { grid-template-columns: 1fr 1fr; gap: 4px; }
-  .comp-table > :nth-child(5n+3) { display: none; }
+  .comp-table { gap: 4px; }
   .comp-row-feature { font-size: 12px; }
   .comp-cell { font-size: 11px; padding: 10px 2px; }
   .diff-card { padding: 26px 20px; }
@@ -257,7 +267,7 @@
 .diff-card {
   background: var(--paper); border: 1px solid var(--slate-200);
   border-radius: var(--radius-lg); padding: 34px 30px;
-  transition: all 0.3s ease;
+  transition: none;
 }
 .diff-card:hover { border-color: var(--brand-300); transform: translateY(-3px); box-shadow: var(--shadow-md); }
 .diff-ic {
@@ -310,6 +320,15 @@
 @media (max-width: 1024px) {
   .diff-grid { grid-template-columns: 1fr 1fr; }
   .wp-inner { grid-template-columns: 1fr; gap: 36px; padding: 44px; }
+  .wp-copy { text-align: center; }
+  .wp-copy .section-eyebrow { justify-content: center; }
+  .wp-copy p { margin-left: auto; margin-right: auto; }
+  .wp-copy .btn {
+    display: flex;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+  }
 }
 @media (max-width: 700px) {
   .why-diff { padding: 72px 0; }

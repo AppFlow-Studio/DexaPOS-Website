@@ -1014,7 +1014,13 @@ export async function CreateReservationAction (
     p_assigned_table_ids: params.assignedTableIds ?? null,
     p_source: params.source ?? 'web_dashboard'
   })
-  if (error) throw error
+  // Postgres `RAISE EXCEPTION` arrives as P0001 with the human-readable text in
+  // `message`. Rethrowing the raw PostgrestError stringifies the whole object
+  // into the toast (`{code: "P0001", details: Null, hint: ...}`), which tells
+  // the user nothing — surface the message instead.
+  if (error) {
+    throw new Error(error.message || 'Unable to create reservation.')
+  }
   const reservationId = (data as any)?.reservation_id as string | undefined
   await LogAuditEvent({
     clerkOrgId,

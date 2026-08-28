@@ -9,11 +9,15 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Info, Utensils, Star, DollarSign, CircleSlash, Layers } from 'lucide-react'
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover'
+import { Info, Utensils, Star, DollarSign, CircleSlash, Layers, Loader2, MoreHorizontal, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { MenuCategoryItem } from '@/types/menu'
 import { PriceSourcePopover } from '@/components/dashboard/menu/PriceSourcePopover'
-import { ItemStockToggle } from '@/components/dashboard/menu/menuId/ItemStockToggle'
 import {
     priceSourceToLevel,
     scopeColor,
@@ -28,6 +32,18 @@ import {
 import { useClerkOrgId } from '@/app/dashboard/hooks/useLocationScoped'
 import { useActiveSnoozes } from '@/lib/queries/use-snoozes'
 import { isActivelySnoozed, snoozeShortLabel } from '@/lib/snooze'
+import { useRef, useState } from 'react'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useRestoreItem, useSnoozeItem, type SnoozeDuration } from '@/lib/queries/use-snoozes'
 
 interface CategoryItemRowProps {
     item: MenuCategoryItem
@@ -58,6 +74,24 @@ export function CategoryItemRow({
     onToggleSelect,
 }: CategoryItemRowProps) {
     const menuItem = item.menu_item
+    const [imageFailed, setImageFailed] = useState(false)
+    // The price popover is driven from the actions menu now that the row no
+    // longer shows an info icon. `priceMode` picks which pane it opens on.
+    const [isPriceOpen, setIsPriceOpen] = useState(false)
+    const [priceMode, setPriceMode] = useState<'view' | 'edit'>('view')
+
+    // The dropdown restores focus to its "..." trigger as it closes, which the
+    // popover's dismiss layer would read as a click-away. `onCloseAutoFocus`
+    // below suppresses that restore; the ref is set synchronously because that
+    // handler runs before the state updates here have committed.
+    const handingOffToPrice = useRef(false)
+    const openPriceFrom = (mode: 'view' | 'edit') => {
+        handingOffToPrice.current = true
+        setPriceMode(mode)
+        setIsPriceOpen(true)
+    }
+    const snoozeItem = useSnoozeItem()
+    const restoreItem = useRestoreItem()
     const priceSource = menuItem?.price_source || 'base'
     const sourceLevel = priceSourceToLevel(priceSource)
     const isAllLocations = useIsAllLocations()
@@ -67,6 +101,22 @@ export function CategoryItemRow({
     // Query dedupes by key), so this is a single request per location, not per row.
     const clerkOrgId = useClerkOrgId()
     const gatedLocationId = useGatedLocationId()
+    const stockActionBusy = snoozeItem.isPending || restoreItem.isPending
+    const markOutOfStock = (duration: SnoozeDuration) => {
+        if (!clerkOrgId || !gatedLocationId) return
+        snoozeItem.mutate({
+            clerkOrgId,
+            menuItemId: item.menu_item_id,
+            locationId: gatedLocationId,
+            duration,
+            itemName: menuItem?.name,
+            image: menuItem?.image,
+        })
+    }
+    const restoreStock = () => {
+        if (!clerkOrgId || !gatedLocationId) return
+        restoreItem.mutate({ clerkOrgId, menuItemId: item.menu_item_id, locationId: gatedLocationId })
+    }
     const { data: activeSnoozes } = useActiveSnoozes(
         clerkOrgId,
         gatedLocationId ?? 'all',
@@ -83,6 +133,23 @@ export function CategoryItemRow({
     const hasOutOfStockModifier = (menuItem?.modifier_groups ?? []).some((g) =>
         (g.items ?? []).some((o) => isActivelySnoozed(o.snoozed_until)),
     )
+
+    // Single mobile status indicator, most severe first: a hard "unavailable"
+    // outranks a temporary 86, which outranks a modifier-level 86. Mirrors the
+    // desktop badge row, which stays visible at `sm:` and up.
+    const statusDot = !menuItem?.effective_availability
+        ? { className: 'bg-destructive', label: 'Unavailable in this menu' }
+        : isOutOfStock
+          ? {
+                className: 'bg-amber-500',
+                label: `Out of stock · ${snoozeShortLabel(snoozedUntil as string)}`,
+            }
+          : hasOutOfStockModifier
+            ? {
+                  className: 'bg-amber-500',
+                  label: 'One or more modifier options are out of stock',
+              }
+            : null
 
     const getPriceSourceBadge = () => {
         if (priceSource === 'base') return null
@@ -107,7 +174,7 @@ export function CategoryItemRow({
     return (
         <div
             className={cn(
-                "flex items-center gap-2 sm:gap-4 py-4 px-1 sm:px-2 hover:bg-muted/50 cursor-pointer transition-colors rounded-lg min-w-0",
+                "flex items-center gap-2 px-1 py-3 sm:gap-4 sm:px-2 hover:bg-muted/50 cursor-pointer transition-colors rounded-lg min-w-0",
                 isSelectionMode && isSelected && "bg-primary/5",
             )}
             onClick={isSelectionMode ? onToggleSelect : onEdit}
@@ -122,37 +189,61 @@ export function CategoryItemRow({
                 </div>
             )}
 
-            {/* Item Image */}
-            <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden flex-shrink-0">
-                {menuItem?.image ? (
+            {/* Item image — hidden on mobile, where the row needs its width for
+                the name, price and badges. */}
+            <div className="hidden h-12 w-12 sm:h-16 sm:w-16 rounded-lg bg-muted sm:flex items-center justify-center overflow-hidden flex-shrink-0">
+                {menuItem?.image && !imageFailed ? (
                     <img
                         src={menuItem.image}
                         alt={menuItem?.name || ''}
                         className="h-full w-full object-cover"
+                        onError={() => setImageFailed(true)}
                     />
                 ) : (
                     <Utensils className="h-6 w-6 text-muted-foreground" />
                 )}
             </div>
 
-            {/* Details + price + badges. Name/desc and price share the top row;
+            {/* Details + price + badges. Name and price share the top row;
                 badges wrap onto their own full-width row below so they never
                 collide with the price column on narrow screens. */}
             <div className="flex-1 min-w-0 space-y-1">
                 <div className="flex items-start justify-between gap-2 min-w-0">
-                    {/* Name + description */}
+                    {/* Item name */}
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                             <h4 className="font-medium truncate">{menuItem?.name}</h4>
                             {item.is_featured && (
                                 <Star className="h-4 w-4 text-yellow-500 fill-yellow-500 shrink-0" />
                             )}
+                            {/* Mobile status dot — stands in for the full-width
+                                badge row below, which is hidden on mobile so every
+                                item row keeps the same height. Tappable: the
+                                popover explains what the colour means. */}
+                            {statusDot && (
+                                <Popover>
+                                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                            type="button"
+                                            aria-label={statusDot.label}
+                                            className={cn(
+                                                'h-2.5 w-2.5 shrink-0 rounded-full sm:hidden',
+                                                statusDot.className
+                                            )}
+                                        />
+                                    </PopoverTrigger>
+                                    <PopoverContent
+                                        align="start"
+                                        className="w-auto max-w-[15rem] px-3 py-2 text-xs"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        {statusDot.label}
+                                    </PopoverContent>
+                                </Popover>
+                            )}
                         </div>
-                        {menuItem?.description && (
-                            <p className="text-sm text-muted-foreground truncate">
-                                {menuItem.description}
-                            </p>
-                        )}
+                        {/* Truncated to a few words at this width, so it earns its
+                            line only on desktop. */}
                     </div>
 
                     {/* Price */}
@@ -161,6 +252,7 @@ export function CategoryItemRow({
                             <PriceSourcePopover
                                 itemId={menuItem?.id || item.menu_item_id}
                                 currentPrice={menuItem?.effective_price ?? 0}
+                                currentCashPrice={menuItem?.effective_cash_price ?? null}
                                 sourceLevel={sourceLevel}
                                 locationId={
                                     isAllLocations ? null : selectedLocation?.id ?? null
@@ -170,52 +262,109 @@ export function CategoryItemRow({
                                     isAllLocations,
                                     locationName: selectedLocation?.name ?? null,
                                 })}
+                                open={isPriceOpen}
+                                onOpenChange={(next) => {
+                                    setIsPriceOpen(next)
+                                    if (!next) handingOffToPrice.current = false
+                                }}
+                                initialMode={priceMode}
                             >
                                 <div className="flex items-center gap-1 whitespace-nowrap">
-                                    <DollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
+                                    {/* The `$` glyph is redundant beside a price;
+                                        desktop keeps it, mobile reclaims the width. */}
+                                    <DollarSign className="hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" />
                                     <span className="font-semibold">
                                         {menuItem?.effective_price?.toFixed(2) || '0.00'}
                                     </span>
-                                    <Info className="h-3 w-3 text-muted-foreground opacity-60 shrink-0" />
                                 </div>
                             </PriceSourcePopover>
                             {menuItem?.effective_cash_price && menuItem.effective_cash_price !== menuItem.effective_price && (
-                                <div className="text-sm text-muted-foreground whitespace-nowrap">
-                                    Cash: ${menuItem.effective_cash_price.toFixed(2)}
+                                <div className="whitespace-nowrap text-xs text-muted-foreground sm:text-sm">
+                                    <span className="hidden sm:inline">Cash: $</span>
+                                    <span className="sm:hidden">cash </span>
+                                    {menuItem.effective_cash_price.toFixed(2)}
                                 </div>
                             )}
                         </div>
                         {!isSelectionMode && (
-                            <>
-                                <ItemStockToggle
-                                    menuItemId={item.menu_item_id}
-                                    clerkOrgId={clerkOrgId}
-                                    locationId={gatedLocationId}
-                                    isOutOfStock={isOutOfStock}
-                                    itemName={menuItem?.name}
-                                    image={menuItem?.image}
-                                />
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="hidden sm:inline-flex h-8 w-8"
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    onEdit()
-                                                }}
-                                            >
-                                                <DollarSign className="h-4 w-4" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Edit state of this item in this menu/category context</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
-                            </>
+                            <div
+                                className="hidden sm:block"
+                                onClick={(event) => event.stopPropagation()}
+                            >
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 rounded-full"
+                                            disabled={stockActionBusy}
+                                            aria-label={`Actions for ${menuItem?.name || 'item'}`}
+                                        >
+                                            {stockActionBusy
+                                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                : <MoreHorizontal className="h-4 w-4" />}
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                        align="end"
+                                        className="w-56"
+                                        onCloseAutoFocus={(event) => {
+                                            // Suppress the focus-return to the
+                                            // trigger when we are handing off to
+                                            // the price popover; that refocus is
+                                            // what was dismissing it.
+                                            if (handingOffToPrice.current) {
+                                                event.preventDefault()
+                                            }
+                                        }}
+                                    >
+                                        <DropdownMenuItem
+                                            onClick={() => openPriceFrom('edit')}
+                                        >
+                                            <DollarSign className="mr-2 h-4 w-4" />
+                                            Adjust price
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            onClick={() => openPriceFrom('view')}
+                                        >
+                                            <Layers className="mr-2 h-4 w-4" />
+                                            View price breakdown
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={onClick}>
+                                            <Info className="mr-2 h-4 w-4" />
+                                            View item details
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        {isOutOfStock && gatedLocationId ? (
+                                            <DropdownMenuItem onClick={restoreStock} className="text-green-700">
+                                                <RotateCcw className="mr-2 h-4 w-4" />
+                                                Restore item to stock
+                                            </DropdownMenuItem>
+                                        ) : (
+                                            <DropdownMenuSub>
+                                                <DropdownMenuSubTrigger disabled={!gatedLocationId}>
+                                                    <CircleSlash className="mr-2 h-4 w-4" />
+                                                    {gatedLocationId ? 'Mark out of stock' : 'Select a location first'}
+                                                </DropdownMenuSubTrigger>
+                                                <DropdownMenuSubContent>
+                                                    <DropdownMenuItem onClick={() => markOutOfStock({ kind: 'hours', hours: 1 })}>
+                                                        For 1 hour
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => markOutOfStock({ kind: 'hours', hours: 4 })}>
+                                                        For 4 hours
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => markOutOfStock({ kind: 'end_of_day' })}>
+                                                        Until end of day
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => markOutOfStock({ kind: 'until_manual' })}>
+                                                        Until manually restored
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuSubContent>
+                                            </DropdownMenuSub>
+                                        )}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -224,9 +373,8 @@ export function CategoryItemRow({
                 {(isOutOfStock ||
                     hasOutOfStockModifier ||
                     !menuItem?.effective_availability ||
-                    (menuItem?.allergens && menuItem.allergens.length > 0) ||
                     (showLocationPricing && priceSource !== 'base')) && (
-                    <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                    <div className="hidden flex-wrap items-center gap-1.5 min-w-0 sm:flex">
                         {hasOutOfStockModifier && (
                             <Badge
                                 variant="outline"
@@ -236,7 +384,11 @@ export function CategoryItemRow({
                                 <span>Modifier out of stock</span>
                             </Badge>
                         )}
-                        {isOutOfStock ? (
+                        {!menuItem?.effective_availability ? (
+                            <Badge variant="destructive" className="text-[10px]">
+                                Unavailable
+                            </Badge>
+                        ) : isOutOfStock ? (
                             <Badge
                                 variant="outline"
                                 className="text-[10px] gap-1 border-amber-300 bg-amber-50 text-amber-700"
@@ -246,18 +398,7 @@ export function CategoryItemRow({
                                     {snoozeShortLabel(snoozedUntil as string)}
                                 </span>
                             </Badge>
-                        ) : (
-                            !menuItem?.effective_availability && (
-                                <Badge variant="destructive" className="text-[10px]">
-                                    Unavailable
-                                </Badge>
-                            )
-                        )}
-                        {menuItem?.allergens && menuItem.allergens.length > 0 && (
-                            <Badge variant="outline" className="text-[10px]">
-                                {menuItem.allergens.length} allergen{menuItem.allergens.length !== 1 ? 's' : ''}
-                            </Badge>
-                        )}
+                        ) : null}
                         {showLocationPricing && getPriceSourceBadge()}
                     </div>
                 )}

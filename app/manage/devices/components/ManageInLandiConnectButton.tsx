@@ -2,7 +2,6 @@
 
 import type { ComponentProps } from 'react'
 import { ExternalLink } from 'lucide-react'
-import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { buildLandiConnectListUrl } from '@/lib/device-registry/landi-connect'
@@ -35,10 +34,7 @@ export function ManageInLandiConnectButton({
   const label = `Manage ${serial} in Landi Connect`
 
   const handleClick = async () => {
-    const showManualHint = () =>
-      toast.info('Opening Landi Connect', {
-        description: `Search for serial ${serial} to find this device.`,
-      })
+    const showManualHint = () => {}
 
     // Optional chaining alone would let a missing clipboard API resolve to
     // `undefined` and wrongly show "Serial copied", so guard explicitly.
@@ -49,9 +45,6 @@ export function ManageInLandiConnectButton({
 
     try {
       await navigator.clipboard.writeText(serial)
-      toast.success('Serial copied', {
-        description: `Paste ${serial} into Landi Connect's search to find this device.`,
-      })
     } catch {
       showManualHint()
     }

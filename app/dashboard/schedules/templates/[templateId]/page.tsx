@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 import { useScheduleTemplateStore } from "@/stores/useScheduleTemplateStore";
 import { useUnifiedStaff } from "@/app/dashboard/hooks/useStaff";
 import { ScheduleTemplate, TemplateShift } from "@/types/schedule";
@@ -179,9 +178,6 @@ export default function EditTemplatePage({
 
   const handleSave = () => {
     if (!template || !template.name.trim()) {
-      toast("Name Required", {
-        description: "Please enter a name for the template before saving.",
-      });
       return;
     }
 
@@ -192,16 +188,13 @@ export default function EditTemplatePage({
       shifts: template.shifts,
     });
 
-    toast("Template Updated", {
-      description: `The template "${template.name}" has been successfully updated.`,
-    });
     router.back();
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-white text-foreground md:h-screen md:min-h-0">
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b">
+      <header className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ChevronLeft className="w-5 h-5" />
@@ -214,19 +207,19 @@ export default function EditTemplatePage({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => router.back()}>
+          <Button variant="outline" onClick={() => router.back()} className="flex-1 sm:flex-none">
             Cancel
           </Button>
-          <Button onClick={handleSave}>
+          <Button onClick={handleSave} className="flex-1 sm:flex-none">
             <Save className="w-4 h-4 mr-2" />
             Save Changes
           </Button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-hidden flex">
+      <div className="flex flex-1 flex-col md:min-h-0 md:flex-row md:overflow-hidden">
         {/* Sidebar / Form */}
-        <div className="w-80 border-r p-6 overflow-y-auto bg-muted/10">
+        <div className="w-full shrink-0 bg-white p-4 sm:p-6 md:w-80 md:overflow-y-auto">
           <div className="space-y-6">
             <div className="space-y-2">
               <label className="text-sm font-medium">Template Name</label>
@@ -271,9 +264,9 @@ export default function EditTemplatePage({
         </div>
 
         {/* Main Grid Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-background">
+        <div className="flex min-h-[560px] min-w-0 shrink-0 flex-col bg-white md:min-h-0 md:flex-1 md:shrink">
           {/* Search Bar */}
-          <div className="p-4 border-b flex items-center gap-4 bg-muted/5">
+          <div className="flex items-center gap-4 bg-white p-4">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -285,7 +278,7 @@ export default function EditTemplatePage({
             </div>
           </div>
 
-          <div className="flex-1 p-6 overflow-hidden">
+          <div className="h-[480px] overflow-hidden p-3 sm:p-6 md:h-auto md:min-h-0 md:flex-1">
             <TemplateGrid
               shifts={template.shifts}
               employees={

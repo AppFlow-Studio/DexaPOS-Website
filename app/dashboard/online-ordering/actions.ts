@@ -9,7 +9,7 @@ import {
   WeeklySchedule,
 } from "./hooks/useOnlineOrderingSettings";
 import { revalidatePath } from "next/cache";
-import { LogAuditEvent } from "../actions/audit-logs";
+import { LogAuditEvent, LogAuditEvents } from "../actions/audit-logs";
 import {
   canMerchantMaintainCompletedStore,
   getDefaultStoreSlug,
@@ -1413,7 +1413,30 @@ export async function getQrTableManagerSnapshot(
   }
 
   const supabase = createServerSupabaseClient();
-  const db = supabase as any;
+
+  // The QR generator is a security-definer database function, so it can see
+  // an existing active code even when the dashboard's JWT lacks the legacy
+  // location claims used by the table_qr_codes read policy. Verify location
+  // access with the caller's JWT, then use the server-only client for the QR
+  // rows themselves. Without this, generation can correctly return
+  // `reprint_existing` while the following snapshot renders “Not generated”.
+  const { error: accessError } = await supabase.rpc("authorize_location_access", {
+    p_location_id: locationId,
+  });
+  if (accessError) {
+    return {
+      success: false,
+      storeName: null,
+      storeSlug: null,
+      customDomain: null,
+      acceptsDineIn: false,
+      qrKillSwitch: false,
+      tables: [],
+      generatedCount: 0,
+      activeCount: 0,
+      error: accessError.message,
+    };
+  }
 
   const { data: config, error: configError } = await supabase
     .from("online_store_config")
@@ -1492,16 +1515,17 @@ export async function getQrTableManagerSnapshot(
     };
   }
 
+  const serviceDb = createServiceRoleClient() as any;
   const [{ data: qrCodes, error: qrCodesError }, { data: scanEvents, error: scanEventsError }] =
     await Promise.all([
-      db
+      serviceDb
         .from("table_qr_codes")
         .select(
           "id, floor_plan_object_id, table_label, token, token_version, is_active, scan_count, last_scanned_at, created_at, rotated_at"
         )
         .in("floor_plan_object_id", floorPlanObjectIds)
         .order("created_at", { ascending: false }),
-      db
+      serviceDb
         .from("qr_scan_events")
         .select("table_qr_code_id, occurred_at")
         .eq("location_id", locationId)
@@ -2188,9 +2212,25 @@ export async function revokeTableQrCode(
   return { success: true };
 }
 
+/**
+ * How many tables one `generateMissingQrCodesForLocation` call will process.
+ *
+ * The Clerk session token is minted once per server action and is short-lived,
+ * so a single call that walks hundreds of tables outlives its own JWT and dies
+ * with "JWT expired" partway through. The client drives this in batches instead
+ * — each call is a fresh request with a fresh token — so wall-clock time per
+ * call stays well inside the token lifetime no matter how many tables exist.
+ */
+const QR_GENERATE_BATCH_SIZE = 25;
+
 export async function generateMissingQrCodesForLocation(
   locationId: string
-): Promise<{ success: boolean; generated: number; error?: string }> {
+): Promise<{
+  success: boolean;
+  generated: number;
+  remaining: number;
+  error?: string;
+}> {
   const supabase = createServerSupabaseClient();
   const { data: location, error: locationError } = await supabase
     .from("locations")
@@ -2202,10 +2242,30 @@ export async function generateMissingQrCodesForLocation(
     return {
       success: false,
       generated: 0,
+      remaining: 0,
       error: locationError?.message || "Location not found",
     };
   }
 
+  // Authorize the caller while their Clerk token is still current. The bulk
+  // work below runs with the server-only service client, so it cannot fail
+  // halfway through because a user JWT expires. This is the same guard used
+  // inside `generate_table_qr_code`, performed once before elevation.
+  const { error: accessError } = await supabase.rpc("authorize_location_access", {
+    p_location_id: locationId,
+  });
+  if (accessError) {
+    return {
+      success: false,
+      generated: 0,
+      remaining: 0,
+      error: accessError.message,
+    };
+  }
+
+  // Entitlement is checked once for the whole batch. It cannot change midway,
+  // and re-checking per table cost four service-role queries each — the bulk of
+  // the round-trips that made this action outrun its token.
   const qrBillingGate = await getQrBillingGateStatus(
     locationId,
     location.merchant_id as string
@@ -2214,6 +2274,7 @@ export async function generateMissingQrCodesForLocation(
     return {
       success: false,
       generated: 0,
+      remaining: 0,
       error:
         qrBillingGate.reason ||
         "QR Table Ordering is not available for the current subscription tier.",
@@ -2222,25 +2283,88 @@ export async function generateMissingQrCodesForLocation(
 
   const snapshot = await getQrTableManagerSnapshot(locationId);
   if (!snapshot.success) {
-    return { success: false, generated: 0, error: snapshot.error };
+    return { success: false, generated: 0, remaining: 0, error: snapshot.error };
   }
 
+  const pending = snapshot.tables.filter(
+    (row) => row.qrStatus === "not_generated"
+  );
+  const batch = pending.slice(0, QR_GENERATE_BATCH_SIZE);
+
+  // The authenticated client above has already proven the caller can manage
+  // this location. Use the server-only client for every table in the batch so
+  // a short-lived Clerk JWT is never required mid-run.
+  const db = createServiceRoleClient() as any;
   let generated = 0;
-  for (const row of snapshot.tables) {
-    if (row.qrStatus !== "not_generated") continue;
-    const result = await generateQrCodeForTable(row.floorPlanObjectId);
-    if (!result.success) {
+
+  // Audit rows are collected and flushed once at the end rather than written
+  // per table. Each LogAuditEvent call re-resolved the actor via Clerk's API —
+  // an outbound HTTP hop per table — which made this loop slow enough to
+  // outlive the request's own short-lived Clerk token ("JWT expired" mid-run).
+  const auditEvents: Parameters<typeof LogAuditEvents>[0] = [];
+
+  // Flush whatever has been generated so far. Called on both the success and
+  // partial-failure paths so progress is never logged twice or lost.
+  const flushAuditEvents = async () => {
+    if (auditEvents.length === 0) return;
+    await LogAuditEvents(auditEvents, {
+      merchantId: location.merchant_id as string,
+      locationId,
+    });
+  };
+
+  for (const row of batch) {
+    const { data, error } = await db.rpc("generate_table_qr_code", {
+      p_floor_plan_object_id: row.floorPlanObjectId,
+      p_regenerate: false,
+    });
+
+    const result = data as { success?: boolean; error?: string; action?: string };
+
+    if (error || !result?.success) {
+      // Report partial progress rather than discarding it: everything already
+      // generated is committed, and the run is safe to resume because
+      // already-generated tables are filtered out above.
+      await flushAuditEvents();
       return {
         success: false,
         generated,
-        error: result.error || `Failed on ${row.tableLabel}`,
+        remaining: pending.length - generated,
+        error:
+          error?.message ||
+          result?.error ||
+          `Failed on ${row.tableLabel}`,
       };
     }
+
+    auditEvents.push({
+      merchantId: location.merchant_id as string,
+      action: "Generated Table QR Code",
+      actionCategory: "settings",
+      resourceType: "table_qr_code",
+      resourceId: row.floorPlanObjectId,
+      resourceName: row.tableLabel,
+      locationId,
+      changes: {
+        after: {
+          table_label: row.tableLabel,
+          qr_action: result.action ?? "generated",
+          bulk: true,
+        },
+      },
+    });
+
     generated += 1;
   }
 
+  await flushAuditEvents();
+
   revalidatePath("/dashboard/online-ordering");
-  return { success: true, generated };
+  return {
+    success: true,
+    generated,
+    remaining: pending.length - generated,
+  };
 }
 
 

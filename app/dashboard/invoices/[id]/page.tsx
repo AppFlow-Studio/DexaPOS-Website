@@ -5,8 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Edit, CheckCheck, Trash2, Send, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import {
+  PageShell,
+  PageHeader,
+  Panel,
+  PanelSection,
+} from "@/components/dashboard/shell";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -66,45 +70,41 @@ export default function InvoiceDetailPage({
 
   if (isLoading) {
     return (
-      <div className="space-y-6 max-w-3xl">
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-64 w-full" />
-      </div>
+      <PageShell width="narrow">
+        <Skeleton className="h-8 w-32 rounded-full" />
+        <Skeleton className="h-64 w-full rounded-3xl" />
+      </PageShell>
     );
   }
 
   if (!invoice) {
     return (
-      <div className="text-center py-16">
-        <p className="text-muted-foreground">Invoice not found.</p>
-        <Button asChild variant="link" className="mt-2">
-          <Link href="/dashboard/invoices">Back to Invoices</Link>
-        </Button>
-      </div>
+      <PageShell width="narrow">
+        <div className="rounded-2xl bg-muted/20 py-16 text-center">
+          <p className="text-muted-foreground">Invoice not found.</p>
+          <Button asChild variant="ghost" className="mt-2 rounded-full">
+            <Link href="/dashboard/invoices">Back to Invoices</Link>
+          </Button>
+        </div>
+      </PageShell>
     );
   }
 
   if (editMode) {
     return (
-      <div className="space-y-6">
-        <div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="-ml-2 text-muted-foreground"
-            onClick={() => setEditMode(false)}
-          >
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Cancel edit
-          </Button>
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Edit Invoice {invoice.invoice_number}
-          </h2>
-        </div>
+      <PageShell width="narrow">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2 h-8 w-fit gap-1.5 rounded-full text-muted-foreground"
+          onClick={() => setEditMode(false)}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Cancel edit
+        </Button>
+        <PageHeader title={`Edit Invoice ${invoice.invoice_number}`} />
         <InvoiceForm existing={invoice} />
-      </div>
+      </PageShell>
     );
   }
 
@@ -117,162 +117,169 @@ export default function InvoiceDetailPage({
   }[invoice.payment_due_type];
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      {/* Back nav */}
-      <div>
-        <Button
-          variant="ghost"
-          size="sm"
-          asChild
-          className="-ml-2 text-muted-foreground"
-        >
-          <Link href="/dashboard/invoices">
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Invoices
-          </Link>
-        </Button>
-      </div>
-
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h2 className="text-2xl font-bold tracking-tight">
-              {invoice.invoice_number}
-            </h2>
-            <InvoiceStatusBadge status={invoice.status} />
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Created {formatDate(invoice.created_at)}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {isSendable(invoice.status) && (
-            <Button size="sm" onClick={() => setShowSend(true)}>
-              <Send className="h-4 w-4 mr-1" />
-              {invoice.status === "draft" ? "Send Invoice" : "Resend"}
-            </Button>
-          )}
-          {invoice.status !== "paid" && invoice.status !== "cancelled" && (
+    <PageShell width="narrow">
+      <PageHeader
+        backHref="/dashboard/invoices"
+        backLabel="Invoices"
+        title={invoice.invoice_number}
+        subtitle={`Created ${formatDate(invoice.created_at)}`}
+        indicator={<InvoiceStatusBadge status={invoice.status} />}
+        actions={
+          <div className="flex min-w-0 flex-wrap gap-2">
+            {isSendable(invoice.status) && (
+              <Button
+                size="sm"
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                onClick={() => setShowSend(true)}
+              >
+                <Send className="mr-1 h-4 w-4" />
+                {invoice.status === "draft" ? "Send Invoice" : "Resend"}
+              </Button>
+            )}
+            {invoice.status !== "paid" && invoice.status !== "cancelled" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                onClick={() =>
+                  updateStatus.mutate({ invoiceId: invoice.id, status: "paid" })
+                }
+                disabled={updateStatus.isPending}
+              >
+                <CheckCheck className="mr-1 h-4 w-4" />
+                Mark Paid
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
-              onClick={() =>
-                updateStatus.mutate({ invoiceId: invoice.id, status: "paid" })
-              }
-              disabled={updateStatus.isPending}
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              asChild
             >
-              <CheckCheck className="h-4 w-4 mr-1" />
-              Mark Paid
+              <a
+                href={`/api/invoices/${invoice.id}/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Download className="mr-1 h-4 w-4" />
+                Download PDF
+              </a>
             </Button>
-          )}
-          <Button size="sm" variant="outline" asChild>
-            <a href={`/api/invoices/${invoice.id}/pdf`} target="_blank" rel="noopener noreferrer">
-              <Download className="h-4 w-4 mr-1" />
-              Download PDF
-            </a>
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setEditMode(true)}
-          >
-            <Edit className="h-4 w-4 mr-1" />
-            Edit
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-destructive hover:text-destructive"
-            onClick={() => setShowDelete(true)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Invoice Details */}
-      <Card className="shadow-none">
-        <CardHeader>
-          <CardTitle className="text-base">Invoice Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground mb-0.5">Customer</p>
-              {invoice.customer ? (
-                <div>
-                  <p className="font-medium">
-                    {invoice.customer.name || "—"}
-                  </p>
-                  {invoice.customer.email && (
-                    <p className="text-muted-foreground text-xs">
-                      {invoice.customer.email}
-                    </p>
-                  )}
-                  {invoice.customer.phone && (
-                    <p className="text-muted-foreground text-xs">
-                      {formatPhoneForDisplay(invoice.customer.phone)}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-muted-foreground italic">No customer</p>
-              )}
-            </div>
-            <div>
-              <p className="text-muted-foreground mb-0.5">Payment Due</p>
-              <p className="font-medium">{paymentDueLabel}</p>
-            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+              onClick={() => setEditMode(true)}
+            >
+              <Edit className="mr-1 h-4 w-4" />
+              Edit
+            </Button>
+            {/* Destructive action keeps its colour (§4.6b exempts these). */}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-9 rounded-full px-3 text-destructive hover:text-destructive"
+              onClick={() => setShowDelete(true)}
+              aria-label="Delete invoice"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        }
+        stackActionsBelowIndicatorOnMobile
+      />
 
-      {/* Line Items */}
-      <Card className="shadow-none">
-        <CardHeader>
-          <CardTitle className="text-base">Items</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[1.05fr_1.55fr]">
+        {/* Invoice Details */}
+        <Panel>
+          <PanelSection label="Invoice Details">
+            <div className="grid min-w-0 grid-cols-1 gap-4 text-sm sm:grid-cols-2 lg:grid-cols-1">
+              <div className="min-w-0">
+                <p className="mb-0.5 text-muted-foreground">Customer</p>
+                {invoice.customer ? (
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">
+                      {invoice.customer.name || "—"}
+                    </p>
+                    {invoice.customer.email && (
+                      <p className="truncate text-xs text-muted-foreground">
+                        {invoice.customer.email}
+                      </p>
+                    )}
+                    {invoice.customer.phone && (
+                      <p className="truncate text-xs text-muted-foreground">
+                        {formatPhoneForDisplay(invoice.customer.phone)}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="italic text-muted-foreground">No customer</p>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="mb-0.5 text-muted-foreground">Payment Due</p>
+                <p className="font-medium">{paymentDueLabel}</p>
+              </div>
+            </div>
+          </PanelSection>
+        </Panel>
+
+        {/* Line Items */}
+        <Panel>
+          <PanelSection label="Items">
           {invoice.items && invoice.items.length > 0 ? (
             <>
-              <div className="grid grid-cols-[1fr_60px_90px_90px] gap-2 text-xs text-muted-foreground pb-1 border-b mb-1">
+              {/* Column labels — no rule beneath (§5.5). Hidden on phones,
+                  where each row becomes a stacked card instead. */}
+              <div className="mb-1 hidden grid-cols-[1fr_60px_90px_90px] gap-2 pb-1 text-xs text-muted-foreground sm:grid">
                 <span>Item</span>
                 <span className="text-center">Qty</span>
                 <span className="text-right">Price</span>
                 <span className="text-right">Total</span>
               </div>
-              {invoice.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="grid grid-cols-[1fr_60px_90px_90px] gap-2 items-start py-2 border-b last:border-b-0 text-sm"
-                >
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    {item.description && (
-                      <p className="text-xs text-muted-foreground">
-                        {item.description}
-                      </p>
-                    )}
+              <div className="space-y-1">
+                {invoice.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="-mx-2 min-w-0 rounded-2xl px-2 py-2 text-sm transition-colors hover:bg-muted/40 sm:grid sm:grid-cols-[minmax(0,1fr)_56px_80px_80px] sm:items-start sm:gap-1.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium">{item.name}</p>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground">
+                          {item.description}
+                        </p>
+                      )}
+                    </div>
+                    {/* Below `sm` the three figures sit on one labelled line
+                        rather than in columns too narrow to hold them. */}
+                    <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground sm:hidden">
+                      <span className="tabular-nums">
+                        {item.quantity} × {formatCurrency(item.unit_price)}
+                      </span>
+                      <span className="ml-auto text-sm font-medium tabular-nums text-foreground">
+                        {formatCurrency(item.total_price)}
+                      </span>
+                    </div>
+                    <span className="hidden text-center tabular-nums sm:block">
+                      {item.quantity}
+                    </span>
+                    <span className="hidden text-right tabular-nums sm:block">
+                      {formatCurrency(item.unit_price)}
+                    </span>
+                    <span className="hidden text-right font-medium tabular-nums sm:block">
+                      {formatCurrency(item.total_price)}
+                    </span>
                   </div>
-                  <span className="text-center tabular-nums">{item.quantity}</span>
-                  <span className="text-right tabular-nums">
-                    {formatCurrency(item.unit_price)}
-                  </span>
-                  <span className="text-right tabular-nums font-medium">
-                    {formatCurrency(item.total_price)}
-                  </span>
-                </div>
-              ))}
+                ))}
+              </div>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground italic">No items</p>
+            <p className="text-sm italic text-muted-foreground">No items</p>
           )}
 
-          <Separator className="mt-4 mb-3" />
-
-          {/* Totals */}
-          <div className="space-y-1.5 text-sm max-w-xs ml-auto">
+          {/* Totals — an inset well rather than a pair of rules (§5.5). */}
+          <div className="mt-4 w-full space-y-1.5 rounded-2xl bg-muted/60 px-4 py-3 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
               <span className="tabular-nums">{formatCurrency(invoice.subtotal)}</span>
@@ -280,8 +287,9 @@ export default function InvoiceDetailPage({
             {invoice.discount_amount > 0 && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Discount</span>
-                <span className="tabular-nums text-green-600">
-                  -{formatCurrency(invoice.discount_amount)}
+                {/* No green (D-12) — the minus carries it. */}
+                <span className="tabular-nums">
+                  −{formatCurrency(invoice.discount_amount)}
                 </span>
               </div>
             )}
@@ -293,25 +301,22 @@ export default function InvoiceDetailPage({
                 <span className="tabular-nums">{formatCurrency(invoice.tax_amount)}</span>
               </div>
             )}
-            <Separator />
-            <div className="flex justify-between font-semibold text-base">
+            <div className="flex justify-between pt-1.5 text-base font-semibold">
               <span>Total</span>
               <span className="tabular-nums">{formatCurrency(invoice.total_amount)}</span>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
+      </div>
 
       {/* Note */}
       {invoice.note && (
-        <Card className="shadow-none">
-          <CardHeader>
-            <CardTitle className="text-base">Note</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm whitespace-pre-wrap">{invoice.note}</p>
-          </CardContent>
-        </Card>
+        <Panel>
+          <PanelSection label="Note">
+            <p className="whitespace-pre-wrap text-sm">{invoice.note}</p>
+          </PanelSection>
+        </Panel>
       )}
 
       {/* Send Dialog */}
@@ -333,9 +338,11 @@ export default function InvoiceDetailPage({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="h-9 rounded-full bg-destructive px-4 text-[0.8125rem] font-medium text-destructive-foreground shadow-sm hover:bg-destructive/90"
               onClick={handleDelete}
             >
               Delete
@@ -343,6 +350,6 @@ export default function InvoiceDetailPage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

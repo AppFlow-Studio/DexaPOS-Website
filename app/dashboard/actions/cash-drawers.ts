@@ -31,6 +31,8 @@ export interface CashDrawerListItem {
   is_active: boolean
   is_open: boolean
   current_session_id: string | null
+  host_printer_id: string | null
+  host_printer_name: string | null
   current_session?: {
     id: string
     opening_amount: number
@@ -179,9 +181,32 @@ export async function listCashDrawers(
       }
     }
 
+    // Host-printer binding (cash_drawers.host_printer_id → printers) is fetched
+    // in a separate, best-effort query so a DB that predates the host_printer_id
+    // migration never breaks the whole list — it just yields no binding.
+    const hostMap = new Map<string, { id: string | null; name: string | null }>()
+    const drawerIds = (data ?? []).map((row: any) => row.id)
+    if (drawerIds.length > 0) {
+      const { data: bindings, error: bindingsError } = await supabase
+        .from('cash_drawers')
+        .select(
+          `id, host_printer_id, host_printer:printers!cash_drawers_host_printer_id_fkey(printer_name)`
+        )
+        .in('id', drawerIds)
+      if (bindingsError) {
+        console.warn('[listCashDrawers] host_printer binding lookup skipped:', bindingsError.message)
+      } else {
+        for (const b of (bindings ?? []) as any[]) {
+          const hp = Array.isArray(b.host_printer) ? b.host_printer[0] : b.host_printer
+          hostMap.set(b.id, { id: b.host_printer_id ?? null, name: hp?.printer_name ?? null })
+        }
+      }
+    }
+
     const mapped: CashDrawerListItem[] = (data ?? []).map((row: any) => {
       const location = Array.isArray(row.location) ? row.location[0] : row.location
       const station = Array.isArray(row.station) ? row.station[0] : row.station
+      const host = hostMap.get(row.id) ?? { id: null, name: null }
       const session = row.current_session_id
         ? sessionMap.get(row.current_session_id) ?? null
         : null
@@ -198,6 +223,8 @@ export async function listCashDrawers(
         is_active: row.is_active,
         is_open: row.is_open,
         current_session_id: row.current_session_id,
+        host_printer_id: host.id,
+        host_printer_name: host.name,
         current_session: session,
       }
     })

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   filterMenusVisibleOnline,
+  isMissingMenuVisibilitySchema,
   normalizeMenuChannelVisibility,
 } from '../menu-channel-visibility'
 
@@ -56,5 +57,37 @@ describe('filterMenusVisibleOnline', () => {
 
     expect(filterMenusVisibleOnline(menus, locationA)).toEqual([{ id: 'menu-b' }])
     expect(filterMenusVisibleOnline(menus, locationB)).toEqual(menus)
+  })
+})
+
+describe('isMissingMenuVisibilitySchema', () => {
+  it('allows the compatibility fallback only for missing visibility columns', () => {
+    expect(
+      isMissingMenuVisibilitySchema({
+        code: '42703',
+        message: 'column location_menus.is_visible_online does not exist',
+      }),
+    ).toBe(true)
+    expect(
+      isMissingMenuVisibilitySchema({
+        code: 'PGRST204',
+        message: "Could not find the 'is_visible_on_pos' column in the schema cache",
+      }),
+    ).toBe(true)
+  })
+
+  it('does not fail open for authorization, network, or unrelated schema errors', () => {
+    expect(
+      isMissingMenuVisibilitySchema({
+        code: '42501',
+        message: 'permission denied for table location_menus',
+      }),
+    ).toBe(false)
+    expect(
+      isMissingMenuVisibilitySchema({
+        code: 'PGRST204',
+        message: "Could not find the 'unrelated_column' column in the schema cache",
+      }),
+    ).toBe(false)
   })
 })

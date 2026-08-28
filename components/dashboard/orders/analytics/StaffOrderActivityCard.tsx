@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { ChartCard } from './ChartCard'
+import { CHART_GRID, CHART_TICK, StatRow, StatTile } from './AnalyticsPrimitives'
 import { DataTable } from '@/components/ui/data-table'
 import { ColumnDef } from '@tanstack/react-table'
 import { Badge } from '@/components/ui/badge'
@@ -78,9 +79,9 @@ export function StaffOrderActivityCard({ data, isLoading }: StaffOrderActivityCa
         return (
           <div className="flex items-center gap-2">
             {isAnomaly && (
-              <AlertCircle className="h-4 w-4 text-red-500" />
+              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
             )}
-            <span>{voidsCount}</span>
+            <span className="tabular-nums">{voidsCount}</span>
           </div>
         )
       },
@@ -124,21 +125,21 @@ export function StaffOrderActivityCard({ data, isLoading }: StaffOrderActivityCa
         {chartData.length > 0 && (
           <ChartContainer config={chartConfig} className="aspect-auto h-[340px] w-full">
               <BarChart data={chartData} margin={{ left: 0, right: 8, top: 5, bottom: 50 }}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid {...CHART_GRID} />
                 <XAxis
                   dataKey="name"
                   interval={0}
                   angle={-40}
                   textAnchor="end"
                   height={70}
-                  tick={{ fontSize: 11 }}
+                  tick={{ ...CHART_TICK, fontSize: 11 }}
                   tickFormatter={(value: string) =>
                     value.length > 10 ? `${value.slice(0, 10)}…` : value
                   }
                 />
-                <YAxis tick={{ fontSize: 12 }} width={32} />
+                <YAxis tick={CHART_TICK} width={32} />
                 <ChartTooltip content={<ChartTooltipContent />} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 13, color: "var(--muted-foreground)" }} />
                 <Bar dataKey="orders_created" stackId="a" fill="#3b82f6" />
                 <Bar dataKey="payments_processed" stackId="a" fill="#10b981" />
                 <Bar dataKey="voids_count" stackId="a" fill="#ef4444" />
@@ -154,15 +155,15 @@ export function StaffOrderActivityCard({ data, isLoading }: StaffOrderActivityCa
           </div>
         )}
 
-        {/* Info Box */}
-        <div className="rounded-lg bg-amber-50 dark:bg-amber-950 p-4 text-sm text-amber-900 dark:text-amber-200">
-          <p className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4" />
-            <span>
-              Red alert icon indicates staff members with void count &gt; {Math.round(avgVoids * 2 * 10) / 10} (2x average)
-            </span>
-          </p>
-        </div>
+        {/* Legend for the anomaly marker — an icon + text strip rather than a
+            tinted box, matching the other callouts on this page. */}
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>
+            The alert icon marks staff with a void count over{' '}
+            {Math.round(avgVoids * 2 * 10) / 10} (2× average).
+          </span>
+        </p>
       </div>
     </ChartCard>
   )

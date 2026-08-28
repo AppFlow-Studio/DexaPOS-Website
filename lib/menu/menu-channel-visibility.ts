@@ -14,6 +14,35 @@ type PartialVisibility = Partial<
   Record<keyof MenuChannelVisibility, boolean | null | undefined>
 >
 
+type PostgrestErrorLike = {
+  code?: string | null
+  message?: string | null
+}
+
+/**
+ * Missing visibility columns are the only read failure that may use the
+ * backward-compatible visible default during a staggered app/DB deployment.
+ */
+export function isMissingMenuVisibilitySchema(
+  error?: PostgrestErrorLike | null,
+): boolean {
+  if (!error) return false
+
+  const message = error.message?.toLowerCase() ?? ''
+  const mentionsVisibilityColumn =
+    message.includes('is_visible_on_pos') ||
+    message.includes('is_visible_on_kiosk') ||
+    message.includes('is_visible_online')
+
+  return (
+    mentionsVisibilityColumn &&
+    (error.code === '42703' ||
+      error.code === 'PGRST204' ||
+      message.includes('does not exist') ||
+      message.includes('schema cache'))
+  )
+}
+
 export function normalizeMenuChannelVisibility(
   visibility?: PartialVisibility | null,
 ): MenuChannelVisibility {

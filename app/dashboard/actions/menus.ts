@@ -63,10 +63,34 @@ export async function GetMenuWithCategories (
   const location_Id = locationId === 'all' ? null : locationId
   console.log('[GetMenuWithCategories] location_Id', location_Id)
 
-  const { data, error } = await supabase.rpc('get_menu_with_categories', {
+  let { data, error } = await supabase.rpc('get_menu_with_categories', {
     p_menu_id: menuId,
     p_location_id: location_Id || null
   })
+
+  // A location-owned menu has one concrete pricing context even when the
+  // dashboard's location selector is on "All". Calling the cascade RPC with a
+  // null location omits L2/L4/L5 overrides, so a successful bulk adjustment is
+  // written but the refreshed UI continues to show the global base price.
+  // Resolve the menu once, then rerun through its owning location so the
+  // displayed effective price matches what customers at that location pay.
+  if (!error && !location_Id && data) {
+    const unscopedMenu = data as MenuWithCategories
+    if (unscopedMenu.is_location_owned && unscopedMenu.location_id) {
+      const scopedResult = await supabase.rpc('get_menu_with_categories', {
+        p_menu_id: menuId,
+        p_location_id: unscopedMenu.location_id,
+      })
+      if (!scopedResult.error && scopedResult.data) {
+        data = scopedResult.data
+      } else if (scopedResult.error) {
+        console.error(
+          'Error resolving location-owned menu pricing:',
+          scopedResult.error,
+        )
+      }
+    }
+  }
   console.log('[GetMenuWithCategories] data', data)
 
   if (error) {
@@ -228,10 +252,81 @@ export async function GetMenus (clerkOrgId: string, locationId?: string | null) 
       console.error('Error getting menus:', error)
       return []
     }
-    return data.map(menu => ({
-      ...menu,
-      ...normalizeMenuChannelVisibility()
-    })) as MenusModel[]
+    const menuRows = (data || []) as MenusModel[]
+    if (menuRows.length === 0) {
+      return menuRows
+    }
+
+    // Enrich the All Locations table without an N+1 query. A location-menu
+    // row is an explicit availability override; otherwise a global menu
+    // inherits the location's global-menu setting and its own base status.
+    const [locationsResult, assignmentsResult] = await Promise.all([
+      supabase
+        .from('locations')
+        .select('id, name, uses_global_menu')
+        .eq('merchant_id', merchant.id)
+        .eq('is_active', true)
+        .order('name'),
+      supabase
+        .from('location_menus')
+        .select('menu_id, location_id, is_active')
+        .in(
+          'menu_id',
+          menuRows.map(menu => menu.id)
+        )
+    ])
+
+    if (locationsResult.error || assignmentsResult.error) {
+      console.error('Error getting menu location availability:', {
+        locations: locationsResult.error?.message,
+        assignments: assignmentsResult.error?.message
+      })
+
+      return menuRows.map(menu => ({
+        ...menu,
+        ...normalizeMenuChannelVisibility(),
+        available_locations: null
+      }))
+    }
+
+    const activeLocations = locationsResult.data || []
+    const assignmentByMenuAndLocation = new Map<string, boolean>()
+
+    for (const assignment of assignmentsResult.data || []) {
+      assignmentByMenuAndLocation.set(
+        `${assignment.menu_id}:${assignment.location_id}`,
+        assignment.is_active
+      )
+    }
+
+    return menuRows.map(menu => {
+      const eligibleLocations = menu.location_id
+        ? activeLocations.filter(location => location.id === menu.location_id)
+        : activeLocations
+
+      const availableLocations = menu.location_id
+        ? menu.is_active
+          ? eligibleLocations
+          : []
+        : eligibleLocations.filter(location => {
+            const assignment = assignmentByMenuAndLocation.get(
+              `${menu.id}:${location.id}`
+            )
+
+            return (
+              assignment ?? (menu.is_active && location.uses_global_menu)
+            )
+          })
+
+      return {
+        ...menu,
+        ...normalizeMenuChannelVisibility(),
+        available_locations: availableLocations.map(location => ({
+          id: location.id,
+          name: location.name
+        }))
+      }
+    })
   }
 
   // // Location-specific view - get global menus with location status

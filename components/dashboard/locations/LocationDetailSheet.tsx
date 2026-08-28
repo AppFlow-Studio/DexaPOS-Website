@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetDescription,
-} from '@/components/ui/sheet'
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Location } from '@/types/merchant_locations'
 import { MapPin, FileText, Clock, Users, Settings, Building2 } from 'lucide-react'
@@ -17,6 +17,7 @@ import { DetailsTab } from './tabs/DetailsTab'
 import { HoursTab } from './tabs/HoursTab'
 import { TeamTab } from './tabs/TeamTab'
 import { SettingsTab } from './tabs/SettingsTab'
+import { roundedPanelControls } from './LocationPanelSection'
 
 interface LocationDetailSheetProps {
     location: Location | null
@@ -57,15 +58,15 @@ export function LocationDetailSheet({
     if (!location) return null
 
     return (
-        <Sheet open={open} onOpenChange={handleOpenChange}>
-            <SheetContent
-                side="right"
-                className="w-full sm:max-w-3xl overflow-y-auto p-2"
+        <Dialog open={open} onOpenChange={handleOpenChange}>
+            <DialogContent
+                overlayClassName="bg-background/60 backdrop-blur-md"
+                className="flex max-h-[92vh] w-full max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-3xl border bg-card p-0 max-sm:h-dvh max-sm:max-h-none max-sm:overflow-hidden sm:max-w-3xl"
             >
-                <SheetHeader className="pb-4 border-b">
+                <DialogHeader className="shrink-0 border-b border-border/60 px-4 py-5 pr-14 text-left sm:px-6">
                     <div className="flex items-start gap-4">
                         <div className={cn(
-                            "h-12 w-12 rounded-xl flex items-center justify-center shrink-0",
+                            "hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl sm:flex",
                             location.is_active ? "bg-primary/10" : "bg-muted"
                         )}>
                             <MapPin className={cn(
@@ -75,31 +76,31 @@ export function LocationDetailSheet({
                         </div>
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                                <SheetTitle className="text-xl truncate">
+                                <DialogTitle className="truncate text-xl">
                                     {location.name}
-                                </SheetTitle>
+                                </DialogTitle>
                                 {location.code && (
-                                    <Badge variant="outline" className="font-mono text-xs shrink-0">
+                                    <Badge variant="secondary" className="rounded-full border-transparent bg-muted text-muted-foreground font-mono text-xs px-2.5 py-0.5 shrink-0">
                                         {location.code}
                                     </Badge>
                                 )}
                             </div>
-                            <SheetDescription className="flex items-center gap-2 mt-1">
+                            <DialogDescription className="mt-1 flex items-center gap-2">
                                 <Building2 className="h-3.5 w-3.5" />
                                 {location.city}, {location.state}
-                            </SheetDescription>
+                            </DialogDescription>
                             <div className="flex items-center gap-2 mt-2">
                                 <Badge
                                     variant={location.is_active ? "default" : "secondary"}
-                                    className="text-xs"
+                                    className="rounded-full text-xs font-medium px-2.5 py-0.5"
                                 >
                                     {location.is_active ? 'Active' : 'Inactive'}
                                 </Badge>
                                 <Badge
                                     variant={location.is_accepting_orders ? "default" : "outline"}
                                     className={cn(
-                                        "text-xs",
-                                        location.is_accepting_orders && "bg-green-600"
+                                        "rounded-full text-xs font-medium px-2.5 py-0.5",
+                                        location.is_accepting_orders && "bg-emerald-600 hover:bg-emerald-600"
                                     )}
                                 >
                                     {location.is_accepting_orders ? 'Accepting Orders' : 'Not Accepting'}
@@ -107,29 +108,41 @@ export function LocationDetailSheet({
                             </div>
                         </div>
                     </div>
-                </SheetHeader>
+                </DialogHeader>
 
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-                    <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="details" className="flex items-center gap-1.5">
-                            <FileText className="h-4 w-4" />
-                            <span className="hidden sm:inline">Details</span>
-                        </TabsTrigger>
-                        <TabsTrigger value="hours" className="flex items-center gap-1.5">
-                            <Clock className="h-4 w-4" />
-                            <span className="hidden sm:inline">Hours</span>
-                        </TabsTrigger>
-                        <TabsTrigger value="team" className="flex items-center gap-1.5">
-                            <Users className="h-4 w-4" />
-                            <span className="hidden sm:inline">Team</span>
-                        </TabsTrigger>
-                        <TabsTrigger value="settings" className="flex items-center gap-1.5">
-                            <Settings className="h-4 w-4" />
-                            <span className="hidden sm:inline">Settings</span>
-                        </TabsTrigger>
+                <Tabs
+                    value={activeTab}
+                    onValueChange={setActiveTab}
+                    className="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-6"
+                >
+                    {/* Pill tabs, matching the status filter on the locations page. */}
+                    <TabsList className="grid w-full grid-cols-4 rounded-full bg-muted/70 p-1 h-auto">
+                        {([
+                            { value: 'details', icon: FileText, label: 'Details' },
+                            { value: 'hours', icon: Clock, label: 'Hours' },
+                            { value: 'team', icon: Users, label: 'Team' },
+                            { value: 'settings', icon: Settings, label: 'Settings' },
+                        ] as const).map(tab => (
+                            <TabsTrigger
+                                key={tab.value}
+                                value={tab.value}
+                                className={cn(
+                                    "flex items-center gap-1.5 rounded-full px-4 py-2 text-[0.8125rem] font-medium",
+                                    "data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                                )}
+                            >
+                                <tab.icon className="h-4 w-4" />
+                                <span className="hidden sm:inline">{tab.label}</span>
+                            </TabsTrigger>
+                        ))}
                     </TabsList>
 
-                    <div className="mt-4 pb-4">
+                    <div
+                        className={cn(
+                            'thin-scrollbar mt-4 min-h-0 flex-1 overflow-y-auto px-1 pb-4 pt-1',
+                            roundedPanelControls,
+                        )}
+                    >
                         <TabsContent value="details" className="m-0 animate-in fade-in slide-in-from-right-2 duration-200">
                             <DetailsTab
                                 location={location}
@@ -156,8 +169,8 @@ export function LocationDetailSheet({
                         </TabsContent>
                     </div>
                 </Tabs>
-            </SheetContent>
-        </Sheet>
+            </DialogContent>
+        </Dialog>
     )
 }
 

@@ -691,7 +691,7 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
         : objectDescriptor.replace(/\b\w/g, (char) => char.toUpperCase())
 
     return (
-        <div className="flex flex-col max-h-screen h-[90vh] bg-background shadow-xl rounded-lg overflow-hidden">
+        <div className="tables-pill-controls flex h-[90vh] max-h-screen flex-col overflow-hidden rounded-3xl border bg-card">
             {/* Top Bar - Edit Mode Specific */}
             <header className="min-h-12 border-b bg-background px-3 flex items-center justify-between gap-2 shrink-0 z-10 flex-wrap py-2">
                 <div className="flex items-center gap-1.5 min-w-0">
@@ -708,9 +708,15 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                             <SelectTrigger className="w-[140px] sm:w-[220px] h-8 text-xs">
                                 <SelectValue placeholder="Select floor plan" />
                             </SelectTrigger>
-                            <SelectContent>
+                            {/* Portalled out of `.tables-pill-controls`, so the
+                                overlay radius is set here (§3.1 tier 2). */}
+                            <SelectContent className="rounded-2xl p-1.5">
                                 {availableFloorPlans.map((fp) => (
-                                    <SelectItem key={fp.id} value={fp.id}>
+                                    <SelectItem
+                                        key={fp.id}
+                                        value={fp.id}
+                                        className="rounded-full py-1.5 pl-3"
+                                    >
                                         <div className="flex items-center justify-between w-full">
                                             <span>{fp.name}</span>
                                             <span className="text-xs text-foreground ml-2">
@@ -844,7 +850,10 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
 
             {/* Manage Floor Plans Dialog */}
             <Dialog open={showManageDialog} onOpenChange={setShowManageDialog}>
-                <DialogContent className="max-w-lg">
+                {/* Mobile: a bottom sheet with a rounded top. Unlike the other
+                    two this has no flex/scroll wrapper of its own, so it takes
+                    overflow-y-auto to stay scrollable inside the 92dvh cap. */}
+                <DialogContent className="tables-pill-controls sm:max-w-lg sm:rounded-3xl max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:h-auto max-sm:max-h-[92dvh] max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:overflow-y-auto max-sm:rounded-b-none max-sm:rounded-t-[28px]">
                     <DialogHeader>
                         <DialogTitle>Manage Floor Plans</DialogTitle>
                         <DialogDescription>Create, rename, or delete floor plans for this location.</DialogDescription>
@@ -853,7 +862,7 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                     {/* Existing Plans List */}
                     <div className="space-y-2 max-h-64 overflow-y-auto">
                         {(availableFloorPlans || []).map((fp) => (
-                            <div key={fp.id} className="flex items-center gap-2 p-2 rounded border bg-muted/30">
+                            <div key={fp.id} className="flex items-center gap-2 rounded-2xl border-0 p-2 bg-muted/50 shadow-none">
                                 {editingPlanId === fp.id ? (
                                     <>
                                         <Input
@@ -861,7 +870,7 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                                             onChange={(e) => setEditingPlanName(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && handleRenamePlan()}
                                             autoFocus
-                                            className="h-7 text-sm flex-1"
+                                            className="h-7 text-sm flex-1 rounded-xl border-transparent bg-background"
                                         />
                                         <Button size="sm" onClick={handleRenamePlan} disabled={isManaging}>Save</Button>
                                         <Button size="sm" variant="ghost" onClick={() => setEditingPlanId(null)}>Cancel</Button>
@@ -922,7 +931,7 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                     )}
 
                     {/* Canvas Size */}
-                    <div className="border-t pt-3 space-y-2">
+                    <div className="pt-3 space-y-2">
                         <p className="text-sm font-medium">Canvas Size</p>
                         <p className="text-xs text-muted-foreground">Sets the visible working area for the active floor plan.</p>
                         <div className="flex items-center gap-2">
@@ -958,7 +967,7 @@ export function FloorPlanCanvasView({ locationId, initialFloorPlanId, onBack, re
                     </div>
 
                     {/* Create New Plan */}
-                    <div className="border-t pt-3 space-y-2">
+                    <div className="pt-3 space-y-2">
                         <p className="text-sm font-medium">Create New Floor Plan</p>
                         <div className="flex gap-2">
                             <Input

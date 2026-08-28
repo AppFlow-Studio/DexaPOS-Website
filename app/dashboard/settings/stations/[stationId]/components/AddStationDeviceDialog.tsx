@@ -222,10 +222,10 @@ export function AddStationDeviceDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : handleClose())}>
-      <DialogContent className="w-[calc(100%-1rem)] sm:max-w-[620px] max-h-[92vh] overflow-hidden gap-0 p-0">
-        <DialogHeader className="border-b bg-gradient-to-br from-slate-50 via-white to-indigo-50/60 px-6 pt-6 pb-4">
+      <DialogContent className="flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-auto sm:max-h-[90vh] sm:w-[calc(100%-1rem)] sm:max-w-[620px] sm:rounded-3xl">
+        <DialogHeader className="shrink-0 px-6 pb-4 pt-6">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-200 bg-indigo-50 text-indigo-700">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-0 bg-muted/60 text-foreground">
               {selectedDevice?.icon || <Printer className="h-6 w-6" />}
             </div>
             <div className="min-w-0 flex-1">
@@ -253,12 +253,14 @@ export function AddStationDeviceDialog({
               <div
                 key={`${item.label}-${item.step}`}
                 className={cn(
-                  "rounded-xl border px-3 py-2 text-sm",
+                  // Current / done / upcoming read as three fill weights, not
+                  // three hues (§4.6b); `--primary` is violet, not brand (C5).
+                  "min-w-0 rounded-2xl border-0 px-3 py-2 text-sm shadow-none",
                   getStepNumber() === item.step
-                    ? "border-primary bg-primary/10 text-primary"
+                    ? "bg-muted text-foreground ring-1 ring-border"
                     : getStepNumber() > item.step
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : "border-slate-200 bg-slate-50 text-slate-500"
+                      ? "bg-muted/60 text-foreground"
+                      : "bg-muted/45 text-muted-foreground"
                 )}
               >
                 <div className="text-[11px] uppercase tracking-wide opacity-70">
@@ -270,7 +272,8 @@ export function AddStationDeviceDialog({
           </div>
         </DialogHeader>
 
-        <div className="overflow-y-auto px-6 py-5 max-h-[calc(92vh-220px)]">
+        <div className="thin-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="min-w-0 px-6 py-5">
           {step === "type" && (
             <div className="grid gap-3 sm:grid-cols-2">
               {DEVICE_TYPES.map((dt) => (
@@ -285,7 +288,7 @@ export function AddStationDeviceDialog({
                     "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all text-center",
                     deviceType === dt.type
                       ? "border-primary bg-primary/5 shadow-sm"
-                      : "border-border hover:border-primary/50 hover:bg-muted/50"
+                      : "bg-muted/45 hover:bg-muted"
                   )}
                 >
                   <span className="text-indigo-700">{dt.icon}</span>
@@ -332,7 +335,7 @@ export function AddStationDeviceDialog({
                         "flex items-center gap-3 p-3 rounded-xl border-2 transition-all",
                         connectionType === ct.type
                           ? "border-primary bg-primary/5"
-                          : "border-border hover:border-primary/50"
+                          : "bg-muted/45 hover:bg-muted"
                       )}
                     >
                       <span className="text-indigo-700">{ct.icon}</span>
@@ -423,7 +426,7 @@ export function AddStationDeviceDialog({
                 </div>
               </div>
 
-              <div className="space-y-4 rounded-2xl border bg-slate-50/80 p-4">
+              <div className="min-w-0 space-y-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                 <div className="flex items-center justify-between py-1">
                   <div>
                     <Label htmlFor="autoCut" className="cursor-pointer">
@@ -463,7 +466,7 @@ export function AddStationDeviceDialog({
 
           {step === "confirm" && (
             <div className="space-y-4">
-              <div className="flex items-center gap-4 rounded-2xl border bg-slate-50/80 p-4">
+              <div className="flex min-w-0 items-center gap-4 rounded-2xl border-0 bg-muted/60 p-4 shadow-none">
                 <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-background text-indigo-700">
                   {selectedDevice?.icon}
                 </div>
@@ -507,8 +510,9 @@ export function AddStationDeviceDialog({
             </div>
           )}
         </div>
+        </div>
 
-        <DialogFooter className="gap-2 border-t bg-slate-50/80 px-6 py-4">
+        <DialogFooter className="shrink-0 gap-2 px-6 py-4">
           {step !== "type" && (
             <Button
               type="button"

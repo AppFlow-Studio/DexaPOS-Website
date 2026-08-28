@@ -18,7 +18,7 @@ import { CreateFloorPlanDialog } from './CreateFloorPlanDialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useUserInfo } from '@/app/manage/hooks/useUserInfo.'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
@@ -175,15 +175,18 @@ export function RuntimeTablesView ({
 
   if (floorPlansError) {
     return (
-      <div className='flex flex-col h-screen max-h-[90vh] rounded-lg shadow-xl overflow-hidden bg-background'>
+      <div className='tables-pill-controls flex h-screen max-h-[90vh] flex-col overflow-hidden rounded-3xl border bg-card'>
         {onBack && (
-          <div className='flex items-center gap-4 p-4 border-b bg-background'>
-            <button
+          <div className='flex items-center gap-3 border-b border-border/60 p-4'>
+            <Button
+              variant='ghost'
+              size='sm'
               onClick={onBack}
-              className='flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors'
+              className='-ml-2 h-8 gap-1.5 rounded-full text-muted-foreground'
             >
-              ← Back
-            </button>
+              <ArrowLeft className='h-4 w-4' />
+              Back
+            </Button>
             {location && (
               <span className='text-sm font-semibold text-foreground'>
                 {location.name}
@@ -207,15 +210,18 @@ export function RuntimeTablesView ({
   if (!floorPlans || floorPlans.length === 0) {
     return (
       <>
-        <div className='flex flex-col h-screen max-h-[90vh] rounded-lg shadow-xl overflow-hidden bg-background'>
+        <div className='tables-pill-controls flex h-screen max-h-[90vh] flex-col overflow-hidden rounded-3xl border bg-card'>
           {onBack && (
-            <div className='flex items-center gap-4 p-4 border-b bg-background'>
-              <button
+            <div className='flex items-center gap-3 border-b border-border/60 p-4'>
+              <Button
+                variant='ghost'
+                size='sm'
                 onClick={onBack}
-                className='flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors'
+                className='-ml-2 h-8 gap-1.5 rounded-full text-muted-foreground'
               >
-                ← Back
-              </button>
+                <ArrowLeft className='h-4 w-4' />
+                Back
+              </Button>
               {location && (
                 <span className='text-sm font-semibold text-foreground'>
                   {location.name}
@@ -241,7 +247,7 @@ export function RuntimeTablesView ({
   // 3. RUNTIME VIEW MODE
   return (
     <>
-      <div className='flex flex-col h-screen max-h-[90vh] rounded-lg shadow-xl  overflow-hidden bg-background'>
+      <div className='tables-pill-controls flex h-screen max-h-[90vh] flex-col overflow-hidden rounded-3xl border bg-card'>
         <TablesTopBar
           location={location}
           floorPlans={floorPlans}

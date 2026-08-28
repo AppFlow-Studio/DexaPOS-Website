@@ -84,6 +84,7 @@ function BottomSheetOverlay({
 interface BottomSheetContentProps extends React.ComponentProps<typeof DialogPrimitive.Content> {
     showDragHandle?: boolean
     height?: "auto" | "full" | "95"
+    overlayClassName?: string
 }
 
 function BottomSheetContent({
@@ -91,6 +92,7 @@ function BottomSheetContent({
     children,
     showDragHandle = true,
     height = "95",
+    overlayClassName,
     ...props
 }: BottomSheetContentProps) {
     const { level } = React.useContext(BottomSheetContext)
@@ -103,7 +105,7 @@ function BottomSheetContent({
 
     return (
         <BottomSheetPortal>
-            <BottomSheetOverlay />
+            <BottomSheetOverlay className={overlayClassName} />
             <DialogPrimitive.Content
                 data-slot="bottom-sheet-content"
                 className={cn(

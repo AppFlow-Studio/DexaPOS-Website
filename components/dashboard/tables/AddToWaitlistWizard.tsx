@@ -22,6 +22,15 @@ import { Users, Phone, FileText, MapPin, Clock } from 'lucide-react'
 import { AddToWaitlistAction } from '@/app/dashboard/actions/floor-plan-actions'
 import { useQueryClient } from '@tanstack/react-query'
 
+/**
+ * Borderless field material — the tinted fill used across the dashboard's
+ * dialogs, so a column of fields reads as one surface rather than a stack of
+ * outlined boxes. Literal string in this `.tsx`: Tailwind does not scan `.ts`,
+ * so a class sourced only from a constants module would render unstyled.
+ */
+const SHEET_FIELD =
+    'rounded-xl border-transparent bg-muted/50 shadow-none focus-visible:bg-background'
+
 interface AddToWaitlistWizardProps {
     locationId: string
     onSuccess?: () => void
@@ -98,8 +107,11 @@ export function AddToWaitlistWizard({ locationId, onSuccess, children }: AddToWa
     return (
         <BottomSheet open={open} onOpenChange={setOpen}>
             {children && <BottomSheetTrigger asChild>{children}</BottomSheetTrigger>}
-            <BottomSheetContent className="max-h-[90vh]">
-                <BottomSheetHeader>
+            <BottomSheetContent className="tables-pill-controls max-h-[90vh]">
+                {/* The header/footer rules are defaults on the shared
+                    BottomSheet primitive; dropped here rather than in the
+                    primitive so the other 18 sheets keep their current look. */}
+                <BottomSheetHeader className="border-b-0">
                     <BottomSheetTitle>Add Party to Waitlist</BottomSheetTitle>
                     <BottomSheetDescription>
                         Enter the party details to add them to the waitlist
@@ -121,6 +133,7 @@ export function AddToWaitlistWizard({ locationId, onSuccess, children }: AddToWa
                                 onChange={(e) => setPartyName(e.target.value)}
                                 required
                                 autoFocus
+                                className={SHEET_FIELD}
                             />
                         </div>
 
@@ -138,6 +151,7 @@ export function AddToWaitlistWizard({ locationId, onSuccess, children }: AddToWa
                                 value={partySize}
                                 onChange={(e) => setPartySize(e.target.value)}
                                 required
+                                className={SHEET_FIELD}
                             />
                         </div>
 
@@ -147,10 +161,18 @@ export function AddToWaitlistWizard({ locationId, onSuccess, children }: AddToWa
                                 <Phone className="h-4 w-4" />
                                 Phone Number
                             </Label>
+                            {/* PhoneInput draws its border from a CSS variable on
+                                the wrapper, not a Tailwind class, so a
+                                `border-transparent` utility would never reach the
+                                inner input — override the variables instead. */}
                             <PhoneInput
                                 id="phone"
                                 value={phone}
                                 onChange={setPhone}
+                                style={{
+                                    '--react-international-phone-border-color': 'transparent',
+                                    '--react-international-phone-background-color': 'var(--muted)',
+                                } as React.CSSProperties}
                             />
                         </div>
 
@@ -165,6 +187,7 @@ export function AddToWaitlistWizard({ locationId, onSuccess, children }: AddToWa
                                 placeholder="e.g., Window, Patio, Bar"
                                 value={preferredSection}
                                 onChange={(e) => setPreferredSection(e.target.value)}
+                                className={SHEET_FIELD}
                             />
                         </div>
 
@@ -181,6 +204,7 @@ export function AddToWaitlistWizard({ locationId, onSuccess, children }: AddToWa
                                 placeholder="Estimated wait time"
                                 value={quotedWaitMinutes}
                                 onChange={(e) => setQuotedWaitMinutes(e.target.value)}
+                                className={SHEET_FIELD}
                             />
                         </div>
 
@@ -196,12 +220,13 @@ export function AddToWaitlistWizard({ locationId, onSuccess, children }: AddToWa
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
                                 rows={3}
+                                className={SHEET_FIELD}
                             />
                         </div>
                     </form>
                 </BottomSheetBody>
 
-                <BottomSheetFooter>
+                <BottomSheetFooter className="border-t-0">
                     <div className="flex gap-2 w-full">
                         <Button
                             variant="outline"

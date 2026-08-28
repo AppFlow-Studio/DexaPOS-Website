@@ -113,11 +113,11 @@ export function OrderStatusFunnel({
                       const item = payload[0]
                       const step = item.payload as { label: string; count: number; percentage: string }
                       return (
-                        <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-lg dark:border-slate-700 dark:bg-slate-950">
-                          <p className="mb-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        <div className="rounded-xl border bg-popover p-3 text-popover-foreground shadow-lg">
+                          <p className="mb-1 text-[0.8125rem] font-medium text-muted-foreground">
                             {step.label}
                           </p>
-                          <p className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                          <p className="text-[0.8125rem] tabular-nums">
                             {step.count} ({step.percentage}%)
                           </p>
                         </div>

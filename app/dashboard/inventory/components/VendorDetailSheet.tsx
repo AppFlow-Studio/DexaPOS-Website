@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Card,
   CardContent,
@@ -144,32 +144,35 @@ export function VendorDetailSheet({
 
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent
-          side="right"
-          className="w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col h-full"
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          className="flex h-dvh max-h-dvh w-full max-w-none flex-col gap-0 overflow-hidden border-0 bg-background p-0 max-sm:top-auto max-sm:translate-y-0 rounded-none sm:h-[640px] sm:max-h-[85vh] sm:w-[calc(100%-1rem)] sm:max-w-[600px] sm:rounded-3xl"
+          overlayClassName="bg-black/35 backdrop-blur-md"
         >
-          <div className="p-6 pb-2 border-b">
-            <div className="flex items-start gap-4">
-              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-500/5 border border-blue-500/10">
-                <Truck className="h-6 w-6 text-blue-500" />
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="shrink-0 p-2.5 rounded-2xl border-0 bg-muted/60">
+                <Truck className="h-5 w-5 text-muted-foreground" />
               </div>
-              <div className="flex-1">
-                <SheetTitle className="text-xl">{vendor.name}</SheetTitle>
-                <SheetDescription className="mt-1">
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-xl">{vendor.name}</DialogTitle>
+                <DialogDescription className="mt-1">
                   {vendor.contact_name || "No contact info"}
-                </SheetDescription>
+                </DialogDescription>
                 {!isSingleLocation && (
                   <div className="flex items-center gap-2 mt-2">
                     {vendor.location_id ? (
-                      <Badge variant="outline" className="gap-1">
+                      <Badge
+                        variant="outline"
+                        className="gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground"
+                      >
                         <MapPin className="h-3 w-3" />
                         Local Vendor
                       </Badge>
                     ) : (
                       <Badge
                         variant="outline"
-                        className="gap-1 text-emerald-600 border-emerald-200 bg-emerald-50"
+                        className="gap-1 rounded-full border-0 bg-muted/60 text-muted-foreground"
                       >
                         <Building2 className="h-3 w-3" />
                         Global Vendor
@@ -179,16 +182,16 @@ export function VendorDetailSheet({
                 )}
               </div>
             </div>
-          </div>
+          </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             <Tabs
               value={activeTab}
               onValueChange={setActiveTab}
               className="w-full h-full flex flex-col"
             >
-              <div className="px-6 pt-4">
-                <TabsList className="w-full grid grid-cols-3 mb-4">
+              <div className="px-6 pt-1">
+                <TabsList className="w-full grid grid-cols-3 mb-4 rounded-2xl border-0 bg-muted/60 p-1 [&>button]:rounded-xl [&>button]:border-0">
                   <TabsTrigger value="catalog">Catalog</TabsTrigger>
                   <TabsTrigger value="locations">Locations</TabsTrigger>
                   <TabsTrigger value="info">Info</TabsTrigger>
@@ -211,7 +214,7 @@ export function VendorDetailSheet({
                     <Button
                       size="sm"
                       onClick={() => setIsAddItemOpen(true)}
-                      className="h-8"
+                      className="h-8 rounded-full"
                     >
                       <Plus className="h-3.5 w-3.5 mr-1" />
                       Add Item
@@ -221,11 +224,11 @@ export function VendorDetailSheet({
                   {isLoadingItems ? (
                     <div className="space-y-3">
                       {[1, 2, 3].map((i) => (
-                        <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                        <Skeleton key={i} className="h-16 w-full rounded-2xl" />
                       ))}
                     </div>
                   ) : vendorItems.length === 0 ? (
-                    <div className="text-center py-12 border rounded-lg border-dashed">
+                    <div className="text-center py-12 rounded-2xl border-0 bg-muted/45">
                       <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                       <p className="text-sm text-muted-foreground">
                         No items in catalog
@@ -272,7 +275,7 @@ export function VendorDetailSheet({
                       size="sm"
                       variant="outline"
                       onClick={() => setIsLinkLocationOpen(true)}
-                      className="h-8"
+                      className="h-8 rounded-full"
                     >
                       <Plus className="h-3.5 w-3.5 mr-1" />
                       Link Location
@@ -282,11 +285,11 @@ export function VendorDetailSheet({
                   {isLoadingLocations ? (
                     <div className="space-y-3">
                       {[1, 2].map((i) => (
-                        <Skeleton key={i} className="h-14 w-full rounded-lg" />
+                        <Skeleton key={i} className="h-14 w-full rounded-2xl" />
                       ))}
                     </div>
                   ) : linkedLocations.length === 0 ? (
-                    <div className="text-center py-12 border rounded-lg border-dashed">
+                    <div className="text-center py-12 rounded-2xl border-0 bg-muted/45">
                       <MapPin className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                       <p className="text-sm text-muted-foreground">
                         Not linked to any locations
@@ -317,7 +320,7 @@ export function VendorDetailSheet({
 
                 {/* INFO TAB (Existing Contact Card) */}
                 <TabsContent value="info" className="mt-0 space-y-6">
-                  <Card>
+                  <Card className="rounded-2xl border-0 bg-muted/45 shadow-none">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm font-medium">
                         Contact Information
@@ -349,7 +352,7 @@ export function VendorDetailSheet({
                   </Card>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <Card>
+                    <Card className="rounded-2xl border-0 bg-muted/45 shadow-none">
                       <CardContent className="p-4 flex flex-col items-center justify-center">
                         <p className="text-2xl font-bold">
                           {vendorDetails?.data?.items_count || 0}
@@ -357,7 +360,7 @@ export function VendorDetailSheet({
                         <p className="text-xs text-muted-foreground">Items</p>
                       </CardContent>
                     </Card>
-                    <Card>
+                    <Card className="rounded-2xl border-0 bg-muted/45 shadow-none">
                       <CardContent className="p-4 flex flex-col items-center justify-center">
                         <p className="text-2xl font-bold">
                           {vendorDetails?.data?.locations_count || 0}
@@ -372,8 +375,8 @@ export function VendorDetailSheet({
               </div>
             </Tabs>
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialogs */}
       <AddVendorItemDialog
@@ -435,9 +438,9 @@ function VendorItemRow({
   onPricingClick: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 group hover:bg-muted/50 transition-colors">
+    <div className="flex items-center justify-between p-3 rounded-2xl border-0 bg-muted/45 group hover:bg-muted/65 transition-colors">
       <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-background border">
+        <div className="p-2 rounded-xl border-0 bg-muted/70">
           <Package className="h-4 w-4 text-muted-foreground" />
         </div>
         <div>
@@ -459,7 +462,7 @@ function VendorItemRow({
       <div className="flex items-center gap-3">
         <div className="text-right">
           <div
-            className="font-semibold text-sm text-green-600 flex items-center gap-1 cursor-pointer hover:underline"
+            className="font-semibold text-sm text-foreground flex items-center gap-1 cursor-pointer hover:underline"
             onClick={onPricingClick}
             title="Set pricing per location"
           >
@@ -475,7 +478,7 @@ function VendorItemRow({
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+          className="h-7 w-7 rounded-full text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
           onClick={onRemove}
           disabled={isRemoving}
         >
@@ -500,9 +503,9 @@ function LocationLinkRow({
   isRemoving: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30 group hover:bg-muted/50 transition-colors">
+    <div className="flex items-center justify-between p-3 rounded-2xl border-0 bg-muted/45 group hover:bg-muted/65 transition-colors">
       <div className="flex items-center gap-3">
-        <div className="p-2 rounded-lg bg-background border">
+        <div className="p-2 rounded-xl border-0 bg-muted/70">
           <Building2 className="h-4 w-4 text-muted-foreground" />
         </div>
         <div>
@@ -513,7 +516,7 @@ function LocationLinkRow({
             {link.is_preferred && (
               <Badge
                 variant="secondary"
-                className="text-[10px] h-4 px-1 gap-0.5"
+                className="text-[10px] h-4 px-1.5 gap-0.5 rounded-full"
               >
                 <Star className="h-2.5 w-2.5 fill-current" />
                 Preferred
@@ -534,7 +537,7 @@ function LocationLinkRow({
         type="button"
         variant="ghost"
         size="icon"
-        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+        className="h-7 w-7 rounded-full text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
         onClick={onRemove}
         disabled={isRemoving}
         title="Unlink Location"

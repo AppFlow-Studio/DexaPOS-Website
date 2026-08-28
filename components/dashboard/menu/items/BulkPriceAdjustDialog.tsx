@@ -125,15 +125,24 @@ export function BulkPriceAdjustDialog({
   const crossStrategy =
     scope === "base" && distinctStrategies.size > 1 && strategies.length > 0;
 
-  const numericValue = Number(value);
-  const valueValid = Number.isFinite(numericValue) && numericValue >= 0;
+  const hasValue = value.trim() !== "";
+  const numericValue = hasValue ? Number(value) : Number.NaN;
+  const valueValid =
+    hasValue &&
+    Number.isFinite(numericValue) &&
+    (direction === "set_fixed" ? numericValue >= 0 : numericValue > 0);
 
   const operation = buildOperation(direction, unit);
 
   const previewRows = useMemo(() => {
     if (!valueValid) return [];
     return selectedItems.slice(0, 5).map((it) => {
-      const next = computeNewPrice(it.effectivePrice, operation, numericValue, rounding);
+      const next = computeNewPrice(
+        it.effectivePrice,
+        operation,
+        numericValue,
+        rounding,
+      );
       return {
         id: it.id,
         name: it.name,
@@ -145,7 +154,7 @@ export function BulkPriceAdjustDialog({
   }, [selectedItems, valueValid, operation, numericValue, rounding]);
 
   const canApply =
-    !isSaving && valueValid && selectedItems.length > 0 && clerkOrgId;
+    !isSaving && valueValid && selectedItems.length > 0 && !!clerkOrgId;
 
   async function handleApply() {
     if (!canApply || !clerkOrgId) return;
@@ -184,20 +193,20 @@ export function BulkPriceAdjustDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Bulk price adjustment</DialogTitle>
-          <DialogDescription>
-            Apply a price change to {selectedItems.length} selected{" "}
+      <DialogContent className="flex max-h-none flex-col gap-0 overflow-hidden rounded-3xl border-0 p-0 sm:max-h-[90dvh] sm:max-w-xl">
+        <DialogHeader className="shrink-0 border-b border-border/60 px-6 py-5 pr-14 text-left">
+          <DialogTitle className="text-xl">Adjust item prices</DialogTitle>
+          <DialogDescription className="leading-5">
+            Apply a card-price change to {selectedItems.length} selected{" "}
             {selectedItems.length === 1 ? "item" : "items"}.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
           {/* Direction */}
           <div className="space-y-2">
             <Label>Operation</Label>
-            <div className="inline-flex rounded-md border bg-muted p-1">
+            <div className="inline-flex rounded-full bg-muted/60 p-1">
               {(
                 [
                   { v: "increase", label: "Increase" },
@@ -210,9 +219,9 @@ export function BulkPriceAdjustDialog({
                   type="button"
                   onClick={() => setDirection(opt.v)}
                   className={cn(
-                    "px-3 py-1.5 text-sm rounded-sm transition",
+                    "shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm transition-colors",
                     direction === opt.v
-                      ? "bg-background shadow-sm font-medium"
+                      ? "bg-background font-medium text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -223,19 +232,19 @@ export function BulkPriceAdjustDialog({
           </div>
 
           {/* Unit + Value */}
-          <div className="flex items-end gap-3">
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-end">
             {direction !== "set_fixed" && (
               <div className="space-y-2">
                 <Label>Unit</Label>
-                <div className="inline-flex rounded-md border bg-muted p-1">
+                <div className="inline-flex rounded-full bg-muted/60 p-1">
                   <button
                     type="button"
                     onClick={() => setUnit("pct")}
                     className={cn(
-                      "px-3 py-1.5 text-sm rounded-sm",
+                      "shrink-0 rounded-full px-4 py-2 text-sm transition-colors",
                       unit === "pct"
-                        ? "bg-background shadow-sm font-medium"
-                        : "text-muted-foreground",
+                        ? "bg-background font-medium text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
                     )}
                   >
                     %
@@ -244,10 +253,10 @@ export function BulkPriceAdjustDialog({
                     type="button"
                     onClick={() => setUnit("amt")}
                     className={cn(
-                      "px-3 py-1.5 text-sm rounded-sm",
+                      "shrink-0 rounded-full px-4 py-2 text-sm transition-colors",
                       unit === "amt"
-                        ? "bg-background shadow-sm font-medium"
-                        : "text-muted-foreground",
+                        ? "bg-background font-medium text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
                     )}
                   >
                     $
@@ -271,7 +280,14 @@ export function BulkPriceAdjustDialog({
                 step="0.01"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                placeholder={direction === "set_fixed" ? "9.99" : unit === "pct" ? "4" : "1.00"}
+                placeholder={
+                  direction === "set_fixed"
+                    ? "e.g. 9.99"
+                    : unit === "pct"
+                      ? "e.g. 4"
+                      : "e.g. 1.00"
+                }
+                className="h-10 rounded-full border-0 bg-muted/60 px-4 tabular-nums shadow-none focus-visible:bg-background"
               />
             </div>
           </div>
@@ -282,17 +298,38 @@ export function BulkPriceAdjustDialog({
             <RadioGroup
               value={rounding}
               onValueChange={(v) => setRounding(v as BulkPriceRounding)}
-              className="grid grid-cols-3 gap-2"
+              className="grid grid-cols-1 gap-2 sm:grid-cols-3"
             >
-              <label className="flex items-center gap-2 rounded-md border p-2.5 cursor-pointer hover:bg-muted/50">
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center gap-2 rounded-2xl border-0 p-3 transition-colors",
+                  rounding === "cent"
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted/50 hover:bg-muted",
+                )}
+              >
                 <RadioGroupItem value="cent" />
                 <span className="text-sm">Nearest cent</span>
               </label>
-              <label className="flex items-center gap-2 rounded-md border p-2.5 cursor-pointer hover:bg-muted/50">
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center gap-2 rounded-2xl border-0 p-3 transition-colors",
+                  rounding === "nickel_up"
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted/50 hover:bg-muted",
+                )}
+              >
                 <RadioGroupItem value="nickel_up" />
                 <span className="text-sm">Round up to nickel</span>
               </label>
-              <label className="flex items-center gap-2 rounded-md border p-2.5 cursor-pointer hover:bg-muted/50">
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center gap-2 rounded-2xl border-0 p-3 transition-colors",
+                  rounding === "ninety_nine_up"
+                    ? "bg-primary/10 text-primary"
+                    : "bg-muted/50 hover:bg-muted",
+                )}
+              >
                 <RadioGroupItem value="ninety_nine_up" />
                 <span className="text-sm">Round up to .99</span>
               </label>
@@ -307,36 +344,58 @@ export function BulkPriceAdjustDialog({
               onValueChange={(v) => setScope(v as "base" | "override")}
               className="grid grid-cols-1 gap-2"
             >
-              <label className="flex items-center gap-2 rounded-md border p-2.5 cursor-pointer hover:bg-muted/50">
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center gap-3 rounded-2xl border-0 p-3 transition-colors",
+                  scope === "base"
+                    ? "bg-primary/10"
+                    : "bg-muted/50 hover:bg-muted",
+                )}
+              >
                 <RadioGroupItem value="base" />
                 <Globe className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">Base price (all locations)</span>
+                <div>
+                  <span className="text-sm">Base price — all locations</span>
+                  <p className="text-xs text-muted-foreground">
+                    Updates the shared base price for each selected item
+                  </p>
+                </div>
               </label>
               <label
                 className={cn(
-                  "flex items-center gap-2 rounded-md border p-2.5",
+                  "flex items-center gap-3 rounded-2xl border-0 p-3 transition-colors",
                   isAllLocations
-                    ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer hover:bg-muted/50",
+                    ? "cursor-not-allowed bg-muted/30 opacity-50"
+                    : scope === "override"
+                      ? "cursor-pointer bg-primary/10"
+                      : "cursor-pointer bg-muted/50 hover:bg-muted",
                 )}
               >
                 <RadioGroupItem value="override" disabled={isAllLocations} />
                 <MapPin className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">
-                  This location only
+                <div>
+                  <span className="text-sm">This location only</span>
                   {isAllLocations && (
-                    <span className="ml-1 text-xs text-muted-foreground">
-                      (select a location to enable)
-                    </span>
+                    <p className="text-xs text-muted-foreground">
+                      Select a location to enable
+                    </p>
                   )}
-                </span>
+                  {!isAllLocations && (
+                    <p className="text-xs text-muted-foreground">
+                      Creates or updates this location&apos;s price override
+                    </p>
+                  )}
+                </div>
               </label>
             </RadioGroup>
           </div>}
 
           {/* Cross-strategy warning */}
           {crossStrategy && (
-            <Alert variant="default" className="border-amber-300 bg-amber-50 text-amber-900">
+            <Alert
+              variant="default"
+              className="rounded-2xl border-0 bg-amber-50 text-amber-900 shadow-none dark:bg-amber-900/20 dark:text-amber-200"
+            >
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Mixed pricing strategies detected</AlertTitle>
               <AlertDescription>
@@ -349,18 +408,25 @@ export function BulkPriceAdjustDialog({
 
           {/* Preview */}
           {previewRows.length > 0 && (
-            <div className="rounded-md border">
-              <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b bg-muted/30">
-                Preview (first {previewRows.length} of {selectedItems.length})
+            <div className="overflow-hidden rounded-2xl bg-muted/40">
+              <div className="border-b border-border/60 px-4 py-2.5 text-xs font-medium text-muted-foreground">
+                Preview (first{" "}
+                <span className="tabular-nums">{previewRows.length}</span> of{" "}
+                <span className="tabular-nums">{selectedItems.length}</span>)
               </div>
               <div className="divide-y">
                 {previewRows.map((r) => (
                   <div
                     key={r.id}
-                    className="flex items-center justify-between px-3 py-2 text-sm"
+                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm"
                   >
-                    <span className="truncate">{r.name}</span>
-                    <span className={cn("tabular-nums", r.skipped && "text-amber-600")}>
+                    <span className="min-w-0 truncate">{r.name}</span>
+                    <span
+                      className={cn(
+                        "shrink-0 tabular-nums",
+                        r.skipped && "text-amber-600 dark:text-amber-400",
+                      )}
+                    >
                       ${r.old.toFixed(2)} →{" "}
                       {r.skipped ? (
                         <em>skipped (negative)</em>
@@ -375,17 +441,22 @@ export function BulkPriceAdjustDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t border-border/60 bg-background px-6 py-4">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isSaving}
+            className="rounded-full"
           >
             Cancel
           </Button>
-          <Button onClick={handleApply} disabled={!canApply}>
+          <Button
+            onClick={handleApply}
+            disabled={!canApply}
+            className="rounded-full px-5"
+          >
             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Apply to {selectedItems.length}{" "}
+            Apply to <span className="tabular-nums">{selectedItems.length}</span>{" "}
             {selectedItems.length === 1 ? "item" : "items"}
           </Button>
         </DialogFooter>

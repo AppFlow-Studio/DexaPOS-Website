@@ -1,6 +1,7 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Panel, PanelSection } from "@/components/dashboard/shell";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -45,14 +46,14 @@ function MetricRow({
   return (
     <div
       className={cn(
-        "flex items-center justify-between py-3",
-        isHighlighted && "bg-muted/50 -mx-4 px-4 rounded-lg border border-muted"
+        "flex min-w-0 flex-wrap items-center justify-between gap-2 py-3",
+        isHighlighted && "rounded-2xl border-0 bg-muted/60 shadow-none px-4"
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 max-w-[70%] items-start gap-2">
         <span
           className={cn(
-            "text-sm",
+            "min-w-0 break-words text-sm leading-snug",
             isHighlighted ? "font-bold" : "text-muted-foreground"
           )}
         >
@@ -71,14 +72,14 @@ function MetricRow({
           </TooltipProvider>
         )}
       </div>
+      {/* No sign tinting (D-12) — the minus carries it. */}
       <span
         className={cn(
-          "font-mono text-sm tabular-nums",
-          isHighlighted && "font-bold",
-          isNegative && "text-red-500"
+          "ml-auto shrink-0 max-w-[30%] text-right font-mono text-sm tabular-nums",
+          isHighlighted && "font-bold"
         )}
       >
-        {isNegative && value !== 0 ? "-" : ""}
+        {isNegative && value !== 0 ? "−" : ""}
         {formatCurrency(Math.abs(value))}
       </span>
     </div>
@@ -94,32 +95,20 @@ export function NetSalesSummaryCard({
   isLoading,
   onDismissDeposit,
 }: NetSalesSummaryCardProps) {
-  if (isLoading) {
-    return (
-      <Card className="border-none shadow-sm bg-card/80 backdrop-blur">
-        <CardHeader className="pb-2">
-          <div className="h-5 w-36 bg-muted animate-pulse rounded" />
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex justify-between">
-              <div className="h-4 w-20 bg-muted animate-pulse rounded" />
-              <div className="h-4 w-16 bg-muted animate-pulse rounded" />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
-    <Card className="border-border/60 shadow-none">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base font-bold tracking-tight">
-          Net Sales Summary
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0 space-y-1">
+    <Panel>
+      <PanelSection label="Net Sales Summary">
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex justify-between">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
         <MetricRow
           label="Gross sales"
           value={grossSales}
@@ -143,27 +132,35 @@ export function NetSalesSummaryCard({
           isHighlighted
           info="Gross sales minus discounts and refunds"
         />
+          </>
+        )}
 
-        {/* Instant Deposit Banner */}
-        {instantDepositAvailable > 0 && (
-          <div className="mt-4 p-3 rounded-lg bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 relative group">
+        {/* Instant Deposit Banner — an inset well, not an outlined box:
+            borderless tinted fill, the same material as every other inset
+            on the page (§3.1). */}
+        {!isLoading && instantDepositAvailable > 0 && (
+          <div className="group relative mt-4 rounded-2xl border-0 bg-[#0C4FD1]/10 p-3 shadow-none dark:bg-[#6CA0FF]/10">
+            {/* Close: filled, borderless, circular — the search-field
+                material. Visible at rest rather than fading in on hover, so
+                the dismiss affordance is discoverable without hunting. */}
             <button
               onClick={onDismissDeposit}
-              className="absolute top-2 right-2 p-1 rounded-full hover:bg-primary/10 transition-colors opacity-0 group-hover:opacity-100"
+              className="absolute top-2 right-2 inline-flex size-8 shrink-0 items-center justify-center rounded-full border-0 bg-muted/60 text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground"
             >
-              <X className="h-3.5 w-3.5 text-muted-foreground" />
+              <X className="h-3.5 w-3.5" />
+              <span className="sr-only">Dismiss</span>
             </button>
             <div className="flex items-start gap-3">
-              <div className="p-1.5 rounded-full bg-primary/20">
-                <Zap className="h-4 w-4 text-primary" />
+              <div className="p-1.5 rounded-full bg-[#0C4FD1]/20 dark:bg-[#6CA0FF]/20">
+                <Zap className="h-4 w-4 text-[#0C4FD1] dark:text-[#6CA0FF]" />
               </div>
               <div>
                 <p className="text-sm">
-                  <span className="font-bold text-primary">
+                  <span className="font-bold text-[#0C4FD1] dark:text-[#6CA0FF]">
                     {formatCurrency(instantDepositAvailable)}
                   </span>{" "}
                   is available to{" "}
-                  <button className="text-primary font-semibold hover:underline">
+                  <button className="text-[#0C4FD1] dark:text-[#6CA0FF] font-semibold hover:underline">
                     instant deposit
                   </button>
                   .
@@ -172,7 +169,7 @@ export function NetSalesSummaryCard({
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   );
 }

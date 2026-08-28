@@ -1,11 +1,27 @@
-export const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  draft:            { label: "Live",             className: "bg-gray-100 text-gray-700 border-gray-200" },
-  calculated:       { label: "Calculated",       className: "bg-blue-100 text-blue-700 border-blue-200" },
-  pending_approval: { label: "Pending Approval", className: "bg-amber-100 text-amber-700 border-amber-200" },
-  approved:         { label: "Approved",         className: "bg-green-100 text-green-700 border-green-200" },
-  exported:         { label: "Exported",         className: "bg-indigo-100 text-indigo-700 border-indigo-200" },
-  voided:           { label: "Voided",           className: "bg-red-100 text-red-700 border-red-200" },
+/**
+ * Session status labels.
+ *
+ * D-12: status is **never** colour-coded. This module used to carry a
+ * `{dot,text,bg}` colour triple per status (the superseded D-11 "soft tint +
+ * dot" treatment). Every status now renders as one neutral `bg-muted/60` pill
+ * and the word carries the meaning, so only the label survives.
+ *
+ * Because no class names live here any more, the C7 hazard is gone with them —
+ * there is nothing for Tailwind to miss, and `TipStatusBadge` no longer needs
+ * a literal class anchor to keep in sync.
+ */
+export const STATUS_LABELS: Record<string, string> = {
+  draft: "Live",
+  calculated: "Calculated",
+  pending_approval: "Pending Approval",
+  approved: "Approved",
+  exported: "Exported",
+  voided: "Voided",
 };
+
+export function tipStatusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? STATUS_LABELS.draft;
+}
 
 export const SHIFT_LABELS: Record<string, string> = {
   full_day: "Full Day",

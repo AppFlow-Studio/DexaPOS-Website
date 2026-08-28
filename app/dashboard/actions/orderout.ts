@@ -511,20 +511,48 @@ export async function pushMenuToOrderOut(
       return { success: false, error: "OrderOut API configuration missing" };
     }
 
-    const pushUrl =
-      isUpdate && existingLink?.oo_menu_id
-        ? `${orderOutApiUrl}/pos/restaurant/${restaurant.oo_restaurant_id}/menu/${existingLink.oo_menu_id}`
-        : `${orderOutApiUrl}/pos/restaurant/${restaurant.oo_restaurant_id}/menu`;
-    const pushMethod = isUpdate && existingLink?.oo_menu_id ? "PUT" : "POST";
+    const menuCollectionUrl = `${orderOutApiUrl}/pos/restaurant/${restaurant.oo_restaurant_id}/menu`;
+    const menuResourceUrl = existingLink?.oo_menu_id
+      ? `${menuCollectionUrl}/${existingLink.oo_menu_id}`
+      : null;
+    const requestMenuPush = (url: string, method: "POST" | "PUT") =>
+      fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": orderOutApiKey,
+        },
+        body: JSON.stringify(menuPayload),
+      });
 
-    const pushResponse = await fetch(pushUrl, {
-      method: pushMethod,
-      headers: {
-        "Content-Type": "application/json",
-        "api-key": orderOutApiKey,
-      },
-      body: JSON.stringify(menuPayload),
-    });
+    let pushMethod: "POST" | "PUT" = menuResourceUrl ? "PUT" : "POST";
+    let pushUrl = menuResourceUrl ?? menuCollectionUrl;
+    let recreatedExistingMenu = false;
+    let pushResponse = await requestMenuPush(pushUrl, pushMethod);
+
+    // OrderOut documents PUT /menu/{menu_id}, but some deployed API versions
+    // only register the collection /menu route. Retry only a route-level 404;
+    // validation/auth/server failures must remain visible and must not create a
+    // second menu accidentally.
+    if (menuResourceUrl && pushResponse.status === 404) {
+      console.warn(
+        "[pushMenuToOrderOut] Resource update route unavailable; trying collection update route"
+      );
+      pushMethod = "PUT";
+      pushUrl = menuCollectionUrl;
+      pushResponse = await requestMenuPush(pushUrl, pushMethod);
+
+      // Older collection-only versions may expose POST but not PUT. In that
+      // case recreate the menu and replace the stored remote ID below.
+      if (pushResponse.status === 404 || pushResponse.status === 405) {
+        console.warn(
+          "[pushMenuToOrderOut] Collection update unsupported; recreating menu through POST"
+        );
+        pushMethod = "POST";
+        recreatedExistingMenu = true;
+        pushResponse = await requestMenuPush(menuCollectionUrl, pushMethod);
+      }
+    }
 
     let pushResult: Record<string, unknown> = {};
     try {
@@ -541,7 +569,7 @@ export async function pushMenuToOrderOut(
     let ooMenuId: string | null = null;
     if (pushResponse.ok && pushResult) {
       // For updates where we already have a link, preserve the existing oo_menu_id
-      if (isUpdate && existingLink?.oo_menu_id) {
+      if (isUpdate && existingLink?.oo_menu_id && !recreatedExistingMenu) {
         ooMenuId = existingLink.oo_menu_id;
         console.log("[pushMenuToOrderOut] Using existing oo_menu_id from link:", ooMenuId);
       } else {
@@ -571,10 +599,10 @@ export async function pushMenuToOrderOut(
         if (getResponse.ok) {
           const menus = await getResponse.json();
           if (Array.isArray(menus) && menus.length > 0) {
-            const matched = menus.find(
+            const matches = menus.filter(
               (m: { name?: string }) => m.name === menuPayload.name
             );
-            const target = matched || menus[menus.length - 1];
+            const target = matches[matches.length - 1] || menus[menus.length - 1];
             ooMenuId = target?.id ? String(target.id) : null;
           }
         }

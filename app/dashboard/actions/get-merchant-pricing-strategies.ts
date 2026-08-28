@@ -6,6 +6,7 @@ export interface LocationStrategy {
   id: string;
   name: string;
   pricing_strategy: "manual" | "dual";
+  dual_pricing_percentage: number;
 }
 
 export async function GetMerchantPricingStrategies(
@@ -24,7 +25,7 @@ export async function GetMerchantPricingStrategies(
 
   const { data, error } = await supabase
     .from("locations")
-    .select("id, name, pricing_strategy")
+    .select("id, name, pricing_strategy, dual_pricing_percentage")
     .eq("merchant_id", merchant.id);
 
   if (error) return { error: error.message };
