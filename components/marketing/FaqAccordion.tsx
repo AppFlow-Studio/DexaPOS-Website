@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Reveal } from "@/components/marketing/Reveal";
 
 interface FaqItem {
   question: string;
@@ -15,7 +16,7 @@ export default function FaqAccordion({ items }: { items: FaqItem[] }) {
   };
 
   return (
-    <div className="faq-list reveal in">
+    <Reveal className="faq-list reveal">
       {items.map((item, i) => (
         <div key={i} className={`faq-item${openIndex === i ? " open" : ""}`}>
           <button className="faq-q" onClick={() => toggle(i)}>
@@ -26,11 +27,15 @@ export default function FaqAccordion({ items }: { items: FaqItem[] }) {
               </svg>
             </span>
           </button>
-          <div className="faq-a" style={{ maxHeight: openIndex === i ? 500 : 0 }}>
+          {/* Height is animated in CSS via grid-template-rows (0fr -> 1fr), which
+              transitions to the answer's real height. The old inline maxHeight:500
+              clipped long answers and made short ones feel abrupt, because the
+              easing was scaled to 500px rather than the actual content. */}
+          <div className="faq-a">
             <div className="faq-a-inner" dangerouslySetInnerHTML={{ __html: item.answer }} />
           </div>
         </div>
       ))}
-    </div>
+    </Reveal>
   );
 }

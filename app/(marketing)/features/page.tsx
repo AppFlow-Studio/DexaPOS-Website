@@ -24,11 +24,13 @@ export default async function Features() {
       {!hasCmsHero && <section className="page-head">
         <div className="wrap">
           <Reveal className="eyebrow reveal">Features</Reveal>
-          <Reveal className="reveal">
-            <h1 style={{ transitionDelay: ".1s" }}>Everything you need. Nothing you don&apos;t.</h1>
+          {/* Delay belongs on the .reveal element — the transition lives there,
+              so a delay on the inner tag would never apply. */}
+          <Reveal as="h1" className="reveal" style={{ transitionDelay: ".1s" }}>
+            Everything you need. Nothing you don&apos;t.
           </Reveal>
-          <Reveal className="reveal">
-            <p className="lede" style={{ transitionDelay: ".2s" }}>Six features that change how you operate. Ten capabilities, one platform.</p>
+          <Reveal as="p" className="lede reveal" style={{ transitionDelay: ".2s" }}>
+            Six features that change how you operate. Ten capabilities, one platform.
           </Reveal>
         </div>
       </section>}
@@ -39,7 +41,7 @@ export default async function Features() {
         <>
           <section className="core">
             <div className="wrap">
-              <Reveal className="section-head reveal">
+              <Reveal className="section-head center reveal">
                 <div className="section-eyebrow">The essentials</div>
                 <h2 className="section-title">What you&apos;ll notice on day one.</h2>
               </Reveal>
@@ -111,7 +113,7 @@ export default async function Features() {
 
           <section className="capabilities">
             <div className="wrap">
-              <Reveal className="section-head reveal">
+              <Reveal className="section-head center reveal">
                 <div className="section-eyebrow">Full capability surface</div>
                 <h2 className="section-title">Ten focused areas. One platform.</h2>
                 <p className="section-sub">Configurable per location, per station, per role.</p>

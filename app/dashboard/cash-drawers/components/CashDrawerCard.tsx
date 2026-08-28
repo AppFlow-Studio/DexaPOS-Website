@@ -1,7 +1,7 @@
 'use client'
 
 import { format } from 'date-fns'
-import { Banknote, Edit, Lock, MoreVertical } from 'lucide-react'
+import { Banknote, Edit, Link2Off, Lock, MoreVertical, Printer } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { TableCell, TableRow } from '@/components/ui/table'
@@ -169,6 +169,21 @@ export function CashDrawerCard({
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
               {drawer.station_name || 'No station assigned'}
             </p>
+            <p className="mt-0.5 flex items-center gap-1 truncate text-xs">
+              {drawer.host_printer_name ? (
+                <>
+                  <Printer className="h-3 w-3 shrink-0 text-emerald-600" />
+                  <span className="truncate text-muted-foreground" title={drawer.host_printer_name}>
+                    {drawer.host_printer_name}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Link2Off className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+                  <span className="text-muted-foreground/60">No drawer host</span>
+                </>
+              )}
+            </p>
           </div>
         </TableCell>
 
@@ -244,6 +259,24 @@ export function CashDrawerCard({
           </dt>
           <dd className="mt-1 truncate text-sm font-medium">
             {drawer.station_name || 'Not assigned'}
+          </dd>
+        </div>
+        <div className="col-span-2 min-w-0">
+          <dt className="text-[11px] font-medium uppercase leading-tight text-muted-foreground">
+            Drawer host
+          </dt>
+          <dd className="mt-1 truncate text-sm font-medium">
+            {drawer.host_printer_name ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Printer className="h-3.5 w-3.5 text-emerald-600" />
+                {drawer.host_printer_name}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                <Link2Off className="h-3.5 w-3.5" />
+                Not bound · set on POS
+              </span>
+            )}
           </dd>
         </div>
         <div className="col-span-2 min-w-0">

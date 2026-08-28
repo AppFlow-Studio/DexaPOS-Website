@@ -439,10 +439,10 @@
   body.dark .sales-icon-btn.active { background: #1A2247; color: var(--brand-400); border-color: #243066; }
 
   .custom-item-btn {
-    padding: 11px 18px; border-radius: 9px;
+    width: 42px; padding: 0; border-radius: 9px;
     background: var(--brand-500); color: var(--paper);
     font-size: 13.5px; font-weight: 600;
-    display: inline-flex; align-items: center; gap: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer; transition: background .15s;
     white-space: nowrap; flex-shrink: 0; border: none;
     height: 42px;
@@ -2857,6 +2857,15 @@
   .pay-amount-label { font-size: 12px; color: var(--slate-500); margin-bottom: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
   .pay-amount-value { font-size: 36px; font-weight: 800; color: var(--ink); letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
 
+  @media (min-width: 901px) and (max-width: 1100px) {
+    #opsTiles { grid-template-columns: repeat(6, 1fr); max-width: 760px; gap: 14px; }
+    #opsTiles .home-tile { grid-column: span 2; }
+    #opsTiles .home-tile:nth-child(4) { grid-column: 2 / span 2; }
+    #mgmtTiles { grid-template-columns: repeat(4, 1fr); max-width: 700px; gap: 14px; }
+    .home-tile { padding: 24px 12px; gap: 14px; }
+    .home-tile-icon { width: 56px; height: 56px; }
+    .home-tile-name { font-size: 13px; }
+  }
   @media (max-width: 900px) {
     .home-tiles { grid-template-columns: repeat(3, 1fr); gap: 10px; }
     .sales-grid { grid-template-columns: 1fr; gap: 12px; }
@@ -2900,7 +2909,7 @@
     .sales-pay-row { grid-template-columns: 1fr 2fr; }
     .sales-menu-top { flex-wrap: wrap; }
     .sales-menu-top .menu-search-wrap { flex-basis: 100%; order: -1; }
-    .custom-item-btn { flex: 1; justify-content: center; }
+    .custom-item-btn { flex: 0 0 42px; }
     .menu-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .menu-card-name { font-size: 12.5px; min-height: 30px; }
     .sales-orderline-label { font-size: 17px; }
@@ -3720,9 +3729,8 @@
           <button class="sales-icon-btn" id="listViewToggle" aria-label="List view">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
           </button>
-          <button class="custom-item-btn" id="customItemBtn">
+          <button class="custom-item-btn" id="customItemBtn" aria-label="Add custom item" title="Add custom item">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-            Custom Item
           </button>
         </div>
 
