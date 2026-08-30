@@ -92,10 +92,6 @@ import {
   upsertSubscriptionPlan,
 } from '@/app/manage/actions/subscription-billing'
 import {
-  getMerchantNmiAccountsSummary,
-  type MerchantNmiAccountRow,
-} from '@/app/manage/actions/admin-merchant/nmi'
-import {
   getMerchantBillingProfiles,
   type MerchantBillingProfileRecord,
 } from '@/app/manage/actions/merchant-billing'
@@ -459,7 +455,6 @@ export function HqSubscriptionsWorkspace({
   const [subscriptions, setSubscriptions] = useState<MerchantSubscriptionRecord[]>([])
   const [invoices, setInvoices] = useState<SubscriptionInvoiceRecord[]>([])
   const [subscriptionServiceMap, setSubscriptionServiceMap] = useState<Record<string, SubscriptionServiceAssignmentRecord[]>>({})
-  const [locationEligibilityMap, setLocationEligibilityMap] = useState<Record<string, MerchantNmiAccountRow>>({})
   const [billingProfilesByLocation, setBillingProfilesByLocation] = useState<Record<string, MerchantBillingProfileRecord>>({})
   const [serviceFormState, setServiceFormState] = useState<ServiceFormState>({})
   const [selectedServicePlanId, setSelectedServicePlanId] = useState('')
@@ -521,11 +516,6 @@ export function HqSubscriptionsWorkspace({
   const selectedAssignments = useMemo(
     () => (selectedLocationSubscription ? subscriptionServiceMap[selectedLocationSubscription.id] ?? [] : []),
     [selectedLocationSubscription, subscriptionServiceMap]
-  )
-
-  const selectedLocationEligibility = useMemo(
-    () => (selectedLocation?.id ? locationEligibilityMap[selectedLocation.id] ?? null : null),
-    [locationEligibilityMap, selectedLocation]
   )
 
   const selectedBillingProfile = useMemo(
@@ -758,7 +748,6 @@ export function HqSubscriptionsWorkspace({
           nextServicePlans,
           nextSubscriptions,
           nextInvoices,
-          nmiSummary,
           billingProfiles,
           nextMerchantTierPlans,
           nextMerchantTierStatus,
@@ -771,7 +760,6 @@ export function HqSubscriptionsWorkspace({
           getSubscriptionPlans(),
           getMerchantSubscriptions(merchant.id),
           getSubscriptionInvoices(merchant.id, null, 100),
-          getMerchantNmiAccountsSummary(merchant.id),
           getMerchantBillingProfiles(merchant.id),
           getMerchantTierPlans(),
           getMerchantTierStatus(merchant.id),
@@ -788,14 +776,25 @@ export function HqSubscriptionsWorkspace({
         )
 
         const nextAssignmentMap = Object.fromEntries(assignmentEntries)
-        const nextEligibilityMap = Object.fromEntries(
-          nmiSummary.locations.map((location) => [location.locationId, location])
+        const merchantWideValorProfile = billingProfiles.find(
+          (profile) =>
+            !profile.location_id &&
+            profile.processor === 'valor' &&
+            profile.billing_method === 'card' &&
+            profile.is_active,
         )
-
         const nextBillingProfilesByLocation = Object.fromEntries(
-          billingProfiles
-            .filter((profile) => profile.location_id)
-            .map((profile) => [profile.location_id as string, profile])
+          sortedLocations.flatMap((location) => {
+            const locationProfile = billingProfiles.find(
+              (profile) =>
+                profile.location_id === location.id &&
+                profile.processor === 'valor' &&
+                profile.billing_method === 'card' &&
+                profile.is_active,
+            )
+            const effectiveProfile = locationProfile ?? merchantWideValorProfile
+            return effectiveProfile ? [[location.id, effectiveProfile]] : []
+          }),
         )
 
         setServices(nextServices)
@@ -804,7 +803,6 @@ export function HqSubscriptionsWorkspace({
         setSubscriptions(nextSubscriptions)
         setInvoices(nextInvoices)
         setSubscriptionServiceMap(nextAssignmentMap)
-        setLocationEligibilityMap(nextEligibilityMap)
         setBillingProfilesByLocation(nextBillingProfilesByLocation)
         setMerchantTierPlans(nextMerchantTierPlans)
         setMerchantTierStatus(nextMerchantTierStatus)
@@ -1327,8 +1325,8 @@ export function HqSubscriptionsWorkspace({
           <Badge variant="outline">{merchant.clerk_org_id || merchant.id}</Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          Location-scoped SaaS subscriptions. Storefront NMI setup stays separate. This workspace manages subscription
-          services, invoices, and charges through the centralized Dexa billing rail.
+          Location-scoped SaaS subscriptions use the merchant&apos;s Valor billing rail. This workspace manages
+          subscription services, invoices, recurring charges, and recovery.
         </p>
       </div>
 
@@ -2060,18 +2058,17 @@ export function HqSubscriptionsWorkspace({
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedLocationEligibility ? (
+                {selectedBillingProfile ? (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant={selectedLocationEligibility.vaultReady ? 'default' : 'secondary'}>
-                      {selectedLocationEligibility.vaultReady ? 'Eligible' : 'Not eligible'}
-                    </Badge>
-                    <span>
-                      {selectedLocationEligibility.vaultReady
-                        ? 'Location has a vaulted billing card.'
-                        : 'Save a billing card for this location before subscription charging.'}
-                    </span>
+                    <Badge variant="default">Valor ready</Badge>
+                    <span>An active vaulted Valor billing card is available.</span>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="secondary">Not ready</Badge>
+                    <span>Save a merchant-wide or location Valor billing card before charging.</span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -2636,7 +2633,11 @@ export function HqSubscriptionsWorkspace({
                 <TableBody>
                   {filteredInvoices.map((invoice) => {
                     const activityDate = invoice.paid_at || invoice.last_payment_attempt_at || invoice.created_at
-                    const reference = invoice.nmi_transaction_id || invoice.last_payment_error || '-'
+                    const reference =
+                      invoice.processor_transaction_id ||
+                      invoice.nmi_transaction_id ||
+                      invoice.last_payment_error ||
+                      '-'
 
                     return (
                       <TableRow key={`txn-${invoice.id}`}>

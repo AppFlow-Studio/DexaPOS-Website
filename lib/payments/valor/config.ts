@@ -7,7 +7,7 @@
  *
  *   1. securelink-staging…:4430  GetClientToken   `/?saleapi=`     body creds
  *   2. securelink-staging…:443   Direct Sale      `/?saleToken`    body creds
- *                                Add Subscription `/?addSubs`      body creds
+ *                                Add Subscription `/?addSub`       body creds
  *                                Hosted Page      `/?hostedpage`   body creds
  *   3. demo.valorpaytech.com     Vault APIs       `/api/valor-vault/…`
  *                                                 HEADER creds

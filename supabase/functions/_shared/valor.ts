@@ -378,6 +378,200 @@ export async function createSale(
 }
 
 // ---------------------------------------------------------------------------
+// Native recurring subscriptions (SaaS billing)
+// ---------------------------------------------------------------------------
+
+export interface ValorRecurringParams {
+  amountMinor: number
+  vaultCustomerId: string
+  paymentProfileId?: string | null
+  billingCustomerName: string
+  billingZip: string
+  startsOn: Date
+  chargeOn: number
+  invoiceNumber?: string
+  email?: string | null
+  validateOnly?: boolean
+}
+
+export interface ValorRecurringResult {
+  success: boolean
+  status: number
+  subscriptionId: string
+  transactionId: string
+  responseText: string
+  body: JsonRecord
+}
+
+function formatValorSubscriptionDate(date: Date): string {
+  if (Number.isNaN(date.getTime())) throw new Error('Invalid Valor subscription date')
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, '0'),
+    String(date.getUTCDate()).padStart(2, '0'),
+  ].join('')
+}
+
+function buildValorRecurringBody(params: ValorRecurringParams): JsonRecord {
+  if (!Number.isInteger(params.amountMinor) || params.amountMinor <= 0) {
+    throw new Error('Valor subscription amount must be a positive integer in minor units')
+  }
+  if (params.amountMinor > VALOR_MAX_AMOUNT_MINOR) {
+    throw new Error('Valor subscription amount exceeds the processor limit')
+  }
+  if (!Number.isInteger(params.chargeOn) || params.chargeOn < 1 || params.chargeOn > 30) {
+    throw new Error('Valor monthly charge day must be between 1 and 30')
+  }
+
+  return {
+    amount: formatMinorUnits(params.amountMinor),
+    surchargeAmount: '0.00',
+    payment_info: {
+      vault_id: params.vaultCustomerId,
+      ...(params.paymentProfileId ? { payment_id: params.paymentProfileId } : {}),
+    },
+    surchargeIndicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    recurring_type: '2',
+    is_validate_card: params.validateOnly ? '1' : '0',
+    shipping_customer_name: params.billingCustomerName,
+    shipping_zip: params.billingZip,
+    billing_customer_name: params.billingCustomerName,
+    billing_zip: params.billingZip,
+    subscription_starts_from: formatValorSubscriptionDate(params.startsOn),
+    charge_until: 'never_expired',
+    charge_on: String(params.chargeOn),
+    failure_notification: '1',
+    // Valor owns recurring retries. Dexa records and enforces the resulting
+    // grace/suspension state but must not independently charge the same cycle.
+    retry_count: '1',
+    additional_prompts: [],
+    ...(params.invoiceNumber ? { invoice_no: params.invoiceNumber.slice(0, 12) } : {}),
+    ...(params.email ? { email: params.email.slice(0, 50) } : {}),
+  }
+}
+
+function toRecurringResult(status: number, body: JsonRecord): ValorRecurringResult {
+  return {
+    success: status < 400 && isValorSuccess(body),
+    status,
+    subscriptionId: firstString(body, ['subscription_id', 'subscriptionid']),
+    transactionId: firstString(body, ['txn_id', 'transaction_id']),
+    responseText:
+      firstString(body, ['response_text', 'error_message', 'display_message', 'message']) ||
+      extractValorError(body) ||
+      'Valor recurring request failed',
+    body,
+  }
+}
+
+export async function createRecurringSubscription(
+  credentials: ValorCredentials,
+  params: ValorRecurringParams,
+  options: { endpoints?: ValorEndpoints; timeoutMs?: number } = {},
+): Promise<ValorRecurringResult> {
+  const endpoints = options.endpoints ?? resolveValorEndpoints()
+  const body = {
+    txn_type: 'add_subscription',
+    ...buildValorRecurringBody(params),
+  }
+  const response = await postWithBodyCredentials(
+    '/?addSub',
+    body,
+    credentials,
+    endpoints,
+    options.timeoutMs,
+  )
+  return toRecurringResult(response.status, response.body)
+}
+
+export async function updateRecurringSubscription(
+  credentials: ValorCredentials,
+  subscriptionId: string,
+  params: ValorRecurringParams,
+  options: { endpoints?: ValorEndpoints; timeoutMs?: number } = {},
+): Promise<ValorRecurringResult> {
+  const endpoints = options.endpoints ?? resolveValorEndpoints()
+  const recurring = buildValorRecurringBody(params)
+  delete recurring.surchargeAmount
+  delete recurring.retry_count
+  const body = {
+    ...recurring,
+    txn_type: 'updateSubscription',
+    subscription_id: subscriptionId,
+    custom_fee: '0.00',
+  }
+
+  const response = await postWithBodyCredentials(
+    '/?updateSub',
+    body,
+    credentials,
+    endpoints,
+    options.timeoutMs,
+  )
+  return toRecurringResult(response.status, response.body)
+}
+
+export type ValorRecurringLifecycleAction = 'activate' | 'deactivate' | 'delete'
+
+const VALOR_RECURRING_LIFECYCLE = {
+  activate: { path: '/?activateSub', txnType: 'activateSubscription' },
+  deactivate: { path: '/?de-Activate', txnType: 'deactivateSubscription' },
+  delete: { path: '/?deleteSub', txnType: 'deleteSubscription' },
+} as const
+
+export async function changeRecurringSubscriptionLifecycle(
+  credentials: ValorCredentials,
+  subscriptionId: string,
+  action: ValorRecurringLifecycleAction,
+  options: { endpoints?: ValorEndpoints; timeoutMs?: number } = {},
+): Promise<ValorRecurringResult> {
+  const normalizedSubscriptionId = subscriptionId.trim()
+  if (!normalizedSubscriptionId) throw new Error('Valor subscription id is required')
+
+  const endpoints = options.endpoints ?? resolveValorEndpoints()
+  const contract = VALOR_RECURRING_LIFECYCLE[action]
+  const response = await postWithBodyCredentials(
+    contract.path,
+    {
+      txn_type: contract.txnType,
+      subscription_id: normalizedSubscriptionId,
+    },
+    credentials,
+    endpoints,
+    options.timeoutMs,
+  )
+  const result = toRecurringResult(response.status, response.body)
+  return {
+    ...result,
+    subscriptionId: result.subscriptionId || normalizedSubscriptionId,
+  }
+}
+
+export function activateRecurringSubscription(
+  credentials: ValorCredentials,
+  subscriptionId: string,
+  options: { endpoints?: ValorEndpoints; timeoutMs?: number } = {},
+) {
+  return changeRecurringSubscriptionLifecycle(credentials, subscriptionId, 'activate', options)
+}
+
+export function deactivateRecurringSubscription(
+  credentials: ValorCredentials,
+  subscriptionId: string,
+  options: { endpoints?: ValorEndpoints; timeoutMs?: number } = {},
+) {
+  return changeRecurringSubscriptionLifecycle(credentials, subscriptionId, 'deactivate', options)
+}
+
+export function deleteRecurringSubscription(
+  credentials: ValorCredentials,
+  subscriptionId: string,
+  options: { endpoints?: ValorEndpoints; timeoutMs?: number } = {},
+) {
+  return changeRecurringSubscriptionLifecycle(credentials, subscriptionId, 'delete', options)
+}
+
+// ---------------------------------------------------------------------------
 // Refund / void
 // ---------------------------------------------------------------------------
 

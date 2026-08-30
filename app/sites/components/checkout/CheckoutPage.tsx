@@ -558,7 +558,7 @@ export function CheckoutPage({
       }).catch(() => {});
     }
 
-    // Step 2: Call create-online-order edge function with the NMI payment token
+    // Step 2: Call create-online-order with the processor token returned by Passage.
     try {
       const res = await fetch(
         `${SUPABASE_URL}/functions/v1/create-online-order`,

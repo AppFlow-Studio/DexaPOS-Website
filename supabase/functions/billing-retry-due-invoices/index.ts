@@ -50,7 +50,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
               apikey: SUPABASE_SERVICE_ROLE_KEY,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ invoice_id: invoice.id }),
+            body: JSON.stringify({ invoice_id: invoice.id, mode: 'automatic' }),
           },
         )
         const payload = await response.json().catch(() => ({}))

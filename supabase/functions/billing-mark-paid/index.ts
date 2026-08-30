@@ -30,6 +30,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       paid_at?: string
       external_reference?: string | null
       notes?: string | null
+      processor?: 'valor' | null
+      processor_account_id?: string | null
+      processor_response?: Record<string, unknown> | null
     }
 
     if (!body.invoice_id) {
@@ -56,10 +59,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         status: 'paid',
         paid_at: paidAt,
         updated_at: new Date().toISOString(),
-        nmi_transaction_id: body.external_reference ?? null,
-        nmi_response: body.notes
-          ? { manual_mark_paid_notes: body.notes }
-          : undefined,
+        processor: body.processor ?? null,
+        processor_account_id: body.processor_account_id ?? null,
+        processor_transaction_id: body.external_reference ?? null,
+        processor_response: {
+          ...(body.processor_response ?? {}),
+          ...(body.notes ? { manual_mark_paid_notes: body.notes } : {}),
+        },
       })
       .eq('id', body.invoice_id)
 
@@ -113,6 +119,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       },
       p_metadata: {
         source: 'billing-mark-paid',
+        processor: body.processor ?? null,
         notes: body.notes ?? null,
       },
     })

@@ -50,9 +50,9 @@ import {
   upsertMerchantSubscription,
 } from '@/app/manage/actions/subscription-billing'
 import {
-  getMerchantNmiAccountsSummary,
-  type MerchantNmiAccountRow,
-} from '@/app/manage/actions/admin-merchant/nmi'
+  getMerchantBillingProfiles,
+  type MerchantBillingProfileRecord,
+} from '@/app/manage/actions/merchant-billing'
 import {
   renderSubscriptionInvoiceHtml,
   type SubscriptionInvoiceDocumentData,
@@ -161,7 +161,7 @@ export function SubscriptionBillingAdminCard({
   const [subscriptions, setSubscriptions] = useState<MerchantSubscriptionRecord[]>([])
   const [invoices, setInvoices] = useState<SubscriptionInvoiceRecord[]>([])
   const [subscriptionServiceMap, setSubscriptionServiceMap] = useState<Record<string, SubscriptionServiceAssignmentRecord[]>>({})
-  const [locationEligibilityMap, setLocationEligibilityMap] = useState<Record<string, MerchantNmiAccountRow>>({})
+  const [billingProfilesByLocation, setBillingProfilesByLocation] = useState<Record<string, MerchantBillingProfileRecord>>({})
   const [serviceFormState, setServiceFormState] = useState<ServiceFormState>({})
   const [invoicePreviewDocument, setInvoicePreviewDocument] = useState<SubscriptionInvoiceDocumentData | null>(null)
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false)
@@ -185,9 +185,9 @@ export function SubscriptionBillingAdminCard({
     [selectedLocationSubscription, subscriptionServiceMap]
   )
 
-  const selectedLocationEligibility = useMemo(
-    () => (selectedLocationId ? locationEligibilityMap[selectedLocationId] ?? null : null),
-    [locationEligibilityMap, selectedLocationId]
+  const selectedBillingProfile = useMemo(
+    () => (selectedLocationId ? billingProfilesByLocation[selectedLocationId] ?? null : null),
+    [billingProfilesByLocation, selectedLocationId]
   )
 
   const invoicePreviewHtml = useMemo(
@@ -198,11 +198,11 @@ export function SubscriptionBillingAdminCard({
   const refresh = () => {
     startTransition(async () => {
       try {
-        const [nextServices, nextSubscriptions, nextInvoices, nmiSummary] = await Promise.all([
+        const [nextServices, nextSubscriptions, nextInvoices, billingProfiles] = await Promise.all([
           getBillableServices(),
           getMerchantSubscriptions(merchantId),
           getSubscriptionInvoices(merchantId, null, 100),
-          getMerchantNmiAccountsSummary(merchantId),
+          getMerchantBillingProfiles(merchantId),
         ])
 
         const assignmentEntries = await Promise.all(
@@ -218,8 +218,27 @@ export function SubscriptionBillingAdminCard({
         setSubscriptions(nextSubscriptions)
         setInvoices(nextInvoices)
         setSubscriptionServiceMap(nextAssignmentMap)
-        setLocationEligibilityMap(
-          Object.fromEntries(nmiSummary.locations.map((location) => [location.locationId, location]))
+        const merchantWideValorProfile = billingProfiles.find(
+          (profile) =>
+            !profile.location_id &&
+            profile.processor === 'valor' &&
+            profile.billing_method === 'card' &&
+            profile.is_active,
+        )
+        setBillingProfilesByLocation(
+          Object.fromEntries(
+            locations.flatMap((location) => {
+              const locationProfile = billingProfiles.find(
+                (profile) =>
+                  profile.location_id === location.id &&
+                  profile.processor === 'valor' &&
+                  profile.billing_method === 'card' &&
+                  profile.is_active,
+              )
+              const effectiveProfile = locationProfile ?? merchantWideValorProfile
+              return effectiveProfile ? [[location.id, effectiveProfile]] : []
+            }),
+          ),
         )
 
         const defaultLocationId = selectedLocationId || locations[0]?.id || ''
@@ -471,18 +490,17 @@ export function SubscriptionBillingAdminCard({
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedLocationEligibility ? (
+                {selectedBillingProfile ? (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant={selectedLocationEligibility.vaultReady ? 'default' : 'secondary'}>
-                      {selectedLocationEligibility.vaultReady ? 'Eligible' : 'Not eligible'}
-                    </Badge>
-                    <span>
-                      {selectedLocationEligibility.vaultReady
-                        ? 'Location has a saved billing card and can be subscribed.'
-                        : 'Location needs a primary vaulted billing card before subscription charging.'}
-                    </span>
+                    <Badge variant="default">Valor ready</Badge>
+                    <span>An active vaulted Valor billing card is available.</span>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="secondary">Not ready</Badge>
+                    <span>Save a merchant-wide or location Valor billing card before charging.</span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">

@@ -15,6 +15,11 @@ import {
   type SubscriptionInvoiceLineItem,
 } from '@/lib/subscription-billing/invoice-template'
 import { resolveMonthlyBillingPeriod } from '@/lib/subscription-billing/billing-period'
+import {
+  activateSubscription as activateValorSubscription,
+  deactivateSubscription as deactivateValorSubscription,
+  deleteSubscription as deleteValorSubscription,
+} from '@/lib/payments/valor/subscriptionApi'
 
 export interface SubscriptionPlanRecord {
   id: string
@@ -193,6 +198,10 @@ export interface SubscriptionInvoiceRecord {
   last_payment_error: string | null
   next_retry_at: string | null
   retry_exhausted_at: string | null
+  processor: 'valor' | null
+  processor_account_id: string | null
+  processor_transaction_id: string | null
+  processor_response: Record<string, unknown> | null
   nmi_transaction_id: string | null
   nmi_response: Record<string, unknown> | null
   line_items: Array<Record<string, unknown>>
@@ -497,6 +506,125 @@ function addOneMonthPeriod(
   }
 }
 
+interface ValorSubscriptionCredentialRow {
+  valor_appid: string
+  valor_epi: string
+  decrypted_appkey: string
+}
+
+async function syncValorSubscriptionLifecycle(params: {
+  subscriptionId: string
+  targetStatus: 'trial' | 'active' | 'past_due' | 'suspended' | 'canceled'
+}): Promise<{ success: boolean; error?: string }> {
+  const serviceRole = createServiceRoleClient() as any
+  const { data: subscription, error: subscriptionError } = await serviceRole
+    .from('merchant_subscriptions')
+    .select(
+      'id, processor, processor_account_id, processor_subscription_id, processor_subscription_status',
+    )
+    .eq('id', params.subscriptionId)
+    .maybeSingle()
+
+  if (subscriptionError || !subscription) {
+    return { success: false, error: 'Failed to load the subscription processor schedule.' }
+  }
+
+  const processorSubscriptionId = subscription.processor_subscription_id?.trim()
+  if (!processorSubscriptionId) return { success: true }
+
+  if (subscription.processor !== 'valor' || !subscription.processor_account_id) {
+    return {
+      success: false,
+      error: 'The native recurring schedule is not linked to a Valor subscription account.',
+    }
+  }
+
+  if (
+    params.targetStatus === 'past_due' ||
+    params.targetStatus === 'trial' ||
+    (params.targetStatus === 'active' &&
+      !['deactivated', 'deleted'].includes(
+        subscription.processor_subscription_status ?? '',
+      )) ||
+    (params.targetStatus === 'suspended' &&
+      subscription.processor_subscription_status === 'deactivated') ||
+    (params.targetStatus === 'canceled' &&
+      subscription.processor_subscription_status === 'deleted')
+  ) {
+    return { success: true }
+  }
+
+  const { data: credentialRows, error: credentialError } = await serviceRole.rpc(
+    'get_valor_account_credentials',
+    { p_account_id: subscription.processor_account_id },
+  )
+  const row = (Array.isArray(credentialRows)
+    ? credentialRows[0]
+    : credentialRows) as ValorSubscriptionCredentialRow | null
+  const appId = row?.valor_appid?.trim()
+  const appKey = row?.decrypted_appkey?.trim()
+  const epi = row?.valor_epi?.trim()
+  if (credentialError || !appId || !appKey || !epi) {
+    return { success: false, error: 'Valor subscription credentials are unavailable.' }
+  }
+
+  const valorOptions = { credentials: { appId, appKey, epi } }
+  const persistProcessorSchedule = async (
+    updates: Record<string, unknown>,
+  ): Promise<{ success: boolean; error?: string }> => {
+    const { error } = await serviceRole
+      .from('merchant_subscriptions')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.subscriptionId)
+
+    return error
+      ? {
+          success: false,
+          error: `Valor schedule changed, but the local subscription could not be updated: ${error.message}`,
+        }
+      : { success: true }
+  }
+
+  try {
+    if (params.targetStatus === 'canceled') {
+      await deleteValorSubscription(valorOptions, processorSubscriptionId)
+      return persistProcessorSchedule({ processor_subscription_status: 'deleted' })
+    }
+
+    if (params.targetStatus === 'suspended') {
+      await deactivateValorSubscription(valorOptions, processorSubscriptionId)
+      return persistProcessorSchedule({ processor_subscription_status: 'deactivated' })
+    }
+
+    if (params.targetStatus === 'active') {
+      if (subscription.processor_subscription_status === 'deleted') {
+        return persistProcessorSchedule({
+          processor_subscription_id: null,
+          processor_subscription_status: null,
+          processor_schedule_created_at: null,
+          processor_next_payment_at: null,
+        })
+      }
+
+      await activateValorSubscription(valorOptions, processorSubscriptionId)
+      return persistProcessorSchedule({ processor_subscription_status: 'active' })
+    }
+
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Valor subscription lifecycle update failed.',
+    }
+  }
+}
+
 async function syncMerchantTierBillingArtifacts(params: {
   merchantId: string
   merchantTierSubscriptionId: string
@@ -511,9 +639,11 @@ async function syncMerchantTierBillingArtifacts(params: {
     .from('merchant_billing_profiles')
     .select('id, location_id, created_at')
     .eq('merchant_id', params.merchantId)
+    .eq('billing_method', 'card')
+    .eq('processor', 'valor')
     .eq('is_active', true)
     .eq('is_primary', true)
-    .not('location_id', 'is', null)
+    .order('location_id', { ascending: true, nullsFirst: true })
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
@@ -529,12 +659,32 @@ async function syncMerchantTierBillingArtifacts(params: {
     }
   }
 
-  if (!anchorProfile?.location_id) {
+  if (!anchorProfile?.id) {
     return {
       success: false as const,
       error:
-        'No location billing profile is available to anchor merchant tier billing.',
+        'No active primary Valor billing card is available for merchant tier billing.',
     }
+  }
+
+  let anchorLocationId = anchorProfile.location_id as string | null
+  if (!anchorLocationId) {
+    const { data: anchorLocation, error: anchorLocationError } = await serviceRole
+      .from('locations')
+      .select('id')
+      .eq('merchant_id', params.merchantId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    if (anchorLocationError || !anchorLocation?.id) {
+      return {
+        success: false as const,
+        error: 'No active location is available to anchor merchant tier billing.',
+      }
+    }
+    anchorLocationId = anchorLocation.id as string
   }
 
   const {
@@ -542,9 +692,11 @@ async function syncMerchantTierBillingArtifacts(params: {
     error: existingAnchorSubscriptionError,
   } = await serviceRole
     .from('merchant_subscriptions')
-    .select('id, metadata')
+    .select(
+      'id, metadata, status, plan_id, current_period_start, current_period_end, next_billing_date, trial_ends_at, billing_profile_id',
+    )
     .eq('merchant_id', params.merchantId)
-    .eq('location_id', anchorProfile.location_id)
+    .eq('location_id', anchorLocationId)
     .maybeSingle()
 
   if (existingAnchorSubscriptionError) {
@@ -568,7 +720,7 @@ async function syncMerchantTierBillingArtifacts(params: {
     await serviceRole.rpc('upsert_merchant_subscription', {
       p_subscription_id: existingAnchorSubscription?.id ?? null,
       p_merchant_id: params.merchantId,
-      p_location_id: anchorProfile.location_id,
+      p_location_id: anchorLocationId,
       p_plan_id: params.planId,
       p_current_period_start: params.currentPeriodStart,
       p_current_period_end: params.currentPeriodEnd,
@@ -592,10 +744,42 @@ async function syncMerchantTierBillingArtifacts(params: {
     }
   }
 
+  const lifecycleResult = await syncValorSubscriptionLifecycle({
+    subscriptionId: anchorSubscriptionId as string,
+    targetStatus: params.status === 'cancelled' ? 'canceled' : params.status,
+  })
+  if (!lifecycleResult.success) {
+    if (existingAnchorSubscription?.id) {
+      await serviceRole
+        .from('merchant_subscriptions')
+        .update({
+          status: existingAnchorSubscription.status,
+          plan_id: existingAnchorSubscription.plan_id,
+          current_period_start: existingAnchorSubscription.current_period_start,
+          current_period_end: existingAnchorSubscription.current_period_end,
+          next_billing_date: existingAnchorSubscription.next_billing_date,
+          trial_ends_at: existingAnchorSubscription.trial_ends_at,
+          billing_profile_id: existingAnchorSubscription.billing_profile_id,
+          metadata: existingAnchorSubscription.metadata,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', anchorSubscriptionId as string)
+    } else {
+      await serviceRole
+        .from('merchant_subscriptions')
+        .delete()
+        .eq('id', anchorSubscriptionId as string)
+    }
+    return {
+      success: false as const,
+      error: lifecycleResult.error || 'Failed to synchronize the Valor billing schedule.',
+    }
+  }
+
   if (params.status === 'cancelled') {
     return {
       success: true as const,
-      anchorLocationId: anchorProfile.location_id as string,
+      anchorLocationId,
       anchorSubscriptionId: anchorSubscriptionId as string,
       invoiceId: null,
     }
@@ -607,7 +791,7 @@ async function syncMerchantTierBillingArtifacts(params: {
     .select('id, created_at')
     .eq('subscription_id', anchorSubscriptionId as string)
     .eq('billing_period_start', params.currentPeriodStart)
-    .eq('location_id', anchorProfile.location_id)
+    .eq('location_id', anchorLocationId)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -692,7 +876,7 @@ async function syncMerchantTierBillingArtifacts(params: {
 
   return {
     success: true as const,
-    anchorLocationId: anchorProfile.location_id as string,
+    anchorLocationId,
     anchorSubscriptionId: anchorSubscriptionId as string,
     invoiceId,
   }
@@ -1635,7 +1819,9 @@ export async function upsertMerchantTierSubscription(
   const serviceRole = createServiceRoleClient()
   const { data: existing, error: existingError } = await serviceRole
     .from('merchant_plan_subscriptions')
-    .select('id, plan_id, status')
+    .select(
+      'id, plan_id, status, current_period_start, current_period_end, trial_ends_at',
+    )
     .eq('merchant_id', params.merchantId)
     .order('updated_at', { ascending: false })
     .order('created_at', { ascending: false })
@@ -1725,6 +1911,36 @@ export async function upsertMerchantTierSubscription(
   })
 
   if (!synced.success) {
+    if (existing?.id) {
+      const { error: rollbackError } = await serviceRole
+        .from('merchant_plan_subscriptions')
+        .update({
+          plan_id: existing.plan_id,
+          status: existing.status,
+          current_period_start: existing.current_period_start,
+          current_period_end: existing.current_period_end,
+          trial_ends_at: existing.trial_ends_at,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+      if (rollbackError) {
+        console.error(
+          '[upsertMerchantTierSubscription] rollback error:',
+          rollbackError,
+        )
+      }
+    } else {
+      const { error: rollbackError } = await serviceRole
+        .from('merchant_plan_subscriptions')
+        .delete()
+        .eq('id', result.data.id as string)
+      if (rollbackError) {
+        console.error(
+          '[upsertMerchantTierSubscription] insert rollback error:',
+          rollbackError,
+        )
+      }
+    }
     return { success: false, error: synced.error }
   }
 
@@ -2002,7 +2218,15 @@ export async function getMerchantSubscriptions(
     throw new Error('Failed to load subscription grace periods.')
   }
 
-  const graceBySubscriptionId = new Map(
+  const graceBySubscriptionId = new Map<
+    string,
+    {
+      grace_period_ends_at: string | null
+      grace_reason: string | null
+      grace_extended_at: string | null
+      grace_extended_by: string | null
+    }
+  >(
     (graceRows ?? []).map((row: any) => [row.id, row]),
   )
 
@@ -2113,6 +2337,17 @@ export async function upsertMerchantSubscription(
   }
 
   const supabase = createServerSupabaseClient()
+  const serviceRole = createServiceRoleClient() as any
+  let previousSubscriptionQuery = serviceRole
+    .from('merchant_subscriptions')
+    .select('id, status')
+  previousSubscriptionQuery = params.subscriptionId
+    ? previousSubscriptionQuery.eq('id', params.subscriptionId)
+    : previousSubscriptionQuery
+        .eq('merchant_id', params.merchantId)
+        .eq('location_id', params.locationId)
+  const { data: previousSubscription } = await previousSubscriptionQuery.maybeSingle()
+
   const { data, error } = await supabase.rpc('upsert_merchant_subscription', {
     p_subscription_id: params.subscriptionId ?? null,
     p_merchant_id: params.merchantId,
@@ -2132,8 +2367,29 @@ export async function upsertMerchantSubscription(
     return { success: false, error: error.message }
   }
 
+  const lifecycleResult = await syncValorSubscriptionLifecycle({
+    subscriptionId: data as string,
+    targetStatus: params.status ?? 'active',
+  })
+  if (!lifecycleResult.success) {
+    if (previousSubscription?.status) {
+      await serviceRole
+        .from('merchant_subscriptions')
+        .update({
+          status: previousSubscription.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', data as string)
+    }
+    return {
+      success: false,
+      error:
+        lifecycleResult.error ||
+        'The subscription was not saved because the Valor schedule could not be synchronized.',
+    }
+  }
+
   try {
-    const serviceRole = createServiceRoleClient()
     const [
       subscriptionRecord,
       locationRecord,
@@ -2515,7 +2771,9 @@ export async function getSubscriptionInvoices(
     const serviceRole = createServiceRoleClient() as any
     const { data: retryRows, error: retryError } = await serviceRole
       .from('subscription_invoices')
-      .select('id, next_retry_at, retry_exhausted_at')
+      .select(
+        'id, next_retry_at, retry_exhausted_at, processor, processor_account_id, processor_transaction_id, processor_response',
+      )
       .in(
         'id',
         invoices.map((invoice) => invoice.id),
@@ -2526,7 +2784,17 @@ export async function getSubscriptionInvoices(
       throw new Error('Failed to load invoice retry schedules.')
     }
 
-    const retryByInvoiceId = new Map(
+    const retryByInvoiceId = new Map<
+      string,
+      {
+        next_retry_at: string | null
+        retry_exhausted_at: string | null
+        processor: 'valor' | null
+        processor_account_id: string | null
+        processor_transaction_id: string | null
+        processor_response: Record<string, unknown> | null
+      }
+    >(
       (retryRows ?? []).map((row: any) => [row.id, row]),
     )
     invoices = invoices.map((invoice) => ({
@@ -2535,6 +2803,13 @@ export async function getSubscriptionInvoices(
         retryByInvoiceId.get(invoice.id)?.next_retry_at ?? null,
       retry_exhausted_at:
         retryByInvoiceId.get(invoice.id)?.retry_exhausted_at ?? null,
+      processor: retryByInvoiceId.get(invoice.id)?.processor ?? null,
+      processor_account_id:
+        retryByInvoiceId.get(invoice.id)?.processor_account_id ?? null,
+      processor_transaction_id:
+        retryByInvoiceId.get(invoice.id)?.processor_transaction_id ?? null,
+      processor_response:
+        retryByInvoiceId.get(invoice.id)?.processor_response ?? null,
     }))
   }
 

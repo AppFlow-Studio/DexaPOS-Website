@@ -549,6 +549,7 @@ Single index for active ticket streams and their source trackers.
 
 1. Implementation and staging-closure plan:
 - `docs/features/payments/PLAN-2026-08-25-VALOR-COMPLETE-INTEGRATION.md`
+- `docs/features/payments/QA-2026-08-30-VALOR-WEBSITE-E2E.md`
 
 2. Source ticket:
 - `[Valor] Complete Integration - Online Payments, Invoices, SaaS Monthly Billing`
@@ -559,20 +560,26 @@ Single index for active ticket streams and their source trackers.
   are integrated into the latest preview baseline.
 - Storefront migration/deployment/provisioning and sandbox E2E remain open.
 - Valor merchant-invoice code is complete: location-aware processor resolution,
-  Passage tokenization, matching server charge, provider persistence, NMI
-  fallback, idempotency, and transport-failure cleanup. Sandbox QA remains.
-- Valor SaaS monthly billing remains contract-blocked because Dexa and Valor
-  cannot both own recurrence. The current implementation fails closed when a
-  Valor `subscription` account is selected instead of silently charging NMI;
-  `PAYMENTS_FORCE_NMI=true` remains available as the emergency rollback.
-- The existing NMI subscription lifecycle now has merchant payment-method
-  recovery links, tenant-scoped **Pay now**, retry scheduling and a protected
-  due-invoice worker, single-claim duplicate protection, HQ grace-period
-  controls, and grace-aware suspension.
-- Billing recovery deployment requires
-  `20260830120000_subscription_billing_grace_and_retry_foundation.sql` before
-  deploying the updated/new billing workers. No migration was executed during
+  Passage tokenization, matching server charge, provider persistence,
+  idempotency, and transport-failure cleanup. Sandbox QA remains.
+- Valor SaaS monthly billing code is complete. Valor owns native recurrence and
+  native retry; Dexa owns invoice projection, notifications, grace handling,
+  suspension, restoration, and audit history.
+- New SaaS card setup and recovery are Valor-only. There is no NMI runtime
+  fallback. Historical `nmi_transaction_id` values remain display-only so old
+  transaction records retain their audit trail.
+- SaaS recovery includes Passage/Vault card setup, native subscription
+  create/update/activate/deactivate/delete operations, tenant-scoped **Pay
+  now**, duplicate-safe recurring webhook processing, HQ grace controls, and
+  grace-aware suspension/restoration.
+- Billing recovery deployment requires the existing authorization and
+  grace/retry migrations, followed by
+  `20260830130000_valor_saas_billing_lifecycle.sql`, before deploying the
+  updated billing workers and Valor webhook. No migration was executed during
   the website implementation.
+- Focused Valor/SaaS tests pass (13 tests) and the Next.js production build
+  passes. Staging migration deployment, Edge Function deployment, sandbox
+  recurring-cycle QA, and senior sign-off remain required.
 - Universal paid-feature enforcement and merchant add-on requests remain open:
   the catalog exists and QR has a specific gate, but no canonical cross-product
   entitlement map currently defines every web/POS feature boundary.

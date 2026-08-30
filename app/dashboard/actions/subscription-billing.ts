@@ -81,6 +81,10 @@ export interface MerchantSubscriptionInvoiceViewRecord {
   last_payment_error: string | null
   next_retry_at: string | null
   retry_exhausted_at: string | null
+  processor: 'valor' | null
+  processor_account_id: string | null
+  processor_transaction_id: string | null
+  processor_response: Record<string, unknown> | null
   nmi_transaction_id: string | null
   nmi_response: Record<string, unknown> | null
   line_items: Array<Record<string, unknown>>
@@ -515,7 +519,9 @@ export async function getMerchantSubscriptionOverview(): Promise<{
   if (normalizedInvoices.length > 0) {
     const { data: retryRows, error: retryError } = await (serviceRole as any)
       .from('subscription_invoices')
-      .select('id, next_retry_at, retry_exhausted_at')
+      .select(
+        'id, next_retry_at, retry_exhausted_at, processor, processor_account_id, processor_transaction_id, processor_response',
+      )
       .in(
         'id',
         normalizedInvoices.map((invoice) => invoice.id),
@@ -529,8 +535,28 @@ export async function getMerchantSubscriptionOverview(): Promise<{
       throw new Error('Failed to load invoice retry schedules.')
     }
 
-    const retryByInvoiceId = new Map(
-      (retryRows ?? []).map((row: any) => [row.id, row]),
+    const retryByInvoiceId = new Map<
+      string,
+      {
+        next_retry_at: string | null
+        retry_exhausted_at: string | null
+        processor: 'valor' | null
+        processor_account_id: string | null
+        processor_transaction_id: string | null
+        processor_response: Record<string, unknown> | null
+      }
+    >(
+      (retryRows ?? []).map((row: any) => [
+        row.id,
+        {
+          next_retry_at: row.next_retry_at ?? null,
+          retry_exhausted_at: row.retry_exhausted_at ?? null,
+          processor: row.processor ?? null,
+          processor_account_id: row.processor_account_id ?? null,
+          processor_transaction_id: row.processor_transaction_id ?? null,
+          processor_response: row.processor_response ?? null,
+        },
+      ]),
     )
     normalizedInvoices = normalizedInvoices.map((invoice) => ({
       ...invoice,
@@ -538,6 +564,13 @@ export async function getMerchantSubscriptionOverview(): Promise<{
         retryByInvoiceId.get(invoice.id)?.next_retry_at ?? null,
       retry_exhausted_at:
         retryByInvoiceId.get(invoice.id)?.retry_exhausted_at ?? null,
+      processor: retryByInvoiceId.get(invoice.id)?.processor ?? null,
+      processor_account_id:
+        retryByInvoiceId.get(invoice.id)?.processor_account_id ?? null,
+      processor_transaction_id:
+        retryByInvoiceId.get(invoice.id)?.processor_transaction_id ?? null,
+      processor_response:
+        retryByInvoiceId.get(invoice.id)?.processor_response ?? null,
     }))
   }
 

@@ -77,6 +77,7 @@ export interface ValorAddSubscriptionBody {
 
 export interface ValorSubscriptionResponse extends ValorEnvelope {
   subscription_id?: string | number;
+  txn_id?: string | number;
   [key: string]: unknown;
 }
 
@@ -149,6 +150,10 @@ export interface CreateSubscriptionParams {
   validateOnly?: boolean;
 }
 
+export interface UpdateSubscriptionParams extends CreateSubscriptionParams {
+  subscriptionId: string;
+}
+
 /** Build the Add Subscription body. Pure — exported for testing. */
 export function buildAddSubscriptionBody(
   params: CreateSubscriptionParams
@@ -206,6 +211,114 @@ export function buildAddSubscriptionBody(
   };
 }
 
+export interface ValorUpdateSubscriptionBody {
+  txn_type: "updateSubscription";
+  subscription_id: string;
+  amount: string;
+  custom_fee: string;
+  payment_info: ValorSubscriptionPaymentInfo;
+  surchargeIndicator: typeof SURCHARGE_INDICATOR_CARD_ONLY;
+  recurring_type: string;
+  is_validate_card: string;
+  shipping_customer_name: string;
+  shipping_zip: string;
+  billing_customer_name: string;
+  billing_zip: string;
+  subscription_starts_from: string;
+  charge_until: string;
+  charge_on: string;
+  failure_notification: "1";
+  additional_prompts: Array<{ name: string; value: string }>;
+  invoice_no?: string;
+  email?: string;
+  phone?: string;
+}
+
+export type ValorSubscriptionLifecycleAction =
+  | "activate"
+  | "deactivate"
+  | "delete";
+
+const SUBSCRIPTION_LIFECYCLE_CONTRACT = {
+  activate: {
+    path: "/?activateSub",
+    txnType: "activateSubscription",
+  },
+  deactivate: {
+    path: "/?de-Activate",
+    txnType: "deactivateSubscription",
+  },
+  delete: {
+    path: "/?deleteSub",
+    txnType: "deleteSubscription",
+  },
+} as const;
+
+export interface ValorSubscriptionLifecycleRequest {
+  path: string;
+  body: {
+    txn_type:
+      | "activateSubscription"
+      | "deactivateSubscription"
+      | "deleteSubscription";
+    subscription_id: string;
+  };
+}
+
+/** Build the documented Valor lifecycle endpoint and payload. */
+export function buildSubscriptionLifecycleRequest(
+  subscriptionId: string,
+  action: ValorSubscriptionLifecycleAction
+): ValorSubscriptionLifecycleRequest {
+  const normalizedSubscriptionId = subscriptionId.trim();
+  if (!normalizedSubscriptionId) {
+    throw new RangeError("subscriptionId is required");
+  }
+
+  const contract = SUBSCRIPTION_LIFECYCLE_CONTRACT[action];
+  return {
+    path: contract.path,
+    body: {
+      txn_type: contract.txnType,
+      subscription_id: normalizedSubscriptionId,
+    },
+  };
+}
+
+/** Build Valor's updateSub body for card replacement or past-due recovery. */
+export function buildUpdateSubscriptionBody(
+  params: UpdateSubscriptionParams
+): ValorUpdateSubscriptionBody {
+  const addBody = buildAddSubscriptionBody(params);
+
+  if (!params.subscriptionId.trim()) {
+    throw new RangeError("subscriptionId is required");
+  }
+
+  return {
+    txn_type: "updateSubscription",
+    subscription_id: params.subscriptionId.trim(),
+    amount: addBody.amount,
+    custom_fee: "0.00",
+    payment_info: addBody.payment_info,
+    surchargeIndicator: addBody.surchargeIndicator,
+    recurring_type: addBody.recurring_type,
+    is_validate_card: addBody.is_validate_card,
+    shipping_customer_name: addBody.shipping_customer_name,
+    shipping_zip: addBody.shipping_zip,
+    billing_customer_name: addBody.billing_customer_name,
+    billing_zip: addBody.billing_zip,
+    subscription_starts_from: addBody.subscription_starts_from,
+    charge_until: addBody.charge_until,
+    charge_on: addBody.charge_on,
+    failure_notification: "1",
+    additional_prompts: addBody.additional_prompts,
+    ...(addBody.invoice_no ? { invoice_no: addBody.invoice_no } : {}),
+    ...(addBody.email ? { email: addBody.email } : {}),
+    ...(addBody.phone ? { phone: addBody.phone } : {}),
+  };
+}
+
 export class ValorSubscriptionError extends Error {
   readonly status: number;
   readonly body: ValorEnvelope;
@@ -225,7 +338,7 @@ export async function createSubscription(
   const body = buildAddSubscriptionBody(params);
 
   const result = await postWithBodyCredentials<ValorSubscriptionResponse>(
-    "/?addSubs",
+    "/?addSub",
     body,
     options
   );
@@ -233,7 +346,7 @@ export async function createSubscription(
   if (result.status >= 400 || !isValorSuccess(result.body)) {
     throw new ValorSubscriptionError(
       extractValorError(result.body) ??
-        `Valor addSubs failed (HTTP ${result.status})`,
+        `Valor addSub failed (HTTP ${result.status})`,
       result.status,
       result.body
     );
@@ -244,4 +357,79 @@ export async function createSubscription(
     subscriptionId: id == null ? null : String(id),
     raw: result.body,
   };
+}
+
+/** Replace a subscription payment method; optionally charge the current cycle. */
+export async function updateSubscription(
+  options: ValorRequestOptions,
+  params: UpdateSubscriptionParams
+): Promise<{ transactionId: string | null; raw: ValorSubscriptionResponse }> {
+  const body = buildUpdateSubscriptionBody(params);
+  const result = await postWithBodyCredentials<ValorSubscriptionResponse>(
+    "/?updateSub",
+    body,
+    options
+  );
+
+  if (result.status >= 400 || !isValorSuccess(result.body)) {
+    throw new ValorSubscriptionError(
+      extractValorError(result.body) ??
+        `Valor updateSub failed (HTTP ${result.status})`,
+      result.status,
+      result.body
+    );
+  }
+
+  const transactionId = result.body.txn_id;
+  return {
+    transactionId:
+      transactionId == null ? null : String(transactionId),
+    raw: result.body,
+  };
+}
+
+/** Pause, resume, or permanently cancel a native Valor subscription. */
+export async function changeSubscriptionLifecycle(
+  options: ValorRequestOptions,
+  subscriptionId: string,
+  action: ValorSubscriptionLifecycleAction
+): Promise<{ raw: ValorSubscriptionResponse }> {
+  const request = buildSubscriptionLifecycleRequest(subscriptionId, action);
+  const result = await postWithBodyCredentials<ValorSubscriptionResponse>(
+    request.path,
+    request.body,
+    options
+  );
+
+  if (result.status >= 400 || !isValorSuccess(result.body)) {
+    throw new ValorSubscriptionError(
+      extractValorError(result.body) ??
+        `Valor ${action} subscription failed (HTTP ${result.status})`,
+      result.status,
+      result.body
+    );
+  }
+
+  return { raw: result.body };
+}
+
+export function activateSubscription(
+  options: ValorRequestOptions,
+  subscriptionId: string
+) {
+  return changeSubscriptionLifecycle(options, subscriptionId, "activate");
+}
+
+export function deactivateSubscription(
+  options: ValorRequestOptions,
+  subscriptionId: string
+) {
+  return changeSubscriptionLifecycle(options, subscriptionId, "deactivate");
+}
+
+export function deleteSubscription(
+  options: ValorRequestOptions,
+  subscriptionId: string
+) {
+  return changeSubscriptionLifecycle(options, subscriptionId, "delete");
 }

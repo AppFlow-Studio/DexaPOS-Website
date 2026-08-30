@@ -14,6 +14,9 @@ const migration = read(
 const graceRetryMigration = read(
   'supabase/migrations/20260830120000_subscription_billing_grace_and_retry_foundation.sql',
 )
+const valorLifecycleMigration = read(
+  'supabase/migrations/20260830130000_valor_saas_billing_lifecycle.sql',
+)
 const internalAuth = read(
   'supabase/functions/_shared/internal-billing-auth.ts',
 )
@@ -94,21 +97,38 @@ describe('subscription billing safety and authorization contract', () => {
     )
   })
 
-  it('does not silently charge NMI when Valor owns the SaaS billing rail', () => {
-    expect(merchantActions).toBeTruthy()
+  it('uses Valor for card setup, native recurring schedules, and recovery', () => {
     const merchantBilling = read('app/manage/actions/merchant-billing.ts')
+    const billingSetup = read('components/billing/MerchantBillingSetupCard.tsx')
+    const hqWorkspace = read('components/billing/HqSubscriptionsWorkspace.tsx')
+    const billingAdmin = read('components/billing/SubscriptionBillingAdminCard.tsx')
+    const chargeFunction = protectedBillingFunctions[0]
+    const retryWorker = protectedBillingFunctions[5]
+    const valorWebhook = read('supabase/functions/valor-webhook/index.ts')
+
     expect(merchantBilling).toContain("'subscription'")
+    expect(merchantBilling).toContain('createCustomerProfile')
+    expect(merchantBilling).toContain('attachPaymentProfile')
+    expect(merchantBilling).toContain('updateSubscription')
+    expect(billingSetup).toContain('PassageCheckout')
+    expect(chargeFunction).toContain('createRecurringSubscription')
+    expect(chargeFunction).toContain('updateRecurringSubscription')
+    expect(chargeFunction).toContain(".eq('purpose', 'subscription')")
+    expect(chargeFunction).not.toContain("../_shared/nmi.ts")
+    expect(chargeFunction).toContain('valor_native_schedule_owns_retry')
+    expect(retryWorker).toContain("mode: 'automatic'")
+    expect(valorWebhook).toContain('valor_recurring_webhook_events')
+    expect(valorWebhook).toContain('notifySubscriptionPaymentFailure')
+    expect(valorWebhook).toContain("'generate_subscription_invoice'")
+    expect(valorWebhook).toContain(".eq('processor_transaction_id', transactionId)")
     expect(merchantBilling).toContain(
-      "subscriptionProcessorAccount?.processor === 'valor'",
+      'Cards must be tokenized and stored through the Valor payment form.',
     )
-    expect(protectedBillingFunctions[0]).toContain(
-      "code: 'valor_subscription_contract_pending'",
-    )
-    expect(protectedBillingFunctions[0]).toContain(
-      ".eq('purpose', 'subscription')",
-    )
-    expect(protectedBillingFunctions[0]).toContain(
-      "Deno.env.get('PAYMENTS_FORCE_NMI') === 'true'",
+    expect(hqWorkspace).not.toContain('getMerchantNmiAccountsSummary')
+    expect(billingAdmin).not.toContain('getMerchantNmiAccountsSummary')
+    expect(valorLifecycleMigration).toContain('processor_subscription_id text')
+    expect(valorLifecycleMigration).toContain(
+      'alter table public.valor_recurring_webhook_events enable row level security',
     )
   })
 
@@ -133,7 +153,7 @@ describe('subscription billing safety and authorization contract', () => {
       'idx_subscription_invoices_retry_due',
     )
     expect(chargeFunction).toContain('invoice_claim_conflict')
-    expect(chargeFunction).toContain('resolveSubscriptionRetrySchedule')
+    expect(chargeFunction).toContain('valor_native_schedule_owns_retry')
     expect(suspendFunction).toContain('grace_period_ends_at')
     expect(retryWorker).toContain(".eq('status', 'failed')")
     expect(retryWorker).toContain(".lte('next_retry_at'")

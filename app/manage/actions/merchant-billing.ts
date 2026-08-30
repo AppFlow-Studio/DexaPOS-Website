@@ -5,8 +5,15 @@ import { revalidatePath } from 'next/cache'
 import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { getProcessorWithNmiFallback } from '@/lib/payments'
 import { resolveProcessorAccount } from '@/lib/payments/resolver'
+import { resolveValorEndpoints } from '@/lib/payments/valor/config'
+import {
+  attachPaymentProfile,
+  createCustomerProfile,
+  sanitizeCustomerName,
+} from '@/lib/payments/valor/customerProfileApi'
+import { getClientToken } from '@/lib/payments/valor/saleApi'
+import { updateSubscription } from '@/lib/payments/valor/subscriptionApi'
 
 const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID!
 
@@ -34,6 +41,9 @@ export interface MerchantBillingProfileRecord {
   platform_billing_config_id: string | null
   customer_vault_id: string | null
   vault_initial_transaction_id: string | null
+  processor: 'nmi' | 'valor'
+  processor_account_id: string | null
+  payment_profile_id: string | null
   is_verified: boolean
   verified_at: string | null
   is_primary: boolean
@@ -43,8 +53,11 @@ export interface MerchantBillingProfileRecord {
 
 export interface MerchantBillingCardSetupRecord {
   configured: boolean
+  provider: 'valor'
   label: string | null
-  tokenizationKey: string | null
+  clientToken: string | null
+  epi: string | null
+  isDemo: boolean
 }
 
 export interface SaveMerchantBillingParams {
@@ -56,11 +69,6 @@ export interface SaveMerchantBillingParams {
   routingNumber?: string
   accountNumber?: string
   accountType?: MerchantBankAccountType
-  cardToken?: string
-  cardBrand?: string
-  cardLastFour?: string
-  cardExpMonth?: number
-  cardExpYear?: number
 }
 
 export interface SaveMerchantBillingCardWithVaultParams {
@@ -84,36 +92,32 @@ function digitsOnly(value?: string | null): string {
   return value.replace(/\D/g, '')
 }
 
-function formatNmiDebugError(input: {
-  status?: number
-  responseText?: string
-  body?: unknown
-  text?: string
-}): string {
-  const parts: string[] = []
+interface ValorCredentialRow {
+  valor_appid: string
+  valor_epi: string
+  decrypted_appkey: string
+}
 
-  if (typeof input.status === 'number') {
-    parts.push(`status ${input.status}`)
+async function getValorCredentials(accountId: string): Promise<{
+  appId: string
+  appKey: string
+  epi: string
+} | null> {
+  const supabase = createServiceRoleClient()
+  const { data, error } = await (supabase as any).rpc('get_valor_account_credentials', {
+    p_account_id: accountId,
+  })
+
+  if (error) {
+    console.error('[merchant-billing:getValorCredentials] Error:', error)
+    return null
   }
 
-  if (input.responseText && input.responseText.trim().length > 0) {
-    parts.push(input.responseText.trim())
-  }
-
-  if (input.text && input.text.trim().length > 0) {
-    const normalized = input.text.trim()
-    if (!parts.includes(normalized)) {
-      parts.push(normalized)
-    }
-  } else if (input.body) {
-    try {
-      parts.push(JSON.stringify(input.body))
-    } catch {
-      // ignore json stringify failure
-    }
-  }
-
-  return parts.join(' | ')
+  const row = (Array.isArray(data) ? data[0] : data) as ValorCredentialRow | null
+  const appId = row?.valor_appid?.trim()
+  const appKey = row?.decrypted_appkey?.trim()
+  const epi = row?.valor_epi?.trim()
+  return appId && appKey && epi ? { appId, appKey, epi } : null
 }
 
 async function assertMerchantScopeForCurrentOrg(merchantId: string): Promise<void> {
@@ -173,6 +177,9 @@ export async function getMerchantBillingProfiles(merchantId: string): Promise<Me
         platform_billing_config_id,
         customer_vault_id,
         vault_initial_transaction_id,
+        processor,
+        processor_account_id,
+        payment_profile_id,
         is_verified,
         verified_at,
         is_primary,
@@ -201,9 +208,21 @@ export async function getMerchantBillingProfiles(merchantId: string): Promise<Me
   }) as MerchantBillingProfileRecord[]
 }
 
-export async function getMerchantBillingCardSetup(merchantId: string): Promise<MerchantBillingCardSetupRecord> {
+export async function getMerchantBillingCardSetup(
+  merchantId: string,
+  locationId?: string | null,
+): Promise<MerchantBillingCardSetupRecord> {
+  const unavailable: MerchantBillingCardSetupRecord = {
+    configured: false,
+    provider: 'valor',
+    label: null,
+    clientToken: null,
+    epi: null,
+    isDemo: false,
+  }
+
   if (!merchantId?.trim()) {
-    return { configured: false, label: null, tokenizationKey: null }
+    return unavailable
   }
 
   const { orgId } = await auth()
@@ -213,23 +232,28 @@ export async function getMerchantBillingCardSetup(merchantId: string): Promise<M
     await assertMerchantScopeForCurrentOrg(merchantId)
   }
 
-  const supabase = createServiceRoleClient()
-  const { data, error } = await supabase
-    .from('platform_billing_provider_configs')
-    .select('label, tokenization_key, is_active')
-    .eq('provider', 'nmi')
-    .eq('is_active', true)
-    .maybeSingle()
+  try {
+    const account = await resolveProcessorAccount(merchantId, 'subscription', {
+      locationId: normalizeText(locationId),
+      forceNmi: false,
+    })
+    if (!account || account.processor !== 'valor') return unavailable
 
-  if (error) {
+    const credentials = await getValorCredentials(account.id)
+    if (!credentials) return unavailable
+
+    const token = await getClientToken({ credentials })
+    return {
+      configured: true,
+      provider: 'valor',
+      label: `Valor SaaS - EPI ${credentials.epi.slice(-4)}`,
+      clientToken: token.clientToken,
+      epi: credentials.epi,
+      isDemo: resolveValorEndpoints().isDemo,
+    }
+  } catch (error) {
     console.error('[getMerchantBillingCardSetup] Error:', error)
-    throw new Error('Failed to load billing card setup.')
-  }
-
-  return {
-    configured: Boolean(data?.tokenization_key),
-    label: data?.label ?? null,
-    tokenizationKey: data?.tokenization_key ?? null,
+    return unavailable
   }
 }
 
@@ -255,9 +279,15 @@ export async function saveMerchantBilling(
     return { success: false, error: 'Invalid billing method.' }
   }
 
+  if (billingMethod === 'card') {
+    return {
+      success: false,
+      error: 'Cards must be tokenized and stored through the Valor payment form.',
+    }
+  }
+
   const achAccountDigits = digitsOnly(params.accountNumber)
   const achRoutingDigits = digitsOnly(params.routingNumber)
-  const cardLastFourDigits = digitsOnly(params.cardLastFour)
 
   if (billingMethod === 'ach') {
     if (!normalizeText(params.bankName)) {
@@ -274,24 +304,6 @@ export async function saveMerchantBilling(
     }
     if (!params.accountType || !['checking', 'savings'].includes(params.accountType)) {
       return { success: false, error: 'Account type must be checking or savings.' }
-    }
-  }
-
-  if (billingMethod === 'card') {
-    if (!normalizeText(params.cardToken)) {
-      return { success: false, error: 'Card token is required.' }
-    }
-    if (!normalizeText(params.cardBrand)) {
-      return { success: false, error: 'Card brand is required.' }
-    }
-    if (cardLastFourDigits.length !== 4) {
-      return { success: false, error: 'Card last 4 is required.' }
-    }
-    if (!params.cardExpMonth || params.cardExpMonth < 1 || params.cardExpMonth > 12) {
-      return { success: false, error: 'Card expiration month is invalid.' }
-    }
-    if (!params.cardExpYear || params.cardExpYear < 2000) {
-      return { success: false, error: 'Card expiration year is invalid.' }
     }
   }
 
@@ -317,46 +329,25 @@ export async function saveMerchantBilling(
     return { success: false, error: 'Failed to update existing billing profile.' }
   }
 
-  const insertPayload: any =
-    billingMethod === 'ach'
-      ? {
-          merchant_id: merchantId,
-          location_id: locationId,
-          billing_email: null,
-          billing_method: 'ach' as const,
-          bank_name: normalizeText(params.bankName),
-          account_holder_name: normalizeText(params.accountHolderName),
-          account_number_last_four: achAccountDigits.slice(-4),
-          routing_number_last_four: achRoutingDigits.slice(-4),
-          account_type: params.accountType as MerchantBankAccountType,
-          card_brand: null,
-          card_last_four: null,
-          card_exp_month: null,
-          card_exp_year: null,
-          card_token: null,
-          is_primary: true,
-          is_verified: false,
-          is_active: true,
-        }
-      : {
-          merchant_id: merchantId,
-          location_id: locationId,
-          billing_email: null,
-          billing_method: 'card' as const,
-          bank_name: null,
-          account_holder_name: null,
-          account_number_last_four: null,
-          routing_number_last_four: null,
-          account_type: null,
-          card_brand: normalizeText(params.cardBrand),
-          card_last_four: cardLastFourDigits.slice(-4),
-          card_exp_month: params.cardExpMonth as number,
-          card_exp_year: params.cardExpYear as number,
-          card_token: normalizeText(params.cardToken),
-          is_primary: true,
-          is_verified: false,
-          is_active: true,
-        }
+  const insertPayload = {
+    merchant_id: merchantId,
+    location_id: locationId,
+    billing_email: null,
+    billing_method: 'ach' as const,
+    bank_name: normalizeText(params.bankName),
+    account_holder_name: normalizeText(params.accountHolderName),
+    account_number_last_four: achAccountDigits.slice(-4),
+    routing_number_last_four: achRoutingDigits.slice(-4),
+    account_type: params.accountType as MerchantBankAccountType,
+    card_brand: null,
+    card_last_four: null,
+    card_exp_month: null,
+    card_exp_year: null,
+    card_token: null,
+    is_primary: true,
+    is_verified: false,
+    is_active: true,
+  }
 
   const { error: insertError } = await supabase
     .from('merchant_billing_profiles')
@@ -408,91 +399,152 @@ export async function saveMerchantBillingCardWithVault(
       return { success: false, error: 'Billing email is required.' }
     }
 
-    const [firstName, ...rest] = cardholderName.split(/\s+/)
-    const lastName = rest.join(' ').trim() || 'Cardholder'
-
     const supabase = createServiceRoleClient()
     const subscriptionProcessorAccount = await resolveProcessorAccount(
       merchantId,
       'subscription',
-      { locationId },
+      { locationId, forceNmi: false },
     )
 
-    if (subscriptionProcessorAccount?.processor === 'valor') {
+    if (!subscriptionProcessorAccount || subscriptionProcessorAccount.processor !== 'valor') {
       return {
         success: false,
         error:
-          'Valor SaaS billing is not enabled yet. The recurring schedule and payment-failure webhook contract must be configured before storing this billing card.',
+          'An active primary Valor subscription account must be provisioned before saving a SaaS billing card.',
       }
     }
 
-    const { data: platformCredentialRows, error: platformCredentialError } = await supabase.rpc(
-      'get_platform_billing_provider_secret',
+    const credentials = await getValorCredentials(subscriptionProcessorAccount.id)
+    if (!credentials) {
+      return {
+        success: false,
+        error: 'The selected Valor subscription account is missing valid API credentials.',
+      }
+    }
+
+    const [{ data: merchant, error: merchantError }, { data: location }] = await Promise.all([
+      supabase
+        .from('merchants')
+        .select('name, owner_phone, business_address_line1, business_city, business_state, business_postal_code')
+        .eq('id', merchantId)
+        .single(),
+      locationId
+        ? supabase
+            .from('locations')
+            .select('name, city, state, postal_code, address_line1')
+            .eq('id', locationId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+
+    if (merchantError || !merchant) {
+      return { success: false, error: 'Merchant billing identity could not be loaded.' }
+    }
+
+    const billingZip = digitsOnly(location?.postal_code || merchant.business_postal_code).slice(0, 5)
+    if (billingZip.length !== 5) {
+      return {
+        success: false,
+        error: 'A valid 5-digit billing ZIP is required in the merchant or location business profile.',
+      }
+    }
+
+    const customer = await createCustomerProfile(
+      { credentials },
       {
-        p_provider: 'nmi',
-      },
-    )
-
-    if (platformCredentialError) {
-      console.error('[saveMerchantBillingCardWithVault] Platform credential error:', platformCredentialError)
-      return { success: false, error: 'Failed to load the Dexa Billing NMI configuration.' }
-    }
-
-    const platformCredential = Array.isArray(platformCredentialRows)
-      ? platformCredentialRows[0]
-      : platformCredentialRows
-
-    if (!platformCredential?.config_id || !platformCredential?.decrypted_secret?.trim()) {
-      return {
-        success: false,
-        error: 'Dexa Billing NMI is not configured yet. Ask HQ to set the platform billing keys first.',
-      }
-    }
-
-    // NMI remains the supported recurring card-vault rail. Valor selections are
-    // rejected above until recurrence ownership and webhook handling are defined.
-    const { processor } = await getProcessorWithNmiFallback(
-      merchantId,
-      'subscription',
-      platformCredential.decrypted_secret.trim(),
-    )
-
-    if (!processor.createCustomer) {
-      return {
-        success: false,
-        error: `${processor.name} does not support storing a billing card.`,
-      }
-    }
-
-    const vaultResult = await processor.createCustomer({
-      paymentToken,
-      contact: {
-        firstName,
-        lastName,
+        customerName: cardholderName,
+        companyName: merchant.name,
+        phone: digitsOnly(merchant.owner_phone).slice(-10) || undefined,
         email: billingEmail,
+        address: {
+          customer_name: sanitizeCustomerName(cardholderName),
+          street_name: normalizeText(location?.address_line1 || merchant.business_address_line1) ?? undefined,
+          city: normalizeText(location?.city || merchant.business_city) ?? undefined,
+          state: normalizeText(location?.state || merchant.business_state) ?? undefined,
+          zip: billingZip,
+        },
       },
-    })
+    )
+    const paymentProfile = await attachPaymentProfile(
+      { credentials },
+      {
+        vaultCustomerId: customer.vaultCustomerId,
+        token: paymentToken,
+        cardholderName,
+      },
+    )
 
-    if (!vaultResult.success || !vaultResult.customerVaultId) {
-      const debugMessage = formatNmiDebugError({
-        status: vaultResult.diagnostics?.httpStatus ?? 0,
-        responseText: vaultResult.responseText,
-        body: vaultResult.raw,
-        text: vaultResult.diagnostics?.rawText ?? '',
-      })
+    let subscriptionsQuery = supabase
+      .from('merchant_subscriptions')
+      .select('id, monthly_amount, next_billing_date, processor_subscription_id')
+      .eq('merchant_id', merchantId)
+      .neq('status', 'canceled')
+    if (locationId) subscriptionsQuery = subscriptionsQuery.eq('location_id', locationId)
+    const { data: subscriptions, error: subscriptionsError } = await subscriptionsQuery
+    if (subscriptionsError) {
+      return { success: false, error: 'Failed to load the active subscription schedule.' }
+    }
 
-      console.error('[saveMerchantBillingCardWithVault] Vault create rejected:', {
-        status: vaultResult.diagnostics?.httpStatus ?? 0,
-        responseText: vaultResult.responseText,
-        text: vaultResult.diagnostics?.rawText ?? '',
-        body: vaultResult.raw,
-      })
+    const { data: stagedProfile, error: stagedProfileError } = await supabase
+      .from('merchant_billing_profiles')
+      .insert({
+        merchant_id: merchantId,
+        location_id: locationId,
+        billing_email: billingEmail,
+        billing_method: 'card',
+        account_holder_name: cardholderName,
+        card_brand: cardBrand,
+        card_last_four: cardLastFour.length === 4 ? cardLastFour : null,
+        card_exp_month: null,
+        card_exp_year: null,
+        card_token: null,
+        payment_device_id: null,
+        platform_billing_config_id: null,
+        customer_vault_id: customer.vaultCustomerId,
+        vault_initial_transaction_id: null,
+        processor: 'valor',
+        processor_account_id: subscriptionProcessorAccount.id,
+        payment_profile_id: paymentProfile.paymentProfileId,
+        is_primary: false,
+        is_verified: false,
+        is_active: false,
+      } as any)
+      .select('id')
+      .single()
 
-      return {
-        success: false,
-        error:
-          debugMessage || 'Failed to store the card in NMI Customer Vault.',
+    if (stagedProfileError || !stagedProfile) {
+      console.error('[saveMerchantBillingCardWithVault] Staged insert error:', stagedProfileError)
+      return { success: false, error: stagedProfileError?.message || 'Failed to stage the Valor billing profile.' }
+    }
+
+    try {
+      for (const subscription of subscriptions ?? []) {
+        if (!subscription.processor_subscription_id || Number(subscription.monthly_amount) <= 0) continue
+        const startsOn = new Date(`${subscription.next_billing_date}T12:00:00.000Z`)
+        await updateSubscription(
+          { credentials },
+          {
+            subscriptionId: subscription.processor_subscription_id,
+            money: {
+              amountMinor: Math.round(Number(subscription.monthly_amount) * 100),
+              currency: 'USD',
+            },
+            interval: 'monthly',
+            chargeOn: Math.min(startsOn.getUTCDate(), 30),
+            startsOn,
+            vaultCustomerId: customer.vaultCustomerId,
+            paymentProfileId: paymentProfile.paymentProfileId ?? undefined,
+            billingCustomerName: sanitizeCustomerName(cardholderName),
+            billingZip,
+            email: billingEmail,
+            retryCount: 1,
+            validateOnly: true,
+          },
+        )
       }
+    } catch (scheduleError) {
+      await supabase.from('merchant_billing_profiles').delete().eq('id', stagedProfile.id)
+      throw scheduleError
     }
 
     let deactivateQuery = supabase
@@ -515,32 +567,37 @@ export async function saveMerchantBillingCardWithVault(
       return { success: false, error: 'Failed to update existing billing profile.' }
     }
 
-    const { error: insertError } = await supabase
+    const { error: activateError } = await supabase
       .from('merchant_billing_profiles')
-      .insert({
-        merchant_id: merchantId,
-        location_id: locationId,
-        billing_email: billingEmail,
-        billing_method: 'card',
-        account_holder_name: cardholderName,
-        card_brand: cardBrand,
-        card_last_four: cardLastFour.length === 4 ? cardLastFour : null,
-        card_exp_month: null,
-        card_exp_year: null,
-        card_token: null,
-        payment_device_id: null,
-        platform_billing_config_id: platformCredential.config_id,
-        customer_vault_id: vaultResult.customerVaultId,
-        vault_initial_transaction_id: vaultResult.initialTransactionId,
+      .update({
         is_primary: true,
         is_verified: true,
         verified_at: new Date().toISOString(),
         is_active: true,
+        updated_at: new Date().toISOString(),
       })
+      .eq('id', stagedProfile.id)
 
-    if (insertError) {
-      console.error('[saveMerchantBillingCardWithVault] Insert error:', insertError)
-      return { success: false, error: insertError.message }
+    if (activateError) {
+      console.error('[saveMerchantBillingCardWithVault] Activation error:', activateError)
+      return { success: false, error: activateError.message }
+    }
+
+    let bindSubscriptions = supabase
+      .from('merchant_subscriptions')
+      .update({
+        billing_profile_id: stagedProfile.id,
+        processor: 'valor',
+        processor_account_id: subscriptionProcessorAccount.id,
+        updated_at: new Date().toISOString(),
+      } as any)
+      .eq('merchant_id', merchantId)
+      .neq('status', 'canceled')
+    if (locationId) bindSubscriptions = bindSubscriptions.eq('location_id', locationId)
+    const { error: bindingError } = await bindSubscriptions
+    if (bindingError) {
+      console.error('[saveMerchantBillingCardWithVault] Subscription binding error:', bindingError)
+      return { success: false, error: 'Valor card was saved, but the subscription binding failed.' }
     }
 
     revalidatePath('/dashboard/settings/billing')
@@ -554,7 +611,7 @@ export async function saveMerchantBillingCardWithVault(
       success: false,
       error:
         error?.message ||
-        'Failed to store the card in NMI Customer Vault.',
+        'Failed to store the card in the Valor vault.',
     }
   }
 }

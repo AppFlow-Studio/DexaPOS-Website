@@ -1149,7 +1149,11 @@ export function MerchantSubscriptionOverviewCard({
                 <TableBody>
                   {invoices.map((invoice) => {
                     const activityDate = invoice.paid_at || invoice.last_payment_attempt_at || invoice.created_at
-                    const reference = invoice.nmi_transaction_id || invoice.last_payment_error || '-'
+                    const reference =
+                      invoice.processor_transaction_id ||
+                      invoice.nmi_transaction_id ||
+                      invoice.last_payment_error ||
+                      '-'
 
                     return (
                       <TableRow key={`merchant-txn-${invoice.id}`} className="border-0">
