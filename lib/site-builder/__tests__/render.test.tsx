@@ -147,10 +147,21 @@ describe("renderer architecture", () => {
    * island for the delegated click listener, which is the whole client-side
    * footprint of marketing pixels.
    *
+   * `reservations/` joined it for the same structural reason. Reservations is
+   * the first section that genuinely needs client JavaScript — a grid that
+   * repopulates when the party size changes, and a countdown against a real
+   * five-minute hold, cannot be a native form the way `PublicForm` is. So
+   * `ReservationsSection` (a server component, in the render graph) emits an
+   * empty `<div data-dexa-reservations>` and `ReservationRuntime` (mounted by
+   * the public route, beside the page) portals the widget into it. The section
+   * never imports the widget, which is what keeps `renderToStaticMarkup`
+   * working in the canvas — and the next test proves it rather than trusting
+   * it.
+   *
    * The carve-out is only safe while nothing in the render graph reaches in
    * here, which is what the next test asserts rather than assumes.
    */
-  const PUBLIC_ROUTE_ONLY_DIRS = new Set(["tracking"]);
+  const PUBLIC_ROUTE_ONLY_DIRS = new Set(["tracking", "reservations"]);
 
   it("has no client components anywhere in the render graph", () => {
     const renderRoot = join(process.cwd(), "components/site-builder");

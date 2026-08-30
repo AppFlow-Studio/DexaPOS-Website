@@ -11,7 +11,11 @@ import { collectBindings } from "@/lib/site-builder/bindings/collect";
 import { resolveBindings } from "@/lib/site-builder/bindings/resolve";
 import type { RenderMode } from "@/lib/site-builder/render-context";
 import { getResolverSources } from "@/lib/site-builder/request-scope";
-import { buildRenderContext, loadSiteContext } from "@/lib/site-builder/site-context";
+import {
+  buildRenderContext,
+  loadSiteContext,
+  resolveEditorPricingLocation,
+} from "@/lib/site-builder/site-context";
 
 /**
  * Full-page preview of a merchant's own draft.
@@ -109,13 +113,28 @@ export default async function WebsitePreviewPage({
   const mode: RenderMode = params.mode === "builder" ? "builder" : "preview";
 
   const sources = getResolverSources(site.deliveryPricingEnabled);
+
+  /**
+   * What this page is priced against — the page's own scope, the brand default,
+   * or nothing. Through the shared rule, because a preview that prices a page
+   * differently from the live site is worse than no preview: it is a preview
+   * that lies.
+   */
+  const pricingLocationId = resolveEditorPricingLocation(site, page.location_id);
+
   const { map: resolved, queryCount } = await resolveBindings(
     collectBindings(doc, { includeHidden: mode === "builder" }),
-    { merchantId: site.merchantId, locationId: site.locationId },
+    {
+      merchantId: site.merchantId,
+      // Borrowed on an unscoped page for names and photographs; `scoped` is what
+      // governs prices and availability. Identical to the public renderer.
+      locationId: pricingLocationId ?? site.locationId,
+      scoped: pricingLocationId !== null,
+    },
     sources,
   );
 
-  const ctx = buildRenderContext(site, mode);
+  const ctx = buildRenderContext(site, mode, undefined, page.location_id);
 
   return (
     <>

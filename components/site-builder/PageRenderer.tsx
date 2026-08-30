@@ -98,6 +98,7 @@ export function SiteChrome({
  * a second typeface without touching a single renderer.
  */
 const HEADING_STYLES = `
+.site-shell { overflow-wrap: anywhere; }
 .site-shell h1, .site-shell h2, .site-shell h3,
 .site-shell h4, .site-shell h5, .site-shell h6,
 .site-shell .site-prose h2, .site-shell .site-prose h3, .site-shell .site-prose h4 {

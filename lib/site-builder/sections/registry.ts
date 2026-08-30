@@ -39,6 +39,8 @@ import {
   PROVIDER_SPECS,
   reviewsDefaults,
   reviewsSchema,
+  reservationsDefaults,
+  reservationsSchema,
   scrollingBannerDefaults,
   scrollingBannerSchema,
   videoDefaults,
@@ -340,6 +342,36 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     liveFields: [],
   },
 
+  reservations: {
+    kind: "reservations",
+    label: "Reservations",
+    description: "Let guests book a table, on your own site.",
+    icon: "CalendarCheck",
+    zone: "body",
+    category: "visit",
+    titleField: "title",
+    // Not a singleton: a long page can reasonably offer booking near the top
+    // and again at the bottom. They read the same live availability, so there
+    // is no state to diverge.
+    singleton: false,
+    addable: true,
+    // Gated on the merchant turning Reservations on. `resolveReservationMode`
+    // decides whether that means linking out or booking here; this gate only
+    // asks whether the capability exists at all.
+    requiresFeature: "reservations",
+    editable: true,
+    deletable: true,
+    movable: true,
+    styleControls: ["background", "textTone"],
+    schema: reservationsSchema,
+    defaults: () => reservationsDefaults(),
+    // Availability is fetched live by the widget, not resolved through the
+    // binding system: a binding is snapshotted at publish, and a snapshotted
+    // table grid is a grid that sells tables somebody already took.
+    bindingTypes: [],
+    liveFields: [],
+  },
+
   reviews: {
     kind: "reviews",
     label: "Reviews",
@@ -403,6 +435,19 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     hiddenFields: () => ["provider"],
   },
 
+  /**
+   * Retired from the catalogue, not deleted.
+   *
+   * `addable: false` here does not mean "the system places it" the way it does
+   * for header, hero and footer — it means merchants no longer insert one. The
+   * entry stays because a page that already carries a PDF section has to keep
+   * rendering it, and its owner has to keep being able to edit or remove it: a
+   * kind the registry has forgotten is a section that cannot be deleted.
+   *
+   * It was previously offered and permanently greyed out with an `unavailable`
+   * reason, which meant every merchant met a row for something none of them
+   * could ever have. Absent says the same thing and costs no reading.
+   */
   pdf: {
     kind: "pdf",
     label: "PDF",
@@ -412,8 +457,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     category: "extras",
     titleField: "title",
     singleton: false,
-    addable: true,
-    unavailable: "Document uploads are not available yet.",
+    addable: false,
     editable: true,
     deletable: true,
     movable: true,

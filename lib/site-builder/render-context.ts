@@ -10,6 +10,7 @@ import type { ResolvedMap } from "./bindings/resolved";
 import { mutedOn, readableOn, tintOn } from "./color";
 import type { RenderEvent } from "./events/event-map";
 import type { ResolvedForm } from "./forms/form-map";
+import { EMPTY_RESERVATIONS_CONFIG, type ReservationsConfig } from "./reservations/protocol";
 import type { SiteBrand, SiteFeatures } from "./site-settings";
 import { DEFAULT_BRAND, DEFAULT_FEATURES } from "./site-settings";
 import type { SectionKind } from "./sections/kinds";
@@ -130,6 +131,22 @@ export interface RenderSite {
    * rather than testing this field directly.
    */
   locationId: string | null;
+  /**
+   * The branch this PAGE is about, or null on a brand page.
+   *
+   * **Not the same question as `locationId`, and the two must never be conflated
+   * again.** `locationId` is the *pricing* scope: it falls back to the brand's
+   * default branch, because a brand page still has to decide whose prices to
+   * show. This one is `site_pages.location_id` and nothing else — it is only set
+   * when the merchant genuinely built a page about one restaurant.
+   *
+   * Booking reads THIS. It used to read `locationId`, which meant a merchant
+   * answering a question about prices silently answered a different question —
+   * which restaurant a guest is eating at — and a two-branch site booked every
+   * guest into the pricing default without ever naming it. See
+   * PLAN-2026-08-29-RESERVATIONS-BRANCH-CHOICE.
+   */
+  pageLocationId: string | null;
   slug: string;
   name: string;
   logoUrl: string | null;
@@ -178,6 +195,23 @@ export interface RenderSite {
    * decides whether, the brand decides what.
    */
   brand: SiteBrand;
+  /**
+   * Branches a guest may book, with the settings each one's form is shaped by.
+   *
+   * **Empty everywhere except a live public render**, and empty there too unless
+   * reservations resolve to `native`. The builder and the preview draw a static
+   * mock instead — not for performance, but because both render against a *real*
+   * restaurant, and a live widget would let a merchant laying out their page
+   * place genuine holds on genuine tables during service.
+   *
+   * It lives on the context rather than in the section's props because
+   * `ReservationsSection` is a server component that must never be `async`: the
+   * canvas renders the section graph through `renderToStaticMarkup`, which
+   * cannot await. Loading it here — in `buildPublicRenderContext`, which already
+   * is async — is what lets the section stay synchronous and still know which
+   * branches exist. See `reservations/config.ts`.
+   */
+  reservations: ReservationsConfig;
 }
 
 export interface RenderContext {
@@ -287,8 +321,11 @@ export interface SectionRenderProps<K extends SectionKind = SectionKind> {
  * `RenderSite` minus the two settings blocks, which every caller would
  * otherwise have to spell out in full to say "this merchant has none".
  */
-export type RenderSiteInput = Omit<RenderSite, "features" | "brand"> &
-  Partial<Pick<RenderSite, "features" | "brand">>;
+export type RenderSiteInput = Omit<
+  RenderSite,
+  "features" | "brand" | "reservations" | "pageLocationId"
+> &
+  Partial<Pick<RenderSite, "features" | "brand" | "reservations" | "pageLocationId">>;
 
 export function createRenderContext(
   overrides: Partial<Omit<RenderContext, "site">> & { site: RenderSiteInput },
@@ -309,7 +346,18 @@ export function createRenderContext(
     // fixture that has never heard of brand settings renders exactly as it did
     // before they existed, which is what keeps this addition invisible to the
     // 400-odd tests that predate it.
-    site: { features: DEFAULT_FEATURES, brand: DEFAULT_BRAND, ...site },
+    // `reservations` defaults empty for the same reason: a fixture, the builder
+    // canvas and the preview all render the static mock, and only a live public
+    // render with native bookings on ever fills it in.
+    site: {
+      features: DEFAULT_FEATURES,
+      brand: DEFAULT_BRAND,
+      reservations: EMPTY_RESERVATIONS_CONFIG,
+      // A fixture that says nothing about pages is a brand page: no branch of
+      // its own, so booking asks rather than assuming.
+      pageLocationId: null,
+      ...site,
+    },
   };
 }
 

@@ -153,10 +153,18 @@ export default function BuilderShell({
     clearNotice();
   }, [notice, clearNotice]);
 
-  useServerRender(doc, locationId, mode, canvasRefreshRequest, setCanvas, setRendering);
+  useServerRender(
+    doc,
+    locationId,
+    page.locationId,
+    mode,
+    canvasRefreshRequest,
+    setCanvas,
+    setRendering,
+  );
   useAutosave(store, resolvedAdapter);
   useSaveFailureToast(store);
-  useMenuCatalog(store, locationId, !!initialCatalog);
+  useMenuCatalog(store, locationId, page.locationId, !!initialCatalog);
   useUnsavedChangesWarning(store);
   useEscapeClosesDrawer(store);
 
@@ -197,7 +205,10 @@ export default function BuilderShell({
  */
 function useServerRender(
   doc: PageDocument,
+  /** The storefront being edited — which restaurant's data to read. */
   locationId: string,
+  /** The page's own scope — what decides whether prices may appear on it. */
+  pageLocationId: string | null,
   /**
    * Build or Preview. Part of what the *server* renders, not just chrome: the
    * toggle used to hide the gutter controls and leave the page itself in
@@ -244,7 +255,7 @@ function useServerRender(
     const timer = setTimeout(async () => {
       setRendering(true);
       try {
-        const node = await renderCanvas(snapshot, locationId, mode);
+        const node = await renderCanvas(snapshot, locationId, mode, pageLocationId);
         if (token !== latest.current) return;
 
         /**
@@ -276,7 +287,7 @@ function useServerRender(
     return () => clearTimeout(timer);
     // `mode` is safe to depend on here — it changes only on a click. Anything
     // with a fresh identity per render is not; see the loop documented above.
-  }, [doc, locationId, mode, canvasRefreshRequest, setCanvas, setRendering]);
+  }, [doc, locationId, pageLocationId, mode, canvasRefreshRequest, setCanvas, setRendering]);
 }
 
 /**
@@ -289,13 +300,18 @@ function useServerRender(
 function useMenuCatalog(
   store: ReturnType<typeof createBuilderStore>,
   locationId: string,
+  /**
+   * The page's scope. Without it the picker asked for a catalog priced against
+   * the storefront and showed money beside a canvas that was withholding it.
+   */
+  pageLocationId: string | null,
   alreadyLoaded: boolean,
 ) {
   useEffect(() => {
     if (alreadyLoaded) return;
     let cancelled = false;
 
-    loadMenuCatalog(locationId)
+    loadMenuCatalog(locationId, pageLocationId)
       .then((catalog) => {
         if (cancelled) return;
         store.getState().setCatalog(catalog.items, catalog.showPrices, catalog.error);
@@ -309,7 +325,7 @@ function useMenuCatalog(
     return () => {
       cancelled = true;
     };
-  }, [store, locationId, alreadyLoaded]);
+  }, [store, locationId, pageLocationId, alreadyLoaded]);
 }
 
 /**

@@ -7,7 +7,6 @@ import { LoadDraft } from "@/app/dashboard/website/actions/draft";
 import { GetPublishedDocument } from "@/app/dashboard/website/actions/publish";
 import { EnsureNavSeeded, GetOrCreateSite } from "@/app/dashboard/website/actions/site";
 import BuilderShell from "@/components/site-builder/builder/BuilderShell";
-import type { ResolverSources } from "@/lib/site-builder/bindings/resolve";
 import type { SitePageSummary } from "@/lib/site-builder/db-types";
 import { getResolverSources } from "@/lib/site-builder/request-scope";
 import {
@@ -15,7 +14,7 @@ import {
   loadSampleMenuItemIds,
   loadSiteContext,
 } from "@/lib/site-builder/site-context";
-import type { MenuCatalog } from "../menu-catalog";
+import { loadMenuCatalog } from "../menu-catalog";
 import { renderCanvas } from "../render-canvas";
 
 /**
@@ -53,12 +52,24 @@ export default async function EditorRoute({
   // instance, so the menu is fetched once per page open rather than twice.
   const sources = getResolverSources(site.deliveryPricingEnabled);
 
-  // Started here, awaited last. The menu is by far the slowest query on this
-  // route — ~490 ms against a ~160 ms round-trip floor — and nothing between
-  // here and the canvas depends on it, so it overlaps the site, page and draft
-  // lookups instead of queueing behind them. `loadInitialCatalog` never
-  // rejects, so the early returns below cannot orphan this promise.
-  const catalogPromise = loadInitialCatalog(sources, site);
+  /**
+   * Warms the menu, which is by far the slowest query on this route — ~490 ms
+   * against a ~160 ms round-trip floor.
+   *
+   * Started here and never awaited: `fetchMenuItems` memoises per
+   * `merchantId:locationId` for the request, so this overlaps the site, page and
+   * draft lookups and the real catalog read below then costs nothing. It used to
+   * build the catalog itself, with its own copy of the mapping, the sorting and
+   * a hardcoded `showPrices: true` — which is precisely how the dish picker came
+   * to quote prices on pages that withhold them.
+   *
+   * The `catch` is not optional: an early `return` below would otherwise leave
+   * a rejected promise with no handler attached. The rejection stays in the memo
+   * and `loadMenuCatalog` reports it properly.
+   */
+  void sources
+    .fetchMenuItems({ merchantId: site.merchantId, locationId: site.locationId, scoped: true })
+    .catch(() => {});
 
   const websiteResult = await GetOrCreateSite(orgId, site.locationId);
   if (!websiteResult.data) {
@@ -122,7 +133,11 @@ export default async function EditorRoute({
   }
 
   const doc = draft.data.document;
-  const initialCatalog = await catalogPromise;
+
+  // Read only now that the page is known: whether the picker may show money
+  // depends on what the page is about, and that answer comes from the same
+  // helper the canvas uses rather than a second copy of the rule.
+  const initialCatalog = await loadMenuCatalog(site.locationId, page.location_id);
 
   /**
    * The navigation, seeded from published pages the first time a site with an
@@ -144,7 +159,7 @@ export default async function EditorRoute({
     <BuilderShell
       key={page.id}
       initialDoc={doc}
-      initialCanvas={await renderCanvas(doc, site.locationId)}
+      initialCanvas={await renderCanvas(doc, site.locationId, "build", page.location_id)}
       initialCatalog={initialCatalog}
       initialRevision={draft.data.revision}
       clerkOrgId={orgId}
@@ -156,10 +171,15 @@ export default async function EditorRoute({
         custom text colour against are the colours it will actually be rendered
         on, not a second opinion about them.
       */
-      theme={buildRenderContext(site, "builder").theme}
+      theme={buildRenderContext(site, "builder", undefined, page.location_id).theme}
       page={{
         id: page.id,
         title: page.title,
+        // What the page is ABOUT — null on a brand page. The shell re-renders
+        // the canvas and loads the dish picker from the browser, and both of
+        // those decide whether money may appear; without this they would fall
+        // back to the storefront and disagree with the first render above.
+        locationId: page.location_id,
         path: page.path,
         isHome: page.is_home,
         status: page.status,
@@ -180,41 +200,6 @@ export default async function EditorRoute({
       publishedAt={published.data?.publishedAt ?? null}
     />
   );
-}
-
-/**
- * The dish list the picker reads.
- *
- * **Never rejects.** It is started before the page and draft lookups so that the
- * menu round trip overlaps them, which means it may be in flight while this
- * route takes an early `return`; a rejection with no handler attached yet would
- * surface as an unhandled rejection rather than as the empty catalog the UI
- * already knows how to explain.
- */
-function loadInitialCatalog(
-  sources: ResolverSources,
-  site: { merchantId: string; locationId: string },
-): Promise<MenuCatalog> {
-  return sources
-    .fetchMenuItems({ merchantId: site.merchantId, locationId: site.locationId, scoped: true })
-    .then((items) => ({
-      items: items
-        .map((item) => ({
-          id: item.id,
-          name: item.name,
-          description: item.description,
-          price: item.price,
-          image: item.image,
-          available: item.available,
-          isPopular: item.isPopular,
-        }))
-        .sort((a, b) => Number(b.available) - Number(a.available) || a.name.localeCompare(b.name)),
-      showPrices: true,
-    }))
-    .catch((error) => {
-      console.error("[site-builder] initial menu catalog failed:", error);
-      return { items: [], showPrices: false, error: "Could not load your menu." };
-    });
 }
 
 function NoStorefront() {

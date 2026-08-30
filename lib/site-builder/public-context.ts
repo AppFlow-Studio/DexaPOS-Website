@@ -7,10 +7,14 @@ import {
   type RenderContext,
   type ThemeTokens,
 } from "./render-context";
+import { loadReservationsConfig } from "./reservations/config";
+import { EMPTY_RESERVATIONS_CONFIG } from "./reservations/protocol";
 import type { RenderDecision } from "./resolve-render-mode";
 import {
   readSiteSettings,
   resolvePricingLocation,
+  resolveReservationApproval,
+  resolveReservationMode,
   siteDisplayName,
   type SiteBrand,
   type SiteFeatures,
@@ -114,6 +118,26 @@ export async function buildPublicRenderContext(
   });
 
   /**
+   * Bookable branches, and only when there is something to book.
+   *
+   * Gated on the resolved mode so a site without reservations never pays for the
+   * round trip — which is most sites. `loadReservationsConfig` goes through a
+   * service-role RPC because every reservation table is RLS'd to merchant admins
+   * and this render is anon; it never throws, so a reservations outage degrades
+   * the booking section to a phone number rather than blanking the page.
+   */
+  const reservations =
+    resolveReservationMode({ features, brand }) === "native"
+      ? {
+          ...(await loadReservationsConfig(decision.siteId)),
+          // Merged here rather than fetched by the RPC: it is one site-wide
+          // value and that RPC returns one row per branch. `brand` is already
+          // in scope, so this costs nothing and cannot drift between branches.
+          approvalMode: resolveReservationApproval({ brand }),
+        }
+      : EMPTY_RESERVATIONS_CONFIG;
+
+  /**
    * The location this page is *priced* against.
    *
    * A page about one restaurant always answers for itself. A brand page falls
@@ -145,6 +169,10 @@ export async function buildPublicRenderContext(
       // is what withholds prices — see `resolvePricingLocation`, which is the
       // single place that rule is decided.
       locationId: pricingLocationId,
+      // The page's own branch, WITHOUT the brand-default fallback above.
+      // Booking reads this rather than the pricing scope, so a merchant's
+      // pricing default can no longer decide which restaurant a guest eats at.
+      pageLocationId: decision.locationId,
       slug: branding?.slug ?? "",
       /**
        * The site's own name, in the one order that is correct for a site that
@@ -177,6 +205,7 @@ export async function buildPublicRenderContext(
       pricingDisclosureText: branding?.pricingDisclosureText ?? null,
       features,
       brand,
+      reservations,
     },
     theme: resolveTheme(
       pickThemeTokens(decision.theme),

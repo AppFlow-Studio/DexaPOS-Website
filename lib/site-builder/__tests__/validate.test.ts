@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { addSection, updateSectionProps, updateSeo } from "../mutations";
-import { createEmptyPage, createStarterPage, type PageDocument } from "../page-document";
+import {
+  createEmptyPage,
+  createSection,
+  createStarterPage,
+  type PageDocument,
+} from "../page-document";
 import { SECTION_REGISTRY } from "../sections/registry";
 import { validatePage } from "../validate";
 
@@ -169,7 +174,7 @@ describe("validatePage", () => {
     expect(codes(result.errors)).toContain("invalid_section_props");
   });
 
-  it.each(["form", "pdf", "integrations"] as const)(
+  it.each(["form", "integrations"] as const)(
     "blocks an incomplete visible %s section",
     (kind) => {
       const added = addSection(starter(), kind);
@@ -179,6 +184,21 @@ describe("validatePage", () => {
       expect(codes(result.errors)).toContain("incomplete_section");
     },
   );
+
+  /**
+   * PDF is no longer offered in the Add Section catalogue, so it cannot be put
+   * on a page through `addSection` any more — but pages published while it was
+   * offered still carry one, and an empty one still has to block a republish.
+   * Built directly here for exactly that reason.
+   */
+  it("blocks an incomplete visible pdf section left over from when it was offered", () => {
+    const doc = starter();
+    const result = validatePage({
+      ...doc,
+      sections: [...doc.sections, createSection("pdf")],
+    });
+    expect(codes(result.errors)).toContain("incomplete_section");
+  });
 
   it("allows an empty video section to publish and warns that it will be omitted", () => {
     const added = addSection(starter(), "video");

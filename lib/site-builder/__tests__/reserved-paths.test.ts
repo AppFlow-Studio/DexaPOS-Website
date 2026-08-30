@@ -129,6 +129,20 @@ describe("RESERVED_PATH_SEGMENTS", () => {
     }
   });
 
+  /**
+   * `r` is the guest reservation manage route. `reservations` deliberately is
+   * NOT reserved — that is the merchant's own booking page, auto-created by
+   * `SyncReservationsPage`, and reserving it would make provisioning refuse the
+   * very path it provisions.
+   */
+  it("reserves the guest manage route without reserving the merchant's own page", () => {
+    expect(RESERVED_PATH_SEGMENTS).toContain("r");
+    expect(RESERVED_PATH_SEGMENTS).not.toContain("reservations");
+    expect(checkPagePath("reservations").ok).toBe(true);
+    expect(checkPagePath("r").ok).toBe(false);
+    expect(checkPagePath("r/abc").ok).toBe(false);
+  });
+
   it("is lowercase throughout, since matching lowercases the input", () => {
     for (const segment of RESERVED_PATH_SEGMENTS) {
       expect(segment).toBe(segment.toLowerCase());

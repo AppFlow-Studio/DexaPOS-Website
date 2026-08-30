@@ -228,6 +228,14 @@ const navMain = [
             url: "/dashboard/website/forms",
           },
           {
+            // When each restaurant seats guests. Separate from Settings, which
+            // only answers whether the business takes bookings on its own site
+            // at all — this is per branch, and a merchant with four has four
+            // different answers.
+            title: "Reservations",
+            url: "/dashboard/website/reservations",
+          },
+          {
             // NOT "Analytics" — it shows no data, and a merchant who clicks
             // Analytics expecting visitor numbers files a support ticket.
             title: "Tracking",

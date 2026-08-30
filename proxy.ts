@@ -2,6 +2,7 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+import { isPublicStorefrontApiPath } from '@/lib/site-builder/public-api-paths'
 import { SITE_DOMAIN, brandSubdomainFromHost } from '@/lib/site-builder/public-url'
 
 const isInternalTeamRoutes = createRouteMatcher(['/manage(.*)'])
@@ -33,8 +34,34 @@ const isCmsAdminRoute = createRouteMatcher(['/admin(.*)'])
 // functions) that authenticate via the x-internal-secret header (401 on mismatch)
 // and have NO Clerk session — so they must skip the middleware sign-in redirect,
 // which would otherwise bounce them to /sign-in and silently break the callers
-// (e.g. the snooze → OrderOut resync). All three own their own authorization.
-const isPublicApiRoute = createRouteMatcher(['/api/contact(.*)', '/api/cms(.*)', '/api/internal(.*)'])
+// (e.g. the snooze → OrderOut resync). All of these own their own authorization.
+//
+// THE THREE BELOW ARE CALLED BY STRANGERS, and every one of them was gated by
+// this middleware until browser QA caught it. `/api(.*)` is in
+// `isKnownAppRoute`, so an API route that is not named here is redirected to
+// /sign-in — which for an anonymous caller is not an error page, it is a 307 to
+// a login form. The endpoints looked correct in isolation and were unreachable
+// in production:
+//
+//   site-reservations — the whole public booking flow (availability, hold,
+//     book, cancel). Every one authenticates by rate limit, honeypot and a
+//     service-role SECURITY DEFINER call; none of them wants a Clerk session,
+//     and a restaurant guest does not have one.
+//   site-forms/submit — a published site's contact form, posted by visitors.
+//   marketing/unsubscribe — the link at the bottom of a marketing email.
+//     Demanding a login to unsubscribe is broken twice over: it does not work,
+//     and "one click to unsubscribe" is a legal requirement, not a nicety.
+//
+// A new public endpoint MUST be added here, and the way to find out is to call
+// it signed out. Signed in, every one of these returns 200 and looks fine.
+const isPublicApiRoute = createRouteMatcher([
+  '/api/contact(.*)',
+  '/api/cms(.*)',
+  '/api/internal(.*)',
+  '/api/site-reservations(.*)',
+  '/api/site-forms(.*)',
+  '/api/marketing/unsubscribe(.*)',
+])
 // The set of gated / app-owned route prefixes. Anything NOT in this set (and not
 // already handled as public above) is treated as public marketing so the
 // (marketing) [...slug] CMS catch-all can serve pages published at arbitrary
@@ -192,6 +219,16 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
   if (storeMatch?.slug) {
     if (!storeMatch.isActive) {
       return notFoundResponse();
+    }
+
+    // The storefront's own public API, which must reach its route handler
+    // rather than the storefront's page tree. Rewriting these turned every
+    // booking request and every contact-form submission on a subdomain or a
+    // custom domain into a 404 HTML page — see `isPublicStorefrontApiPath` for
+    // why it is these two prefixes and not all of `/api`. Checked AFTER the
+    // is-active gate above, so a suspended store's endpoints stay dark too.
+    if (isPublicStorefrontApiPath(req.nextUrl.pathname)) {
+      return NextResponse.next();
     }
 
     const { slug } = storeMatch;

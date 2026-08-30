@@ -7,6 +7,8 @@ import { createBuilderStore, type BuilderInit, type EditorPage } from "../store"
 const PAGE: EditorPage = {
   id: "page_1",
   title: "Home",
+  // A brand page, which is what a home page is.
+  locationId: null,
   path: "",
   isHome: true,
   status: "draft",
@@ -21,6 +23,25 @@ function makeStore(overrides: Partial<BuilderInit> = {}) {
     ...overrides,
   });
 }
+
+describe("preview device state", () => {
+  it("starts on desktop and changes viewport without changing page state", () => {
+    const store = makeStore({ revision: 7 });
+    const before = store.getState();
+
+    expect(before.previewDevice).toBe("desktop");
+    store.getState().setPreviewDevice("mobile");
+
+    const after = store.getState();
+    expect(after.previewDevice).toBe("mobile");
+    expect(after.doc).toBe(before.doc);
+    expect(after.revision).toBe(7);
+    expect(after.editGeneration).toBe(0);
+    expect(after.saveState).toBe("idle");
+    expect(after.past).toBe(before.past);
+    expect(after.future).toBe(before.future);
+  });
+});
 
 describe("builder save acknowledgement", () => {
   it("never marks an edit made during a save as saved", () => {

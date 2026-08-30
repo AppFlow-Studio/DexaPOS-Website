@@ -76,7 +76,8 @@ export const FEATURE_DESCRIPTIONS: Record<SiteFeature, string> = {
   reviews: "Show what guests have said about you, in their own words.",
   rewards: "Tell guests about your loyalty program.",
   giftCards: "Let guests buy a gift card from your website.",
-  reservations: "Let guests book a table, and add a Book a table button to your header.",
+  reservations:
+    "Let guests book a table — on your own site, or through the provider you already use.",
 };
 
 /**
@@ -106,6 +107,28 @@ export const UNAVAILABLE_FEATURES: Partial<Record<SiteFeature, string>> = {
 /** The toggles a merchant may actually set today. */
 export const AVAILABLE_SITE_FEATURES: readonly SiteFeature[] = SITE_FEATURES.filter(
   (feature) => !UNAVAILABLE_FEATURES[feature],
+);
+
+/**
+ * Capabilities that are real, but switched on somewhere other than the Features
+ * card — because the switch is the smallest part of setting them up.
+ *
+ * Reservations is the whole reason this exists. Its on/off used to sit here
+ * while the branch switches, service times, closed dates and booking policy sat
+ * on their own screen, so a merchant met two different on/off controls in two
+ * different places and could not tell which one was in charge. The switch now
+ * lives at the top of that screen, directly above the branches it governs.
+ *
+ * The feature is still stored in `features` exactly as before — this list moves
+ * a control, not a column.
+ */
+export const FEATURES_WITH_OWN_SCREEN: Partial<Record<SiteFeature, string>> = {
+  reservations: "/dashboard/website/reservations",
+};
+
+/** The toggles the Features card itself renders. */
+export const SETTINGS_CARD_FEATURES: readonly SiteFeature[] = AVAILABLE_SITE_FEATURES.filter(
+  (feature) => !FEATURES_WITH_OWN_SCREEN[feature],
 );
 
 /** Completes a partially-stored — or entirely absent — feature set. */
@@ -172,6 +195,46 @@ export const httpUrlSchema = z
     message: "Enter a full web address starting with https://",
   });
 
+/**
+ * How a merchant takes bookings, once Reservations is on.
+ *
+ * `native` — the booking happens on their own site, against their own tables —
+ * is the only mode. There was briefly a second, `link`, which sent guests out to
+ * OpenTable or Resy. It was removed: it made "do we take bookings?" a three-way
+ * question split across two screens, and the per-location switches underneath it
+ * meant nothing for a merchant who had chosen to link out.
+ *
+ * **Kept as an enum of one rather than deleted outright.** Two things follow
+ * from that, and both are deliberate. A stored `"link"` no longer parses, so
+ * `resolveBrand` drops it and the site resolves to `off` — the safe direction,
+ * because such a site was configured for a provider we no longer send anyone
+ * to. And bringing the mode back later is a one-word change here rather than a
+ * reshaping of every reader.
+ */
+export const RESERVATION_MODES = ["native"] as const;
+
+export type ReservationMode = (typeof RESERVATION_MODES)[number];
+
+/**
+ * Whether a website booking is accepted on the spot or held for the merchant's
+ * answer.
+ *
+ * `auto` is today's behaviour and the default for every row that predates this
+ * key: `create_public_reservation` stores `confirmed` and the guest is told so
+ * immediately. `manual` stores `pending` instead, and the guest is told a
+ * request has been sent — the two must move together, or the confirmation
+ * message becomes a lie.
+ *
+ * **One rule for the whole business, not per branch.** It lives on
+ * `merchant_sites.brand` rather than `reservation_settings` for that reason:
+ * that table is keyed per location, so a merchant-wide rule stored there would
+ * be N rows that can drift, and a branch created next month would silently take
+ * the column default instead of the answer the merchant already gave.
+ */
+export const RESERVATION_APPROVAL_MODES = ["auto", "manual"] as const;
+
+export type ReservationApprovalMode = (typeof RESERVATION_APPROVAL_MODES)[number];
+
 export const PRICE_RANGES = ["$", "$$", "$$$", "$$$$"] as const;
 
 export type PriceRange = (typeof PRICE_RANGES)[number];
@@ -223,15 +286,33 @@ export const siteBrandSchema = z.object({
   name: z.string().trim().min(1).max(MAX_BRAND_NAME).optional(),
   social: z.array(socialLinkSchema).max(MAX_SOCIAL_LINKS),
   /**
-   * Where "Book a table" goes.
+   * A provider booking link — OpenTable, Resy, a Google form.
    *
-   * A URL rather than a booking system, deliberately: nearly every restaurant
-   * that takes reservations already has one — OpenTable, Resy, a Google form —
-   * and asking them to move it here to get a button on their own website would
-   * be the reason they do not get a button on their own website. Owner's
-   * Reservations section binds to a provider link the same way.
+   * **Nothing reads this any more.** It is kept in the schema, and only in the
+   * schema, so that the value a merchant typed survives: zod strips unknown
+   * keys, so removing the field would quietly erase every stored URL the next
+   * time anything else on the brand was saved. Keeping it costs one line and
+   * makes restoring link mode a matter of reading it again.
    */
   reservationUrl: httpUrlSchema.optional(),
+  /**
+   * Whether bookings happen on this site.
+   *
+   * Absent on every row written before native booking existed, and on every row
+   * that was configured to link out to a provider instead. Both resolve to
+   * `off` — see `resolveReservationMode`, which explains why that is the honest
+   * answer rather than a regression.
+   */
+  reservationMode: z.enum(RESERVATION_MODES).optional(),
+  /**
+   * Whether the merchant accepts bookings automatically or reviews each one.
+   *
+   * Absent on every row written before manual review existed, and
+   * `resolveReservationApproval` reads that absence as `auto` — exactly what
+   * those sites do today. Defaulting the other way would switch every existing
+   * restaurant onto manual review on deploy.
+   */
+  reservationApproval: z.enum(RESERVATION_APPROVAL_MODES).optional(),
   /** Free text, but short and few: these are search terms, not a description. */
   cuisines: z.array(z.string().trim().min(1).max(40)).max(MAX_CUISINES),
   priceRange: z.enum(PRICE_RANGES).optional(),
@@ -305,6 +386,15 @@ export function resolveBrand(stored: unknown): SiteBrand {
     : [];
 
   const reservationUrl = httpUrlSchema.safeParse(source.reservationUrl);
+  const reservationMode = RESERVATION_MODES.find((mode) => mode === source.reservationMode);
+  // Must be listed here as well as on the schema. `resolveBrand` is an
+  // allowlist that rebuilds the object key by key, so a key it does not know is
+  // dropped on the next unrelated brand write — a merchant editing their
+  // Instagram handle would silently switch their restaurant back to
+  // auto-accept. Covered by a test, not just this comment.
+  const reservationApproval = RESERVATION_APPROVAL_MODES.find(
+    (mode) => mode === source.reservationApproval,
+  );
   const priceRange = PRICE_RANGES.find((range) => range === source.priceRange);
   const defaultLocationId = z.string().uuid().safeParse(source.defaultLocationId);
   // Trimmed and clamped rather than rejected, for the same reason `clampStrings`
@@ -320,6 +410,8 @@ export function resolveBrand(stored: unknown): SiteBrand {
     social: uniqueSocial,
     cuisines,
     ...(reservationUrl.success ? { reservationUrl: reservationUrl.data } : {}),
+    ...(reservationMode ? { reservationMode } : {}),
+    ...(reservationApproval ? { reservationApproval } : {}),
     ...(priceRange ? { priceRange } : {}),
     ...(defaultLocationId.success ? { defaultLocationId: defaultLocationId.data } : {}),
     forceLocationChoice: source.forceLocationChoice === true,
@@ -370,6 +462,61 @@ export function readSiteSettings(site: {
   brand?: unknown;
 }): { features: SiteFeatures; brand: SiteBrand } {
   return { features: resolveFeatures(site.features), brand: resolveBrand(site.brand) };
+}
+
+/**
+ * The one question every reservations surface asks: off, or on?
+ *
+ * Collapses the two stored fields into the single answer the header, the
+ * section registry, the page provisioner and the reservations screen all need,
+ * so none of them has to remember that *whether* and *how* live in different
+ * places.
+ *
+ * **It now matches the SQL gate character for character.** Both
+ * `get_public_reservation_availability` and `create_public_reservation_hold`
+ * require `features->>'reservations' = 'true' AND
+ * brand->>'reservationMode' = 'native'`, and so does this. That agreement is
+ * worth more than it looks: while link mode existed this function could answer
+ * `link` where the database answered no, and a page and a database disagreeing
+ * about whether a restaurant takes bookings is how a guest gets shown a grid of
+ * times the server then refuses to hold.
+ *
+ * **A site with no `reservationMode` resolves to `off`, and that is the point.**
+ * Those rows were written either before native booking existed or by a merchant
+ * who chose to link out to a provider. Neither has a booking page provisioned,
+ * so the alternatives are a header button pointing at a 404 or a restaurant
+ * silently switched onto a booking system it never configured. No button is the
+ * honest outcome, and the merchant turns it back on from one switch.
+ */
+export function resolveReservationMode(settings: {
+  features: SiteFeatures;
+  brand: SiteBrand;
+}): "off" | ReservationMode {
+  return settings.features.reservations && settings.brand.reservationMode === "native"
+    ? "native"
+    : "off";
+}
+
+/**
+ * Whether this business accepts a website booking on the spot, or holds it for
+ * a human answer.
+ *
+ * **Only the exact string `"manual"` means manual.** Absent, null, a casing
+ * variant, or anything unrecognised resolves to `"auto"` — today's behaviour.
+ * `create_public_reservation` applies the identical rule in SQL, and the two
+ * must not disagree: TypeScript decides what the guest is *told* before they
+ * commit, SQL decides what is *stored*, and a mismatch means a guest reading
+ * "request sent" against a row that is already confirmed, or the reverse.
+ *
+ * Deliberately independent of `resolveReservationMode`. A site with bookings
+ * turned off still has an approval setting stored; it simply never applies.
+ * Reading the two together here would make the merchant's saved answer vanish
+ * from the screen whenever they toggled the master switch off.
+ */
+export function resolveReservationApproval(settings: {
+  brand: SiteBrand;
+}): ReservationApprovalMode {
+  return settings.brand.reservationApproval === "manual" ? "manual" : "auto";
 }
 
 export const MAX_SEO_SUFFIX = 60;

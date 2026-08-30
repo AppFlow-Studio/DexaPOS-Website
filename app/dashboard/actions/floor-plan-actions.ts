@@ -19,6 +19,9 @@ import {
   notifyReservationConfirmed,
   notifyReservationCancelled,
 } from '@/app/actions/notifications/reservation'
+// Website bookings notify through the site-builder path, which knows how to
+// build the guest's `/r/{token}` link and logs every send to `message_log`.
+import { notifyReservationRequestAnswered } from '@/lib/site-builder/reservations/notify'
 import { normalizePhone } from '@/lib/phone'
 import { getNextAvailableTableNumber } from '@/utils/tables/floor-plan-helpers'
 
@@ -1194,6 +1197,82 @@ export async function CancelReservationAction (
     }
   )
   return data
+}
+
+/**
+ * The merchant's answer to a booking request.
+ *
+ * **Replaces `UpdateReservationStatusAction` for the pending → confirmed
+ * transition**, and the difference is not cosmetic. That function writes the
+ * column and returns: no `cancelled_by`, no guard against a second Confirm, and
+ * — most importantly — **it tells the guest nothing.** A guest who was told
+ * "we'll answer shortly" and is then confirmed in silence never learns they
+ * have a table.
+ *
+ * The RPC is idempotent by design: a second Confirm comes back with
+ * `already: true` rather than raising, so two managers both clicking on a
+ * Friday night both see success and the guest gets exactly one message.
+ *
+ * **The notification is fired without awaiting**, matching
+ * `CancelReservationAction`: the database has already committed, and a Resend
+ * outage must not turn a successful confirmation into a red toast.
+ *
+ * **There is deliberately no `locationId` parameter.** Its sibling
+ * `UpdateReservationStatusAction` takes one and callers hand it the dashboard's
+ * *selected* location — which is correct on the single-branch day view and
+ * wrong anywhere that lists several, where it would write the wrong restaurant
+ * into the audit log. The branch is a property of the reservation, so it is
+ * read from the reservation. A caller cannot get it wrong if it cannot pass it.
+ */
+export async function RespondToReservationRequestAction (
+  clerkOrgId: string,
+  reservationId: string,
+  accept: boolean,
+  reason?: string
+) {
+  const supabase = createServerSupabaseClient()
+  const { data, error } = await supabase.rpc('respond_to_reservation_request', {
+    p_reservation_id: reservationId,
+    p_accept: accept,
+    p_reason: reason?.trim() || null
+  })
+  if (error) throw error
+
+  const outcome = (data ?? {}) as { acted?: boolean; already?: boolean; status?: string }
+
+  // Nothing happened, so nothing is logged and nobody is messaged. The request
+  // had already been answered — by the other manager, by the guest withdrawing,
+  // or by an expiry. Re-notifying here is exactly the double message the RPC's
+  // guard exists to prevent.
+  if (!outcome.acted) return outcome
+
+  // Read after the RPC, which has already proven the caller may see this row.
+  const { data: row } = await supabase
+    .from('reservations')
+    .select('location_id')
+    .eq('id', reservationId)
+    .maybeSingle()
+
+  await LogAuditEvent({
+    clerkOrgId,
+    locationId: (row?.location_id as string | undefined) ?? undefined,
+    action: accept ? 'confirmed_reservation_request' : 'declined_reservation_request',
+    actionCategory: 'reservations',
+    severity: 'info',
+    resourceType: 'reservation',
+    resourceId: reservationId,
+    resourceName: accept ? 'confirmed' : (reason?.trim() || 'declined')
+  })
+
+  notifyReservationRequestAnswered({
+    reservationId,
+    accepted: accept,
+    reason: reason ?? null
+  }).catch((err) => {
+    console.error('[notifyReservationRequestAnswered] failed:', err)
+  })
+
+  return outcome
 }
 
 export async function AssignReservationTablesAction (

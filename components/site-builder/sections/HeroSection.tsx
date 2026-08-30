@@ -114,7 +114,9 @@ export default function HeroSection({ section, ctx }: SectionRenderProps<"hero">
       >
         <h1
           className={`font-semibold leading-tight tracking-tight ${
-            isSpotlight ? "max-w-3xl text-5xl md:text-6xl" : "max-w-3xl text-4xl md:text-5xl"
+            isSpotlight
+              ? "max-w-3xl text-4xl sm:text-5xl md:text-6xl"
+              : "max-w-3xl text-4xl md:text-5xl"
           }`}
           {...f("props.heading")}
         >
