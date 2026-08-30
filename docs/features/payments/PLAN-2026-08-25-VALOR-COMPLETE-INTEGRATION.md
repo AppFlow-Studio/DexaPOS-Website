@@ -76,14 +76,14 @@ This avoids duplicate collection:
 | Workstream | Code status | Remaining closure |
 | --- | --- | --- |
 | HQ Valor boarding | Complete and previously sandbox verified | Reconfirm on the target staging deployment. |
-| Hosted online ordering | Complete | Apply resolver migration, deploy Edge Functions, provision account, run sandbox E2E. |
-| QR dine-in payment | Complete in website/customer flow | Apply QR migrations and run QR-to-paid-order E2E. |
-| Merchant invoices | Complete | Provision `invoice` account and run Passage success/decline/idempotency QA. |
+| Hosted online ordering | Complete | Staging migration, functions, and Joes Coffee Uptown `online_order` account are ready; run sandbox E2E. |
+| QR dine-in payment | Complete in website/customer flow | Staging functions and tip-safe total projection are deployed; run QR-to-paid-order E2E. |
+| Merchant invoices | Complete | Joes Coffee Uptown `invoice` account is provisioned; run Passage success/decline/idempotency QA. |
 | Web refund/void | Complete | Prove unsettled void, settled full refund, and settled partial refund. |
-| SaaS billing card setup | Complete | Apply lifecycle migration and validate Passage/Vault in staging. |
+| SaaS billing card setup | Complete | Lifecycle migration, functions, and merchant-wide `subscription` account are ready; validate Passage/Vault in hosted staging. |
 | Native Valor recurrence | Complete | Create one controlled native schedule and observe a sandbox cycle. |
 | Failed-payment recovery | Complete | Send controlled signed failed/success events and verify state/notifications. |
-| Grace, suspension, restoration | Complete | Deploy workers and execute controlled time/state QA. |
+| Grace, suspension, restoration | Complete | Workers are deployed; execute controlled time/state QA. |
 | Settlement webhook | Built and previously staging verified | Confirm target URL, secret, event selection, and watchdog. |
 
 ## SaaS Billing Implementation
@@ -212,13 +212,42 @@ integrated on the branch before this SaaS completion pass.
    `docs/features/payments/QA-2026-08-30-VALOR-WEBSITE-E2E.md`.
 9. Obtain senior sign-off before production promotion.
 
+## Staging Deployment Record - 2026-08-30
+
+The following shared staging work is complete and must not be applied again:
+
+- `20260829120000_process_online_order_total_amount_tip_exclusive.sql`
+- `20260830120000_subscription_billing_grace_and_retry_foundation.sql`
+- `20260830130000_valor_saas_billing_lifecycle.sql`
+- `process-online-payment` version 166
+- `create-online-order` version 205
+- `billing-charge-subscription` version 34
+- `billing-mark-paid` version 21
+- `billing-retry-due-invoices` version 1
+- `billing-suspend-overdue` version 21
+- `valor-webhook` version 25
+
+Joes Coffee Shop is the controlled QA merchant. Uptown Branch has an active
+primary Valor `online_order` account and an active primary `invoice` account.
+The merchant also has an active primary merchant-global `subscription` account.
+The two added purpose rows reuse the encrypted credential reference and fee
+metadata from the already verified Uptown sandbox account; no raw credential,
+card profile, payment, or charge was created during provisioning.
+
+Credential decryption through `get_valor_account_credentials` passed for the
+new `invoice` and `subscription` rows. A direct client-token request from the
+local development workstation timed out before receiving an HTTP response from
+Valor's sandbox transaction host. The deployed `process-online-payment` Edge
+Function then successfully returned a sandbox Valor Passage token for Joes
+Coffee Uptown, proving cloud-to-Valor connectivity for storefront and QR
+bootstrap. Invoice and SaaS Passage/Vault still require browser QA because
+those token requests execute on the Next.js/Vercel server path.
+
 ## Remaining External Prerequisites
 
 - Valor sandbox portal access and complete sandbox card response data.
 - Permission to configure recurring and settlement webhooks.
-- A controlled merchant boarded with active Valor `online_order`, `invoice`,
-  and `subscription` accounts as required by each scenario.
-- Approved staging migration and Edge Function deployment access.
+- Hosted QA/Vercel connectivity for invoice and SaaS Passage/Vault requests.
 - One full native recurring cycle or Valor-assisted accelerated recurrence test.
 
 ## Production Gate

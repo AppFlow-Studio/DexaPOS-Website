@@ -24,6 +24,22 @@ order on a physical register or KDS.
 - Use only approved Valor sandbox card data; never expose credentials or full
   card values in the recording.
 
+### Current Staging Readiness - 2026-08-30
+
+- The required migrations and payment/billing Edge Functions are deployed.
+- Joes Coffee Shop / Uptown Branch is provisioned for `online_order` and
+  `invoice`; the merchant is provisioned for merchant-global `subscription`.
+- Both new purpose accounts pass the credential-decryption RPC check.
+- No billing profile or payment was created automatically. Create the sandbox
+  profile through Passage during the SaaS recording so tokenization and Vault
+  persistence are part of the evidence.
+- This workstation timed out connecting directly to Valor's sandbox transaction
+  host, but the deployed storefront payment Edge Function successfully minted
+  a sandbox Passage token for Joes Coffee Uptown. Run invoice and SaaS card QA
+  from the hosted preview because those flows execute through Next.js/Vercel.
+  If either hosted flow times out, request Valor/IP allow-list confirmation
+  before changing credentials.
+
 ## Video 1 - HQ Boarding and Processor Provisioning
 
 ### Goal
