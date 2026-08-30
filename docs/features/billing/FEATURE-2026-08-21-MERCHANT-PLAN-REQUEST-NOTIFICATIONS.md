@@ -62,7 +62,7 @@ subscription contract:
 Migration and deployment prerequisites:
 
 - Apply
-  `supabase/migrations/20260826120000_subscription_billing_grace_and_retry_foundation.sql`.
+  `supabase/migrations/20260830120000_subscription_billing_grace_and_retry_foundation.sql`.
 - Then deploy `billing-charge-subscription`, `billing-handle-failure`,
   `billing-suspend-overdue`, and `billing-retry-due-invoices`.
 - Schedule the retry and suspension workers with service-role authorization or
@@ -214,7 +214,7 @@ that staging schema after deployment.
   - Regenerates database types from the deployed shared staging schema.
 - `tests/subscription-billing-safety.test.ts`
   - Covers billing authorization, consent evidence, and failure alerts.
-- `supabase/migrations/20260826120000_subscription_billing_grace_and_retry_foundation.sql`
+- `supabase/migrations/20260830120000_subscription_billing_grace_and_retry_foundation.sql`
   - Adds HQ grace-period evidence and automatic retry lifecycle timestamps.
 - `supabase/functions/_shared/subscription-retry-policy.ts`
   - Defines the configurable retry cadence and exhaustion result.

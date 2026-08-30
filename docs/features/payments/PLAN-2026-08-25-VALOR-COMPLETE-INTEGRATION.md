@@ -251,7 +251,7 @@ or failed invoices, retry scheduling and a protected due-invoice worker,
 single-claim protection, HQ grace-period controls, and grace-aware suspension.
 
 Deployment requires
-`20260826120000_subscription_billing_grace_and_retry_foundation.sql` before the
+`20260830120000_subscription_billing_grace_and_retry_foundation.sql` before the
 updated billing Edge Functions. These changes do not enable Valor subscription
 charges. If a Valor `subscription` account is selected, the existing fail-closed
 guard remains authoritative.
@@ -338,7 +338,7 @@ without directly editing payment data.
 - `supabase/functions/billing-suspend-overdue/index.ts`
 - `supabase/functions/billing-retry-due-invoices/index.ts`
 - `supabase/functions/_shared/subscription-retry-policy.ts`
-- `supabase/migrations/20260826120000_subscription_billing_grace_and_retry_foundation.sql`
+- `supabase/migrations/20260830120000_subscription_billing_grace_and_retry_foundation.sql`
 - `app/dashboard/actions/subscription-billing.ts`
 - `app/manage/actions/subscription-billing.ts`
 - `components/billing/MerchantSubscriptionOverviewCard.tsx`

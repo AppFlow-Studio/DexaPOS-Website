@@ -570,7 +570,7 @@ Single index for active ticket streams and their source trackers.
   due-invoice worker, single-claim duplicate protection, HQ grace-period
   controls, and grace-aware suspension.
 - Billing recovery deployment requires
-  `20260826120000_subscription_billing_grace_and_retry_foundation.sql` before
+  `20260830120000_subscription_billing_grace_and_retry_foundation.sql` before
   deploying the updated/new billing workers. No migration was executed during
   the website implementation.
 - Universal paid-feature enforcement and merchant add-on requests remain open:

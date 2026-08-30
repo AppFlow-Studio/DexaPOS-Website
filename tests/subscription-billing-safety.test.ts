@@ -12,7 +12,7 @@ const migration = read(
   'supabase/migrations/20260824140000_subscription_authorizations_and_failure_notifications.sql',
 )
 const graceRetryMigration = read(
-  'supabase/migrations/20260826120000_subscription_billing_grace_and_retry_foundation.sql',
+  'supabase/migrations/20260830120000_subscription_billing_grace_and_retry_foundation.sql',
 )
 const internalAuth = read(
   'supabase/functions/_shared/internal-billing-auth.ts',
