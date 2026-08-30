@@ -1,7 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
+import {
+  isSelectable,
+  monthGrid,
+  monthHasSelectableDay,
+  shiftMonth,
+  shortDate,
+  WEEKDAY_INITIALS,
+} from "@/lib/site-builder/reservations/calendar";
 import {
   AVAILABILITY_PATH,
   HOLD_PATH,
@@ -11,6 +20,12 @@ import {
   type BookableLocation,
   type BookResponse,
 } from "@/lib/site-builder/reservations/protocol";
+import {
+  availableHours,
+  filterSlotsNearHour,
+  groupSlotsByService,
+  prettyHour,
+} from "@/lib/site-builder/reservations/slot-view";
 
 /**
  * The booking widget: pick a party size, a date and a time, then four fields.
@@ -204,6 +219,22 @@ export default function ReservationWidget({
   const [partySize, setPartySize] = useState(2);
   const [date, setDate] = useState(todayIso);
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
+  /**
+   * Which part of the day the guest wants, or `"all"`.
+   *
+   * Filtering happens here rather than in the request: availability is already
+   * re-queried on every picker change, and narrowing a list we hold costs
+   * nothing, keeps the grid instant, and cannot disagree with what the server
+   * last said was free.
+   */
+  const [timeFilter, setTimeFilter] = useState<number | "all">("all");
+  /**
+   * Which of the pill's three panels is open, if any.
+   *
+   * Held here rather than inside each `Picker` so that "only one open at a time"
+   * is structural — see the note on `Picker.open`.
+   */
+  const [openPicker, setOpenPicker] = useState<"Guests" | "Date" | "Time" | null>(null);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   /**
@@ -305,6 +336,38 @@ export default function ReservationWidget({
   useEffect(() => {
     void loadSlots();
   }, [loadSlots]);
+
+  // ── What the grid actually shows ──────────────────────────────────────────
+  const hours = useMemo(() => availableHours(slots), [slots]);
+
+  /**
+   * A filter the current day cannot honour is simply not applied.
+   *
+   * Changing the date or the party size reloads the grid, and the hours that
+   * come back are rarely the same ones — "7 PM" against a day that stops
+   * serving at 3 has to mean something. Resolving it HERE, during render,
+   * rather than correcting the state afterwards in an effect, is what keeps the
+   * control and the grid from ever disagreeing: an effect would let one render
+   * pass through showing an empty grid under a picker still naming 7 PM, and
+   * only then fix it. Feeding this back into the `<select>` too means the guest
+   * watches the choice return to "All Times" instead of losing it silently.
+   */
+  const effectiveFilter =
+    timeFilter !== "all" && hours.includes(timeFilter) ? timeFilter : "all";
+
+  const visibleSlots = useMemo(
+    () => (effectiveFilter === "all" ? slots : filterSlotsNearHour(slots, effectiveFilter)),
+    [slots, effectiveFilter],
+  );
+
+  /*
+    No "narrowed to nothing" state exists, and that is a property of the design
+    rather than an omission: every hour offered is an hour that HAS a table, so
+    the window around it always contains at least the slot that put it in the
+    list. A message for it would be unreachable code claiming to handle a case
+    that cannot arise.
+  */
+  const groups = useMemo(() => groupSlotsByService(visibleSlots), [visibleSlots]);
 
   // ── The hold countdown ────────────────────────────────────────────────────
   const [remaining, setRemaining] = useState<number>(0);
@@ -488,50 +551,113 @@ export default function ReservationWidget({
         </div>
       )}
 
-      {/* The search bar: one pill, three segments, no search button. */}
-      <div className="mb-6 flex flex-wrap items-stretch gap-px overflow-hidden rounded-full border">
-        <Segment label="Guests">
-          <select
-            aria-label="Number of guests"
-            value={partySize}
-            onChange={(e) => setPartySize(Number(e.target.value))}
-            className="w-full bg-transparent text-base font-medium outline-none"
+      {/*
+        The search bar: one pill, three segments, no search button.
+
+        **The dividers are the `gap-px` showing the pill's own background
+        through.** The pill is painted `--site-border` and each segment is
+        painted `--site-card` on top, so the one-pixel gaps read as hairlines
+        between them — in a row on a wide screen and between stacked rows on a
+        phone, with no `divide-*` utilities and no breakpoint variants to get
+        right. Before, those gaps had nothing behind them but the page, so the
+        "rules" were whatever colour the section happened to be and vanished
+        entirely on a surface that matched.
+
+        `borderColor` is set explicitly, as it should be on everything here: the
+        global `* { @apply border-border }` in `globals.css` resolves to the
+        DASHBOARD's border colour, so an unstyled border on a merchant's site is
+        one of ours rather than one of theirs.
+      */}
+      <div
+        className="mb-6 flex flex-col items-stretch gap-px overflow-hidden rounded-[var(--site-radius)] border sm:flex-row sm:rounded-full"
+        style={{ borderColor: "var(--site-border)", background: "var(--site-border)" }}
+      >
+        <Picker
+          label="Guests"
+          open={openPicker === "Guests"}
+          onOpenChange={(o) => setOpenPicker(o ? "Guests" : null)}
+          value={partySizeLabel(partySize, maxParty)}>
+          {(close) => (
+            <OptionList
+              ariaLabel="Number of guests"
+              /*
+                The branch's own range, not a hardcoded 1–12. One entry PAST the
+                maximum is offered on purpose: picking it is how a guest with a
+                big party reaches the "call us" message below, instead of
+                finding the control simply stops and learning nothing.
+              */
+              options={Array.from(
+                { length: maxParty - minParty + 2 },
+                (_, i) => minParty + i,
+              ).map((n) => ({ value: String(n), label: partySizeLabel(n, maxParty) }))}
+              selected={String(partySize)}
+              onPick={(value) => {
+                setPartySize(Number(value));
+                close();
+              }}
+            />
+          )}
+        </Picker>
+
+        <Picker
+          label="Date"
+          open={openPicker === "Date"}
+          onOpenChange={(o) => setOpenPicker(o ? "Date" : null)}
+          value={shortDate(date)}>
+          {(close) => (
+            <CalendarPanel
+              value={date}
+              min={todayIso()}
+              // The branch's real booking window. Past it the restaurant has not
+              // opened its books, and the grid would be empty for a reason the
+              // guest cannot see.
+              max={addDays(todayIso(), maxAdvanceDays)}
+              onPick={(day) => {
+                setDate(day);
+                close();
+              }}
+            />
+          )}
+        </Picker>
+
+        {/*
+          TIME. This segment used to print `prettyDate(date)` — the same day the
+          date input beside it already showed, as static text. Two thirds of the
+          pill said Aug 30 and only one of them did anything.
+
+          The options are the hours that actually have a table, not a fixed
+          clock. SevenRooms offers every half hour from 6:00 AM at a restaurant
+          whose first seating is 12:45 PM, so most of their menu leads nowhere;
+          deriving them from the loaded slots means every entry returns
+          something, and a lunch-only day offers lunch-only hours with nobody
+          configuring that.
+
+          Hidden when there is nothing to narrow: a filter over one hour of
+          availability is a control that cannot change the answer.
+        */}
+        {hours.length > 1 && (
+          <Picker
+            label="Time"
+            open={openPicker === "Time"}
+            onOpenChange={(o) => setOpenPicker(o ? "Time" : null)}
+            value={effectiveFilter === "all" ? "All Times" : prettyHour(effectiveFilter)}
           >
-            {/*
-              The branch's own range, not a hardcoded 1–12. One entry PAST the
-              maximum is offered on purpose: picking it is how a guest with a big
-              party reaches the "call us" message below, instead of finding the
-              control simply stops and learning nothing.
-            */}
-            {Array.from(
-              { length: maxParty - minParty + 2 },
-              (_, i) => minParty + i,
-            ).map((n) => (
-              <option key={n} value={n}>
-                {n > maxParty ? `${maxParty + 1}+` : n} {n === 1 ? "Guest" : "Guests"}
-              </option>
-            ))}
-          </select>
-        </Segment>
-
-        <Segment label="Date">
-          <input
-            type="date"
-            aria-label="Reservation date"
-            value={date}
-            min={todayIso()}
-            // The branch's real booking window. Past it the restaurant has not
-            // opened its books, and the grid would be empty for a reason the
-            // guest cannot see.
-            max={addDays(todayIso(), maxAdvanceDays)}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full bg-transparent text-base font-medium outline-none"
-          />
-        </Segment>
-
-        <Segment label="When">
-          <span className="text-base font-medium">{prettyDate(date)}</span>
-        </Segment>
+            {(close) => (
+              <OptionList
+                ariaLabel="Time of day"
+                options={[
+                  { value: "all", label: "All Times" },
+                  ...hours.map((hour) => ({ value: String(hour), label: prettyHour(hour) })),
+                ]}
+                selected={String(effectiveFilter)}
+                onPick={(value) => {
+                  setTimeFilter(value === "all" ? "all" : Number(value));
+                  close();
+                }}
+              />
+            )}
+          </Picker>
+        )}
       </div>
 
       {notice && (
@@ -572,39 +698,419 @@ export default function ReservationWidget({
             {showOtherDates ? " Try another date." : ""}
           </p>
         ) : (
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {slots.map((slot) => (
-              <li key={`${slot.servicePeriodId}-${slot.time}`}>
-                <button
-                  type="button"
-                  onClick={() => void chooseSlot(slot)}
-                  disabled={loading}
-                  className="flex w-full flex-col items-center justify-center rounded-[var(--site-radius)] px-4 py-3 font-semibold text-[var(--site-brand-contrast)] transition disabled:opacity-60"
-                  style={{ background: "var(--site-brand)" }}
+          /*
+            One block per service, headed by the merchant's own name for it.
+
+            That name used to sit inside every chip as a caption, so a merchant
+            with a single service — which is what `DEFAULT_SERVICE_PERIOD` gives
+            everyone — had the word "DINNER" stamped down the whole grid, and a
+            merchant with two had the boundary marked only by that caption
+            quietly changing partway through.
+
+            The heading appears only when there is more than one group. A lone
+            "DINNER" bar under a section already titled "Book a table" is noise,
+            and the point of grouping is to add a landmark where there is
+            something to navigate, not to label the obvious.
+          */
+          <div className="flex flex-col gap-6">
+            {groups.map((group) => (
+              <div key={group.id}>
+                {groups.length > 1 && group.name && (
+                  <h4
+                    className="mb-3 border-b pb-2 text-[0.7rem] uppercase tracking-wide opacity-60"
+                    style={{ borderColor: "var(--site-border)" }}
+                  >
+                    {group.name}
+                  </h4>
+                )}
+                <ul
+                  className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+                  // Named so a screen-reader user landing in the second grid
+                  // knows which service they are in without hunting for the
+                  // heading above it.
+                  aria-label={groups.length > 1 && group.name ? group.name : undefined}
                 >
-                  <span>{prettyTime(slot.time)}</span>
-                  {/* The second line is what lets one grid cover Lunch and Dinner. */}
-                  {slot.serviceName && (
-                    <span className="text-[0.65rem] uppercase tracking-wide opacity-80">
-                      {slot.serviceName}
-                    </span>
-                  )}
-                </button>
-              </li>
+                  {group.slots.map((slot) => (
+                    <li key={`${slot.servicePeriodId}-${slot.time}`}>
+                      <button
+                        type="button"
+                        onClick={() => void chooseSlot(slot)}
+                        disabled={loading}
+                        className="flex w-full items-center justify-center rounded-[var(--site-radius)] px-4 py-3 font-semibold text-[var(--site-brand-contrast)] transition disabled:opacity-60"
+                        style={{ background: "var(--site-brand)" }}
+                      >
+                        {prettyTime(slot.time)}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-function Segment({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * The theme a portalled panel has to carry with it.
+ *
+ * `--site-*` are declared on the storefront's own wrapper, not on `:root`, so a
+ * panel portalled to `<body>` renders OUTSIDE the scope that defines them and
+ * every token resolves to nothing — a transparent box with the page showing
+ * through it, which is exactly what the first cut did. Copying the computed
+ * values onto the panel is what makes it a piece of the merchant's site again.
+ *
+ * Portalling is still right: the pill sets `overflow-hidden` to clip its
+ * segments to the rounded ends, so a panel rendered in place would be cut off at
+ * the pill's edge.
+ */
+const PANEL_THEME_VARS = [
+  "--site-card",
+  "--site-border",
+  "--site-text",
+  "--site-brand",
+  "--site-brand-contrast",
+  "--site-radius",
+  "--site-font",
+] as const;
+
+function readThemeVars(el: Element): Record<string, string> {
+  const cs = getComputedStyle(el);
+  const vars: Record<string, string> = {};
+  for (const name of PANEL_THEME_VARS) vars[name] = cs.getPropertyValue(name);
+  return vars;
+}
+
+/** `9+ Guests` past the branch's maximum, `2 Guests` inside it. */
+function partySizeLabel(n: number, maxParty: number): string {
+  const count = n > maxParty ? `${maxParty + 1}+` : String(n);
+  return `${count} ${n === 1 ? "Guest" : "Guests"}`;
+}
+
+/**
+ * One criterion in the search pill: a button that opens a themed panel.
+ *
+ * **The panel is portalled to `<body>`, not nested in the segment.** The pill
+ * sets `overflow-hidden` so its segments clip to the rounded ends, and anything
+ * absolutely positioned inside would be cut off at the pill's own edge — the
+ * calendar would lose everything below its first row. Portalling also lets a
+ * panel be wider than the segment that opened it, which the calendar has to be
+ * on a phone.
+ *
+ * Position is measured from the trigger and refreshed on scroll and resize, so
+ * the panel tracks the pill rather than drifting away from it.
+ */
+function Picker({
+  label,
+  value,
+  open,
+  onOpenChange,
+  children,
+}: {
+  label: string;
+  value: string;
+  /**
+   * Owned by the pill, not by each picker.
+   *
+   * Local state let two panels stand open at once: clicking a second trigger
+   * only dismissed the first because `mousedown` happens to fire before
+   * `click`, and a keyboard user tabbing to the next trigger and pressing Enter
+   * produced neither — so both panels stayed up, overlapping. One value at the
+   * parent makes "only one open" true by construction rather than by event
+   * ordering.
+   */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: (close: () => void) => React.ReactNode;
+}) {
+  const [rect, setRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  // Captured once per opening rather than in `place`, which also runs on every
+  // scroll frame and has no business setting state that often.
+  const [theme, setTheme] = useState<Record<string, string>>({});
+  /*
+    Held in a ref so the listener effect below does not depend on it. Callers
+    pass an inline arrow, which is a new function every render, and an effect
+    depending on it would tear down and re-subscribe its document listeners on
+    every single render while the panel is open.
+  */
+  const onOpenChangeRef = useRef(onOpenChange);
+  // Refreshed in an effect rather than assigned during render: writing a ref
+  // while rendering is the thing refs are specifically not for, and the effect
+  // runs before any event a guest could fire.
+  useEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const place = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setRect({ top: r.bottom + 4, left: r.left, width: r.width });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    if (triggerRef.current) setTheme(readThemeVars(triggerRef.current));
+
+    function onPointerDown(e: MouseEvent | TouchEvent) {
+      const target = e.target as Node;
+      // The trigger is excluded so its own click can toggle rather than being
+      // closed here and immediately reopened.
+      if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      onOpenChangeRef.current(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      onOpenChangeRef.current(false);
+      // Focus goes back where it came from, or a keyboard user is dropped at
+      // the top of the document with no idea what they just dismissed.
+      triggerRef.current?.focus();
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, place]);
+
+  const close = useCallback(() => {
+    onOpenChangeRef.current(false);
+    triggerRef.current?.focus();
+  }, []);
+
   return (
-    <div className="min-w-[8rem] flex-1 px-5 py-3">
-      <span className="block text-[0.7rem] uppercase tracking-wide opacity-60">{label}</span>
-      {children}
+    <div className="min-w-32 flex-1" style={{ background: "var(--site-card)" }}>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => onOpenChange(!open)}
+        className="flex w-full cursor-pointer items-center justify-between gap-2 px-5 py-3 text-left"
+      >
+        <span className="min-w-0">
+          <span className="block text-[0.7rem] uppercase tracking-wide opacity-60">{label}</span>
+          <span className="block truncate text-base font-medium">{value}</span>
+        </span>
+        {/* `▾`, the same character the site header's nav menu uses, so the two
+            controls on a merchant's page agree. */}
+        <span aria-hidden className="text-xs opacity-60">
+          ▾
+        </span>
+      </button>
+
+      {open &&
+        rect &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="rounded-[var(--site-radius)] border p-1 shadow-lg"
+            style={{
+              ...(theme as React.CSSProperties),
+              position: "fixed",
+              top: rect.top,
+              left: rect.left,
+              minWidth: rect.width,
+              zIndex: 60,
+              background: "var(--site-card)",
+              borderColor: "var(--site-border)",
+              color: "var(--site-text)",
+              fontFamily: "var(--site-font)",
+            }}
+          >
+            {/*
+              eslint-disable-next-line react-hooks/refs -- `close` only reads the
+              trigger ref when a guest invokes it, in an event handler; passing
+              it to the render prop does not dereference anything during render.
+            */}
+            {children(close)}
+          </div>,
+          document.body,
+        )}
     </div>
+  );
+}
+
+/**
+ * The list inside a picker.
+ *
+ * The chosen row is a filled brand pill rather than a tick or a tinted
+ * background — the same treatment the time slots get, so "this is the one you
+ * picked" looks the same everywhere in the widget.
+ */
+function OptionList({
+  ariaLabel,
+  options,
+  selected,
+  onPick,
+}: {
+  ariaLabel: string;
+  options: { value: string; label: string }[];
+  selected: string;
+  onPick: (value: string) => void;
+}) {
+  return (
+    <ul
+      role="listbox"
+      aria-label={ariaLabel}
+      // Capped so a branch seating twenty cannot produce a panel taller than
+      // the screen; anything longer scrolls inside the panel.
+      className="max-h-64 overflow-y-auto"
+      style={{ minWidth: "11rem" }}
+    >
+      {options.map((option) => {
+        const isSelected = option.value === selected;
+        return (
+          <li key={option.value} role="option" aria-selected={isSelected}>
+            <button
+              type="button"
+              onClick={() => onPick(option.value)}
+              className="w-full cursor-pointer rounded-full px-4 py-2 text-center text-sm font-medium"
+              style={
+                isSelected
+                  ? { background: "var(--site-brand)", color: "var(--site-brand-contrast)" }
+                  : undefined
+              }
+            >
+              {option.label}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * The date panel: one month, stepped with arrows.
+ *
+ * One month rather than the two SevenRooms shows side by side. Two only pays
+ * for itself on a wide screen, and the same panel has to work at 390px where
+ * two months either overflow or shrink the tap targets below a thumb — so the
+ * arrows carry the whole job at every width.
+ *
+ * A day outside the branch's booking window is rendered disabled rather than
+ * omitted, so the shape of the month stays readable and a guest can see that
+ * the restaurant simply is not open that far out.
+ */
+function CalendarPanel({
+  value,
+  min,
+  max,
+  onPick,
+}: {
+  value: string;
+  min: string;
+  max: string;
+  onPick: (day: string) => void;
+}) {
+  const [anchor, setAnchor] = useState(value);
+  const grid = useMemo(() => monthGrid(anchor), [anchor]);
+
+  const prev = shiftMonth(anchor, -1);
+  const next = shiftMonth(anchor, 1);
+  const canGoBack = monthHasSelectableDay(prev, min, max);
+  const canGoForward = monthHasSelectableDay(next, min, max);
+
+  return (
+    <div className="p-2" style={{ minWidth: "17rem" }}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <StepButton label="Previous month" disabled={!canGoBack} onClick={() => setAnchor(prev)}>
+          ‹
+        </StepButton>
+        <span className="text-sm font-semibold">{grid.label}</span>
+        <StepButton label="Next month" disabled={!canGoForward} onClick={() => setAnchor(next)}>
+          ›
+        </StepButton>
+      </div>
+
+      <table className="w-full border-collapse">
+        <thead>
+          <tr>
+            {WEEKDAY_INITIALS.map((initial, i) => (
+              // Index keys: the initials are not unique (two S, two T).
+              <th
+                key={i}
+                scope="col"
+                className="pb-1 text-[0.7rem] font-medium uppercase opacity-50"
+              >
+                {initial}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {grid.weeks.map((week, w) => (
+            <tr key={w}>
+              {week.map((day, d) => (
+                <td key={d} className="p-0.5 text-center">
+                  {day && (
+                    <button
+                      type="button"
+                      disabled={!isSelectable(day, min, max)}
+                      onClick={() => onPick(day)}
+                      aria-current={day === value ? "date" : undefined}
+                      aria-label={shortDate(day)}
+                      className="h-9 w-9 cursor-pointer rounded-full text-sm disabled:cursor-default disabled:opacity-30"
+                      style={
+                        day === value
+                          ? {
+                              background: "var(--site-brand)",
+                              color: "var(--site-brand-contrast)",
+                              fontWeight: 600,
+                            }
+                          : undefined
+                      }
+                    >
+                      {Number(day.slice(8, 10))}
+                    </button>
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StepButton({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border text-base disabled:cursor-default disabled:opacity-30"
+      style={{ borderColor: "var(--site-border)" }}
+    >
+      {children}
+    </button>
   );
 }
 

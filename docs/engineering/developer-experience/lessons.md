@@ -230,3 +230,27 @@ that was supposed to produce them.
 
 **Also found:** `poke_orderout_status_relay` (20260727120100) carries the same open grant. Lower
 severity — it only fires an HTTP poke — but it is the same mistake, still live.
+
+## Tailwind 4: an arbitrary value after `ring-` / `divide-` is a WIDTH, not a colour
+
+`focus-within:ring-2 ring-[var(--site-brand)]` produced no focus indicator at
+all. The arbitrary value is parsed as a ring *width*, so the colour resolved to
+nothing and the computed `box-shadow` was five transparent zero-width layers.
+`divide-[var(--site-border)]` fails the same way. `ring-inset` no longer exists
+in v4 either — it is `inset-ring`.
+
+**Neither failed loudly.** The classes were on the element, spelled correctly,
+and looked right in DevTools' class list. Only `getComputedStyle` revealed that
+nothing had been applied.
+
+Rules:
+- For a CSS-variable colour use the v4 form (`ring-(--site-brand)`), or avoid the
+  ambiguity entirely with an explicit property — this codebase already sets site
+  tokens via inline `style`, which cannot be misparsed and is not subject to
+  content scanning.
+- **Verify a style landed with `getComputedStyle`, never by reading the class
+  list.** A class that is present is not a class that applied.
+- Do NOT grep `.next/**/*.css` to check whether a utility was generated. Those
+  chunks are cached and can predate the running dev server, so they will happily
+  tell you a working class is missing and a missing class is present. Ask the
+  browser instead.
