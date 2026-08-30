@@ -54,17 +54,18 @@ export async function sendOnlineOrderPaymentEmail(params: {
   displayNumber: string | null
   orderNumber: string | null
   totalAmount: number
-  orderType: 'pickup' | 'delivery'
+  orderType: 'pickup' | 'delivery' | 'qr_dine_in'
 }): Promise<void> {
   const orderLabel = params.displayNumber || params.orderNumber || 'your order'
+  const orderTypeLabel = params.orderType === 'qr_dine_in' ? 'dine-in' : params.orderType
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#111827;">
       <h2 style="margin-bottom:8px;">Payment received</h2>
-      <p style="margin:0 0 16px;">Your ${params.orderType} order from <strong>${params.locationName}</strong> has been paid successfully.</p>
+      <p style="margin:0 0 16px;">Your ${orderTypeLabel} order from <strong>${params.locationName}</strong> has been paid successfully.</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
         <tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;">Merchant</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;">${params.merchantName}</td></tr>
         <tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;">Order</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;">${orderLabel}</td></tr>
-        <tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;">Type</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;text-transform:capitalize;">${params.orderType}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;">Type</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;text-transform:capitalize;">${orderTypeLabel}</td></tr>
         <tr><td style="padding:8px 0;font-weight:700;">Total</td><td style="padding:8px 0;text-align:right;font-weight:700;">${formatUsd(params.totalAmount)}</td></tr>
       </table>
       <p style="color:#4b5563;font-size:14px;">This email confirms payment only. The store will continue preparing the order based on its normal workflow.</p>

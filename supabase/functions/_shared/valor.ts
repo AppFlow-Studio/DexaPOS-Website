@@ -376,3 +376,170 @@ export async function createSale(
   )
   return toSaleResult(status, responseBody)
 }
+
+// ---------------------------------------------------------------------------
+// Refund / void
+// ---------------------------------------------------------------------------
+
+export interface ValorRefundParams {
+  transactionId: string
+  amountMinor: number
+  authCode?: string
+  rrn?: string
+  invoiceNumber?: string
+}
+
+export interface ValorVoidParams {
+  transactionId: string
+  amountMinor?: number
+}
+
+export interface ValorReversalRequestBody {
+  appid: string
+  appkey: string
+  epi: string
+  txn_type: 'refund' | 'void'
+  ref_txn_id: string
+  amount?: string
+  sale_refund?: string
+  surchargeIndicator?: string
+  surchargeindicator?: string
+  auth_code?: string
+  rrn?: string
+  invoicenumber?: string
+}
+
+function assertReversalAmount(amountMinor: number): void {
+  if (!Number.isInteger(amountMinor)) {
+    throw new RangeError(
+      `Valor reversal amount must be an integer in minor units, received ${amountMinor}`,
+    )
+  }
+  if (amountMinor <= 0) {
+    throw new RangeError('Valor will not process a zero- or negative-amount reversal')
+  }
+  if (amountMinor > VALOR_MAX_AMOUNT_MINOR) {
+    throw new RangeError(
+      `Refund exceeds Valor's $99,999.99 per-transaction cap (received ${formatMinorUnits(amountMinor)})`,
+    )
+  }
+}
+
+/** Pure builder kept in parity with lib/payments/valor/refundApi.ts. */
+export function buildRefundRequestBody(
+  credentials: ValorCredentials,
+  params: ValorRefundParams,
+): ValorReversalRequestBody {
+  assertReversalAmount(params.amountMinor)
+
+  return {
+    appid: credentials.appId,
+    appkey: credentials.appKey,
+    epi: credentials.epi,
+    txn_type: 'refund',
+    amount: formatMinorUnits(params.amountMinor),
+    ref_txn_id: params.transactionId,
+    sale_refund: '1',
+    surchargeIndicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    ...(params.authCode ? { auth_code: params.authCode } : {}),
+    ...(params.rrn ? { rrn: params.rrn } : {}),
+    ...(params.invoiceNumber ? { invoicenumber: params.invoiceNumber } : {}),
+  }
+}
+
+/** Pure builder kept in parity with lib/payments/valor/refundApi.ts. */
+export function buildVoidRequestBody(
+  credentials: ValorCredentials,
+  params: ValorVoidParams,
+): ValorReversalRequestBody {
+  if (params.amountMinor !== undefined) assertReversalAmount(params.amountMinor)
+
+  return {
+    appid: credentials.appId,
+    appkey: credentials.appKey,
+    epi: credentials.epi,
+    txn_type: 'void',
+    ref_txn_id: params.transactionId,
+    surchargeindicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    ...(params.amountMinor !== undefined
+      ? { amount: formatMinorUnits(params.amountMinor) }
+      : {}),
+  }
+}
+
+export type ValorReversalOutcome = 'approved' | 'declined' | 'error'
+
+export interface ValorReversalResult {
+  success: boolean
+  outcome: ValorReversalOutcome
+  status: number
+  details: {
+    transactionId: string
+    authCode: string
+    responseCode: string
+    responseText: string
+    rrn: string
+  }
+  body: JsonRecord
+}
+
+export function toReversalResult(
+  status: number,
+  body: JsonRecord,
+): ValorReversalResult {
+  const approved = isValorSuccess(body)
+  const transportFailed = status >= 500 || status === 0
+
+  return {
+    success: approved,
+    outcome: approved ? 'approved' : transportFailed ? 'error' : 'declined',
+    status,
+    details: {
+      transactionId: firstString(body, ['txn_id', 'txnid', 'transaction_id']),
+      authCode: firstString(body, ['approval_code', 'auth_code']),
+      responseCode: firstString(body, ['error_code']),
+      responseText:
+        firstString(body, ['response_text', 'msg', 'error_message']) ||
+        extractValorError(body) ||
+        (transportFailed
+          ? 'The reversal could not be completed right now. Please try again.'
+          : 'The reversal was not accepted. Please review and try again.'),
+      rrn: firstString(body, ['rrn']),
+    },
+    body,
+  }
+}
+
+export async function refundSale(
+  credentials: ValorCredentials,
+  params: ValorRefundParams,
+  options: { endpoints?: ValorEndpoints; timeoutMs?: number } = {},
+): Promise<ValorReversalResult> {
+  const endpoints = options.endpoints ?? resolveValorEndpoints()
+  const body = buildRefundRequestBody(credentials, params)
+  const { status, body: responseBody } = await postWithBodyCredentials(
+    '/?refund',
+    body as unknown as JsonRecord,
+    credentials,
+    endpoints,
+    options.timeoutMs,
+  )
+  return toReversalResult(status, responseBody)
+}
+
+export async function voidSale(
+  credentials: ValorCredentials,
+  params: ValorVoidParams,
+  options: { endpoints?: ValorEndpoints; timeoutMs?: number } = {},
+): Promise<ValorReversalResult> {
+  const endpoints = options.endpoints ?? resolveValorEndpoints()
+  const body = buildVoidRequestBody(credentials, params)
+  const { status, body: responseBody } = await postWithBodyCredentials(
+    '/?void',
+    body as unknown as JsonRecord,
+    credentials,
+    endpoints,
+    options.timeoutMs,
+  )
+  return toReversalResult(status, responseBody)
+}
