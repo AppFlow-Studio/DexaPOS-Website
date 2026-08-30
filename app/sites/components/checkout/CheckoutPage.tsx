@@ -35,6 +35,7 @@ import {
 import type { AppliedPromo } from "./PromoCodeSection";
 import { isStoreOpenNow } from "../StoreInfoBar";
 import { getSavedAddresses, addSavedAddress, type SavedAddress } from "../../customer-actions";
+import { getQrOrderStatus } from "../../qr-actions";
 import type { Site, OnlineOrderingConfig } from "@/types/site";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -121,6 +122,36 @@ export function CheckoutPage({
   // Hydration guard — cart is in localStorage
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
+
+  // A refresh clears the in-memory confirmation state but preserves the QR
+  // session. Recover its active order from the server instead of showing an
+  // empty checkout after a successful payment.
+  const recoveredOrderRef = useRef(false);
+  useEffect(() => {
+    if (!hydrated || !isQrTableMode || recoveredOrderRef.current) return;
+    if (useCart.getState().items.length !== 0) return;
+
+    const session = useSession.getState();
+    if (!session.sessionToken) return;
+    recoveredOrderRef.current = true;
+
+    let cancelled = false;
+    void (async () => {
+      if (session.activeOrderId) {
+        if (!cancelled) router.replace(storePath(`/order/${session.activeOrderId}`));
+        return;
+      }
+
+      const status = await getQrOrderStatus(session.sessionToken!);
+      if (!cancelled && status.success && status.hasOrder && status.orderId) {
+        router.replace(storePath(`/order/${status.orderId}`));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, isQrTableMode, router, storePath]);
 
   // Step
   const [step, setStep] = useState<"checkout" | "confirmation">("checkout");

@@ -1,4 +1,4 @@
-import type { SiteThemeConfig } from "@/types/site";
+import type { SiteThemeConfig, StorefrontTemplateId } from "@/types/site";
 
 // Maps the font options from the dashboard picker to their Google Fonts URLs.
 // The template fontUrl already bundles display fonts — this map covers the body font only.
@@ -14,9 +14,8 @@ export const FONT_GOOGLE_URLS: Record<string, string> = {
 };
 
 // Templates available for selection in the admin UI.
-// "bold" and "minimal" are excluded — code preserved but disabled.
-export const AVAILABLE_TEMPLATES = ["classic", "hero", "market", "boutique"] as const;
-export type AvailableTemplateId = (typeof AVAILABLE_TEMPLATES)[number];
+export const AVAILABLE_TEMPLATES = ["classic", "hero", "market", "boutique"] as const satisfies readonly StorefrontTemplateId[];
+export type AvailableTemplateId = StorefrontTemplateId;
 
 // Typography and geometry vary per template — colors do not.
 export const TEMPLATE_DEFAULTS = {
@@ -31,30 +30,6 @@ export const TEMPLATE_DEFAULTS = {
     fontDisplay: "'DM Serif Display', serif",
     fontUrl:
       "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap",
-  },
-  bold: {
-    bg: "#FFFFFF",
-    card: "#FFFFFF",
-    text: "#111827",
-    textSecondary: "#6B7280",
-    border: "#E5E7EB",
-    radius: "16px",
-    font: "'Space Grotesk', sans-serif",
-    fontDisplay: "'Playfair Display', serif",
-    fontUrl:
-      "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap",
-  },
-  minimal: {
-    bg: "#FFFFFF",
-    card: "#FFFFFF",
-    text: "#111827",
-    textSecondary: "#6B7280",
-    border: "#E5E7EB",
-    radius: "8px",
-    font: "'Outfit', sans-serif",
-    fontDisplay: "'DM Serif Display', serif",
-    fontUrl:
-      "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=DM+Serif+Display&display=swap",
   },
   // Hero: sticky horizontal category nav, horizontal cards (image right), slide-in cart drawer
   hero: {

@@ -2,8 +2,8 @@
 // create-online-order Edge Function
 // ============================================================================
 // Validates stock, hours, delivery zone, recalculates prices server-side,
-// creates a payment intent, and processes payment through NMI using a
-// tokenized storefront payment token. On successful card charge, calls
+// creates a payment intent, and processes payment through Valor by default
+// (or NMI behind the migration kill switch). On successful card charge, calls
 // process_online_order RPC to create the order immediately.
 // ============================================================================
 
@@ -1523,7 +1523,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     })
   }
 
-  if (!payCashInStore) {
+  const notificationPrefs = (
+    storeConfig.notification_prefs as { email_on_order_placed?: boolean } | null
+  ) ?? {}
+
+  if (!payCashInStore && notificationPrefs.email_on_order_placed !== false) {
     const customerEmail =
       session?.customer_email?.trim() ||
       body.customer_email?.trim() ||

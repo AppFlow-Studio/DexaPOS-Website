@@ -77,8 +77,8 @@ export function InlinePriceEditor({
   const [cashTouched, setCashTouched] = React.useState(false);
 
   // Resolve this scope's location dual-pricing config so a dual location's cash
-  // override tracks card at (1 − pct/100). Global (no-location) scopes have no
-  // single pct, so they don't auto-derive.
+  // override tracks card at card ÷ (1 + pct/100). Global (no-location) scopes
+  // have no single pct, so they don't auto-derive.
   const { data: stratResp } = useMerchantPricingStrategies(
     clerkOrgId,
     !!locationId,
@@ -211,7 +211,7 @@ export function InlinePriceEditor({
         />
         {autoDerive && (
           <p className="text-[10px] text-muted-foreground">
-            Auto-set to {dualPct}% off the card price — edit to override.
+            Auto-set to card ÷ (1 + {dualPct}%) — edit to override.
           </p>
         )}
       </div>

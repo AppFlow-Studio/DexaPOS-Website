@@ -54,3 +54,20 @@ consumed it. Surfaces that persist prices independently must also derive: `Inlin
 server-side SQL). A model change to the helper does NOT reach SQL RPCs — grep for the math, don't
 trust the funnel. Base/global price scope has no single location %, so leave global cash to the
 item editor rather than guessing a rate.
+
+## …then REVERTED: dual pricing is cash-as-base (surcharge) after all (2026-08-27)
+Context: the "cash discount" model above was later reversed at the user's direction — the intended
+model is cash-as-base: "calculate from the cash price UP, not from the card price down" ($10 cash →
+$10.40 card). So `card = cash × (1 + pct/100)`, inverse `cash = card ÷ (1 + pct/100)`. This also
+matches the POS, which already derives cash via the inverse (`20260706130000_open_item_dual_pricing_inverse.sql`);
+the discount commit had made web inconsistent with the tablet.
+Reverted surfaces: `lib/pricing.ts` (+ tests), the two wording-only spots in `PriceInputGroup` and
+`InlinePriceEditor` (their derive *wiring* was already direction-correct — only the helper math and
+copy changed), and the two bulk-adjust RPCs (`… / (1 + pct/100)`), all in migration
+`20260827120000_revert_dual_pricing_cash_surcharge.sql`.
+Data fix: the user chose "keep card, only fix cash" — recompute stored cash as `card ÷ (1 + pct/100)`
+so menu/card prices don't move; only the cash column shifts (~1¢). The epsilon still matters on the
+inverse: a true cash base of $10 stores card $10.40, and `10.40 ÷ 1.04 = 9.99999…` must floor back to
+$10.00, not $9.99 — keep `Math.floor(raw*100 + 1e-6)/100`. Meta-lesson: a "more correct" convention
+is never the spec; the number/direction the user states is. This is the second flip of the same
+math — pin the model in one helper + one migration and confirm the direction before touching prices.

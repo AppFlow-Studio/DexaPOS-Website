@@ -160,6 +160,7 @@ Single index for active ticket streams and their source trackers.
 
 1. Plan:
 - `docs/features/qr-dine-in/PLAN-2026-05-27-QR-DINE-IN-UNIFIED.md`
+- `docs/features/qr-dine-in/PLAN-2026-08-29-QR-VALOR-PAYMENT-LIFECYCLE.md`
 
 2. Ops runbook:
 - `docs/features/online-ordering/RUNBOOK-PAYMENT-WHITELIST-SYNC.md`
@@ -170,6 +171,8 @@ Single index for active ticket streams and their source trackers.
 4. Scope notes:
 - Website repo only for this stream.
 - QR storefront, dashboard QR manager, QR analytics, and guest-alert validation surfaces are implemented here.
+- Valor QR checkout is implemented; its paired cancellation/refund lifecycle is
+  authored and awaits coordinated migration, edge deployment, and sandbox QA.
 - Remaining open items are primarily deploy, payment-origin registration, POS follow-up, and end-to-end QA.
 - Do not mark QR payment or realtime items complete without staging or hosted-environment verification.
 
@@ -575,6 +578,19 @@ Single index for active ticket streams and their source trackers.
   entitlement map currently defines every web/POS feature boundary.
 - The migration collision is resolved by the uniquely named
   `20260824153907_c3_storefront_valor_account_resolver.sql`.
+
+## Stream Z: Dashboard Data Loaders Rollout
+
+1. Ticket and Haidar handoff:
+- `docs/tickets/TICKET-2026-08-26-DATA-PAGE-LOADERS-ROLLOUT.md`
+
+2. Pilot scope:
+- Reusable analytics and catalog skeletons replace fragmented first-load
+  waiting states on `/dashboard/transactions` and `/dashboard/menu/items`.
+- Background refetches retain existing data; mutation-button spinners remain.
+- The handoff lists merchant and HQ rollout priorities, accessibility rules,
+  responsive QA, and acceptance criteria.
+- No query, schema, package, or lockfile changes are part of the pilot.
 
 ## Notes
 

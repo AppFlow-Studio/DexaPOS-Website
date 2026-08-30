@@ -4,7 +4,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildSaleRequestBody as nodeBuildSaleRequestBody } from "../valor/saleApi";
 import {
+  buildRefundRequestBody as nodeBuildRefundRequestBody,
+  buildVoidRequestBody as nodeBuildVoidRequestBody,
+} from "../valor/refundApi";
+import {
+  buildRefundRequestBody as denoBuildRefundRequestBody,
   buildSaleRequestBody as denoBuildSaleRequestBody,
+  buildVoidRequestBody as denoBuildVoidRequestBody,
+  toReversalResult,
   toSaleResult,
 } from "../../../supabase/functions/_shared/valor";
 
@@ -133,6 +140,80 @@ describe("Valor storefront Deno toSaleResult classification", () => {
     expect(r.outcome).toBe("error");
     expect(r.success).toBe(false);
     expect(r.details.responseText).toMatch(/temporarily unavailable/i);
+  });
+});
+
+describe("Valor storefront Deno/Node reversal-body parity", () => {
+  it("builds the documented full refund body", () => {
+    const nodeBody = nodeBuildRefundRequestBody(CREDS, {
+      transactionId: "sale-123",
+      money: { amountMinor: 4599, currency: "USD" },
+      authCode: "AUTH1",
+      rrn: "RRN1",
+      invoiceNumber: "INV1",
+    });
+    const denoBody = denoBuildRefundRequestBody(CREDS, {
+      transactionId: "sale-123",
+      amountMinor: 4599,
+      authCode: "AUTH1",
+      rrn: "RRN1",
+      invoiceNumber: "INV1",
+    });
+
+    expect(denoBody).toEqual(nodeBody);
+    expect(denoBody.sale_refund).toBe("1");
+    expect(denoBody.surchargeIndicator).toBe("0");
+  });
+
+  it("builds the documented void body", () => {
+    const nodeBody = nodeBuildVoidRequestBody(CREDS, {
+      transactionId: "sale-456",
+    });
+    const denoBody = denoBuildVoidRequestBody(CREDS, {
+      transactionId: "sale-456",
+    });
+
+    expect(denoBody).toEqual(nodeBody);
+    expect(denoBody.surchargeindicator).toBe("0");
+  });
+
+  it("rejects invalid refund amounts", () => {
+    for (const bad of [0, -1, 10.5]) {
+      expect(() =>
+        denoBuildRefundRequestBody(CREDS, {
+          transactionId: "sale-123",
+          amountMinor: bad,
+        }),
+      ).toThrow(RangeError);
+    }
+  });
+});
+
+describe("Valor storefront Deno reversal classification", () => {
+  it("recognizes a successful Valor reversal", () => {
+    const result = toReversalResult(200, {
+      error_no: "S00",
+      error_code: "00",
+      txnid: "refund-1",
+      approval_code: "APPROVED",
+      rrn: "rrn-1",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.outcome).toBe("approved");
+    expect(result.details.transactionId).toBe("refund-1");
+    expect(result.details.rrn).toBe("rrn-1");
+  });
+
+  it("keeps a transport failure distinct from a decline", () => {
+    expect(toReversalResult(502, {}).outcome).toBe("error");
+    expect(
+      toReversalResult(400, {
+        error_no: "D01",
+        error_code: "05",
+        response_text: "Already settled",
+      }).outcome,
+    ).toBe("declined");
   });
 });
 

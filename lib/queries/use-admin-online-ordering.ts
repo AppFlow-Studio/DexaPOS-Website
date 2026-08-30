@@ -19,6 +19,7 @@ import {
   getAdminNmiMerchantStatus,
   type AdminCreateNmiMerchantInput,
 } from '@/app/manage/actions/admin-merchant/nmi'
+import type { StorefrontTemplateId } from '@/types/site'
 
 // ============================================================================
 // Types (matching server action types)
@@ -117,7 +118,7 @@ export interface OnlineOrderingSettings {
   faviconUrl?: string | null
   ogImageUrl?: string | null
   bannerText?: string | null
-  templateId?: 'classic' | 'bold' | 'minimal'
+  templateId?: StorefrontTemplateId
   primaryColor?: string
   secondaryColor?: string
   accentColor?: string | null
