@@ -268,7 +268,9 @@ in `PageShell` would nest a second `<main>` landmark.
       `components/dashboard/loading/__tests__/` (`DataPageSkeleton.test.tsx`,
       `loading-gate.test.tsx`). No new packages: they use `renderToString`
       under the existing node environment, matching `AffectsTag.test.tsx`.
-- [ ] No package, lockfile, database, or POS changes are included.
+- [x] No package, lockfile, database, or POS changes are included.
+      `git diff --name-only origin/dexaposwebsite-preview...HEAD` touches only
+      page components, the shared skeleton, its tests, and docs.
 
 ## QA evidence matrix
 
