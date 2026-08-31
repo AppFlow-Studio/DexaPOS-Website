@@ -88,6 +88,13 @@ interface Props {
   basePath: string;
   /** The restaurant's display name, for the confirmation screen. */
   venueName: string | null;
+  /**
+   * The site's logo, for the confirmation screen.
+   *
+   * Optional and null-tolerant: a merchant who has never uploaded one is the
+   * common case, not an error, and that screen has to look finished without it.
+   */
+  logoUrl?: string | null;
   showDetails: boolean;
   showOtherDates: boolean;
   /**
@@ -173,6 +180,7 @@ export default function ReservationWidget({
   approvalMode,
   basePath,
   venueName,
+  logoUrl,
   showOtherDates,
 }: Props) {
   // Anything that is not exactly "manual" is auto — the same rule the SQL and
@@ -509,6 +517,7 @@ export default function ReservationWidget({
           branch correctly. Now the two agree.
         */
         venueName={branch?.name ?? venueName}
+        logoUrl={logoUrl ?? null}
       />
     );
   }
@@ -1380,10 +1389,12 @@ function SuccessView({
   booked,
   basePath,
   venueName,
+  logoUrl,
 }: {
   booked: BookResponse;
   basePath: string;
   venueName: string | null;
+  logoUrl: string | null;
 }) {
   const manageHref = `${basePath}/r/${booked.manageToken}`;
 
@@ -1402,7 +1413,24 @@ function SuccessView({
 
   return (
     <div className="mx-auto max-w-lg text-center" role="status" aria-live="polite">
-      <div className="rounded-[var(--site-radius)] border p-8">
+      <div className="px-2 py-6">
+        {/*
+          Decorative, so `alt` is empty on purpose: the headline directly below
+          already names the restaurant, and a screen reader announcing the name
+          twice in a row is worse than not announcing the mark at all.
+
+          `max-h` rather than a fixed `h`: merchant logos arrive at every aspect
+          ratio, and a wordmark five times wider than it is tall must be allowed
+          to stay short instead of being blown up to a set height.
+        */}
+        {logoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- merchant CDN host
+          <img
+            src={logoUrl}
+            alt=""
+            className="mx-auto mb-6 max-h-14 w-auto max-w-[12rem] object-contain"
+          />
+        )}
         <p className="text-xs uppercase tracking-[0.14em] opacity-60">
           {pending
             ? booked.alreadyBooked

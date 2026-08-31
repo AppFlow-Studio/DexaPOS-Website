@@ -65,6 +65,8 @@ interface MountConfig {
   approvalMode?: "auto" | "manual";
   basePath: string;
   venueName: string | null;
+  /** The site's logo, shown on the confirmation screen. Null when unset. */
+  logoUrl?: string | null;
   showDetails: boolean;
   showOtherDates: boolean;
 }

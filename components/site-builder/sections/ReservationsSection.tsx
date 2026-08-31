@@ -165,6 +165,9 @@ export default function ReservationsSection({
               // Serialised rather than fetched: the confirmation screen names
               // the restaurant, and the widget has no other way to know it.
               venueName: ctx.site.name ?? null,
+              // Same reason as `venueName`: the confirmation screen shows the
+              // merchant's mark, and the widget has no other way to reach it.
+              logoUrl: ctx.site.logoUrl ?? null,
               showDetails,
               showOtherDates,
             })}
