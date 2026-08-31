@@ -39,7 +39,6 @@ function cases() {
         productLines: [{ product_id: "item-1", qty: 2 }],
         taxMinor: 380,
         tipMinor: 700,
-        cardholderName: "Jane Doe",
         orderDescription: "Online order dexa-abc-123",
         email: "jane@example.com",
         phone: "5125550123",
@@ -126,13 +125,24 @@ describe("Valor storefront Deno toSaleResult classification", () => {
 
   it("declined on a 4xx business error (retry another card)", () => {
     const r = toSaleResult(400, {
-      error_no: "D01",
+      error_no: "E98",
       error_code: "05",
-      response_text: "Declined",
+      msg: "Declined",
     });
     expect(r.outcome).toBe("declined");
     expect(r.success).toBe(false);
     expect(r.details.responseText).toBe("Declined");
+  });
+
+  it("reports the detailed cause for a 4xx gateway configuration error", () => {
+    const r = toSaleResult(400, {
+      error_no: "D06",
+      msg: "PROCESSING ERROR",
+      desc: "NOT A VALID APP ID",
+    });
+    expect(r.outcome).toBe("error");
+    expect(r.details.responseCode).toBe("D06");
+    expect(r.details.responseText).toBe("NOT A VALID APP ID");
   });
 
   it("error on 5xx transport failure (retry same card)", () => {

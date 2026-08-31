@@ -236,7 +236,6 @@ export interface ValorSaleParams {
   productLines: ValorProductLine[]
   taxMinor?: number
   tipMinor?: number
-  cardholderName?: string
   orderDescription?: string
   email?: string
   phone?: string
@@ -254,17 +253,50 @@ export interface ValorSaleRequestBody {
   amount: string
   token: string
   invoicenumber: string
+  ecomm_channel: 'passagejs'
   surchargeIndicator: typeof SURCHARGE_INDICATOR_CARD_ONLY
   shipping_country: string
-  productIds: ValorProductLine[]
+  productIds?: ValorProductLine[]
   tax_amount?: string
-  tip?: string
-  cardholdername?: string
   orderdescription?: string
   email?: string
   phone?: string
   address1?: string
   zip?: string
+}
+
+function normalizeOptionalText(value: string | undefined, maxLength: number): string | undefined {
+  const normalized = value?.trim().replace(/\s+/g, ' ').slice(0, maxLength)
+  return normalized || undefined
+}
+
+function normalizeAlphanumericText(value: string | undefined, maxLength: number): string | undefined {
+  return normalizeOptionalText(value?.replace(/[^A-Za-z0-9 ]/g, ' '), maxLength)
+}
+
+function normalizePhone(value: string | undefined): string | undefined {
+  const digits = value?.replace(/\D/g, '') ?? ''
+  const domestic = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits
+  return domestic.length === 10 ? domestic : undefined
+}
+
+function normalizeZip(value: string | undefined): string | undefined {
+  const digits = value?.replace(/\D/g, '') ?? ''
+  return digits.length >= 5 ? digits.slice(0, 5) : undefined
+}
+
+function normalizeEmail(value: string | undefined): string | undefined {
+  const normalized = value?.trim()
+  return normalized && normalized.length <= 50 ? normalized : undefined
+}
+
+/** Valor accepts a maximum of 12 alphanumeric characters for invoice IDs. */
+export function normalizeValorInvoiceNumber(value: string): string {
+  const normalized = value.replace(/[^A-Za-z0-9]/g, '')
+  if (!normalized) {
+    throw new RangeError('Valor invoice number must contain an alphanumeric character')
+  }
+  return normalized.slice(-12)
 }
 
 /**
@@ -290,6 +322,12 @@ export function buildSaleRequestBody(
     )
   }
 
+  const orderDescription = normalizeAlphanumericText(params.orderDescription, 50)
+  const email = normalizeEmail(params.email)
+  const phone = normalizePhone(params.phone)
+  const address1 = normalizeAlphanumericText(params.address1, 100)
+  const zip = normalizeZip(params.zip)
+
   return {
     appid: credentials.appId,
     appkey: credentials.appKey,
@@ -297,18 +335,17 @@ export function buildSaleRequestBody(
     txn_type: 'sale',
     amount: formatMinorUnits(params.amountMinor),
     token: params.token,
-    invoicenumber: params.invoiceNumber,
+    invoicenumber: normalizeValorInvoiceNumber(params.invoiceNumber),
+    ecomm_channel: 'passagejs',
     surchargeIndicator: SURCHARGE_INDICATOR_CARD_ONLY,
     shipping_country: params.shippingCountry ?? 'US',
-    productIds: params.productLines,
+    ...(params.productLines.length > 0 ? { productIds: params.productLines } : {}),
     ...(params.taxMinor !== undefined ? { tax_amount: formatMinorUnits(params.taxMinor) } : {}),
-    ...(params.tipMinor !== undefined ? { tip: formatMinorUnits(params.tipMinor) } : {}),
-    ...(params.cardholderName ? { cardholdername: params.cardholderName } : {}),
-    ...(params.orderDescription ? { orderdescription: params.orderDescription } : {}),
-    ...(params.email ? { email: params.email } : {}),
-    ...(params.phone ? { phone: params.phone } : {}),
-    ...(params.address1 ? { address1: params.address1 } : {}),
-    ...(params.zip ? { zip: params.zip } : {}),
+    ...(orderDescription ? { orderdescription: orderDescription } : {}),
+    ...(email ? { email } : {}),
+    ...(phone ? { phone } : {}),
+    ...(address1 ? { address1 } : {}),
+    ...(zip ? { zip } : {}),
   }
 }
 
@@ -337,20 +374,24 @@ export interface ValorSaleResult {
 /** Map a Valor sale response onto a provider-neutral result (mirrors toProcessorTransaction). */
 export function toSaleResult(status: number, body: JsonRecord): ValorSaleResult {
   const approved = isValorSuccess(body)
-  const transportFailed = status >= 500 || status === 0
-  const outcome: ValorSaleOutcome = approved ? 'approved' : transportFailed ? 'error' : 'declined'
+  const declined = body.error_no === 'E98' || body.error_code === 'E98'
+  const gatewayFailed = !approved && !declined
+  const outcome: ValorSaleOutcome = approved ? 'approved' : gatewayFailed ? 'error' : 'declined'
+  const responseText = gatewayFailed
+    ? firstString(body, ['desc', 'error_message', 'response_text', 'msg', 'mesg'])
+    : firstString(body, ['msg', 'mesg', 'response_text', 'error_message', 'desc'])
 
   return {
     success: approved,
     outcome,
     status,
     details: {
-      transactionId: firstString(body, ['txn_id', 'transaction_id']),
+      transactionId: firstString(body, ['txn_id', 'txnid', 'transaction_id']),
       authCode: firstString(body, ['approval_code', 'auth_code']),
-      responseCode: firstString(body, ['error_code']),
+      responseCode: firstString(body, ['error_code', 'error_no']),
       responseText:
-        firstString(body, ['response_text', 'error_message']) ||
-        (transportFailed
+        responseText ||
+        (gatewayFailed
           ? 'Payment service is temporarily unavailable. Please try again.'
           : 'Your card was declined. Please try another card.'),
       rrn: firstString(body, ['rrn']),
@@ -368,7 +409,7 @@ export async function createSale(
   const endpoints = options.endpoints ?? resolveValorEndpoints()
   const body = buildSaleRequestBody(credentials, params)
   const { status, body: responseBody } = await postWithBodyCredentials(
-    '/?saleToken',
+    '/?sale',
     body as unknown as JsonRecord,
     credentials,
     endpoints,

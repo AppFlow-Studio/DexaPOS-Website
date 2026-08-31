@@ -67,9 +67,9 @@ describe("createValorProcessor — construction", () => {
 });
 
 describe("createValorProcessor — sale", () => {
-  it("charges the Direct Sale Token endpoint, card-only, and approves on S00/00", async () => {
+  it("charges the Passage.js Sale endpoint, card-only, and approves on S00/00", async () => {
     const { fetchImpl, calls } = stubFetch([
-      { status: 200, body: { error_no: "S00", error_code: "00", txn_id: "txn_1", approval_code: "AUTH1" } },
+      { status: 200, body: { error_no: "S00", error_code: "00", txnid: "txn_1", approval_code: "AUTH1" } },
     ]);
     const processor = createValorProcessor({ ...CREDS, endpoints: ENDPOINTS, fetchImpl });
 
@@ -77,6 +77,7 @@ describe("createValorProcessor — sale", () => {
       money: { amountMinor: 2500, currency: "USD" },
       paymentToken: "tok_abc",
       orderId: "INV-1",
+      contact: { firstName: "Order", lastName: "Customer" },
     });
 
     expect(tx.outcome).toBe("approved");
@@ -84,12 +85,15 @@ describe("createValorProcessor — sale", () => {
     expect(tx.authCode).toBe("AUTH1");
     expect(tx.processor).toBe("valor");
 
-    expect(calls[0].url).toBe("https://txn.test/?saleToken");
+    expect(calls[0].url).toBe("https://txn.test/?sale");
     const body = jsonBody(calls[0]);
     expect(body.surchargeIndicator).toBe("0");
     expect(body.amount).toBe("25.00");
     expect(body.token).toBe("tok_abc");
-    expect(body.invoicenumber).toBe("INV-1");
+    expect(body.invoicenumber).toBe("INV1");
+    expect(body.ecomm_channel).toBe("passagejs");
+    expect(body.productIds).toBeUndefined();
+    expect(body.cardholdername).toBeUndefined();
     expect(body.appid).toBe("app-id");
     expect(body.appkey).toBe("app-key");
     expect(body.epi).toBe("2000000001");
@@ -97,7 +101,7 @@ describe("createValorProcessor — sale", () => {
 
   it("classifies a gateway answer of refusal as declined", async () => {
     const { fetchImpl } = stubFetch([
-      { status: 200, body: { error_no: "E05", error_code: "05", response_text: "Declined" } },
+      { status: 400, body: { error_no: "E98", error_code: "05", msg: "Declined" } },
     ]);
     const processor = createValorProcessor({ ...CREDS, endpoints: ENDPOINTS, fetchImpl });
 

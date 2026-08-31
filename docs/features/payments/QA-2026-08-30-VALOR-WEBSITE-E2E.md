@@ -23,6 +23,31 @@ order on a physical register or KDS.
 - Hosted storefront and QR URLs are reachable from a private/mobile browser.
 - Use only approved Valor sandbox card data; never expose credentials or full
   card values in the recording.
+- The storefront Passage form must show billing street address and ZIP. These
+  AVS values are forwarded with the tokenized sale; raw card data remains inside
+  Passage.js and must never pass through DEXA.
+- The order contact name is not sent as Valor's optional `cardholdername`.
+  Passage.js tokenization remains the source of payment-card identity.
+
+### Storefront sale correction - 2026-08-30
+
+- Passage.js card tokenization succeeded, but the server-side charge returned a
+  `502 payment_gateway_error` with no Valor response code.
+- Root cause: the sale clients posted to `/?saleToken`. Valor's current
+  Passage.js contract posts the card token to `/?sale` and identifies the source
+  with `ecomm_channel: passagejs`.
+- Both the Node payment adapter and Deno Edge Function client now use the
+  documented endpoint and parse the documented `txnid`, `msg`, and `desc`
+  response fields.
+- Both clients normalize Valor's constrained Passage.js fields identically:
+  invoice IDs are alphanumeric and at most 12 characters, US phone numbers
+  contain 10 digits, ZIP codes contain 5 digits, and customer/address fields
+  stay within the documented lengths.
+- Tip remains part of the charged grand total and the local order breakdown,
+  but is not emitted as an unsupported top-level field to Valor's Passage.js
+  Sale API.
+- Deploy the updated `create-online-order` function before repeating the
+  staging payment recording.
 
 ### Current Staging Readiness - 2026-08-30
 
@@ -33,12 +58,13 @@ order on a physical register or KDS.
 - No billing profile or payment was created automatically. Create the sandbox
   profile through Passage during the SaaS recording so tokenization and Vault
   persistence are part of the evidence.
-- This workstation timed out connecting directly to Valor's sandbox transaction
-  host, but the deployed storefront payment Edge Function successfully minted
-  a sandbox Passage token for Joes Coffee Uptown. Run invoice and SaaS card QA
-  from the hosted preview because those flows execute through Next.js/Vercel.
-  If either hosted flow times out, request Valor/IP allow-list confirmation
-  before changing credentials.
+- The deployed storefront payment Edge Function successfully mints a sandbox
+  Passage client token for Joes Coffee Uptown. Card tokenization is a separate
+  browser-to-Valor request: direct non-charging probes to Valor's sandbox
+  transaction host on both `4430` (Passage.js default) and `443` timed out from
+  this workstation on 2026-08-30. A Vercel preview does not proxy that browser
+  request, so complete card E2E from a network that can reach the Valor sandbox
+  host or ask Valor to confirm sandbox/IP access before rotating credentials.
 
 ## Video 1 - HQ Boarding and Processor Provisioning
 
@@ -67,10 +93,11 @@ Show that HQ can prepare a merchant for Valor without direct database edits.
 1. Open the hosted storefront in a private browser.
 2. Add an item, modifier, tax, and tip.
 3. Proceed to checkout and show the Valor Passage form.
-4. Pay with approved sandbox data.
-5. Show the customer confirmation page and order number.
-6. In the merchant dashboard, open `/dashboard/orders` and the order detail.
-7. Show paid status, total/tip agreement, and Valor transaction reference.
+4. Enter the approved sandbox card plus its AVS street address and ZIP.
+5. Pay with approved sandbox data.
+6. Show the customer confirmation page and order number.
+7. In the merchant dashboard, open `/dashboard/orders` and the order detail.
+8. Show paid status, total/tip agreement, and Valor transaction reference.
 
 ### Part B - QR Dine-In
 

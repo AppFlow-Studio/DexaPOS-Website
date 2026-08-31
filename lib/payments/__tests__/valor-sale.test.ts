@@ -102,6 +102,55 @@ describe("buildSaleRequestBody", () => {
     );
   });
 
+  it("identifies tokenized checkout as Passage.js and omits empty product lines", () => {
+    const body = buildSaleRequestBody(credentials, {
+      ...baseParams,
+      productLines: [],
+    });
+    expect(body.ecomm_channel).toBe("passagejs");
+    expect(body.productIds).toBeUndefined();
+  });
+
+  it("normalizes fields to Valor's documented Passage.js limits", () => {
+    const body = buildSaleRequestBody(credentials, {
+      ...baseParams,
+      invoiceNumber: "dexa-12345678-abcdef",
+      orderDescription: "Online order: dexa-12345678-abcdef!",
+      email: `${"a".repeat(55)}@example.com`,
+      phone: "+1 (512) 555-0123",
+      address1: "1 Main St ".repeat(20),
+      zip: "85284-1234",
+    });
+
+    expect(body.invoicenumber).toBe("345678abcdef");
+    expect(body.invoicenumber).toMatch(/^[A-Za-z0-9]{1,12}$/);
+    expect("cardholdername" in body).toBe(false);
+    expect(body.orderdescription).toBe("Online order dexa 12345678 abcdef");
+    expect(body.email).toBeUndefined();
+    expect(body.phone).toBe("5125550123");
+    expect(body.address1).toHaveLength(100);
+    expect(body.zip).toBe("85284");
+  });
+
+  it("omits malformed optional phone and ZIP values", () => {
+    const body = buildSaleRequestBody(credentials, {
+      ...baseParams,
+      phone: "123",
+      zip: "12",
+    });
+    expect(body.phone).toBeUndefined();
+    expect(body.zip).toBeUndefined();
+  });
+
+  it("rejects an invoice number with no alphanumeric characters", () => {
+    expect(() =>
+      buildSaleRequestBody(credentials, {
+        ...baseParams,
+        invoiceNumber: "---",
+      })
+    ).toThrow(/invoice number/i);
+  });
+
   it("omits optional fields rather than sending empty strings", () => {
     const body = buildSaleRequestBody(credentials, baseParams);
     expect("email" in body).toBe(false);
@@ -109,14 +158,14 @@ describe("buildSaleRequestBody", () => {
     expect("tip" in body).toBe(false);
   });
 
-  it("includes tax and tip when provided", () => {
+  it("includes tax but leaves tip inside the grand total", () => {
     const body = buildSaleRequestBody(credentials, {
       ...baseParams,
       taxMinor: 225,
       tipMinor: 500,
     });
     expect(body.tax_amount).toBe("2.25");
-    expect(body.tip).toBe("5.00");
+    expect("tip" in body).toBe(false);
   });
 
   it("rejects a zero-amount sale", () => {
@@ -166,21 +215,50 @@ describe("toProcessorTransaction", () => {
     expect(tx.processor).toBe("valor");
   });
 
+  it("maps Valor's documented Passage.js response field names", () => {
+    const tx = toProcessorTransaction({
+      status: 200,
+      body: {
+        error_no: "S00",
+        error_code: "00",
+        txnid: "10337052",
+        approval_code: "TAS678",
+        msg: "APPROVED",
+      },
+    });
+    expect(tx.transactionId).toBe("10337052");
+    expect(tx.responseText).toBe("APPROVED");
+  });
+
   it("treats a 5xx as retryable error, not a decline", () => {
     expect(toProcessorTransaction({ status: 502, body: {} }).outcome).toBe("error");
   });
 
-  it("treats a 400 with a failure code as a decline", () => {
+  it("treats a documented E98 card rejection as a decline", () => {
     const tx = toProcessorTransaction({
       status: 400,
-      body: { error_no: "F01", error_code: "05", error_message: "Do not honor" },
+      body: { error_no: "E98", error_code: "05", msg: "Do not honor" },
     });
     expect(tx.outcome).toBe("declined");
     expect(tx.responseText).toBe("Do not honor");
   });
 
+  it("surfaces the detailed cause for Valor processing errors", () => {
+    const tx = toProcessorTransaction({
+      status: 400,
+      body: {
+        error_no: "D06",
+        msg: "PROCESSING ERROR",
+        desc: "NOT A VALID APP ID",
+      },
+    });
+    expect(tx.outcome).toBe("error");
+    expect(tx.responseCode).toBe("D06");
+    expect(tx.responseText).toBe("NOT A VALID APP ID");
+  });
+
   it("falls back to a customer-safe message when none is given", () => {
     const tx = toProcessorTransaction({ status: 400, body: {} });
-    expect(tx.responseText).toMatch(/declined/i);
+    expect(tx.responseText).toMatch(/temporarily unavailable/i);
   });
 });

@@ -26,6 +26,10 @@ import { PlaceOrderButton } from "./PlaceOrderButton";
 import { OrderConfirmation } from "./OrderConfirmation";
 import { PaymentCardForm, type PaymentCardFormHandle } from "./PaymentCardForm";
 import { PassageCheckout } from "@/lib/payments/valor/passageClient";
+import {
+  readPassageBillingDetails,
+  type PassageBillingDetails,
+} from "@/lib/payments/valor/passageBilling";
 import { ConfirmDialog } from "../ConfirmDialog";
 import {
   type PlaceOrderItem,
@@ -243,6 +247,8 @@ export function CheckoutPage({
   } | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [payCashInStore, setPayCashInStore] = useState(false);
+  const valorPaymentTokenRef = useRef<string | null>(null);
+  const valorSubmissionRef = useRef(false);
 
   useEffect(() => {
     if (!isQrTableMode) return;
@@ -425,7 +431,10 @@ export function CheckoutPage({
     handlePlaceOrder();
   };
 
-  const handlePlaceOrder = async (valorToken?: string) => {
+  const handlePlaceOrder = async (
+    valorToken?: string,
+    valorBilling?: PassageBillingDetails
+  ) => {
     const { sessionToken } = useSession.getState();
 
     setLoading(true);
@@ -582,6 +591,10 @@ export function CheckoutPage({
             ...(paymentToken ? { payment_token: paymentToken } : {}),
             ...(paymentCardType ? { payment_card_type: paymentCardType } : {}),
             ...(paymentCardLastFour ? { payment_card_last_four: paymentCardLastFour } : {}),
+            ...(valorBilling?.address1
+              ? { billing_address1: valorBilling.address1 }
+              : {}),
+            ...(valorBilling?.zip ? { billing_zip: valorBilling.zip } : {}),
             // Contact info (always sent — edge function uses session data if available)
             customer_name: `${firstName} ${lastName}`.trim() || undefined,
             customer_phone: customer?.phone || normalizePhone(phone) || phone.trim() || undefined,
@@ -935,16 +948,41 @@ export function CheckoutPage({
                     isDemo={valorBootstrap.isDemo}
                     formAction="/api/valor/passage-callback"
                     submitText={`Pay $${total.toFixed(2)}`}
+                    showBillingAddress
                     onTokenReceived={({ token }) => {
-                      // Passage owns the Pay button, so it can fire before the rest
-                      // of the form is valid — guard, then charge with the token.
+                      // Passage invokes onFormSubmit immediately after this callback;
+                      // hold the token in a ref so it can be paired with AVS data.
+                      valorPaymentTokenRef.current = token;
+                    }}
+                    onFormSubmit={(formData) => {
+                      const token = valorPaymentTokenRef.current;
+                      valorPaymentTokenRef.current = null;
+
                       if (!canPlaceOrder) {
                         setPaymentError(
                           "Please complete your contact and order details above, then tap Pay again."
                         );
                         return;
                       }
-                      void handlePlaceOrder(token);
+                      const billing = readPassageBillingDetails(formData);
+                      if (!billing.address1 || !billing.zip) {
+                        setPaymentError(
+                          "Enter the billing street address and ZIP code for this card."
+                        );
+                        return;
+                      }
+                      if (!token) {
+                        setPaymentError(
+                          "Card tokenization did not complete. Please try again."
+                        );
+                        return;
+                      }
+                      if (valorSubmissionRef.current) return;
+
+                      valorSubmissionRef.current = true;
+                      void handlePlaceOrder(token, billing).finally(() => {
+                        valorSubmissionRef.current = false;
+                      });
                     }}
                     onError={(e) =>
                       setPaymentError(e.message ?? "Payment error. Please try again.")
