@@ -87,7 +87,7 @@ export default async function ReservationManagePage({ params }: PageProps) {
   const reservation = await loadReservationByToken(token);
   if (!reservation) notFound();
 
-  const theme = await loadSiteTheme(slug);
+  const { theme, logoUrl } = await loadSiteChrome(slug);
   const fontsHref = googleFontsHref([theme.fontFamily, theme.headingFont]);
 
   const terminal = isTerminal(reservation.status);
@@ -116,6 +116,23 @@ export default async function ReservationManagePage({ params }: PageProps) {
 
       <main className="w-full max-w-lg space-y-6">
         <header className="text-center">
+          {/*
+            Decorative: the branch name sits directly beneath it, so an `alt`
+            carrying the same words would have a screen reader say the
+            restaurant twice before reaching the status.
+
+            `max-h` and not a fixed height — merchant logos come at every aspect
+            ratio, and a wide wordmark should stay short rather than be scaled
+            up to fill one.
+          */}
+          {logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element -- merchant CDN host
+            <img
+              src={logoUrl}
+              alt=""
+              className="mx-auto mb-6 max-h-14 w-auto max-w-[12rem] object-contain"
+            />
+          )}
           {reservation.location.name && (
             <p className="text-xs uppercase tracking-[0.14em] opacity-60">
               {reservation.location.name}
@@ -263,13 +280,44 @@ function VenueFooter({ reservation }: { reservation: ManagedReservation }) {
  * nothing published, falls back to the platform theme rather than failing: the
  * booking details are the point of the page, and the styling is not worth a 500.
  */
-async function loadSiteTheme(slug: string): Promise<ThemeTokens> {
+/**
+ * The site's theme and its logo, from one lookup.
+ *
+ * They travel together because `resolveRenderMode` already returns both: this
+ * page was resolving the decision and keeping only the theme, so showing the
+ * merchant's mark costs no extra round trip.
+ *
+ * A failure falls back to an unbranded page rather than a 500. A guest here is
+ * trying to cancel a table; the branding is the part of this page that can be
+ * missing without the page failing at its job.
+ */
+async function loadSiteChrome(
+  slug: string,
+): Promise<{ theme: ThemeTokens; logoUrl: string | null }> {
   try {
-    const decision = await resolveRenderMode(createAnonSupabaseClient(), slug, "", true);
-    if (decision.mode !== "builder") return DEFAULT_THEME;
-    return resolveTheme(decision.theme as Partial<ThemeTokens> | null);
+    /*
+      `false` for `hasActiveStorefront`, matching the events page.
+
+      This read `true`, and that silently disabled the whole function:
+      `loadSiteRequestFacts` short-circuits on a truthy value and returns
+      `site: null, addressedBySubdomain: false` WITHOUT running the RPC, which
+      `decideRenderMode` then turns into `mode: "template"`. The `!== "builder"`
+      guard below was therefore always taken, so this page has never once
+      rendered in the merchant's own theme - it has served DEFAULT_THEME to
+      every guest since it shipped. The bug was invisible because the fallback
+      is a perfectly presentable page.
+
+      The flag means "an ordering storefront answers this address", and no
+      storefront serves /r/{token} - the built site is the only thing that can.
+    */
+    const decision = await resolveRenderMode(createAnonSupabaseClient(), slug, "", false);
+    if (decision.mode !== "builder") return { theme: DEFAULT_THEME, logoUrl: null };
+    return {
+      theme: resolveTheme(decision.theme as Partial<ThemeTokens> | null),
+      logoUrl: decision.logoUrl ?? null,
+    };
   } catch {
-    return DEFAULT_THEME;
+    return { theme: DEFAULT_THEME, logoUrl: null };
   }
 }
 
