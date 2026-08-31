@@ -1,5 +1,5 @@
 /**
- * [C2] Valor subscriptions — the SaaS billing rail.
+ * [C2] Valor subscriptions - the SaaS billing rail.
  *
  * This is DEXA charging merchants monthly, not merchants charging customers.
  * Subscriptions run under `VALOR_DEXA_HQ_EPI` (DEXA boarded as a merchant under
@@ -17,7 +17,11 @@ import {
   type ValorEnvelope,
   type ValorRequestOptions,
 } from "./client";
-import { VALOR_MAX_AMOUNT_MINOR } from "./config";
+import {
+  resolveValorSurchargeIndicator,
+  VALOR_MAX_AMOUNT_MINOR,
+  type ValorSurchargeIndicator,
+} from "./config";
 
 /** Valor's `recurring_type` enum ([V-SUB]). */
 export const RECURRING_TYPE = {
@@ -31,9 +35,6 @@ export const RECURRING_TYPE = {
 } as const;
 
 export type RecurringInterval = keyof typeof RECURRING_TYPE;
-
-/** See `saleApi.ts` — web is card-only, so never the cash-discount MID. */
-const SURCHARGE_INDICATOR_CARD_ONLY = "0" as const;
 
 /** `is_validate_card`: "0" charges immediately, "1" validates only. */
 export const VALIDATE_ONLY = "1" as const;
@@ -51,18 +52,18 @@ export interface ValorAddSubscriptionBody {
   surchargeAmount: string;
   txn_type: "add_subscription";
   payment_info: ValorSubscriptionPaymentInfo;
-  surchargeIndicator: typeof SURCHARGE_INDICATOR_CARD_ONLY;
+  surchargeIndicator: ValorSurchargeIndicator;
   recurring_type: string;
   is_validate_card: string;
   shipping_customer_name: string;
   shipping_zip: string;
   billing_customer_name: string;
   billing_zip: string;
-  /** YYYYMMDD. */
+  /** YYYY-MM-DD. */
   subscription_starts_from: string;
   /** A duration, or the literal "never_expired". */
   charge_until: string;
-  /** Day-of-week (0–6) or day-of-month (1–30), per `recurring_type`. */
+  /** Day-of-week (0-6) or day-of-month (1-30), per `recurring_type`. */
   charge_on: string;
   additional_prompts: Array<{ name: string; value: string }>;
   tax?: string;
@@ -83,7 +84,7 @@ export interface ValorSubscriptionResponse extends ValorEnvelope {
 
 export const NEVER_EXPIRES = "never_expired" as const;
 
-/** Format a date as Valor's YYYYMMDD, in UTC. */
+/** Format a date as Valor's live API requires: YYYY-MM-DD in UTC. */
 export function formatSubscriptionDate(date: Date): string {
   if (Number.isNaN(date.getTime())) {
     throw new RangeError("subscription start date is invalid");
@@ -91,14 +92,14 @@ export function formatSubscriptionDate(date: Date): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   const day = String(date.getUTCDate()).padStart(2, "0");
-  return `${year}${month}${day}`;
+  return `${year}-${month}-${day}`;
 }
 
 /**
  * Validate `charge_on` against the chosen interval.
  *
- * Valor overloads one field with two meanings — day-of-week for weekly
- * intervals, day-of-month otherwise — so an out-of-range value is easy to send
+ * Valor overloads one field with two meanings - day-of-week for weekly
+ * intervals, day-of-month otherwise - so an out-of-range value is easy to send
  * and produces an opaque gateway rejection.
  */
 export function assertValidChargeOn(
@@ -110,7 +111,7 @@ export function assertValidChargeOn(
   if (isWeekly) {
     if (!Number.isInteger(chargeOn) || chargeOn < 0 || chargeOn > 6) {
       throw new RangeError(
-        `charge_on must be a day of week 0–6 for a ${interval} subscription, received ${chargeOn}`
+        `charge_on must be a day of week 0-6 for a ${interval} subscription, received ${chargeOn}`
       );
     }
     return;
@@ -118,7 +119,7 @@ export function assertValidChargeOn(
 
   if (!Number.isInteger(chargeOn) || chargeOn < 1 || chargeOn > 30) {
     throw new RangeError(
-      `charge_on must be a day of month 1–30 for a ${interval} subscription, received ${chargeOn}`
+      `charge_on must be a day of month 1-30 for a ${interval} subscription, received ${chargeOn}`
     );
   }
 }
@@ -126,7 +127,7 @@ export function assertValidChargeOn(
 export interface CreateSubscriptionParams {
   money: Money;
   interval: RecurringInterval;
-  /** Day of week (0–6) or day of month (1–30), per interval. */
+  /** Day of week (0-6) or day of month (1-30), per interval. */
   chargeOn: number;
   startsOn: Date;
   /** Vault customer id from `createCustomerProfile`. */
@@ -154,9 +155,10 @@ export interface UpdateSubscriptionParams extends CreateSubscriptionParams {
   subscriptionId: string;
 }
 
-/** Build the Add Subscription body. Pure — exported for testing. */
+/** Build the Add Subscription body. Pure - exported for testing. */
 export function buildAddSubscriptionBody(
-  params: CreateSubscriptionParams
+  params: CreateSubscriptionParams,
+  surchargeIndicator: ValorSurchargeIndicator = "0"
 ): ValorAddSubscriptionBody {
   assertValidMoney(params.money);
   if (params.money.amountMinor === 0) {
@@ -173,7 +175,7 @@ export function buildAddSubscriptionBody(
 
   return {
     amount: formatMinorUnits(params.money.amountMinor),
-    // Card-only web: no surcharge is ever added, so the amount is always zero.
+    // Valor calculates any processor-configured fee; Dexa never invents one.
     surchargeAmount: "0.00",
     txn_type: "add_subscription",
     payment_info: {
@@ -182,7 +184,7 @@ export function buildAddSubscriptionBody(
         ? { payment_id: params.paymentProfileId }
         : {}),
     },
-    surchargeIndicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    surchargeIndicator,
     recurring_type: RECURRING_TYPE[params.interval],
     is_validate_card: params.validateOnly ? VALIDATE_ONLY : CHARGE_IMMEDIATELY,
     shipping_customer_name:
@@ -217,7 +219,7 @@ export interface ValorUpdateSubscriptionBody {
   amount: string;
   custom_fee: string;
   payment_info: ValorSubscriptionPaymentInfo;
-  surchargeIndicator: typeof SURCHARGE_INDICATOR_CARD_ONLY;
+  surchargeIndicator: ValorSurchargeIndicator;
   recurring_type: string;
   is_validate_card: string;
   shipping_customer_name: string;
@@ -287,9 +289,10 @@ export function buildSubscriptionLifecycleRequest(
 
 /** Build Valor's updateSub body for card replacement or past-due recovery. */
 export function buildUpdateSubscriptionBody(
-  params: UpdateSubscriptionParams
+  params: UpdateSubscriptionParams,
+  surchargeIndicator: ValorSurchargeIndicator = "0"
 ): ValorUpdateSubscriptionBody {
-  const addBody = buildAddSubscriptionBody(params);
+  const addBody = buildAddSubscriptionBody(params, surchargeIndicator);
 
   if (!params.subscriptionId.trim()) {
     throw new RangeError("subscriptionId is required");
@@ -335,7 +338,10 @@ export async function createSubscription(
   options: ValorRequestOptions,
   params: CreateSubscriptionParams
 ): Promise<{ subscriptionId: string | null; raw: ValorSubscriptionResponse }> {
-  const body = buildAddSubscriptionBody(params);
+  const body = buildAddSubscriptionBody(
+    params,
+    resolveValorSurchargeIndicator(options.credentials.epi)
+  );
 
   const result = await postWithBodyCredentials<ValorSubscriptionResponse>(
     "/?addSub",
@@ -364,7 +370,10 @@ export async function updateSubscription(
   options: ValorRequestOptions,
   params: UpdateSubscriptionParams
 ): Promise<{ transactionId: string | null; raw: ValorSubscriptionResponse }> {
-  const body = buildUpdateSubscriptionBody(params);
+  const body = buildUpdateSubscriptionBody(
+    params,
+    resolveValorSurchargeIndicator(options.credentials.epi)
+  );
   const result = await postWithBodyCredentials<ValorSubscriptionResponse>(
     "/?updateSub",
     body,

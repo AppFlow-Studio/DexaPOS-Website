@@ -3,6 +3,7 @@ import {
   isValidEpi,
   readValorEnvironment,
   resolveValorEndpoints,
+  resolveValorSurchargeIndicator,
 } from "../valor/config";
 import {
   buildSaleRequestBody,
@@ -69,6 +70,35 @@ describe("resolveValorEndpoints", () => {
   });
 });
 
+describe("resolveValorSurchargeIndicator", () => {
+  it("enables surcharge mode for Valor's public sandbox transaction EPI", () => {
+    expect(
+      resolveValorSurchargeIndicator("2412333540", { VALOR_ENV: "sandbox" })
+    ).toBe("1");
+    expect(
+      resolveValorSurchargeIndicator("2412333541", { VALOR_ENV: "sandbox" })
+    ).toBe("0");
+  });
+
+  it("supports one additional exact sandbox QA EPI", () => {
+    const env = {
+      VALOR_ENV: "sandbox",
+      VALOR_QA_SURCHARGE_EPI: "2412333541",
+    };
+    expect(resolveValorSurchargeIndicator("2412333541", env)).toBe("1");
+    expect(resolveValorSurchargeIndicator("2412333542", env)).toBe("0");
+  });
+
+  it("fails closed in production even when the QA EPI is configured", () => {
+    expect(
+      resolveValorSurchargeIndicator("2412333540", {
+        VALOR_ENV: "production",
+        VALOR_QA_SURCHARGE_EPI: "2412333540",
+      })
+    ).toBe("0");
+  });
+});
+
 describe("isValidEpi", () => {
   it("accepts a 10-digit EPI starting with 2", () => {
     expect(isValidEpi("2000000001")).toBe(true);
@@ -83,12 +113,16 @@ describe("isValidEpi", () => {
 });
 
 describe("buildSaleRequestBody", () => {
-  it("always sends surchargeIndicator '0' as a string", () => {
-    // Web is card-only. Sending "1" would add an unauthorized surcharge to a
-    // customer's card even though the merchant is boarded surcharge-enabled.
+  it("defaults surchargeIndicator to string '0'", () => {
     const body = buildSaleRequestBody(credentials, baseParams);
     expect(body.surchargeIndicator).toBe("0");
     expect(typeof body.surchargeIndicator).toBe("string");
+  });
+
+  it("accepts the resolved sandbox surcharge mode", () => {
+    expect(buildSaleRequestBody(credentials, baseParams, "1").surchargeIndicator).toBe(
+      "1"
+    );
   });
 
   it("formats amounts as major-unit strings", () => {

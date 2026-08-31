@@ -5,7 +5,7 @@
  *
  *  - `getClientToken` mints the short-lived token Passage.js needs to render
  *    the card form. It is the only value of the three credentials that may
- *    reach the browser — the APP key must never leave the server.
+ *    reach the browser - the APP key must never leave the server.
  *  - `createSale` charges the card token Passage.js hands back.
  *
  * Sources re-fetched 2026-08-09: [V-DST] direct-sale-token-api,
@@ -26,9 +26,11 @@ import {
 } from "./client";
 import {
   isValidEpi,
+  resolveValorSurchargeIndicator,
   VALOR_MAX_AMOUNT_MINOR,
   ValorConfigError,
   type ValorMerchantCredentials,
+  type ValorSurchargeIndicator,
 } from "./config";
 
 export { isValorSuccess } from "./client";
@@ -37,22 +39,9 @@ export { isValorSuccess } from "./client";
 export type ValorApiOptions = ValorRequestOptions;
 
 /**
- * Web checkout is card-only, so every sale runs on the traditional MID with no
- * added fee — `"0"` per [V-DST]:
- *
- *   "The value '0' represents a transaction being ran on the traditional MID
- *    with no custom fee added, while '1' represents a transaction being ran on
- *    the cash discounting MID with the custom fee added"
- *
- * Merchants are boarded surcharge-enabled, so the boarding config and this
- * value deliberately disagree. Sending "1" here would add an unauthorized
- * surcharge to a customer's card. It is a constant, not a parameter, so no
- * call site can pass the wrong one.
- *
- * Note it is the *string* "0" — the arch parent's excerpt shows a numeric 0.
+ * Valor uses "0" for a traditional MID and "1" for a surcharge MID. Builders
+ * default to "0"; only the sandbox QA EPI resolver may select "1" at runtime.
  */
-const SURCHARGE_INDICATOR_CARD_ONLY = "0" as const;
-
 export interface ValorClientTokenResponse {
   error_no: string;
   error_code: string;
@@ -84,7 +73,7 @@ export interface ValorSaleRequestBody {
   token: string;
   invoicenumber: string;
   ecomm_channel: "passagejs";
-  surchargeIndicator: typeof SURCHARGE_INDICATOR_CARD_ONLY;
+  surchargeIndicator: ValorSurchargeIndicator;
   shipping_country: string;
   productIds?: ValorProductLine[];
   tax_amount?: string;
@@ -212,7 +201,7 @@ export async function getClientToken(
 
   // GetClientToken is POST /?gptoken on the :443 transaction host with
   // txn_type "clientToken" ([V-create-page-token]). Confirmed live against
-  // sandbox — the prior /?saleapi= + txn_type "sale" guess on the :4430 host
+  // sandbox - the prior /?saleapi= + txn_type "sale" guess on the :4430 host
   // was rejected with error_no D07.
   const result = await postWithBodyCredentials<
     ValorEnvelopeWithClientToken
@@ -230,10 +219,11 @@ export async function getClientToken(
   return result.body as ValorClientTokenResponse;
 }
 
-/** Build the Direct Sale Token request body. Pure — exported for testing. */
+/** Build the Direct Sale Token request body. Pure - exported for testing. */
 export function buildSaleRequestBody(
   credentials: ValorMerchantCredentials,
-  params: ValorSaleParams
+  params: ValorSaleParams,
+  surchargeIndicator: ValorSurchargeIndicator = "0"
 ): ValorSaleRequestBody {
   assertChargeable(params.money);
 
@@ -255,7 +245,7 @@ export function buildSaleRequestBody(
     token: params.token,
     invoicenumber: normalizeValorInvoiceNumber(params.invoiceNumber),
     ecomm_channel: "passagejs",
-    surchargeIndicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    surchargeIndicator,
     shipping_country: params.shippingCountry ?? "US",
     ...(params.productLines.length > 0 ? { productIds: params.productLines } : {}),
     ...(params.taxMinor !== undefined
@@ -311,7 +301,11 @@ export async function createSale(
   options: ValorRequestOptions,
   params: ValorSaleParams
 ): Promise<ProcessorTransaction> {
-  const body = buildSaleRequestBody(options.credentials, params);
+  const body = buildSaleRequestBody(
+    options.credentials,
+    params,
+    resolveValorSurchargeIndicator(options.credentials.epi)
+  );
 
   const result = await postWithBodyCredentials<ValorSaleResponseBody>(
     "/?sale",

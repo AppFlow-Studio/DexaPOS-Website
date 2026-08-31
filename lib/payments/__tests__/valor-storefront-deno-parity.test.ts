@@ -11,6 +11,7 @@ import {
   buildRefundRequestBody as denoBuildRefundRequestBody,
   buildSaleRequestBody as denoBuildSaleRequestBody,
   buildVoidRequestBody as denoBuildVoidRequestBody,
+  resolveValorSurchargeIndicator as denoResolveValorSurchargeIndicator,
   toReversalResult,
   toSaleResult,
 } from "../../../supabase/functions/_shared/valor";
@@ -84,7 +85,7 @@ describe("Valor storefront Deno/Node sale-body parity", () => {
     });
   }
 
-  it("locks the card-only surcharge indicator to string '0'", () => {
+  it("defaults the surcharge indicator to string '0'", () => {
     const body = denoBuildSaleRequestBody(CREDS, {
       amountMinor: 1000,
       token: "t",
@@ -132,6 +133,58 @@ describe("Valor storefront Deno toSaleResult classification", () => {
     expect(r.outcome).toBe("declined");
     expect(r.success).toBe(false);
     expect(r.details.responseText).toBe("Declined");
+  });
+
+  it("keeps the sandbox surcharge request body identical in Node and Deno", () => {
+    const nodeBody = nodeBuildSaleRequestBody(
+      CREDS,
+      {
+        money: { amountMinor: 1000, currency: "USD" },
+        token: "t",
+        invoiceNumber: "i",
+        productLines: [],
+      },
+      "1"
+    );
+    const denoBody = denoBuildSaleRequestBody(
+      CREDS,
+      {
+        amountMinor: 1000,
+        token: "t",
+        invoiceNumber: "i",
+        productLines: [],
+      },
+      "1"
+    );
+    expect(denoBody).toEqual(nodeBody);
+  });
+
+  it("supports the public sandbox EPI without a secret", () => {
+    expect(
+      denoResolveValorSurchargeIndicator("2412333540", {
+        VALOR_ENV: "sandbox",
+      })
+    ).toBe("1");
+    expect(
+      denoResolveValorSurchargeIndicator("2412333540", {
+        VALOR_ENV: "production",
+      })
+    ).toBe("0");
+  });
+
+  it("keeps an additional Deno QA override exact-EPI and sandbox-only", () => {
+    const sandboxEnv = {
+      VALOR_ENV: "sandbox",
+      VALOR_QA_SURCHARGE_EPI: CREDS.epi,
+    };
+    expect(denoResolveValorSurchargeIndicator(CREDS.epi, sandboxEnv)).toBe("1");
+    expect(denoResolveValorSurchargeIndicator("2000000002", sandboxEnv)).toBe("0");
+    expect(
+      denoResolveValorSurchargeIndicator(CREDS.epi, {
+        ...sandboxEnv,
+        VALOR_ENV: "production",
+      })
+    ).toBe("0");
   });
 
   it("reports the detailed cause for a 4xx gateway configuration error", () => {
@@ -185,6 +238,26 @@ describe("Valor storefront Deno/Node reversal-body parity", () => {
 
     expect(denoBody).toEqual(nodeBody);
     expect(denoBody.surchargeindicator).toBe("0");
+  });
+
+  it("keeps surcharge-mode refund and void bodies in parity", () => {
+    const nodeRefund = nodeBuildRefundRequestBody(
+      CREDS,
+      {
+        transactionId: "sale-123",
+        money: { amountMinor: 500, currency: "USD" },
+      },
+      "1"
+    );
+    const denoRefund = denoBuildRefundRequestBody(
+      CREDS,
+      { transactionId: "sale-123", amountMinor: 500 },
+      "1"
+    );
+    const nodeVoid = nodeBuildVoidRequestBody(CREDS, { transactionId: "sale-123" }, "1");
+    const denoVoid = denoBuildVoidRequestBody(CREDS, { transactionId: "sale-123" }, "1");
+    expect(denoRefund).toEqual(nodeRefund);
+    expect(denoVoid).toEqual(nodeVoid);
   });
 
   it("rejects invalid refund amounts", () => {

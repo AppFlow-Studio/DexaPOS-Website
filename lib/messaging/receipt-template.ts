@@ -1,4 +1,8 @@
-import { getOrderBreakdown, type BreakdownOrderInput } from "@/lib/orders/order-breakdown";
+import {
+  getOrderBreakdown,
+  getOrderDisplayTotal,
+  type BreakdownOrderInput,
+} from "@/lib/orders/order-breakdown";
 import type { OrderPayment } from "@/types/order-management";
 
 type ReceiptOrder = {
@@ -276,8 +280,7 @@ export function renderReceiptHtml(
   // Split-tender orders show the list ladder bridged by the cash discount down
   // to what was collected; pure lanes already bake the discount into the total.
   const cashDiscount = breakdown.mixedCashDiscount;
-  const chargedTotal =
-    breakdown.isMixed && lane.amountPaid > 0 ? lane.amountPaid : lane.total + tip;
+  const chargedTotal = getOrderDisplayTotal(breakdown);
 
   // ── Banner ──
   const banner =

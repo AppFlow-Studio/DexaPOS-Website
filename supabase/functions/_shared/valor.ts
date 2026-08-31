@@ -5,7 +5,7 @@
 //   The storefront charge runs inside the create-online-order Deno edge function,
 //   which cannot import the Next.js lib/payments module. Rather than relocate the
 //   edge function's validated (validate -> charge -> create-order -> record)
-//   ordering into Next.js, we mirror exactly two Valor HTTP calls here — the same
+//   ordering into Next.js, we mirror exactly two Valor HTTP calls here - the same
 //   pattern _shared/nmi.ts already uses alongside the Node NMI client. The Node
 //   source of truth is lib/payments/valor/{saleApi,client,config}.ts; a
 //   golden-body parity test keeps the sale request body from drifting.
@@ -17,6 +17,9 @@
 // ============================================================================
 
 export type ValorEnvironment = 'sandbox' | 'production'
+export type ValorSurchargeIndicator = '0' | '1'
+
+const VALOR_PUBLIC_SANDBOX_SURCHARGE_EPI = '2412333540'
 
 export interface ValorEndpoints {
   environment: ValorEnvironment
@@ -36,14 +39,10 @@ const DEFAULT_TIMEOUT_MS = 15_000
 /** Valor caps a single transaction at $99,999.99 ([V-DST]). Minor units. */
 export const VALOR_MAX_AMOUNT_MINOR = 9_999_999
 
-// Web checkout is card-only: run on the traditional MID with no added fee ("0"
-// per [V-DST]). Merchants are boarded surcharge-enabled, so this deliberately
-// disagrees with boarding — sending "1" here would add an unauthorized surcharge
-// to a customer's card. It is a constant, never a parameter. Note it is the
-// *string* "0".
-const SURCHARGE_INDICATOR_CARD_ONLY = '0' as const
-
+// Request builders default to the traditional MID ("0"). A sandbox-only,
+// exact-EPI resolver may select the processor-configured surcharge MID ("1").
 type JsonRecord = Record<string, unknown>
+type EnvLike = Record<string, string | undefined>
 
 export interface ValorCredentials {
   appId: string
@@ -56,8 +55,24 @@ export function readValorEnvironment(): ValorEnvironment {
   return Deno.env.get('VALOR_ENV') === 'production' ? 'production' : 'sandbox'
 }
 
+/** Enable surcharge mode only for an explicitly supported sandbox processor profile. */
+export function resolveValorSurchargeIndicator(
+  epi: string,
+  env: EnvLike = {
+    VALOR_ENV: Deno.env.get('VALOR_ENV'),
+    VALOR_QA_SURCHARGE_EPI: Deno.env.get('VALOR_QA_SURCHARGE_EPI'),
+  },
+): ValorSurchargeIndicator {
+  const qaEpi = env.VALOR_QA_SURCHARGE_EPI?.trim()
+  const usesSandboxSurchargeProfile =
+    epi === VALOR_PUBLIC_SANDBOX_SURCHARGE_EPI || qaEpi === epi
+  return env.VALOR_ENV !== 'production' && usesSandboxSurchargeProfile
+    ? '1'
+    : '0'
+}
+
 /**
- * Resolve the hosts to call. Production hosts are never hardcoded — Valor only
+ * Resolve the hosts to call. Production hosts are never hardcoded - Valor only
  * publishes staging hosts, and a guessed production host in a module that moves
  * money is how a live charge ends up pointed somewhere unintended. Production
  * requires VALOR_BASE_URL explicitly (mirrors config.ts:resolveValorEndpoints).
@@ -103,7 +118,7 @@ export function formatMinorUnits(amountMinor: number): string {
 
 /**
  * Valor signals success on the securelink hosts with error_no "S00" +
- * error_code "00" (mirrors client.ts:isValorSuccess — the vault-host `code`
+ * error_code "00" (mirrors client.ts:isValorSuccess - the vault-host `code`
  * path is intentionally not ported; the storefront never touches the vault).
  */
 export function isValorSuccess(body: JsonRecord): boolean {
@@ -129,7 +144,7 @@ function firstString(source: JsonRecord, keys: string[]): string {
 }
 
 /**
- * POST to a securelink endpoint with credentials merged into the body — the same
+ * POST to a securelink endpoint with credentials merged into the body - the same
  * injection client.ts does, so a call site cannot forget or mismatch them.
  */
 async function postWithBodyCredentials(
@@ -178,7 +193,7 @@ export interface ValorClientToken {
  * Mint the short-lived token Passage.js needs to render the card form.
  *
  * POST /?gptoken txn_type "clientToken" on the :443 transaction host
- * (mirrors saleApi.ts:getClientToken — confirmed live against sandbox; the prior
+ * (mirrors saleApi.ts:getClientToken - confirmed live against sandbox; the prior
  * :4430 /?saleapi= guess was rejected with error_no D07). The clientToken is
  * safe to hand the browser; the appKey used to obtain it is not.
  */
@@ -254,7 +269,7 @@ export interface ValorSaleRequestBody {
   token: string
   invoicenumber: string
   ecomm_channel: 'passagejs'
-  surchargeIndicator: typeof SURCHARGE_INDICATOR_CARD_ONLY
+  surchargeIndicator: ValorSurchargeIndicator
   shipping_country: string
   productIds?: ValorProductLine[]
   tax_amount?: string
@@ -300,13 +315,14 @@ export function normalizeValorInvoiceNumber(value: string): string {
 }
 
 /**
- * Build the Direct Sale Token request body. Pure — exported so the golden-body
+ * Build the Direct Sale Token request body. Pure - exported so the golden-body
  * parity test can assert this matches lib/payments/valor/saleApi.ts's
  * buildSaleRequestBody for identical inputs.
  */
 export function buildSaleRequestBody(
   credentials: ValorCredentials,
   params: ValorSaleParams,
+  surchargeIndicator: ValorSurchargeIndicator = '0',
 ): ValorSaleRequestBody {
   if (!Number.isInteger(params.amountMinor)) {
     throw new RangeError(
@@ -337,7 +353,7 @@ export function buildSaleRequestBody(
     token: params.token,
     invoicenumber: normalizeValorInvoiceNumber(params.invoiceNumber),
     ecomm_channel: 'passagejs',
-    surchargeIndicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    surchargeIndicator,
     shipping_country: params.shippingCountry ?? 'US',
     ...(params.productLines.length > 0 ? { productIds: params.productLines } : {}),
     ...(params.taxMinor !== undefined ? { tax_amount: formatMinorUnits(params.taxMinor) } : {}),
@@ -407,7 +423,11 @@ export async function createSale(
   options: { endpoints?: ValorEndpoints; timeoutMs?: number } = {},
 ): Promise<ValorSaleResult> {
   const endpoints = options.endpoints ?? resolveValorEndpoints()
-  const body = buildSaleRequestBody(credentials, params)
+  const body = buildSaleRequestBody(
+    credentials,
+    params,
+    resolveValorSurchargeIndicator(credentials.epi),
+  )
   const { status, body: responseBody } = await postWithBodyCredentials(
     '/?sale',
     body as unknown as JsonRecord,
@@ -450,10 +470,13 @@ function formatValorSubscriptionDate(date: Date): string {
     date.getUTCFullYear(),
     String(date.getUTCMonth() + 1).padStart(2, '0'),
     String(date.getUTCDate()).padStart(2, '0'),
-  ].join('')
+  ].join('-')
 }
 
-function buildValorRecurringBody(params: ValorRecurringParams): JsonRecord {
+function buildValorRecurringBody(
+  params: ValorRecurringParams,
+  surchargeIndicator: ValorSurchargeIndicator = '0',
+): JsonRecord {
   if (!Number.isInteger(params.amountMinor) || params.amountMinor <= 0) {
     throw new Error('Valor subscription amount must be a positive integer in minor units')
   }
@@ -471,7 +494,7 @@ function buildValorRecurringBody(params: ValorRecurringParams): JsonRecord {
       vault_id: params.vaultCustomerId,
       ...(params.paymentProfileId ? { payment_id: params.paymentProfileId } : {}),
     },
-    surchargeIndicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    surchargeIndicator,
     recurring_type: '2',
     is_validate_card: params.validateOnly ? '1' : '0',
     shipping_customer_name: params.billingCustomerName,
@@ -513,7 +536,7 @@ export async function createRecurringSubscription(
   const endpoints = options.endpoints ?? resolveValorEndpoints()
   const body = {
     txn_type: 'add_subscription',
-    ...buildValorRecurringBody(params),
+    ...buildValorRecurringBody(params, resolveValorSurchargeIndicator(credentials.epi)),
   }
   const response = await postWithBodyCredentials(
     '/?addSub',
@@ -532,7 +555,10 @@ export async function updateRecurringSubscription(
   options: { endpoints?: ValorEndpoints; timeoutMs?: number } = {},
 ): Promise<ValorRecurringResult> {
   const endpoints = options.endpoints ?? resolveValorEndpoints()
-  const recurring = buildValorRecurringBody(params)
+  const recurring = buildValorRecurringBody(
+    params,
+    resolveValorSurchargeIndicator(credentials.epi),
+  )
   delete recurring.surchargeAmount
   delete recurring.retry_count
   const body = {
@@ -664,6 +690,7 @@ function assertReversalAmount(amountMinor: number): void {
 export function buildRefundRequestBody(
   credentials: ValorCredentials,
   params: ValorRefundParams,
+  surchargeIndicator: ValorSurchargeIndicator = '0',
 ): ValorReversalRequestBody {
   assertReversalAmount(params.amountMinor)
 
@@ -675,7 +702,7 @@ export function buildRefundRequestBody(
     amount: formatMinorUnits(params.amountMinor),
     ref_txn_id: params.transactionId,
     sale_refund: '1',
-    surchargeIndicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    surchargeIndicator,
     ...(params.authCode ? { auth_code: params.authCode } : {}),
     ...(params.rrn ? { rrn: params.rrn } : {}),
     ...(params.invoiceNumber ? { invoicenumber: params.invoiceNumber } : {}),
@@ -686,6 +713,7 @@ export function buildRefundRequestBody(
 export function buildVoidRequestBody(
   credentials: ValorCredentials,
   params: ValorVoidParams,
+  surchargeIndicator: ValorSurchargeIndicator = '0',
 ): ValorReversalRequestBody {
   if (params.amountMinor !== undefined) assertReversalAmount(params.amountMinor)
 
@@ -695,7 +723,7 @@ export function buildVoidRequestBody(
     epi: credentials.epi,
     txn_type: 'void',
     ref_txn_id: params.transactionId,
-    surchargeindicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    surchargeindicator: surchargeIndicator,
     ...(params.amountMinor !== undefined
       ? { amount: formatMinorUnits(params.amountMinor) }
       : {}),
@@ -751,7 +779,11 @@ export async function refundSale(
   options: { endpoints?: ValorEndpoints; timeoutMs?: number } = {},
 ): Promise<ValorReversalResult> {
   const endpoints = options.endpoints ?? resolveValorEndpoints()
-  const body = buildRefundRequestBody(credentials, params)
+  const body = buildRefundRequestBody(
+    credentials,
+    params,
+    resolveValorSurchargeIndicator(credentials.epi),
+  )
   const { status, body: responseBody } = await postWithBodyCredentials(
     '/?refund',
     body as unknown as JsonRecord,
@@ -768,7 +800,11 @@ export async function voidSale(
   options: { endpoints?: ValorEndpoints; timeoutMs?: number } = {},
 ): Promise<ValorReversalResult> {
   const endpoints = options.endpoints ?? resolveValorEndpoints()
-  const body = buildVoidRequestBody(credentials, params)
+  const body = buildVoidRequestBody(
+    credentials,
+    params,
+    resolveValorSurchargeIndicator(credentials.epi),
+  )
   const { status, body: responseBody } = await postWithBodyCredentials(
     '/?void',
     body as unknown as JsonRecord,

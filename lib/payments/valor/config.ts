@@ -23,6 +23,9 @@
 export type EnvLike = Record<string, string | undefined>;
 
 export type ValorEnvironment = "sandbox" | "production";
+export type ValorSurchargeIndicator = "0" | "1";
+
+const VALOR_PUBLIC_SANDBOX_SURCHARGE_EPI = "2412333540";
 
 export interface ValorEndpoints {
   environment: ValorEnvironment;
@@ -53,6 +56,23 @@ export function readValorEnvironment(
   env: EnvLike = process.env
 ): ValorEnvironment {
   return env.VALOR_ENV === "production" ? "production" : "sandbox";
+}
+
+/**
+ * Allow Valor's public sandbox transaction profile, or one explicitly named
+ * sandbox EPI, to use its processor-configured surcharge MID. Production and
+ * every other account remain card-only.
+ */
+export function resolveValorSurchargeIndicator(
+  epi: string,
+  env: EnvLike = process.env
+): ValorSurchargeIndicator {
+  const qaEpi = env.VALOR_QA_SURCHARGE_EPI?.trim();
+  const usesSandboxSurchargeProfile =
+    epi === VALOR_PUBLIC_SANDBOX_SURCHARGE_EPI || qaEpi === epi;
+  return readValorEnvironment(env) === "sandbox" && usesSandboxSurchargeProfile
+    ? "1"
+    : "0";
 }
 
 /**

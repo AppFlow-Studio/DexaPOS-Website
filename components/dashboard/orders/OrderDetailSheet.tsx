@@ -80,7 +80,10 @@ import { SendReceiptModal } from "./SendReceiptModal";
 import { AssignCustomerModal } from "./AssignCustomerModal";
 import { AdjustTipModal } from "./AdjustTipModal";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
-import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
+import {
+  getOrderBreakdown,
+  getOrderDisplayTotal,
+} from "@/lib/orders/order-breakdown";
 import {
   orderSourceLabel,
   platformLabel,
@@ -1031,7 +1034,9 @@ export function OrderDetailSheet({
   );
   const voidedCount = items.filter((i) => i.is_voided).length;
   const paymentCount = payments.length;
-  const totalAmount = Number(displayOrder.total_amount) || 0;
+  const totalAmount = getOrderDisplayTotal(
+    getOrderBreakdown(displayOrder, payments)
+  );
   const amountDue = Number(displayOrder.amount_due) || 0;
   const fulfillmentValue = isTableLabeledOrder
     ? tableName ?? "Dining Room"
@@ -1510,11 +1515,7 @@ export function OrderDetailSheet({
                               ? `Total (${laneLabel})`
                               : "Total"
                           }
-                          value={formatCurrency(
-                            isMixedPayment && lane.amountPaid > 0
-                              ? lane.amountPaid
-                              : lane.total
-                          )}
+                          value={formatCurrency(getOrderDisplayTotal(b))}
                           bold
                           className="text-base"
                           valueClassName={

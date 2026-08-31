@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createValorProcessor } from "../valor-adapter";
 import { createProcessor } from "../index";
 import { PaymentProcessorError, type ProcessorAccount } from "../types";
@@ -21,6 +21,10 @@ const ENDPOINTS: ValorEndpoints = {
 };
 
 const CREDS = { epi: "2000000001", appId: "app-id", appKey: "app-key" };
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 interface RecordedCall {
   url: string;
@@ -113,6 +117,23 @@ describe("createValorProcessor — sale", () => {
 
     expect(tx.outcome).toBe("declined");
     expect(tx.responseText).toBe("Declined");
+  });
+
+  it("uses surcharge mode for only the configured sandbox QA EPI", async () => {
+    vi.stubEnv("VALOR_ENV", "sandbox");
+    vi.stubEnv("VALOR_QA_SURCHARGE_EPI", CREDS.epi);
+    const { fetchImpl, calls } = stubFetch([
+      { status: 200, body: { error_no: "S00", error_code: "00", txnid: "txn_qa" } },
+    ]);
+    const processor = createValorProcessor({ ...CREDS, endpoints: ENDPOINTS, fetchImpl });
+
+    await processor.sale({
+      money: { amountMinor: 100, currency: "USD" },
+      paymentToken: "tok",
+      orderId: "QA-1",
+    });
+
+    expect(jsonBody(calls[0]).surchargeIndicator).toBe("1");
   });
 
   it("classifies a 5xx as error (retryable), not a decline", async () => {

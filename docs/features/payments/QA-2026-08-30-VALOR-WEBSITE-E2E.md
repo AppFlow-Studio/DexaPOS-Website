@@ -66,6 +66,46 @@ order on a physical register or KDS.
   request, so complete card E2E from a network that can reach the Valor sandbox
   host or ask Valor to confirm sandbox/IP access before rotating credentials.
 
+### QA Processor Compatibility - 2026-08-31
+
+- Network access is no longer the blocker. Passage tokenization and direct
+  calls to Valor's sandbox transaction and Vault hosts succeed from this
+  workstation.
+- The DEXA-boarded Uptown EPI returns `E98/VP` (`Merchant Profile Update
+  Required`) for Sale and Add Subscription. Valor/ISO must correct that
+  processor profile before it can be used as production-like QA evidence.
+- Valor's documented public sandbox transaction profile approved a tokenized
+  Sale, a Void, and a non-charging Add Subscription request. Its profile
+  requires `surchargeIndicator="1"`.
+- Valor's documented public sandbox EPI is recognized directly in sandbox so
+  staging QA does not depend on secret-management access. An optional
+  `VALOR_QA_SURCHARGE_EPI` supports one additional controlled QA EPI. The
+  resolver always returns `"0"` in production and for every non-matching EPI.
+- The live Vault API requires `billing_*` and `shipping_*` address keys; the
+  previous generic address payload returned HTTP 400. The website client now
+  emits the live contract and parses both `errors[]` and legacy `error[]`.
+- The live Add Subscription API requires `subscription_starts_from` as
+  `YYYY-MM-DD`. The published schema still says `YYYYMMDD`, but the latter is
+  rejected with `SUB07`; both Node and Edge clients now use the live format.
+- Supabase project RBAC currently blocks this workstation from setting the QA
+  secret or deploying functions to `dfwqakoyittmrwbqvxgw`. No staging account
+  was switched while deployment was incomplete.
+
+#### Authorized staging deployment
+
+Run these only after `npx supabase login` uses an account with Edge Function
+deployment access to the staging project:
+
+```powershell
+npx supabase functions deploy create-online-order --project-ref dfwqakoyittmrwbqvxgw
+npx supabase functions deploy cancel-online-order --project-ref dfwqakoyittmrwbqvxgw
+npx supabase functions deploy billing-charge-subscription --project-ref dfwqakoyittmrwbqvxgw
+```
+
+After deployment, route only the controlled staging `online_order`, `invoice`,
+and `subscription` processor accounts, preserve a rollback snapshot, and rerun
+the API smoke tests before opening the recording URLs.
+
 ## Video 1 - HQ Boarding and Processor Provisioning
 
 ### Goal
