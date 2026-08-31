@@ -252,7 +252,7 @@ export default function SettingsScreen({
         <p className="border-t px-4 py-3 text-xs text-muted-foreground">
           Reservations are set up under{" "}
           <Link href="/dashboard/website/reservations" className="underline underline-offset-2">
-            Reservations
+            Website Reservations
           </Link>{" "}
           in the sidebar, where the switch sits with your service times and the branches that take
           bookings.

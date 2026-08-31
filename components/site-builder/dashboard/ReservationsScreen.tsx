@@ -317,7 +317,7 @@ export default function ReservationsScreen({
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 pb-24 sm:p-6 lg:p-8">
       <ListHeader
-        title="Reservations"
+        title="Website Reservations"
         subtitle="Whether your website takes bookings, and when each restaurant seats guests."
       />
 
