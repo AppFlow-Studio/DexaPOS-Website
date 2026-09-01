@@ -326,15 +326,30 @@ in `PageShell` would nest a second `<main>` landmark.
       `grep -rn PageLoader app/` now returns **nothing** — the legacy centred
       spinner is gone from every route, HQ and merchant alike. The component
       itself remains at `components/ui/page-loader.tsx` with no callers.
-- [ ] Filter, pagination, focus-refetch, and manual-refresh actions preserve
-      visible cached data.
-- [ ] Existing empty and error states remain reachable and do not overlap the
-      loading state.
+- [x] Filter, pagination, focus-refetch, and manual-refresh actions preserve
+      visible cached data. Measured on `/manage/users`: typing a search filter
+      took the list 8 rows → 4 rows with `data-page-loader` absent on every
+      sampled frame. On `/manage/merchants` a simulated window focus-refetch
+      kept content rendered throughout (`loader: false`, content present at
+      every 100 ms sample). Enforced structurally by gating on `isLoading`,
+      never `isFetching` — guarded in `loading-gate.test.tsx`.
+- [x] Existing empty and error states remain reachable and do not overlap the
+      loading state. Converted routes branch by early return or a ternary
+      chain, so the states are structurally exclusive. Measured on
+      `/manage/users`: every state transition sampled had exactly one state
+      active (`loading → populated`, never both), and searching a
+      non-matching term reached the empty state with `loading: false`.
 - [x] Disabled/optional queries cannot leave a route permanently skeletonized.
       Regression-guarded in `loading-gate.test.tsx`; converted routes gate only
       on required, always-enabled queries.
-- [ ] Mutation controls retain local progress feedback and cannot be double
-      submitted.
+- [x] Mutation controls retain local progress feedback and cannot be double
+      submitted. Audited every converted route. Service-charge Save keeps its
+      own `Loader2` and is `disabled={upsert.isPending}`; the customer delete
+      dialog is guarded by `deleteCustomer.isPending`; the invoice delete
+      closes its dialog before the mutation resolves. **One real gap found and
+      fixed:** the invoice "Mark as Paid" and "Cancel" dropdown items had no
+      guard, so a double click fired the status mutation twice — both now carry
+      `disabled={updateStatus.isPending}`.
 - [ ] All converted routes pass desktop, tablet, and 360px phone QA without
       horizontal overflow.
 - [x] All converted loaders expose meaningful assistive status and stop pulsing

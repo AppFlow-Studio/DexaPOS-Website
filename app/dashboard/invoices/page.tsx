@@ -138,8 +138,11 @@ function InvoiceRowMenu({
             {invoice.status === "draft" ? "Send" : "Resend"}
           </DropdownMenuItem>
         )}
+        {/* Disabled while a status change is in flight: a dropdown item stays
+            clickable otherwise, so a double click fires the mutation twice. */}
         {invoice.status !== "paid" && (
           <DropdownMenuItem
+            disabled={updateStatus.isPending}
             onClick={() =>
               updateStatus.mutate({ invoiceId: invoice.id, status: "paid" })
             }
@@ -150,6 +153,7 @@ function InvoiceRowMenu({
         )}
         {invoice.status !== "cancelled" && (
           <DropdownMenuItem
+            disabled={updateStatus.isPending}
             onClick={() =>
               updateStatus.mutate({ invoiceId: invoice.id, status: "cancelled" })
             }
