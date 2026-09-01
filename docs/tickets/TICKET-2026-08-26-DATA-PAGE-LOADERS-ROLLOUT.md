@@ -245,11 +245,44 @@ spinner remains anywhere under `app/`.
 
 | Route | Was | Now |
 | --- | --- | --- |
-| `/manage/users` | `<PageLoader />` | `table`, `shell="plain"` |
-| `/manage/users/[userId]` | `<PageLoader />` | `detail`, `shell="plain"` |
-| `/manage/roles-permissions` | `<PageLoader />` | `table`, `shell="plain"` |
-| `/manage/merchants/[merchantId]` | `<PageLoader message="Loading merchant details..." />` | `detail`, `shell="plain"` |
-| `/manage/subscriptions/[merchantId]` | `<PageLoader message="Loading subscription workspace..." />` | `detail`, `shell="plain"` |
+| `/manage/users` | `<PageLoader />` | `table`, `shell="plain"` — **browser-verified** |
+| `/manage/users/[userId]` | `<PageLoader />` | `detail`, `shell="plain"` — **browser-verified** |
+| `/manage/roles-permissions` | `<PageLoader />` | `table`, `shell="plain"` — **not yet browser-verified**, see below |
+| `/manage/merchants/[merchantId]` | `<PageLoader message="Loading merchant details..." />` | `detail`, `shell="plain"` — **browser-verified** |
+| `/manage/subscriptions/[merchantId]` | `<PageLoader message="Loading subscription workspace..." />` | `detail`, `shell="plain"` — **browser-verified** |
+
+#### HQ browser verification (2026-08-30)
+
+Run against a real HQ session on the dev server, at 1440px.
+
+| Route | Variant | Skeletons | Reduced-motion opt-out | Spinners | `<main>` count | Overflow |
+| --- | --- | --- | --- | --- | --- | --- |
+| `/manage/users` | `table` | 59 | 59 / 59 | 0 | 1 | none |
+| `/manage/users/[userId]` | `detail` | 36 | 36 / 36 | 0 | 1 | none |
+| `/manage/merchants/[merchantId]` | `detail` | 36 | 36 / 36 | 0 | 1 | none |
+| `/manage/subscriptions/[merchantId]` | `detail` | 36 | 36 / 36 | 0 | 1 | none |
+
+All four expose `role="status"`, `aria-live="polite"`, `aria-busy="true"` and a
+route-specific screen-reader label ("Loading the HQ user directory", "Loading
+the user profile", "Loading merchant details", "Loading the subscription
+workspace"). `<main>` count of 1 confirms `shell="plain"` avoids the nested
+landmark it was added to prevent.
+
+At 360px, `/manage/users` measured `visualViewport.scale === 1`,
+`scrollWidth === clientWidth === 360`, no document overflow and zero
+overflowing descendants.
+
+> `/manage/roles-permissions` could not be reached: the available HQ account
+> redirects with `?denied=1&required=roles.manage`, so it lacks that
+> permission. Its conversion is identical in shape to `/manage/users` (same
+> `table` variant, same `shell="plain"`) and is covered by typecheck and the
+> shared component's tests, but **no one has yet watched it render**. It needs
+> a super-admin session to close out.
+
+> Attribution: this verification was performed by Haidar using the team's
+> shared HQ admin login, with Ali's and the manager's agreement. It is **not**
+> the independent reviewer pass — the Definition of Done still requires Ali to
+> verify the behaviour personally.
 | `/manage/merchants` | Section skeletons | Acceptable |
 | `/manage/subscriptions` | Section skeletons | Acceptable |
 | `/manage/transactions` | Section skeletons | Acceptable |
@@ -304,8 +337,13 @@ in `PageShell` would nest a second `<main>` landmark.
       submitted.
 - [ ] All converted routes pass desktop, tablet, and 360px phone QA without
       horizontal overflow.
-- [ ] All converted loaders expose meaningful assistive status and stop pulsing
-      under reduced motion.
+- [x] All converted loaders expose meaningful assistive status and stop pulsing
+      under reduced motion. Every animated block carries
+      `motion-reduce:animate-none` (asserted per variant in
+      `DataPageSkeleton.test.tsx` and measured in-browser: 59/59, 36/36 on the
+      HQ routes). Each loader exposes `role="status"`, `aria-live="polite"`,
+      `aria-busy="true"` and a route-specific label. **Still needs a real
+      screen-reader and OS-level reduced-motion pass to close fully.**
 - [x] Targeted automated tests cover initial loading, cached background refetch,
       and loader accessibility attributes. 29 tests in
       `components/dashboard/loading/__tests__/` (`DataPageSkeleton.test.tsx`,
