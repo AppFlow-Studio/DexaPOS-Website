@@ -611,7 +611,14 @@ export default function AuditLogsPage() {
               className="h-9 shrink-0 gap-1.5 rounded-full border-0 px-3 font-normal tabular-nums shadow-none"
             >
               <Activity className="size-3.5 shrink-0 text-muted-foreground" />
-              {total.toLocaleString()}
+              {/* "0 entries" while the query is still in flight claims the
+                  shop has no activity at all, which is a different fact from
+                  "not counted yet". */}
+              {isLoading ? (
+                <Skeleton className="h-3.5 w-8 rounded-full motion-reduce:animate-none" />
+              ) : (
+                total.toLocaleString()
+              )}
               <span className="hidden xs:inline">&nbsp;entries</span>
             </Badge>
             <Button

@@ -7,7 +7,8 @@ import {
   type OnlineOrderingSettings,
   type OnlineStoreSetupStatus,
 } from "./hooks/useOnlineOrderingSettings";
-import { useGatedLocationId, useGatedLocation } from "@/stores/location-store";
+import { useGatedLocationId, useGatedLocation, useHasLocations } from "@/stores/location-store";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1252,6 +1253,9 @@ export default function OnlineOrderingPage() {
   const selectedLocationId = gatedLocationId ?? "all";
   const selectedLocation = useGatedLocation();
   const isAllLocations = !gatedLocationId;
+  // Distinguishes "the store has not populated yet" from "this account really
+  // has no location to show" — see the guard further down.
+  const hasLocations = useHasLocations();
 
   const [requirementsOpen, setRequirementsOpen] = useState(false);
   const [requirementsMissing, setRequirementsMissing] = useState<Record<string, boolean> | null>(null);
@@ -1287,6 +1291,39 @@ export default function OnlineOrderingPage() {
   }
 
   if (!selectedLocationId || !selectedLocation) {
+    // The location list lives in a persisted Zustand store that starts as `[]`,
+    // so `selectedLocation` is null on first paint for a perfectly healthy
+    // account. Rendering "Location unavailable" there turns a pending state
+    // into a dead end, so wait until the store actually has locations before
+    // concluding one is missing.
+    if (!hasLocations) {
+      return (
+        <PageShell>
+          <PageHeader title="Online Ordering" />
+          <div role="status" aria-live="polite" aria-busy="true">
+            <span className="sr-only">Loading online ordering settings</span>
+            <Panel padded>
+              <div className="space-y-6">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Skeleton className="h-9 w-9 shrink-0 rounded-xl bg-muted/70 motion-reduce:animate-none" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Skeleton className="h-4 w-56 max-w-full rounded-full bg-muted/70 motion-reduce:animate-none" />
+                    <Skeleton className="h-3 w-72 max-w-full rounded-full bg-muted/70 motion-reduce:animate-none" />
+                  </div>
+                </div>
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="min-w-0 space-y-2">
+                    <Skeleton className="h-4 w-32 rounded-full bg-muted/70 motion-reduce:animate-none" />
+                    <Skeleton className="h-10 w-full rounded-xl bg-muted/70 motion-reduce:animate-none" />
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </div>
+        </PageShell>
+      );
+    }
+
     return (
       <PageShell>
         <PageHeader title="Online Ordering" />

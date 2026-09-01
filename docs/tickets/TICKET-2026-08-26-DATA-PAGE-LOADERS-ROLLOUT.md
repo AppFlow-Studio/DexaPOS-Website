@@ -213,6 +213,31 @@ under test. Production-build Slow 3G runs remain QA's job.
 > whose query has not run. This is the empty state the ticket requires to stay
 > reachable, so the route is left alone.
 
+### Priority 2 — merchant operations
+
+Same method. The dominant defect across both priorities was not a missing
+loader but a **loader that lies**: a resolved-looking figure (`0`, `$0.00`,
+`—`, `(0)`, `0 entries`) rendered while the query was still in flight, which
+is indistinguishable from a settled-but-empty account.
+
+| Route | First-load behaviour observed | Decision |
+| --- | --- | --- |
+| `/dashboard/locations` | Card skeletons fine, but the three KPI figures rendered a literal `'—'` and the tabs read `Active (0) / Archived (0)`. Real values are 4 / 1 / 3 | **Converted** → figures skeletonised, counts omitted while pending |
+| `/dashboard/audit-logs` | Timeline skeleton fine, but the header badge read **"0 entries"** while pending | **Converted** → count skeletonised |
+| `/dashboard/online-ordering` | Rendered the **"Location unavailable"** dead-end before the persisted location store hydrated | **Converted** → skeleton until the store has locations |
+| `/dashboard/devices` | 12 skeletons, no spinners, no em-dashes | Existing loader acceptable |
+| `/dashboard/staff` | 26 skeletons; all four `StatTile`s pass `isLoading` | Existing loader acceptable |
+| `/dashboard/staff/timesheets` | `StatTile`s pass `isLoading`; rows skeletonised | Existing loader acceptable |
+| `/dashboard/inventory` | All four `StatTile`s pass `isLoading`; the zeros seen afterwards are a genuine empty catalog for this location | Existing loader acceptable |
+| `/dashboard/support` | 17 skeletons via `TicketCardSkeleton` | Existing loader acceptable |
+
+> Note on `/dashboard/online-ordering`: the same class of bug as the
+> service-charge flash. `locations` in the persisted Zustand store starts as
+> `[]`, so `useGatedLocation()` returns `null` on first paint for a perfectly
+> healthy account and the page concluded the location was missing. Now gated on
+> `useHasLocations()`, so "not populated yet" and "genuinely unavailable" are
+> distinguishable.
+
 ### Workstream D — DEXA HQ
 
 All five confirmed legacy `PageLoader` routes are converted; no generic centred
@@ -259,8 +284,10 @@ in `PageShell` would nest a second `<main>` landmark.
       `menu/categories`, `invoices`); the rest were observed to paint their
       structure immediately and were deliberately left alone — see the audit
       table for the per-route evidence.
-- [ ] Priority 2 merchant routes and listed HQ routes are audited and converted
-      where needed.
+- [x] Priority 2 merchant routes and listed HQ routes are audited and converted
+      where needed. Three converted (`locations`, `audit-logs`,
+      `online-ordering`); five observed already correct. See the Priority 2
+      table for the per-route evidence.
 - [x] The five confirmed HQ legacy `PageLoader` routes no longer use the generic
       centered spinner unless a documented exception is approved.
       `grep -rn PageLoader app/` now returns **nothing** — the legacy centred
