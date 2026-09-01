@@ -20,7 +20,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-type BillingMode = 'manual' | 'automatic'
+type BillingMode = 'manual' | 'automatic' | 'configuration'
 
 interface ValorCredentialRow {
   valor_appid: string
@@ -76,7 +76,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       mode?: BillingMode
     }
     const invoiceId = body.invoice_id?.trim()
-    const mode: BillingMode = body.mode === 'automatic' ? 'automatic' : 'manual'
+    const mode: BillingMode =
+      body.mode === 'automatic'
+        ? 'automatic'
+        : body.mode === 'configuration'
+          ? 'configuration'
+          : 'manual'
 
     if (!invoiceId) {
       return jsonResponse({ success: false, error: 'invoice_id is required' }, 400)

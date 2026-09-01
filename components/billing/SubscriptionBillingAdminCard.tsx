@@ -42,12 +42,11 @@ import {
   getMerchantSubscriptions,
   getSubscriptionInvoices,
   getSubscriptionServiceAssignments,
-  replaceSubscriptionServiceAssignments,
+  saveAndChargeMerchantSubscription,
   type BillableServiceRecord,
   type MerchantSubscriptionRecord,
   type SubscriptionInvoiceRecord,
   type SubscriptionServiceAssignmentRecord,
-  upsertMerchantSubscription,
 } from '@/app/manage/actions/subscription-billing'
 import {
   getMerchantBillingProfiles,
@@ -332,7 +331,7 @@ export function SubscriptionBillingAdminCard({
     }
 
     startTransition(async () => {
-      const subscriptionResult = await upsertMerchantSubscription({
+      const subscriptionResult = await saveAndChargeMerchantSubscription({
         subscriptionId: selectedLocationSubscription?.id,
         merchantId,
         locationId: selectedLocationId,
@@ -346,16 +345,7 @@ export function SubscriptionBillingAdminCard({
           source: 'hq_service_catalog_billing_ui',
           pricingModel: 'service_catalog',
         },
-      })
-
-      if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
-        toast.error(subscriptionResult.error || 'Failed to save subscription.')
-        return
-      }
-
-      const serviceResult = await replaceSubscriptionServiceAssignments(
-        subscriptionResult.subscriptionId,
-        (effectiveStatus === 'canceled' ? [] : enabledServices).map((service) => ({
+        services: (effectiveStatus === 'canceled' ? [] : enabledServices).map((service) => ({
           serviceId: service.serviceId,
           quantity: service.quantity,
           enabled: true,
@@ -363,11 +353,11 @@ export function SubscriptionBillingAdminCard({
             source: 'hq_service_catalog_billing_ui',
             serviceCode: service.serviceCode,
           },
-        }))
-      )
+        })),
+      })
 
-      if (!serviceResult.success) {
-        toast.error(serviceResult.error || 'Failed to save service assignments.')
+      if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
+        toast.error(subscriptionResult.error || 'Failed to save and charge subscription.')
         return
       }
 
@@ -377,8 +367,8 @@ export function SubscriptionBillingAdminCard({
           : status === 'canceled'
             ? 'Selected services removed. Subscription remains active.'
           : selectedLocationSubscription
-            ? 'Subscription services updated.'
-            : 'Subscription created.'
+            ? 'Subscription services updated and automatic payment approved.'
+            : 'Subscription created and automatic payment approved.'
       )
       refresh()
     })
@@ -610,15 +600,33 @@ export function SubscriptionBillingAdminCard({
               })}
             </div>
 
-            <div className="flex items-center gap-3">
-              <Button onClick={handleSave} disabled={!canManageBilling || isPending}>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                onClick={handleSave}
+                disabled={
+                  !canManageBilling ||
+                  isPending ||
+                  (status === 'active' && !selectedBillingProfile)
+                }
+              >
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {selectedLocationSubscription ? 'Update Location Services' : 'Create Location Subscription'}
+                {status === 'active'
+                  ? selectedLocationSubscription
+                    ? 'Update & Charge'
+                    : 'Create & Charge'
+                  : selectedLocationSubscription
+                    ? 'Update Location Services'
+                    : 'Create Location Subscription'}
               </Button>
               <Button variant="outline" onClick={refresh} disabled={isPending}>
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 Refresh
               </Button>
+              {status === 'active' ? (
+                <span className="text-xs text-muted-foreground">
+                  Services activate only after Valor approves the automatic charge.
+                </span>
+              ) : null}
             </div>
           </CardContent>
         </Card>

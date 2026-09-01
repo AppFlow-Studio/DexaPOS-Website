@@ -49,7 +49,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { PageHeader, PageShell, Panel, PanelSection } from '@/components/dashboard/shell'
 import {
   getMerchantSubscriptionInvoiceDocument,
-  payMerchantSubscriptionInvoice,
   RequestMerchantTierPlan,
   RequestSubscriptionHardware,
   type MerchantBillingLocationViewRecord,
@@ -259,7 +258,6 @@ export function MerchantSubscriptionOverviewCard({
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false)
   const [isInvoicePreviewLoading, setIsInvoicePreviewLoading] = useState(false)
   const [invoiceActionId, setInvoiceActionId] = useState<string | null>(null)
-  const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null)
   const [contactModalMode, setContactModalMode] = useState<'plan' | 'hardware' | null>(null)
   const [selectedRequestedPlanId, setSelectedRequestedPlanId] = useState('')
   const [hasAcceptedPlanAuthorization, setHasAcceptedPlanAuthorization] =
@@ -456,24 +454,6 @@ export function MerchantSubscriptionOverviewCard({
     } catch (error: any) {
       toast.error(error?.message || 'Failed to download invoice.')
     }
-  }
-
-  const handlePayInvoice = async (invoiceId: string) => {
-    setPayingInvoiceId(invoiceId)
-    const result = await payMerchantSubscriptionInvoice(invoiceId)
-    setPayingInvoiceId(null)
-
-    if (!result.success) {
-      toast.error(result.error || 'The invoice payment could not be completed.')
-      return
-    }
-
-    toast.success(
-      result.status === 'paid'
-        ? 'Invoice paid successfully.'
-        : 'Invoice payment submitted.',
-    )
-    await refresh()
   }
 
   const handleRequestPlan = async () => {
@@ -1039,7 +1019,7 @@ export function MerchantSubscriptionOverviewCard({
             <div>
               <div className="font-medium">Outstanding balance: {formatMoney(transactionSummary.pending)}</div>
               <div className="mt-1 text-sm text-amber-800">
-                Update the saved card if needed, then use Pay now beside an open or failed invoice.
+                Update the saved card so DEXA Billing can automatically retry eligible invoices.
               </div>
             </div>
           </div>
@@ -1179,7 +1159,7 @@ export function MerchantSubscriptionOverviewCard({
       <PanelSection
         icon={FileText}
         label="Billing History"
-        caption="View and download invoices across all merchant locations."
+        caption="Invoices are charged automatically through the saved Valor billing method. View and download records across all merchant locations."
       >
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Loading invoices...</div>
@@ -1215,29 +1195,14 @@ export function MerchantSubscriptionOverviewCard({
                           {invoice.next_retry_at
                             ? `Automatic retry scheduled ${formatDate(invoice.next_retry_at)}`
                             : invoice.retry_exhausted_at
-                              ? 'Automatic retries exhausted. Update the payment method and pay manually.'
-                              : 'Payment failed. Update the payment method or retry manually.'}
+                              ? 'Automatic retries are exhausted. Update the payment method or contact DEXA Billing.'
+                              : 'Payment failed. Update the payment method or contact DEXA Billing.'}
                         </div>
                       ) : null}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{formatMoney(invoice.total_amount)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex flex-wrap justify-end gap-2">
-                        {['open', 'failed'].includes(invoice.status) ? (
-                          <Button
-                            size="sm"
-                            className="h-8 rounded-full px-3 text-xs font-medium"
-                            onClick={() => handlePayInvoice(invoice.id)}
-                            disabled={Boolean(payingInvoiceId)}
-                          >
-                            {payingInvoiceId === invoice.id ? (
-                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <CreditCard className="mr-1.5 h-3.5 w-3.5" />
-                            )}
-                            Pay now
-                          </Button>
-                        ) : null}
                         <Button
                           size="sm"
                           variant="outline"

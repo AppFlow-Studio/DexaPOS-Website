@@ -72,7 +72,7 @@ import {
   getSubscriptionInvoices,
   getSubscriptionServiceAssignments,
   setMerchantSubscriptionGracePeriod,
-  replaceSubscriptionServiceAssignments,
+  saveAndChargeMerchantSubscription,
   type BillableServiceRecord,
   type DeviceBillingServiceMappingRecord,
   type SubscriptionPlanRecord,
@@ -88,7 +88,6 @@ import {
   upsertBillableService,
   upsertDeviceBillingServiceMapping,
   upsertMerchantTierSubscription,
-  upsertMerchantSubscription,
   upsertSubscriptionPlan,
 } from '@/app/manage/actions/subscription-billing'
 import {
@@ -1011,7 +1010,7 @@ export function HqSubscriptionsWorkspace({
     }
 
     startTransition(async () => {
-      const subscriptionResult = await upsertMerchantSubscription({
+      const subscriptionResult = await saveAndChargeMerchantSubscription({
         subscriptionId: selectedLocationSubscription?.id,
         merchantId: merchant.id,
         locationId: selectedLocation.id,
@@ -1025,16 +1024,7 @@ export function HqSubscriptionsWorkspace({
           source: 'hq_subscriptions_workspace',
           pricingModel: 'service_catalog',
         },
-      })
-
-      if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
-        toast.error(subscriptionResult.error || 'Failed to save subscription.')
-        return
-      }
-
-      const serviceResult = await replaceSubscriptionServiceAssignments(
-        subscriptionResult.subscriptionId,
-        (effectiveStatus === 'canceled' ? [] : enabledServices).map((service) => ({
+        services: (effectiveStatus === 'canceled' ? [] : enabledServices).map((service) => ({
           serviceId: service.serviceId,
           quantity: service.quantity,
           enabled: true,
@@ -1042,11 +1032,11 @@ export function HqSubscriptionsWorkspace({
             source: 'hq_subscriptions_workspace',
             serviceCode: service.serviceCode,
           },
-        }))
-      )
+        })),
+      })
 
-      if (!serviceResult.success) {
-        toast.error(serviceResult.error || 'Failed to save service assignments.')
+      if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
+        toast.error(subscriptionResult.error || 'Failed to save and charge subscription.')
         return
       }
 
@@ -1056,8 +1046,8 @@ export function HqSubscriptionsWorkspace({
           : status === 'canceled'
             ? 'Selected services removed. Subscription remains active.'
             : selectedLocationSubscription
-              ? 'Subscription updated.'
-              : 'Subscription created.'
+              ? 'Subscription updated and automatic payment approved.'
+              : 'Subscription created and automatic payment approved.'
       )
 
       refresh()
@@ -1155,7 +1145,7 @@ export function HqSubscriptionsWorkspace({
 
       toast.success(
         result.invoiceId
-          ? 'Merchant tier updated and invoice generated.'
+          ? 'Merchant tier updated and automatic payment approved.'
           : 'Merchant tier updated.',
       )
       if (result.notificationWarning) {
@@ -1415,7 +1405,7 @@ export function HqSubscriptionsWorkspace({
                       }}
                     >
                       {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Approve & activate
+                      Approve, charge & activate
                     </Button>
                     <Button
                       type="button"
@@ -1656,8 +1646,15 @@ export function HqSubscriptionsWorkspace({
               <div className="flex flex-wrap items-center gap-2">
                 <Button onClick={() => handleSaveMerchantTier()} disabled={isPending || !selectedMerchantTierPlanId}>
                   {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Merchant Tier
+                  {merchantTierSubscriptionStatus === 'active'
+                    ? 'Save Tier & Charge'
+                    : 'Save Merchant Tier'}
                 </Button>
+                {merchantTierSubscriptionStatus === 'active' ? (
+                  <span className="text-xs text-muted-foreground">
+                    The prior tier remains unchanged unless Valor approves the automatic charge.
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -2103,10 +2100,28 @@ export function HqSubscriptionsWorkspace({
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 Refresh
               </Button>
-              <Button onClick={handleSave} disabled={isPending || !selectedLocation}>
+              <Button
+                onClick={handleSave}
+                disabled={
+                  isPending ||
+                  !selectedLocation ||
+                  (status === 'active' && !selectedBillingProfile)
+                }
+              >
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {selectedLocationSubscription ? 'Save Changes' : 'Create Subscription'}
+                {status === 'active'
+                  ? selectedLocationSubscription
+                    ? 'Save & Charge'
+                    : 'Create & Charge'
+                  : selectedLocationSubscription
+                    ? 'Save Changes'
+                    : 'Create Subscription'}
               </Button>
+              {status === 'active' ? (
+                <span className="text-xs text-muted-foreground">
+                  Valor must approve the automatic charge before these services become active.
+                </span>
+              ) : null}
             </div>
 
             <div className="grid gap-4 rounded-2xl bg-muted/30 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] md:items-end">

@@ -512,6 +512,76 @@ interface ValorSubscriptionCredentialRow {
   decrypted_appkey: string
 }
 
+type SubscriptionChargeMode = 'manual' | 'automatic' | 'configuration'
+
+interface SubscriptionChargeResult {
+  success: boolean
+  invoiceId?: string
+  status?: string
+  transactionId?: string | null
+  error?: string
+}
+
+async function chargeSubscriptionInvoiceViaValor(
+  invoiceId: string,
+  mode: SubscriptionChargeMode,
+): Promise<SubscriptionChargeResult> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return { success: false, error: 'Missing Supabase server configuration.' }
+  }
+
+  try {
+    const response = await fetch(
+      `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/billing-charge-subscription`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${serviceRoleKey}`,
+          apikey: serviceRoleKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ invoice_id: invoiceId, mode }),
+        cache: 'no-store',
+      },
+    )
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      success?: boolean
+      error?: string
+      invoice_id?: string
+      status?: string
+      transaction_id?: string | null
+    }
+
+    if (!response.ok || !payload.success) {
+      return {
+        success: false,
+        invoiceId: payload.invoice_id ?? invoiceId,
+        error: payload.error || 'Failed to charge invoice.',
+      }
+    }
+
+    return {
+      success: true,
+      invoiceId: payload.invoice_id ?? invoiceId,
+      status: payload.status,
+      transactionId: payload.transaction_id ?? null,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      invoiceId,
+      error:
+        error instanceof Error
+          ? `Valor billing service could not be reached: ${error.message}`
+          : 'Valor billing service could not be reached.',
+    }
+  }
+}
+
 async function syncValorSubscriptionLifecycle(params: {
   subscriptionId: string
   targetStatus: 'trial' | 'active' | 'past_due' | 'suspended' | 'canceled'
@@ -693,7 +763,7 @@ async function syncMerchantTierBillingArtifacts(params: {
   } = await serviceRole
     .from('merchant_subscriptions')
     .select(
-      'id, metadata, status, plan_id, current_period_start, current_period_end, next_billing_date, trial_ends_at, billing_profile_id',
+      'id, metadata, status, plan_id, current_period_start, current_period_end, next_billing_date, trial_ends_at, billing_profile_id, monthly_amount, station_count, processor, processor_account_id, processor_subscription_id, processor_subscription_status, processor_schedule_created_at, processor_next_payment_at',
     )
     .eq('merchant_id', params.merchantId)
     .eq('location_id', anchorLocationId)
@@ -782,6 +852,7 @@ async function syncMerchantTierBillingArtifacts(params: {
       anchorLocationId,
       anchorSubscriptionId: anchorSubscriptionId as string,
       invoiceId: null,
+      previousAnchorSubscription: existingAnchorSubscription,
     }
   }
 
@@ -879,6 +950,7 @@ async function syncMerchantTierBillingArtifacts(params: {
     anchorLocationId,
     anchorSubscriptionId: anchorSubscriptionId as string,
     invoiceId,
+    previousAnchorSubscription: existingAnchorSubscription,
   }
 }
 
@@ -894,6 +966,16 @@ export interface UpsertMerchantSubscriptionParams {
   trialEndsAt?: string | null
   billingProfileId?: string | null
   metadata?: Record<string, unknown>
+}
+
+export interface SaveAndChargeMerchantSubscriptionParams
+  extends UpsertMerchantSubscriptionParams {
+  services: Array<{
+    serviceId: string
+    quantity: number
+    enabled?: boolean
+    metadata?: Record<string, unknown>
+  }>
 }
 
 interface InvoiceDocumentContext {
@@ -1944,6 +2026,102 @@ export async function upsertMerchantTierSubscription(
     return { success: false, error: synced.error }
   }
 
+  if (params.status === 'active' && synced.invoiceId) {
+    const chargeResult = await chargeSubscriptionInvoiceViaValor(
+      synced.invoiceId,
+      'configuration',
+    )
+
+    if (!chargeResult.success) {
+      const rollbackErrors: string[] = []
+      const merchantPlanRollback = existing?.id
+        ? await serviceRole
+            .from('merchant_plan_subscriptions')
+            .update({
+              plan_id: existing.plan_id,
+              status: existing.status,
+              current_period_start: existing.current_period_start,
+              current_period_end: existing.current_period_end,
+              trial_ends_at: existing.trial_ends_at,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id)
+        : await serviceRole
+            .from('merchant_plan_subscriptions')
+            .delete()
+            .eq('id', result.data.id as string)
+
+      if (merchantPlanRollback.error) {
+        rollbackErrors.push(`merchant tier: ${merchantPlanRollback.error.message}`)
+      }
+
+      const previousAnchor = synced.previousAnchorSubscription
+      const anchorRollback = previousAnchor
+        ? await serviceRole
+            .from('merchant_subscriptions')
+            .update({
+              metadata: previousAnchor.metadata,
+              status: previousAnchor.status,
+              plan_id: previousAnchor.plan_id,
+              current_period_start: previousAnchor.current_period_start,
+              current_period_end: previousAnchor.current_period_end,
+              next_billing_date: previousAnchor.next_billing_date,
+              trial_ends_at: previousAnchor.trial_ends_at,
+              billing_profile_id: previousAnchor.billing_profile_id,
+              monthly_amount: previousAnchor.monthly_amount,
+              station_count: previousAnchor.station_count,
+              processor: previousAnchor.processor,
+              processor_account_id: previousAnchor.processor_account_id,
+              processor_subscription_id: previousAnchor.processor_subscription_id,
+              processor_subscription_status:
+                previousAnchor.processor_subscription_status,
+              processor_schedule_created_at:
+                previousAnchor.processor_schedule_created_at,
+              processor_next_payment_at:
+                previousAnchor.processor_next_payment_at,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', synced.anchorSubscriptionId)
+        : await serviceRole
+            .from('merchant_subscriptions')
+            .update({
+              status: 'past_due',
+              metadata: {
+                billing_scope: 'merchant_tier',
+                merchant_tier_subscription_id: result.data.id,
+                merchant_tier_plan_id: params.planId,
+                activation_failed: true,
+              },
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', synced.anchorSubscriptionId)
+
+      if (anchorRollback.error) {
+        rollbackErrors.push(`billing anchor: ${anchorRollback.error.message}`)
+      }
+
+      await serviceRole
+        .from('subscription_invoices')
+        .update({
+          status: 'failed',
+          last_payment_error:
+            chargeResult.error || 'Valor rejected the automatic subscription charge.',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', synced.invoiceId)
+        .in('status', ['open', 'processing'])
+
+      return {
+        success: false,
+        error:
+          `Valor did not approve the payment, so the merchant tier was not changed. ${chargeResult.error || ''}`.trim() +
+          (rollbackErrors.length > 0
+            ? ` Rollback needs review: ${rollbackErrors.join('; ')}.`
+            : ''),
+      }
+    }
+  }
+
   const notificationWarning =
     subscriptionChanged || Boolean(params.requestId)
     ? await notifyMerchantOfTierAssignment({
@@ -2562,7 +2740,7 @@ export async function replaceSubscriptionServiceAssignments(
 
     if (
       subscriptionRecord.data &&
-      subscriptionRecord.data.status !== 'canceled'
+      subscriptionRecord.data.status === 'active'
     ) {
       const [
         { data: merchantRecord },
@@ -2662,6 +2840,232 @@ export async function replaceSubscriptionServiceAssignments(
 
   revalidatePath('/manage/billing')
   return { success: true }
+}
+
+export async function saveAndChargeMerchantSubscription(
+  params: SaveAndChargeMerchantSubscriptionParams,
+): Promise<{
+  success: boolean
+  subscriptionId?: string
+  invoiceId?: string
+  transactionId?: string | null
+  error?: string
+}> {
+  await assertHQPermission('system.billing.manage')
+
+  const targetStatus = params.status ?? 'active'
+  const serviceRole = createServiceRoleClient() as any
+  let previousQuery = serviceRole
+    .from('merchant_subscriptions')
+    .select(
+      'id, plan_id, status, current_period_start, current_period_end, next_billing_date, trial_ends_at, billing_profile_id, metadata, monthly_amount, station_count, processor, processor_account_id, processor_subscription_id, processor_subscription_status, processor_schedule_created_at, processor_next_payment_at',
+    )
+
+  previousQuery = params.subscriptionId
+    ? previousQuery.eq('id', params.subscriptionId)
+    : previousQuery
+        .eq('merchant_id', params.merchantId)
+        .eq('location_id', params.locationId)
+
+  const { data: previousSubscription, error: previousSubscriptionError } =
+    await previousQuery.maybeSingle()
+
+  if (previousSubscriptionError) {
+    return { success: false, error: 'Failed to snapshot the current subscription.' }
+  }
+
+  const { data: previousAssignments, error: previousAssignmentsError } =
+    previousSubscription?.id
+      ? await serviceRole
+          .from('merchant_subscription_services')
+          .select('service_id, quantity, is_enabled, metadata')
+          .eq('subscription_id', previousSubscription.id)
+      : { data: [], error: null }
+
+  if (previousAssignmentsError) {
+    return { success: false, error: 'Failed to snapshot the current paid services.' }
+  }
+
+  let billingProfileId = params.billingProfileId ?? null
+  if (targetStatus === 'active') {
+    const { data: valorProfile, error: valorProfileError } = await serviceRole
+      .from('merchant_billing_profiles')
+      .select('id')
+      .eq('merchant_id', params.merchantId)
+      .eq('billing_method', 'card')
+      .eq('processor', 'valor')
+      .eq('is_active', true)
+      .eq('is_primary', true)
+      .order('location_id', { ascending: true, nullsFirst: true })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    if (valorProfileError || !valorProfile?.id) {
+      return {
+        success: false,
+        error:
+          'Save an active primary Valor billing card before activating paid services.',
+      }
+    }
+    billingProfileId = valorProfile.id
+  }
+
+  // Active configurations remain non-entitled until Valor approves the charge.
+  const subscriptionResult = await upsertMerchantSubscription({
+    ...params,
+    billingProfileId,
+    status: targetStatus === 'active' ? 'past_due' : targetStatus,
+  })
+
+  if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
+    return subscriptionResult
+  }
+
+  const subscriptionId = subscriptionResult.subscriptionId
+  let invoiceId: string | undefined
+
+  const rollback = async (reason: string) => {
+    const rollbackErrors: string[] = []
+    const restoreAssignments = (previousAssignments ?? []).map((assignment: any) => ({
+      service_id: assignment.service_id,
+      quantity: assignment.quantity,
+      enabled: assignment.is_enabled,
+      metadata: assignment.metadata ?? {},
+    }))
+    const { error: assignmentsRollbackError } = await serviceRole.rpc(
+      'replace_merchant_subscription_services',
+      {
+        p_subscription_id: subscriptionId,
+        p_services: previousSubscription ? restoreAssignments : [],
+      },
+    )
+    if (assignmentsRollbackError) {
+      rollbackErrors.push(`services: ${assignmentsRollbackError.message}`)
+    }
+
+    const subscriptionRollback = previousSubscription
+      ? await serviceRole
+          .from('merchant_subscriptions')
+          .update({
+            plan_id: previousSubscription.plan_id,
+            status: previousSubscription.status,
+            current_period_start: previousSubscription.current_period_start,
+            current_period_end: previousSubscription.current_period_end,
+            next_billing_date: previousSubscription.next_billing_date,
+            trial_ends_at: previousSubscription.trial_ends_at,
+            billing_profile_id: previousSubscription.billing_profile_id,
+            metadata: previousSubscription.metadata,
+            monthly_amount: previousSubscription.monthly_amount,
+            station_count: previousSubscription.station_count,
+            processor: previousSubscription.processor,
+            processor_account_id: previousSubscription.processor_account_id,
+            processor_subscription_id:
+              previousSubscription.processor_subscription_id,
+            processor_subscription_status:
+              previousSubscription.processor_subscription_status,
+            processor_schedule_created_at:
+              previousSubscription.processor_schedule_created_at,
+            processor_next_payment_at:
+              previousSubscription.processor_next_payment_at,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', subscriptionId)
+      : await serviceRole
+          .from('merchant_subscriptions')
+          .update({
+            status: 'past_due',
+            metadata: {
+              ...(params.metadata ?? {}),
+              activation_failed: true,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', subscriptionId)
+
+    if (subscriptionRollback.error) {
+      rollbackErrors.push(`subscription: ${subscriptionRollback.error.message}`)
+    }
+
+    if (invoiceId) {
+      await serviceRole
+        .from('subscription_invoices')
+        .update({
+          status: 'failed',
+          last_payment_error: reason,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', invoiceId)
+        .in('status', ['open', 'processing'])
+    }
+
+    revalidatePath('/manage/subscriptions')
+    revalidatePath(`/manage/subscriptions/${params.merchantId}`)
+    revalidatePath('/dashboard/subscriptions')
+
+    return rollbackErrors.length > 0
+      ? `${reason} The prior configuration could not be fully restored: ${rollbackErrors.join('; ')}.`
+      : reason
+  }
+
+  const serviceResult = await replaceSubscriptionServiceAssignments(
+    subscriptionId,
+    targetStatus === 'canceled' ? [] : params.services,
+  )
+  if (!serviceResult.success) {
+    return {
+      success: false,
+      subscriptionId,
+      error: await rollback(
+        serviceResult.error || 'Failed to save paid service assignments.',
+      ),
+    }
+  }
+
+  if (targetStatus !== 'active') {
+    return { success: true, subscriptionId }
+  }
+
+  const invoiceResult = await generateSubscriptionInvoiceManually(
+    subscriptionId,
+    null,
+  )
+  invoiceId = invoiceResult.invoiceId
+  if (!invoiceResult.success || !invoiceId) {
+    return {
+      success: false,
+      subscriptionId,
+      error: await rollback(
+        invoiceResult.error || 'Failed to generate the activation invoice.',
+      ),
+    }
+  }
+
+  const chargeResult = await chargeSubscriptionInvoiceViaValor(
+    invoiceId,
+    'configuration',
+  )
+  if (!chargeResult.success) {
+    return {
+      success: false,
+      subscriptionId,
+      invoiceId,
+      error: await rollback(
+        `Valor did not approve the payment, so the subscription was not activated or updated. ${chargeResult.error || ''}`.trim(),
+      ),
+    }
+  }
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath(`/manage/subscriptions/${params.merchantId}`)
+  revalidatePath('/dashboard/subscriptions')
+
+  return {
+    success: true,
+    subscriptionId,
+    invoiceId,
+    transactionId: chargeResult.transactionId ?? null,
+  }
 }
 
 export async function generateSubscriptionInvoiceManually(
@@ -2946,41 +3350,11 @@ export async function chargeSubscriptionInvoiceManually(
     return { success: false, error: 'invoiceId is required.' }
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return { success: false, error: 'Missing Supabase server configuration.' }
-  }
-
-  const response = await fetch(
-    `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/billing-charge-subscription`,
-    {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${serviceRoleKey}`,
-      apikey: serviceRoleKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ invoice_id: invoiceId }),
-    cache: 'no-store',
-    },
+  const chargeResult = await chargeSubscriptionInvoiceViaValor(
+    invoiceId,
+    'manual',
   )
-
-  const payload = (await response.json().catch(() => ({}))) as {
-    success?: boolean
-    error?: string
-    invoice_id?: string
-    status?: string
-    transaction_id?: string | null
-  }
-
-  if (!response.ok || !payload.success) {
-    return {
-      success: false,
-      error: payload.error || 'Failed to charge invoice.',
-    }
-  }
+  if (!chargeResult.success) return chargeResult
 
   const serviceRole = createServiceRoleClient()
   const { data: invoice } = await serviceRole
@@ -2997,8 +3371,8 @@ export async function chargeSubscriptionInvoiceManually(
 
   return {
     success: true,
-    invoiceId: payload.invoice_id,
-    status: payload.status,
-    transactionId: payload.transaction_id ?? null,
+    invoiceId: chargeResult.invoiceId ?? invoiceId,
+    status: chargeResult.status,
+    transactionId: chargeResult.transactionId ?? null,
   }
 }

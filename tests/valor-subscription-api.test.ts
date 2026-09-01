@@ -29,7 +29,7 @@ describe('Valor SaaS recurring request contract', () => {
       },
       recurring_type: '2',
       is_validate_card: '0',
-      subscription_starts_from: '20260915',
+      subscription_starts_from: '2026-09-15',
       charge_until: 'never_expired',
       charge_on: '15',
       surchargeIndicator: '0',
