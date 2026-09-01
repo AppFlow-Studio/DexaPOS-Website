@@ -23,6 +23,7 @@ import {
   type OnlineStoreReviewChecklist,
 } from '@/lib/online-store/setup-flow'
 import { uploadMerchantDocument, uploadOrganizationDocument } from '@/lib/cdn/server'
+import type { StorefrontTemplateId } from '@/types/site'
 import {
   syncStorefrontWhitelistForLocation,
   type WhitelistSyncResult,
@@ -198,7 +199,7 @@ interface OnlineOrderingSettings {
   faviconUrl?: string | null
   ogImageUrl?: string | null
   bannerText?: string | null
-  templateId?: 'classic' | 'bold' | 'minimal'
+  templateId?: StorefrontTemplateId
   primaryColor?: string
   secondaryColor?: string
   accentColor?: string | null

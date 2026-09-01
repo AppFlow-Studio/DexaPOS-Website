@@ -30,6 +30,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { useCart } from "../hooks/useCart";
 import { ItemDetailsModal } from "./ItemDetailsModal";
+import { useActiveItemAutoScroll } from "../hooks/useActiveItemAutoScroll";
 import {
   getStorefrontBrowsePrice,
   getStorefrontDeliveryPriceLabel,
@@ -65,7 +66,6 @@ export type MenuLayout = "cards" | "sidebyside" | "no-images";
 interface MenuBrowserProps {
   menus: StorefrontMenu[];
   menuLayout?: MenuLayout;
-  templateId?: "classic" | "bold" | "minimal" | "hero" | "market" | "boutique";
 }
 
 function isValidImageSrc(src?: string | null): boolean {
@@ -87,12 +87,7 @@ function flattenItems(menus: StorefrontMenu[]): StorefrontItem[] {
 export function MenuBrowser({
   menus,
   menuLayout = "cards",
-  templateId = "classic",
 }: MenuBrowserProps) {
-  // New templates have their own layout components; MenuBrowser treats them as classic
-  const effectiveTemplateId = (templateId === "hero" || templateId === "market" || templateId === "boutique")
-    ? "classic"
-    : templateId;
   const [activeMenuId, setActiveMenuId] = useState<string>("");
   const [activeCategory, setActiveCategory] = useState<string>("");
   const [selectedItem, setSelectedItem] = useState<StorefrontItem | null>(null);
@@ -107,6 +102,8 @@ export function MenuBrowser({
   const [headerHeight, setHeaderHeight] = useState(56);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const desktopSuggestionsRef = useRef<HTMLDivElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const desktopMenuRef = useRef<HTMLDivElement>(null);
   const mobilePillsRef = useRef<HTMLDivElement>(null);
   const desktopPillsRef = useRef<HTMLDivElement>(null);
   // While a pill click is smooth-scrolling, lock the highlight to the target so
@@ -356,22 +353,10 @@ export function MenuBrowser({
     };
   }, [filteredCategories, activeMenu?.categories, searchQuery, dietaryFilter, navHeight, headerHeight]);
 
-  // Keep the active category pill visible within its horizontal scroll strip
-  // (both mobile and desktop rows), so scroll-spy never highlights an off-screen pill.
-  useEffect(() => {
-    if (!activeCategory) return;
-    for (const container of [mobilePillsRef.current, desktopPillsRef.current]) {
-      if (!container) continue;
-      const pill = container.querySelector<HTMLElement>(`[data-category-pill="${activeCategory}"]`);
-      if (!pill) continue;
-      const cRect = container.getBoundingClientRect();
-      const pRect = pill.getBoundingClientRect();
-      if (pRect.left < cRect.left || pRect.right > cRect.right) {
-        const delta = pRect.left - cRect.left - (cRect.width - pRect.width) / 2;
-        container.scrollBy({ left: delta, behavior: "smooth" });
-      }
-    }
-  }, [activeCategory]);
+  useActiveItemAutoScroll(mobileMenuRef, activeMenuId);
+  useActiveItemAutoScroll(desktopMenuRef, activeMenuId);
+  useActiveItemAutoScroll(mobilePillsRef, activeCategory);
+  useActiveItemAutoScroll(desktopPillsRef, activeCategory);
 
   const popularItems = useMemo(() => {
     if (!activeMenu || searchQuery.trim() || dietaryFilter) return [];
@@ -429,12 +414,13 @@ export function MenuBrowser({
         {/* Desktop row */}
         <div className="hidden lg:flex items-center gap-3 py-2">
           {menus.length > 1 && (
-            <div className="flex overflow-x-auto no-scrollbar gap-1 flex-1">
+            <div ref={desktopMenuRef} className="flex overflow-x-auto no-scrollbar gap-1 flex-1">
               {menus.map((menu) => {
                 const isActive = activeMenuId === menu.id;
                 return (
                   <button
                     key={menu.id}
+                    data-auto-scroll-id={menu.id}
                     onClick={() => setActiveMenuId(menu.id)}
                     className="px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-[1px] shrink-0"
                     style={{
@@ -592,11 +578,11 @@ export function MenuBrowser({
 
           {/* Mobile menu tabs */}
           {menus.length > 1 && (
-            <div className="flex overflow-x-auto no-scrollbar gap-1 pb-1">
+            <div ref={mobileMenuRef} className="flex overflow-x-auto no-scrollbar gap-1 pb-1">
               {menus.map((menu) => {
                 const isActive = activeMenuId === menu.id;
                 return (
-                  <button key={menu.id} onClick={() => setActiveMenuId(menu.id)} className="px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-[1px] shrink-0" style={{ borderColor: isActive ? "var(--primary)" : "transparent", color: isActive ? "var(--primary)" : "#6B7280", backgroundColor: "transparent" }}>
+                  <button key={menu.id} data-auto-scroll-id={menu.id} onClick={() => setActiveMenuId(menu.id)} className="px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-[1px] shrink-0" style={{ borderColor: isActive ? "var(--primary)" : "transparent", color: isActive ? "var(--primary)" : "#6B7280", backgroundColor: "transparent" }}>
                     {menu.name.toUpperCase()}
                   </button>
                 );
@@ -609,7 +595,7 @@ export function MenuBrowser({
             {categories.map((cat) => {
               const isActive = activeCategory === cat.id;
               return (
-                <button key={cat.id} data-category-pill={cat.id} onClick={() => scrollToCategory(cat.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-200 shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "var(--primary-text)" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
+                <button key={cat.id} data-auto-scroll-id={cat.id} onClick={() => scrollToCategory(cat.id)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium whitespace-nowrap shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "#FFFFFF" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
                   {cat.name}
                 </button>
               );
@@ -638,7 +624,7 @@ export function MenuBrowser({
             {categories.map((cat) => {
               const isActive = activeCategory === cat.id;
               return (
-                <button key={cat.id} data-category-pill={cat.id} onClick={() => scrollToCategory(cat.id)} className="px-3.5 py-1.5 text-xs font-medium whitespace-nowrap transition-all duration-200 shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "var(--primary-text)" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
+                <button key={cat.id} data-auto-scroll-id={cat.id} onClick={() => scrollToCategory(cat.id)} className="px-3.5 py-1.5 text-xs font-medium whitespace-nowrap shrink-0 rounded-full" style={{ backgroundColor: isActive ? "var(--primary)" : "#FFFFFF", color: isActive ? "#FFFFFF" : "#6B7280", border: `1px solid ${isActive ? "var(--primary)" : "#E5E7EB"}` }}>
                   {cat.name}
                 </button>
               );
@@ -647,7 +633,7 @@ export function MenuBrowser({
         </div>
       </nav>
 
-      <div className="min-w-0 w-full space-y-12 pb-48 lg:pb-20">
+      <div className="min-w-0 w-full space-y-12 pb-24 lg:pb-12">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeMenu.id}
@@ -748,7 +734,6 @@ export function MenuBrowser({
                         item={item}
                         layout={menuLayout}
                         onClick={() => handleItemClick(item)}
-                        templateId={effectiveTemplateId}
                         showBadges={true}
                         failedImageIds={failedImageIds}
                         onImageError={handleImageError}
@@ -793,7 +778,6 @@ function ItemCard({
   item,
   layout,
   onClick,
-  templateId = "classic",
   showBadges = true,
   failedImageIds,
   onImageError,
@@ -801,7 +785,6 @@ function ItemCard({
   item: StorefrontItem;
   layout: MenuLayout;
   onClick: () => void;
-  templateId?: "classic" | "bold" | "minimal";
   showBadges?: boolean;
   failedImageIds: Set<string>;
   onImageError: (id: string) => void;
@@ -813,7 +796,6 @@ function ItemCard({
   };
   const showImage = layout !== "no-images" && isValidImageSrc(item.image) && !imageError && !failedImageIds.has(item.id);
   const isSoldOut = item.availability === false;
-  const isBold = templateId === "bold";
 
   const cardStyle = {
     backgroundColor: "#FFFFFF",
@@ -846,7 +828,7 @@ function ItemCard({
       >
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
-            <h4 className="font-semibold text-sm leading-tight line-clamp-1 group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#111827" }}>
+            <h4 className="font-bold text-sm leading-tight line-clamp-1 group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#111827" }}>
               {item.name}
             </h4>
             {showBadges && item.is_new && (
@@ -901,7 +883,7 @@ function ItemCard({
         <div className="flex-1 p-3 flex flex-col justify-between min-w-0">
           <div>
             <div className="flex flex-wrap items-center gap-1.5 mb-1">
-              <h4 className="font-semibold text-sm leading-tight line-clamp-1 group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#111827" }}>
+              <h4 className="font-bold text-sm leading-tight line-clamp-1 group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#111827" }}>
                 {item.name}
               </h4>
               {showBadges && item.is_new && (
@@ -943,13 +925,13 @@ function ItemCard({
           </div>
         </div>
         {showImage ? (
-          <div className="w-20 sm:w-24 shrink-0 relative overflow-hidden" style={{ backgroundColor: "#F3F4F6" }}>
+          <div className="relative m-2 ml-0 size-28 shrink-0 self-center overflow-hidden rounded-lg sm:m-0 sm:h-auto sm:w-24 sm:self-stretch sm:rounded-none" style={{ backgroundColor: "#F3F4F6" }}>
             <Image
               src={item.image!}
               fill
               alt={item.name}
               className="object-cover group-hover:scale-105 transition-transform duration-500"
-              sizes="96px"
+              sizes="(max-width: 640px) 112px, 96px"
               onError={handleImageError}
             />
             {isSoldOut && (
@@ -961,7 +943,7 @@ function ItemCard({
             )}
           </div>
         ) : (
-          <div className="w-20 sm:w-24 shrink-0 flex items-center justify-center" style={{ backgroundColor: "#F9FAFB" }}>
+          <div className="m-2 ml-0 flex size-28 shrink-0 self-center items-center justify-center rounded-lg sm:m-0 sm:h-auto sm:w-24 sm:self-stretch sm:rounded-none" style={{ backgroundColor: "#F9FAFB" }}>
             <span className="text-2xl font-bold" style={{ color: "var(--primary)", opacity: 0.3 }}>
               {item.name.charAt(0).toUpperCase()}
             </span>
@@ -972,79 +954,6 @@ function ItemCard({
   }
 
   // --- Cards layout (default) ---
-  // Bold template: slightly larger typography, same white card
-  if (isBold) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-40px" }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
-        onClick={isSoldOut ? undefined : onClick}
-        className={`group overflow-hidden flex flex-col transition-all duration-200 ${isSoldOut ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
-        style={{ ...cardStyle, borderRadius: "16px" }}
-        onMouseEnter={isSoldOut ? undefined : handleEnter}
-        onMouseLeave={isSoldOut ? undefined : handleLeave}
-      >
-        <div className="w-full aspect-video relative overflow-hidden" style={{ backgroundColor: "#F3F4F6" }}>
-          {showImage ? (
-            <Image
-              src={item.image!}
-              fill
-              alt={item.name}
-              className="object-cover group-hover:scale-105 transition-transform duration-700"
-              sizes="(max-width: 768px) 100vw, 50vw"
-              onError={handleImageError}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <span className="text-5xl font-black select-none" style={{ color: "var(--primary)", fontFamily: "var(--font-display)", opacity: 0.2 }}>
-                {item.name.charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
-          {showBadges && (item.is_new || item.is_popular) && (
-            <div className="absolute top-2 right-2 z-10 flex flex-row gap-1">
-              {item.is_new && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: "#FFFFFF", border: "1px solid var(--primary)", color: "var(--primary)" }}>New</span>
-              )}
-              {item.is_popular && (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: "#FFFFFF", border: "1px solid var(--primary)", color: "var(--primary)" }}>Popular</span>
-              )}
-            </div>
-          )}
-          {!item.availability && (
-            <div className="absolute inset-0 flex items-center justify-center z-10" style={{ backgroundColor: "rgba(255,255,255,0.75)" }}>
-              <span className="text-sm font-semibold px-3 py-1 rounded-full" style={{ backgroundColor: "#F3F4F6", color: "#6B7280" }}>Sold Out</span>
-            </div>
-          )}
-        </div>
-        <div className="p-3 sm:p-4 flex flex-col flex-1">
-          <h4 className="text-base font-bold leading-tight line-clamp-2 mb-1 group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#111827", fontFamily: "var(--font-display)" }}>
-            {item.name}
-          </h4>
-          {item.description && (
-            <p className="text-xs line-clamp-2 flex-1 mb-3" style={{ color: "#6B7280" }}>
-              {item.description}
-            </p>
-          )}
-          <div className="flex items-center justify-between gap-2 mt-auto">
-            <div className="flex flex-col">
-              <span className="text-base font-bold" style={{ color: "#111827" }}>
-                ${getStorefrontBrowsePrice(item).toFixed(2)}
-              </span>
-              {getStorefrontDeliveryPriceLabel(item) && (
-                <span className="text-[10px] text-slate-500">{getStorefrontDeliveryPriceLabel(item)}</span>
-              )}
-            </div>
-            <AddButton item={item} onClick={onClick} />
-          </div>
-        </div>
-      </motion.div>
-    );
-  }
-
-  // Classic / Minimal cards
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -1057,7 +966,7 @@ function ItemCard({
       onMouseEnter={isSoldOut ? undefined : handleEnter}
       onMouseLeave={isSoldOut ? undefined : handleLeave}
     >
-      <div className="w-full aspect-video relative overflow-hidden" style={{ backgroundColor: "#F3F4F6" }}>
+      <div className="relative m-2 mb-0 aspect-square w-[calc(100%-1rem)] overflow-hidden rounded-lg sm:m-0 sm:aspect-video sm:w-full sm:rounded-none" style={{ backgroundColor: "#F3F4F6" }}>
         {showBadges && (item.is_new || item.is_popular) && (
           <div className="absolute top-2 right-2 z-10 flex flex-row gap-1">
             {item.is_new && (
@@ -1091,7 +1000,7 @@ function ItemCard({
         )}
       </div>
       <div className="p-3 flex flex-col flex-1">
-        <h4 className="font-semibold text-sm line-clamp-2 mb-0.5 leading-tight group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#111827" }}>
+        <h4 className="font-bold text-sm line-clamp-2 mb-0.5 leading-tight group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#111827" }}>
           {item.name}
         </h4>
         {item.dietary_tags && item.dietary_tags.length > 0 && (
