@@ -188,7 +188,7 @@ under test. Production-build Slow 3G runs remain QA's job.
 | `/dashboard/orders` | Content area **completely blank**, only sidebar chrome | **Converted** → new `orders` variant |
 | `/dashboard/payments` | Header, tabs and **real KPI values** paint immediately; charts fill in below | Existing loader acceptable |
 | `/dashboard/customers` | Legacy `PageLoader` spinner in a fixed `h-64` box inside `CustomerList` | **Converted** → section-level row/card skeletons |
-| `/dashboard/invoices` | Row skeletons only; header/stats pop in late | **Convert** → `table` (pending) |
+| `/dashboard/invoices` | Rows skeletonised, but the four KPI tiles rendered `$0.00 / $0.00 / 0 / 0` while pending — a settled, empty ledger rather than an unfinished request | **Converted** → KPI figures skeletonised |
 | `/dashboard/subscriptions` | Server component, no client data wait | No loader required |
 | `/dashboard/reports` | Title, date picker, export buttons, KPI labels and section headings all paint immediately; only the figures skeletonise in place | Existing loader acceptable |
 | `/dashboard/reports/comparison` | Full control surface instant; heavy query gated behind location selection | No meaningful initial wait |
@@ -234,8 +234,8 @@ spinner remains anywhere under `app/`.
 
 Both new variants clear the "needed by at least two routes" bar:
 
-- **`table`** — filter bar over record rows: `/manage/users`,
-  `/manage/roles-permissions`, and the pending `/dashboard/invoices`.
+- **`table`** — filter bar over record rows: `/manage/users` and
+  `/manage/roles-permissions`.
 - **`orders`** — the two containers of `/dashboard/orders`: an Overview panel
   (range pills + 5-across KPI row with sparkline slots) and an All Orders panel
   (heading + Refresh, filter chips, search, table rows).
@@ -254,8 +254,11 @@ in `PageShell` would nest a second `<main>` landmark.
 - [x] `/dashboard/menu/items` uses the catalog pilot.
 - [x] Every Priority 1 route is audited and its decision is recorded.
       See "Workstream A — route audit" above.
-- [ ] Every Priority 1 route with a visible initial wait uses an appropriate
-      page- or section-shaped skeleton.
+- [x] Every Priority 1 route with a visible initial wait uses an appropriate
+      page- or section-shaped skeleton. Four converted (`orders`, `customers`,
+      `menu/categories`, `invoices`); the rest were observed to paint their
+      structure immediately and were deliberately left alone — see the audit
+      table for the per-route evidence.
 - [ ] Priority 2 merchant routes and listed HQ routes are audited and converted
       where needed.
 - [x] The five confirmed HQ legacy `PageLoader` routes no longer use the generic

@@ -232,7 +232,11 @@ export default function InvoicesPage() {
   // DB-authoritative, location-scoped KPIs (§4) — derived server-side from
   // amount_paid/paid_at/status; overdue is read-time derived. Refetched via
   // React Query invalidation whenever any invoice mutation runs.
-  const { data: kpi } = useInvoiceKpis();
+  // The `?? 0` fallbacks below are the right resting value but the wrong
+  // pending one: while the query is in flight they render "$0.00 / 0", which
+  // reads as a settled, empty ledger rather than an unfinished request. The
+  // tiles take `isLoading` so the figure skeletonises and the label stays.
+  const { data: kpi, isLoading: isKpiLoading } = useInvoiceKpis();
   const outstanding = kpi?.outstanding ?? 0;
   const paidThisMonth = kpi?.paidThisMonth ?? 0;
   const overdueCount = kpi?.overdueCount ?? 0;
@@ -262,24 +266,28 @@ export default function InvoicesPage() {
               icon={<DollarSign />}
               value={formatCurrency(outstanding)}
               meta="Unpaid balance"
+              isLoading={isKpiLoading}
             />
             <StatTile
               label="Paid This Month"
               icon={<CheckCircle2 />}
               value={formatCurrency(paidThisMonth)}
               meta="Current month"
+              isLoading={isKpiLoading}
             />
             <StatTile
               label="Overdue"
               icon={<AlertCircle />}
               value={overdueCount}
               meta="Needs attention"
+              isLoading={isKpiLoading}
             />
             <StatTile
               label="Drafts"
               icon={<Clock />}
               value={draftCount}
               meta="Not sent yet"
+              isLoading={isKpiLoading}
             />
           </StatRow>
         </div>
