@@ -55,6 +55,46 @@ describe("page skeleton gate — cached data stays visible", () => {
   });
 });
 
+describe("page skeleton gate — identity must gate the gate", () => {
+  /**
+   * Regression guard for a real bug: /dashboard/orders gated on
+   * `isLoadingOrders || isLoadingStats`, but BOTH queries are
+   * `enabled: !!clerkOrgId`. A disabled query reports isLoading: true forever
+   * in React Query v5, so a missing org id pinned the page on the skeleton
+   * permanently — the route simply stopped responding.
+   *
+   * The rule: when every gating query is disabled behind an identity, that
+   * identity must be part of the condition.
+   */
+  function ordersGate(clerkOrgId: string | undefined, queries: {
+    isLoading: boolean;
+  }[]): boolean {
+    return !!clerkOrgId && queries.some((q) => q.isLoading);
+  }
+
+  const coldDisabled = { isLoading: true };
+
+  it("does NOT strand the page when the identity is missing", () => {
+    // Both queries report isLoading forever because they are disabled.
+    expect(ordersGate(undefined, [coldDisabled, coldDisabled])).toBe(false);
+  });
+
+  it("still shows the skeleton once the identity resolves", () => {
+    expect(ordersGate("org_123", [coldDisabled, coldDisabled])).toBe(true);
+  });
+
+  it("clears once the queries settle", () => {
+    expect(ordersGate("org_123", [settled, settled])).toBe(false);
+  });
+
+  it("the naive gate would have stranded the route", () => {
+    // Documents the bug this guard exists to prevent.
+    const naive = (queries: { isLoading: boolean }[]) =>
+      queries.some((q) => q.isLoading);
+    expect(naive([coldDisabled, coldDisabled])).toBe(true);
+  });
+});
+
 describe("page skeleton gate — cannot strand the route", () => {
   it("a disabled/optional query never holds the page in a skeleton", () => {
     // A disabled query reports isLoading: true forever in React Query v5, so

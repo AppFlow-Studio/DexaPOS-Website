@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { useOrderOverview, useOrdersPage } from "../hooks/useOrder";
 import { isOrderReportable } from "@/lib/reporting/recognized-order";
+import { useClerkOrgId } from "../hooks/useLocationScoped";
 import { DataPageSkeleton } from "@/components/dashboard/loading/DataPageSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -48,6 +49,8 @@ import { useDebounce } from "@/lib/hooks/useDebounce";
 export default function OrdersPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  // Both order queries are gated on this; see the loading guard below.
+  const clerkOrgId = useClerkOrgId();
   const requestedPage = Number(searchParams.get("page"));
   const page = Number.isFinite(requestedPage)
     ? Math.max(1, Math.floor(requestedPage))
@@ -438,7 +441,13 @@ export default function OrdersPage() {
   // First paint only: `isLoading` is true solely when no cached page exists,
   // so filter, sort, and pagination changes keep the current rows visible and
   // fall through to the per-section `isFetching` affordances below.
-  if (isLoadingOrders || isLoadingStats) {
+  //
+  // Both queries are `enabled: !!clerkOrgId`, and a disabled query reports
+  // isLoading: true forever in React Query v5 (isPending && never fetched).
+  // Requiring the org id here means a missing identity falls through to the
+  // page's own empty/error states instead of pinning the skeleton on screen
+  // with no way out.
+  if (clerkOrgId && (isLoadingOrders || isLoadingStats)) {
     return (
       <DataPageSkeleton
         variant="orders"
