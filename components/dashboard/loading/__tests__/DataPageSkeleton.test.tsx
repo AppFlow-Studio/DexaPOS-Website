@@ -8,6 +8,7 @@ import {
 
 const VARIANTS: DataPageSkeletonVariant[] = [
   "analytics",
+  "orders",
   "catalog",
   "table",
   "detail",
@@ -85,6 +86,39 @@ describe("DataPageSkeleton — variant geometry", () => {
     // A variant that collapsed into another would defeat the whole point of
     // a page-shaped skeleton.
     expect(new Set(rendered).size).toBe(VARIANTS.length);
+  });
+
+  it("orders draws exactly the page's two containers", () => {
+    // /dashboard/orders is an Overview panel (range pills + 5 KPI tiles with
+    // sparklines) and an All Orders panel (heading, filter chips, table rows).
+    // Regression guard: it was first wired to `analytics`, whose chart panel,
+    // tab strip and four summary panels promised a layout that never arrived.
+    const html = renderToString(
+      <DataPageSkeleton variant="orders" label="Loading orders" />,
+    );
+
+    const containers = html.match(/rounded-3xl border bg-card/g)?.length ?? 0;
+    expect(containers).toBe(2);
+
+    // The analytics variant's four two-column summary panels must not appear.
+    expect(html).not.toContain("md:grid-cols-2");
+    // The KPI row is 5-across, not the analytics 4-across.
+    expect(html).toContain("xl:grid-cols-5");
+  });
+
+  it("orders builds filter chips from literal Tailwind widths", () => {
+    // Tailwind scans source text, so an interpolated `w-${n}` compiles to no
+    // rule and the chip renders unstyled at zero width.
+    const html = renderToString(
+      <DataPageSkeleton variant="orders" label="Loading orders" />,
+    );
+    // Distinct literal widths, so the chip row reads as varied filter pills
+    // rather than one repeated block.
+    const widths = new Set(
+      [...html.matchAll(/\bw-(\d+) rounded-full/g)].map((m) => m[1]),
+    );
+    expect(widths.size).toBeGreaterThan(2);
+    expect(html).toContain("w-40");
   });
 
   it("detail opens with a breadcrumb instead of a duplicate page header", () => {

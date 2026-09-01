@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 
 export type DataPageSkeletonVariant =
   | 'analytics'
+  | 'orders'
   | 'catalog'
   | 'table'
   | 'detail'
@@ -158,6 +159,74 @@ function CatalogSkeleton() {
 }
 
 /**
+ * Two containers, matching `/dashboard/orders` exactly:
+ *
+ *   1. Overview — range pills + resolved window, then a 5-across KPI row
+ *      where each tile is label / figure / sparkline.
+ *   2. All Orders — heading + Refresh, a filter chip row, then table rows.
+ *
+ * Deliberately NOT the `analytics` variant: that one draws a large chart
+ * panel, a tab strip and four two-column summary panels, none of which this
+ * page has. Reusing it made the skeleton promise a layout that never arrived.
+ */
+function OrdersSkeleton() {
+  return (
+    <>
+      {/* 1 — Overview */}
+      <div className="min-w-0 overflow-hidden rounded-3xl border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-6 py-4">
+          <div className="flex items-center gap-0.5 rounded-full bg-muted/70 p-1">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <LoadingBlock key={index} className="h-9 w-16 rounded-full" />
+            ))}
+          </div>
+          <LoadingBlock className="h-4 w-36 rounded-full" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-2 gap-y-6 px-2 pb-6 xl:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="min-w-0 space-y-3 px-4">
+              <LoadingBlock className="h-4 w-20 rounded-full" />
+              <LoadingBlock className="h-9 w-24 max-w-full" />
+              {/* Mirrors the tile's `mt-4 h-12` sparkline slot. */}
+              <LoadingBlock className="h-12 w-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 2 — All Orders */}
+      <div className="min-w-0 overflow-hidden rounded-3xl border bg-card px-6 py-6">
+        <div className="flex items-center justify-between gap-3">
+          <LoadingBlock className="h-5 w-28" />
+          <LoadingBlock className="h-8 w-24 rounded-full" />
+        </div>
+
+        {/* Widths are literal, never interpolated: Tailwind scans source text,
+            so a class built at runtime gets no rule and renders unstyled. */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <LoadingBlock className="h-9 w-40 rounded-full" />
+          <LoadingBlock className="h-9 w-24 rounded-full" />
+          <LoadingBlock className="h-9 w-20 rounded-full" />
+          <LoadingBlock className="h-9 w-28 rounded-full" />
+          <LoadingBlock className="h-9 w-28 rounded-full" />
+          <LoadingBlock className="h-9 w-28 rounded-full" />
+          <LoadingBlock className="h-9 w-24 rounded-full" />
+        </div>
+
+        <LoadingBlock className="mt-4 h-10 w-full max-w-sm rounded-full" />
+
+        <div className="mt-4 space-y-2">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <LoadingBlock key={index} className="h-10 w-full" />
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
+/**
  * A filter bar over a row-based list. Used by routes whose payload is a table
  * or a stack of record rows rather than a media grid.
  */
@@ -252,6 +321,7 @@ function DetailSkeleton() {
 
 const VARIANT_BODIES: Record<DataPageSkeletonVariant, () => React.JSX.Element> = {
   analytics: AnalyticsSkeleton,
+  orders: OrdersSkeleton,
   catalog: CatalogSkeleton,
   table: TableSkeleton,
   detail: DetailSkeleton,

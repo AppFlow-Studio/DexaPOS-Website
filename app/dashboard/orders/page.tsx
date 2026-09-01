@@ -441,7 +441,7 @@ export default function OrdersPage() {
   if (isLoadingOrders || isLoadingStats) {
     return (
       <DataPageSkeleton
-        variant="analytics"
+        variant="orders"
         shell="plain"
         label="Loading orders"
       />
