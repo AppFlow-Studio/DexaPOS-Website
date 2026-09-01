@@ -185,16 +185,26 @@ under test. Production-build Slow 3G runs remain QA's job.
 
 | Route | First-load behaviour observed | Decision |
 | --- | --- | --- |
-| `/dashboard/orders` | Content area **completely blank**, only sidebar chrome | **Converted** → `analytics` |
+| `/dashboard/orders` | Content area **completely blank**, only sidebar chrome | **Converted** → new `orders` variant |
 | `/dashboard/payments` | Header, tabs and **real KPI values** paint immediately; charts fill in below | Existing loader acceptable |
-| `/dashboard/customers` | Legacy `PageLoader` spinner inside `CustomerList` | **Convert** → `table` (pending) |
+| `/dashboard/customers` | Legacy `PageLoader` spinner in a fixed `h-64` box inside `CustomerList` | **Converted** → section-level row/card skeletons |
 | `/dashboard/invoices` | Row skeletons only; header/stats pop in late | **Convert** → `table` (pending) |
 | `/dashboard/subscriptions` | Server component, no client data wait | No loader required |
-| `/dashboard/reports` | Per-KPI `isLoading`, values arrive piecemeal | **Convert** → `analytics` (pending) |
+| `/dashboard/reports` | Title, date picker, export buttons, KPI labels and section headings all paint immediately; only the figures skeletonise in place | Existing loader acceptable |
 | `/dashboard/reports/comparison` | Full control surface instant; heavy query gated behind location selection | No meaningful initial wait |
 | `/dashboard/reports/cash-drawers` | `StatTile` skeletons honour `isLoading`; the `—` and "Not yet loaded" seen afterwards are a **resolved-empty** range, not a loading state | Existing loader acceptable |
-| `/dashboard/menu/categories` | Grid skeletons already section-shaped | **Convert** → `catalog` (pending) |
-| `/dashboard/menu/modifiers` | Grid skeletons already section-shaped | **Convert** → `catalog` (pending) |
+| `/dashboard/menu/categories` | List rows skeletonised, but all four KPI tiles rendered a hard `0` while pending — reads as an empty catalog | **Converted** → KPI figures skeletonised |
+| `/dashboard/menu/modifiers` | All four `StatTile`s already pass `isLoading`; list grid already skeletonised | Existing loader acceptable |
+
+> Note on `/dashboard/orders`: first wired to `analytics`, which was wrong —
+> that variant was built for `/dashboard/transactions` (large chart panel, tab
+> strip, four two-column summary panels) and orders has none of those, so the
+> skeleton promised a layout that never arrived. Replaced with a dedicated
+> `orders` variant mirroring its two real containers.
+
+> Note on `/dashboard/reports`: initially assumed to need `analytics`.
+> Observation showed the opposite — converting it would have *regressed* the
+> route by hiding structure that currently paints instantly. Left alone.
 
 > Note on cash-drawers: an initial read flagged the em-dash KPI row as a broken
 > loading state. It is not. `StatTile` does honour `isLoading`; the dashes come
@@ -225,8 +235,10 @@ spinner remains anywhere under `app/`.
 Both new variants clear the "needed by at least two routes" bar:
 
 - **`table`** — filter bar over record rows: `/manage/users`,
-  `/manage/roles-permissions`, and the pending `/dashboard/customers` and
-  `/dashboard/invoices`.
+  `/manage/roles-permissions`, and the pending `/dashboard/invoices`.
+- **`orders`** — the two containers of `/dashboard/orders`: an Overview panel
+  (range pills + 5-across KPI row with sparkline slots) and an All Orders panel
+  (heading + Refresh, filter chips, search, table rows).
 - **`detail`** — breadcrumb, identity header, summary strip, tabbed body:
   `/manage/users/[userId]`, `/manage/merchants/[merchantId]`,
   `/manage/subscriptions/[merchantId]`.
@@ -248,8 +260,9 @@ in `PageShell` would nest a second `<main>` landmark.
       where needed.
 - [x] The five confirmed HQ legacy `PageLoader` routes no longer use the generic
       centered spinner unless a documented exception is approved.
-      (`grep -rn PageLoader app/` returns only `/dashboard/customers`, which is
-      a Priority 1 conversion still pending.)
+      `grep -rn PageLoader app/` now returns **nothing** — the legacy centred
+      spinner is gone from every route, HQ and merchant alike. The component
+      itself remains at `components/ui/page-loader.tsx` with no callers.
 - [ ] Filter, pagination, focus-refetch, and manual-refresh actions preserve
       visible cached data.
 - [ ] Existing empty and error states remain reachable and do not overlap the
