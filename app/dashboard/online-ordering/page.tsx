@@ -41,11 +41,13 @@ import { NotificationsTab } from "./components/NotificationsTab";
 import { HoursConfigModal } from "./components/HoursConfigModal";
 import { WeeklySchedule } from "./hooks/useOnlineOrderingSettings";
 import { QrTableManager } from "./components/QrTableManager";
+import { MarketingQrManager } from "./components/MarketingQrManager";
 import { QrAnalyticsPanel } from "./components/QrAnalyticsPanel";
 import { QrGuestAlertsPanel } from "./components/QrGuestAlertsPanel";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
 import { buildStoreUrl } from "@/app/sites/lib/store-url";
+import { validateQrBrandingColors } from "@/lib/qr/branding-rules";
 import {
   LocationIndicator,
   PageHeader,
@@ -299,6 +301,30 @@ function CompletedSetupPanel({
   });
   const qrGate = settings.qrBillingGate;
   const qrControlsLocked = isSaving || !qrGate.entitled;
+
+  /**
+   * Reject unscannable colours *as the merchant picks them*.
+   *
+   * `resolveQrBranding` degrades at render time so an old row still prints,
+   * but that is the wrong moment to learn about it: the merchant finds out via
+   * a toast on the QR screen, long after leaving this form. These are the same
+   * three values the QR renderer reads — `primaryColor` draws the modules,
+   * `backgroundColor` the ground, `secondaryColor` the optional gradient.
+   *
+   * Deliberately not a hard save block: these colours also drive the whole
+   * storefront, so refusing to save a valid website because its palette would
+   * make a poor QR code would be the wrong trade. The requirement is that the
+   * merchant is told at the point of choice, with the reason — which this does.
+   */
+  const qrColorIssues = useMemo(
+    () =>
+      validateQrBrandingColors({
+        moduleColor: settings.primaryColor,
+        backgroundColor: settings.backgroundColor,
+        secondaryColor: settings.secondaryColor,
+      }),
+    [settings.primaryColor, settings.backgroundColor, settings.secondaryColor]
+  );
   const qrEnableSwitchDisabled =
     isSaving || (!qrGate.entitled && !settings.acceptsDineIn);
   const { orgSlug } = useAuth();
@@ -880,6 +906,33 @@ function CompletedSetupPanel({
                 />
               </div>
 
+              {/* The reason, at the point of choice. `message` already says why
+                  and is written for merchants, so it is rendered verbatim. */}
+              {qrColorIssues.length > 0 ? (
+                <div
+                  className="rounded-2xl border-0 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-none dark:bg-amber-900/20 dark:text-amber-200"
+                  role="status"
+                >
+                  <p className="font-medium">
+                    {qrColorIssues.some((issue) => issue.scope === "primary")
+                      ? "These colours will not scan as a QR code"
+                      : "The QR gradient will be skipped"}
+                  </p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {qrColorIssues.map((issue) => (
+                      <li key={`${issue.code}-${issue.scope}`}>
+                        {issue.message}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2">
+                    {qrColorIssues.some((issue) => issue.scope === "primary")
+                      ? "Your storefront can still use them. Table QR codes will fall back to black on white until this is fixed."
+                      : "Your storefront can still use it. Table QR codes will print in the primary colour alone."}
+                  </p>
+                </div>
+              ) : null}
+
               {/* Row 1: Logo, Favicon, OG Image — uniform 80×80 */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {(
@@ -1154,6 +1207,18 @@ function CompletedSetupPanel({
                 qrKillSwitch={settings.qrKillSwitch}
                 qrEntitled={qrGate.entitled}
                 qrGateMessage={qrGate.reason}
+              />
+
+              {/* Deliberately OUTSIDE the qrEntitled gate above. Table QR
+                  ordering is a billable multi-location dine-in feature; a
+                  flyer is not. Gating this would lock out exactly the
+                  single-location merchants who print flyers. Passing the flag
+                  forced-true would not be equivalent — a later refactor of the
+                  gate would silently swallow this. */}
+              <MarketingQrManager
+                locationId={selectedLocationId}
+                locationName={locationName}
+                storefrontEnabled={settings.enabled}
               />
 
               <QrAnalyticsPanel

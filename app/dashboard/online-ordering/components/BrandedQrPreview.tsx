@@ -13,6 +13,15 @@ interface BrandedQrPreviewProps {
   className?: string;
   /** Rendered size in CSS pixels. The underlying raster is drawn at 2x for crispness. */
   sizePx?: number;
+  /**
+   * Accessible name for the image. Two of these can sit on one screen — the
+   * table-code preview and the marketing-code preview — and identical alt text
+   * leaves a screen reader user unable to tell which is which.
+   */
+  label?: string;
+  /** Shown when there is nothing to encode yet. Table and marketing codes are
+   *  created in different ways, so they need different instructions. */
+  emptyLabel?: string;
 }
 
 interface RenderOutcome {
@@ -34,6 +43,8 @@ export function BrandedQrPreview({
   branding,
   className,
   sizePx = 176,
+  label = "Preview of the branded QR code",
+  emptyLabel = "Generate a table QR code to see the branded preview.",
 }: BrandedQrPreviewProps) {
   const [outcome, setOutcome] = useState<RenderOutcome | null>(null);
 
@@ -125,14 +136,14 @@ export function BrandedQrPreview({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={current.objectUrl}
-          alt="Preview of the branded QR code"
+          alt={label}
           width={sizePx}
           height={sizePx}
           className="h-full w-full object-contain"
         />
       ) : (
         <span className="px-3 text-center text-[11px] leading-tight text-muted-foreground">
-          Generate a table QR code to see the branded preview.
+          {emptyLabel}
         </span>
       )}
     </div>
