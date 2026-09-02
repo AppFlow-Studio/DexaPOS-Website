@@ -456,10 +456,19 @@ function AuditDetailModal({
 
 // ─── Skeleton Loader ──────────────────────────────────────────────────────────
 
-function TimelineSkeleton() {
+/**
+ * `rows` should be however many entries the page is actually about to show,
+ * when that is known. On a refetch — switching tabs, changing a filter — the
+ * previous result already tells us the count, so drawing a fixed six
+ * placeholders overstates a category holding two entries and invents rows
+ * entirely for one holding none.
+ */
+function TimelineSkeleton({ rows = 6 }: { rows?: number }) {
+  if (rows <= 0) return null;
+
   return (
     <div className="space-y-2.5">
-      {Array.from({ length: 6 }).map((_, i) => (
+      {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
           className="min-w-0 rounded-2xl border-0 bg-muted/45 p-3 sm:p-4"
@@ -800,6 +809,10 @@ export default function AuditLogsPage() {
         {/* Timeline */}
         <div className="min-w-0 border-t border-border/60 px-4 py-6 sm:px-6">
           {isLoading ? (
+            // Reached only on a genuine cold load, where no count exists yet.
+            // Tab and filter changes keep the previous entries on screen via
+            // keepPreviousData and show progress on the Refresh control
+            // instead, so a category holding two rows never flashes six.
             <TimelineSkeleton />
           ) : logs.length === 0 ? (
             <Empty
