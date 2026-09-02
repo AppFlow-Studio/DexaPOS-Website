@@ -86,171 +86,19 @@ server-side SQL). A model change to the helper does NOT reach SQL RPCs — grep 
 trust the funnel. Base/global price scope has no single location %, so leave global cash to the
 item editor rather than guessing a rate.
 
----
-
-## JSX: `{expr} text&entity;` silently loses the space (2026-08-30)
-
-**Symptom.** A branch name rendered welded to the next word — `Uptown Branchconfirms each
-booking`, `Omar Declinedwill be told`. Three separate occurrences in one feature, all shipped
-past `tsc`, all shipped past unit tests, all found only by opening a browser.
-
-**The pattern that breaks:**
-
-```jsx
-{branch?.name ?? "This restaurant"} confirms each booking. We&rsquo;ll hold your table
-```
-
-The source has the space. `od -c` confirms it. **esbuild compiles it correctly** — the children
-array comes out as `[name, " confirms each booking. We\u2019ll hold it."]`, space intact. But
-Turbopack/SWC splits the JSXText at the HTML entity and drops the leading whitespace of the first
-segment, so React receives two adjacent text nodes with nothing between them.
-
-**It is specific to the entity.** The control case renders fine — `{n} minutes` in
-`ReservationsScreen` produces `"5 minutes"` in the DOM. So this is not "JSX eats spaces after
-expressions" in general, and there is no need to audit every interpolation in the codebase.
-
-**The rule:** when an expression is followed by text containing an HTML entity (`&rsquo;`,
-`&nbsp;`, `&amp;` …), write the space explicitly:
-
-```jsx
-{branch?.name ?? "This restaurant"}{" "}
-confirms each booking. We&rsquo;ll hold your table
-```
-
-**Why it matters beyond typography.** Every instance was in guest-facing or merchant-facing copy
-where the interpolated value is a *name* — the restaurant's or the guest's. Getting someone's name
-wrong in the first line of a message is the kind of defect a merchant forwards to support.
-
-**The real lesson is about verification, not JSX.** `tsc` cannot see it, unit tests asserting
-`toContain("confirms each booking")` pass happily, and a snapshot test would have baked the bug in
-as expected output. Only rendering the page catches it. **Copy that interpolates a value must be
-read in a browser at least once**, and the assertion worth writing is on the *joined* string
-(`toContain("Uptown Branch confirms")`), not on either half.
-
----
-
-## A published storefront is a different HOST, and `localhost:3000` never tests it
-
-**Symptom.** Every guest who opened "Book a table" on a live site was told *"We could not load
-times just now. Please try again."* The booking API was correct, the endpoint returned real slots,
-and the whole flow passed QA.
-
-**Cause.** `proxy.ts` rewrites every path on a storefront host to `/sites/{slug}{path}` so the
-storefront renders. That rewrite ran before anything else and did not exclude `/api`, so
-`POST /api/site-reservations/availability` was rewritten into the storefront's page catch-all and
-answered with a 404 **HTML** page. `res.json()` threw, and the widget's `catch` printed the
-"could not load times" line — a network-failure message for a routing bug. `/api/site-forms/submit`
-was dead the same way, so contact-form submissions were lost.
-
-**Why QA missed it.** All of it was tested at `localhost:3000/sites/{slug}`, which is the apex host,
-where no rewrite happens. The bug only exists on the hosts real visitors use:
-`{slug}.dexaposai.com`, a merchant's custom domain, and `{slug}.localhost:3000` in development.
-
-**The rule — the signed-out probe now has two axes, host and session.** The existing lesson was
-"call a public endpoint signed out". That is necessary and not sufficient. Call it **on a storefront
-host** as well:
-
-```bash
-# Both must answer JSON. The subdomain answering text/html is the bug.
-curl -s -o /dev/null -w "%{http_code} %{content_type}\n" -X POST \
-  "http://localhost:3000/api/site-reservations/availability" -H "content-type: application/json" -d '{}'
-curl -s -o /dev/null -w "%{http_code} %{content_type}\n" -X POST \
-  "http://joes-coffee-shop.localhost:3000/api/site-reservations/availability" -H "content-type: application/json" -d '{}'
-```
-
-`{slug}.localhost:3000` needs no hosts-file entry and exercises the real production code path —
-`extractStoreSlug` keeps `localhost` as its dev root precisely so this is testable.
-
-**The generalisation.** Any request a *published site* makes to our own origin has to be checked on
-the storefront host, not only the apex one: API routes, form actions, redirects back to the page,
-and anything reading `Host`. Two hosts serve the same app and only one of them is what a customer
-uses.
-
-**And keep the exemption narrow.** The fix exempts `/api/site-reservations` and `/api/site-forms`
-from the rewrite — not `/api`. Exempting the whole namespace would make gated app endpoints
-reachable on a customer-facing domain, where a signed-in staff cookie can still travel. See
-`lib/site-builder/public-api-paths.ts`; a new public storefront endpoint must be added there *and*
-to `isPublicApiRoute` in `proxy.ts` — the first decides whether the request reaches its handler, the
-second whether Clerk lets a stranger past.
-
----
-
-## `REVOKE ... FROM PUBLIC` does not lock down a Supabase function
-
-**2026-08-30, reservation request expiry.** Found in verification, not in review or tests.
-
-A new `SECURITY DEFINER` function in `public` that bulk-cancels bookings was written with what
-looks like a correct lockdown:
-
-```sql
-REVOKE ALL ON FUNCTION public.expire_stale_reservation_requests(int, int, text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION ... TO service_role;
-```
-
-Applied to staging, `proacl` read `{postgres=X, anon=X, authenticated=X, service_role=X}`.
-
-**Why.** Supabase's default privileges `GRANT EXECUTE` to `anon` and `authenticated` *explicitly*
-whenever a function is created in `public`. `REVOKE ... FROM PUBLIC` removes the implicit
-world grant and does not touch an explicit role grant. The function was therefore a live PostgREST
-RPC endpoint callable by anyone holding the publishable key — which ships in every browser — and it
-took its own lookback window as an argument, so the caller chose the blast radius.
-
-**The rule.** Name the roles. Every function in `public` that is not meant for browsers ends with:
-
-```sql
-REVOKE ALL ON FUNCTION public.fn(args) FROM PUBLIC, anon, authenticated;
-```
-
-This repo already had the right form in `20260828160000_reservation_public_write.sql`. Copy from a
-neighbour rather than from memory.
-
-**The second, worse half: the test passed.** A contract test asserted
-`expect(sql).not.toMatch(/TO anon/)` — which passes trivially on a file that never mentions `anon`,
-which is exactly the broken file. A negative assertion over migration *text* cannot distinguish
-"revoked" from "never mentioned", and no text assertion can see `proacl` at all.
-
-So:
-
-1. **Assert positively.** Check the file *contains* `FROM PUBLIC, anon, authenticated`. Never write
-   a test whose passing condition is that some string is absent from a file, when absence is the
-   failure mode.
-2. **Text tests are not grant tests.** After applying any migration that creates a function,
-   read the live ACL before believing it:
-
-```sql
-select proname, proacl::text from pg_proc p
-  join pg_namespace n on n.oid = p.pronamespace
- where n.nspname = 'public' and proname = '<fn>';
-```
-
-**Generalisation.** Whenever the security property lives in the *database's* state rather than in
-the migration file, the migration file cannot be the evidence. Same class as the migration-ledger
-trap already recorded: check `pg_proc`, `information_schema`, and `proacl` — never the artefact
-that was supposed to produce them.
-
-**Also found:** `poke_orderout_status_relay` (20260727120100) carries the same open grant. Lower
-severity — it only fires an HTTP poke — but it is the same mistake, still live.
-
-## Tailwind 4: an arbitrary value after `ring-` / `divide-` is a WIDTH, not a colour
-
-`focus-within:ring-2 ring-[var(--site-brand)]` produced no focus indicator at
-all. The arbitrary value is parsed as a ring *width*, so the colour resolved to
-nothing and the computed `box-shadow` was five transparent zero-width layers.
-`divide-[var(--site-border)]` fails the same way. `ring-inset` no longer exists
-in v4 either — it is `inset-ring`.
-
-**Neither failed loudly.** The classes were on the element, spelled correctly,
-and looked right in DevTools' class list. Only `getComputedStyle` revealed that
-nothing had been applied.
-
-Rules:
-- For a CSS-variable colour use the v4 form (`ring-(--site-brand)`), or avoid the
-  ambiguity entirely with an explicit property — this codebase already sets site
-  tokens via inline `style`, which cannot be misparsed and is not subject to
-  content scanning.
-- **Verify a style landed with `getComputedStyle`, never by reading the class
-  list.** A class that is present is not a class that applied.
-- Do NOT grep `.next/**/*.css` to check whether a utility was generated. Those
-  chunks are cached and can predate the running dev server, so they will happily
-  tell you a working class is missing and a missing class is present. Ask the
-  browser instead.
+## …then REVERTED: dual pricing is cash-as-base (surcharge) after all (2026-08-27)
+Context: the "cash discount" model above was later reversed at the user's direction — the intended
+model is cash-as-base: "calculate from the cash price UP, not from the card price down" ($10 cash →
+$10.40 card). So `card = cash × (1 + pct/100)`, inverse `cash = card ÷ (1 + pct/100)`. This also
+matches the POS, which already derives cash via the inverse (`20260706130000_open_item_dual_pricing_inverse.sql`);
+the discount commit had made web inconsistent with the tablet.
+Reverted surfaces: `lib/pricing.ts` (+ tests), the two wording-only spots in `PriceInputGroup` and
+`InlinePriceEditor` (their derive *wiring* was already direction-correct — only the helper math and
+copy changed), and the two bulk-adjust RPCs (`… / (1 + pct/100)`), all in migration
+`20260827120000_revert_dual_pricing_cash_surcharge.sql`.
+Data fix: the user chose "keep card, only fix cash" — recompute stored cash as `card ÷ (1 + pct/100)`
+so menu/card prices don't move; only the cash column shifts (~1¢). The epsilon still matters on the
+inverse: a true cash base of $10 stores card $10.40, and `10.40 ÷ 1.04 = 9.99999…` must floor back to
+$10.00, not $9.99 — keep `Math.floor(raw*100 + 1e-6)/100`. Meta-lesson: a "more correct" convention
+is never the spec; the number/direction the user states is. This is the second flip of the same
+math — pin the model in one helper + one migration and confirm the direction before touching prices.

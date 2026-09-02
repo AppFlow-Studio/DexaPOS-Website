@@ -16,6 +16,9 @@ const isOrgSelectionRoute = createRouteMatcher(['/join-organization(.*)'])
 const isAcceptInvitationRoute = createRouteMatcher(['/accept-invitation(.*)'])
 const isMarketingRoute = createRouteMatcher([
   '/',
+  // Alias of '/' that is never punted to /dashboard, so the marketing homepage
+  // stays reachable while signed in.
+  '/home',
   '/demo',
   '/features',
   '/pricing',

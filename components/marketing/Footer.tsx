@@ -28,7 +28,7 @@ export default function Footer({ settings = DEFAULT_SITE_SETTINGS }: { settings?
     <footer className="footer" aria-label="Site footer">
       <div className="wrap">
         <div className="footer-top">
-          <div>
+          <div className="footer-brand">
             <Link href="/" className="logo" aria-label={settings.brand_home_aria} {...siteEditAttrs("logo_aria", "Logo aria label")}>
               <OptimizedImage
                 className="logo-img"

@@ -155,7 +155,7 @@ export function PriceInputGroup({
                   happened on click. */}
               <TooltipContent className="z-[250] max-w-xs">
                 <p>Dual Pricing is enabled.</p>
-                <p>Cash price is {percentage}% off the card price.</p>
+                <p>Cash is the base price — card price is {percentage}% above it.</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -213,7 +213,7 @@ export function PriceInputGroup({
       {isDual && (
         <div className="flex items-center justify-between mt-2">
           <p className="text-[11px] text-muted-foreground">
-            * Cash price is {percentage}% off the card price.
+            * Card price is {percentage}% above the cash price (cash is the base).
           </p>
           <div className="flex items-center gap-2">
             <label htmlFor="auto-calc-toggle" className="text-[11px] text-muted-foreground whitespace-nowrap">

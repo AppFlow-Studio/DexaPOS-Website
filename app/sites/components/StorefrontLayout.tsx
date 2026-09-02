@@ -115,7 +115,7 @@ export function StorefrontLayout({
     );
   }
 
-  // Classic (and legacy minimal/bold) layout
+  // Classic is the default and fallback layout.
   return (
     <>
       {deepLink}
@@ -161,9 +161,6 @@ function ClassicLayout({
   }, []);
   const { setOpen } = useCart();
 
-  const templateId: SiteThemeConfig["templateId"] =
-    site?.theme_config?.templateId || "classic";
-
   const rawBusinessHours =
     site?.online_ordering_config?.operatingHours ||
     (location as any).business_hours;
@@ -198,10 +195,7 @@ function ClassicLayout({
 
   const menuLayout = site?.online_ordering_config?.menuLayout ?? "cards";
 
-  const mainContainerClass =
-    (templateId as string) === "minimal"
-      ? "mx-auto max-w-3xl px-4 sm:px-6 py-6 lg:pb-8 pb-6"
-      : "container mx-auto px-4 py-6 lg:pb-8 pb-6";
+  const mainContainerClass = "container mx-auto px-4 py-6 lg:pb-8 pb-6";
 
   const renderContent = () => {
     switch (activeTab) {
@@ -209,11 +203,7 @@ function ClassicLayout({
         return <OrdersPanel slug={slug} storeConfigId={site?.id} />;
       default:
         return (
-          <MenuBrowser
-            menus={menus}
-            menuLayout={menuLayout}
-            templateId={templateId || "classic"}
-          />
+          <MenuBrowser menus={menus} menuLayout={menuLayout} />
         );
     }
   };
@@ -248,11 +238,7 @@ function ClassicLayout({
           />
 
           {/* Story / description section */}
-          <div className={
-            (templateId as string) === "minimal"
-              ? "max-w-3xl mx-auto px-4 mt-4"
-              : "container mx-auto px-4 mt-4"
-          }>
+          <div className="container mx-auto px-4 mt-4">
             <QrTableBanner tableLabel={qrTableLabel} className="mb-4" />
             <BranchStorySection site={site} />
           </div>

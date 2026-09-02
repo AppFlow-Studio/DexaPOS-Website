@@ -4,11 +4,15 @@ import ContactForm from "@/components/marketing/ContactForm";
 import PricingCalculator from "@/components/marketing/PricingCalculator";
 import type { PricingCalculatorSettings } from "@/components/marketing/PricingCalculator";
 import FaqAccordion from "@/components/marketing/FaqAccordion";
+import { Reveal } from "@/components/marketing/Reveal";
+import FaqDetails from "@/components/marketing/FaqDetails";
+import CountUp from "@/components/marketing/CountUp";
 import DemoFrame from "@/components/marketing/DemoFrame";
 import InlineCmsPreview from "./InlineCmsPreview";
 import Link from "next/link";
-import { Suspense } from "react";
+import { Fragment, Suspense } from "react";
 import OptimizedImage from "@/components/marketing/OptimizedImage";
+import CompareSwitch from "@/components/marketing/CompareSwitch";
 
 export default function SectionRenderer({ sections, route }: { sections: Section[]; route?: string }) {
   if (!sections || sections.length === 0) return null;
@@ -118,9 +122,9 @@ function PageHeadSection({ section }: { section: Section }) {
   return (
     <section className="page-head">
       <div className="wrap">
-        {section.subheading && <div className="eyebrow reveal in" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
-        {section.heading && <h1 className="reveal in" style={{ transitionDelay: ".1s" }} {...editAttrs(section, "heading", "Heading")}>{section.heading}</h1>}
-        {section.lede && <p className="lede reveal in" style={{ transitionDelay: ".2s" }} {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
+        {section.subheading && <Reveal as="div" className="eyebrow reveal" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</Reveal>}
+        {section.heading && <Reveal as="h1" className="reveal" style={{ transitionDelay: ".1s" }} {...editAttrs(section, "heading", "Heading")}>{section.heading}</Reveal>}
+        {section.lede && <Reveal as="p" className="lede reveal" style={{ transitionDelay: ".2s" }} {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</Reveal>}
       </div>
     </section>
   );
@@ -147,9 +151,9 @@ function HardwareHeroSection({ section }: { section: Section }) {
   return (
     <section className="page-head">
       <div className="wrap">
-        <div className="eyebrow reveal in" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading || "Hardware"}</div>
-        {section.heading && <h1 className="reveal in" style={{ transitionDelay: ".1s" }} {...editAttrs(section, "heading", "Heading")}>{section.heading}</h1>}
-        {section.lede && <p className="lede reveal in" style={{ transitionDelay: ".2s" }} {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
+        <Reveal as="div" className="eyebrow reveal" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading || "Hardware"}</Reveal>
+        {section.heading && <Reveal as="h1" className="reveal" style={{ transitionDelay: ".1s" }} {...editAttrs(section, "heading", "Heading")}>{section.heading}</Reveal>}
+        {section.lede && <Reveal as="p" className="lede reveal" style={{ transitionDelay: ".2s" }} {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</Reveal>}
       </div>
     </section>
   );
@@ -161,12 +165,12 @@ function HardwareCategoriesSection({ section }: { section: Section }) {
   return (
     <section className="hw-cats">
       <div className="wrap">
-        <div className="section-head reveal in">
+        <Reveal as="div" className="section-head center reveal">
           {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
           {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
-        </div>
+        </Reveal>
 
-        <div className="hw-grid reveal-stagger in">
+        <Reveal as="div" className="hw-grid reveal-stagger">
           {items.map((item, i) => (
             <div className="hw-card" key={item.title || i}>
               {item.image && (
@@ -187,7 +191,7 @@ function HardwareCategoriesSection({ section }: { section: Section }) {
               </div>
             </div>
           ))}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -200,12 +204,12 @@ function HardwarePrinciplesSection({ section }: { section: Section }) {
   return (
     <section className="principles">
       <div className="wrap">
-        <div className="section-head reveal in">
+        <Reveal as="div" className="section-head center reveal">
           {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
           {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
-        </div>
+        </Reveal>
 
-        <div className="princ-grid reveal-stagger in">
+        <Reveal as="div" className="princ-grid reveal-stagger">
           {items.map((item, i) => (
             <div className="princ" key={item.title || i}>
               <div className="princ-icon">
@@ -215,7 +219,7 @@ function HardwarePrinciplesSection({ section }: { section: Section }) {
               {item.description && <p {...editAttrs(section, `items.${i}.description`, "Principle description")}>{item.description}</p>}
             </div>
           ))}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -260,7 +264,7 @@ function HardwareCompatibilitySection({ section }: { section: Section }) {
   return (
     <section className="compat">
       <div className="wrap">
-        <div className="compat-card reveal in">
+        <Reveal as="div" className="compat-card reveal">
           <div>
             {section.heading && <h3 {...editAttrs(section, "heading", "Heading")}>{section.heading}</h3>}
             {section.body && <p {...editAttrs(section, "body", "Body")}>{section.body}</p>}
@@ -283,7 +287,7 @@ function HardwareCompatibilitySection({ section }: { section: Section }) {
               </div>
             ))}
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -348,11 +352,11 @@ function authorInitials(name: string) {
 function PricingSectionHead({ section }: { section: Section }) {
   if (!section.subheading && !section.heading && !section.lede) return null;
   return (
-    <div className="section-head reveal in">
+    <Reveal as="div" className="section-head center reveal">
       {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
       {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
       {section.lede && <p className="section-sub" {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
-    </div>
+    </Reveal>
   );
 }
 
@@ -362,7 +366,7 @@ function PricingHeroSection({ section }: { section: Section }) {
   return (
     <section className="pricing-hero">
       <div className="wrap">
-        <div className="reveal in">
+        <Reveal as="div" className="reveal">
           {section.subheading && <div className="eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
           {(section.heading || section.heading_accent) && (
             <h1>
@@ -389,9 +393,9 @@ function PricingHeroSection({ section }: { section: Section }) {
               <span {...editAttrs(section, "body", "Trust line", "richtext")} dangerouslySetInnerHTML={{ __html: section.body }} />
             </div>
           )}
-        </div>
+        </Reveal>
 
-        <div className="reveal in" style={{ transitionDelay: ".15s" }}>
+        <Reveal as="div" className="reveal" style={{ transitionDelay: ".15s" }}>
           <div className="hero-preview">
             {section.floating_title && (
               <div className="preview-head">
@@ -419,7 +423,7 @@ function PricingHeroSection({ section }: { section: Section }) {
             )}
             {section.footnote && <p className="preview-foot" {...editAttrs(section, "footnote", "Preview footnote")}>{section.footnote}</p>}
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -432,7 +436,7 @@ function PricingCoreSection({ section }: { section: Section }) {
     <section className="psec alt" style={{ paddingBottom: 0 }}>
       <div className="wrap">
         <PricingSectionHead section={section} />
-        <div className="price-grid reveal-stagger in">
+        <Reveal as="div" className="price-grid reveal-stagger">
           {items.map((item, i) => {
             const { price, suffix } = splitPriceValue(item.link_text || "");
             return (
@@ -456,7 +460,7 @@ function PricingCoreSection({ section }: { section: Section }) {
               </div>
             );
           })}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -468,7 +472,7 @@ function PricingIncludedSection({ section }: { section: Section }) {
   return (
     <section className="psec alt" style={{ paddingTop: 0 }}>
       <div className="wrap">
-        <div className="included-strip reveal in">
+        <Reveal as="div" className="included-strip reveal">
           <div className="included-head">
             <div className="text">
               {section.heading && <h3 {...editAttrs(section, "heading", "Heading")}>{section.heading}</h3>}
@@ -489,7 +493,7 @@ function PricingIncludedSection({ section }: { section: Section }) {
               </div>
             ))}
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -502,7 +506,7 @@ function PricingAddonsSection({ section }: { section: Section }) {
     <section className="psec">
       <div className="wrap">
         <PricingSectionHead section={section} />
-        <div className="addons-grid reveal-stagger in">
+        <Reveal as="div" className="addons-grid reveal-stagger">
           {items.map((item, i) => {
             if (item.link) {
               return (
@@ -541,7 +545,7 @@ function PricingAddonsSection({ section }: { section: Section }) {
               </div>
             );
           })}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -555,7 +559,7 @@ function PricingTestimonialsSection({ section, trustSection }: { section: Sectio
     <section className="psec dark">
       <div className="wrap">
         <PricingSectionHead section={section} />
-        <div className="testimonials-grid reveal-stagger in">
+        <Reveal as="div" className="testimonials-grid reveal-stagger">
           {items.map((item, i) => (
             <div className="testimonial" key={item.title || i}>
               <div className="quote-mark">&ldquo;</div>
@@ -574,21 +578,21 @@ function PricingTestimonialsSection({ section, trustSection }: { section: Sectio
               </div>
             </div>
           ))}
-        </div>
+        </Reveal>
         {trustItems.length > 0 && (
-          <div className="trust-stats reveal in">
+          <Reveal as="div" className="trust-stats reveal">
             {trustItems.map((item, i) => {
               const { prefix, num, suffix } = splitStatValue(item.title || "");
               return (
                 <div className="trust-stat" key={item.description || i}>
                   <div className="num" {...editAttrs(trustSection as Section, `items.${i}.title`, "Stat value")}>
-                    {prefix && <span className="prefix">{prefix}</span>}{num}{suffix && <span className="suffix">{suffix}</span>}
+                    {prefix && <span className="prefix">{prefix}</span>}<CountUp value={num} suffix={suffix} />{suffix && <span className="suffix">{suffix}</span>}
                   </div>
                   {item.description && <div className="lbl" {...editAttrs(trustSection as Section, `items.${i}.description`, "Stat label")}>{item.description}</div>}
                 </div>
               );
             })}
-          </div>
+          </Reveal>
         )}
       </div>
     </section>
@@ -601,19 +605,19 @@ function PricingTrustSection({ section }: { section: Section }) {
   return (
     <section className="psec dark" style={{ paddingTop: 0 }}>
       <div className="wrap">
-        <div className="trust-stats reveal in">
+        <Reveal as="div" className="trust-stats reveal">
           {items.map((item, i) => {
             const { prefix, num, suffix } = splitStatValue(item.title || "");
             return (
               <div className="trust-stat" key={item.description || i}>
                 <div className="num" {...editAttrs(section, `items.${i}.title`, "Stat value")}>
-                  {prefix && <span className="prefix">{prefix}</span>}{num}{suffix && <span className="suffix">{suffix}</span>}
+                  {prefix && <span className="prefix">{prefix}</span>}<CountUp value={num} suffix={suffix} />{suffix && <span className="suffix">{suffix}</span>}
                 </div>
                 {item.description && <div className="lbl" {...editAttrs(section, `items.${i}.description`, "Stat label")}>{item.description}</div>}
               </div>
             );
           })}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -626,16 +630,17 @@ function PricingFaqSection({ section }: { section: Section }) {
     <section className="psec">
       <div className="wrap">
         <PricingSectionHead section={section} />
-        <div className="faq-list reveal in">
+        <Reveal as="div" className="faq-list reveal">
           {items.map((item, index) => (
-            <details className="faq-item" key={item.title || index}>
-              <summary {...editAttrs(section, `items.${index}.title`, "Question")}>{item.title}</summary>
-              {item.description && (
-                <div className="faq-answer" {...editAttrs(section, `items.${index}.description`, "Answer", "richtext")} dangerouslySetInnerHTML={{ __html: item.description }} />
-              )}
-            </details>
+            <FaqDetails
+              key={item.title || index}
+              question={item.title || ""}
+              answerHtml={item.description}
+              questionAttrs={editAttrs(section, `items.${index}.title`, "Question")}
+              answerAttrs={editAttrs(section, `items.${index}.description`, "Answer", "richtext")}
+            />
           ))}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -660,9 +665,9 @@ function IndustriesHeroSection({ section }: { section: Section }) {
   return (
     <section className="page-head">
       <div className="wrap">
-        <div className="eyebrow reveal in" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading || "Industries"}</div>
-        {section.heading && <h1 className="reveal in" style={{ transitionDelay: ".1s" }} {...editAttrs(section, "heading", "Heading")}>{section.heading}</h1>}
-        {section.lede && <p className="lede reveal in" style={{ transitionDelay: ".2s" }} {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
+        <Reveal as="div" className="eyebrow reveal" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading || "Industries"}</Reveal>
+        {section.heading && <Reveal as="h1" className="reveal" style={{ transitionDelay: ".1s" }} {...editAttrs(section, "heading", "Heading")}>{section.heading}</Reveal>}
+        {section.lede && <Reveal as="p" className="lede reveal" style={{ transitionDelay: ".2s" }} {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</Reveal>}
       </div>
     </section>
   );
@@ -675,12 +680,12 @@ function IndustriesGridSection({ section }: { section: Section }) {
     <section className="ind-grid">
       <div className="wrap">
         {(section.subheading || section.heading) && (
-          <div className="section-head reveal in">
+          <Reveal as="div" className="section-head center reveal">
             {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
             {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
-          </div>
+          </Reveal>
         )}
-        <div className="ind-row reveal-stagger in">
+        <Reveal as="div" className="ind-row reveal-stagger">
           {items.map((item, i) => (
             <div className="ind-card" key={item.title || i}>
               {item.image && (
@@ -701,7 +706,7 @@ function IndustriesGridSection({ section }: { section: Section }) {
               </div>
             </div>
           ))}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -716,7 +721,7 @@ function IndustriesMultiLocSection({ section }: { section: Section }) {
   return (
     <section className="multi-loc">
       <div className="wrap">
-        <div className="multi-card reveal in">
+        <Reveal as="div" className="multi-card reveal">
           <div className="multi-content">
             {section.subheading && <div className="multi-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
             {section.heading && <h2 {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
@@ -743,7 +748,7 @@ function IndustriesMultiLocSection({ section }: { section: Section }) {
               <OptimizedImage src={section.main_image} alt={section.main_image_alt || ""} fill sizes="(max-width: 900px) 100vw, 50vw" className="cms-cover-image" cmsAttrs={editAttrs(section, "main_image", "Feature image", "image", { "data-cms-alt-path": `${section.id}.main_image_alt` })} />
             </div>
           )}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -788,9 +793,9 @@ function WhyHeroSection({ section }: { section: Section }) {
   return (
     <section className="page-head">
       <div className="wrap">
-        <div className="eyebrow reveal in" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading || "Why DEXA"}</div>
-        {section.heading && <h1 className="reveal in" style={{ transitionDelay: ".1s" }} {...editAttrs(section, "heading", "Heading")}>{section.heading}</h1>}
-        {section.lede && <p className="lede reveal in" style={{ transitionDelay: ".2s" }} {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
+        <Reveal as="div" className="eyebrow reveal" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading || "Why DEXA"}</Reveal>
+        {section.heading && <Reveal as="h1" className="reveal" style={{ transitionDelay: ".1s" }} {...editAttrs(section, "heading", "Heading")}>{section.heading}</Reveal>}
+        {section.lede && <Reveal as="p" className="lede reveal" style={{ transitionDelay: ".2s" }} {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</Reveal>}
       </div>
     </section>
   );
@@ -802,19 +807,19 @@ function WhyStatsSection({ section }: { section: Section }) {
   return (
     <section className="trust">
       <div className="wrap">
-        <div className="trust-grid reveal-stagger in">
+        <Reveal as="div" className="trust-grid reveal-stagger">
           {items.map((item, i) => {
             const { prefix, num, suffix } = splitStatValue(item.title || "");
             return (
               <div className="trust-stat" key={item.title || i}>
                 <div className="trust-stat-value" {...editAttrs(section, `items.${i}.title`, "Stat value")}>
-                  {prefix}<span>{num}</span>{suffix}
+                  {prefix}<CountUp value={num} suffix={suffix} />{suffix}
                 </div>
                 {item.description && <div className="trust-stat-label" {...editAttrs(section, `items.${i}.description`, "Stat label")}>{item.description}</div>}
               </div>
             );
           })}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -826,14 +831,14 @@ function WhyImageSection({ section }: { section: Section }) {
   return (
     <section className="why-photo">
       <div className="wrap">
-        <figure className="why-photo-frame reveal in">
+        <Reveal as="figure" className="why-photo-frame reveal">
           <OptimizedImage src={section.src} alt={section.alt || ""} width={2100} height={900} sizes="(max-width: 1200px) 100vw, 1200px" cmsAttrs={editAttrs(section, "src", "Image", "image", { "data-cms-alt-path": `${section.id}.alt` })} />
           {(section.caption || section.heading) && (
             <figcaption className="why-photo-cap">
               <p {...editAttrs(section, section.caption ? "caption" : "heading", section.caption ? "Caption" : "Heading")}>{section.caption || section.heading}</p>
             </figcaption>
           )}
-        </figure>
+        </Reveal>
       </div>
     </section>
   );
@@ -846,21 +851,22 @@ function WhyCompareSection({ section }: { section: Section }) {
   return (
     <section className="comparison">
       <div className="wrap">
-        <div className="section-head center reveal in">
+        <Reveal as="div" className="section-head center reveal">
           {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
           {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
           {section.lede && <p className="section-sub" {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
-        </div>
+        </Reveal>
 
-        <div className="comp-card reveal in">
+        <Reveal as="div" className="comp-card reveal">
           <div className="comp-head-row">
             <h3>Capability comparison</h3>
             <p>The differences operators care about</p>
           </div>
 
+          <CompareSwitch competitors={columns.slice(2)}>
           <div className="comp-table">
             {columns.map((column, i) => (
-              <div key={i} className={`comp-th ${i === 0 ? "feature-col" : ""} ${i === 1 ? "dexa-col" : ""}`} {...editAttrs(section, `compare_columns.${i}`, "Table column")}>
+              <div key={i} data-col={i} className={`comp-th ${i === 0 ? "feature-col" : ""} ${i === 1 ? "dexa-col" : ""}`} {...editAttrs(section, `compare_columns.${i}`, "Table column")}>
                 {column}
               </div>
             ))}
@@ -870,21 +876,22 @@ function WhyCompareSection({ section }: { section: Section }) {
                 const isLastRow = rowIndex === rows.length - 1;
                 if (cellIndex === 0) {
                   return (
-                    <div key={`${rowIndex}-${cellIndex}`} className="comp-row-feature" style={isLastRow ? { borderBottom: "none" } : undefined} {...editAttrs(section, `compare_rows.${rowIndex}.${cellIndex}`, "Table cell")}>
+                    <div key={`${rowIndex}-${cellIndex}`} data-col={cellIndex} className="comp-row-feature" style={isLastRow ? { borderBottom: "none" } : undefined} {...editAttrs(section, `compare_rows.${rowIndex}.${cellIndex}`, "Table cell")}>
                       {cell}
                     </div>
                   );
                 }
 
                 return (
-                  <div key={`${rowIndex}-${cellIndex}`} className={`comp-cell ${cellIndex === 1 ? "dexa" : "competitor"}`} style={isLastRow ? { borderBottom: "none" } : undefined}>
+                  <div key={`${rowIndex}-${cellIndex}`} data-col={cellIndex} className={`comp-cell ${cellIndex === 1 ? "dexa" : "competitor"}`} style={isLastRow ? { borderBottom: "none" } : undefined}>
                     <span className={cellIndex === 1 ? "comp-pill" : ""} {...editAttrs(section, `compare_rows.${rowIndex}.${cellIndex}`, "Table cell")}>{cell}</span>
                   </div>
                 );
               })
             ))}
           </div>
-        </div>
+          </CompareSwitch>
+        </Reveal>
       </div>
     </section>
   );
@@ -897,13 +904,13 @@ function WhyDifferentiatorsSection({ section }: { section: Section }) {
   return (
     <section className="why-diff">
       <div className="wrap">
-        <div className="section-head center reveal in">
+        <Reveal as="div" className="section-head center reveal">
           {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
           {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
           {section.lede && <p className="section-sub" {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
-        </div>
+        </Reveal>
 
-        <div className="diff-grid reveal-stagger in">
+        <Reveal as="div" className="diff-grid reveal-stagger">
           {items.map((item, i) => {
             const iconName = item.icon || fallbackIcons[i % fallbackIcons.length];
             return (
@@ -914,7 +921,7 @@ function WhyDifferentiatorsSection({ section }: { section: Section }) {
               </div>
             );
           })}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -948,7 +955,7 @@ function WhyPricingSection({ section }: { section: Section }) {
   return (
     <section className="why-pricing">
       <div className="wrap">
-        <div className="wp-inner reveal in">
+        <Reveal as="div" className="wp-inner reveal">
           <div className="wp-copy">
             {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
             {section.heading && <h2 {...editAttrs(section, "heading", "Heading")}>{splitPricingHeading(section.heading)}</h2>}
@@ -969,7 +976,7 @@ function WhyPricingSection({ section }: { section: Section }) {
               </div>
             ))}
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -984,11 +991,11 @@ function WhyFaqSection({ section }: { section: Section }) {
   return (
     <section className="faq-section">
       <div className="wrap">
-        <div className="section-head center reveal in">
+        <Reveal as="div" className="section-head center reveal">
           {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
           {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
           {section.lede && <p className="section-sub" {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
-        </div>
+        </Reveal>
 
         <FaqAccordion items={items} />
       </div>
@@ -1026,12 +1033,19 @@ function HeroSection({ section }: { section: Section }) {
       )}
       {trustItems.length > 0 && (
         <div className="hero-trust">
-          {trustItems.map((item, i) => (
-            <div key={i} className="hero-trust-item">
-              {item.title && <span className="hero-trust-num" {...editAttrs(section, `items.${i}.title`, "Trust value")}>{item.title}</span>}
-              {item.description && <span className="hero-trust-label" {...editAttrs(section, `items.${i}.description`, "Trust label")}>{item.description}</span>}
-            </div>
-          ))}
+          {trustItems.map((item, i) => {
+            const { prefix, num, suffix } = splitStatValue(item.title || "");
+            return (
+              <div key={i} className="hero-trust-item">
+                {item.title && (
+                  <span className="hero-trust-num" {...editAttrs(section, `items.${i}.title`, "Trust value")}>
+                    {prefix}<CountUp value={num} suffix={suffix} />{suffix}
+                  </span>
+                )}
+                {item.description && <span className="hero-trust-label" {...editAttrs(section, `items.${i}.description`, "Trust label")}>{item.description}</span>}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1055,8 +1069,8 @@ function HeroSection({ section }: { section: Section }) {
       <div className="wrap">
         {hasVisual ? (
           <div className="hero-grid">
-            <div className="reveal in">{content}</div>
-            <div className="hero-visual reveal in" style={{ transitionDelay: ".15s" }}>
+            <Reveal as="div" className="reveal">{content}</Reveal>
+            <Reveal as="div" className="hero-visual reveal" style={{ transitionDelay: ".15s" }}>
               {section.main_image && (
                 <figure className="hero-photo">
                   <OptimizedImage src={section.main_image} alt={section.main_image_alt || ""} width={1040} height={676} sizes="(max-width: 900px) 100vw, 50vw" preload cmsAttrs={editAttrs(section, "main_image", "Hero image", "image", { "data-cms-alt-path": `${section.id}.main_image_alt` })} />
@@ -1073,7 +1087,7 @@ function HeroSection({ section }: { section: Section }) {
                   </div>
                 </div>
               )}
-            </div>
+            </Reveal>
           </div>
         ) : (
           content
@@ -1132,17 +1146,18 @@ function VideoSection({ section }: { section: Section }) {
 
 function CardsSection({ section }: { section: Section }) {
   const items = section.items || [];
+  const hasImages = items.some((item) => item.image);
   return (
     <section className="cms-cards">
       <div className="wrap">
         {section.heading && (
-          <div className="section-head">
+          <Reveal className="section-head center reveal">
             {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
             <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>
             {section.lede && <p className="section-sub" {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
-          </div>
+          </Reveal>
         )}
-        <div className="cms-cards-grid" style={items.some(i => i.image) ? { display: "grid", gridTemplateColumns: items.length > 2 ? "1fr 1fr" : "1fr", gap: "24px" } : {}}>
+        <Reveal className={`cms-cards-grid reveal-stagger${hasImages ? ` cms-cards-grid-images${items.length > 2 ? " cms-cards-grid-two-columns" : ""}` : ""}`}>
           {items.map((item, i) => {
             if (item.image && !item.icon) {
               const card = (
@@ -1188,7 +1203,7 @@ function CardsSection({ section }: { section: Section }) {
               </div>
             );
           })}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -1199,7 +1214,7 @@ function PricingCalculatorSection({ section }: { section: Section }) {
     <section className="psec" id={section.settings?.anchor as string || "calculator"}>
       <div className="wrap">
         {(section.subheading || section.heading || section.lede) && (
-          <div className="section-head">
+          <div className="section-head center">
             {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
             {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
             {section.lede && <p className="section-sub" {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
@@ -1248,7 +1263,7 @@ function ContactFormSection({ section }: { section: Section }) {
             }}
           />
 
-          <div className="side-content reveal in" style={{ transitionDelay: ".1s" }}>
+          <Reveal as="div" className="side-content reveal" style={{ transitionDelay: ".1s" }}>
             {section.subheading && <h2 {...editAttrs(section, "subheading", "Side heading")}>{section.subheading}</h2>}
             {section.body && <p {...editAttrs(section, "body", "Side intro")}>{section.body}</p>}
 
@@ -1279,7 +1294,7 @@ function ContactFormSection({ section }: { section: Section }) {
                 <OptimizedImage src={section.main_image} alt={section.main_image_alt || ""} width={1200} height={800} sizes="(max-width: 900px) 100vw, 45vw" cmsAttrs={editAttrs(section, "main_image", "Contact image", "image", { "data-cms-alt-path": `${section.id}.main_image_alt` })} />
               </figure>
             )}
-          </div>
+          </Reveal>
         </div>
       </div>
     </section>
@@ -1309,20 +1324,21 @@ function FaqSection({ section }: { section: Section }) {
     <section className="faq-section">
       <div className="wrap">
         {(section.subheading || section.heading || section.lede) && (
-          <div className="section-head center reveal in">
+          <Reveal as="div" className="section-head center reveal">
             {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
             {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
             {section.lede && <p className="section-sub" {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
-          </div>
+          </Reveal>
         )}
         <div className="faq-list">
           {items.map((item, index) => (
-            <details className="faq-item" key={item.title || index}>
-              <summary {...editAttrs(section, `items.${index}.title`, "Question")}>{item.title}</summary>
-              {item.description && (
-                <div className="faq-answer" {...editAttrs(section, `items.${index}.description`, "Answer", "richtext")} dangerouslySetInnerHTML={{ __html: item.description }} />
-              )}
-            </details>
+            <FaqDetails
+              key={item.title || index}
+              question={item.title || ""}
+              answerHtml={item.description}
+              questionAttrs={editAttrs(section, `items.${index}.title`, "Question")}
+              answerAttrs={editAttrs(section, `items.${index}.description`, "Answer", "richtext")}
+            />
           ))}
         </div>
       </div>
@@ -1338,7 +1354,7 @@ function CtaSection({ section }: { section: Section }) {
         : []);
   return (
     <section className="cta-strip" style={section.background_color ? { background: section.background_color } : {}}>
-      <div className="wrap">
+      <Reveal className="wrap reveal">
         {section.subheading && <div className="section-eyebrow" style={{ color: "var(--brand-300)", justifyContent: "center" }} {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
         {section.heading && <h2 {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
         {section.body && <p {...editAttrs(section, "body", "Body")}>{section.body}</p>}
@@ -1354,7 +1370,7 @@ function CtaSection({ section }: { section: Section }) {
             ))}
           </div>
         )}
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -1371,26 +1387,28 @@ function StatsSection({ section }: { section: Section }) {
     <section className="proof">
       <div className="wrap">
         {(section.subheading || section.heading) && (
-          <div className="section-head center">
+          <Reveal className="section-head center reveal">
             {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
             {section.heading && <h2 className="section-title" style={{ color: "var(--paper)" }} {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
             {section.lede && <p className="section-sub" style={{ color: "rgba(255,255,255,0.70)" }} {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
-          </div>
+          </Reveal>
         )}
         {items.length > 0 && (
-          <div className="proof-grid">
+          /* Fades in as one block (not a per-item stagger) so the row reads as a
+             single unit, matching the pricing page's stats bar. */
+          <Reveal className="proof-grid reveal">
             {items.map((item, i) => {
               const { prefix, num, suffix } = splitStatValue(item.title || "");
               return (
                 <div key={i} className="proof-stat">
                   <div className="proof-stat-value" {...editAttrs(section, `items.${i}.title`, "Stat value")}>
-                    {prefix}<span>{num}</span>{suffix}
+                    {prefix}<CountUp value={num} suffix={suffix} />{suffix}
                   </div>
                   {item.description && <div className="proof-stat-label" {...editAttrs(section, `items.${i}.description`, "Stat label")}>{item.description}</div>}
                 </div>
               );
             })}
-          </div>
+          </Reveal>
         )}
       </div>
     </section>
@@ -1411,12 +1429,12 @@ function IndustriesSection({ section }: { section: Section }) {
   return (
     <section className="industries-strip">
       <div className="wrap">
-        <div className="section-head reveal in">
+        <Reveal as="div" className="section-head center reveal">
           {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
           {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
           {section.lede && <p className="section-sub" {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
-        </div>
-        <div className="industry-row reveal-stagger in">
+        </Reveal>
+        <Reveal as="div" className="industry-row reveal-stagger">
           {industries.map(({ name: industryName, icon }) => (
             <div key={industryName} className="industry-tag">
               <div className="industry-tag-icon">
@@ -1425,14 +1443,14 @@ function IndustriesSection({ section }: { section: Section }) {
               <div className="industry-tag-name">{industryName}</div>
             </div>
           ))}
-        </div>
+        </Reveal>
         {section.button_text && section.button_link && (
-          <div style={{ textAlign: "center", marginTop: 48 }} className="reveal in">
+          <Reveal as="div" style={{ textAlign: "center", marginTop: 48 }} className="reveal">
             <a href={section.button_link} className="btn btn-secondary" {...editAttrs(section, "button_text", "Button", "link", { "data-cms-href-path": `${section.id}.button_link` })}>
               {section.button_text}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M13 5l7 7-7 7" /></svg>
             </a>
-          </div>
+          </Reveal>
         )}
       </div>
     </section>
@@ -1445,7 +1463,7 @@ function AnnotationsSection({ section }: { section: Section }) {
     <section className="annotations">
       <div className="wrap">
         {(section.subheading || section.heading) && (
-          <div className="section-head">
+          <div className="section-head center">
             {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
             {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
           </div>
@@ -1474,13 +1492,13 @@ function CoreFeaturesSection({ section }: { section: Section }) {
     <section className="core">
       <div className="wrap">
         {(section.subheading || section.heading) && (
-          <div className="section-head">
+          <Reveal className="section-head center reveal">
             {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
             {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
-          </div>
+          </Reveal>
         )}
         {items.length > 0 && (
-          <div className="core-grid">
+          <Reveal className="core-grid reveal-stagger">
             {items.map((item, i) => (
               <div key={i} className="core-card">
                 <div className="core-image">
@@ -1495,7 +1513,7 @@ function CoreFeaturesSection({ section }: { section: Section }) {
                 </div>
               </div>
             ))}
-          </div>
+          </Reveal>
         )}
       </div>
     </section>
@@ -1508,14 +1526,14 @@ function CapabilitiesSection({ section }: { section: Section }) {
     <section className="capabilities">
       <div className="wrap">
         {(section.subheading || section.heading || section.lede) && (
-          <div className="section-head">
+          <Reveal className="section-head center reveal">
             {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
             {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
             {section.lede && <p className="section-sub" {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
-          </div>
+          </Reveal>
         )}
         {items.length > 0 && (
-          <div className="cap-grid">
+          <Reveal className="cap-grid reveal-stagger">
             {items.map((item, i) => (
               <div key={i} className="cap">
                 <div className="cap-head">
@@ -1532,7 +1550,7 @@ function CapabilitiesSection({ section }: { section: Section }) {
                 )}
               </div>
             ))}
-          </div>
+          </Reveal>
         )}
       </div>
     </section>
@@ -1544,7 +1562,7 @@ function CompareStripSection({ section }: { section: Section }) {
   return (
     <section className="compare-strip">
       <div className="wrap">
-        <div className="compare-card">
+        <Reveal className="compare-card reveal">
           <div>
             {section.heading && <h2 {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
             {section.body && <p {...editAttrs(section, "body", "Body")}>{section.body}</p>}
@@ -1565,7 +1583,7 @@ function CompareStripSection({ section }: { section: Section }) {
               ))}
             </div>
           )}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -1594,17 +1612,18 @@ function CompareSection({ section }: { section: Section }) {
           </div>
         )}
         {rows.length > 0 && (
+          <CompareSwitch competitors={columns.slice(2)} tone="dark">
           <div className="compare-scroll">
             <div className="compare-table">
               <div className="compare-r compare-head">
                 {columns.map((col, i) => (
-                  <div key={i} className={`compare-c ${i === 1 ? "dexa" : ""}`} {...editAttrs(section, `compare_columns.${i}`, "Table column")}>{col}</div>
+                  <div key={i} data-col={i} className={`compare-c ${i === 1 ? "dexa" : ""}`} {...editAttrs(section, `compare_columns.${i}`, "Table column")}>{col}</div>
                 ))}
               </div>
               {rows.map((row, i) => (
                 <div className="compare-r" key={i}>
                   {row.map((cell, j) => (
-                    <div key={j} className={`compare-c ${j === 1 ? "dexa" : ""} ${j === 0 ? "feat" : ""}`}>
+                    <div key={j} data-col={j} className={`compare-c ${j === 1 ? "dexa" : ""} ${j === 0 ? "feat" : ""}`}>
                       {j === 1 && (
                         <span className="ck">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
@@ -1617,6 +1636,7 @@ function CompareSection({ section }: { section: Section }) {
               ))}
             </div>
           </div>
+          </CompareSwitch>
         )}
       </div>
     </section>
@@ -1643,15 +1663,48 @@ function StatusIcon({ icon }: { icon?: "check" | "x" | "none" }) {
   return null;
 }
 
+/**
+ * Renders "/mo" and "/mo*" so CSS can shorten them to "/m" on narrow screens.
+ *
+ * The switched-down pricing table gives each column roughly 100px, where
+ * "$0-$69/mo*" wraps onto a second line. Only the tail is wrapped — the cell's
+ * textContent stays exactly what the CMS stored, which the inline editor reads.
+ */
+function withCompactUnit(value: string) {
+  if (!value.includes("/mo")) return value;
+
+  // The cell wrappers are inline-flex, which would blockify a bare tail span and
+  // drop the "o" onto a line of its own. Keep the value inside one inline element.
+  return (
+    <span className="cmp-unit">
+      {value.split(/(\/mo\*?)/g).map((part, i) => {
+        const match = /^\/mo(\*?)$/.exec(part);
+        if (!match) return <Fragment key={i}>{part}</Fragment>;
+
+        return (
+          <Fragment key={i}>
+            /m<span className="cmp-unit-tail">{`o${match[1]}`}</span>
+          </Fragment>
+        );
+      })}
+    </span>
+  );
+}
+
 function PricingCell({ value, tone, icon }: { value: string; tone?: "default" | "positive" | "muted" | "strong"; icon?: "check" | "x" | "none" }) {
-  if (!tone || tone === "default") return <>{value}</>;
+  // Untoned cells used to render as a bare fragment, inheriting the plain body
+  // colour. In rows where only some cells carry a tone (e.g. "Online ordering
+  // commission") that made comparable figures render in different colours —
+  // the inconsistency called out in the Aug 2026 feedback. Give every cell a
+  // wrapper so the column reads as one treatment.
+  if (!tone || tone === "default") return <span className="check-default">{withCompactUnit(value)}</span>;
 
   const className = tone === "positive" ? "check-yes" : tone === "strong" ? "check-strong" : "check-no";
 
   return (
     <span className={className}>
       <StatusIcon icon={icon} />
-      {value}
+      <span className="pricing-cell-value">{withCompactUnit(value)}</span>
     </span>
   );
 }
@@ -1665,7 +1718,7 @@ function PricingCompareSection({ section }: { section: Section }) {
     <section className={`psec ${section.settings?.background === "alt" ? "alt" : ""}`}>
       <div className="wrap">
         {(section.subheading || section.heading || section.lede) && (
-          <div className="section-head">
+          <div className="section-head center">
             {section.subheading && <div className="section-eyebrow" {...editAttrs(section, "subheading", "Eyebrow")}>{section.subheading}</div>}
             {section.heading && <h2 className="section-title" {...editAttrs(section, "heading", "Heading")}>{section.heading}</h2>}
             {section.lede && <p className="section-sub" {...editAttrs(section, "lede", "Lead paragraph")}>{section.lede}</p>}
@@ -1673,6 +1726,7 @@ function PricingCompareSection({ section }: { section: Section }) {
         )}
 
         {rows.length > 0 && (
+          <CompareSwitch competitors={columns.slice(2)}>
           <div className="compare-card">
             <table className="compare-table">
               <colgroup>
@@ -1685,7 +1739,7 @@ function PricingCompareSection({ section }: { section: Section }) {
               <thead>
                 <tr>
                   {columns.map((column, index) => (
-                    <th key={index} className={index === 1 ? "dexa-col" : ""} {...editAttrs(section, `compare_columns.${index}`, "Table column")}>
+                    <th key={index} data-col={index} className={index === 1 ? "dexa-col" : ""} {...editAttrs(section, `compare_columns.${index}`, "Table column")}>
                       {column}
                     </th>
                   ))}
@@ -1699,14 +1753,14 @@ function PricingCompareSection({ section }: { section: Section }) {
 
                       if (cellIndex === 0) {
                         return (
-                          <td key={cellIndex} className="row-label" {...editAttrs(section, `compare_rows.${rowIndex}.${cellIndex}`, "Table cell")}>
+                          <td key={cellIndex} data-col={cellIndex} className="row-label" {...editAttrs(section, `compare_rows.${rowIndex}.${cellIndex}`, "Table cell")}>
                             {cell}
                           </td>
                         );
                       }
 
                       return (
-                        <td key={cellIndex} className={cellIndex === 1 ? "dexa-col" : ""}>
+                        <td key={cellIndex} data-col={cellIndex} className={cellIndex === 1 ? "dexa-col" : ""}>
                           <span {...editAttrs(section, `compare_rows.${rowIndex}.${cellIndex}`, "Table cell")}>
                             <PricingCell value={cell} tone={cellStyle?.tone} icon={cellStyle?.icon} />
                           </span>
@@ -1732,6 +1786,7 @@ function PricingCompareSection({ section }: { section: Section }) {
               </div>
             )}
           </div>
+          </CompareSwitch>
         )}
       </div>
     </section>
