@@ -1320,10 +1320,63 @@ export default function MerchantDashboardLayout({
     }
   }, [isLoaded, isSignedIn]);
 
+  // Session still resolving. This gates every dashboard route, so a centred
+  // spinner here blanks the whole app — sidebar, header and all — and the user
+  // then watches the frame appear, then the page skeleton, then content: three
+  // transitions before anything useful. Painting the shell's own geometry
+  // instead means only the parts that are actually unknown are pending.
   if (isMounted && !isLoaded) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+        className="dashboard-sidebar-theme flex h-svh max-h-svh min-h-0 overflow-hidden"
+      >
+        <span className="sr-only">Loading your dashboard</span>
+
+        {/* Sidebar rail — hidden below md, matching MerchantSidebar. */}
+        <div className="hidden w-64 shrink-0 flex-col gap-6 border-r p-4 md:flex">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-10 w-10 shrink-0 rounded-xl bg-muted/70 motion-reduce:animate-none" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="h-4 w-28 max-w-full rounded-full bg-muted/70 motion-reduce:animate-none" />
+              <Skeleton className="h-3 w-20 max-w-full rounded-full bg-muted/70 motion-reduce:animate-none" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <Skeleton
+                key={index}
+                className="h-8 w-full rounded-lg bg-muted/70 motion-reduce:animate-none"
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="flex h-svh max-h-svh min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+          {/* Mirrors the real h-16 bordered header. */}
+          <div className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
+            <Skeleton className="h-5 w-40 max-w-[50vw] rounded-full bg-muted/70 motion-reduce:animate-none" />
+            <div className="ml-auto flex items-center gap-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton
+                  key={index}
+                  className="h-8 w-8 shrink-0 rounded-full bg-muted/70 motion-reduce:animate-none"
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-6 overflow-hidden p-4 sm:p-6">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-52 max-w-[70vw] rounded-2xl bg-muted/70 motion-reduce:animate-none" />
+              <Skeleton className="h-4 w-72 max-w-[84vw] rounded-full bg-muted/70 motion-reduce:animate-none" />
+            </div>
+            <Skeleton className="h-32 w-full rounded-3xl bg-muted/70 motion-reduce:animate-none" />
+            <Skeleton className="h-64 w-full rounded-3xl bg-muted/70 motion-reduce:animate-none" />
+          </div>
+        </div>
       </div>
     );
   }
