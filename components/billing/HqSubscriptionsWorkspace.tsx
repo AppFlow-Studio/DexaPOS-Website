@@ -71,7 +71,8 @@ import {
   getMerchantSubscriptions,
   getSubscriptionInvoices,
   getSubscriptionServiceAssignments,
-  replaceSubscriptionServiceAssignments,
+  setMerchantSubscriptionGracePeriod,
+  saveAndChargeMerchantSubscription,
   type BillableServiceRecord,
   type DeviceBillingServiceMappingRecord,
   type SubscriptionPlanRecord,
@@ -87,13 +88,8 @@ import {
   upsertBillableService,
   upsertDeviceBillingServiceMapping,
   upsertMerchantTierSubscription,
-  upsertMerchantSubscription,
   upsertSubscriptionPlan,
 } from '@/app/manage/actions/subscription-billing'
-import {
-  getMerchantNmiAccountsSummary,
-  type MerchantNmiAccountRow,
-} from '@/app/manage/actions/admin-merchant/nmi'
 import {
   getMerchantBillingProfiles,
   type MerchantBillingProfileRecord,
@@ -255,6 +251,15 @@ function formatDate(date: string | null | undefined): string {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+function formatDateTimeLocalInput(value: string | null | undefined): string {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return localDate.toISOString().slice(0, 16)
 }
 
 function statusVariant(status: string): 'default' | 'secondary' | 'outline' | 'destructive' {
@@ -449,7 +454,6 @@ export function HqSubscriptionsWorkspace({
   const [subscriptions, setSubscriptions] = useState<MerchantSubscriptionRecord[]>([])
   const [invoices, setInvoices] = useState<SubscriptionInvoiceRecord[]>([])
   const [subscriptionServiceMap, setSubscriptionServiceMap] = useState<Record<string, SubscriptionServiceAssignmentRecord[]>>({})
-  const [locationEligibilityMap, setLocationEligibilityMap] = useState<Record<string, MerchantNmiAccountRow>>({})
   const [billingProfilesByLocation, setBillingProfilesByLocation] = useState<Record<string, MerchantBillingProfileRecord>>({})
   const [serviceFormState, setServiceFormState] = useState<ServiceFormState>({})
   const [selectedServicePlanId, setSelectedServicePlanId] = useState('')
@@ -469,6 +473,8 @@ export function HqSubscriptionsWorkspace({
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState(endOfMonthIso())
   const [nextBillingDate, setNextBillingDate] = useState(firstDayNextMonthIso())
   const [trialEndsAt, setTrialEndsAt] = useState('')
+  const [gracePeriodEndsAt, setGracePeriodEndsAt] = useState('')
+  const [graceReason, setGraceReason] = useState('')
   const [invoicePreviewDocument, setInvoicePreviewDocument] = useState<SubscriptionInvoiceDocumentData | null>(null)
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false)
   const [isInvoicePreviewLoading, setIsInvoicePreviewLoading] = useState(false)
@@ -511,11 +517,6 @@ export function HqSubscriptionsWorkspace({
     [selectedLocationSubscription, subscriptionServiceMap]
   )
 
-  const selectedLocationEligibility = useMemo(
-    () => (selectedLocation?.id ? locationEligibilityMap[selectedLocation.id] ?? null : null),
-    [locationEligibilityMap, selectedLocation]
-  )
-
   const selectedBillingProfile = useMemo(
     () => (selectedLocation?.id ? billingProfilesByLocation[selectedLocation.id] ?? null : null),
     [billingProfilesByLocation, selectedLocation]
@@ -525,6 +526,31 @@ export function HqSubscriptionsWorkspace({
     () => servicePlans.find((plan) => plan.id === selectedServicePlanId) ?? servicePlans[0] ?? null,
     [selectedServicePlanId, servicePlans]
   )
+
+  const saveGracePeriod = (clear = false) => {
+    if (!selectedLocationSubscription) {
+      toast.error('Create the location subscription first.')
+      return
+    }
+
+    startTransition(async () => {
+      const result = await setMerchantSubscriptionGracePeriod({
+        subscriptionId: selectedLocationSubscription.id,
+        gracePeriodEndsAt: clear || !gracePeriodEndsAt
+          ? null
+          : new Date(gracePeriodEndsAt).toISOString(),
+        reason: graceReason,
+      })
+
+      if (!result.success) {
+        toast.error(result.error || 'Failed to update the grace period.')
+        return
+      }
+
+      toast.success(clear ? 'Grace period cleared.' : 'Grace period extended.')
+      refresh()
+    })
+  }
 
   const selectedCatalogService = useMemo(
     () => (selectedCatalogServiceId ? services.find((service) => service.id === selectedCatalogServiceId) ?? null : null),
@@ -721,7 +747,6 @@ export function HqSubscriptionsWorkspace({
           nextServicePlans,
           nextSubscriptions,
           nextInvoices,
-          nmiSummary,
           billingProfiles,
           nextMerchantTierPlans,
           nextMerchantTierStatus,
@@ -734,7 +759,6 @@ export function HqSubscriptionsWorkspace({
           getSubscriptionPlans(),
           getMerchantSubscriptions(merchant.id),
           getSubscriptionInvoices(merchant.id, null, 100),
-          getMerchantNmiAccountsSummary(merchant.id),
           getMerchantBillingProfiles(merchant.id),
           getMerchantTierPlans(),
           getMerchantTierStatus(merchant.id),
@@ -751,14 +775,25 @@ export function HqSubscriptionsWorkspace({
         )
 
         const nextAssignmentMap = Object.fromEntries(assignmentEntries)
-        const nextEligibilityMap = Object.fromEntries(
-          nmiSummary.locations.map((location) => [location.locationId, location])
+        const merchantWideValorProfile = billingProfiles.find(
+          (profile) =>
+            !profile.location_id &&
+            profile.processor === 'valor' &&
+            profile.billing_method === 'card' &&
+            profile.is_active,
         )
-
         const nextBillingProfilesByLocation = Object.fromEntries(
-          billingProfiles
-            .filter((profile) => profile.location_id)
-            .map((profile) => [profile.location_id as string, profile])
+          sortedLocations.flatMap((location) => {
+            const locationProfile = billingProfiles.find(
+              (profile) =>
+                profile.location_id === location.id &&
+                profile.processor === 'valor' &&
+                profile.billing_method === 'card' &&
+                profile.is_active,
+            )
+            const effectiveProfile = locationProfile ?? merchantWideValorProfile
+            return effectiveProfile ? [[location.id, effectiveProfile]] : []
+          }),
         )
 
         setServices(nextServices)
@@ -767,7 +802,6 @@ export function HqSubscriptionsWorkspace({
         setSubscriptions(nextSubscriptions)
         setInvoices(nextInvoices)
         setSubscriptionServiceMap(nextAssignmentMap)
-        setLocationEligibilityMap(nextEligibilityMap)
         setBillingProfilesByLocation(nextBillingProfilesByLocation)
         setMerchantTierPlans(nextMerchantTierPlans)
         setMerchantTierStatus(nextMerchantTierStatus)
@@ -818,6 +852,10 @@ export function HqSubscriptionsWorkspace({
             setCurrentPeriodEnd(defaultSubscription.current_period_end)
             setNextBillingDate(defaultSubscription.next_billing_date)
             setTrialEndsAt(defaultSubscription.trial_ends_at?.slice(0, 10) ?? '')
+            setGracePeriodEndsAt(
+              formatDateTimeLocalInput(defaultSubscription.grace_period_ends_at),
+            )
+            setGraceReason(defaultSubscription.grace_reason ?? '')
             setServiceFormState(
               buildInitialServiceFormState(nextServices, nextAssignmentMap[defaultSubscription.id] ?? [])
             )
@@ -827,6 +865,8 @@ export function HqSubscriptionsWorkspace({
             setCurrentPeriodEnd(endOfMonthIso())
             setNextBillingDate(firstDayNextMonthIso())
             setTrialEndsAt('')
+            setGracePeriodEndsAt('')
+            setGraceReason('')
             setServiceFormState(buildInitialServiceFormState(nextServices))
           }
         }
@@ -878,6 +918,12 @@ export function HqSubscriptionsWorkspace({
       setCurrentPeriodEnd(selectedLocationSubscription.current_period_end)
       setNextBillingDate(selectedLocationSubscription.next_billing_date)
       setTrialEndsAt(selectedLocationSubscription.trial_ends_at?.slice(0, 10) ?? '')
+      setGracePeriodEndsAt(
+        formatDateTimeLocalInput(
+          selectedLocationSubscription.grace_period_ends_at,
+        ),
+      )
+      setGraceReason(selectedLocationSubscription.grace_reason ?? '')
       setServiceFormState(buildInitialServiceFormState(services, selectedAssignments))
       return
     }
@@ -887,6 +933,8 @@ export function HqSubscriptionsWorkspace({
     setCurrentPeriodEnd(endOfMonthIso())
     setNextBillingDate(firstDayNextMonthIso())
     setTrialEndsAt('')
+    setGracePeriodEndsAt('')
+    setGraceReason('')
     setServiceFormState(buildInitialServiceFormState(services))
   }, [selectedLocation, selectedLocationSubscription, selectedAssignments, services])
 
@@ -962,7 +1010,7 @@ export function HqSubscriptionsWorkspace({
     }
 
     startTransition(async () => {
-      const subscriptionResult = await upsertMerchantSubscription({
+      const subscriptionResult = await saveAndChargeMerchantSubscription({
         subscriptionId: selectedLocationSubscription?.id,
         merchantId: merchant.id,
         locationId: selectedLocation.id,
@@ -976,16 +1024,7 @@ export function HqSubscriptionsWorkspace({
           source: 'hq_subscriptions_workspace',
           pricingModel: 'service_catalog',
         },
-      })
-
-      if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
-        toast.error(subscriptionResult.error || 'Failed to save subscription.')
-        return
-      }
-
-      const serviceResult = await replaceSubscriptionServiceAssignments(
-        subscriptionResult.subscriptionId,
-        (effectiveStatus === 'canceled' ? [] : enabledServices).map((service) => ({
+        services: (effectiveStatus === 'canceled' ? [] : enabledServices).map((service) => ({
           serviceId: service.serviceId,
           quantity: service.quantity,
           enabled: true,
@@ -993,11 +1032,11 @@ export function HqSubscriptionsWorkspace({
             source: 'hq_subscriptions_workspace',
             serviceCode: service.serviceCode,
           },
-        }))
-      )
+        })),
+      })
 
-      if (!serviceResult.success) {
-        toast.error(serviceResult.error || 'Failed to save service assignments.')
+      if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
+        toast.error(subscriptionResult.error || 'Failed to save and charge subscription.')
         return
       }
 
@@ -1007,8 +1046,8 @@ export function HqSubscriptionsWorkspace({
           : status === 'canceled'
             ? 'Selected services removed. Subscription remains active.'
             : selectedLocationSubscription
-              ? 'Subscription updated.'
-              : 'Subscription created.'
+              ? 'Subscription updated and automatic payment approved.'
+              : 'Subscription created and automatic payment approved.'
       )
 
       refresh()
@@ -1106,7 +1145,7 @@ export function HqSubscriptionsWorkspace({
 
       toast.success(
         result.invoiceId
-          ? 'Merchant tier updated and invoice generated.'
+          ? 'Merchant tier updated and automatic payment approved.'
           : 'Merchant tier updated.',
       )
       if (result.notificationWarning) {
@@ -1276,8 +1315,8 @@ export function HqSubscriptionsWorkspace({
           <Badge variant="outline">{merchant.clerk_org_id || merchant.id}</Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          Location-scoped SaaS subscriptions. Storefront NMI setup stays separate. This workspace manages subscription
-          services, invoices, and charges through the centralized Dexa billing rail.
+          Location-scoped SaaS subscriptions use the merchant&apos;s Valor billing rail. This workspace manages
+          subscription services, invoices, recurring charges, and recovery.
         </p>
       </div>
 
@@ -1366,7 +1405,7 @@ export function HqSubscriptionsWorkspace({
                       }}
                     >
                       {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Approve & activate
+                      Approve, charge & activate
                     </Button>
                     <Button
                       type="button"
@@ -1607,8 +1646,15 @@ export function HqSubscriptionsWorkspace({
               <div className="flex flex-wrap items-center gap-2">
                 <Button onClick={() => handleSaveMerchantTier()} disabled={isPending || !selectedMerchantTierPlanId}>
                   {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Merchant Tier
+                  {merchantTierSubscriptionStatus === 'active'
+                    ? 'Save Tier & Charge'
+                    : 'Save Merchant Tier'}
                 </Button>
+                {merchantTierSubscriptionStatus === 'active' ? (
+                  <span className="text-xs text-muted-foreground">
+                    The prior tier remains unchanged unless Valor approves the automatic charge.
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -2009,18 +2055,17 @@ export function HqSubscriptionsWorkspace({
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedLocationEligibility ? (
+                {selectedBillingProfile ? (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant={selectedLocationEligibility.vaultReady ? 'default' : 'secondary'}>
-                      {selectedLocationEligibility.vaultReady ? 'Eligible' : 'Not eligible'}
-                    </Badge>
-                    <span>
-                      {selectedLocationEligibility.vaultReady
-                        ? 'Location has a vaulted billing card.'
-                        : 'Save a billing card for this location before subscription charging.'}
-                    </span>
+                    <Badge variant="default">Valor ready</Badge>
+                    <span>An active vaulted Valor billing card is available.</span>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="secondary">Not ready</Badge>
+                    <span>Save a merchant-wide or location Valor billing card before charging.</span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -2055,10 +2100,71 @@ export function HqSubscriptionsWorkspace({
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 Refresh
               </Button>
-              <Button onClick={handleSave} disabled={isPending || !selectedLocation}>
+              <Button
+                onClick={handleSave}
+                disabled={
+                  isPending ||
+                  !selectedLocation ||
+                  (status === 'active' && !selectedBillingProfile)
+                }
+              >
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {selectedLocationSubscription ? 'Save Changes' : 'Create Subscription'}
+                {status === 'active'
+                  ? selectedLocationSubscription
+                    ? 'Save & Charge'
+                    : 'Create & Charge'
+                  : selectedLocationSubscription
+                    ? 'Save Changes'
+                    : 'Create Subscription'}
               </Button>
+              {status === 'active' ? (
+                <span className="text-xs text-muted-foreground">
+                  Valor must approve the automatic charge before these services become active.
+                </span>
+              ) : null}
+            </div>
+
+            <div className="grid gap-4 rounded-2xl bg-muted/30 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] md:items-end">
+              <div className="space-y-2">
+                <Label htmlFor="billing-grace-until">Grace period until</Label>
+                <Input
+                  id="billing-grace-until"
+                  type="datetime-local"
+                  value={gracePeriodEndsAt}
+                  onChange={(event) => setGracePeriodEndsAt(event.target.value)}
+                  disabled={!selectedLocationSubscription}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="billing-grace-reason">Reason</Label>
+                <Input
+                  id="billing-grace-reason"
+                  value={graceReason}
+                  onChange={(event) => setGraceReason(event.target.value)}
+                  placeholder="Approved extension or temporary billing exception"
+                  disabled={!selectedLocationSubscription}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => saveGracePeriod(false)}
+                  disabled={isPending || !selectedLocationSubscription || !gracePeriodEndsAt}
+                >
+                  Extend grace
+                </Button>
+                {selectedLocationSubscription?.grace_period_ends_at ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => saveGracePeriod(true)}
+                    disabled={isPending}
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </div>
           <CardDescription>
@@ -2542,7 +2648,11 @@ export function HqSubscriptionsWorkspace({
                 <TableBody>
                   {filteredInvoices.map((invoice) => {
                     const activityDate = invoice.paid_at || invoice.last_payment_attempt_at || invoice.created_at
-                    const reference = invoice.nmi_transaction_id || invoice.last_payment_error || '-'
+                    const reference =
+                      invoice.processor_transaction_id ||
+                      invoice.nmi_transaction_id ||
+                      invoice.last_payment_error ||
+                      '-'
 
                     return (
                       <TableRow key={`txn-${invoice.id}`}>

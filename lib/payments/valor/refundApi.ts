@@ -33,13 +33,16 @@ import {
   postWithBodyCredentials,
   type ValorRequestOptions,
 } from "./client";
-import { VALOR_MAX_AMOUNT_MINOR, type ValorMerchantCredentials } from "./config";
+import {
+  resolveValorSurchargeIndicator,
+  VALOR_MAX_AMOUNT_MINOR,
+  type ValorMerchantCredentials,
+  type ValorSurchargeIndicator,
+} from "./config";
 
 const REFUND_PATH = "/?refund";
 const VOID_PATH = "/?void";
 /** Card-only, traditional MID — same rationale as the sale's "0". */
-const SURCHARGE_INDICATOR_CARD_ONLY = "0" as const;
-
 export interface ValorRefundParams {
   /** The original sale's Valor transaction id (`ref_txn_id`). Required. */
   transactionId: string;
@@ -106,7 +109,8 @@ function assertRefundable(money: Money): void {
 /** Build the refund request body. Pure — exported for tests. */
 export function buildRefundRequestBody(
   credentials: ValorMerchantCredentials,
-  params: ValorRefundParams
+  params: ValorRefundParams,
+  surchargeIndicator: ValorSurchargeIndicator = "0"
 ): ValorReversalRequestBody {
   assertRefundable(params.money);
 
@@ -118,7 +122,7 @@ export function buildRefundRequestBody(
     amount: formatMinorUnits(params.money.amountMinor),
     ref_txn_id: params.transactionId,
     sale_refund: "1",
-    surchargeIndicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    surchargeIndicator,
     ...(params.authCode ? { auth_code: params.authCode } : {}),
     ...(params.rrn ? { rrn: params.rrn } : {}),
     ...(params.invoiceNumber ? { invoicenumber: params.invoiceNumber } : {}),
@@ -128,7 +132,8 @@ export function buildRefundRequestBody(
 /** Build the void request body. Pure — exported for tests. */
 export function buildVoidRequestBody(
   credentials: ValorMerchantCredentials,
-  params: ValorVoidParams
+  params: ValorVoidParams,
+  surchargeIndicator: ValorSurchargeIndicator = "0"
 ): ValorReversalRequestBody {
   if (params.money) assertRefundable(params.money);
 
@@ -138,7 +143,7 @@ export function buildVoidRequestBody(
     epi: credentials.epi,
     txn_type: "void",
     ref_txn_id: params.transactionId,
-    surchargeindicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    surchargeindicator: surchargeIndicator,
     ...(params.money ? { amount: formatMinorUnits(params.money.amountMinor) } : {}),
   };
 }
@@ -181,7 +186,11 @@ export async function createRefund(
   options: ValorRequestOptions,
   params: ValorRefundParams
 ): Promise<ProcessorTransaction> {
-  const body = buildRefundRequestBody(options.credentials, params);
+  const body = buildRefundRequestBody(
+    options.credentials,
+    params,
+    resolveValorSurchargeIndicator(options.credentials.epi)
+  );
   const result = await postWithBodyCredentials<ValorReversalResponseBody>(
     REFUND_PATH,
     body,
@@ -195,7 +204,11 @@ export async function voidSale(
   options: ValorRequestOptions,
   params: ValorVoidParams
 ): Promise<ProcessorTransaction> {
-  const body = buildVoidRequestBody(options.credentials, params);
+  const body = buildVoidRequestBody(
+    options.credentials,
+    params,
+    resolveValorSurchargeIndicator(options.credentials.epi)
+  );
   const result = await postWithBodyCredentials<ValorReversalResponseBody>(
     VOID_PATH,
     body,

@@ -160,6 +160,7 @@ Single index for active ticket streams and their source trackers.
 
 1. Plan:
 - `docs/features/qr-dine-in/PLAN-2026-05-27-QR-DINE-IN-UNIFIED.md`
+- `docs/features/qr-dine-in/PLAN-2026-08-29-QR-VALOR-PAYMENT-LIFECYCLE.md`
 
 2. Ops runbook:
 - `docs/features/online-ordering/RUNBOOK-PAYMENT-WHITELIST-SYNC.md`
@@ -170,6 +171,8 @@ Single index for active ticket streams and their source trackers.
 4. Scope notes:
 - Website repo only for this stream.
 - QR storefront, dashboard QR manager, QR analytics, and guest-alert validation surfaces are implemented here.
+- Valor QR checkout is implemented; its paired cancellation/refund lifecycle is
+  authored and awaits coordinated migration, edge deployment, and sandbox QA.
 - Remaining open items are primarily deploy, payment-origin registration, POS follow-up, and end-to-end QA.
 - Do not mark QR payment or realtime items complete without staging or hosted-environment verification.
 
@@ -541,6 +544,47 @@ Single index for active ticket streams and their source trackers.
 - Two source-contract inconsistencies are documented: rolling seven-day
   visibility cannot reconstruct old dropped rows, and category-name trimming
   is deferred because it changes routing despite the instrumentation-only scope.
+
+## Stream Y: Valor Complete Integration
+
+1. Implementation and staging-closure plan:
+- `docs/features/payments/PLAN-2026-08-25-VALOR-COMPLETE-INTEGRATION.md`
+- `docs/features/payments/QA-2026-08-30-VALOR-WEBSITE-E2E.md`
+
+2. Source ticket:
+- `[Valor] Complete Integration - Online Payments, Invoices, SaaS Monthly Billing`
+- Notion page ID: `3c68280c-1b1d-8106-8352-ee19b4b32807`
+
+3. Scope notes:
+- HQ boarding, storefront sale/tip, web refund/void, and settlement webhook code
+  are integrated into the latest preview baseline.
+- Storefront migration/deployment/provisioning and sandbox E2E remain open.
+- Valor merchant-invoice code is complete: location-aware processor resolution,
+  Passage tokenization, matching server charge, provider persistence,
+  idempotency, and transport-failure cleanup. Sandbox QA remains.
+- Valor SaaS monthly billing code is complete. Valor owns native recurrence and
+  native retry; Dexa owns invoice projection, notifications, grace handling,
+  suspension, restoration, and audit history.
+- New SaaS card setup and recovery are Valor-only. There is no NMI runtime
+  fallback. Historical `nmi_transaction_id` values remain display-only so old
+  transaction records retain their audit trail.
+- SaaS recovery includes Passage/Vault card setup, native subscription
+  create/update/activate/deactivate/delete operations, tenant-scoped **Pay
+  now**, duplicate-safe recurring webhook processing, HQ grace controls, and
+  grace-aware suspension/restoration.
+- Billing recovery deployment requires the existing authorization and
+  grace/retry migrations, followed by
+  `20260830130000_valor_saas_billing_lifecycle.sql`, before deploying the
+  updated billing workers and Valor webhook. No migration was executed during
+  the website implementation.
+- Focused Valor/SaaS tests pass (13 tests) and the Next.js production build
+  passes. Staging migration deployment, Edge Function deployment, sandbox
+  recurring-cycle QA, and senior sign-off remain required.
+- Universal paid-feature enforcement and merchant add-on requests remain open:
+  the catalog exists and QR has a specific gate, but no canonical cross-product
+  entitlement map currently defines every web/POS feature boundary.
+- The migration collision is resolved by the uniquely named
+  `20260824153907_c3_storefront_valor_account_resolver.sql`.
 
 ## Stream Z: Dashboard Data Loaders Rollout
 
