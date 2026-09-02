@@ -247,7 +247,7 @@ spinner remains anywhere under `app/`.
 | --- | --- | --- |
 | `/manage/users` | `<PageLoader />` | `table`, `shell="plain"` — **browser-verified** |
 | `/manage/users/[userId]` | `<PageLoader />` | `detail`, `shell="plain"` — **browser-verified** |
-| `/manage/roles-permissions` | `<PageLoader />` | `table`, `shell="plain"` — **not yet browser-verified**, see below |
+| `/manage/roles-permissions` | `<PageLoader />` | `table`, `shell="plain"` — **verified by Haidar 2026-09-02** |
 | `/manage/merchants/[merchantId]` | `<PageLoader message="Loading merchant details..." />` | `detail`, `shell="plain"` — **browser-verified** |
 | `/manage/subscriptions/[merchantId]` | `<PageLoader message="Loading subscription workspace..." />` | `detail`, `shell="plain"` — **browser-verified** |
 
@@ -272,12 +272,11 @@ At 360px, `/manage/users` measured `visualViewport.scale === 1`,
 `scrollWidth === clientWidth === 360`, no document overflow and zero
 overflowing descendants.
 
-> `/manage/roles-permissions` could not be reached: the available HQ account
-> redirects with `?denied=1&required=roles.manage`, so it lacks that
-> permission. Its conversion is identical in shape to `/manage/users` (same
-> `table` variant, same `shell="plain"`) and is covered by typecheck and the
-> shared component's tests, but **no one has yet watched it render**. It needs
-> a super-admin session to close out.
+> `/manage/roles-permissions` could not be reached from the shared HQ account
+> used for the automated pass above — it redirects with
+> `?denied=1&required=roles.manage`. **Haidar verified it manually on
+> 2026-09-02** with a session holding that permission; all five converted HQ
+> routes are now confirmed rendering correctly.
 
 > Attribution: this verification was performed by Haidar using the team's
 > shared HQ admin login, with Ali's and the manager's agreement. It is **not**
