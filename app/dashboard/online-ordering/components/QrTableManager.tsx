@@ -24,6 +24,14 @@ import {
 import { BrandedQrPreview } from "./BrandedQrPreview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Panel,
   PanelSection,
@@ -41,6 +49,8 @@ import { buildQrTableUrl } from "@/app/sites/lib/store-url";
 import {
   Ban,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Download,
   ExternalLink,
@@ -52,6 +62,7 @@ import {
   RefreshCw,
   RotateCcw,
   ScanLine,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -64,6 +75,22 @@ interface QrTableManagerProps {
   qrEntitled: boolean;
   qrGateMessage?: string | null;
 }
+
+type StatusFilter = "all" | QrTableManagerRow["qrStatus"];
+
+/**
+ * Rows rendered per zone before paging. Every row used to mount at once: a
+ * real location with 233 tables put 634 buttons and 233 dropdowns in the DOM,
+ * inside a 512px box holding 20,000px of scroll. This caps both.
+ */
+const ROWS_PER_PAGE = 25;
+
+const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
+  all: "All statuses",
+  active: "Active",
+  revoked: "Revoked",
+  not_generated: "Not generated",
+};
 
 function getStatusBadge(status: QrTableManagerRow["qrStatus"]) {
   switch (status) {
@@ -154,6 +181,11 @@ export function QrTableManager({
     done: number;
     total: number;
   } | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  // One page cursor per zone, so paging through the bar does not move the patio.
+  // Absent key means page 1; the map is cleared whenever the filters change.
+  const [zonePages, setZonePages] = useState<Record<string, number>>({});
 
   const loadSnapshot = useCallback(async () => {
     setIsLoading(true);
@@ -180,14 +212,58 @@ export function QrTableManager({
     return () => window.clearTimeout(timer);
   }, [loadSnapshot]);
 
+  const allRows = useMemo(() => snapshot?.tables ?? [], [snapshot?.tables]);
+
+  const isFiltered = search.trim() !== "" || statusFilter !== "all";
+
+  // Match on the label a person actually reads off the floor plan, plus the
+  // underlying name, so "12" finds table 12 whichever the merchant named it.
+  const filteredRows = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return allRows.filter((row) => {
+      if (statusFilter !== "all" && row.qrStatus !== statusFilter) return false;
+      if (!needle) return true;
+      return (
+        row.tableLabel.toLowerCase().includes(needle) ||
+        row.tableName.toLowerCase().includes(needle) ||
+        (row.zoneName ?? "").toLowerCase().includes(needle)
+      );
+    });
+  }, [allRows, search, statusFilter]);
+
   const groupedRows = useMemo(() => {
     const groups = new Map<string, QrTableManagerRow[]>();
-    for (const row of snapshot?.tables ?? []) {
+    for (const row of filteredRows) {
       const key = row.zoneName || "Unassigned";
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
     return Array.from(groups.entries());
-  }, [snapshot?.tables]);
+  }, [filteredRows]);
+
+  // Changing what is being looked at invalidates every cursor: page 7 of the
+  // unfiltered list is not page 7 of the search results. Reset at the point of
+  // change rather than in an effect watching it — the effect version renders
+  // once on the stale page before correcting.
+  function updateSearch(value: string) {
+    setSearch(value);
+    setZonePages({});
+  }
+
+  function updateStatusFilter(value: StatusFilter) {
+    setStatusFilter(value);
+    setZonePages({});
+  }
+
+  function getZonePage(zoneName: string, totalRows: number) {
+    const pageCount = Math.max(1, Math.ceil(totalRows / ROWS_PER_PAGE));
+    // Clamp rather than store: a zone can shrink under a filter while a stale
+    // cursor still points past the end, which would render an empty zone.
+    return Math.min(zonePages[zoneName] ?? 1, pageCount);
+  }
+
+  function setZonePage(zoneName: string, page: number) {
+    setZonePages((prev) => ({ ...prev, [zoneName]: page }));
+  }
 
   async function withBusy<T>(key: string, work: () => Promise<T>) {
     setBusyKey(key);
@@ -463,7 +539,22 @@ export function QrTableManager({
       doc.setFontSize(22);
       doc.text(title, originX + panelWidth / 2, 41, { align: "center" });
 
-      doc.addImage(qrImage, "PNG", originX + panelWidth / 2 - 28, 47, 56, 56);
+      // jsPDF defaults to no compression, so the 1400px code was embedded as
+      // raw RGB: 1400 × 1400 × 3 = 5,880,000 bytes, measured on a generated
+      // tent. A QR is large flat areas of two colours, which deflates to a
+      // fraction of that. The alias keys jsPDF's image cache to this table's
+      // code so the two panels below provably share one copy, rather than
+      // leaving it to content hashing.
+      doc.addImage(
+        qrImage,
+        "PNG",
+        originX + panelWidth / 2 - 28,
+        47,
+        56,
+        56,
+        `qr-${row.floorPlanObjectId}`,
+        "FAST"
+      );
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
@@ -708,8 +799,83 @@ export function QrTableManager({
           </div>
         ) : null}
 
+        {!isLoading && allRows.length > 0 ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                value={search}
+                onChange={(event) => updateSearch(event.target.value)}
+                placeholder="Search tables by name or zone"
+                aria-label="Search tables"
+                className="pl-9"
+              />
+            </div>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => updateStatusFilter(value as StatusFilter)}
+            >
+              <SelectTrigger className="sm:w-48" aria-label="Filter by QR status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(
+                  Object.keys(STATUS_FILTER_LABELS) as StatusFilter[]
+                ).map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {STATUS_FILTER_LABELS[value]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="shrink-0 text-sm text-muted-foreground tabular-nums">
+              {isFiltered
+                ? `${filteredRows.length} of ${allRows.length} tables`
+                : `${allRows.length} table${allRows.length === 1 ? "" : "s"}`}
+            </p>
+          </div>
+        ) : null}
+
+        {!isLoading && allRows.length > 0 && filteredRows.length === 0 ? (
+          <div className="flex flex-col items-start gap-3 rounded-2xl border-0 bg-muted/60 px-4 py-8 text-sm text-muted-foreground shadow-none">
+            <p>
+              No tables match{" "}
+              {search.trim() ? (
+                <>
+                  &ldquo;<span className="font-medium text-foreground">{search.trim()}</span>&rdquo;
+                </>
+              ) : (
+                "this filter"
+              )}
+              {statusFilter !== "all" && search.trim()
+                ? ` with status ${STATUS_FILTER_LABELS[statusFilter].toLowerCase()}`
+                : ""}
+              .
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                updateSearch("");
+                updateStatusFilter("all");
+              }}
+            >
+              Clear filters
+            </Button>
+          </div>
+        ) : null}
+
         {!isLoading &&
-          groupedRows.map(([zoneName, rows]) => (
+          groupedRows.map(([zoneName, rows]) => {
+            const pageCount = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+            const page = getZonePage(zoneName, rows.length);
+            const firstIndex = (page - 1) * ROWS_PER_PAGE;
+            const pageRows = rows.slice(firstIndex, firstIndex + ROWS_PER_PAGE);
+
+            return (
             // Borderless: this bordered card sat inside the panel, and each of
             // its table rows drew a third frame. With 236 tables that was a
             // wall of nested boxes running thousands of pixels tall.
@@ -729,7 +895,7 @@ export function QrTableManager({
               {/* Hairline-divided rows in a capped scroller: a zone with 236
                   tables is now a fixed-height list instead of the page. */}
               <div className="thin-scrollbar min-w-0 max-h-[32rem] divide-y divide-border/60 overflow-y-auto rounded-2xl border-0 bg-muted/40 px-3 shadow-none">
-                {rows.map((row) => {
+                {pageRows.map((row) => {
                   const isBusy =
                     busyKey === `gen-${row.floorPlanObjectId}` ||
                     busyKey === `regen-${row.floorPlanObjectId}` ||
@@ -878,8 +1044,45 @@ export function QrTableManager({
                   );
                 })}
               </div>
+
+              {/* Only zones large enough to page get a pager: a six-table patio
+                  should not carry the chrome of a 233-table floor. */}
+              {pageCount > 1 ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground tabular-nums">
+                    Showing {firstIndex + 1}–{firstIndex + pageRows.length} of{" "}
+                    {rows.length}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setZonePage(zoneName, page - 1)}
+                      disabled={page <= 1}
+                      aria-label={`Previous page of ${zoneName}`}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </Button>
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                      Page {page} of {pageCount}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setZonePage(zoneName, page + 1)}
+                      disabled={page >= pageCount}
+                      aria-label={`Next page of ${zoneName}`}
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
-          ))}
+            );
+          })}
 
         <div className="rounded-2xl border-0 bg-muted px-4 py-3 text-sm text-foreground shadow-none">
           <p>
