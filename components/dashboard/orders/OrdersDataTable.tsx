@@ -713,14 +713,22 @@ export function OrdersDataTable({
                         ))}
                     </TableHeader>
                     <TableBody>
-                        {isLoading ? (
-                            <TableRow>
-                                <TableCell colSpan={visibleColumns.length} className="h-24 text-center">
-                                    <div className="flex items-center justify-center">
-                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-                                    </div>
-                                </TableCell>
-                            </TableRow>
+                        {/* Only when there is nothing to show. `isLoading` here is
+                            the caller's fetching flag, so keying the placeholder
+                            on it alone replaced a populated table with a spinner
+                            on every refetch — re-entering the route, changing a
+                            filter, hitting Refresh. Rows the user already has
+                            stay put; the toolbar carries the refresh affordance. */}
+                        {isLoading && !table.getRowModel().rows?.length ? (
+                            Array.from({ length: 8 }).map((_, index) => (
+                                <TableRow key={`loading-${index}`} className="border-0">
+                                    {visibleColumns.map((column, colIndex) => (
+                                        <TableCell key={`${column.id}-${colIndex}`}>
+                                            <div className="h-4 w-full max-w-28 animate-pulse rounded-full bg-muted/70 motion-reduce:animate-none" />
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))
                         ) : table.getRowModel().rows?.length ? (
                             table.getRowModel().rows.map((row) => (
                                 <TableRow
