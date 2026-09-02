@@ -1,8 +1,13 @@
 "use client";
 
-import { Clock3, Phone, Star, Users } from "lucide-react";
+import { Clock3, Globe, Phone, Star, Users } from "lucide-react";
 import type { Reservation } from "@/types/floor-plan";
 import { formatPhoneForDisplay } from "@/lib/phone";
+import {
+  isWebsiteReservation,
+  reservationSourceLabel,
+  WEBSITE_SOURCE_STYLE,
+} from "@/lib/constants/reservation-source";
 import {
   reservationStatusLabel,
   reservationStatusStyle,
@@ -19,6 +24,7 @@ export default function ReservationCard({
   onClick,
 }: ReservationCardProps) {
   const status = reservationStatusStyle(reservation.status);
+  const fromWebsite = isWebsiteReservation(reservation.source);
 
   return (
     <button
@@ -42,6 +48,23 @@ export default function ReservationCard({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          {/*
+            Before VIP and status, because it answers a different question:
+            those say how the booking is going, this says the merchant has
+            never spoken to this guest.
+          */}
+          {fromWebsite && (
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                WEBSITE_SOURCE_STYLE.bg,
+                WEBSITE_SOURCE_STYLE.text
+              )}
+            >
+              <Globe className="h-3 w-3" />
+              Website
+            </span>
+          )}
           {reservation.is_vip && (
             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
               <Star className="h-3 w-3 fill-current" />
@@ -113,9 +136,10 @@ export default function ReservationCard({
 
       <div className="flex items-center justify-between gap-3 px-5 pb-5 pt-2 text-[0.8125rem] text-muted-foreground">
         <span className="truncate">Tap for details</span>
-        <span className="shrink-0 capitalize">
-          {reservation.source?.replaceAll("_", " ") || "dashboard"}
-        </span>
+        {/* Not repeated when the badge above already says it. */}
+        {!fromWebsite && (
+          <span className="shrink-0">{reservationSourceLabel(reservation.source)}</span>
+        )}
       </div>
     </button>
   );

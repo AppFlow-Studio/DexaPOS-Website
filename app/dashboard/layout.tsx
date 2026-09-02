@@ -74,6 +74,7 @@ import {
   DollarSign,
   CalendarClock,
   ShieldAlert,
+  PanelsTopLeft,
   Percent,
 } from "lucide-react";
 import Link from "next/link";
@@ -109,6 +110,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ReadOnlyNotificationBell } from "@/components/notifications/ReadOnlyNotificationBell";
 import { GetUnreadTicketCounts } from "./actions/support";
 import { MobileBottomNav } from "@/components/dashboard/MobileBottomNav";
+import { isOverlayOpen, useOverlayOpen } from "@/lib/hooks/overlay-open";
 import type { BottomNavTab, MoreNavItem } from "@/components/dashboard/MobileBottomNav";
 import { GlobalSearch } from "./components/global-search/GlobalSearch";
 
@@ -203,6 +205,51 @@ const navMain = [
         title: "Online Ordering",
         url: "/dashboard/online-ordering",
         icon: Globe,
+      },
+      {
+        // Sits next to Online Ordering deliberately: the Website is the
+        // restaurant's marketing layer, while Online Ordering owns checkout
+        // and fulfilment. There is no overview screen — Pages is the landing
+        // surface, and the editor is a full-screen overlay above it.
+        title: "Website",
+        url: "/dashboard/website/pages",
+        icon: PanelsTopLeft,
+        items: [
+          {
+            title: "Pages",
+            url: "/dashboard/website/pages",
+          },
+          {
+            title: "Events",
+            url: "/dashboard/website/events",
+          },
+          {
+            title: "Forms",
+            url: "/dashboard/website/forms",
+          },
+          {
+            // Named for the website, not just "Reservations", because
+            // /dashboard/reservations is a sibling in this same sidebar and
+            // holds a different thing: the actual bookings, whatever their
+            // origin. This one is the website's own booking setup — the master
+            // switch, and when each restaurant seats guests.
+            title: "Website Reservations",
+            url: "/dashboard/website/reservations",
+          },
+          {
+            // NOT "Analytics" — it shows no data, and a merchant who clicks
+            // Analytics expecting visitor numbers files a support ticket.
+            title: "Tracking",
+            url: "/dashboard/website/tracking",
+          },
+          {
+            // The brand layer: what the website offers, and the facts every
+            // page reads. Style is reached from Pages because it is about the
+            // pages you are looking at; this is not.
+            title: "Settings",
+            url: "/dashboard/website/settings",
+          },
+        ],
       },
       {
         title: "Kiosk",
@@ -352,9 +399,29 @@ const navFooter = [
   },
 ];
 
-function MerchantSidebar() {
+function MerchantSidebar({ inert }: { inert?: boolean }) {
   const { data: userInfo, isLoading } = useUserInfo();
   const pathname = usePathname();
+
+  /*
+    Bring the current page's nav item into view.
+
+    The nav is long enough that opening a group near the bottom — Website, at
+    1440×900 — expanded it entirely below the fold: the merchant saw a chevron
+    and no sub-items at all, and nothing suggested there was anything to scroll
+    to. `block: "nearest"` scrolls only when the item is actually out of view,
+    so a visible item does not get yanked around on every navigation.
+
+    A DOM query rather than a ref because the nav is written out by hand, group
+    by group; `data-active` is set by the shared sidebar primitives, so this
+    keeps working as items are added.
+  */
+  useEffect(() => {
+    const active = document.querySelector<HTMLElement>(
+      '[data-sidebar="menu-sub-button"][data-active="true"]',
+    );
+    active?.scrollIntoView({ block: "nearest" });
+  }, [pathname]);
   const { signOut } = useClerk();
   const queryClient = useQueryClient();
 
@@ -369,7 +436,10 @@ function MerchantSidebar() {
   };
 
   return (
-    <Sidebar variant="inset">
+    // `inert` while a builder overlay owns the screen: the whole nav tree stays
+    // rendered (so nothing reflows when the overlay closes) but stops being
+    // tabbable, clickable and visible to assistive tech.
+    <Sidebar variant="inset" inert={inert}>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-4 py-2">
           {isLoading ? (
@@ -382,8 +452,7 @@ function MerchantSidebar() {
                     src={userInfo?.members?.[0]?.organizations?.imageURL}
                     alt={userInfo?.members?.[0]?.organizations?.name}
                     fill
-                    objectFit="cover"
-                    className="rounded-lg"
+                    className="rounded-lg object-cover"
                   />
                 ) : (
                   <Store className="h-4 w-4 text-primary-foreground" />
@@ -536,6 +605,55 @@ function MerchantSidebar() {
                                               {subItem.icon && (
                                                 <subItem.icon className="h-3 w-3" />
                                               )}
+                                              <span>{subItem.title}</span>
+                                            </Link>
+                                          </SidebarMenuSubButton>
+                                        </SidebarMenuSubItem>
+                                      ))}
+                                  </SidebarMenuSub>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            </SidebarMenuItem>
+                          );
+                        }
+
+                        // Website expands into its own screens. Sub-items match
+                        // on prefix rather than equality so the entry stays
+                        // highlighted inside /pages/new and /pages/[pageId].
+                        if (menuItem.title === "Website") {
+                          const isWebsiteOpen = pathname.startsWith("/dashboard/website");
+
+                          return (
+                            <SidebarMenuItem key={menuItem.title}>
+                              <Collapsible defaultOpen={isWebsiteOpen} className="group">
+                                <div className="flex items-center">
+                                  <SidebarMenuButton
+                                    asChild
+                                    isActive={isWebsiteOpen}
+                                    className="flex-1"
+                                  >
+                                    <Link href={menuItem.url}>
+                                      <menuItem.icon className="h-4 w-4" />
+                                      <span>{menuItem.title}</span>
+                                    </Link>
+                                  </SidebarMenuButton>
+                                  <CollapsibleTrigger asChild>
+                                    <button className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent transition-colors shrink-0">
+                                      <ChevronRight className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                                    </button>
+                                  </CollapsibleTrigger>
+                                </div>
+                                <CollapsibleContent>
+                                  <SidebarMenuSub>
+                                    {/* @ts-ignore */}
+                                    {menuItem.items &&
+                                      menuItem.items.map((subItem) => (
+                                        <SidebarMenuSubItem key={subItem.title}>
+                                          <SidebarMenuSubButton
+                                            asChild
+                                            isActive={pathname.startsWith(subItem.url)}
+                                          >
+                                            <Link href={subItem.url}>
                                               <span>{subItem.title}</span>
                                             </Link>
                                           </SidebarMenuSubButton>
@@ -1177,10 +1295,26 @@ export default function MerchantDashboardLayout({
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => { setIsMounted(true); }, []);
   const [searchOpen, setSearchOpen] = useState(false);
+  // True while the website builder (or any other `OverlayChrome` surface) owns
+  // the screen.
+  const overlayOpen = useOverlayOpen();
 
   // Global ⌘K / Ctrl+K opens the command palette from anywhere in the dashboard.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      /*
+        …anywhere except under a full-screen overlay. Inside the website
+        builder this popped the dashboard palette over the canvas and offered
+        to navigate to Orders or Staff, discarding the edit in progress.
+
+        Read imperatively rather than closed over: this listener is bound once,
+        and the answer has to be the one that is true when the key is pressed.
+        It also cannot be solved from the overlay with `stopPropagation` — the
+        listener is on `document` and a keypress starting at `body` never
+        passes through the overlay at all.
+      */
+      if (isOverlayOpen()) return;
+
       if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
         setSearchOpen((prev) => !prev);
@@ -1429,16 +1563,26 @@ export default function MerchantDashboardLayout({
   // window scrolls as well, and you get two scrollbars with dead space under
   // the content. #main-content below is the single intended scroll container.
   return (
+    /*
+      `overlayOpen` switches off every part of the shell that is not an
+      ancestor of the overlay. The overlay renders inside `{children}`, so
+      `inert` on `<main>` or higher would disable the overlay along with the
+      app — which is why the flag is published from the overlay and read here
+      rather than applied at the top.
+    */
     <SidebarProvider className="dashboard-sidebar-theme h-svh max-h-svh min-h-0 overflow-hidden">
       <ImpersonationHydrator />
-      <MerchantSidebar />
+      <MerchantSidebar inert={overlayOpen} />
       {/* h-svh + min-h-0 constrain this column to the viewport so #main-content
           below can actually scroll. Without the floor, `flex-1` lets the scroll
           container grow to fit its content — it never scrolls, the window
           scrolls instead, and any `position: sticky` inside it never triggers. */}
       <main aria-label="Dashboard content" className="h-svh max-h-svh min-h-0 flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
         <ImpersonationBanner />
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
+        <header
+          inert={overlayOpen}
+          className="flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:px-4"
+        >
           <SidebarTrigger className="-ml-1 hidden sm:flex" />
           <h1 className="text-base md:text-sm lg:text-base font-semibold truncate flex-1 min-w-0">Merchant Dashboard</h1>
           <LocationIndicator userRole={userRole} />
@@ -1464,7 +1608,11 @@ export default function MerchantDashboardLayout({
         </header>
         <div id="main-content" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-20 sm:pb-6">{children}</div>
       </main>
-      <MobileBottomNav tabs={dashboardBottomTabs} moreItems={dashboardMoreItems} />
+      <MobileBottomNav
+        tabs={dashboardBottomTabs}
+        moreItems={dashboardMoreItems}
+        inert={overlayOpen}
+      />
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
     </SidebarProvider>
   );

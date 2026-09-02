@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Site } from "@/types/site";
 import { StorefrontMenu } from "@/types/storefront";
 import { MobileBottomTabs, TabType } from "./MobileBottomTabs";
+import { ItemDeepLink } from "./ItemDeepLink";
 import { MenuBrowser } from "./MenuBrowser";
 import { OrdersPanel } from "./OrdersPanel";
 import { OrdersSheet } from "./OrdersSheet";
@@ -63,50 +64,69 @@ export function StorefrontLayout({
   const templateId: SiteThemeConfig["templateId"] =
     site?.theme_config?.templateId || "classic";
 
+  /*
+    Mounted above the template fork on purpose: every layout below already
+    watches the cart store for `pendingModalItem`, so one mount here serves all
+    four rather than each growing its own copy of the same effect.
+  */
+  const deepLink = <ItemDeepLink menus={menus} />;
+
   // Delegate to dedicated layout components for new templates
   if (templateId === "hero") {
     return (
-      <HeroLayout
-        site={site}
-        location={location}
-        menus={menus}
-        slug={slug}
-        seedQrSession={seedQrSession}
-      />
+      <>
+        {deepLink}
+        <HeroLayout
+          site={site}
+          location={location}
+          menus={menus}
+          slug={slug}
+          seedQrSession={seedQrSession}
+        />
+      </>
     );
   }
   if (templateId === "market") {
     return (
-      <MarketLayout
-        site={site}
-        location={location}
-        menus={menus}
-        slug={slug}
-        seedQrSession={seedQrSession}
-      />
+      <>
+        {deepLink}
+        <MarketLayout
+          site={site}
+          location={location}
+          menus={menus}
+          slug={slug}
+          seedQrSession={seedQrSession}
+        />
+      </>
     );
   }
   if (templateId === "boutique") {
     return (
-      <BoutiqueLayout
+      <>
+        {deepLink}
+        <BoutiqueLayout
+          site={site}
+          location={location}
+          menus={menus}
+          slug={slug}
+          seedQrSession={seedQrSession}
+        />
+      </>
+    );
+  }
+
+  // Classic is the default and fallback layout.
+  return (
+    <>
+      {deepLink}
+      <ClassicLayout
         site={site}
         location={location}
         menus={menus}
         slug={slug}
         seedQrSession={seedQrSession}
       />
-    );
-  }
-
-  // Classic (and legacy minimal/bold) layout
-  return (
-    <ClassicLayout
-      site={site}
-      location={location}
-      menus={menus}
-      slug={slug}
-      seedQrSession={seedQrSession}
-    />
+    </>
   );
 }
 
@@ -140,9 +160,6 @@ function ClassicLayout({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
   const { setOpen } = useCart();
-
-  const templateId: SiteThemeConfig["templateId"] =
-    site?.theme_config?.templateId || "classic";
 
   const rawBusinessHours =
     site?.online_ordering_config?.operatingHours ||
@@ -178,10 +195,7 @@ function ClassicLayout({
 
   const menuLayout = site?.online_ordering_config?.menuLayout ?? "cards";
 
-  const mainContainerClass =
-    (templateId as string) === "minimal"
-      ? "mx-auto max-w-3xl px-4 sm:px-6 py-6 lg:pb-8 pb-6"
-      : "container mx-auto px-4 py-6 lg:pb-8 pb-6";
+  const mainContainerClass = "container mx-auto px-4 py-6 lg:pb-8 pb-6";
 
   const renderContent = () => {
     switch (activeTab) {
@@ -189,11 +203,7 @@ function ClassicLayout({
         return <OrdersPanel slug={slug} storeConfigId={site?.id} />;
       default:
         return (
-          <MenuBrowser
-            menus={menus}
-            menuLayout={menuLayout}
-            templateId={templateId || "classic"}
-          />
+          <MenuBrowser menus={menus} menuLayout={menuLayout} />
         );
     }
   };
@@ -228,11 +238,7 @@ function ClassicLayout({
           />
 
           {/* Story / description section */}
-          <div className={
-            (templateId as string) === "minimal"
-              ? "max-w-3xl mx-auto px-4 mt-4"
-              : "container mx-auto px-4 mt-4"
-          }>
+          <div className="container mx-auto px-4 mt-4">
             <QrTableBanner tableLabel={qrTableLabel} className="mb-4" />
             <BranchStorySection site={site} />
           </div>

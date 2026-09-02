@@ -1,0 +1,323 @@
+/**
+ * Colour maths for the site theme.
+ *
+ * Lives outside the design workspace because two callers need the same answers:
+ * the workspace (validating what a merchant types, deriving the neutrals they
+ * never see) and the palette catalogue (which is checked against these rules in
+ * tests, so a shipped palette cannot carry unreadable text).
+ *
+ * Contrast is WCAG 2.1 relative luminance, not a channel average — an average
+ * calls white-on-gold readable when it is not.
+ */
+
+export interface Rgb {
+  r: number;
+  g: number;
+  b: number;
+}
+
+const HEX_PATTERN = /^#[0-9a-f]{6}$/i;
+
+export function isHexColor(value: string): boolean {
+  return HEX_PATTERN.test(value.trim());
+}
+
+/** Accepts `#abc` and `#aabbcc`; returns `#AABBCC`. Invalid input returns null. */
+export function normalizeHex(value: string): string | null {
+  const raw = value.trim();
+  if (HEX_PATTERN.test(raw)) return raw.toUpperCase();
+  if (/^#[0-9a-f]{3}$/i.test(raw)) {
+    const [, r, g, b] = raw;
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+  }
+  return null;
+}
+
+export function hexToRgb(hex: string): Rgb {
+  const normalized = normalizeHex(hex) ?? "#000000";
+  return {
+    r: Number.parseInt(normalized.slice(1, 3), 16),
+    g: Number.parseInt(normalized.slice(3, 5), 16),
+    b: Number.parseInt(normalized.slice(5, 7), 16),
+  };
+}
+
+export function rgbToHex({ r, g, b }: Rgb): string {
+  const channel = (value: number) =>
+    Math.round(Math.min(255, Math.max(0, value)))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${channel(r)}${channel(g)}${channel(b)}`.toUpperCase();
+}
+
+/** Linear blend of two colours. `amount` 0 returns `from`, 1 returns `to`. */
+export function mix(from: string, to: string, amount: number): string {
+  const a = hexToRgb(from);
+  const b = hexToRgb(to);
+  const t = Math.min(1, Math.max(0, amount));
+  return rgbToHex({
+    r: a.r + (b.r - a.r) * t,
+    g: a.g + (b.g - a.g) * t,
+    b: a.b + (b.b - a.b) * t,
+  });
+}
+
+export interface Hsl {
+  /** Degrees, 0–360. */
+  h: number;
+  /** 0–1. */
+  s: number;
+  /** 0–1. */
+  l: number;
+}
+
+/**
+ * Hue/saturation/lightness, for controls a human can actually steer.
+ *
+ * Nothing is *stored* as HSL — the theme is hex throughout, and it stays that
+ * way. This exists because "make it a bit lighter" and "try the same colour but
+ * greener" are single-axis moves in HSL and three-axis moves in RGB, so a
+ * picker built on hex arithmetic ends up asking a restaurant owner to reason
+ * about red, green and blue channels separately. Round-tripping through hex is
+ * lossy at the last digit, which is why the picker keeps the hex string as the
+ * source of truth and derives HSL fresh each render rather than holding it in
+ * state.
+ */
+export function rgbToHsl({ r, g, b }: Rgb): Hsl {
+  const red = r / 255;
+  const green = g / 255;
+  const blue = b / 255;
+  const max = Math.max(red, green, blue);
+  const min = Math.min(red, green, blue);
+  const delta = max - min;
+  const l = (max + min) / 2;
+
+  if (delta === 0) return { h: 0, s: 0, l };
+
+  const s = delta / (1 - Math.abs(2 * l - 1));
+  let h: number;
+  if (max === red) h = ((green - blue) / delta) % 6;
+  else if (max === green) h = (blue - red) / delta + 2;
+  else h = (red - green) / delta + 4;
+
+  h *= 60;
+  return { h: h < 0 ? h + 360 : h, s, l };
+}
+
+export function hslToRgb({ h, s, l }: Hsl): Rgb {
+  const hue = ((h % 360) + 360) % 360;
+  const saturation = Math.min(1, Math.max(0, s));
+  const lightness = Math.min(1, Math.max(0, l));
+
+  const c = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = lightness - c / 2;
+
+  const [r, g, b] =
+    hue < 60
+      ? [c, x, 0]
+      : hue < 120
+        ? [x, c, 0]
+        : hue < 180
+          ? [0, c, x]
+          : hue < 240
+            ? [0, x, c]
+            : hue < 300
+              ? [x, 0, c]
+              : [c, 0, x];
+
+  return { r: (r + m) * 255, g: (g + m) * 255, b: (b + m) * 255 };
+}
+
+export function hexToHsl(hex: string): Hsl {
+  return rgbToHsl(hexToRgb(hex));
+}
+
+export function hslToHex(hsl: Hsl): string {
+  return rgbToHex(hslToRgb(hsl));
+}
+
+/** WCAG 2.1 relative luminance, 0 (black) to 1 (white). */
+export function relativeLuminance(hex: string): number {
+  const { r, g, b } = hexToRgb(hex);
+  const linear = (channel: number) => {
+    const c = channel / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+}
+
+/** WCAG contrast ratio, 1 (identical) to 21 (black on white). */
+export function contrastRatio(a: string, b: string): number {
+  const [light, dark] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+}
+
+export function isLight(hex: string): boolean {
+  return relativeLuminance(hex) > 0.45;
+}
+
+/** The darker/lighter of two foregrounds, whichever reads better on `background`. */
+export function readableOn(background: string, dark = "#111827", light = "#FFFFFF"): string {
+  return contrastRatio(background, dark) >= contrastRatio(background, light) ? dark : light;
+}
+
+export type ContrastGrade = "aaa" | "aa" | "aa-large" | "fail";
+
+/**
+ * Grades a foreground/background pair against WCAG 2.1.
+ *
+ * `aa-large` means the pair only passes at 18pt/14pt-bold and up — fine for a
+ * hero headline, not for body copy, which is exactly the distinction a merchant
+ * choosing a brand colour needs to be told about.
+ */
+export function gradeContrast(foreground: string, background: string): ContrastGrade {
+  const ratio = contrastRatio(foreground, background);
+  if (ratio >= 7) return "aaa";
+  if (ratio >= 4.5) return "aa";
+  if (ratio >= 3) return "aa-large";
+  return "fail";
+}
+
+/** The colour keys a palette owns. `fontFamily`/`headingFont`/`radius` are not colours. */
+export const THEME_COLOR_KEYS = [
+  "brand",
+  "brandContrast",
+  "surface",
+  "surfaceMuted",
+  "surfaceDark",
+  "text",
+  "textMuted",
+  "textOnDark",
+  "border",
+  "card",
+] as const;
+
+export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number];
+
+export type ThemeColors = Record<ThemeColorKey, string>;
+
+/**
+ * Fills in the six supporting colours from the three a merchant actually picks.
+ *
+ * The design workspace only ever asks for brand, page background, and text.
+ * Everything else — muted panels, borders, the dark hero band, muted copy — is
+ * derived here so a merchant who chooses a near-black page background cannot end
+ * up with the light-grey borders and near-white muted panels the old preset list
+ * left behind.
+ */
+export function deriveThemeColors(core: {
+  brand: string;
+  surface: string;
+  text: string;
+}): ThemeColors {
+  const { brand, surface, text } = core;
+  const lightSurface = isLight(surface);
+
+  return {
+    brand,
+    brandContrast: readableOn(brand),
+    surface,
+    // A panel that sits *on* the page: nudged toward the text colour so it
+    // separates on a light page and lifts on a dark one.
+    surfaceMuted: lightSurface ? mix(surface, text, 0.05) : mix(surface, "#FFFFFF", 0.055),
+    // The dark section band — the `classic`/`spotlight` hero, the scrolling
+    // banner, and any section set to the `dark` background. Deliberately dark in
+    // *both* modes: on a light page it is a deep tint of the text colour; on an
+    // already-dark page it goes deeper still rather than inverting.
+    // Not the footer — that is a muted band. See `FooterSection`.
+    surfaceDark: lightSurface ? mix(text, "#000000", 0.12) : mix(surface, "#000000", 0.45),
+    text,
+    // Pulled only 36% toward the background. Anything looser reads as "dimmer"
+    // but drops secondary copy — hours, descriptions, captions — below the 4.5:1
+    // AA threshold, which the palette test enforces.
+    textMuted: mix(text, surface, 0.36),
+    textOnDark: lightSurface
+      ? readableOn(mix(text, "#000000", 0.12))
+      : readableOn(mix(surface, "#000000", 0.45)),
+    border: lightSurface ? mix(surface, text, 0.14) : mix(surface, "#FFFFFF", 0.14),
+    card: lightSurface ? "#FFFFFF" : mix(surface, "#FFFFFF", 0.07),
+  };
+}
+
+/** WCAG AA for body-sized text. The same threshold `style-inputs` holds itself to. */
+const AA_BODY = 4.5;
+
+/**
+ * `color` walked in lightness until it clears AA on `background`.
+ *
+ * This is what makes "put this heading in my brand colour" a safe thing to
+ * offer. A merchant's brand is chosen to look right as a *button fill*, where it
+ * carries a derived label colour and its own contrast is nobody's problem. Used
+ * as type directly it frequently fails: a mid-tone teal on white measures around
+ * 2.8:1, which is unreadable and is exactly the trap a raw colour picker sets.
+ *
+ * Rather than refuse the choice, the hue is kept and the lightness moved away
+ * from the background until the pair passes — so a merchant asking for "my
+ * orange" gets their orange, darkened enough to read, rather than a warning
+ * triangle or a page nobody can read. Hue and saturation are untouched, which is
+ * what keeps it recognisably the same colour.
+ *
+ * Falls back to a plain readable neutral in the pathological case where no
+ * lightness of this hue passes — a near-white background and a pale yellow can
+ * fail at every step, and readable type matters more than a preserved hue.
+ */
+export function tintOn(color: string, background: string, headroom = 0.3): string {
+  // Measured as it will actually be rendered: the sections fade their secondary
+  // copy, so a colour that clears AA on its own can fail where it is used. Same
+  // reasoning as `mutedOn`, which carries the long version.
+  const passes = (candidate: string) =>
+    contrastRatio(mix(candidate, background, headroom), background) >= AA_BODY;
+
+  if (passes(color)) return normalizeHex(color) ?? color;
+
+  const { h, s } = hexToHsl(color);
+  // Away from the background: darken type on a light page, lighten it on a dark
+  // one. Trying both directions would let a dark brand jump to a pale tint of
+  // itself, which reads as a different colour entirely.
+  const towardsBlack = isLight(background);
+
+  for (let step = 1; step <= 20; step += 1) {
+    const l = towardsBlack ? 0.5 - step * 0.025 : 0.5 + step * 0.025;
+    const candidate = hslToHex({ h, s, l: Math.min(1, Math.max(0, l)) });
+    if (passes(candidate)) return candidate;
+  }
+
+  return readableOn(background);
+}
+
+/**
+ * The most de-emphasised version of `foreground` on `background` that still
+ * clears AA **with room to spare for a further fade**.
+ *
+ * Two things make this more than a call to `mix`.
+ *
+ * First, `deriveThemeColors` hardcodes 36% for `textMuted` because that number
+ * was measured against the one pair it is used for. Secondary copy on a *brand*
+ * or *dark* band is a different pair with a different limit, so the amount is
+ * found by measurement here rather than assumed — otherwise a muted caption
+ * passes on a navy banner and fails on a pale one.
+ *
+ * Second, and less obvious: **the sections fade their own copy.** A subheading
+ * carries `opacity-75`, a footer column `opacity-70`. Composited against the
+ * backdrop, that is another mix — so a colour sitting exactly on the AA line
+ * lands under it the moment it is used where such copy actually appears, and the
+ * guarantee would hold only for the headline. `headroom` is that second fade,
+ * sized to the strongest one applied to merchant copy anywhere in the section
+ * renderers, so the *rendered* text clears AA rather than the token doing so in
+ * isolation. (A handful of small uppercase labels use `opacity-60`; they are
+ * chrome rather than copy, and holding every muted tone to that would leave the
+ * option indistinguishable from `default`.)
+ */
+export function mutedOn(
+  foreground: string,
+  background: string,
+  { limit = 0.36, headroom = 0.3 }: { limit?: number; headroom?: number } = {},
+): string {
+  for (let amount = limit; amount > 0; amount -= 0.04) {
+    const candidate = mix(foreground, background, amount);
+    const asRendered = mix(candidate, background, headroom);
+    if (contrastRatio(asRendered, background) >= AA_BODY) return candidate;
+  }
+  return normalizeHex(foreground) ?? foreground;
+}

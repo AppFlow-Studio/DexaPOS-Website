@@ -1,0 +1,607 @@
+/**
+ * Stage 2 acceptance test — cross-tenant isolation for the website builder.
+ *
+ * This script is the *artifact* behind the ticket's "two merchants can each
+ * build, save, and publish a distinct site with zero data bleed" criterion. It
+ * proves isolation by attempting operations that MUST fail, rather than by
+ * reading policy SQL and believing it. Every future edit to those policies
+ * should be followed by a run of this script.
+ *
+ * It needs a real database, so it does not run in CI alongside the unit tests.
+ * Run it against staging after applying
+ * supabase/migrations/20260813120000_website_builder_foundation.sql.
+ *
+ * Usage:
+ *   npx tsx scripts/verify-site-tenancy.ts --a <merchantIdA> --b <merchantIdB>
+ *   npx tsx scripts/verify-site-tenancy.ts --list        # show candidate merchants
+ *
+ * Requires in .env:
+ *   NEXT_PUBLIC_SUPABASE_URL
+ *   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY   (the anon key — used for the anon lane)
+ *   SUPABASE_SERVICE_ROLE_KEY              (setup/teardown only, never for assertions)
+ *
+ * The authenticated lanes need a Clerk-issued Supabase token per merchant. Pass
+ * them as SITE_TENANCY_TOKEN_A / SITE_TENANCY_TOKEN_B; without them the script
+ * runs the anon lane and the service-role fixtures, and clearly reports the
+ * authenticated lanes as SKIPPED rather than passing them by default.
+ */
+
+import { readFileSync } from "fs";
+import { resolve } from "path";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+// ── env (same manual .env parse the other scripts use) ──────────────────────
+const envPath = resolve(__dirname, "..", ".env");
+try {
+  for (const line of readFileSync(envPath, "utf-8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let val = trimmed.slice(eq + 1).trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    if (!process.env[key]) process.env[key] = val;
+  }
+} catch (e) {
+  console.error(`[tenancy] could not read ${envPath}:`, (e as Error).message);
+}
+
+const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const ANON = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!URL || !ANON || !SERVICE) {
+  console.error("[tenancy] missing NEXT_PUBLIC_SUPABASE_URL / PUBLISHABLE_KEY / SERVICE_ROLE_KEY");
+  process.exit(1);
+}
+
+const service = createClient(URL, SERVICE, { auth: { persistSession: false } });
+const anon = createClient(URL, ANON, { auth: { persistSession: false } });
+
+function tokenClient(token: string): SupabaseClient {
+  return createClient(URL!, ANON!, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+}
+
+// ── reporting ───────────────────────────────────────────────────────────────
+let failures = 0;
+let skipped = 0;
+
+/**
+ * Supabase query builders are thenables, not Promises, so the assertion helpers
+ * take `PromiseLike` — otherwise every call site would need a stray `await`.
+ */
+type QueryResult = PromiseLike<{ data: unknown; error: { message: string } | null }>;
+
+/**
+ * Asserts an operation was DENIED. A denial can surface either as a Postgres
+ * error or as an empty result set — RLS filters rather than throwing on SELECT —
+ * so both count, and anything that returns a row is a leak.
+ */
+async function expectDenied(label: string, op: () => QueryResult) {
+  try {
+    const { data, error } = await op();
+    const rows = Array.isArray(data) ? data.length : data ? 1 : 0;
+    if (error || rows === 0) {
+      console.log(`  ✓ DENIED  ${label}${error ? ` (${error.message.slice(0, 60)})` : " (0 rows)"}`);
+    } else {
+      failures += 1;
+      console.log(`  ✗ LEAKED  ${label} — returned ${rows} row(s)`);
+    }
+  } catch (e) {
+    console.log(`  ✓ DENIED  ${label} (threw: ${(e as Error).message.slice(0, 60)})`);
+  }
+}
+
+async function expectAllowed(label: string, op: () => QueryResult) {
+  const { data, error } = await op();
+  const rows = Array.isArray(data) ? data.length : data ? 1 : 0;
+  if (!error && rows > 0) {
+    console.log(`  ✓ ALLOWED ${label}`);
+  } else {
+    failures += 1;
+    console.log(`  ✗ BLOCKED ${label} — ${error?.message ?? "0 rows"} (this should have worked)`);
+  }
+}
+
+function skip(label: string, why: string) {
+  skipped += 1;
+  console.log(`  – SKIP    ${label} — ${why}`);
+}
+
+// ── args ────────────────────────────────────────────────────────────────────
+const args = process.argv.slice(2);
+const argOf = (flag: string) => {
+  const i = args.indexOf(flag);
+  return i === -1 ? undefined : args[i + 1];
+};
+
+async function listCandidates() {
+  const { data } = await service
+    .from("online_store_config")
+    .select("merchant_id, location_id, store_name, slug")
+    .limit(20);
+  console.log("Merchants with a storefront (usable as --a / --b):\n");
+  for (const row of (data ?? []) as Record<string, string>[]) {
+    console.log(`  ${row.merchant_id}  ${row.slug.padEnd(24)} ${row.store_name}`);
+  }
+}
+
+/** Ensures each merchant has a site + home page, using service role. */
+async function fixture(merchantId: string) {
+  const { data: config } = await service
+    .from("online_store_config")
+    .select("id, location_id")
+    .eq("merchant_id", merchantId)
+    .limit(1)
+    .maybeSingle();
+
+  if (!config) throw new Error(`merchant ${merchantId} has no online_store_config`);
+
+  const cfg = config as { id: string; location_id: string };
+
+  // One site per merchant (2026-08-15). The storefront config above is still
+  // read, but only to prove the merchant has a location worth pointing at — it
+  // no longer identifies the site.
+  let { data: site } = await service
+    .from("merchant_sites")
+    .select("id")
+    .eq("merchant_id", merchantId)
+    .maybeSingle();
+
+  if (!site) {
+    const { data: created, error } = await service
+      .from("merchant_sites")
+      .insert({ merchant_id: merchantId })
+      .select("id")
+      .single();
+    if (error) throw new Error(`could not create site: ${error.message}`);
+    site = created;
+  }
+
+  const siteId = (site as { id: string }).id;
+
+  let { data: page } = await service
+    .from("site_pages")
+    .select("id, revision")
+    .eq("site_id", siteId)
+    .eq("is_home", true)
+    .maybeSingle();
+
+  if (!page) {
+    const { data: created, error } = await service
+      .from("site_pages")
+      .insert({
+        site_id: siteId,
+        merchant_id: merchantId,
+        path: "",
+        title: "Home",
+        is_home: true,
+      })
+      .select("id, revision")
+      .single();
+    if (error) throw new Error(`could not create home page: ${error.message}`);
+    page = created;
+  }
+
+  return { siteId, page: page as { id: string; revision: number } };
+}
+
+async function main() {
+  if (args.includes("--list")) {
+    await listCandidates();
+    return;
+  }
+
+  const merchantA = argOf("--a");
+  const merchantB = argOf("--b");
+  if (!merchantA || !merchantB) {
+    console.error("Usage: npx tsx scripts/verify-site-tenancy.ts --a <merchantIdA> --b <merchantIdB>");
+    console.error("       npx tsx scripts/verify-site-tenancy.ts --list");
+    process.exit(1);
+  }
+
+  console.log("\nFixtures (service role)");
+  const a = await fixture(merchantA);
+  const b = await fixture(merchantB);
+  console.log(`  A site=${a.siteId} page=${a.page.id}`);
+  console.log(`  B site=${b.siteId} page=${b.page.id}`);
+
+  // ── Lane 1: merchant A must not touch merchant B ─────────────────────────
+  console.log("\nLane 1 — merchant A against merchant B's data");
+  const tokenA = process.env.SITE_TENANCY_TOKEN_A;
+  if (!tokenA) {
+    for (const label of [
+      "select B's site",
+      "select B's draft",
+      "update B's draft",
+      "reparent A's page into B's site",
+      "insert a page into B's site",
+      "select B's versions",
+    ]) {
+      skip(label, "set SITE_TENANCY_TOKEN_A to a Clerk-issued Supabase token for merchant A");
+    }
+  } else {
+    const clientA = tokenClient(tokenA);
+
+    await expectAllowed("A can read its own site", () =>
+      clientA.from("merchant_sites").select("id").eq("id", a.siteId),
+    );
+    await expectAllowed("A can read its own draft", () =>
+      clientA.from("site_pages").select("id").eq("id", a.page.id),
+    );
+
+    await expectDenied("A selects B's site", () =>
+      clientA.from("merchant_sites").select("id").eq("id", b.siteId),
+    );
+    await expectDenied("A selects B's draft", () =>
+      clientA.from("site_pages").select("id").eq("id", b.page.id),
+    );
+    await expectDenied("A updates B's draft", () =>
+      clientA
+        .from("site_pages")
+        .update({ title: "pwned" })
+        .eq("id", b.page.id)
+        .select("id"),
+    );
+    // The one WITH CHECK exists to stop: moving your own row into another tenant.
+    await expectDenied("A reparents its own page into B's site", () =>
+      clientA
+        .from("site_pages")
+        .update({ site_id: b.siteId })
+        .eq("id", a.page.id)
+        .select("id"),
+    );
+    await expectDenied("A inserts a page into B's site", () =>
+      clientA
+        .from("site_pages")
+        .insert({ site_id: b.siteId, merchant_id: merchantA, path: "intruder", title: "x" })
+        .select("id"),
+    );
+    await expectDenied("A selects B's versions", () =>
+      clientA.from("site_page_versions").select("id").eq("site_id", b.siteId),
+    );
+  }
+
+  // ── Lane 2: anon must see nothing at all (until Stage 4 adds public reads) ─
+  console.log("\nLane 2 — anonymous visitor");
+  await expectDenied("anon selects any site", () => anon.from("merchant_sites").select("id").limit(1));
+  await expectDenied("anon selects any page", () => anon.from("site_pages").select("id").limit(1));
+  await expectDenied("anon selects any draft content", () =>
+    anon.from("site_pages").select("draft_content").limit(1),
+  );
+  await expectDenied("anon selects any version", () =>
+    anon.from("site_page_versions").select("id").limit(1),
+  );
+  await expectDenied("anon inserts a page", () =>
+    anon
+      .from("site_pages")
+      .insert({ site_id: a.siteId, merchant_id: merchantA, path: "anon", title: "x" })
+      .select("id"),
+  );
+
+  // ── Lane 3: invariants that do not depend on a token ──────────────────────
+  console.log("\nLane 3 — schema invariants (service role)");
+
+  // Tenancy is derived by trigger, so a lying client cannot misfile a row.
+  const { data: lied } = await service
+    .from("site_pages")
+    .insert({
+      site_id: a.siteId,
+      merchant_id: merchantB, // deliberately wrong
+      path: "trigger-test",
+      title: "Trigger test",
+    })
+    .select("id, merchant_id")
+    .single();
+
+  if (lied && (lied as { merchant_id: string }).merchant_id === merchantA) {
+    console.log("  ✓ trigger overrode a falsified merchant_id");
+  } else {
+    failures += 1;
+    console.log("  ✗ trigger did NOT override a falsified merchant_id");
+  }
+  if (lied) await service.from("site_pages").delete().eq("id", (lied as { id: string }).id);
+
+  // What Lane 3 is about to overwrite on merchant A's real home page.
+  //
+  // The revision checks below have to write `draft_content` and `title` to mean
+  // anything, and this script is pointed at an environment where that page may
+  // be someone's actual work in progress. Snapshot first, restore in `finally`,
+  // so a verification run is not a way to lose a draft. Without this, running
+  // the acceptance test was itself destructive — which is a large part of why
+  // it had never been run.
+  const { data: before } = await service
+    .from("site_pages")
+    .select("draft_content, title")
+    .eq("id", a.page.id)
+    .single();
+
+  try {
+    await revisionAndImmutabilityChecks(a, merchantA);
+  } finally {
+    if (!before) {
+      failures += 1;
+      console.log("  ✗ could not snapshot merchant A's draft — it may now hold probe content");
+    } else {
+      const original = before as { draft_content: unknown; title: string };
+      const { error: restoreError } = await service
+        .from("site_pages")
+        .update({ draft_content: original.draft_content, title: original.title })
+        .eq("id", a.page.id);
+
+      // Reported, not assumed. An earlier version of this script had no restore
+      // at all and left `sec_probe` plus a `Home <timestamp>` title on a real
+      // merchant's draft, where it sat unnoticed for a day — precisely because
+      // nothing ever said whether the cleanup happened.
+      if (restoreError) {
+        failures += 1;
+        console.log(`  ✗ FAILED to restore merchant A's draft: ${restoreError.message}`);
+        console.log(`    page ${a.page.id} may still contain the probe section.`);
+      } else {
+        console.log("  ↩ restored merchant A's draft content and title");
+      }
+    }
+  }
+
+  await publicReadPathChecks(a, merchantA);
+
+  // ── result ────────────────────────────────────────────────────────────────
+  console.log(
+    failures === 0
+      ? `\n✅ tenancy verification passed${skipped ? ` (${skipped} skipped)` : ""}\n`
+      : `\n❌ ${failures} isolation failure(s)${skipped ? `, ${skipped} skipped` : ""}\n`,
+  );
+  if (skipped > 0 && failures === 0) {
+    console.log(
+      "Skipped lanes are NOT passes. Supply SITE_TENANCY_TOKEN_A to complete the acceptance test.\n",
+    );
+  }
+  process.exit(failures === 0 ? 0 : 1);
+}
+
+/**
+ * Lane 4 — the public read path and the host namespace.
+ *
+ * Added 2026-08-16 with `get_public_site_page()`. The decision to give the
+ * public a SECURITY DEFINER function instead of an `anon` SELECT policy rests
+ * entirely on two claims — anon can call the function, and anon still cannot
+ * read the tables behind it — and a claim about a security boundary that is
+ * only checked by reading the migration is not checked at all.
+ *
+ * The function bypasses RLS by construction, so it is the one place in this
+ * feature where a mistake is unbounded. It is worth over-testing.
+ */
+async function publicReadPathChecks(
+  a: { siteId: string; page: { id: string } },
+  merchantA: string,
+) {
+  console.log("\nLane 4 — the public read path (anon)");
+
+  const { data: storefront } = await service
+    .from("online_store_config")
+    .select("slug")
+    .eq("merchant_id", merchantA)
+    .eq("is_active", true)
+    .limit(1)
+    .maybeSingle();
+
+  const slug = (storefront as { slug: string } | null)?.slug;
+  if (!slug) {
+    skip("public read path", "merchant A has no active storefront to address");
+    return;
+  }
+
+  // 1. anon may call it at all. A permission error here means the GRANT is
+  //    missing and every published page would 404 for real visitors.
+  const { data: rows, error: rpcError } = await anon.rpc("get_public_site_page", {
+    p_slug: slug,
+    p_path: "",
+  });
+
+  if (rpcError) {
+    failures += 1;
+    console.log(`  ✗ BLOCKED anon cannot call get_public_site_page — ${rpcError.message}`);
+    return;
+  }
+  console.log("  ✓ ALLOWED anon calls get_public_site_page");
+
+  const row = (rows as Record<string, unknown>[] | null)?.[0];
+  if (!row) {
+    failures += 1;
+    console.log(`  ✗ the function returned nothing for the active slug "${slug}"`);
+    return;
+  }
+
+  // 2. The whole point of the function shape. `draft_content` is every
+  //    merchant's unpublished work and must not be reachable through the one
+  //    door anon has.
+  const leaked = Object.keys(row).filter((key) => /draft/i.test(key));
+  if (leaked.length === 0) {
+    console.log("  ✓ the function exposes no draft column");
+  } else {
+    failures += 1;
+    console.log(`  ✗ LEAKED the function returned draft column(s): ${leaked.join(", ")}`);
+  }
+
+  // 3. anon still has no way around it.
+  await expectDenied("anon still cannot read site_pages directly", () =>
+    anon.from("site_pages").select("id").limit(1),
+  );
+
+  // 4. A path nobody published resolves to "no page", not to a draft.
+  const { data: missing } = await anon.rpc("get_public_site_page", {
+    p_slug: slug,
+    p_path: "definitely-not-published",
+  });
+  const missingRow = (missing as Record<string, unknown>[] | null)?.[0];
+  if (missingRow && missingRow.page_id === null) {
+    console.log("  ✓ an unpublished path resolves to no page");
+  } else if (!missingRow) {
+    failures += 1;
+    console.log("  ✗ an unpublished path returned no row at all — the site became unaddressable");
+  } else {
+    failures += 1;
+    console.log("  ✗ an unpublished path returned a page");
+  }
+
+  // ── the host namespace ────────────────────────────────────────────────────
+  console.log("\nLane 4b — brand subdomain namespace (service role)");
+
+  const { data: siteBefore } = await service
+    .from("merchant_sites")
+    .select("subdomain")
+    .eq("id", a.siteId)
+    .single();
+  const originalSubdomain = (siteBefore as { subdomain: string | null } | null)?.subdomain ?? null;
+
+  const setSubdomain = (value: string | null) =>
+    service.from("merchant_sites").update({ subdomain: value }).eq("id", a.siteId).select("id");
+
+  try {
+    // The CHECK constraint, which keeps an unresolvable hostname out of the
+    // column rather than out of a form.
+    await expectDenied("a malformed subdomain is refused", () => setSubdomain("-not-a-label"));
+
+    // The tenancy boundary: claiming another storefront's slug as a brand
+    // address would let one merchant answer on another merchant's address.
+    await expectDenied("a subdomain colliding with a storefront slug is refused", () =>
+      setSubdomain(slug),
+    );
+
+    // The same collision, created from the other side. This one is checked
+    // last and restored immediately, because if the trigger were missing the
+    // update would succeed and rename a live storefront.
+    const probe = `tenancy-probe-${Date.now().toString(36)}`;
+    const { error: claimError } = await setSubdomain(probe);
+
+    if (claimError) {
+      failures += 1;
+      console.log(`  ✗ could not claim a valid subdomain — ${claimError.message}`);
+    } else {
+      console.log("  ✓ a valid, free subdomain is accepted");
+
+      const { data: renamed, error: renameError } = await service
+        .from("online_store_config")
+        .update({ slug: probe })
+        .eq("slug", slug)
+        .select("id, slug");
+
+      const renamedRows = (renamed as unknown[] | null)?.length ?? 0;
+      if (renameError || renamedRows === 0) {
+        console.log("  ✓ a storefront slug colliding with a subdomain is refused");
+      } else {
+        failures += 1;
+        console.log("  ✗ LEAKED a storefront was renamed onto an existing subdomain — restoring");
+        await service.from("online_store_config").update({ slug }).eq("slug", probe);
+      }
+    }
+  } finally {
+    const { error: restoreError } = await setSubdomain(originalSubdomain);
+    if (restoreError) {
+      failures += 1;
+      console.log(`  ✗ FAILED to restore merchant A's subdomain: ${restoreError.message}`);
+    } else {
+      console.log(`  ↩ restored merchant A's subdomain (${originalSubdomain ?? "none"})`);
+    }
+  }
+}
+
+/**
+ * The write-dependent half of Lane 3.
+ *
+ * Split out so the caller can wrap it in the snapshot/restore that keeps these
+ * writes from outliving the run.
+ */
+async function revisionAndImmutabilityChecks(
+  a: { siteId: string; page: { id: string; revision: number } },
+  merchantA: string,
+) {
+  // Revision must advance on a content change (autosave concurrency depends on
+  // it) and must NOT advance otherwise.
+  //
+  // The content below must genuinely differ from what the page already holds.
+  // This check previously wrote `{schemaVersion:1, sections:[], seo:{}, settings:{}}`
+  // — byte-identical to the column DEFAULT the fixture page was created with — so
+  // `IS DISTINCT FROM` was correctly false and the trigger correctly did nothing.
+  // The test reported a schema failure that did not exist.
+  const { data: bumped } = await service
+    .from("site_pages")
+    .update({
+      draft_content: {
+        schemaVersion: 1,
+        sections: [{ id: "sec_probe", kind: "hero", props: { heading: "revision probe" } }],
+        seo: {},
+        settings: {},
+      },
+    })
+    .eq("id", a.page.id)
+    .select("revision")
+    .single();
+
+  const afterChange = (bumped as { revision: number } | null)?.revision;
+  if (afterChange !== undefined && afterChange > a.page.revision) {
+    console.log(`  ✓ revision advances when draft_content changes (${a.page.revision} → ${afterChange})`);
+  } else {
+    failures += 1;
+    console.log(
+      `  ✗ revision did NOT advance on a content change (stayed ${afterChange ?? "?"})`,
+    );
+  }
+
+  // The inverse, which matters just as much: renaming a page must not invalidate
+  // an editor that is open on it.
+  const { data: unbumped } = await service
+    .from("site_pages")
+    .update({ title: `Home ${Date.now()}` })
+    .eq("id", a.page.id)
+    .select("revision")
+    .single();
+
+  if ((unbumped as { revision: number } | null)?.revision === afterChange) {
+    console.log("  ✓ revision holds steady when only the title changes");
+  } else {
+    failures += 1;
+    console.log("  ✗ a title-only edit bumped the revision — open editors would be kicked out");
+  }
+
+  // Versions are append-only.
+  const { data: version } = await service
+    .from("site_page_versions")
+    .insert({
+      page_id: a.page.id,
+      site_id: a.siteId,
+      merchant_id: merchantA,
+      version_number: 999999,
+      content: { schemaVersion: 1, sections: [], seo: {}, settings: {} },
+      content_hash: "verify-tenancy-fixture",
+    })
+    .select("id")
+    .single();
+
+  if (version) {
+    const versionId = (version as { id: string }).id;
+    const { error: mutateError } = await service
+      .from("site_page_versions")
+      .update({ content: { tampered: true } })
+      .eq("id", versionId);
+
+    if (mutateError) {
+      console.log("  ✓ published version content is immutable");
+    } else {
+      failures += 1;
+      console.log("  ✗ published version content was MUTABLE");
+    }
+    await service.from("site_page_versions").delete().eq("id", versionId);
+  }
+}
+
+main().catch((e) => {
+  console.error("\n[tenancy] fatal:", (e as Error).message);
+  process.exit(1);
+});

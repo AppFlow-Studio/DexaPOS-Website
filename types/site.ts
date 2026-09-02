@@ -16,6 +16,8 @@ export interface SiteThemeConfig {
   cardColor?: string | null;
 }
 
+export type StorefrontTemplateId = NonNullable<SiteThemeConfig["templateId"]>;
+
 // Schedule Types
 export interface DaySchedule {
   enabled: boolean;
