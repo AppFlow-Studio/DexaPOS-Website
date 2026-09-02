@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 "use client";
 
 import { useState, useMemo } from "react";
@@ -25,7 +26,6 @@ import {
 import {
   ChevronDown,
   ChevronUp,
-  Loader2,
   Receipt,
   Calendar,
   Banknote,
@@ -256,8 +256,10 @@ export function OrdersTab({ customer }: OrdersTabProps) {
       {/* Orders Table */}
       <div className="overflow-x-auto rounded-2xl border-0 bg-muted/35">
         {isLoading ? (
-          <div className="flex items-center justify-center h-40">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <div className="space-y-2 p-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full motion-reduce:animate-none" />
+            ))}
           </div>
         ) : sortedOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">

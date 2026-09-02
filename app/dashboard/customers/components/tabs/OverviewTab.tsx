@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -78,39 +78,39 @@ export function OverviewTab({
           title="LAST VISIT"
           value={lastVisitRelative}
           subtitle={lastVisitAbsolute ?? undefined}
-          className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none sm:p-6 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card-content]]:px-0"
+          className="rounded-2xl border-0 bg-muted/60 shadow-none"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="TOTAL VISITS"
           value={String(totalVisits)}
           trend={visitTrendLabel ? { direction: visitTrendDir, label: visitTrendLabel } : undefined}
-          className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none sm:p-6 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card-content]]:px-0"
+          className="rounded-2xl border-0 bg-muted/60 shadow-none"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="LIFETIME SPEND"
           value={`$${lifetimeSpend.toLocaleString()}`}
           badge={percentileBadge ?? undefined}
-          className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none sm:p-6 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card-content]]:px-0"
+          className="rounded-2xl border-0 bg-muted/60 shadow-none"
           isLoading={isLoadingProfile || isLoadingSpend}
         />
         <MetricCard
           title="AVG. SPEND"
           value={`$${avgSpend.toFixed(2)}`}
-          className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none sm:p-6 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card-content]]:px-0"
+          className="rounded-2xl border-0 bg-muted/60 shadow-none"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="AVG. TIP"
           value={`${avgTip.toFixed(1)}%`}
-          className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none sm:p-6 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card-content]]:px-0"
+          className="rounded-2xl border-0 bg-muted/60 shadow-none"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="CUSTOMER SINCE"
           value={customerSince ?? "—"}
-          className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none sm:p-6 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card-content]]:px-0"
+          className="rounded-2xl border-0 bg-muted/60 shadow-none"
           isLoading={isLoadingProfile}
         />
       </div>
@@ -126,9 +126,8 @@ export function OverviewTab({
           </CardHeader>
           <CardContent>
             {isLoadingSpend ? (
-              <div className="h-35 flex items-center justify-center">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
+              // Chart-shaped: the area chart below is 140px tall.
+              <Skeleton className="h-35 w-full rounded-lg motion-reduce:animate-none" />
             ) : spendTrend && spendTrend.length > 0 ? (
               <ResponsiveContainer width="100%" height={140}>
                 <AreaChart data={spendTrend} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
@@ -199,8 +198,18 @@ export function OverviewTab({
           </CardHeader>
           <CardContent className="flex items-center justify-between pl-0">
             {isLoadingChannels ? (
-              <div className="w-full h-35 flex items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              // Mirrors the populated layout: a legend column beside the
+              // donut, rather than a spinner floating in an empty box.
+              <div className="flex w-full min-w-0 items-center justify-between gap-4">
+                <div className="min-w-0 space-y-3 pl-6">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Skeleton className="h-2.5 w-2.5 shrink-0 rounded-full motion-reduce:animate-none" />
+                      <Skeleton className="h-3.5 w-20 rounded-full motion-reduce:animate-none" />
+                    </div>
+                  ))}
+                </div>
+                <Skeleton className="h-28 w-28 shrink-0 rounded-full motion-reduce:animate-none" />
               </div>
             ) : orderChannels.length > 0 ? (
               <>
