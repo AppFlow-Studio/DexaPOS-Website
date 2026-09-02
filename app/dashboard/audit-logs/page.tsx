@@ -561,15 +561,29 @@ export default function AuditLogsPage() {
     [search, locationId, resourceTypes, actorUserId, dateRange]
   );
 
-  const { data, isLoading, isFetching, refetch } = useAuditLogs(
-    filters,
-    pageSize,
-    (page - 1) * pageSize
-  );
+  const { data, isLoading, isFetching, isPlaceholderData, refetch } =
+    useAuditLogs(filters, pageSize, (page - 1) * pageSize);
 
   const logs = data?.data ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  // `isPlaceholderData` means what is on screen belongs to a DIFFERENT query
+  // key — the tab, filter or page we just navigated away from. Showing those
+  // rows under the new tab's heading claims they belong to it, so they are
+  // replaced by a skeleton. A plain refetch of the same key is not
+  // placeholder data, so manual refresh still keeps its rows visible.
+  const showSkeleton = isLoading || isPlaceholderData;
+
+  // How many placeholder rows to draw. Switching tab or filter tells us
+  // nothing about the new category's size, so a short placeholder is the
+  // honest answer — it never claims a category holds six entries. Paging
+  // within the same filter is the one case we can size accurately: every
+  // page but the last is full, and the last holds the remainder.
+  const isPaging = isPlaceholderData && total > 0 && page > 1;
+  const skeletonRows = isPaging
+    ? Math.max(1, Math.min(pageSize, total - (page - 1) * pageSize))
+    : 3;
 
   // Build unique actor list from loaded logs for the staff dropdown
   const uniqueActors = useMemo(() => {
@@ -623,7 +637,7 @@ export default function AuditLogsPage() {
               {/* "0 entries" while the query is still in flight claims the
                   shop has no activity at all, which is a different fact from
                   "not counted yet". */}
-              {isLoading ? (
+              {showSkeleton ? (
                 <Skeleton className="h-3.5 w-8 rounded-full motion-reduce:animate-none" />
               ) : (
                 total.toLocaleString()
@@ -808,12 +822,8 @@ export default function AuditLogsPage() {
 
         {/* Timeline */}
         <div className="min-w-0 border-t border-border/60 px-4 py-6 sm:px-6">
-          {isLoading ? (
-            // Reached only on a genuine cold load, where no count exists yet.
-            // Tab and filter changes keep the previous entries on screen via
-            // keepPreviousData and show progress on the Refresh control
-            // instead, so a category holding two rows never flashes six.
-            <TimelineSkeleton />
+          {showSkeleton ? (
+            <TimelineSkeleton rows={skeletonRows} />
           ) : logs.length === 0 ? (
             <Empty
               icon={Activity}
@@ -841,7 +851,7 @@ export default function AuditLogsPage() {
           )}
 
           {/* Pagination */}
-          {!isLoading && total > pageSize && (
+          {!showSkeleton && total > pageSize && (
             <div className="mt-6 flex min-w-0 flex-col items-center justify-between gap-3 pt-4 sm:flex-row">
               <p className="min-w-0 text-center text-[0.8125rem] tabular-nums text-muted-foreground sm:text-left">
                 Showing{" "}
