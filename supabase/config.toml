@@ -470,3 +470,8 @@ entrypoint = "./functions/billing-mark-paid/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/billing-suspend-overdue/index.ts"
+
+[functions.billing-retry-due-invoices]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/billing-retry-due-invoices/index.ts"

@@ -3,7 +3,10 @@
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_REPORTING_TIMEZONE } from "@/lib/reporting/date-range";
-import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
+import {
+  getOrderBreakdown,
+  getOrderDisplayTotal,
+} from "@/lib/orders/order-breakdown";
 import {
   Table,
   TableBody,
@@ -134,10 +137,7 @@ function formatTxDate(dateStr: string, timeZone?: string | null): string {
 // charged lane's total (+ tip). Uses the shared breakdown so the table matches
 // what the receipt foots to — never the bare card/list total for cash orders.
 function getDisplayTotal(tx: OrderResponse): number {
-  const b = getOrderBreakdown(tx, tx.order_payments);
-  return b.isMixed && b.primary.amountPaid > 0
-    ? b.primary.amountPaid
-    : b.primary.total + b.primary.tip;
+  return getOrderDisplayTotal(getOrderBreakdown(tx, tx.order_payments));
 }
 
 function getOrderTypeConfig(orderType: string) {

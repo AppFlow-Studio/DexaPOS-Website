@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
@@ -21,6 +21,8 @@ import { OrderStatusWatcher } from "./OrderStatusWatcher";
 import { CallServerCard } from "./CallServerCard";
 import { formatScheduledTime } from "../lib/format-scheduled-time";
 import { getQrOrderStatus } from "../qr-actions";
+
+const subscribeToNothing = () => () => {};
 
 interface OrderTrackingPageProps {
   initialOrder: OrderTrackingData;
@@ -171,6 +173,11 @@ export function OrderTrackingPage({
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [pendingCountdown, setPendingCountdown] = useState<number | null>(null);
   const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
+  const mounted = useSyncExternalStore(
+    subscribeToNothing,
+    () => true,
+    () => false,
+  );
   const storePath = useStorefrontPath(slug);
 
 
@@ -377,7 +384,7 @@ export function OrderTrackingPage({
                   Ready by {estimatedReady.wallClock}
                 </h1>
                 <p className="text-sm" style={{ color: "#6b7280" }}>
-                  {estimatedReady.label} · Order #{order.displayNumber}
+                  {mounted ? `${estimatedReady.label} · ` : ""}Order #{order.displayNumber}
                 </p>
               </>
             ) : order.requestedTime ? (
