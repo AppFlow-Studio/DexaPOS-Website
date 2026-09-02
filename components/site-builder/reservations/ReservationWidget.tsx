@@ -1285,13 +1285,23 @@ function CheckoutView({
           <span>Send me news and offers.</span>
         </label>
 
-        {/* The honeypot: hidden from people, irresistible to bots. */}
+        {/*
+          The honeypot: hidden from people, irresistible to naive bots. The
+          neutral field name and the data-*-ignore attributes keep password
+          managers (1Password, LastPass, Bitwarden, Dashlane) and browser
+          autofill from filling it — autoComplete="off" alone is widely ignored,
+          and an autofilled honeypot reads as a bot and rejects a real guest.
+        */}
         <input
           type="text"
           name={HONEYPOT_FIELD}
           tabIndex={-1}
           autoComplete="off"
           aria-hidden="true"
+          data-1p-ignore="true"
+          data-lpignore="true"
+          data-bwignore="true"
+          data-form-type="other"
           className="absolute left-[-9999px] h-px w-px opacity-0"
         />
 
