@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ECC_RECOVERY_CAPACITY,
   MAX_LOGO_AREA_FRACTION,
+  maxLogoAreaFractionForModules,
   QUIET_ZONE_MODULES,
 } from "@/lib/qr/branding-rules";
 import { buildBrandedQrOptions } from "@/lib/qr/render";
@@ -139,5 +140,53 @@ describe("buildBrandedQrOptions", () => {
 
     expect(styling.dotsOptions?.color).toBe("#111827");
     expect(branding.warnings).not.toHaveLength(0);
+  });
+});
+
+/**
+ * A flat logo cap is not safe across QR versions.
+ *
+ * Measured on real output: a table code (~184-char signed-token URL, version
+ * 14) decoded with a 25%-area logo; the first marketing code (~59-char
+ * short-code URL, version 6) did not decode at any scale with the same
+ * setting. Error correction is applied per interleaved block, and a low
+ * version has few blocks, so one solid centre square can exhaust a whole
+ * block's budget.
+ */
+describe("logo area is capped by code size, not a flat percentage", () => {
+  it("gives a low-version code a smaller logo than a high-version one", () => {
+    // A marketing URL and a table URL, at the lengths they actually have.
+    const marketing = "https://joes-coffee.dexapos.com/m/GP30G0B9KV";
+    const table = `https://joes-coffee.dexapos.com/t/${"a".repeat(150)}`;
+
+    const small = buildBrandedQrOptions({ value: marketing, logoUrl: LOGO_URL });
+    const large = buildBrandedQrOptions({ value: table, logoUrl: LOGO_URL });
+
+    expect(small.styling.imageOptions?.imageSize).toBeLessThan(
+      large.styling.imageOptions?.imageSize as number
+    );
+  });
+
+  it("never exceeds the ticket's 25% ceiling at any size", () => {
+    for (const modules of [21, 41, 45, 65, 73, 177]) {
+      expect(maxLogoAreaFractionForModules(modules)).toBeLessThanOrEqual(
+        MAX_LOGO_AREA_FRACTION
+      );
+    }
+  });
+
+  it("stays under the measured failure point for a version 6 code", () => {
+    // 41 modules failed to decode at 20% and survived at 16%.
+    expect(maxLogoAreaFractionForModules(41)).toBeLessThan(0.2);
+  });
+
+  it("stays under the measured failure point for a version 14 code", () => {
+    // 73 modules failed at 25% and survived at 20%.
+    expect(maxLogoAreaFractionForModules(73)).toBeLessThan(0.25);
+  });
+
+  it("falls back to the most conservative cap for a nonsense module count", () => {
+    expect(maxLogoAreaFractionForModules(0)).toBe(0.14);
+    expect(maxLogoAreaFractionForModules(Number.NaN)).toBe(0.14);
   });
 });

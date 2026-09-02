@@ -31,8 +31,50 @@ export const ECC_RECOVERY_CAPACITY: Record<QrErrorCorrectionLevel, number> = {
 /**
  * Hard cap from the ticket: the logo may occlude at most 25% of the QR's area.
  * Clamped in code — never left to the merchant.
+ *
+ * This is a ceiling, not a target. `maxLogoAreaFractionForModules` lowers it
+ * further for small codes, which the ticket's flat number does not survive.
  */
 export const MAX_LOGO_AREA_FRACTION = 0.25;
+
+/**
+ * The safe logo area for a code of `moduleCount` modules.
+ *
+ * **A flat 25% is not safe across QR versions**, and this was measured, not
+ * reasoned about. A table code encodes a ~184-character signed-token URL and
+ * comes out at version 14 (73×73). A marketing code encodes a ~59-character
+ * short-code URL and comes out at **version 6 (41×41)**. The same centred logo
+ * that leaves a version 14 code readable makes a version 6 code undecodable:
+ * the first branded marketing QR produced by this codebase failed to decode at
+ * every scale from 1200px down to 300px, while the equivalent table code
+ * decoded at all of them.
+ *
+ * The reason is block structure, not area. Error correction is applied per
+ * interleaved block; a low version has few blocks, so one contiguous centre
+ * square can exhaust a whole block's recovery budget while the same *fraction*
+ * spread over a high version's many blocks stays inside it. Reed–Solomon
+ * recovers scattered damage far better than a solid hole.
+ *
+ * Thresholds below sit under the measured failure points with margin:
+ *
+ * | modules | measured OK | measured FAIL | shipped |
+ * |---------|-------------|---------------|---------|
+ * | 41 (v6) | 16%         | 20%           | 14%     |
+ * | 73 (v14)| 20%         | 25%           | 22%     |
+ *
+ * Tune only against the printed-scan matrix, and re-measure both a short
+ * marketing URL and a long table URL when you do — they are different codes.
+ */
+export function maxLogoAreaFractionForModules(moduleCount: number): number {
+  if (!Number.isFinite(moduleCount) || moduleCount <= 0) {
+    // Nothing to reason about; take the most conservative option.
+    return 0.14;
+  }
+
+  if (moduleCount <= 45) return 0.14; // version 1–7
+  if (moduleCount <= 65) return 0.18; // version 8–12
+  return 0.22; // version 13 and up
+}
 
 /** Quiet zone required by the QR spec, in modules, on every side. */
 export const QUIET_ZONE_MODULES = 4;

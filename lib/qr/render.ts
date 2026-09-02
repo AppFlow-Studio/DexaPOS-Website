@@ -16,12 +16,13 @@ import type { Options as QrCodeStylingOptions } from "qr-code-styling";
 
 import {
   areaFractionToImageSize,
-  MAX_LOGO_AREA_FRACTION,
+  maxLogoAreaFractionForModules,
   quietZoneMarginPx,
   resolveQrBranding,
   type ResolveQrBrandingInput,
   type ResolvedQrBranding,
 } from "./branding-rules";
+import { prepareLogoForQr } from "./logo-plate";
 
 export const DEFAULT_QR_PIXEL_SIZE = 1200;
 
@@ -84,8 +85,13 @@ function buildStylingOptions(
     errorCorrectionLevel: branding.errorCorrectionLevel,
   }).modules.size;
 
+  // The cap depends on how big this particular code is, not just on the
+  // ticket's flat 25%. A short marketing URL produces a low-version code whose
+  // error correction cannot survive a 25% centre logo — measured, see
+  // `maxLogoAreaFractionForModules`. `moduleCount` above is already the grid
+  // this payload will actually use.
   const imageSize = areaFractionToImageSize(
-    MAX_LOGO_AREA_FRACTION,
+    maxLogoAreaFractionForModules(moduleCount),
     branding.errorCorrectionLevel
   );
 
@@ -143,43 +149,208 @@ function buildStylingOptions(
   };
 }
 
+/**
+ * Build one renderer instance, with the logo plated first.
+ *
+ * The library clears a rectangle for the logo but paints nothing into it, and
+ * sizes that rectangle from the image file rather than from the ink inside it
+ * — so a transparent logo comes out as a bare hole. `prepareLogoForQr` hands
+ * back an image that already carries its own opaque background, which is the
+ * shape the library has always rendered correctly. See `logo-plate.ts`.
+ */
 async function createStyledQr(options: BrandedQrOptions) {
   const { styling, branding } = buildBrandedQrOptions(options);
   const QRCodeStyling = await loadQrCodeStyling();
 
-  return { instance: new QRCodeStyling(styling), branding };
+  if (!branding.logoUrl) {
+    return { instance: new QRCodeStyling(styling), branding };
+  }
+
+  const prepared = await prepareLogoForQr({
+    logoUrl: branding.logoUrl,
+    // The plate takes the QR's own background colour so it merges with the
+    // modules the library clears around it, rather than reading as a card
+    // pasted over the code.
+    plateColor: branding.backgroundColor,
+    // Unless that would hide the logo, in which case a badge in the merchant's
+    // own module colour beats an empty square.
+    fallbackPlateColor: branding.moduleColor,
+  });
+
+  const warnings = [...branding.warnings];
+
+  if (prepared.usedFallbackPlate) warnings.push(LOGO_BADGED_NOTICE);
+
+  if (prepared.outcome === "blank" || prepared.outcome === "unavailable") {
+    warnings.push(
+      prepared.outcome === "blank"
+        ? LOGO_BLANK_WARNING
+        : LOGO_UNAVAILABLE_WARNING
+    );
+
+    return {
+      instance: new QRCodeStyling({ ...styling, image: undefined }),
+      // Reporting no logo here also leaves the deadline below unarmed, which
+      // is correct: there is no image left that could hang.
+      branding: { ...branding, logoUrl: null, warnings },
+    };
+  }
+
+  return {
+    instance: new QRCodeStyling(
+      prepared.dataUrl
+        ? {
+            ...styling,
+            image: prepared.dataUrl,
+            imageOptions: {
+              ...styling.imageOptions,
+              // A shaped plate covers exactly what it needs to. Blanking a
+              // rectangle of modules on top of it is what made a transparent
+              // logo look like it was sitting on a panel, and it occludes more
+              // of the code than the outline does.
+              hideBackgroundDots: !prepared.shapedPlate,
+            },
+          }
+        : styling
+    ),
+    branding: { ...branding, warnings },
+  };
+}
+
+type StyledQrInstance = Awaited<ReturnType<typeof createStyledQr>>["instance"];
+
+/**
+ * How long the logo gets to load before the code is rendered without it.
+ *
+ * `qr-code-styling` installs no error handler anywhere on its browser path.
+ * Verified against the bundled source: zero occurrences of `onerror`,
+ * `onabort` or `ontimeout`. It is `img.onload = …; img.src = url`, and the XHR
+ * that inlines the logo likewise sets only `onload`. (The Node/`nodeCanvas`
+ * branch does have a `.catch`; the browser branch, the one we use, does not.)
+ *
+ * So a `logo_url` that 404s, has been deleted from the bucket, or is served by
+ * a host that fails CORS does not reject — it never settles. That is not an
+ * exception a `.catch` can see, it is a hang: the preview spins forever and
+ * every export awaits with no toast, no error and no completion. The ticket
+ * forbids an error state for a missing logo; no state at all is worse.
+ *
+ * Six seconds clears a cold CDN fetch with room to spare and still returns
+ * inside a merchant's patience.
+ */
+export const LOGO_LOAD_TIMEOUT_MS = 6_000;
+
+const LOGO_UNAVAILABLE_WARNING =
+  "The logo could not be loaded, so this code was rendered without it. Check the logo in Online Store settings.";
+
+const LOGO_BLANK_WARNING =
+  "This store's logo image is empty, so the code was rendered without it. Upload a logo with visible artwork in Online Store settings.";
+
+/**
+ * A pale logo was rescued by painting its plate in the module colour.
+ *
+ * Not a failure — the code looks better for it — but the merchant is getting a
+ * coloured badge they did not ask for, and finding out from their own printed
+ * table tents would be worse than being told here.
+ */
+const LOGO_BADGED_NOTICE =
+  "This store's logo is too pale to sit on the QR background, so it was placed on a badge in the QR colour to keep it visible.";
+
+const TIMED_OUT = Symbol("qr-logo-timeout");
+
+/**
+ * Run one render, and if a logo is in play, hold it to a deadline.
+ *
+ * On expiry the code is re-rendered with no logo and the drop is reported
+ * through the same `warnings` channel every other fallback uses — the
+ * degrade-and-say-so path already exists, this failure mode simply never
+ * reached it.
+ */
+async function renderWithLogoDeadline<T>(
+  options: BrandedQrOptions,
+  extract: (instance: StyledQrInstance) => Promise<T | null>,
+  formatLabel: string
+): Promise<BrandedQrResult<T>> {
+  const { instance, branding } = await createStyledQr(options);
+
+  // Without a logo there is nothing that can hang, so don't arm a timer that
+  // could only ever fire spuriously on a slow machine.
+  if (!branding.logoUrl) {
+    return {
+      data: await required(extract(instance), formatLabel),
+      warnings: branding.warnings,
+      branding,
+    };
+  }
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<typeof TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(TIMED_OUT), LOGO_LOAD_TIMEOUT_MS);
+  });
+
+  let raced: T | null | typeof TIMED_OUT;
+  try {
+    raced = await Promise.race([extract(instance), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (raced !== TIMED_OUT) {
+    return {
+      data: await required(Promise.resolve(raced), formatLabel),
+      warnings: branding.warnings,
+      branding,
+    };
+  }
+
+  // The original render is abandoned, not cancelled — the library gives us no
+  // handle to cancel with. It resolves into nothing if the image ever arrives.
+  const fallback = await createStyledQr({ ...options, logoUrl: null });
+
+  return {
+    data: await required(extract(fallback.instance), formatLabel),
+    warnings: [...fallback.branding.warnings, LOGO_UNAVAILABLE_WARNING],
+    branding: fallback.branding,
+  };
+}
+
+async function required<T>(
+  work: Promise<T | null>,
+  formatLabel: string
+): Promise<T> {
+  const data = await work;
+
+  if (!data) {
+    throw new Error(`Failed to render the QR code as ${formatLabel}.`);
+  }
+
+  return data;
 }
 
 /** Branded QR as an SVG string. The logo is inlined, so the file stands alone. */
 export async function renderBrandedQrSvg(
   options: BrandedQrOptions
 ): Promise<BrandedQrResult<string>> {
-  const { instance, branding } = await createStyledQr(options);
-  const blob = await instance.getRawData("svg");
+  const { data, warnings, branding } = await renderWithLogoDeadline(
+    options,
+    async (instance) => {
+      const blob = await instance.getRawData("svg");
+      return blob ? await blobToText(blob as Blob) : null;
+    },
+    "SVG"
+  );
 
-  if (!blob) {
-    throw new Error("Failed to render the QR code as SVG.");
-  }
-
-  return {
-    data: await blobToText(blob as Blob),
-    warnings: branding.warnings,
-    branding,
-  };
+  return { data, warnings, branding };
 }
 
 /** Branded QR as a PNG blob. */
 export async function renderBrandedQrPngBlob(
   options: BrandedQrOptions
 ): Promise<BrandedQrResult<Blob>> {
-  const { instance, branding } = await createStyledQr(options);
-  const blob = await instance.getRawData("png");
-
-  if (!blob) {
-    throw new Error("Failed to render the QR code as PNG.");
-  }
-
-  return { data: blob as Blob, warnings: branding.warnings, branding };
+  return renderWithLogoDeadline(
+    options,
+    async (instance) => (await instance.getRawData("png")) as Blob | null,
+    "PNG"
+  );
 }
 
 /** Branded QR as a PNG data URL — the shape `jsPDF.addImage` accepts. */
