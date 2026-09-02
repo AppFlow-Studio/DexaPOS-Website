@@ -55,6 +55,57 @@ describe("page skeleton gate — cached data stays visible", () => {
   });
 });
 
+describe("page skeleton gate — the three identity states", () => {
+  /**
+   * The orders gate got this wrong twice, in opposite directions:
+   *
+   *   `isLoadingOrders || isLoadingStats` alone  -> stranded the page forever,
+   *      because both queries are `enabled: !!clerkOrgId` and a disabled query
+   *      reports isLoading: true indefinitely in React Query v5.
+   *
+   *   `clerkOrgId && (...)` alone -> flashed an empty table and 0 stats while
+   *      the org id was still being fetched, because the guard short-circuits
+   *      to false and lets the page render with empty query data.
+   *
+   * Identity has THREE states, and each needs a different answer.
+   */
+  function gate(
+    identity: { isLoading: boolean; orgId: string },
+    data: { isLoading: boolean }[],
+  ): boolean {
+    return (
+      identity.isLoading ||
+      (!!identity.orgId && data.some((q) => q.isLoading))
+    );
+  }
+
+  const cold = { isLoading: true };
+
+  it("identity still resolving → skeleton, not an empty page", () => {
+    // The regression: data queries are disabled and their data is empty, so
+    // rendering here shows an empty table and 0 stats for a beat.
+    expect(gate({ isLoading: true, orgId: "" }, [cold, cold])).toBe(true);
+  });
+
+  it("identity resolved but absent → fall through, never stranded", () => {
+    expect(gate({ isLoading: false, orgId: "" }, [cold, cold])).toBe(false);
+  });
+
+  it("identity resolved and present → skeleton only while data is in flight", () => {
+    expect(gate({ isLoading: false, orgId: "org_1" }, [cold, cold])).toBe(true);
+    expect(gate({ isLoading: false, orgId: "org_1" }, [settled, settled])).toBe(
+      false,
+    );
+  });
+
+  it("never renders content before identity is known", () => {
+    // The invariant both bugs violated: while identity is unknown, the page
+    // must not be showing its populated view.
+    const identityUnknown = { isLoading: true, orgId: "" };
+    expect(gate(identityUnknown, [settled, settled])).toBe(true);
+  });
+});
+
 describe("page skeleton gate — identity must gate the gate", () => {
   /**
    * Regression guard for a real bug: /dashboard/orders gated on
