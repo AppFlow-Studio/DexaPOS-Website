@@ -359,9 +359,10 @@ export function TransactionVolumeCard({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-3 border-t">
-          <div className="flex items-center gap-3">
+        {/* Footer. Stacks under sm: side by side, the count text is squeezed
+            into a narrow column at 360px and the link crowds it. */}
+        <div className="flex flex-col gap-3 pt-3 border-t sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
             <span className="text-xs text-muted-foreground">
               Showing {pagedRows.length} payment method{pagedRows.length !== 1 ? "s" : ""}
             </span>

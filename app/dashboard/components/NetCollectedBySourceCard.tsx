@@ -112,6 +112,12 @@ export function NetCollectedBySourceCard({
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {/* Three money/label columns do not fit 360px, so the table scrolls
+            inside its own container rather than wrapping headers onto two
+            lines or clipping at the card edge. min-w keeps the columns
+            aligned once scrolling starts. */}
+        <div className="-mx-1 overflow-x-auto px-1">
+          <div className="min-w-[22rem]">
         {/* Table Header */}
         <div className="grid grid-cols-3 gap-4 pb-2 border-b text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <span>Source</span>
@@ -147,11 +153,13 @@ export function NetCollectedBySourceCard({
                     isTop && "bg-blue-50/50 dark:bg-blue-950/10 -mx-3 px-3 rounded-lg"
                   )}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-muted/60">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    {/* Decorative only — the source name says the same thing,
+                        and the badge costs ~38px the label needs on phones. */}
+                    <div className="hidden sm:flex items-center justify-center w-7 h-7 shrink-0 rounded-lg bg-muted/60">
                       {icon}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="font-medium">{row.source}</span>
                       {desc && (
                         <p className="text-[10px] text-muted-foreground leading-tight">
@@ -189,6 +197,8 @@ export function NetCollectedBySourceCard({
             </span>
           </div>
         )}
+          </div>
+        </div>
 
         {/* Insight callout */}
         {topSource && rows.length > 1 && (
