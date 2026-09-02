@@ -52,7 +52,7 @@ function TaxableRevenueSkeleton() {
             min-w-[640px] + 6-column grid. The previous free-form flex row
             was ~416px wide with no scroll container, so it clipped at the
             card edge on phones and did not match the layout it stood in for. */}
-        <div className="overflow-x-auto">
+        <div className="-mx-6 overflow-x-auto px-6">
           <div className="min-w-[640px]">
             <div className="grid grid-cols-6 gap-3 pb-2 border-b">
               {Array.from({ length: 6 }).map((_, index) => (
@@ -118,7 +118,7 @@ export function TaxableRevenueByTenderCard({
         ) : (
           <>
             {/* Table Header */}
-            <div className="overflow-x-auto">
+            <div className="-mx-6 overflow-x-auto px-6">
               <div className="min-w-[640px]">
                 <div className="grid grid-cols-6 gap-3 pb-2 border-b text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <span>Tax Name</span>

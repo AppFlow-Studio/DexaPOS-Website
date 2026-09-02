@@ -63,7 +63,7 @@ function NetCollectedBySourceSkeleton() {
       <CardContent>
         {/* Mirrors the real table: same scroll container, min-width and
             3-column grid, so the rows land without the layout shifting. */}
-        <div className="-mx-1 overflow-x-auto px-1">
+        <div className="-mx-6 overflow-x-auto px-6">
           <div className="min-w-[22rem]">
             <div className="grid grid-cols-3 gap-4 pb-2 border-b">
               {Array.from({ length: 3 }).map((_, index) => (
@@ -128,7 +128,7 @@ export function NetCollectedBySourceCard({
             inside its own container rather than wrapping headers onto two
             lines or clipping at the card edge. min-w keeps the columns
             aligned once scrolling starts. */}
-        <div className="-mx-1 overflow-x-auto px-1">
+        <div className="-mx-6 overflow-x-auto px-6">
           <div className="min-w-[22rem]">
         {/* Table Header */}
         <div className="grid grid-cols-3 gap-4 pb-2 border-b text-xs font-semibold uppercase tracking-wider text-muted-foreground">

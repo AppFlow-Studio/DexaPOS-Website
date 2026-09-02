@@ -424,14 +424,16 @@ function TreemapSkeleton() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
+        {/* Stacks under sm: the control group is a fixed 164px, which does
+            not fit beside the title at 360px. */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <Skeleton className="h-5 w-52 max-w-full" />
             <Skeleton className="h-3 w-72 max-w-full mt-2" />
           </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-9 w-32" />
-            <Skeleton className="h-9 w-9" />
+          <div className="flex shrink-0 gap-2">
+            <Skeleton className="h-9 w-32 max-w-full" />
+            <Skeleton className="h-9 w-9 shrink-0" />
           </div>
         </div>
       </CardHeader>
