@@ -858,17 +858,20 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             ))}
           </TableHeader>
           <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-                  </div>
-                </TableCell>
-              </TableRow>
+            {/* Only when there is nothing to show: keying on `isLoading` alone
+                replaced a populated table with a spinner on every refetch.
+                Skeleton rows keep the column geometry, so real rows land
+                without the body resizing — matching the mobile cards below. */}
+            {isLoading && !table.getRowModel().rows?.length ? (
+              Array.from({ length: 8 }).map((_, index) => (
+                <TableRow key={`loading-${index}`} className="border-0">
+                  {columns.map((column, colIndex) => (
+                    <TableCell key={`${column.id ?? colIndex}-${colIndex}`}>
+                      <div className="h-4 w-full max-w-28 animate-pulse rounded-full bg-muted/70 motion-reduce:animate-none" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
             ) : table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
