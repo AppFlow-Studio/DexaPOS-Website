@@ -78,39 +78,39 @@ export function OverviewTab({
           title="LAST VISIT"
           value={lastVisitRelative}
           subtitle={lastVisitAbsolute ?? undefined}
-          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
+          className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none sm:p-6 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card-content]]:px-0"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="TOTAL VISITS"
           value={String(totalVisits)}
           trend={visitTrendLabel ? { direction: visitTrendDir, label: visitTrendLabel } : undefined}
-          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
+          className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none sm:p-6 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card-content]]:px-0"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="LIFETIME SPEND"
           value={`$${lifetimeSpend.toLocaleString()}`}
           badge={percentileBadge ?? undefined}
-          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
+          className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none sm:p-6 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card-content]]:px-0"
           isLoading={isLoadingProfile || isLoadingSpend}
         />
         <MetricCard
           title="AVG. SPEND"
           value={`$${avgSpend.toFixed(2)}`}
-          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
+          className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none sm:p-6 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card-content]]:px-0"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="AVG. TIP"
           value={`${avgTip.toFixed(1)}%`}
-          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
+          className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none sm:p-6 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card-content]]:px-0"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="CUSTOMER SINCE"
           value={customerSince ?? "—"}
-          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
+          className="min-w-0 rounded-2xl border-0 bg-muted/60 p-3 shadow-none sm:p-6 [&_[data-slot=card-header]]:px-0 [&_[data-slot=card-content]]:px-0"
           isLoading={isLoadingProfile}
         />
       </div>
