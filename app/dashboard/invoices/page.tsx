@@ -199,12 +199,20 @@ export default function InvoicesPage() {
 
   const {
     data: invoiceResult,
-    isLoading,
+    isLoading: isInvoicesLoading,
     isFetching,
+    isPlaceholderData,
   } = useInvoices(
     activeTab === "all" ? null : activeTab,
     { page, pageSize },
   );
+
+  // The query uses keepPreviousData, so switching status tab leaves the
+  // PREVIOUS filter's invoices on screen under the new tab. Those rows are
+  // not what the tab claims to show, so they are replaced by the skeleton.
+  // A plain refetch of the same key is not placeholder data, so manual
+  // refresh still keeps its rows visible.
+  const isLoading = isInvoicesLoading || isPlaceholderData;
   const invoices = invoiceResult?.data ?? [];
   const pagination =
     invoiceResult?.pagination ?? buildPaginationMeta(0, { page, pageSize });
