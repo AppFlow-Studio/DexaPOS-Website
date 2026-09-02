@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 export type DataPageSkeletonVariant =
   | 'analytics'
   | 'orders'
+  | 'report'
   | 'catalog'
   | 'table'
   | 'detail'
@@ -21,6 +22,22 @@ type DataPageSkeletonProps = {
   /** Renders the page title/subtitle/action block. HQ detail routes that own
    * their own breadcrumb pass `false` and get the breadcrumb line instead. */
   showHeader?: boolean
+  /**
+   * `report` only. Report pages share a KPI row but diverge below it, so each
+   * route states its own shape rather than inheriting a generic one that
+   * promises panels it will never render.
+   */
+  report?: {
+    /** KPI tiles in the stat row. Every report page uses `StatRow columns={4}`,
+     * so 4 is the norm; pass the real count where it differs. */
+    stats?: number
+    /** Draw the pill tab strip above the body. */
+    tabs?: number
+    /** What fills the space under the KPI row. */
+    body?: 'table' | 'chart' | 'panels'
+    /** `panels` only: how many. */
+    panels?: number
+  }
 }
 
 function LoadingBlock({ className }: { className?: string }) {
@@ -46,11 +63,13 @@ function HeaderSkeleton() {
   )
 }
 
-function StatSkeletons() {
+function StatSkeletons({ count = 4 }: { count?: number }) {
+  if (count <= 0) return null
+
   return (
     <Panel>
       <div className="grid grid-cols-2 gap-x-5 gap-y-6 px-4 py-6 sm:px-6 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
+        {Array.from({ length: count }).map((_, index) => (
           <div key={index} className="min-w-0 space-y-3">
             <LoadingBlock className="h-3 w-20 rounded-full" />
             <LoadingBlock className="h-8 w-28 max-w-full" />
@@ -227,6 +246,77 @@ function OrdersSkeleton() {
 }
 
 /**
+ * Report pages: a KPI row, then whatever that particular report actually
+ * shows. Deliberately configurable — the reports differ enough that a single
+ * fixed shape would promise a chart to a page that renders a table, or four
+ * summary panels to one that renders none.
+ */
+function ReportSkeleton({
+  stats = 4,
+  tabs = 0,
+  body = 'table',
+  panels = 4,
+}: NonNullable<DataPageSkeletonProps['report']> = {}) {
+  return (
+    <>
+      <StatSkeletons count={stats} />
+
+      {tabs > 0 && (
+        <div className="flex gap-2 overflow-x-auto rounded-full bg-muted/40 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {Array.from({ length: tabs }).map((_, index) => (
+            <LoadingBlock key={index} className="h-9 w-28 shrink-0 rounded-full" />
+          ))}
+        </div>
+      )}
+
+      {body === 'chart' && (
+        <Panel padded>
+          <div className="space-y-5">
+            <LoadingBlock className="h-5 w-44 max-w-full" />
+            <LoadingBlock className="h-64 w-full" />
+          </div>
+        </Panel>
+      )}
+
+      {body === 'table' && (
+        <Panel padded>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <LoadingBlock className="h-5 w-40 max-w-full" />
+              <LoadingBlock className="h-9 w-28 rounded-full" />
+            </div>
+            <div className="min-w-0 space-y-2">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <LoadingBlock key={index} className="h-10 w-full" />
+              ))}
+            </div>
+          </div>
+        </Panel>
+      )}
+
+      {body === 'panels' && (
+        <div className="grid min-w-0 gap-4 md:grid-cols-2">
+          {Array.from({ length: panels }).map((_, index) => (
+            <Panel key={index} padded className="space-y-5">
+              <LoadingBlock className="h-5 w-36 max-w-full" />
+              {Array.from({ length: 4 }).map((__, rowIndex) => (
+                <div
+                  key={rowIndex}
+                  className="flex items-center justify-between gap-4"
+                >
+                  <LoadingBlock className="h-4 w-28 max-w-full rounded-full" />
+                  <LoadingBlock className="h-5 w-20 shrink-0 rounded-full" />
+                </div>
+              ))}
+            </Panel>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
+/**
  * A filter bar over a row-based list. Used by routes whose payload is a table
  * or a stack of record rows rather than a media grid.
  */
@@ -319,7 +409,10 @@ function DetailSkeleton() {
   )
 }
 
-const VARIANT_BODIES: Record<DataPageSkeletonVariant, () => React.JSX.Element> = {
+const VARIANT_BODIES: Record<
+  Exclude<DataPageSkeletonVariant, 'report'>,
+  () => React.JSX.Element
+> = {
   analytics: AnalyticsSkeleton,
   orders: OrdersSkeleton,
   catalog: CatalogSkeleton,
@@ -334,8 +427,12 @@ export function DataPageSkeleton({
   // `detail` opens with its own breadcrumb + identity header, so the generic
   // title block would be a second, duplicate header.
   showHeader = variant !== 'detail',
+  report,
 }: DataPageSkeletonProps) {
-  const Body = VARIANT_BODIES[variant]
+  const Body =
+    variant === 'report'
+      ? () => <ReportSkeleton {...(report ?? {})} />
+      : VARIANT_BODIES[variant]
 
   const content = (
     <div

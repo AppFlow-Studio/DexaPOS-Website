@@ -88,6 +88,63 @@ describe("DataPageSkeleton — variant geometry", () => {
     expect(new Set(rendered).size).toBe(VARIANTS.length);
   });
 
+  it("report draws the stat count each route declares, not a default", () => {
+    // Report pages differ: some open with four KPI tiles, online-ordering
+    // has six, and comparison has none because its controls come first.
+    // A shared default would promise tiles a page never renders.
+    const four = renderToString(
+      <DataPageSkeleton variant="report" label="Loading" report={{ stats: 4 }} />,
+    );
+    const six = renderToString(
+      <DataPageSkeleton variant="report" label="Loading" report={{ stats: 6 }} />,
+    );
+    const none = renderToString(
+      <DataPageSkeleton variant="report" label="Loading" report={{ stats: 0 }} />,
+    );
+
+    const tiles = (html: string) =>
+      (html.match(/h-3 w-20 rounded-full/g) ?? []).length;
+
+    expect(tiles(four)).toBe(4);
+    expect(tiles(six)).toBe(6);
+    expect(tiles(none)).toBe(0);
+  });
+
+  it("report draws only the body its route declares", () => {
+    const table = renderToString(
+      <DataPageSkeleton
+        variant="report"
+        label="Loading"
+        report={{ body: "table" }}
+      />,
+    );
+    const panels = renderToString(
+      <DataPageSkeleton
+        variant="report"
+        label="Loading"
+        report={{ body: "panels", panels: 2 }}
+      />,
+    );
+
+    // A table body must not emit the two-column summary panel grid, and a
+    // panels body must emit exactly the count asked for.
+    expect(table).not.toContain("md:grid-cols-2");
+    expect(panels).toContain("md:grid-cols-2");
+    expect((panels.match(/h-5 w-36 max-w-full/g) ?? []).length).toBe(2);
+  });
+
+  it("report omits the tab strip when a route has no tabs", () => {
+    const withTabs = renderToString(
+      <DataPageSkeleton variant="report" label="Loading" report={{ tabs: 4 }} />,
+    );
+    const without = renderToString(
+      <DataPageSkeleton variant="report" label="Loading" report={{ tabs: 0 }} />,
+    );
+
+    expect((withTabs.match(/h-9 w-28 shrink-0/g) ?? []).length).toBe(4);
+    expect(without).not.toContain("h-9 w-28 shrink-0");
+  });
+
   it("orders draws exactly the page's two containers", () => {
     // /dashboard/orders is an Overview panel (range pills + 5 KPI tiles with
     // sparklines) and an All Orders panel (heading, filter chips, table rows).

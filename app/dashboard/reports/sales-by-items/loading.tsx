@@ -5,8 +5,8 @@ export default function RouteLoading() {
     <DataPageSkeleton
       variant="report"
       shell="plain"
-      label="Loading the financial report"
-      report={{ stats: 4, tabs: 5, body: 'table' }}
+      label="Loading sales by item"
+      report={{ stats: 4, body: 'table' }}
     />
   )
 }

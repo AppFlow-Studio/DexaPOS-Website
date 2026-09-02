@@ -301,10 +301,12 @@ export function OverviewTab({
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-start gap-4 p-4 bg-muted/20 rounded-lg">
-                <div className="h-10 w-10 bg-muted animate-pulse rounded-lg shrink-0" />
-                <div className="flex-1 space-y-2 min-w-0">
-                  <div className="h-4 w-40 bg-muted animate-pulse rounded" />
-                  <div className="h-3 w-56 bg-muted animate-pulse rounded" />
+                <div className="h-10 w-10 bg-muted animate-pulse rounded-lg shrink-0 motion-reduce:animate-none" />
+                {/* Relative widths: w-40 and w-56 are 160px and 224px, which
+                    overflow this panel on a phone however narrow the track. */}
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-4 w-3/5 max-w-40 bg-muted animate-pulse rounded motion-reduce:animate-none" />
+                  <div className="h-3 w-4/5 max-w-56 bg-muted animate-pulse rounded motion-reduce:animate-none" />
                 </div>
               </div>
             ))}

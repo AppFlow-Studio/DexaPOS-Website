@@ -2,6 +2,11 @@ import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleto
 
 export default function RouteLoading() {
   return (
-    <DataPageSkeleton variant="analytics" shell="plain" label="Loading the location comparison" />
+    <DataPageSkeleton
+      variant="report"
+      shell="plain"
+      label="Loading the location comparison"
+      report={{ stats: 0, body: 'panels', panels: 4 }}
+    />
   )
 }
