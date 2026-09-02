@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { resolveWebsiteOrgId } from "@/lib/site-builder/request-org";
 import { notFound, redirect } from "next/navigation";
 
 import { ListSubmissions } from "@/app/dashboard/website/actions/forms";
@@ -16,7 +16,7 @@ export default async function FormSubmissionsRoute({
   params: Promise<{ formId: string }>;
   searchParams: Promise<{ location?: string }>;
 }) {
-  const { orgId } = await auth();
+  const orgId = await resolveWebsiteOrgId();
   if (!orgId) redirect("/sign-in");
 
   const { formId } = await params;

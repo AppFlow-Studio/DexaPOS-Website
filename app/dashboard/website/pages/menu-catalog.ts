@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { resolveWebsiteOrgId } from "@/lib/site-builder/request-org";
 
 import { getResolverSources } from "@/lib/site-builder/request-scope";
 import { loadSiteContext, resolveEditorPricingLocation } from "@/lib/site-builder/site-context";
@@ -74,7 +74,7 @@ export async function loadMenuCatalog(
    */
   pageLocationId: string | null = null,
 ): Promise<MenuCatalog> {
-  const { orgId } = await auth();
+  const orgId = await resolveWebsiteOrgId();
   if (!orgId) return { ...EMPTY, error: "Not signed in." };
 
   const site = await loadSiteContext(orgId, locationId ?? undefined);

@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { resolveWebsiteOrgId } from "@/lib/site-builder/request-org";
 
 import PageRenderer, { SiteChrome } from "@/components/site-builder/PageRenderer";
 import { collectAssetIds, collectBindings } from "@/lib/site-builder/bindings/collect";
@@ -60,7 +60,7 @@ export async function renderCanvas(
    */
   pageLocationId: string | null = null,
 ) {
-  const { orgId } = await auth();
+  const orgId = await resolveWebsiteOrgId();
   if (!orgId) return null;
 
   // When the builder page awaits this action in process, these two are already

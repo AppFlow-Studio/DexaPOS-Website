@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { resolveWebsiteOrgId } from "@/lib/site-builder/request-org";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -22,7 +22,7 @@ export default async function NewPageRoute({
 }: {
   searchParams: Promise<{ location?: string }>;
 }) {
-  const { orgId } = await auth();
+  const orgId = await resolveWebsiteOrgId();
   if (!orgId) redirect("/sign-in");
 
   const params = await searchParams;
