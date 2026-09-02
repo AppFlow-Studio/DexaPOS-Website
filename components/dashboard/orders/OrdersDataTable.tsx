@@ -722,8 +722,13 @@ export function OrdersDataTable({
                         {isLoading && !table.getRowModel().rows?.length ? (
                             Array.from({ length: 8 }).map((_, index) => (
                                 <TableRow key={`loading-${index}`} className="border-0">
-                                    {visibleColumns.map((column, colIndex) => (
-                                        <TableCell key={`${column.id}-${colIndex}`}>
+                                    {/* getVisibleLeafColumns, not visibleColumns:
+                                        the latter is the full column definition
+                                        list and ignores the Columns filter, so
+                                        the skeleton drew cells for columns the
+                                        header was not rendering. */}
+                                    {table.getVisibleLeafColumns().map((column) => (
+                                        <TableCell key={column.id}>
                                             <div className="h-4 w-full max-w-28 animate-pulse rounded-full bg-muted/70 motion-reduce:animate-none" />
                                         </TableCell>
                                     ))}

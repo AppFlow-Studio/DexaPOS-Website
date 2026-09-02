@@ -865,8 +865,10 @@ export function StaffDataTable({ data, isLoading }: StaffDataTableProps) {
             {isLoading && !table.getRowModel().rows?.length ? (
               Array.from({ length: 8 }).map((_, index) => (
                 <TableRow key={`loading-${index}`} className="border-0">
-                  {columns.map((column, colIndex) => (
-                    <TableCell key={`${column.id ?? colIndex}-${colIndex}`}>
+                  {/* Visible leaf columns, so a hidden column does not get a
+                      phantom skeleton cell the header never renders. */}
+                  {table.getVisibleLeafColumns().map((column) => (
+                    <TableCell key={column.id}>
                       <div className="h-4 w-full max-w-28 animate-pulse rounded-full bg-muted/70 motion-reduce:animate-none" />
                     </TableCell>
                   ))}
