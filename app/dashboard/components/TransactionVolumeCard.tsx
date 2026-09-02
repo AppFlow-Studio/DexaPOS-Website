@@ -102,15 +102,18 @@ function TransactionVolumeSkeleton() {
       <CardContent>
         <div className="space-y-4">
           <Skeleton className="h-8 w-full rounded-full" />
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex justify-between items-center py-3">
-                <Skeleton className="h-4 w-32" />
-                <div className="flex gap-8">
-                  <Skeleton className="h-4 w-14" />
-                  <Skeleton className="h-4 w-14" />
-                  <Skeleton className="h-4 w-20" />
-                </div>
+          {/* Mirrors the real table's responsive tracks — 3 columns on
+              phones, 4 from sm — so the rows land in place. */}
+          <div className="divide-y">
+            {Array.from({ length: 3 }).map((_, rowIndex) => (
+              <div
+                key={rowIndex}
+                className="grid grid-cols-[minmax(100px,1fr)_80px_80px] sm:grid-cols-[minmax(130px,1fr)_90px_90px_100px] gap-x-3 py-3 items-center"
+              >
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="hidden h-4 w-full sm:block" />
               </div>
             ))}
           </div>

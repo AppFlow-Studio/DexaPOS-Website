@@ -61,16 +61,28 @@ function NetCollectedBySourceSkeleton() {
         <Skeleton className="h-3 w-64 max-w-full" />
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="flex justify-between items-center py-2">
-              <Skeleton className="h-4 w-24" />
-              <div className="flex gap-6">
-                <Skeleton className="h-4 w-10" />
-                <Skeleton className="h-4 w-20" />
-              </div>
+        {/* Mirrors the real table: same scroll container, min-width and
+            3-column grid, so the rows land without the layout shifting. */}
+        <div className="-mx-1 overflow-x-auto px-1">
+          <div className="min-w-[22rem]">
+            <div className="grid grid-cols-3 gap-4 pb-2 border-b">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <Skeleton key={index} className="h-3 w-full" />
+              ))}
             </div>
-          ))}
+            <div className="divide-y">
+              {Array.from({ length: 3 }).map((_, rowIndex) => (
+                <div
+                  key={rowIndex}
+                  className="grid grid-cols-3 gap-4 py-3 items-center"
+                >
+                  {Array.from({ length: 3 }).map((__, colIndex) => (
+                    <Skeleton key={colIndex} className="h-4 w-full" />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>
