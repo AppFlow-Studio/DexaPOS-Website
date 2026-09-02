@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js'
-import { refundSale, voidSale } from '../_shared/nmi.ts'
+import { refundSale, voidSale, type NmiVoidReason } from '../_shared/nmi.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -195,19 +195,50 @@ Deno.serve(async (req: Request): Promise<Response> => {
           },
         })
 
-      const shouldRefund = Boolean(payment.is_settled || payment.settled_at)
       const amount = Number(Number(payment.total_amount ?? order.total_amount ?? 0).toFixed(2))
-      const reversalResult = shouldRefund
-        ? await refundSale(
+      // NMI's void_reason is an ENUM — the guest's free-text `reason` cannot be
+      // forwarded (it returns E_INVALID_SUBMISSION / "The provided data is
+      // invalid." and the cancel fails). Map the trigger to a valid enum member;
+      // the free text is still recorded on the payment row + audit via p_return_reason.
+      const nmiVoidReason: NmiVoidReason =
+        body.trigger === 'timeout' ? 'pos_timeout' : 'user_cancel'
+
+      const doVoid = () =>
+        voidSale(
+          { apiKey: nmiDeviceCredential.decrypted_security_key },
+          payment.transaction_id,
+          nmiVoidReason,
+        )
+      const doRefund = () =>
+        refundSale(
           { apiKey: nmiDeviceCredential.decrypted_security_key },
           payment.transaction_id,
           { amount },
         )
-        : await voidSale(
-          { apiKey: nmiDeviceCredential.decrypted_security_key },
-          payment.transaction_id,
-          reason,
+
+      // Settlement state cannot be trusted locally: nothing syncs NMI settlement
+      // back onto order_payments (is_settled is only ever set by the manual HQ
+      // reconciliation action), so it stays false forever and we always guessed
+      // "void" — which NMI rejects once the sale has settled ("Only transactions
+      // pending settlement can be voided"), and symmetrically a refund is rejected
+      // while still unsettled. Try the likely method, then fall back to the other
+      // when NMI's rejection is specifically about settlement state.
+      let shouldRefund = Boolean(payment.is_settled || payment.settled_at)
+      let reversalResult = shouldRefund ? await doRefund() : await doVoid()
+
+      const settlementStateMismatch = (r: typeof reversalResult) =>
+        /pending settlement|not settled|already settled|settled transaction/i.test(
+          `${r.details.responseText ?? ''} ${r.text ?? ''}`,
         )
+
+      if (!reversalResult.success && settlementStateMismatch(reversalResult)) {
+        console.warn(
+          `[CANCEL_ORDER] ${shouldRefund ? 'refund' : 'void'} rejected on settlement state; retrying as ${shouldRefund ? 'void' : 'refund'}`,
+          { transactionId: payment.transaction_id, responseText: reversalResult.details.responseText },
+        )
+        shouldRefund = !shouldRefund
+        reversalResult = shouldRefund ? await doRefund() : await doVoid()
+      }
 
       if (!reversalResult.success) {
         console.error('[CANCEL_ORDER] NMI reversal failed:', reversalResult)
@@ -229,6 +260,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         referenceNumber: reversalResult.details.referenceNumber || reversalResult.details.transactionId,
       }
 
+      // `p_restore_paid_quantity` MUST be sent explicitly. Two overloads of
+      // apply_refund_to_payment exist (identical except this trailing optional
+      // param); omitting it makes PostgREST unable to choose a candidate and it
+      // fails with PGRST203 — which happened AFTER the gateway reversal had
+      // already succeeded, leaving money voided at NMI but unrecorded locally.
       const { error: refundApplyError } = await supabase.rpc('apply_refund_to_payment', {
         p_payment_id: payment.id,
         p_refund_amount: Number(amount),

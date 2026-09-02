@@ -35,6 +35,8 @@ import {
 import type { AppliedPromo } from "./PromoCodeSection";
 import { isStoreOpenNow } from "../StoreInfoBar";
 import { getSavedAddresses, addSavedAddress, type SavedAddress } from "../../customer-actions";
+import { notifyOrderPlaced } from "../../notification-actions";
+import { getQrOrderStatus } from "../../qr-actions";
 import type { Site, OnlineOrderingConfig } from "@/types/site";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -121,6 +123,51 @@ export function CheckoutPage({
   // Hydration guard — cart is in localStorage
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
+
+  // Reload recovery: the confirmation screen lives only in ephemeral `orderResult`
+  // state, so a refresh dropped the guest onto an empty checkout. On a true reload
+  // (empty cart = post-order signature), ask the server whether this session token
+  // already has an order and, if so, send the guest to the server-backed tracking
+  // route instead of a dead cart.
+  //
+  // We resolve the order from the persisted sessionToken via get_qr_order_status
+  // rather than reading useSession.activeOrderId: on reload, activeOrderId is
+  // repopulated asynchronously by refreshSession() in useSessionInit, so reading
+  // it synchronously here raced and usually saw null (the bug that made the fix
+  // look like it never worked). The session token is persisted and available
+  // immediately, and the RPC is the source of truth for "does this session have
+  // an order".
+  const recoveredRef = useRef(false);
+  useEffect(() => {
+    if (!hydrated || recoveredRef.current) return;
+    // Only a post-order reload has an empty cart here; an in-progress checkout
+    // still has items, so we never yank a shopping guest away.
+    if (useCart.getState().items.length !== 0) return;
+
+    const token = useSession.getState().sessionToken;
+    if (!token) return;
+    recoveredRef.current = true;
+
+    let cancelled = false;
+    (async () => {
+      // Fast path: activeOrderId may already be set (same-tab, no full reload).
+      const known = useSession.getState().activeOrderId;
+      if (known) {
+        if (!cancelled) router.replace(storePath(`/order/${known}`));
+        return;
+      }
+      const status = await getQrOrderStatus(token);
+      if (cancelled) return;
+      if (status.success && status.hasOrder && status.orderId) {
+        router.replace(storePath(`/order/${status.orderId}`));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
 
   // Step
   const [step, setStep] = useState<"checkout" | "confirmation">("checkout");
@@ -597,6 +644,15 @@ export function CheckoutPage({
         });
         if (result.order_id) {
           useSession.getState().setActiveOrderId(result.order_id);
+          // Fire the placed receipt (email/SMS) from the app via a server action.
+          // This runs in-process using the app's Resend/Telnyx creds — no shared
+          // secret or reachable app URL required, unlike the create-online-order
+          // edge → /api/internal/order-placed-notify hop (which silently no-ops
+          // when INTERNAL_NOTIFICATION_SECRET / NEXT_PUBLIC_APP_URL are unset).
+          // Fire-and-forget so a send failure never blocks confirmation.
+          // NOTE: if the edge notify hop is ever wired live, gate ONE of the two
+          // paths to avoid duplicate receipts (see tasks/BUG-qr-notifications-*).
+          void notifyOrderPlaced(result.order_id);
         }
         // Save delivery address if requested
         if (saveNewAddress && isAuthenticated && orderType === "delivery" && selectedAddressId === "new" && newAddress.street) {

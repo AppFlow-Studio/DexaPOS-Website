@@ -171,6 +171,13 @@ export function OrderTrackingPage({
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [pendingCountdown, setPendingCountdown] = useState<number | null>(null);
   const [orderDetailsOpen, setOrderDetailsOpen] = useState(false);
+  // The "~N min" ETA is computed from the current time, so the server render and
+  // the client hydration disagree by a few seconds (e.g. "~10 min" vs "~9 min").
+  // That mismatch made React discard and re-render the tree, which left the
+  // "View Live Status"/CTA links briefly unresponsive. Only show the relative
+  // label after mount so SSR and first client render always agree.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const storePath = useStorefrontPath(slug);
 
 
@@ -377,7 +384,7 @@ export function OrderTrackingPage({
                   Ready by {estimatedReady.wallClock}
                 </h1>
                 <p className="text-sm" style={{ color: "#6b7280" }}>
-                  {estimatedReady.label} · Order #{order.displayNumber}
+                  {mounted ? `${estimatedReady.label} · ` : ""}Order #{order.displayNumber}
                 </p>
               </>
             ) : order.requestedTime ? (

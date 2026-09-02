@@ -180,22 +180,61 @@ export async function createSale(
   }
 }
 
+/**
+ * NMI v5 accepts `void_reason` only as an enum — free text is rejected with
+ * E_INVALID_SUBMISSION ("The provided data is invalid."), which previously made
+ * every guest cancel fail because the guest's typed reason was passed through.
+ * https://docs.nmi.com/reference/void-payment-v5
+ */
+export const NMI_VOID_REASONS = [
+  'fraud',
+  'user_cancel',
+  'icc_rejected',
+  'icc_card_removed',
+  'icc_no_confirmation',
+  'pos_timeout',
+] as const
+
+export type NmiVoidReason = typeof NMI_VOID_REASONS[number]
+
+/**
+ * v5 reversal endpoints (void/refund) return a TransactionResponse whose
+ * `condition` flips to canceled/refunded. They do NOT reliably echo the classic
+ * `response: "1"` / `response_code: "100"` fields, so `isApproved()` alone
+ * reported a SUCCESSFUL void as a failure — which then triggered a refund retry
+ * that NMI rejected with "Voided Transaction Cannot be Refunded".
+ * Treat HTTP 2xx plus a reversed condition (or the classic approval) as success.
+ */
+function isReversalApproved(result: {
+  ok: boolean
+  details: NmiTransactionDetails
+}): boolean {
+  if (!result.ok) return false
+  if (isApproved(result.details)) return true
+  const condition = (result.details.condition ?? '').toLowerCase()
+  return ['canceled', 'cancelled', 'voided', 'refunded', 'complete'].includes(condition)
+}
+
 export async function voidSale(
   config: NmiRequestConfig,
   transactionId: string,
-  voidReason?: string,
+  voidReason?: NmiVoidReason,
 ) {
+  // Only send the field when it is a valid enum member; NMI rejects anything else.
+  const isValidReason =
+    !!voidReason && (NMI_VOID_REASONS as readonly string[]).includes(voidReason)
+
   const result = await callNmi(
     `/api/v5/payments/${transactionId}/void`,
     {
       method: 'POST',
-      body: JSON.stringify(voidReason ? { void_reason: voidReason } : {}),
+      body: JSON.stringify(isValidReason ? { void_reason: voidReason } : {}),
     },
     config,
   )
 
   return {
-    success: result.ok && isApproved(result.details),
+    success: isReversalApproved(result),
     ...result,
   }
 }
@@ -222,7 +261,7 @@ export async function refundSale(
   )
 
   return {
-    success: result.ok && isApproved(result.details),
+    success: isReversalApproved(result),
     ...result,
   }
 }

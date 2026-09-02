@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // Dev-only: allow the local network host so a phone on the same Wi-Fi can load
+  // dev resources (HMR, fonts, CSS) when testing the QR guest flow off-device.
+  // Ignored in production builds.
+  allowedDevOrigins: ["192.168.1.115"],
   turbopack: {
     root: process.cwd(),
     resolveAlias: {
