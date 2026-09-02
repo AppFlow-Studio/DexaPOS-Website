@@ -59,7 +59,6 @@ import {
 import { Order, OrderResponse, OrderType } from '@/types/order-management'
 import { OrderStatusBadge } from './OrderStatusBadge'
 import { PaymentStatusBadge } from './PaymentStatusBadge'
-import { DeliveryPlatformBadge } from './DeliveryPlatformBadge'
 import { useIsAllLocations, useLocationStore } from '@/stores/location-store'
 import { useRouter } from 'next/navigation'
 import {
@@ -87,7 +86,6 @@ interface OrdersDataTableProps {
     sortingValue?: SortingState
     onSortingChange?: OnChangeFn<SortingState>
     searchPlaceholder?: string
-    hideOrderTypeBadge?: boolean
 }
 
 // Format date to "Today at 9:53 pm" or "Dec 15 at 2:30 pm"
@@ -205,7 +203,6 @@ export function OrdersDataTable({
     sortingValue,
     onSortingChange,
     searchPlaceholder = 'Search orders...',
-    hideOrderTypeBadge = false,
 }: OrdersDataTableProps) {
     const [localSorting, setLocalSorting] = React.useState<SortingState>([
         { id: 'created_at', desc: true },
@@ -343,14 +340,15 @@ export function OrdersDataTable({
             cell: ({ row }) => {
                 const order = row.original
                 const typeConfig = getOrderTypeConfig(order.order_type)
+                // Fulfilment type only. The delivery platform / online-order
+                // badge used to sit here too, but the Channel column already
+                // carries order origin and the marketplace brand, so showing
+                // it in both places was duplication.
                 return (
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="inline-flex items-center gap-1.5">
-                            {typeConfig.icon}
-                            <span className="font-medium text-foreground/80">{typeConfig.label}</span>
-                        </span>
-                        {!hideOrderTypeBadge && <DeliveryPlatformBadge order={order} />}
-                    </div>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                        {typeConfig.icon}
+                        <span className="font-medium text-foreground/80">{typeConfig.label}</span>
+                    </span>
                 )
             },
         },
