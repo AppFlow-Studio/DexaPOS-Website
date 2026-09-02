@@ -1,0 +1,76 @@
+- generic [active] [ref=e1]:
+  - link "Skip to content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - link "Joes Coffee Shop" [ref=e7] [cursor=pointer]:
+          - /url: /sites/joes-coffee-shop
+          - img "Joes Coffee Shop" [ref=e8]
+        - navigation "Primary" [ref=e9]:
+          - link "Home" [ref=e10] [cursor=pointer]:
+            - /url: /sites/joes-coffee-shop
+          - link "About us" [ref=e11] [cursor=pointer]:
+            - /url: /sites/joes-coffee-shop/about-us
+        - generic [ref=e12]:
+          - link "Book a table" [ref=e13] [cursor=pointer]:
+            - /url: /sites/joes-coffee-shop/reservations
+          - link "Order Now" [ref=e14] [cursor=pointer]:
+            - /url: /sites/joes-downtown-brooklyn
+    - generic [ref=e17]:
+      - heading "Welcome" [level=1] [ref=e18]
+      - link "Order Now" [ref=e21] [cursor=pointer]:
+        - /url: /sites/joes-downtown-brooklyn
+    - generic [ref=e23]:
+      - heading "Book a table" [level=2] [ref=e25]
+      - list [ref=e28]:
+        - listitem [ref=e29]:
+          - button "Joes Downtown Brooklyn Updated 123 Main Street · Brooklyn, NY · 11217" [ref=e30]:
+            - generic [ref=e31]: Joes Downtown Brooklyn Updated
+            - generic [ref=e32]: 123 Main Street · Brooklyn, NY · 11217
+        - listitem [ref=e33]:
+          - button "Uptown Branch 231123 dakdsf · New York City, NY · 10306" [ref=e34]:
+            - generic [ref=e35]: Uptown Branch
+            - generic [ref=e36]: 231123 dakdsf · New York City, NY · 10306
+    - contentinfo [ref=e37]:
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]:
+            - paragraph [ref=e41]: Joes Coffee Shop
+            - generic [ref=e42]: 123 Main Street, Brooklyn, NY, 11217
+            - link "(123) 456-7890" [ref=e43] [cursor=pointer]:
+              - /url: tel:1234567890
+          - generic [ref=e44]:
+            - heading "Hours" [level=3] [ref=e45]
+            - generic [ref=e46]:
+              - generic [ref=e47]:
+                - term [ref=e48]: Monday
+                - definition [ref=e49]: 10:00 AM – 6:00 PM
+              - generic [ref=e50]:
+                - term [ref=e51]: Tuesday
+                - definition [ref=e52]: 9:00 AM – 9:00 PM
+              - generic [ref=e53]:
+                - term [ref=e54]: Wednesday
+                - definition [ref=e55]: Open 24 hours
+              - generic [ref=e56]:
+                - term [ref=e57]: Thursday
+                - definition [ref=e58]: Open 24 hours
+              - generic [ref=e59]:
+                - term [ref=e60]: Friday
+                - definition [ref=e61]: Open 24 hours
+              - generic [ref=e62]:
+                - term [ref=e63]: Saturday
+                - definition [ref=e64]: Open 24 hours
+              - generic [ref=e65]:
+                - term [ref=e66]: Sunday
+                - definition [ref=e67]: Open 24 hours
+        - generic [ref=e68]:
+          - paragraph [ref=e69]: © 2026 Joes Coffee Shop. All rights reserved.
+          - list [ref=e70]:
+            - listitem [ref=e71]:
+              - link "Instagram" [ref=e72] [cursor=pointer]:
+                - /url: https://instagram.com/resturantsfortesting
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e78] [cursor=pointer]:
+    - img [ref=e79]
+  - alert [ref=e82]
