@@ -1,5 +1,6 @@
-import { Skeleton } from "@/components/ui/skeleton";
 "use client";
+
+import { Skeleton } from "@/components/ui/skeleton";
 
 import { useState, useMemo } from "react";
 import { useCustomerOrders } from "../../hooks/useCustomerOrders";
