@@ -57,8 +57,8 @@ function NetCollectedBySourceSkeleton() {
   return (
     <Card>
       <CardHeader>
-        <Skeleton className="h-5 w-56" />
-        <Skeleton className="h-3 w-64" />
+        <Skeleton className="h-5 w-56 max-w-full" />
+        <Skeleton className="h-3 w-64 max-w-full" />
       </CardHeader>
       <CardContent>
         <div className="space-y-3">

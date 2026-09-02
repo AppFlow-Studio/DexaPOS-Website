@@ -96,8 +96,8 @@ function TransactionVolumeSkeleton() {
   return (
     <Card className="border shadow-sm">
       <CardHeader className="pb-4">
-        <Skeleton className="h-5 w-48" />
-        <Skeleton className="h-3 w-64" />
+        <Skeleton className="h-5 w-48 max-w-full" />
+        <Skeleton className="h-3 w-64 max-w-full" />
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
