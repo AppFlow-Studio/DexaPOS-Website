@@ -19,12 +19,22 @@ export const BOOK_PATH = "/api/site-reservations/book";
 export const CANCEL_PATH = "/api/site-reservations/cancel";
 
 /**
- * The honeypot field name. Matches `HONEYPOT_FIELD` in
- * `lib/cms/form-security.ts` so the shared `isBot` helper works unchanged, and
- * re-declared here rather than imported because that module builds a Supabase
- * client at import time and this one is pulled into a client component.
+ * The honeypot field name.
+ *
+ * Deliberately NOT a real autofill category. The old name — `company_website` —
+ * was a magnet: the field is off-screen and invisible to a human, so the only
+ * thing that can put a value in it is a bot OR a password manager / browser
+ * autofill that fills by field name and ignores `autoComplete="off"`. When that
+ * happened the server read the filled honeypot as a bot and rejected a real
+ * guest with the generic "we could not complete your booking". A neutral name,
+ * together with the `data-*-ignore` attributes on the input (see
+ * `ReservationWidget`), keeps autofill out while a blanket bot still trips it.
+ *
+ * Re-declared here rather than imported from `lib/cms/form-security.ts` because
+ * that module builds a Supabase client at import time and this one is pulled
+ * into a client component. The two honeypots are independent by design.
  */
-export const HONEYPOT_FIELD = "company_website";
+export const HONEYPOT_FIELD = "reservation_meta";
 
 /** Milliseconds since the checkout form was shown. A soft second signal. */
 export const RENDERED_AT_FIELD = "rendered_at";

@@ -2,8 +2,8 @@ import { after } from "next/server";
 
 import {
   bool,
+  botSignal,
   fail,
-  looksAutomated,
   looksLikeEmail,
   looksLikePhone,
   ok,
@@ -72,7 +72,17 @@ export async function POST(request: Request): Promise<Response> {
   // response is the generic unavailable rather than anything that says "we
   // think you are a robot". An automated submitter gets nothing to iterate
   // against — and the held slot simply expires on its own five minutes later.
-  if (looksAutomated(body)) return fail("unavailable");
+  const bot = botSignal(body);
+  if (bot) {
+    // A rejected booking writes nothing and answers with the generic code, so a
+    // false positive — a password manager filling the honeypot — is otherwise
+    // invisible. Log the SIGNAL, never the guest's details, so "a real bot" and
+    // "our own honeypot tripped a guest" are distinguishable in the logs.
+    console.warn(
+      `[site-reservations] booking rejected as automated: ${bot} (site ${siteId})`,
+    );
+    return fail("unavailable");
+  }
 
   if (!(await withinRateLimit(request, `site-reservations:book:${siteId}`, RATE_LIMIT.max, RATE_LIMIT.windowSeconds))) {
     return fail("rate_limited");
