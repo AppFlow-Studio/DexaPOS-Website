@@ -1,5 +1,5 @@
 import { SettingsPageSkeleton } from '@/components/dashboard/loading/SettingsPageSkeleton'
 
-export default function RouteLoading() {
-  return <SettingsPageSkeleton variant="general" />
+export default function Loading() {
+  return <SettingsPageSkeleton variant="prep-stations" />
 }

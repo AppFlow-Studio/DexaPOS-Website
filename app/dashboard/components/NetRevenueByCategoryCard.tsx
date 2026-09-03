@@ -422,7 +422,7 @@ function TreemapLegend({
 
 function TreemapSkeleton() {
   return (
-    <Card>
+    <Card className="min-w-0 overflow-hidden">
       <CardHeader>
         {/* Stacks under sm: the control group is a fixed 164px, which does
             not fit beside the title at 360px. */}
@@ -437,13 +437,13 @@ function TreemapSkeleton() {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-w-0">
         <Skeleton className="h-4 w-48 max-w-full mb-4" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Skeleton className="h-75 w-full rounded-lg" />
-          <div className="space-y-3">
+        <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2 [&>*]:min-w-0">
+          <Skeleton className="h-75 w-full max-w-full rounded-lg" />
+          <div className="min-w-0 space-y-3">
             {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-10 w-full" />
+              <Skeleton key={i} className="h-10 w-full max-w-full" />
             ))}
           </div>
         </div>

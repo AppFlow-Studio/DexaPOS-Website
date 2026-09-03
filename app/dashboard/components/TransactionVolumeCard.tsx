@@ -94,25 +94,25 @@ function ensureCoreRows(rows: TransactionVolumeRow[]): TransactionVolumeRow[] {
 
 function TransactionVolumeSkeleton() {
   return (
-    <Card className="border shadow-sm">
+    <Card className="min-w-0 overflow-hidden border shadow-sm">
       <CardHeader className="pb-4">
         <Skeleton className="h-5 w-48 max-w-full" />
         <Skeleton className="h-3 w-64 max-w-full" />
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-full rounded-full" />
+      <CardContent className="min-w-0">
+        <div className="min-w-0 space-y-4 overflow-hidden">
+          <Skeleton className="h-8 w-full max-w-full rounded-full" />
           {/* Mirrors the real table's responsive tracks — 3 columns on
               phones, 4 from sm — so the rows land in place. */}
           <div className="divide-y">
             {Array.from({ length: 3 }).map((_, rowIndex) => (
               <div
                 key={rowIndex}
-                className="grid grid-cols-[minmax(100px,1fr)_80px_80px] sm:grid-cols-[minmax(130px,1fr)_90px_90px_100px] gap-x-3 py-3 items-center"
+                className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] items-center gap-x-2 py-3 sm:grid-cols-[minmax(130px,1fr)_90px_90px_100px] sm:gap-x-3"
               >
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full max-w-full" />
+                <Skeleton className="h-4 w-full max-w-full" />
+                <Skeleton className="h-4 w-full max-w-full" />
                 <Skeleton className="hidden h-4 w-full sm:block" />
               </div>
             ))}

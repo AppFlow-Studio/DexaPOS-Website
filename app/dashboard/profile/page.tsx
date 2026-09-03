@@ -41,15 +41,16 @@ export default function ProfilePage() {
       {/* Identity summary — tier 1 panel, not a <Card> (C6/§3.1). */}
       <Panel padded>
         <div className="flex items-center gap-4">
-          {isLoading ? (
+          {isLoading || !userInfo || userInfo instanceof Error ? (
             <>
               <Skeleton className="h-16 w-16 shrink-0 rounded-full" />
-              <div className="min-w-0 space-y-2">
-                <Skeleton className="h-5 w-40" />
-                <Skeleton className="h-4 w-56" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-5 w-40 max-w-full" />
+                <Skeleton className="h-4 w-56 max-w-full" />
+                <Skeleton className="h-5 w-28 max-w-full rounded-full" />
               </div>
             </>
-          ) : userInfo && !(userInfo instanceof Error) ? (
+          ) : (
             <>
               <Avatar className="h-16 w-16 shrink-0">
                 <AvatarImage
@@ -86,7 +87,7 @@ export default function ProfilePage() {
                 )}
               </div>
             </>
-          ) : null}
+          )}
         </div>
       </Panel>
 
