@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { UserProfile, useUser } from "@clerk/nextjs";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useIsDarkTheme } from "@/app/sign-in/clerk-form";
@@ -14,6 +15,36 @@ export default function ProfilePage() {
   // Clerk renders nothing until its script boots, leaving the Panel below an
   // empty box for seconds. Hold its shape until the widget can paint.
   const { isLoaded: isClerkLoaded } = useUser();
+  const [isProfilePainted, setIsProfilePainted] = useState(false);
+  const profileWidgetRef = useRef<HTMLDivElement>(null);
+
+  // `useUser().isLoaded` only means Clerk's user resource is ready. The
+  // `<UserProfile>` widget mounts in a later pass, so using that flag alone
+  // briefly exposes an empty, collapsed Panel. Keep the in-panel fallback
+  // visible until the widget has actually painted meaningful content.
+  useEffect(() => {
+    if (!isClerkLoaded) return;
+
+    const host = profileWidgetRef.current;
+    if (!host) return;
+
+    const markPainted = () => {
+      if (host.textContent?.trim()) {
+        setIsProfilePainted(true);
+        return true;
+      }
+      return false;
+    };
+
+    if (markPainted()) return;
+
+    const observer = new MutationObserver(() => {
+      if (markPainted()) observer.disconnect();
+    });
+    observer.observe(host, { childList: true, subtree: true, characterData: true });
+
+    return () => observer.disconnect();
+  }, [isClerkLoaded]);
 
   // `UserProfile` types `appearance` as `Theme`, which omits `baseTheme` — and
   // passing it anyway had no effect (Clerk set none of its `--clerk-color-*`
@@ -102,16 +133,25 @@ export default function ProfilePage() {
           to a constants module so Tailwind is guaranteed to scan every class
           (C7): a class living only in a `.ts` file generates no CSS rule. */}
       <Panel padded>
-        {!isClerkLoaded ? <UserProfileFallback /> : null}
-        <div className={isClerkLoaded ? undefined : "hidden"}>
-        <UserProfile
-          routing="hash"
-          appearance={{
-            variables: {
-              ...clerkColors,
-              borderRadius: "0.625rem",
-            },
-            elements: {
+        <div className="relative min-w-0">
+          {!isProfilePainted ? <UserProfileFallback /> : null}
+          <div
+            ref={profileWidgetRef}
+            aria-hidden={!isProfilePainted}
+            className={
+              isProfilePainted
+                ? "min-w-0"
+                : "invisible pointer-events-none absolute inset-0 min-w-0"
+            }
+          >
+            <UserProfile
+              routing="hash"
+              appearance={{
+                variables: {
+                  ...clerkColors,
+                  borderRadius: "0.625rem",
+                },
+                elements: {
               // `clerk-themed` hands text colour back to the app's tokens —
               // Clerk bakes its palette into generated classes and honours
               // neither `baseTheme` nor `variables` here, so in dark mode its
@@ -145,10 +185,11 @@ export default function ProfilePage() {
               // does not track the theme; use the muted token instead.
               navbarButton:
                 "!rounded-full !text-muted-foreground hover:!bg-muted/60 hover:!text-foreground",
-              footer: "hidden",
-            },
-          }}
-        />
+                  footer: "hidden",
+                },
+              }}
+            />
+          </div>
         </div>
       </Panel>
     </PageShell>

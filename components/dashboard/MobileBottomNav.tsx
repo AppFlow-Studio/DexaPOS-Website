@@ -156,7 +156,14 @@ export function MobileBottomNav({
         open={moreOpen}
         onOpenChange={handleMoreOpenChange}
       >
-        <SheetContent side="bottom" className="h-[70vh] overflow-y-auto">
+        <SheetContent
+          side="bottom"
+          className="h-[70vh] overflow-y-auto !rounded-t-[28px] border-x bg-clip-padding"
+          style={{
+            borderTopLeftRadius: "1.75rem",
+            borderTopRightRadius: "1.75rem",
+          }}
+        >
           <SheetHeader className="pb-2">
             <SheetTitle>More</SheetTitle>
           </SheetHeader>
