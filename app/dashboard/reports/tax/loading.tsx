@@ -6,7 +6,7 @@ export default function RouteLoading() {
       variant="report"
       shell="plain"
       label="Loading the tax report"
-      report={{ stats: 4, body: 'table' }}
+      report={{ stats: 0, body: 'table' }}
     />
   )
 }

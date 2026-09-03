@@ -6,7 +6,7 @@ export default function RouteLoading() {
       variant="report"
       shell="plain"
       label="Loading the financial report"
-      report={{ stats: 4, tabs: 5, body: 'table' }}
+      report={{ stats: 0, tabs: 4, body: 'table' }}
     />
   )
 }

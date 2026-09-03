@@ -207,28 +207,36 @@ function DrawerStatusPanel({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
                         {s.printer_model ? ` · ${s.printer_model}` : ""}
                       </p>
                     ) : (
-                      <p className="mt-0.5 flex items-center gap-1 text-xs text-amber-600">
-                        <Link2Off className="h-3 w-3 shrink-0" />
-                        No printer bound — set on the POS Test Pop screen
+                      <p className="mt-0.5 flex items-start gap-1 text-xs text-amber-600">
+                        <Link2Off className="mt-0.5 h-3 w-3 shrink-0" />
+                        <span className="min-w-0">
+                          No printer bound — set on the POS Test Pop screen
+                        </span>
                       </p>
                     )}
                   </div>
-                  {s.last_kick_outcome ? (
-                    <OutcomeBadge outcome={s.last_kick_outcome} />
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground">
-                      No kicks
-                    </Badge>
-                  )}
+                  {/* shrink-0 so a long drawer name cannot squeeze the badge
+                      out of the card. */}
+                  <div className="shrink-0">
+                    {s.last_kick_outcome ? (
+                      <OutcomeBadge outcome={s.last_kick_outcome} />
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        No kicks
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
-                <div className="mt-2 flex items-center justify-between gap-2">
+                {/* Wraps rather than overflowing: the connectivity label plus
+                    three counters exceed a 320px card on one line. */}
+                <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
                   {s.host_printer_id ? (
                     <ConnectivityDot connected={s.printer_connected} />
                   ) : (
                     <span className="text-xs text-muted-foreground/60">—</span>
                   )}
-                  <div className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs tabular-nums text-muted-foreground">
                     <span className="text-emerald-600">{s.okCount} ok</span>
                     <span className="text-amber-600">{s.unconfirmedCount} unconf</span>
                     <span className="text-red-600">{s.failedCount} fail</span>
