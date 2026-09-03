@@ -77,3 +77,6 @@ docs/*1on1*.docx
 
 # Valor sandbox probe scripts (local dev tooling, not product code)
 /valor-*.ts
+
+# Graphify generated knowledge graph and cache
+/graphify-out/

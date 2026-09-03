@@ -34,6 +34,37 @@ separate `CREATE TRIGGER`s (INSERT gets NEW TABLE only; UPDATE gets OLD+NEW). Va
 SQL against a real Postgres (local `supabase db reset`, or a scratch branch) before pushing —
 `tsc`/`next build` never touch SQL.
 
+## Deleting a component can orphan a feature that every test still passes (2026-08-18)
+Context: the Owner-shaped website-builder rebuild deleted `PageListCard.tsx`, which was the only
+thing that opened the page-settings panel. The panel itself survived — store action
+`openPageSettings`, and 100 lines of `PageSettings` in `SectionDrawer` rendering page name, web
+address and *Remove this page* with its confirm dialog.
+Mistake: nothing anywhere called `openPageSettings` any more, so pages could no longer be renamed
+or deleted at all. 381 unit tests passed, `tsc` was clean, and the production build succeeded —
+every unit under the orphan is reachable and correct *in isolation*. Only clicking through the
+product found it.
+Rule: when a rebuild deletes UI, grep every public action of the surviving store for callers
+(`grep -rn "<action>" --include=*.tsx`). An action with exactly one reference — its own definition
+— is an orphaned feature, not dead code to remove. Do this before claiming a phase complete, and
+treat "create → edit → publish → unpublish → delete" style lifecycle click-throughs as part of
+done, because no unit test can see a missing entry point.
+
+## A `redirect()` page under a force-dynamic layout is not an HTTP redirect (2026-08-18)
+Context: three moved website routes rendered "This page couldn't load" instead of redirecting, on
+Next 16.2.12.
+Mistake: assumed `redirect()` in a Server Component emits a 3xx. It does not once the response has
+begun streaming — Next answers **200** and instructs the client router to navigate. That path is
+currently broken upstream: the router state becomes a promise, `useActionQueue` calls `use()`
+conditionally on exactly that, the hook count changes between renders, and React throws "Rendered
+more hooks than during the previous render" (vercel/next.js#78396). Every pure redirect page in
+this repo has it, including `/dashboard/billing` on `main`.
+Rule: express a static path-to-path move in `redirects()` in `next.config.ts`, not as a page that
+calls `redirect()`. It is served before React exists — a real 307, no render, works with JS off,
+and immune to this class of bug. Source query strings carry over automatically; use a `has` query
+capture to lift a query param into a path segment. Keep `permanent: false` for internal routes, as
+browsers cache a 308 indefinitely. Reserve runtime `redirect()` for genuinely conditional
+branching (auth, role), which cannot move to config.
+
 ## Dual pricing is a CASH DISCOUNT, not a card surcharge (2026-08-24)
 Context: `lib/pricing.ts` computed cash as `card / (1 + pct/100)` (surcharge model → 28 ÷ 1.04 =
 26.92). The intended model is a cash discount: `cash = card × (1 − pct/100)` (28 × 0.96 = 26.88);

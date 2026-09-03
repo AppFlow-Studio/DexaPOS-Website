@@ -138,9 +138,12 @@ export async function postWithHeaderCredentials<
  * is probed before falling back.
  */
 export function extractValorError(body: ValorEnvelope): string | null {
-  if (Array.isArray(body.error) && body.error.length > 0) {
-    const first = body.error[0];
-    if (typeof first === "string") return first;
+  for (const key of ["errors", "error"]) {
+    const values = body[key];
+    if (Array.isArray(values) && values.length > 0) {
+      const first = values[0];
+      if (typeof first === "string") return first;
+    }
   }
   for (const key of ["error_message", "response_text", "message", "status"]) {
     const value = body[key];

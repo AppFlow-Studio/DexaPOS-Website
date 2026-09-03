@@ -33,7 +33,17 @@ interface MobileBottomNavProps {
   moreItems: MoreNavItem[];
 }
 
-export function MobileBottomNav({ tabs, moreItems }: MobileBottomNavProps) {
+export function MobileBottomNav({
+  tabs,
+  moreItems,
+  /**
+   * Switched off while a full-screen overlay owns the screen. The bar is
+   * `fixed` and used to sit *over* the website builder's overlay — same
+   * `z-50`, later in the DOM — landing exactly on the drawer's Done button at
+   * 420 px. The overlay now outranks it; this also stops it being tabbed to.
+   */
+  inert,
+}: MobileBottomNavProps & { inert?: boolean }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const { signOut } = useClerk();
@@ -69,6 +79,7 @@ export function MobileBottomNav({ tabs, moreItems }: MobileBottomNavProps) {
   return (
     <>
       <nav
+        inert={inert}
         className="fixed bottom-0 left-0 right-0 z-50 sm:hidden bg-background/95 backdrop-blur-md border-t"
         style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
       >

@@ -42,17 +42,16 @@ import {
   getMerchantSubscriptions,
   getSubscriptionInvoices,
   getSubscriptionServiceAssignments,
-  replaceSubscriptionServiceAssignments,
+  saveAndChargeMerchantSubscription,
   type BillableServiceRecord,
   type MerchantSubscriptionRecord,
   type SubscriptionInvoiceRecord,
   type SubscriptionServiceAssignmentRecord,
-  upsertMerchantSubscription,
 } from '@/app/manage/actions/subscription-billing'
 import {
-  getMerchantNmiAccountsSummary,
-  type MerchantNmiAccountRow,
-} from '@/app/manage/actions/admin-merchant/nmi'
+  getMerchantBillingProfiles,
+  type MerchantBillingProfileRecord,
+} from '@/app/manage/actions/merchant-billing'
 import {
   renderSubscriptionInvoiceHtml,
   type SubscriptionInvoiceDocumentData,
@@ -161,7 +160,7 @@ export function SubscriptionBillingAdminCard({
   const [subscriptions, setSubscriptions] = useState<MerchantSubscriptionRecord[]>([])
   const [invoices, setInvoices] = useState<SubscriptionInvoiceRecord[]>([])
   const [subscriptionServiceMap, setSubscriptionServiceMap] = useState<Record<string, SubscriptionServiceAssignmentRecord[]>>({})
-  const [locationEligibilityMap, setLocationEligibilityMap] = useState<Record<string, MerchantNmiAccountRow>>({})
+  const [billingProfilesByLocation, setBillingProfilesByLocation] = useState<Record<string, MerchantBillingProfileRecord>>({})
   const [serviceFormState, setServiceFormState] = useState<ServiceFormState>({})
   const [invoicePreviewDocument, setInvoicePreviewDocument] = useState<SubscriptionInvoiceDocumentData | null>(null)
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false)
@@ -185,9 +184,9 @@ export function SubscriptionBillingAdminCard({
     [selectedLocationSubscription, subscriptionServiceMap]
   )
 
-  const selectedLocationEligibility = useMemo(
-    () => (selectedLocationId ? locationEligibilityMap[selectedLocationId] ?? null : null),
-    [locationEligibilityMap, selectedLocationId]
+  const selectedBillingProfile = useMemo(
+    () => (selectedLocationId ? billingProfilesByLocation[selectedLocationId] ?? null : null),
+    [billingProfilesByLocation, selectedLocationId]
   )
 
   const invoicePreviewHtml = useMemo(
@@ -198,11 +197,11 @@ export function SubscriptionBillingAdminCard({
   const refresh = () => {
     startTransition(async () => {
       try {
-        const [nextServices, nextSubscriptions, nextInvoices, nmiSummary] = await Promise.all([
+        const [nextServices, nextSubscriptions, nextInvoices, billingProfiles] = await Promise.all([
           getBillableServices(),
           getMerchantSubscriptions(merchantId),
           getSubscriptionInvoices(merchantId, null, 100),
-          getMerchantNmiAccountsSummary(merchantId),
+          getMerchantBillingProfiles(merchantId),
         ])
 
         const assignmentEntries = await Promise.all(
@@ -218,8 +217,27 @@ export function SubscriptionBillingAdminCard({
         setSubscriptions(nextSubscriptions)
         setInvoices(nextInvoices)
         setSubscriptionServiceMap(nextAssignmentMap)
-        setLocationEligibilityMap(
-          Object.fromEntries(nmiSummary.locations.map((location) => [location.locationId, location]))
+        const merchantWideValorProfile = billingProfiles.find(
+          (profile) =>
+            !profile.location_id &&
+            profile.processor === 'valor' &&
+            profile.billing_method === 'card' &&
+            profile.is_active,
+        )
+        setBillingProfilesByLocation(
+          Object.fromEntries(
+            locations.flatMap((location) => {
+              const locationProfile = billingProfiles.find(
+                (profile) =>
+                  profile.location_id === location.id &&
+                  profile.processor === 'valor' &&
+                  profile.billing_method === 'card' &&
+                  profile.is_active,
+              )
+              const effectiveProfile = locationProfile ?? merchantWideValorProfile
+              return effectiveProfile ? [[location.id, effectiveProfile]] : []
+            }),
+          ),
         )
 
         const defaultLocationId = selectedLocationId || locations[0]?.id || ''
@@ -313,7 +331,7 @@ export function SubscriptionBillingAdminCard({
     }
 
     startTransition(async () => {
-      const subscriptionResult = await upsertMerchantSubscription({
+      const subscriptionResult = await saveAndChargeMerchantSubscription({
         subscriptionId: selectedLocationSubscription?.id,
         merchantId,
         locationId: selectedLocationId,
@@ -327,16 +345,7 @@ export function SubscriptionBillingAdminCard({
           source: 'hq_service_catalog_billing_ui',
           pricingModel: 'service_catalog',
         },
-      })
-
-      if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
-        toast.error(subscriptionResult.error || 'Failed to save subscription.')
-        return
-      }
-
-      const serviceResult = await replaceSubscriptionServiceAssignments(
-        subscriptionResult.subscriptionId,
-        (effectiveStatus === 'canceled' ? [] : enabledServices).map((service) => ({
+        services: (effectiveStatus === 'canceled' ? [] : enabledServices).map((service) => ({
           serviceId: service.serviceId,
           quantity: service.quantity,
           enabled: true,
@@ -344,11 +353,11 @@ export function SubscriptionBillingAdminCard({
             source: 'hq_service_catalog_billing_ui',
             serviceCode: service.serviceCode,
           },
-        }))
-      )
+        })),
+      })
 
-      if (!serviceResult.success) {
-        toast.error(serviceResult.error || 'Failed to save service assignments.')
+      if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
+        toast.error(subscriptionResult.error || 'Failed to save and charge subscription.')
         return
       }
 
@@ -358,8 +367,8 @@ export function SubscriptionBillingAdminCard({
           : status === 'canceled'
             ? 'Selected services removed. Subscription remains active.'
           : selectedLocationSubscription
-            ? 'Subscription services updated.'
-            : 'Subscription created.'
+            ? 'Subscription services updated and automatic payment approved.'
+            : 'Subscription created and automatic payment approved.'
       )
       refresh()
     })
@@ -471,18 +480,17 @@ export function SubscriptionBillingAdminCard({
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedLocationEligibility ? (
+                {selectedBillingProfile ? (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant={selectedLocationEligibility.vaultReady ? 'default' : 'secondary'}>
-                      {selectedLocationEligibility.vaultReady ? 'Eligible' : 'Not eligible'}
-                    </Badge>
-                    <span>
-                      {selectedLocationEligibility.vaultReady
-                        ? 'Location has a saved billing card and can be subscribed.'
-                        : 'Location needs a primary vaulted billing card before subscription charging.'}
-                    </span>
+                    <Badge variant="default">Valor ready</Badge>
+                    <span>An active vaulted Valor billing card is available.</span>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="secondary">Not ready</Badge>
+                    <span>Save a merchant-wide or location Valor billing card before charging.</span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -592,15 +600,33 @@ export function SubscriptionBillingAdminCard({
               })}
             </div>
 
-            <div className="flex items-center gap-3">
-              <Button onClick={handleSave} disabled={!canManageBilling || isPending}>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                onClick={handleSave}
+                disabled={
+                  !canManageBilling ||
+                  isPending ||
+                  (status === 'active' && !selectedBillingProfile)
+                }
+              >
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {selectedLocationSubscription ? 'Update Location Services' : 'Create Location Subscription'}
+                {status === 'active'
+                  ? selectedLocationSubscription
+                    ? 'Update & Charge'
+                    : 'Create & Charge'
+                  : selectedLocationSubscription
+                    ? 'Update Location Services'
+                    : 'Create Location Subscription'}
               </Button>
               <Button variant="outline" onClick={refresh} disabled={isPending}>
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 Refresh
               </Button>
+              {status === 'active' ? (
+                <span className="text-xs text-muted-foreground">
+                  Services activate only after Valor approves the automatic charge.
+                </span>
+              ) : null}
             </div>
           </CardContent>
         </Card>

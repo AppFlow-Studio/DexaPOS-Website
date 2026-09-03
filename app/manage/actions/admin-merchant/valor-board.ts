@@ -312,9 +312,15 @@ export async function boardMerchantOnValor(
         : ''
       return { ok: false, error: `Boarding failed at ${e.step}: ${e.message}.${orphan}` }
     }
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : 'Boarding failed unexpectedly.',
+    if (e instanceof Error) {
+      // Unwrap a wrapped cause (a network/timeout error, a thrown RPC error) so
+      // the returned message carries the real reason rather than a generic head.
+      const cause =
+        e.cause instanceof Error && !e.message.includes(e.cause.message)
+          ? `: ${e.cause.message}`
+          : ''
+      return { ok: false, error: `${e.message}${cause}` }
     }
+    return { ok: false, error: 'Boarding failed unexpectedly.' }
   }
 }

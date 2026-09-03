@@ -78,7 +78,10 @@ import {
   TableSessionWithEvents,
 } from "@/types/order-management";
 import { OrderFullHistory } from "@/types/order-full-history";
-import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
+import {
+  getOrderBreakdown,
+  getOrderDisplayTotal,
+} from "@/lib/orders/order-breakdown";
 
 /**
  * Confirm dialogs on this page rise from below and drop straight back down,
@@ -428,6 +431,7 @@ export default function OrderDetailPage() {
   // Single source of truth: one consistent pricing track per render (foots).
   const breakdown = getOrderBreakdown(order, payments);
   const primaryLane = breakdown.primary;
+  const displayTotal = getOrderDisplayTotal(breakdown);
   const laneLabel = breakdown.display === "cash" ? "Cash" : "Card";
   const cashSavings = breakdown.card.total - breakdown.cash.total;
   const isMixedPayment =
@@ -1014,7 +1018,7 @@ export default function OrderDetailPage() {
               <div className="mt-5 flex items-baseline justify-between gap-4">
                 <span className="text-sm text-muted-foreground">Total</span>
                 <span className="text-[1.75rem] font-medium leading-none tracking-[-0.02em] tabular-nums">
-                  {formatCurrency(primaryLane.total)}
+                  {formatCurrency(displayTotal)}
                 </span>
               </div>
               <div className="mt-2">
@@ -1106,11 +1110,7 @@ export default function OrderDetailPage() {
                       "text-[#0C4FD1] dark:text-[#6CA0FF]"
                   )}
                 >
-                  {formatCurrency(
-                    isMixedPayment && primaryLane.amountPaid > 0
-                      ? primaryLane.amountPaid
-                      : primaryLane.total
-                  )}
+                  {formatCurrency(displayTotal)}
                 </span>
               </div>
 

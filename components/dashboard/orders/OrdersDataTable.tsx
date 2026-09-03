@@ -70,6 +70,10 @@ import { PlatformBadge } from './PlatformBadge'
 import { ReceiptModal } from './ReceiptModal'
 import { RefundVoidDialog, type RefundVoidAction } from './RefundVoidDialog'
 import { useColumnPreferences } from '@/app/dashboard/hooks/useColumnPreferences'
+import {
+    getOrderBreakdown,
+    getOrderDisplayTotal,
+} from '@/lib/orders/order-breakdown'
 
 interface OrdersDataTableProps {
     data: OrderResponse[]
@@ -472,11 +476,18 @@ export function OrdersDataTable({
                     <ArrowUpDown className="ml-2 h-3 w-3" />
                 </Button>
             ),
-            cell: ({ row }) => (
-                <div className="text-sm font-medium tabular-nums text-foreground">
-                    {formatCurrency(row.original.total_amount)}
-                </div>
-            ),
+            cell: ({ row }) => {
+                const order = row.original
+                const displayTotal = getOrderDisplayTotal(
+                    getOrderBreakdown(order, order.order_payments || [])
+                )
+
+                return (
+                    <div className="text-sm font-medium tabular-nums text-foreground">
+                        {formatCurrency(displayTotal)}
+                    </div>
+                )
+            },
         },
         {
             accessorKey: 'payment_status',
