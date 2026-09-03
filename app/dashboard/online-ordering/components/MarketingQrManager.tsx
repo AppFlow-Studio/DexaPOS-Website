@@ -8,6 +8,7 @@ import {
   Megaphone,
   Plus,
   RefreshCw,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,6 +32,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { buildMarketingQrUrl } from "@/app/sites/lib/store-url";
 import {
   DEFAULT_BACKGROUND_COLOR,
@@ -43,6 +51,7 @@ import {
 } from "@/lib/qr/render";
 
 import { BrandedQrPreview } from "./BrandedQrPreview";
+import { MarketingQrCreateDialog } from "./MarketingQrCreateDialog";
 import {
   createMarketingQrCode,
   deactivateMarketingQrCode,
@@ -58,6 +67,26 @@ interface MarketingQrManagerProps {
   /** The storefront itself being off makes every printed code a dead end. */
   storefrontEnabled: boolean;
 }
+
+type StatusFilter = "all" | "active" | "inactive";
+
+const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
+  all: "All statuses",
+  active: "Active",
+  inactive: "Inactive",
+};
+
+/**
+ * Stands in for a real short code while previewing a code that does not exist
+ * yet.
+ *
+ * The length is what matters, not the characters: QR density follows payload
+ * length, so ten characters here render the same grid a minted code will. A
+ * placeholder of the wrong length would preview a denser or sparser code than
+ * the merchant actually gets. Ten characters, and none of them I, L, O or U,
+ * matching the `short_code` CHECK.
+ */
+const PREVIEW_SHORT_CODE = "XXXXXXXXXX";
 
 function slugifyFileName(value: string) {
   return value
@@ -113,8 +142,10 @@ export function MarketingQrManager({
   const [rows, setRows] = useState<MarketingQrRow[]>([]);
   const [store, setStore] = useState<MarketingQrStoreContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [name, setName] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // The code awaiting confirmation. A printed flyer cannot be recalled, so
   // deactivation is worth a beat of friction — but through the app's own
@@ -174,8 +205,40 @@ export function MarketingQrManager({
     [store?.slug, store?.customDomain]
   );
 
+  /** What a code created right now would resolve to, for the create preview. */
+  const previewUrl = useMemo(
+    () =>
+      buildMarketingQrUrl({
+        slug: store?.slug,
+        customDomain: store?.customDomain,
+        shortCode: PREVIEW_SHORT_CODE,
+      }),
+    [store?.slug, store?.customDomain]
+  );
+
+  const isFiltered = search.trim() !== "" || statusFilter !== "all";
+
+  // Search the name and the short code both: a merchant holding a printed
+  // flyer has the code in front of them and not much else.
+  const filteredRows = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+
+    return rows.filter((row) => {
+      if (statusFilter === "active" && !row.isActive) return false;
+      if (statusFilter === "inactive" && row.isActive) return false;
+      if (!needle) return true;
+
+      return (
+        row.name.toLowerCase().includes(needle) ||
+        row.shortCode.toLowerCase().includes(needle)
+      );
+    });
+  }, [rows, search, statusFilter]);
+
   // Preview whatever the merchant last touched, else the newest live code —
-  // a deactivated code is not what someone is about to print.
+  // a deactivated code is not what someone is about to print. Chosen from every
+  // row, not the filtered ones, so narrowing the list does not blank the
+  // preview of the code being looked at.
   const selected = useMemo(() => {
     const chosen = rows.find((row) => row.id === selectedId);
     return chosen ?? rows.find((row) => row.isActive) ?? null;
@@ -196,15 +259,12 @@ export function MarketingQrManager({
     }
   }
 
-  async function handleCreate() {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      toast.error("Give this code a name, like “Front window decal”.");
-      return;
-    }
+  /** Resolves true when the code was created, which closes the dialog. */
+  async function handleCreate(name: string): Promise<boolean> {
+    let created = false;
 
     await withBusy("create", async () => {
-      const result = await createMarketingQrCode(locationId, trimmed);
+      const result = await createMarketingQrCode(locationId, name);
 
       if (!result.success || !result.row) {
         toast.error(result.error ?? "Could not create the code.");
@@ -213,9 +273,15 @@ export function MarketingQrManager({
 
       setRows((prev) => [result.row!, ...prev]);
       setSelectedId(result.row.id);
-      setName("");
+      // A new code must be visible the moment it lands, even if the filters in
+      // force would have hidden it.
+      setSearch("");
+      setStatusFilter("all");
+      created = true;
       toast.success(`“${result.row.name}” is ready to print.`);
     });
+
+    return created;
   }
 
   async function handleDeactivate(row: MarketingQrRow) {
@@ -300,19 +366,32 @@ export function MarketingQrManager({
         label="Marketing QR codes"
         caption={`Codes for flyers, decals and packaging at ${locationName}. These point at your storefront, not at a table.`}
         action={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void load()}
-            disabled={isLoading || busyKey !== null}
-          >
-            {isLoading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
-            )}
-            Refresh
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void load()}
+              disabled={isLoading || busyKey !== null}
+            >
+              {isLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Refresh
+            </Button>
+            {/* Lives here rather than in the toolbar below because the toolbar
+                only appears once codes exist, and the first code has to be
+                reachable too. */}
+            <Button
+              size="sm"
+              onClick={() => setIsCreateOpen(true)}
+              disabled={busyKey !== null}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              New code
+            </Button>
+          </div>
         }
       >
         <div className="space-y-4">
@@ -334,7 +413,7 @@ export function MarketingQrManager({
                   ? `Preview of the marketing QR code “${selected.name}”`
                   : "Preview of the marketing QR code"
               }
-              emptyLabel="Create a marketing code to see the branded preview."
+              emptyLabel="Choose New code to see the branded preview."
             />
             <div className="min-w-0 space-y-1">
               <p className="text-sm font-medium">
@@ -343,7 +422,7 @@ export function MarketingQrManager({
               <p className="text-sm text-muted-foreground">
                 {selected
                   ? "Downloads use this exact artwork, in your brand colours."
-                  : "Create a code below to see it here."}
+                  : "Choose New code to make your first one."}
               </p>
               {selected ? (
                 <p className="break-all font-mono text-xs text-muted-foreground">
@@ -353,31 +432,40 @@ export function MarketingQrManager({
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void handleCreate();
-              }}
-              placeholder="Name this code, e.g. Front window decal"
-              aria-label="Name for the new marketing QR code"
-              maxLength={80}
-              disabled={busyKey !== null}
-            />
-            <Button
-              className="shrink-0"
-              onClick={() => void handleCreate()}
-              disabled={busyKey !== null || !name.trim()}
-            >
-              {busyKey === "create" ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" />
-              )}
-              Create code
-            </Button>
-          </div>
+          {!isLoading && rows.length > 0 ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative min-w-0 flex-1">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search codes by name or code"
+                  aria-label="Search marketing codes"
+                  className="pl-9"
+                />
+              </div>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+              >
+                <SelectTrigger className="sm:w-48" aria-label="Filter by status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(STATUS_FILTER_LABELS) as StatusFilter[]).map(
+                    (value) => (
+                      <SelectItem key={value} value={value}>
+                        {STATUS_FILTER_LABELS[value]}
+                      </SelectItem>
+                    )
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           {isLoading ? (
             <div
@@ -390,16 +478,33 @@ export function MarketingQrManager({
             </div>
           ) : rows.length === 0 ? (
             <div className="rounded-2xl border-0 bg-muted/60 px-4 py-8 text-sm text-muted-foreground shadow-none">
-              No marketing codes yet. Create one above, then download it as an
-              SVG for print or a PNG for social.
+              No marketing codes yet. Choose{" "}
+              <span className="font-medium">New code</span>, then download it as
+              an SVG for print or a PNG for social.
+            </div>
+          ) : filteredRows.length === 0 ? (
+            <div className="flex flex-col items-start gap-3 rounded-2xl border-0 bg-muted/60 px-4 py-8 text-sm text-muted-foreground shadow-none">
+              <p>No codes match this search.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSearch("");
+                  setStatusFilter("all");
+                }}
+              >
+                Clear filters
+              </Button>
             </div>
           ) : (
             <>
               <p className="text-sm text-muted-foreground tabular-nums">
-                {activeCount} active · {rows.length} total
+                {isFiltered
+                  ? `Showing ${filteredRows.length} of ${rows.length}`
+                  : `${activeCount} active · ${rows.length} total`}
               </p>
               <div className="divide-y divide-border/60 rounded-2xl border-0 bg-muted/40 px-3 shadow-none">
-                {rows.map((row) => {
+                {filteredRows.map((row) => {
                   const isBusy = busyKey?.endsWith(row.id) ?? false;
 
                   return (
@@ -491,6 +596,15 @@ export function MarketingQrManager({
           )}
         </div>
       </PanelSection>
+
+      <MarketingQrCreateDialog
+        open={isCreateOpen}
+        onOpenChange={setIsCreateOpen}
+        branding={qrBranding}
+        previewUrl={previewUrl}
+        isCreating={busyKey === "create"}
+        onCreate={handleCreate}
+      />
 
       <AlertDialog
         open={pendingDeactivation !== null}
