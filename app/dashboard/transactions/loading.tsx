@@ -2,6 +2,10 @@ import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleto
 
 export default function RouteLoading() {
   return (
-    <DataPageSkeleton variant="analytics" shell="plain" label="Loading transactions" />
+    <DataPageSkeleton
+      variant="financials"
+      shell="plain"
+      label="Loading financial information"
+    />
   )
 }

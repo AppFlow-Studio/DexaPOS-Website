@@ -9,6 +9,10 @@ export type DataPageSkeletonVariant =
   | 'catalog'
   | 'table'
   | 'detail'
+  | 'payments'
+  | 'financials'
+  | 'thread'
+  | 'profile'
 
 type DataPageSkeletonProps = {
   variant: DataPageSkeletonVariant
@@ -22,6 +26,13 @@ type DataPageSkeletonProps = {
   /** Renders the page title/subtitle/action block. HQ detail routes that own
    * their own breadcrumb pass `false` and get the breadcrumb line instead. */
   showHeader?: boolean
+  /**
+   * Mirrors `PageShell`'s own `width`. Routes that render inside
+   * `PageShell width="narrow"` — profile, the support thread — must say so,
+   * or the skeleton spans the full width and the page visibly narrows the
+   * moment it arrives.
+   */
+  width?: 'full' | 'narrow'
   /**
    * `report` only. Report pages share a KPI row but diverge below it, so each
    * route states its own shape rather than inheriting a generic one that
@@ -409,6 +420,197 @@ function DetailSkeleton() {
   )
 }
 
+/**
+ * `/dashboard/payments`: a two-pill tab strip, a 4-tile stat row, a
+ * THREE-across chart grid, then the All Payments table panel.
+ *
+ * Not the `analytics` variant: that leads with one big hero chart and closes
+ * with four two-column summary panels. This page has neither, so the generic
+ * shape promised a layout that never arrived.
+ */
+function PaymentsSkeleton() {
+  return (
+    <>
+      <div className="flex gap-2 overflow-x-auto rounded-full bg-muted/40 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <LoadingBlock className="h-9 w-32 shrink-0 rounded-full" />
+        <LoadingBlock className="h-9 w-28 shrink-0 rounded-full" />
+      </div>
+
+      <StatSkeletons />
+
+      {/* Mirrors PaymentCharts: three nested panels, each a title over a
+          200px plot. */}
+      <div className="grid min-w-0 gap-4 md:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <Panel key={index} nested className="min-w-0 px-4 py-4 sm:px-6">
+            <LoadingBlock className="h-5 w-32 max-w-full" />
+            <LoadingBlock className="mt-4 h-[200px] w-full" />
+          </Panel>
+        ))}
+      </div>
+
+      <Panel padded>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <LoadingBlock className="h-5 w-32 max-w-full" />
+            <LoadingBlock className="h-8 w-24 rounded-full" />
+          </div>
+          <div className="min-w-0 space-y-2">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <LoadingBlock key={index} className="h-10 w-full" />
+            ))}
+          </div>
+        </div>
+      </Panel>
+    </>
+  )
+}
+
+/**
+ * `/dashboard/transactions`: hero chart panel, a 4-tile stat row, a
+ * three-pill tab strip, then the overview tab's SIX summary cards in two
+ * columns.
+ *
+ * Close to `analytics` but not equal to it: that variant draws four summary
+ * panels and omits the panel wrapper this page puts around its stat row. The
+ * route loader and the in-page loading gate both render this, so the two hand
+ * off without the layout shifting.
+ */
+function FinancialsSkeleton() {
+  return (
+    <>
+      <Panel padded>
+        <div className="flex min-h-[22rem] flex-col gap-5 sm:min-h-[25rem]">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-3">
+              <LoadingBlock className="h-10 w-44 max-w-full" />
+              <LoadingBlock className="h-4 w-28 rounded-full" />
+            </div>
+            <LoadingBlock className="h-9 w-36 rounded-full" />
+          </div>
+          <LoadingBlock className="min-h-52 flex-1" />
+        </div>
+      </Panel>
+
+      <StatSkeletons />
+
+      <div className="flex gap-2 overflow-x-auto rounded-full bg-muted/40 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <LoadingBlock key={index} className="h-9 w-32 shrink-0 rounded-full" />
+        ))}
+      </div>
+
+      <div className="grid min-w-0 gap-4 md:grid-cols-2">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Panel key={index} padded className="space-y-5">
+            <LoadingBlock className="h-5 w-36 max-w-full" />
+            {Array.from({ length: 4 }).map((__, rowIndex) => (
+              <div
+                key={rowIndex}
+                className="flex items-center justify-between gap-4"
+              >
+                <LoadingBlock className="h-4 w-28 max-w-full rounded-full" />
+                <LoadingBlock className="h-5 w-20 shrink-0 rounded-full" />
+              </div>
+            ))}
+          </Panel>
+        ))}
+      </div>
+    </>
+  )
+}
+
+/**
+ * A support ticket conversation: a status/meta line, then the message thread
+ * in one tall panel with a composer pinned under it.
+ *
+ * Alternating bubble alignment and widths are deliberate — a column of
+ * identical full-width rows does not read as a conversation. The shapes are
+ * fixed per index rather than random so server and client markup agree.
+ */
+const THREAD_BUBBLES = [
+  { own: false, width: 'w-3/4', height: 'h-16' },
+  { own: true, width: 'w-2/3', height: 'h-12' },
+  { own: false, width: 'w-1/2', height: 'h-12' },
+  { own: true, width: 'w-3/4', height: 'h-20' },
+  { own: false, width: 'w-2/3', height: 'h-14' },
+]
+
+function ThreadSkeleton() {
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <LoadingBlock className="h-6 w-24 rounded-full" />
+        <LoadingBlock className="h-6 w-20 rounded-full" />
+      </div>
+
+      <Panel
+        padded
+        className="flex h-[55dvh] flex-col sm:h-auto sm:min-h-[420px]"
+      >
+        <div className="min-h-0 flex-1 space-y-4">
+          {THREAD_BUBBLES.map((bubble, index) => (
+            <div key={index} className={cn('flex', bubble.own && 'justify-end')}>
+              <LoadingBlock
+                className={cn('max-w-[75%]', bubble.width, bubble.height)}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 flex items-end gap-2">
+          <LoadingBlock className="h-11 flex-1 rounded-2xl" />
+          <LoadingBlock className="h-11 w-11 shrink-0 rounded-full" />
+        </div>
+      </Panel>
+    </>
+  )
+}
+
+/**
+ * `/dashboard/profile`: an identity panel (avatar beside name/email) over the
+ * account-management panel. The lower block is Clerk's `<UserProfile>`, which
+ * renders its own side nav beside a form, so the skeleton splits the same way
+ * rather than drawing one undifferentiated slab.
+ */
+function ProfileSkeleton() {
+  return (
+    <>
+      <Panel padded>
+        <div className="flex items-center gap-4">
+          <LoadingBlock className="h-16 w-16 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <LoadingBlock className="h-5 w-40 max-w-full" />
+            <LoadingBlock className="h-4 w-56 max-w-full rounded-full" />
+            <LoadingBlock className="h-5 w-28 max-w-full rounded-full" />
+          </div>
+        </div>
+      </Panel>
+
+      <Panel padded>
+        <div className="flex min-w-0 flex-col gap-6 sm:flex-row">
+          <div className="w-full shrink-0 space-y-2 sm:w-48">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <LoadingBlock key={index} className="h-9 w-full rounded-full" />
+            ))}
+          </div>
+
+          <div className="min-w-0 flex-1 space-y-6">
+            <LoadingBlock className="h-6 w-40 max-w-full" />
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="min-w-0 space-y-2">
+                <LoadingBlock className="h-3 w-24 rounded-full" />
+                <LoadingBlock className="h-10 w-full rounded-full" />
+              </div>
+            ))}
+            <LoadingBlock className="h-9 w-32 rounded-full" />
+          </div>
+        </div>
+      </Panel>
+    </>
+  )
+}
+
 const VARIANT_BODIES: Record<
   Exclude<DataPageSkeletonVariant, 'report'>,
   () => React.JSX.Element
@@ -418,6 +620,10 @@ const VARIANT_BODIES: Record<
   catalog: CatalogSkeleton,
   table: TableSkeleton,
   detail: DetailSkeleton,
+  payments: PaymentsSkeleton,
+  financials: FinancialsSkeleton,
+  thread: ThreadSkeleton,
+  profile: ProfileSkeleton,
 }
 
 export function DataPageSkeleton({
@@ -427,12 +633,21 @@ export function DataPageSkeleton({
   // `detail` opens with its own breadcrumb + identity header, so the generic
   // title block would be a second, duplicate header.
   showHeader = variant !== 'detail',
+  // These two render inside `PageShell width="narrow"`, so they default to it
+  // rather than making every caller remember.
+  width = variant === 'profile' || variant === 'thread' ? 'narrow' : 'full',
   report,
 }: DataPageSkeletonProps) {
-  const Body =
-    variant === 'report'
-      ? () => <ReportSkeleton {...(report ?? {})} />
-      : VARIANT_BODIES[variant]
+  // Rendered as an element, not assigned to a capitalised variable and used
+  // as `<Body />`: the arrow form defines a new component type on every
+  // render, which remounts the subtree and trips react-hooks' "cannot create
+  // components during render".
+  const body =
+    variant === 'report' ? (
+      <ReportSkeleton {...(report ?? {})} />
+    ) : (
+      VARIANT_BODIES[variant]()
+    )
 
   const content = (
     <div
@@ -444,7 +659,7 @@ export function DataPageSkeleton({
     >
       <span className="sr-only">{label}</span>
       {showHeader ? <HeaderSkeleton /> : null}
-      <Body />
+      {body}
     </div>
   )
 
@@ -452,5 +667,5 @@ export function DataPageSkeleton({
     return content
   }
 
-  return <PageShell>{content}</PageShell>
+  return <PageShell width={width}>{content}</PageShell>
 }
