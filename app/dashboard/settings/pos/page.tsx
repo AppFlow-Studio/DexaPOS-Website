@@ -587,9 +587,10 @@ export default function PosSettingsPage() {
                 />
               </div>
 
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <Button
                   variant="outline"
+                  className="w-full sm:w-auto"
                   disabled={!locationIsDirty || saveLocationMutation.isPending}
                   onClick={() => {
                     if (data?.location.pos_config) {
@@ -603,6 +604,7 @@ export default function PosSettingsPage() {
                   Reset
                 </Button>
                 <Button
+                  className="w-full sm:w-auto"
                   disabled={!locationIsDirty || saveLocationMutation.isPending}
                   onClick={handleSaveLocation}
                 >

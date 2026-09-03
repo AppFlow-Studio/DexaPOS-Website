@@ -246,7 +246,7 @@ export async function GetInvoices(
       return emptyPaginatedResult(pagination);
     }
 
-    const overdue = ((data as Invoice[]) || []).filter((invoice) =>
+    const overdue = ((data as unknown as Invoice[]) || []).filter((invoice) =>
       isOverdue(invoice),
     );
 

@@ -1,15 +1,19 @@
 "use client";
 
-import { UserProfile } from "@clerk/nextjs";
+import { UserProfile, useUser } from "@clerk/nextjs";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useIsDarkTheme } from "@/app/sign-in/clerk-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PageShell, PageHeader, Panel } from "@/components/dashboard/shell";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UserProfileFallback } from "@/components/profile/UserProfileFallback";
 
 export default function ProfilePage() {
   const { data: userInfo, isLoading } = useUserInfo();
   const isDark = useIsDarkTheme();
+  // Clerk renders nothing until its script boots, leaving the Panel below an
+  // empty box for seconds. Hold its shape until the widget can paint.
+  const { isLoaded: isClerkLoaded } = useUser();
 
   // `UserProfile` types `appearance` as `Theme`, which omits `baseTheme` — and
   // passing it anyway had no effect (Clerk set none of its `--clerk-color-*`
@@ -97,6 +101,8 @@ export default function ProfilePage() {
           to a constants module so Tailwind is guaranteed to scan every class
           (C7): a class living only in a `.ts` file generates no CSS rule. */}
       <Panel padded>
+        {!isClerkLoaded ? <UserProfileFallback /> : null}
+        <div className={isClerkLoaded ? undefined : "hidden"}>
         <UserProfile
           routing="hash"
           appearance={{
@@ -142,6 +148,7 @@ export default function ProfilePage() {
             },
           }}
         />
+        </div>
       </Panel>
     </PageShell>
   );
