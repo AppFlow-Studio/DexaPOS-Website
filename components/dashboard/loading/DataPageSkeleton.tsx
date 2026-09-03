@@ -13,6 +13,9 @@ export type DataPageSkeletonVariant =
   | 'financials'
   | 'thread'
   | 'profile'
+  | 'stations'
+  | 'pos-settings'
+  | 'media-gallery'
 
 type DataPageSkeletonProps = {
   variant: DataPageSkeletonVariant
@@ -62,14 +65,16 @@ function LoadingBlock({ className }: { className?: string }) {
   )
 }
 
-function HeaderSkeleton() {
+function HeaderSkeleton({ action = true }: { action?: boolean }) {
   return (
     <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0 space-y-2">
         <LoadingBlock className="h-9 w-52 max-w-[72vw]" />
         <LoadingBlock className="h-4 w-72 max-w-[84vw] rounded-full" />
       </div>
-      <LoadingBlock className="h-9 w-full rounded-full sm:w-48" />
+      {/* Pages whose PageHeader takes no `actions` must not promise a button
+          here — it vanishes on load and drags the header's height with it. */}
+      {action ? <LoadingBlock className="h-9 w-full rounded-full sm:w-48" /> : null}
     </div>
   )
 }
@@ -573,9 +578,19 @@ function ThreadSkeleton() {
  * renders its own side nav beside a form, so the skeleton splits the same way
  * rather than drawing one undifferentiated slab.
  */
+/**
+ * Mirrors `/dashboard/profile`: an identity Panel over Clerk's `<UserProfile>`.
+ *
+ * Shapes are taken from the rendered widget rather than guessed — its nav is a
+ * titled rail with exactly two items (Profile, Security), and the body is a
+ * stack of read-only detail ROWS (label / value / action), not a form. An
+ * earlier version drew three nav pills over three rounded inputs and a submit
+ * button, none of which the page has.
+ */
 function ProfileSkeleton() {
   return (
     <>
+      {/* Identity summary — avatar, name, email, org pill. */}
       <Panel padded>
         <div className="flex items-center gap-4">
           <LoadingBlock className="h-16 w-16 shrink-0 rounded-full" />
@@ -589,22 +604,262 @@ function ProfileSkeleton() {
 
       <Panel padded>
         <div className="flex min-w-0 flex-col gap-6 sm:flex-row">
-          <div className="w-full shrink-0 space-y-2 sm:w-48">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <LoadingBlock key={index} className="h-9 w-full rounded-full" />
-            ))}
+          {/* Clerk's nav rail: "Account" + subtitle, then Profile / Security. */}
+          <div className="w-full shrink-0 space-y-4 sm:w-56">
+            <div className="space-y-2">
+              <LoadingBlock className="h-6 w-28 max-w-full" />
+              <LoadingBlock className="h-3 w-40 max-w-full rounded-full" />
+            </div>
+            <div className="space-y-1.5">
+              {Array.from({ length: 2 }).map((_, index) => (
+                <LoadingBlock key={index} className="h-8 w-full rounded-full" />
+              ))}
+            </div>
           </div>
 
-          <div className="min-w-0 flex-1 space-y-6">
-            <LoadingBlock className="h-6 w-40 max-w-full" />
+          {/* "Profile details" over its detail rows. */}
+          <div className="min-w-0 flex-1 space-y-5">
+            <LoadingBlock className="h-6 w-36 max-w-full" />
             {Array.from({ length: 3 }).map((_, index) => (
-              <div key={index} className="min-w-0 space-y-2">
-                <LoadingBlock className="h-3 w-24 rounded-full" />
-                <LoadingBlock className="h-10 w-full rounded-full" />
+              <div
+                key={index}
+                className="flex min-w-0 items-center justify-between gap-4"
+              >
+                <LoadingBlock className="h-4 w-28 shrink-0 rounded-full" />
+                <LoadingBlock className="h-4 min-w-0 flex-1 rounded-full" />
+                <LoadingBlock className="hidden h-4 w-20 shrink-0 rounded-full sm:block" />
               </div>
             ))}
-            <LoadingBlock className="h-9 w-32 rounded-full" />
           </div>
+        </div>
+      </Panel>
+    </>
+  )
+}
+
+/**
+ * One `PanelSection` heading: the brand-blue icon + label row, then the
+ * caption line under it. Every settings panel opens this way, so the three
+ * settings variants below share this rather than each redrawing it.
+ */
+function PanelHeadingSkeleton({ action = false }: { action?: boolean }) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+      <div className="min-w-0 flex-1 basis-64 space-y-2">
+        <div className="flex items-center gap-2">
+          <LoadingBlock className="h-[1.125rem] w-[1.125rem] shrink-0 rounded-md" />
+          <LoadingBlock className="h-5 w-44 max-w-full" />
+        </div>
+        <LoadingBlock className="h-4 w-64 max-w-full rounded-full" />
+      </div>
+      {action && <LoadingBlock className="h-6 w-12 shrink-0 rounded-full" />}
+    </div>
+  )
+}
+
+/** A label/description line beside a switch — the unit POS defaults is made of. */
+function SettingRowSkeleton() {
+  return (
+    <div className="flex min-w-0 items-start justify-between gap-4 rounded-2xl bg-muted/25 px-4 py-4">
+      <div className="min-w-0 flex-1 space-y-2">
+        <LoadingBlock className="h-4 w-36 max-w-full rounded-full" />
+        <LoadingBlock className="h-3 w-52 max-w-full rounded-full" />
+      </div>
+      <LoadingBlock className="h-5 w-9 shrink-0 rounded-full" />
+    </div>
+  )
+}
+
+/**
+ * `/dashboard/settings/stations`: a search field and two filter pills over the
+ * station list, which is a nine-column table at `xl` and a two-up card grid
+ * below it, closing with the pagination row.
+ *
+ * Deliberately NOT the `table` variant: that one leads with a four-tile KPI
+ * row this page never renders, and draws a single column of rows where this
+ * page shows a responsive card grid on everything narrower than a desktop.
+ */
+export function StationsBodySkeleton() {
+  return (
+    <>
+      <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
+        <LoadingBlock className="h-10 w-full rounded-full sm:w-[300px]" />
+        <LoadingBlock className="h-9 w-full rounded-full sm:w-[180px]" />
+        <LoadingBlock className="h-9 w-full rounded-full sm:w-[140px]" />
+      </div>
+
+      {/* Desktop table — a header band over the rows, matching the real page's
+          `hidden xl:block` split. */}
+      <div className="hidden min-w-0 xl:block">
+        <Panel>
+          <div className="min-w-0 space-y-2 px-4 py-4 sm:px-6">
+            <LoadingBlock className="h-10 w-full" />
+            {Array.from({ length: 6 }).map((_, index) => (
+              <LoadingBlock key={index} className="h-14 w-full" />
+            ))}
+          </div>
+        </Panel>
+      </div>
+
+      {/* Card grid below `xl`, mirroring `grid-cols-1 sm:grid-cols-2`. */}
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div
+            key={index}
+            className="min-w-0 space-y-4 rounded-2xl bg-muted/25 p-4"
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <LoadingBlock className="h-9 w-9 shrink-0 rounded-xl" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <LoadingBlock className="h-4 w-32 max-w-full rounded-full" />
+                <LoadingBlock className="h-3 w-24 max-w-full rounded-full" />
+              </div>
+              <LoadingBlock className="h-6 w-16 shrink-0 rounded-full" />
+            </div>
+            <LoadingBlock className="h-3 w-40 max-w-full rounded-full" />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <LoadingBlock className="h-4 w-48 max-w-full rounded-full" />
+        <div className="flex items-center gap-2">
+          <LoadingBlock className="h-9 w-28 rounded-full" />
+          <LoadingBlock className="h-9 w-24 rounded-full" />
+        </div>
+      </div>
+    </>
+  )
+}
+
+/**
+ * `/dashboard/settings/pos`: the "how this resolves" alert, then a two-column
+ * grid — three location-default panels of switch rows on the left, the station
+ * override panel and the scope note on the right.
+ *
+ * The previous loader drew two equal 520px slabs, so the page visibly
+ * rearranged itself into an alert plus an uneven `1.15fr / 0.85fr` split the
+ * moment the settings arrived. The column ratio and the switch-row rhythm are
+ * reproduced here for that reason.
+ */
+export function PosSettingsBodySkeleton() {
+  return (
+    <>
+      <div className="flex min-w-0 items-start gap-3 rounded-2xl border bg-card px-4 py-4">
+        <LoadingBlock className="mt-0.5 h-4 w-4 shrink-0 rounded-md" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <LoadingBlock className="h-4 w-48 max-w-full rounded-full" />
+          <LoadingBlock className="h-3 w-full rounded-full" />
+          <LoadingBlock className="h-3 w-3/4 rounded-full" />
+        </div>
+      </div>
+
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <div className="min-w-0 space-y-6">
+          {/* Receipt content and payment behaviour lay their switches out
+              `md:grid-cols-2`; display and notifications is a single column. */}
+          {[
+            { rows: 6, columns: 2, action: true },
+            { rows: 4, columns: 2, action: false },
+            { rows: 4, columns: 1, action: false },
+          ].map((panel, index) => (
+            <Panel key={index}>
+              <div className="min-w-0 space-y-5 px-4 py-8 sm:px-6">
+                <PanelHeadingSkeleton action={panel.action} />
+                <div
+                  className={cn(
+                    'grid min-w-0 gap-3',
+                    panel.columns === 2 && 'md:grid-cols-2',
+                  )}
+                >
+                  {Array.from({ length: panel.rows }).map((_, rowIndex) => (
+                    <SettingRowSkeleton key={rowIndex} />
+                  ))}
+                </div>
+              </div>
+            </Panel>
+          ))}
+        </div>
+
+        <div className="min-w-0 space-y-6">
+          <Panel>
+            <div className="min-w-0 space-y-5 px-4 py-8 sm:px-6">
+              <PanelHeadingSkeleton />
+              {/* Station picker, then the controls it can override. */}
+              <div className="min-w-0 space-y-2">
+                <LoadingBlock className="h-4 w-20 rounded-full" />
+                <LoadingBlock className="h-10 w-full rounded-full" />
+              </div>
+              {Array.from({ length: 4 }).map((_, index) => (
+                <SettingRowSkeleton key={index} />
+              ))}
+              <LoadingBlock className="h-9 w-32 rounded-full" />
+            </div>
+          </Panel>
+
+          <Panel>
+            <div className="min-w-0 space-y-5 px-4 py-8 sm:px-6">
+              <PanelHeadingSkeleton />
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <LoadingBlock key={index} className="h-3 w-full rounded-full" />
+                ))}
+                <LoadingBlock className="h-3 w-2/3 rounded-full" />
+              </div>
+            </div>
+          </Panel>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/**
+ * The gallery tiles on their own. Each carries the real 16:9 aspect ratio, so
+ * the uploaded images drop into place rather than pushing the page down.
+ */
+export function MediaGalleryGridSkeleton() {
+  return (
+    <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div
+          key={index}
+          className="min-w-0 overflow-hidden rounded-2xl bg-muted/45"
+        >
+          <LoadingBlock className="aspect-video w-full rounded-none" />
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <LoadingBlock className="h-3 w-24 max-w-full rounded-full" />
+            <LoadingBlock className="h-8 w-8 shrink-0 rounded-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * `/dashboard/settings/customer-display`: an upload dropzone panel over the
+ * image gallery, a three-across grid of 16:9 cards.
+ *
+ * The gallery tiles carry the same aspect ratio as the real ones, so the
+ * carousel images drop into place rather than pushing the page down.
+ */
+export function MediaGalleryBodySkeleton() {
+  return (
+    <>
+      <Panel>
+        <div className="min-w-0 space-y-4 px-4 py-8 sm:px-6">
+          <PanelHeadingSkeleton />
+          {/* The dropzone itself — one tall drop target, not a row of bars. */}
+          <LoadingBlock className="h-40 w-full" />
+          <LoadingBlock className="h-3 w-72 max-w-full rounded-full" />
+        </div>
+      </Panel>
+
+      <Panel>
+        <div className="min-w-0 space-y-5 px-4 py-8 sm:px-6">
+          <PanelHeadingSkeleton />
+          <MediaGalleryGridSkeleton />
         </div>
       </Panel>
     </>
@@ -624,6 +879,9 @@ const VARIANT_BODIES: Record<
   financials: FinancialsSkeleton,
   thread: ThreadSkeleton,
   profile: ProfileSkeleton,
+  stations: StationsBodySkeleton,
+  'pos-settings': PosSettingsBodySkeleton,
+  'media-gallery': MediaGalleryBodySkeleton,
 }
 
 export function DataPageSkeleton({
@@ -658,7 +916,7 @@ export function DataPageSkeleton({
       className="min-w-0 space-y-6"
     >
       <span className="sr-only">{label}</span>
-      {showHeader ? <HeaderSkeleton /> : null}
+      {showHeader ? <HeaderSkeleton action={variant !== 'profile'} /> : null}
       {body}
     </div>
   )

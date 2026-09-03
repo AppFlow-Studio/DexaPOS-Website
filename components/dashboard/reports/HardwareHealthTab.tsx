@@ -194,9 +194,12 @@ function DrawerStatusPanel({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
         ) : statuses.length === 0 ? (
           <EmptyState title="No active cash drawers" description="Add a drawer under Cash Drawers to see hardware status" />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             {statuses.map((s) => (
-              <div key={s.cash_drawer_id} className="rounded-lg border bg-card p-3">
+              <div
+                key={s.cash_drawer_id}
+                className="min-w-0 rounded-lg border bg-card p-3"
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{s.drawer_name}</p>
@@ -315,7 +318,9 @@ function KickEventsTable({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date })
   const skeletonRows = Array.from({ length: 5 });
 
   return (
-    <div className="space-y-4">
+    // min-w-0 so the table below scrolls inside its own container instead of
+    // widening this column and pushing the whole tab past the viewport.
+    <div className="min-w-0 space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -598,7 +603,10 @@ export function HardwareHealthTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo
   ];
 
   return (
-    <div className="space-y-6">
+    // min-w-0: without it this column floors at its widest child's intrinsic
+    // width, so the whole tab grows past the viewport and the cards below
+    // clip at the screen edge no matter how they wrap internally.
+    <div className="min-w-0 space-y-6">
       <Panel padded>
         <StatRow columns={4}>
           {tiles.map((t) => (

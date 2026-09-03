@@ -16,6 +16,9 @@ const VARIANTS: DataPageSkeletonVariant[] = [
   "financials",
   "thread",
   "profile",
+  "stations",
+  "pos-settings",
+  "media-gallery",
 ];
 
 describe("DataPageSkeleton — accessibility contract", () => {
