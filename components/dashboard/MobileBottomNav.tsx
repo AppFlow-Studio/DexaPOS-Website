@@ -61,6 +61,19 @@ export function MobileBottomNav({
     setMoreOpen(false);
   };
 
+  const handleMoreOpenChange = (open: boolean) => {
+    if (!open) {
+      closeMore();
+      return;
+    }
+
+    // Radix can request an open while it restores focus to the trigger during
+    // the close animation. Apply the same guard used by the trigger itself so
+    // that request cannot produce a close -> reopen -> close flash.
+    if (Date.now() < closingUntil.current) return;
+    setMoreOpen(true);
+  };
+
   // Navigation is the authoritative "the link was followed" signal — more
   // reliable than the link's own onClick, which can be pre-empted by the
   // close animation. Closing here is conditional on the sheet actually being
@@ -141,7 +154,7 @@ export function MobileBottomNav({
 
       <Sheet
         open={moreOpen}
-        onOpenChange={(open) => (open ? setMoreOpen(true) : closeMore())}
+        onOpenChange={handleMoreOpenChange}
       >
         <SheetContent side="bottom" className="h-[70vh] overflow-y-auto">
           <SheetHeader className="pb-2">
