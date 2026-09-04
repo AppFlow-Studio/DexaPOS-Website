@@ -55,7 +55,7 @@ export function SettingsSectionNav() {
           list and the sections past the cut become unreachable. */}
       <nav
         aria-label="Settings sections"
-        className="thin-scrollbar -mx-1 overflow-x-auto px-1 pb-1"
+        className="no-scrollbar -mx-1 overflow-x-auto px-1 pb-1"
       >
         <div className="flex min-w-max items-center gap-1 xl:min-w-0 xl:flex-col xl:items-stretch">
           {SETTINGS_SECTIONS.map(({ label, href, icon: Icon }) => {

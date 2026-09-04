@@ -7,7 +7,7 @@ import {
   type OnlineOrderingSettings,
   type OnlineStoreSetupStatus,
 } from "./hooks/useOnlineOrderingSettings";
-import { useGatedLocationId, useGatedLocation } from "@/stores/location-store";
+import { useGatedLocationId, useGatedLocation, useHasLocations } from "@/stores/location-store";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +57,7 @@ import {
   getOnlineStoreRequestRequirements,
   saveOnlineStoreRequestRequirements,
 } from "./actions";
+import { OnlineOrderingSkeleton } from "./OnlineOrderingSkeleton";
 
 function SettingsToggleRow({
   title,
@@ -1252,6 +1253,9 @@ export default function OnlineOrderingPage() {
   const selectedLocationId = gatedLocationId ?? "all";
   const selectedLocation = useGatedLocation();
   const isAllLocations = !gatedLocationId;
+  // Distinguishes "the store has not populated yet" from "this account really
+  // has no location to show" — see the guard further down.
+  const hasLocations = useHasLocations();
 
   const [requirementsOpen, setRequirementsOpen] = useState(false);
   const [requirementsMissing, setRequirementsMissing] = useState<Record<string, boolean> | null>(null);
@@ -1287,6 +1291,15 @@ export default function OnlineOrderingPage() {
   }
 
   if (!selectedLocationId || !selectedLocation) {
+    // The location list lives in a persisted Zustand store that starts as `[]`,
+    // so `selectedLocation` is null on first paint for a perfectly healthy
+    // account. Rendering "Location unavailable" there turns a pending state
+    // into a dead end, so wait until the store actually has locations before
+    // concluding one is missing.
+    if (!hasLocations) {
+      return <OnlineOrderingSkeleton />;
+    }
+
     return (
       <PageShell>
         <PageHeader title="Online Ordering" />
@@ -1304,17 +1317,7 @@ export default function OnlineOrderingPage() {
   const currentSettings = settings.find((entry) => entry.locationId === selectedLocationId);
 
   if (isLoading && !currentSettings) {
-    return (
-      <PageShell>
-        <PageHeader
-          title="Online Ordering"
-          indicator={<LocationIndicator isAllLocations={false} locationName={selectedLocation.name} />}
-        />
-        <Panel className="flex h-56 items-center justify-center" aria-label="Loading online ordering settings">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </Panel>
-      </PageShell>
-    );
+    return <OnlineOrderingSkeleton />;
   }
 
   if (!currentSettings) {

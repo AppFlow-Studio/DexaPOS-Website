@@ -62,7 +62,7 @@ export default function OrganizationsPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-2">
                     <div className="h-7 w-48 bg-muted rounded-md animate-pulse" />
-                    <div className="h-4 w-72 bg-muted rounded-md animate-pulse" />
+                    <div className="h-4 w-72 max-w-full bg-muted rounded-md animate-pulse" />
                 </div>
                 <div className="h-9 w-32 bg-muted rounded-md animate-pulse" />
             </div>
@@ -70,13 +70,13 @@ export default function OrganizationsPage() {
             {/* KPI cards skeleton */}
             <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                 {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="border rounded-xl p-4 bg-card">
+                    <div key={i} className="min-w-0 overflow-hidden border rounded-xl p-4 bg-card">
                         <div className="flex items-center justify-between pb-2">
-                            <div className="h-4 w-24 bg-muted rounded-md animate-pulse" />
+                            <div className="h-4 w-24 max-w-full bg-muted rounded-md animate-pulse" />
                             <div className="h-4 w-4 bg-muted rounded-sm animate-pulse" />
                         </div>
-                        <div className="h-7 w-28 bg-muted rounded-md animate-pulse" />
-                        <div className="h-3 w-40 mt-2 bg-muted rounded-md animate-pulse" />
+                        <div className="h-7 w-28 max-w-full bg-muted rounded-md animate-pulse" />
+                        <div className="h-3 w-40 max-w-full mt-2 bg-muted rounded-md animate-pulse" />
                     </div>
                 ))}
             </div>
@@ -84,14 +84,14 @@ export default function OrganizationsPage() {
             {/* Table skeleton */}
             <div className="border rounded-xl overflow-hidden">
                 <div className="border-b p-4">
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-2">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0 space-y-2">
                             <div className="h-5 w-40 bg-muted rounded-md animate-pulse" />
-                            <div className="h-4 w-64 bg-muted rounded-md animate-pulse" />
+                            <div className="h-4 w-64 max-w-full bg-muted rounded-md animate-pulse" />
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="h-9 w-64 bg-muted rounded-md animate-pulse" />
-                            <div className="h-9 w-20 bg-muted rounded-md animate-pulse" />
+                        <div className="flex min-w-0 items-center gap-2">
+                            <div className="h-9 min-w-0 flex-1 bg-muted rounded-md animate-pulse sm:w-64 sm:flex-none" />
+                            <div className="h-9 w-20 max-w-[35%] shrink-0 bg-muted rounded-md animate-pulse" />
                         </div>
                     </div>
                 </div>
