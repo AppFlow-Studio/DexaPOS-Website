@@ -138,8 +138,11 @@ function InvoiceRowMenu({
             {invoice.status === "draft" ? "Send" : "Resend"}
           </DropdownMenuItem>
         )}
+        {/* Disabled while a status change is in flight: a dropdown item stays
+            clickable otherwise, so a double click fires the mutation twice. */}
         {invoice.status !== "paid" && (
           <DropdownMenuItem
+            disabled={updateStatus.isPending}
             onClick={() =>
               updateStatus.mutate({ invoiceId: invoice.id, status: "paid" })
             }
@@ -150,6 +153,7 @@ function InvoiceRowMenu({
         )}
         {invoice.status !== "cancelled" && (
           <DropdownMenuItem
+            disabled={updateStatus.isPending}
             onClick={() =>
               updateStatus.mutate({ invoiceId: invoice.id, status: "cancelled" })
             }
@@ -195,15 +199,51 @@ export default function InvoicesPage() {
 
   const {
     data: invoiceResult,
-    isLoading,
+    isLoading: isInvoicesLoading,
     isFetching,
+    isPlaceholderData,
   } = useInvoices(
     activeTab === "all" ? null : activeTab,
     { page, pageSize },
   );
+
+  // The query uses keepPreviousData, so switching status tab leaves the
+  // PREVIOUS filter's invoices on screen under the new tab. Those rows are
+  // not what the tab claims to show, so they are replaced by the skeleton.
+  // A plain refetch of the same key is not placeholder data, so manual
+  // refresh still keeps its rows visible.
+  const isLoading = isInvoicesLoading || isPlaceholderData;
   const invoices = invoiceResult?.data ?? [];
   const pagination =
     invoiceResult?.pagination ?? buildPaginationMeta(0, { page, pageSize });
+
+  // DB-authoritative, location-scoped KPIs (§4) — derived server-side from
+  // amount_paid/paid_at/status; overdue is read-time derived. Refetched via
+  // React Query invalidation whenever any invoice mutation runs.
+  // The `?? 0` fallbacks below are the right resting value but the wrong
+  // pending one: while the query is in flight they render "$0.00 / 0", which
+  // reads as a settled, empty ledger rather than an unfinished request. The
+  // tiles take `isLoading` so the figure skeletonises and the label stays.
+  const { data: kpi, isLoading: isKpiLoading } = useInvoiceKpis();
+
+  // How many rows the pending tab will actually render, or null when unknown.
+  // While `isPlaceholderData` holds, `invoiceResult` still belongs to the
+  // PREVIOUS tab, so its total says nothing about the tab being entered — but
+  // the KPIs do, for the tabs they cover. Sizing the skeleton to this instead
+  // of a fixed five stops the placeholder growing taller than the content that
+  // replaces it, which is what makes the section jump.
+  const expectedRows = (() => {
+    if (page > 1) return null; // KPI counts describe the whole tab, not page N
+    if (isKpiLoading || !kpi) return null;
+    if (activeTab === "draft") return Math.min(kpi.draftCount, pageSize);
+    if (activeTab === "overdue") return Math.min(kpi.overdueCount, pageSize);
+    return null;
+  })();
+
+  // A tab the KPIs prove is empty goes straight to the empty state; rendering
+  // five skeleton rows first would only collapse to it a moment later.
+  const showSkeleton = isLoading && expectedRows !== 0;
+  const skeletonRows = expectedRows ?? 5;
 
   const setPage = useCallback(
     (nextPage: number) => {
@@ -229,10 +269,6 @@ export default function InvoicesPage() {
   const updateStatus = useUpdateInvoiceStatus();
   const deleteInvoice = useDeleteInvoice();
 
-  // DB-authoritative, location-scoped KPIs (§4) — derived server-side from
-  // amount_paid/paid_at/status; overdue is read-time derived. Refetched via
-  // React Query invalidation whenever any invoice mutation runs.
-  const { data: kpi } = useInvoiceKpis();
   const outstanding = kpi?.outstanding ?? 0;
   const paidThisMonth = kpi?.paidThisMonth ?? 0;
   const overdueCount = kpi?.overdueCount ?? 0;
@@ -262,24 +298,28 @@ export default function InvoicesPage() {
               icon={<DollarSign />}
               value={formatCurrency(outstanding)}
               meta="Unpaid balance"
+              isLoading={isKpiLoading}
             />
             <StatTile
               label="Paid This Month"
               icon={<CheckCircle2 />}
               value={formatCurrency(paidThisMonth)}
               meta="Current month"
+              isLoading={isKpiLoading}
             />
             <StatTile
               label="Overdue"
               icon={<AlertCircle />}
               value={overdueCount}
               meta="Needs attention"
+              isLoading={isKpiLoading}
             />
             <StatTile
               label="Drafts"
               icon={<Clock />}
               value={draftCount}
               meta="Not sent yet"
+              isLoading={isKpiLoading}
             />
           </StatRow>
         </div>
@@ -313,15 +353,15 @@ export default function InvoicesPage() {
           </div>
 
           <div className="mt-4">
-            {isLoading ? (
+            {showSkeleton ? (
               <div className="rounded-2xl bg-muted/20 p-3">
                 <div className="space-y-2">
-                  {[...Array(5)].map((_, i) => (
+                  {[...Array(skeletonRows)].map((_, i) => (
                     <Skeleton key={i} className="h-12 w-full rounded-2xl" />
                   ))}
                 </div>
               </div>
-            ) : invoices.length === 0 ? (
+            ) : isLoading || invoices.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-2xl bg-muted/20 px-4 py-16 text-center">
                 <FileText className="mb-4 h-12 w-12 text-muted-foreground/30" />
                 <h3 className="mb-1 text-lg font-semibold">No invoices yet</h3>

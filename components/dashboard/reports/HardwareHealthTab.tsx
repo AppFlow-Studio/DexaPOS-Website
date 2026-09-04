@@ -194,9 +194,12 @@ function DrawerStatusPanel({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
         ) : statuses.length === 0 ? (
           <EmptyState title="No active cash drawers" description="Add a drawer under Cash Drawers to see hardware status" />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             {statuses.map((s) => (
-              <div key={s.cash_drawer_id} className="rounded-lg border bg-card p-3">
+              <div
+                key={s.cash_drawer_id}
+                className="min-w-0 rounded-lg border bg-card p-3"
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{s.drawer_name}</p>
@@ -207,28 +210,36 @@ function DrawerStatusPanel({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date 
                         {s.printer_model ? ` · ${s.printer_model}` : ""}
                       </p>
                     ) : (
-                      <p className="mt-0.5 flex items-center gap-1 text-xs text-amber-600">
-                        <Link2Off className="h-3 w-3 shrink-0" />
-                        No printer bound — set on the POS Test Pop screen
+                      <p className="mt-0.5 flex items-start gap-1 text-xs text-amber-600">
+                        <Link2Off className="mt-0.5 h-3 w-3 shrink-0" />
+                        <span className="min-w-0">
+                          No printer bound — set on the POS Test Pop screen
+                        </span>
                       </p>
                     )}
                   </div>
-                  {s.last_kick_outcome ? (
-                    <OutcomeBadge outcome={s.last_kick_outcome} />
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground">
-                      No kicks
-                    </Badge>
-                  )}
+                  {/* shrink-0 so a long drawer name cannot squeeze the badge
+                      out of the card. */}
+                  <div className="shrink-0">
+                    {s.last_kick_outcome ? (
+                      <OutcomeBadge outcome={s.last_kick_outcome} />
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        No kicks
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
-                <div className="mt-2 flex items-center justify-between gap-2">
+                {/* Wraps rather than overflowing: the connectivity label plus
+                    three counters exceed a 320px card on one line. */}
+                <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
                   {s.host_printer_id ? (
                     <ConnectivityDot connected={s.printer_connected} />
                   ) : (
                     <span className="text-xs text-muted-foreground/60">—</span>
                   )}
-                  <div className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs tabular-nums text-muted-foreground">
                     <span className="text-emerald-600">{s.okCount} ok</span>
                     <span className="text-amber-600">{s.unconfirmedCount} unconf</span>
                     <span className="text-red-600">{s.failedCount} fail</span>
@@ -307,7 +318,9 @@ function KickEventsTable({ dateFrom, dateTo }: { dateFrom: Date; dateTo: Date })
   const skeletonRows = Array.from({ length: 5 });
 
   return (
-    <div className="space-y-4">
+    // min-w-0 so the table below scrolls inside its own container instead of
+    // widening this column and pushing the whole tab past the viewport.
+    <div className="min-w-0 space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -590,7 +603,10 @@ export function HardwareHealthTab({ dateFrom, dateTo }: { dateFrom: Date; dateTo
   ];
 
   return (
-    <div className="space-y-6">
+    // min-w-0: without it this column floors at its widest child's intrinsic
+    // width, so the whole tab grows past the viewport and the cards below
+    // clip at the screen edge no matter how they wrap internally.
+    <div className="min-w-0 space-y-6">
       <Panel padded>
         <StatRow columns={4}>
           {tiles.map((t) => (
