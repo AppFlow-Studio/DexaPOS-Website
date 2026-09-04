@@ -41,7 +41,7 @@ export default function IntegrationsSection({ section, ctx }: SectionRenderProps
     if (ctx.mode !== "builder") return null;
 
     return (
-      <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style)}>
+      <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style, ctx.theme)}>
         <Container>
           <SectionHeading
             heading={title || spec.placeholderTitle}
@@ -59,7 +59,7 @@ export default function IntegrationsSection({ section, ctx }: SectionRenderProps
   }
 
   return (
-    <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style)}>
+    <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style, ctx.theme)}>
       <Container>
         <SectionHeading
           heading={title}

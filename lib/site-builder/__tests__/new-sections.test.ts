@@ -6,25 +6,39 @@ import { addableKinds, SECTION_REGISTRY } from "../sections/registry";
 import { parseVideoRef, videoEmbedUrl } from "../sections/schemas/video";
 
 /**
- * The five kinds Phase 4 added: `cards`, `reviews`, `scrolling-banner`,
- * `video`, `pdf`.
+ * The kinds Phase 4 added: `cards`, `reviews`, `scrolling-banner`, `video` —
+ * and `pdf`, which shipped with them and has since been taken back out of the
+ * Add Section catalogue.
  *
  * The registry's own tests already assert the invariants every kind shares —
  * defaults parse, zones are real, capabilities exist. These cover what is
- * specific to these five, and in particular the two things that are genuinely
+ * specific to these, and in particular the two things that are genuinely
  * dangerous: a video embed built from merchant input, and a marquee that moves.
  */
 describe("the new kinds are properly registered", () => {
-  const added = ["cards", "reviews", "scrolling-banner", "video", "pdf"] as const;
+  const added = ["cards", "reviews", "scrolling-banner", "video"] as const;
 
-  it("offers all five in the Add Section catalogue", () => {
+  it("offers all four in the Add Section catalogue", () => {
     for (const kind of added) {
       expect(addableKinds(), `${kind} should be addable`).toContain(kind);
     }
   });
 
-  it("does not let the catalogue promise a PDF uploader that only accepts images", () => {
-    expect(SECTION_REGISTRY.pdf.unavailable).toMatch(/Document uploads/);
+  /**
+   * Retired, not deleted. A merchant cannot insert one and the catalogue does
+   * not mention it, but the kind still renders and can still be deleted —
+   * pages published while it was offered must not break.
+   */
+  it("does not offer PDF, and refuses one asked for by name", () => {
+    expect(addableKinds()).not.toContain("pdf");
+    const result = addSection(createStarterPage({ locationId: "loc_1" }), "pdf");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("not_addable");
+  });
+
+  it("keeps PDF editable and deletable for pages that already carry one", () => {
+    const def = SECTION_REGISTRY.pdf;
+    expect(def.editable && def.deletable && def.movable).toBe(true);
   });
 
   it("makes each one ordinary composable content", () => {
@@ -43,7 +57,7 @@ describe("the new kinds are properly registered", () => {
       expect(result.ok, `${kind} could not be added`).toBe(true);
       if (result.ok) doc = result.doc;
     }
-    expect(doc.sections.filter((s) => added.includes(s.kind as never))).toHaveLength(5);
+    expect(doc.sections.filter((s) => added.includes(s.kind as never))).toHaveLength(4);
   });
 
   it("keeps the footer last however many sections are added", () => {

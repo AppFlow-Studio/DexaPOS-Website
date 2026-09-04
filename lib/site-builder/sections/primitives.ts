@@ -53,10 +53,61 @@ export const SPACING_SCALES = ["compact", "normal", "loose"] as const;
 export const ALIGNMENTS = ["left", "center"] as const;
 export const BREAKPOINTS = ["mobile", "tablet", "desktop"] as const;
 
+/**
+ * The colour of a section's copy — **relative to what it is sitting on**, never
+ * an absolute value.
+ *
+ * This is the answer to "let merchants change the font colour", and the shape of
+ * it is the whole point. A stored hex would be wrong the moment anything around
+ * it moved: switch the section's background from Default to Dark and navy type
+ * disappears; change the brand colour and every page that hardcoded the old one
+ * keeps it; publish, and the value is frozen into an immutable snapshot. A tone
+ * is re-resolved against the actual backdrop on every render, so none of those
+ * states exist.
+ *
+ * `brand` is the option merchants are actually asking for when they ask for this
+ * — their headline in their own colour — and `tintOn` is what makes it safe to
+ * grant on any backdrop.
+ *
+ * `custom` is the escape hatch for a merchant with a brand guide, and it is the
+ * one value that carries a colour of its own in `textColor`. It is **still not
+ * raw CSS**: the stored hex is a *request*, not the rendered value. Every render
+ * puts it through `tintOn` against the backdrop the section actually sits on, so
+ * a colour that cannot be read there is darkened or lightened until it can. The
+ * merchant keeps their hue; the visitor keeps a page they can read. What is
+ * given up, and what the editor says out loud, is that a custom colour no longer
+ * follows a later theme change the way the other three tones do.
+ *
+ * Absent means `default`, which is the colour these sections have always used.
+ */
+export const TEXT_TONES = ["default", "muted", "brand", "custom"] as const;
+
+export type TextTone = (typeof TEXT_TONES)[number];
+
+/**
+ * A six-digit hex colour, and nothing else.
+ *
+ * Not `z.string()`: this value ends up inside a `style` attribute on a public
+ * page, and the section schemas are the boundary that decides what may get
+ * there. The regex is the whole defence — `normalizeHex` in the editor produces
+ * exactly this shape, so anything else arriving here was not typed by the
+ * control.
+ */
+export const hexColorSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
+
 export interface SectionStyle {
   background?: (typeof BACKGROUND_TONES)[number];
   spacing?: (typeof SPACING_SCALES)[number];
   align?: (typeof ALIGNMENTS)[number];
+  textTone?: TextTone;
+  /**
+   * The colour behind `textTone: "custom"`, as the merchant asked for it.
+   *
+   * Kept when they switch back to a named tone, so flipping to Default to
+   * compare and back again does not lose the colour they mixed. Ignored by every
+   * tone but `custom`.
+   */
+  textColor?: string;
   /** Responsive visibility. Modelled now; the builder UI for it can ship later. */
   hideOn?: (typeof BREAKPOINTS)[number][];
 }
@@ -65,6 +116,8 @@ export const sectionStyleSchema = z.object({
   background: z.enum(BACKGROUND_TONES).optional(),
   spacing: z.enum(SPACING_SCALES).optional(),
   align: z.enum(ALIGNMENTS).optional(),
+  textTone: z.enum(TEXT_TONES).optional(),
+  textColor: hexColorSchema.optional(),
   hideOn: z.array(z.enum(BREAKPOINTS)).max(3).optional(),
 });
 

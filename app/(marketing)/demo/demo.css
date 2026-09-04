@@ -3,17 +3,18 @@
   background: var(--paper);
 }
 
+/* Centred: the heading/lede and the action buttons stack and centre rather
+   than sitting on opposite ends of a space-between row. */
 .demo-meta {
   display: flex;
-  justify-content: space-between;
-  align-items: end;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
   margin-bottom: 28px;
-  flex-wrap: wrap;
-  gap: 16px;
+  gap: 20px;
 }
 .demo-meta-left {
-  flex: 1;
-  min-width: 280px;
+  min-width: 0;
 }
 .demo-meta-eyebrow {
   display: inline-flex;
@@ -26,10 +27,8 @@
   margin-bottom: 14px;
   text-transform: uppercase;
 }
-.demo-meta-eyebrow::before {
-  content: ''; width: 24px; height: 1px;
-  background: var(--brand-500);
-}
+/* No leading dash when centred — it pulls the eyebrow off-axis. */
+.demo-meta-eyebrow::before { display: none; }
 .demo-meta h2 {
   font-size: clamp(28px, 3.4vw, 38px);
   line-height: 1.1;
@@ -43,11 +42,15 @@
   line-height: 1.55;
   color: var(--slate-600);
   max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .demo-meta-actions {
   display: flex;
   gap: 10px;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 .demo-action-btn {
   display: inline-flex;
@@ -60,7 +63,7 @@
   background: var(--paper);
   border: 1px solid var(--slate-200);
   color: var(--ink);
-  transition: all 0.2s;
+  transition: none;
   cursor: pointer;
   font-family: var(--font);
 }
@@ -69,6 +72,23 @@
   transform: translateY(-1px);
 }
 .demo-action-btn svg { color: var(--brand-500); }
+.demo-action-label-mobile { display: none; }
+.demo-meta-actions a.demo-action-btn {
+  min-height: 56px;
+  padding: 16px 30px;
+  background: var(--matte-black);
+  border-color: var(--matte-black);
+  color: var(--warm-white);
+  font-size: 15px;
+  font-weight: 600;
+  animation: demo-cta-color 3.2s ease-in-out infinite;
+}
+.demo-meta-actions a.demo-action-btn svg { color: currentColor; }
+
+@keyframes demo-cta-color {
+  0%, 100% { background-color: var(--matte-black); border-color: var(--matte-black); }
+  50% { background-color: var(--brand-600); border-color: var(--brand-600); }
+}
 .demo-action-btn-secondary {
   background: var(--slate-50);
   border-color: var(--slate-300);
@@ -130,7 +150,7 @@
 }
 .pos-iframe {
   width: 100%;
-  height: 760px;
+  height: clamp(560px, calc(100vh - 180px), 760px);
   border: 0;
   display: block;
 }
@@ -172,7 +192,7 @@
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-lg);
   padding: 32px;
-  transition: all 0.2s;
+  transition: none;
 }
 .ann:hover {
   border-color: var(--brand-300);
@@ -200,9 +220,17 @@
 }
 
 @media (max-width: 1024px) {
-  .pos-iframe { height: 680px; }
   .ann-grid { grid-template-columns: 1fr; }
-  .device-url { margin: 0 8px; }
+}
+@media (max-width: 900px) {
+  .demo-section { padding: 48px 0; }
+  .demo-meta { margin-bottom: 0; }
+  .demo-meta-left,
+  .demo-action-btn-secondary,
+  .device-frame,
+  .demo-section .demo-hint { display: none; }
+  .demo-action-label-default { display: none; }
+  .demo-action-label-mobile { display: inline; }
 }
 @media (max-width: 700px) {
   .device-frame { padding: 10px; border-radius: 14px; }
@@ -212,6 +240,9 @@
   .demo-meta-actions { width: 100%; flex-wrap: wrap; }
   .pos-iframe { height: 680px; }
   .demo-meta-sub { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo-meta-actions a.demo-action-btn { animation: none; }
 }
 @media (max-width: 390px) {
   .pos-iframe { height: 520px; }

@@ -25,15 +25,15 @@ export default async function IndustriesPage() {
     <>
       <section className="page-head">
         <div className="wrap">
-          <div className="eyebrow reveal in">Industries</div>
-          <h1 className="reveal in" style={{ transitionDelay: ".1s" }}>Built for the way your concept runs.</h1>
-          <p className="lede reveal in" style={{ transitionDelay: ".2s" }}>DEXA configures itself for eight different restaurant concepts, with the right defaults already set for your operation.</p>
+          <Reveal as="div" className="eyebrow reveal">Industries</Reveal>
+          <Reveal as="h1" className="reveal" style={{ transitionDelay: ".1s" }}>Built for the way your concept runs.</Reveal>
+          <Reveal as="p" className="lede reveal" style={{ transitionDelay: ".2s" }}>DEXA configures itself for eight different restaurant concepts, with the right defaults already set for your operation.</Reveal>
         </div>
       </section>
 
       <section className="ind-grid">
         <div className="wrap">
-          <div className="ind-row reveal-stagger in">
+          <Reveal as="div" className="ind-row reveal-stagger">
             {industries.map((item) => (
               <div key={item.title} className="ind-card">
                 <div className="ind-image" style={{ backgroundImage: `url(${item.image})` }} />
@@ -48,7 +48,7 @@ export default async function IndustriesPage() {
                 </div>
               </div>
             ))}
-          </div>
+          </Reveal>
         </div>
       </section>
 

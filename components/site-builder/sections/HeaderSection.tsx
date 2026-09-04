@@ -1,5 +1,7 @@
 import type { SectionRenderProps } from "@/lib/site-builder/render-context";
 import { fieldAttrsFor } from "../edit-attrs";
+import { reservationsPagePath } from "@/lib/site-builder/reservations/paths";
+import { resolveReservationMode } from "@/lib/site-builder/site-settings";
 import { trackAttrs } from "@/lib/site-builder/tracking";
 import { Container, CtaButton, sectionStyleProps } from "../section-shell";
 
@@ -22,14 +24,66 @@ export default function HeaderSection({ section, ctx }: SectionRenderProps<"head
    * decide where a link goes is a bad trade for a nav that is at most eight
    * items long. Five clears a 1024px header even with long labels.
    */
-  const reserveUrl =
-    ctx.site.features.reservations && ctx.site.brand.reservationUrl
-      ? ctx.site.brand.reservationUrl
+  /**
+   * Where "Book a table" goes.
+   *
+   * One destination now: the merchant's own booking page. It used to be gated
+   * on `brand.reservationUrl` — an outbound link to OpenTable or Resy — which
+   * meant a merchant who switched to taking bookings on their own site lost the
+   * header button entirely. That mode is gone; `resolveReservationMode` answers
+   * `off` for any site still carrying its settings, so no site shows a button
+   * for a booking system we no longer send anyone to.
+   */
+  const reserveHere =
+    resolveReservationMode({ features: ctx.site.features, brand: ctx.site.brand }) === "native"
+      ? reservationsPagePath(ctx.site.basePath)
       : null;
+
+  /*
+    Every booking entry point navigates to the reservations page. There is no
+    dialog.
+
+    The header's link used to carry `data-dexa-reservations-trigger`, which the
+    reservations runtime upgraded into a modal so a visitor could book without
+    leaving the page. Nothing else on a site ever carried it, so the SAME words
+    behaved four different ways: the header opened a dialog, but only on a
+    public page, only above `lg` (below that booking moves into the collapsed
+    menu), and only when a branch resolved — while the hero button, the
+    reservations section's own call to action and every nav link navigated. A
+    visitor cannot learn a rule like that, and a merchant looking at their own
+    site could not tell which one they would get.
+
+    So the dialog is gone rather than extended to the other entry points: one
+    destination, on every device, in every mode. The anchor already had a real
+    `href` — that was always the point of building the trigger as a link rather
+    than a button — so removing the attribute is the whole change here, and the
+    now-unreachable dialog is removed from `ReservationRuntime`.
+
+    `resolveBookingTarget` went with it: the header's only use of it was
+    choosing the dialog's branch, and the reservations page resolves its own.
+  */
 
   const INLINE_LIMIT = 5;
   const inline = ctx.site.nav.slice(0, INLINE_LIMIT);
   const overflow = ctx.site.nav.slice(INLINE_LIMIT);
+
+  /**
+   * Booking, as it appears below `lg`.
+   *
+   * The whole navigation collapses into one menu on a phone, and the "Book a
+   * table" anchor beside the Order button is desktop-only — a header with a
+   * logo, a menu, a phone number and two calls to action does not fit 390px.
+   * So the booking link joins the collapsed menu at exactly the widths where
+   * the anchor is hidden, and there is one way to book at every size: never
+   * two, never none.
+   *
+   * Appended here rather than stored in `merchant_sites.nav`, which is what
+   * provisioning used to do. A stored item would show up in the desktop row as
+   * well, beside the button that already says the same thing.
+   */
+  const collapsedNav = reserveHere
+    ? [...ctx.site.nav, { href: reserveHere, label: "Book a table" }]
+    : ctx.site.nav;
 
   // `sticky` is dropped in builder mode: a header that follows the canvas scroll
   // fights the overlay's drop targets and makes reordering feel broken.
@@ -40,30 +94,40 @@ export default function HeaderSection({ section, ctx }: SectionRenderProps<"head
     <header
       className={`${positioning} w-full border-b`}
       style={{
-        ...sectionStyleProps(section.style),
+        ...sectionStyleProps(section.style, ctx.theme),
         borderColor: "var(--site-border)",
         ...(transparentOverHero ? { background: "transparent", borderColor: "transparent" } : {}),
       }}
     >
-      <Container className="flex items-center gap-6 py-4">
-        <div className={logoAlign === "center" ? "flex-1 text-center" : "flex-1"}>
-          <a href={ctx.site.basePath || "/"} className="inline-flex items-center gap-3">
+      <Container className="flex items-center gap-3 py-4 sm:gap-6">
+        <div className={logoAlign === "center" ? "min-w-0 flex-1 text-center" : "min-w-0 flex-1"}>
+          <a
+            href={ctx.site.basePath || "/"}
+            className="inline-flex max-w-full items-center gap-3"
+          >
             {ctx.site.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- merchant CDN host
               <img
                 src={ctx.site.logoUrl}
                 alt={ctx.site.name}
-                className="h-9 w-auto object-contain"
+                className="h-9 max-w-32 object-contain sm:max-w-48"
               />
             ) : (
-              <span className="text-lg font-semibold tracking-tight">{ctx.site.name}</span>
+              <span className="block truncate text-lg font-semibold tracking-tight">
+                {ctx.site.name}
+              </span>
             )}
           </a>
         </div>
 
-        {ctx.site.nav.length > 0 && (
+        {collapsedNav.length > 0 && (
           <>
-            <nav className="hidden items-center gap-6 md:flex" aria-label="Primary">
+            {/* Skipped entirely when the site has no pages but does take
+                bookings: the desktop row would otherwise be an empty nav
+                element, and the booking anchor beside the Order button already
+                covers that case at this width. */}
+            {inline.length > 0 && (
+            <nav className="hidden shrink-0 items-center gap-6 lg:flex" aria-label="Primary">
               {inline.map((link) => (
                 <a
                   key={`${link.href}-${link.label}`}
@@ -75,18 +139,19 @@ export default function HeaderSection({ section, ctx }: SectionRenderProps<"head
               ))}
               {overflow.length > 0 && <NavMenu label="More" links={overflow} />}
             </nav>
+            )}
 
-            {/* Below `md` the whole navigation collapses into one menu. It used
+            {/* Below `lg` the whole navigation collapses into one menu. It used
                 to simply not render, which meant a phone visitor — most of them
                 — could reach nothing but the home page however carefully the
                 merchant had arranged their links. */}
-            <nav className="md:hidden" aria-label="Primary">
-              <NavMenu label="Menu" links={ctx.site.nav} />
+            <nav className="shrink-0 lg:hidden" aria-label="Primary">
+              <NavMenu label="Menu" links={collapsedNav} />
             </nav>
           </>
         )}
 
-        <div className="flex items-center gap-4">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-4">
           {showPhone && ctx.site.phone && (
             <a
               href={`tel:${ctx.site.phone.replace(/[^\d+]/g, "")}`}
@@ -104,12 +169,12 @@ export default function HeaderSection({ section, ctx }: SectionRenderProps<"head
             Reservations on AND given somewhere to send people; either alone is
             a button that goes nowhere.
           */}
-          {reserveUrl && (
+          {/* `lg`, not `sm`: below that the collapsed menu carries booking
+              instead, so the two can never both be on screen. */}
+          {reserveHere && (
             <a
-              href={reserveUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden text-sm font-medium opacity-80 transition-opacity hover:opacity-100 sm:inline"
+              href={reserveHere}
+              className="hidden text-sm font-medium opacity-80 transition-opacity hover:opacity-100 lg:inline"
               {...trackAttrs("reservation_start")}
             >
               Book a table

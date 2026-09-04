@@ -1,5 +1,11 @@
 import { createClient } from 'npm:@supabase/supabase-js'
-import { createSale, createVaultSale } from '../_shared/nmi.ts'
+import {
+  activateRecurringSubscription,
+  createRecurringSubscription,
+  updateRecurringSubscription,
+  type ValorCredentials,
+  type ValorRecurringResult,
+} from '../_shared/valor.ts'
 import { sendSubscriptionInvoicePaymentEmail } from '../_shared/payment-emails.ts'
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
 import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
@@ -9,8 +15,17 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-internal-secret',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-internal-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+type BillingMode = 'manual' | 'automatic' | 'configuration'
+
+interface ValorCredentialRow {
+  valor_appid: string
+  valor_epi: string
+  decrypted_appkey: string
 }
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
@@ -25,25 +40,55 @@ function toAmount(value: unknown): number {
   return Number.isFinite(amount) ? amount : 0
 }
 
+function toMinorUnits(value: unknown): number {
+  return Math.round(toAmount(value) * 100)
+}
+
+function parseBillingDate(value: string | null | undefined): Date {
+  if (!value) return new Date()
+  const parsed = new Date(`${value.slice(0, 10)}T12:00:00.000Z`)
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed
+}
+
+function recurringChargeDay(value: string | null | undefined): number {
+  return Math.min(parseBillingDate(value).getUTCDate(), 30)
+}
+
+function normalizeValorCredentials(row: ValorCredentialRow | null): ValorCredentials | null {
+  const appId = row?.valor_appid?.trim()
+  const epi = row?.valor_epi?.trim()
+  const appKey = row?.decrypted_appkey?.trim()
+  return appId && epi && appKey ? { appId, epi, appKey } : null
+}
+
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (req.method !== 'POST') return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
+  if (req.method !== 'POST') {
+    return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
+  }
   if (!(await isAuthorizedInternalBillingRequest(req))) {
     return jsonResponse({ success: false, error: 'Unauthorized' }, 401)
   }
 
   try {
-    const body = await req.json().catch(() => ({})) as {
+    const body = (await req.json().catch(() => ({}))) as {
       invoice_id?: string
+      mode?: BillingMode
     }
+    const invoiceId = body.invoice_id?.trim()
+    const mode: BillingMode =
+      body.mode === 'automatic'
+        ? 'automatic'
+        : body.mode === 'configuration'
+          ? 'configuration'
+          : 'manual'
 
-    if (!body.invoice_id?.trim()) {
+    if (!invoiceId) {
       return jsonResponse({ success: false, error: 'invoice_id is required' }, 400)
     }
 
     const now = new Date().toISOString()
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-
     const { data: invoice, error: invoiceError } = await supabase
       .from('subscription_invoices')
       .select(`
@@ -62,36 +107,36 @@ Deno.serve(async (req: Request): Promise<Response> => {
         billing_method,
         status,
         created_at,
-        paid_at,
         payment_attempt_count,
         merchant_subscriptions (
           id,
           status,
-          billing_profile_id
+          billing_profile_id,
+          processor,
+          processor_account_id,
+          processor_subscription_id,
+          processor_subscription_status,
+          monthly_amount,
+          next_billing_date
         )
       `)
-      .eq('id', body.invoice_id)
+      .eq('id', invoiceId)
       .single()
 
     if (invoiceError || !invoice) {
       return jsonResponse({ success: false, error: 'Invoice not found' }, 404)
     }
-
     if (!['open', 'failed'].includes(invoice.status)) {
       return jsonResponse(
-        {
-          success: false,
-          error: `Invoice status ${invoice.status} cannot be charged manually.`,
-        },
+        { success: false, error: `Invoice status ${invoice.status} cannot be charged.` },
         400,
       )
     }
-
     if (invoice.billing_method !== 'card') {
       return jsonResponse(
         {
           success: false,
-          error: 'Only card-based subscription billing is supported right now.',
+          error: 'Only card-based subscription billing is supported.',
           code: 'billing_method_not_supported',
         },
         400,
@@ -101,253 +146,268 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const subscription = Array.isArray(invoice.merchant_subscriptions)
       ? invoice.merchant_subscriptions[0]
       : invoice.merchant_subscriptions
-
-    let billingProfile:
-      | {
-          id: string
-          billing_email: string | null
-          billing_method: string
-          card_token: string | null
-          customer_vault_id: string | null
-          vault_initial_transaction_id: string | null
-          payment_device_id: string | null
-          platform_billing_config_id: string | null
-          card_brand: string | null
-          card_last_four: string | null
-          is_primary: boolean
-          location_id?: string | null
-        }
-      | null = null
-    let billingProfileError: { message?: string } | null = null
-
-    if (subscription?.billing_profile_id) {
-      const profileResult = await supabase
-        .from('merchant_billing_profiles')
-        .select('id, billing_email, billing_method, card_token, customer_vault_id, vault_initial_transaction_id, payment_device_id, platform_billing_config_id, card_brand, card_last_four, is_primary, location_id')
-        .eq('id', subscription.billing_profile_id)
-        .eq('merchant_id', invoice.merchant_id)
-        .eq('billing_method', 'card')
-        .eq('is_active', true)
-        .maybeSingle()
-
-      billingProfile = profileResult.data
-      billingProfileError = profileResult.error
-    } else {
-      const profileResult = await supabase
-        .from('merchant_billing_profiles')
-        .select('id, billing_email, billing_method, card_token, customer_vault_id, vault_initial_transaction_id, payment_device_id, platform_billing_config_id, card_brand, card_last_four, is_primary, location_id')
-        .eq('merchant_id', invoice.merchant_id)
-        .eq('billing_method', 'card')
-        .eq('is_active', true)
-        .eq('is_primary', true)
-        .or(`location_id.eq.${invoice.location_id},location_id.is.null`)
-        .order('location_id', { ascending: true, nullsFirst: false })
-        .limit(1)
-
-      billingProfile = profileResult.data?.[0] ?? null
-      billingProfileError = profileResult.error
+    if (!subscription) {
+      return jsonResponse({ success: false, error: 'Subscription not found' }, 404)
     }
+
+    const { data: billingProfile, error: billingProfileError } = await supabase
+      .from('merchant_billing_profiles')
+      .select(`
+        id,
+        billing_email,
+        billing_method,
+        customer_vault_id,
+        payment_profile_id,
+        processor,
+        processor_account_id
+      `)
+      .eq('id', subscription.billing_profile_id)
+      .eq('merchant_id', invoice.merchant_id)
+      .eq('billing_method', 'card')
+      .eq('processor', 'valor')
+      .eq('is_active', true)
+      .maybeSingle()
 
     if (billingProfileError || !billingProfile) {
       return jsonResponse(
         {
           success: false,
-          error: 'No active card billing profile found for this merchant.',
+          error: 'No active Valor card billing profile is linked to this subscription.',
           code: 'billing_profile_missing',
         },
         400,
       )
     }
-
-    if (!billingProfile.customer_vault_id?.trim() && !billingProfile.card_token?.trim()) {
+    if (!billingProfile.customer_vault_id?.trim()) {
       return jsonResponse(
         {
           success: false,
-          error: 'The selected billing profile is missing an NMI vault reference or card token.',
+          error: 'The Valor billing profile is missing its vault customer reference.',
           code: 'billing_payment_reference_missing',
         },
         400,
       )
     }
 
-    let resolvedPaymentDeviceId = billingProfile.payment_device_id ?? null
-    let resolvedPlatformBillingConfigId = billingProfile.platform_billing_config_id ?? null
-    let resolvedRailSource: 'platform_billing_config' | 'location_payment_device' = 'location_payment_device'
-    let nmiApiKey: string | null = null
-
-    if (billingProfile.customer_vault_id?.trim() && resolvedPlatformBillingConfigId) {
-      const { data: platformCredentialRows, error: platformCredentialError } = await supabase.rpc(
-        'get_platform_billing_provider_secret',
-        {
-          p_provider: 'nmi',
-        },
-      )
-
-      if (platformCredentialError) {
-        console.error('[billing-charge-subscription] Platform credential error:', platformCredentialError)
-      } else {
-        const platformCredential = Array.isArray(platformCredentialRows)
-          ? platformCredentialRows[0]
-          : platformCredentialRows
-
-        if (platformCredential?.decrypted_secret?.trim()) {
-          nmiApiKey = platformCredential.decrypted_secret.trim()
-          resolvedRailSource = 'platform_billing_config'
-        }
-      }
-    }
-
-    if (!nmiApiKey) {
-      if (!resolvedPaymentDeviceId) {
-        const { data: paymentConfigRows, error: paymentConfigError } = await supabase.rpc(
-          'get_storefront_payment_config',
-          {
-            p_location_id: invoice.location_id,
-          },
-        )
-
-        if (paymentConfigError) {
-          console.error('[billing-charge-subscription] Payment config error:', paymentConfigError)
-          return jsonResponse(
-            {
-              success: false,
-              error: 'Payment configuration is unavailable for this location.',
-              code: 'payment_config_unavailable',
-            },
-            502,
-          )
-        }
-
-        const storefrontPaymentConfig = Array.isArray(paymentConfigRows)
-          ? paymentConfigRows[0]
-          : paymentConfigRows
-
-        resolvedPaymentDeviceId = storefrontPaymentConfig?.device_id ?? null
-      }
-
-      if (!resolvedPaymentDeviceId) {
-        return jsonResponse(
-          {
-            success: false,
-            error: 'No active billing rail is configured for this billing profile.',
-            code: 'payment_device_missing',
-          },
-          502,
-        )
-      }
-
-      const { data: credentialRows, error: credentialError } = await supabase.rpc(
-        'get_nmi_device_credentials',
-        {
-          p_device_id: resolvedPaymentDeviceId,
-        },
-      )
-
-      if (credentialError) {
-        console.error('[billing-charge-subscription] Credential error:', credentialError)
-        return jsonResponse(
-          {
-            success: false,
-            error: 'Payment configuration is unavailable for this location.',
-            code: 'payment_credentials_unavailable',
-          },
-          502,
-        )
-      }
-
-      const nmiCredential = Array.isArray(credentialRows)
-        ? credentialRows[0]
-        : credentialRows
-
-      if (!nmiCredential?.decrypted_security_key?.trim()) {
-        return jsonResponse(
-          {
-            success: false,
-            error: 'The active NMI device is missing its private API key.',
-            code: 'payment_api_key_missing',
-          },
-          502,
-        )
-      }
-
-      nmiApiKey = nmiCredential.decrypted_security_key.trim()
-    }
-
-    if (!nmiApiKey) {
+    const processorAccountId =
+      subscription.processor_account_id ?? billingProfile.processor_account_id ?? null
+    if (!processorAccountId) {
       return jsonResponse(
         {
           success: false,
-          error: 'No active NMI billing credentials are available.',
-          code: 'payment_api_key_missing',
+          error: 'No primary Valor SaaS billing account is linked to this subscription.',
+          code: 'processor_account_missing',
+        },
+        400,
+      )
+    }
+
+    const { data: processorAccount, error: processorAccountError } = await supabase
+      .from('merchant_processor_accounts')
+      .select('id, processor, purpose, is_active, is_primary')
+      .eq('id', processorAccountId)
+      .eq('merchant_id', invoice.merchant_id)
+      .eq('processor', 'valor')
+      .eq('purpose', 'subscription')
+      .eq('is_active', true)
+      .eq('is_primary', true)
+      .maybeSingle()
+
+    if (processorAccountError || !processorAccount) {
+      return jsonResponse(
+        {
+          success: false,
+          error: 'The primary Valor SaaS billing account is unavailable.',
+          code: 'processor_account_unavailable',
         },
         502,
       )
     }
 
-    const nextAttemptCount = Number(invoice.payment_attempt_count || 0) + 1
+    const { data: credentialRows, error: credentialError } = await supabase.rpc(
+      'get_valor_account_credentials',
+      { p_account_id: processorAccount.id },
+    )
+    const credentialRow = (Array.isArray(credentialRows)
+      ? credentialRows[0]
+      : credentialRows) as ValorCredentialRow | null
+    const credentials = normalizeValorCredentials(credentialRow)
+    if (credentialError || !credentials) {
+      console.error('[billing-charge-subscription] Valor credential error:', credentialError)
+      return jsonResponse(
+        {
+          success: false,
+          error: 'Valor SaaS billing credentials are unavailable.',
+          code: 'payment_credentials_unavailable',
+        },
+        502,
+      )
+    }
 
-    const { error: processingError } = await supabase
+    // Valor owns retries for an existing native schedule. The Dexa retry sweep
+    // must never independently charge that same billing cycle.
+    if (mode === 'automatic' && subscription.processor_subscription_id) {
+      await supabase
+        .from('subscription_invoices')
+        .update({ next_retry_at: null, updated_at: now })
+        .eq('id', invoice.id)
+
+      return jsonResponse({
+        success: true,
+        invoice_id: invoice.id,
+        subscription_id: invoice.subscription_id,
+        skipped: true,
+        reason: 'valor_native_schedule_owns_retry',
+      })
+    }
+
+    const [{ data: merchant }, { data: location }] = await Promise.all([
+      supabase
+        .from('merchants')
+        .select('name, owner_email, business_postal_code')
+        .eq('id', invoice.merchant_id)
+        .maybeSingle(),
+      supabase
+        .from('locations')
+        .select('name, postal_code')
+        .eq('id', invoice.location_id)
+        .maybeSingle(),
+    ])
+    const billingName = merchant?.name?.trim() || 'Dexa merchant'
+    const billingZip = (location?.postal_code || merchant?.business_postal_code || '')
+      .replace(/\D/g, '')
+      .slice(0, 5)
+    if (billingZip.length !== 5) {
+      return jsonResponse(
+        {
+          success: false,
+          error: 'A five-digit billing ZIP is required before charging with Valor.',
+          code: 'billing_zip_missing',
+        },
+        400,
+      )
+    }
+
+    const nextAttemptCount = Number(invoice.payment_attempt_count || 0) + 1
+    const { data: claimedInvoice, error: claimError } = await supabase
       .from('subscription_invoices')
       .update({
         status: 'processing',
         payment_attempt_count: nextAttemptCount,
         last_payment_attempt_at: now,
         last_payment_error: null,
+        next_retry_at: null,
+        processor: 'valor',
+        processor_account_id: processorAccount.id,
         updated_at: now,
       })
       .eq('id', invoice.id)
+      .in('status', ['open', 'failed'])
+      .select('id')
+      .maybeSingle()
 
-    if (processingError) {
-      console.error('[billing-charge-subscription] Processing update error:', processingError)
-      return jsonResponse({ success: false, error: processingError.message }, 500)
+    if (claimError || !claimedInvoice) {
+      return jsonResponse(
+        {
+          success: false,
+          error: claimError?.message || 'Invoice is already being processed.',
+          code: 'invoice_claim_conflict',
+        },
+        claimError ? 500 : 409,
+      )
     }
 
-    const charge = billingProfile.customer_vault_id?.trim()
-      ? await createVaultSale(
-          { apiKey: nmiApiKey },
-          {
-            amount: toAmount(invoice.total_amount),
-            currency: 'USD',
-            customerVaultId: billingProfile.customer_vault_id.trim(),
-            industry: 'ecommerce',
-            initiatedBy: 'merchant',
-            initialTransactionId: billingProfile.vault_initial_transaction_id?.trim() || undefined,
-          },
+    const startsOn = parseBillingDate(
+      subscription.next_billing_date || invoice.billing_period_end || invoice.due_date,
+    )
+    const recurringParams = {
+      amountMinor: toMinorUnits(invoice.total_amount),
+      vaultCustomerId: billingProfile.customer_vault_id.trim(),
+      paymentProfileId: billingProfile.payment_profile_id,
+      billingCustomerName: billingName,
+      billingZip,
+      startsOn,
+      chargeOn: recurringChargeDay(subscription.next_billing_date || invoice.due_date),
+      invoiceNumber: invoice.invoice_number,
+      email: billingProfile.billing_email || merchant?.owner_email || null,
+      validateOnly: false,
+    }
+
+    let charge: ValorRecurringResult
+    try {
+      if (
+        subscription.processor_subscription_id &&
+        (subscription.status === 'suspended' ||
+          subscription.processor_subscription_status === 'deactivated')
+      ) {
+        const activation = await activateRecurringSubscription(
+          credentials,
+          subscription.processor_subscription_id,
         )
-      : await createSale(
-          { apiKey: nmiApiKey },
-          {
-            amount: toAmount(invoice.total_amount),
-            currency: 'USD',
-            paymentToken: billingProfile.card_token.trim(),
-            industry: 'ecommerce',
-          },
-        )
+        if (!activation.success) {
+          throw new Error(
+            activation.responseText || 'Valor subscription could not be reactivated',
+          )
+        }
+      }
+
+      charge = subscription.processor_subscription_id
+        ? await updateRecurringSubscription(
+            credentials,
+            subscription.processor_subscription_id,
+            recurringParams,
+          )
+        : await createRecurringSubscription(credentials, recurringParams)
+    } catch (error) {
+      charge = {
+        success: false,
+        status: 502,
+        subscriptionId: subscription.processor_subscription_id || '',
+        transactionId: '',
+        responseText: error instanceof Error ? error.message : 'Valor recurring request failed',
+        body: {},
+      }
+    }
+
+    const processorSubscriptionId =
+      charge.subscriptionId || subscription.processor_subscription_id || null
+
+    if (processorSubscriptionId) {
+      const scheduleUpdates: Record<string, unknown> = {
+        processor: 'valor',
+        processor_account_id: processorAccount.id,
+        processor_subscription_id: processorSubscriptionId,
+        processor_subscription_status: charge.success ? 'active' : 'payment_failed',
+        processor_next_payment_at: subscription.next_billing_date || invoice.due_date,
+        updated_at: now,
+      }
+      if (!subscription.processor_subscription_id) {
+        scheduleUpdates.processor_schedule_created_at = now
+      }
+      await supabase
+        .from('merchant_subscriptions')
+        .update(scheduleUpdates)
+        .eq('id', invoice.subscription_id)
+    }
 
     if (!charge.success) {
-      const failureMessage =
-        charge.details.responseText ||
-        charge.body.message?.toString() ||
-        charge.text ||
-        'Charge failed'
-
+      const failureMessage = charge.responseText || 'Valor subscription charge failed'
       await supabase
         .from('subscription_invoices')
         .update({
           status: 'failed',
           last_payment_attempt_at: now,
           last_payment_error: failureMessage,
-          nmi_response: charge.body,
+          next_retry_at: null,
+          processor: 'valor',
+          processor_account_id: processorAccount.id,
+          processor_response: charge.body,
           updated_at: now,
         })
         .eq('id', invoice.id)
-
       await supabase
         .from('merchant_subscriptions')
-        .update({
-          status: 'past_due',
-          updated_at: now,
-        })
+        .update({ status: 'past_due', updated_at: now })
         .eq('id', invoice.subscription_id)
         .neq('status', 'canceled')
 
@@ -358,23 +418,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
         p_resource_type: 'subscription_invoice',
         p_resource_name: invoice.invoice_number,
         p_resource_id: invoice.id,
-        p_changes: {
-          status: 'failed',
-          payment_attempt_count: nextAttemptCount,
-        },
+        p_changes: { status: 'failed', payment_attempt_count: nextAttemptCount },
         p_metadata: {
           source: 'billing-charge-subscription',
-          billing_profile_id: billingProfile.id,
-          payment_device_id: resolvedPaymentDeviceId,
-          platform_billing_config_id: resolvedPlatformBillingConfigId,
-          billing_rail_source: resolvedRailSource,
-          nmi_status: charge.status,
-          nmi_body: charge.body,
+          processor: 'valor',
+          processor_account_id: processorAccount.id,
+          processor_subscription_id: processorSubscriptionId,
+          valor_status: charge.status,
+          valor_body: charge.body,
         },
         p_status: 'failed',
         p_error_message: failureMessage,
       })
-
       try {
         await notifySubscriptionPaymentFailure({
           supabase,
@@ -383,10 +438,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
           failureMessage,
         })
       } catch (notificationError) {
-        console.error(
-          '[billing-charge-subscription] Failed to deliver payment failure notifications:',
-          notificationError,
-        )
+        console.error('[billing-charge-subscription] Failure notification error:', notificationError)
       }
 
       return jsonResponse(
@@ -394,33 +446,33 @@ Deno.serve(async (req: Request): Promise<Response> => {
           success: false,
           error: failureMessage,
           code: 'payment_declined',
-          details: {
-            responseCode: charge.details.responseCode,
-            responseMessage: charge.details.responseText,
-            nmiStatus: charge.status,
-          },
+          processor: 'valor',
+          processor_subscription_id: processorSubscriptionId,
         },
         402,
       )
     }
 
-    const subscriptionWasRecoverable = subscription && ['past_due', 'suspended'].includes(subscription.status)
-
+    const transactionId = charge.transactionId || null
+    const subscriptionWasRecoverable = ['past_due', 'suspended'].includes(subscription.status)
     const { error: paidError } = await supabase
       .from('subscription_invoices')
       .update({
         status: 'paid',
         paid_at: now,
-        nmi_transaction_id: charge.details.transactionId || charge.details.id || null,
-        nmi_response: charge.body,
+        processor: 'valor',
+        processor_account_id: processorAccount.id,
+        processor_transaction_id: transactionId,
+        processor_response: charge.body,
         last_payment_attempt_at: now,
         last_payment_error: null,
+        next_retry_at: null,
+        retry_exhausted_at: null,
         updated_at: now,
       })
       .eq('id', invoice.id)
 
     if (paidError) {
-      console.error('[billing-charge-subscription] Paid update error:', paidError)
       return jsonResponse({ success: false, error: paidError.message }, 500)
     }
 
@@ -428,6 +480,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
       .from('merchant_subscriptions')
       .update({
         status: 'active',
+        processor: 'valor',
+        processor_account_id: processorAccount.id,
+        processor_subscription_id: processorSubscriptionId,
+        processor_subscription_status: 'active',
+        processor_next_payment_at: subscription.next_billing_date || invoice.due_date,
+        grace_period_ends_at: null,
+        grace_reason: null,
         updated_at: now,
       })
       .eq('id', invoice.subscription_id)
@@ -441,12 +500,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         p_resource_type: 'merchant_subscription',
         p_resource_name: invoice.invoice_number,
         p_resource_id: invoice.subscription_id,
-        p_changes: {
-          restored_by_invoice_id: invoice.id,
-        },
-        p_metadata: {
-          source: 'billing-charge-subscription',
-        },
+        p_changes: { restored_by_invoice_id: invoice.id },
+        p_metadata: { source: 'billing-charge-subscription', processor: 'valor' },
       })
     }
 
@@ -460,33 +515,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
       p_changes: {
         status: 'paid',
         payment_attempt_count: nextAttemptCount,
-        nmi_transaction_id: charge.details.transactionId || charge.details.id || null,
+        processor_transaction_id: transactionId,
       },
       p_metadata: {
         source: 'billing-charge-subscription',
-        billing_profile_id: billingProfile.id,
-        payment_device_id: resolvedPaymentDeviceId,
-        platform_billing_config_id: resolvedPlatformBillingConfigId,
-        billing_rail_source: resolvedRailSource,
-        nmi_status: charge.status,
-        nmi_body: charge.body,
+        processor: 'valor',
+        processor_account_id: processorAccount.id,
+        processor_subscription_id: processorSubscriptionId,
+        valor_status: charge.status,
       },
     })
 
     try {
-      const [{ data: merchant }, { data: location }] = await Promise.all([
-        supabase
-          .from('merchants')
-          .select('name, owner_email')
-          .eq('id', invoice.merchant_id)
-          .maybeSingle(),
-        supabase
-          .from('locations')
-          .select('name')
-          .eq('id', invoice.location_id)
-          .maybeSingle(),
-      ])
-
       const recipientEmail = billingProfile.billing_email?.trim() || merchant?.owner_email?.trim()
       if (recipientEmail) {
         await sendSubscriptionInvoicePaymentEmail({
@@ -503,19 +543,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
           cardSurcharge: toAmount(invoice.card_surcharge),
           totalAmount: toAmount(invoice.total_amount),
           dueDate: invoice.due_date,
-          transactionId: charge.details.transactionId || charge.details.id || null,
+          transactionId,
         })
       }
     } catch (emailError) {
-      console.error('[billing-charge-subscription] Failed to send invoice email:', emailError)
+      console.error('[billing-charge-subscription] Invoice email error:', emailError)
     }
 
     return jsonResponse({
       success: true,
       invoice_id: invoice.id,
       subscription_id: invoice.subscription_id,
+      processor: 'valor',
+      processor_subscription_id: processorSubscriptionId,
       status: 'paid',
-      transaction_id: charge.details.transactionId || charge.details.id || null,
+      transaction_id: transactionId,
     })
   } catch (error) {
     console.error('[billing-charge-subscription] Unhandled error:', error)

@@ -2,7 +2,13 @@ import type { SectionRenderProps } from "@/lib/site-builder/render-context";
 import type { SectionStyle } from "@/lib/site-builder/sections/primitives";
 import { fieldAttrsFor } from "../edit-attrs";
 import SiteImage from "../SiteImage";
-import { Container, CtaButton, sectionClassName, sectionStyleProps } from "../section-shell";
+import {
+  Container,
+  CtaButton,
+  sectionClassName,
+  sectionStyleProps,
+  textToneColor,
+} from "../section-shell";
 
 /**
  * The workhorse block: a title, a sentence, optionally a photo beside them and
@@ -50,6 +56,7 @@ export default function ContentSection({ section, ctx }: SectionRenderProps<"con
     background === "color"
       ? ({ ...section.style, background: backgroundTone ?? "muted" } as SectionStyle)
       : ({ ...section.style, background: "default" } as SectionStyle),
+    ctx.theme,
   );
 
   const prose = (
@@ -96,7 +103,9 @@ export default function ContentSection({ section, ctx }: SectionRenderProps<"con
               backgroundImage: `linear-gradient(rgb(0 0 0 / 0.55), rgb(0 0 0 / 0.55)), url(${cssUrl(backgroundUrl)})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
-              color: "var(--site-text-on-dark)",
+              // Darkened by its own gradient above, so light type — and the
+              // merchant's tone read against that, not against the page.
+              color: textToneColor("dark", section.style, ctx.theme),
             }
           : {}),
       }}

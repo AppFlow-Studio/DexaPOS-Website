@@ -3,7 +3,13 @@ import type { RenderEvent } from "@/lib/site-builder/events/event-map";
 import type { RenderContext, SectionRenderProps } from "@/lib/site-builder/render-context";
 import SiteImage from "../SiteImage";
 import { fieldAttrsFor } from "../edit-attrs";
-import { Container, SectionHeading, sectionClassName, sectionStyleProps } from "../section-shell";
+import {
+  Container,
+  SectionHeading,
+  sectionClassName,
+  sectionStyleProps,
+  textToneColor,
+} from "../section-shell";
 
 /**
  * The merchant's events, in one of two shapes.
@@ -45,7 +51,7 @@ function Grid({ section, ctx }: SectionRenderProps<"events">) {
   const upcoming = upcomingEvents(ctx.events ?? []).slice(0, limit);
 
   return (
-    <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style)}>
+    <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style, ctx.theme)}>
       <Container>
         <SectionHeading
           heading={title}
@@ -168,7 +174,7 @@ function Spotlight({ section, ctx }: SectionRenderProps<"events">) {
     if (!inBuilder) return null;
 
     return (
-      <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style)}>
+      <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style, ctx.theme)}>
         <Container>
           <p className="rounded-[var(--site-radius)] border border-dashed p-8 text-center text-sm opacity-70">
             {!eventId
@@ -226,7 +232,10 @@ function Spotlight({ section, ctx }: SectionRenderProps<"events">) {
     const band = (
       <div
         className="relative w-full overflow-hidden"
-        style={{ background: "var(--site-surface-dark)", color: "var(--site-text-on-dark)" }}
+        style={{
+          background: "var(--site-surface-dark)",
+          color: textToneColor("dark", section.style, ctx.theme),
+        }}
       >
         <EventPhoto
           event={event}
@@ -255,7 +264,7 @@ function Spotlight({ section, ctx }: SectionRenderProps<"events">) {
     if (!title && !subtitle) return band;
 
     return (
-      <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style)}>
+      <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style, ctx.theme)}>
         <Container>{heading}</Container>
         {band}
       </section>
@@ -264,7 +273,7 @@ function Spotlight({ section, ctx }: SectionRenderProps<"events">) {
 
   // ── photo beside the copy ────────────────────────────────────────────────
   return (
-    <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style)}>
+    <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style, ctx.theme)}>
       <Container>{heading}</Container>
       <Container
         className={`flex flex-col gap-8 md:flex-row md:items-center md:gap-12 ${

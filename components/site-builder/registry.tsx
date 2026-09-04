@@ -15,6 +15,7 @@ import HeroSection from "./sections/HeroSection";
 import LocationSection from "./sections/LocationSection";
 import PdfSection from "./sections/PdfSection";
 import PopularItemsSection from "./sections/PopularItemsSection";
+import ReservationsSection from "./sections/ReservationsSection";
 import ReviewsSection from "./sections/ReviewsSection";
 import ScrollingBannerSection from "./sections/ScrollingBannerSection";
 import VideoSection from "./sections/VideoSection";
@@ -37,6 +38,7 @@ export const SECTION_RENDERERS: {
   content: ContentSection,
   cards: CardsSection,
   gallery: GallerySection,
+  reservations: ReservationsSection,
   reviews: ReviewsSection,
   "scrolling-banner": ScrollingBannerSection,
   video: VideoSection,

@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Plus, Save, X } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -20,7 +21,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
-  AVAILABLE_SITE_FEATURES,
   FEATURE_DESCRIPTIONS,
   FEATURE_LABELS,
   MAX_BRAND_NAME,
@@ -28,6 +28,7 @@ import {
   MAX_SEO_DESCRIPTION,
   MAX_SEO_SUFFIX,
   PRICE_RANGE_HINTS,
+  SETTINGS_CARD_FEATURES,
   PRICE_RANGES,
   SOCIAL_LABELS,
   SOCIAL_PLATFORMS,
@@ -119,6 +120,11 @@ export default function SettingsScreen({
         return;
       }
 
+      // No reservations-page reconciliation here any more. The switch that
+      // decides whether that page should exist lives on the Reservations
+      // screen, and `SetReservationsEnabled` stores the decision and reconciles
+      // the page in one action — so this screen cannot leave the two disagreeing
+      // by saving a brand change without following it.
       toast.success("Website settings saved.");
       // Deliberately not router.refresh(): the server props are already
       // revalidated by the actions, and a refresh here would race the
@@ -224,10 +230,13 @@ export default function SettingsScreen({
         description="Turn on what your restaurant actually does. Sections you can add to a page follow from these."
       >
         <div className="divide-y">
-          {/* Only the toggles that do something. Rewards and Gift cards had no
-              consumer anywhere in the product, so switching one on promised a
-              capability the website could not deliver. */}
-          {AVAILABLE_SITE_FEATURES.map((feature) => (
+          {/* Only the toggles that do something, and only the ones that are
+              genuinely just a toggle. Rewards and Gift cards had no consumer
+              anywhere in the product, so switching one on promised a capability
+              the website could not deliver. Reservations is switched on at the
+              top of its own screen, beside the branch switches and service
+              times that decide whether it can actually take a booking. */}
+          {SETTINGS_CARD_FEATURES.map((feature) => (
             <FeatureRow
               key={feature}
               feature={feature}
@@ -239,6 +248,14 @@ export default function SettingsScreen({
         <p className="border-t px-4 py-3 text-xs text-muted-foreground">
           Turning one off removes it from the Add Section list. Sections already on a page stay where
           they are — nothing you have published disappears.
+        </p>
+        <p className="border-t px-4 py-3 text-xs text-muted-foreground">
+          Reservations are set up under{" "}
+          <Link href="/dashboard/website/reservations" className="underline underline-offset-2">
+            Website Reservations
+          </Link>{" "}
+          in the sidebar, where the switch sits with your service times and the branches that take
+          bookings.
         </p>
         {Object.keys(UNAVAILABLE_FEATURES).length > 0 && (
           <p className="border-t px-4 py-3 text-xs text-muted-foreground">
@@ -260,28 +277,6 @@ export default function SettingsScreen({
           onChange={(social) => patchBrand({ social })}
         />
       </Card>
-
-      {features.reservations && (
-        <Card
-          title="Reservations"
-          description="Where “Book a table” sends guests. Your existing booking system — OpenTable, Resy, or a form of your own."
-        >
-          <div className="p-4">
-            <UrlField
-              label="Booking link"
-              value={brand.reservationUrl ?? ""}
-              placeholder="https://resy.com/cities/…"
-              onChange={(value) =>
-                patchBrand({ reservationUrl: value ? value : undefined })
-              }
-            />
-            <p className="mt-2 text-xs text-muted-foreground">
-              Until this is filled in, your header carries no booking button — a button that goes
-              nowhere is worse than none.
-            </p>
-          </div>
-        </Card>
-      )}
 
       <Card
         title="About your restaurant"
@@ -352,9 +347,19 @@ export default function SettingsScreen({
             </p>
           </div>
 
+          {/*
+            Named for what it does, not for a thing the website does not do.
+
+            This read "Always ask which location" / "Guests choose a branch
+            before they see any prices" — which promised a branch chooser that
+            has never existed anywhere in the public renderer. What the setting
+            actually does is refuse the default above, so pages that are not
+            about one branch stay priceless until the guest navigates somewhere
+            that is. Withholding is real and worth offering; asking was not.
+          */}
           <ToggleRow
-            label="Always ask which location"
-            description="Guests choose a branch before they see any prices, whatever the default says."
+            label="Never show prices before a branch is chosen"
+            description="Overrides the default above: pages that are not about one branch show no prices at all. Guests see prices once they open a branch's page or start an order."
             on={brand.forceLocationChoice}
             onChange={(forceLocationChoice) => patchBrand({ forceLocationChoice })}
           />

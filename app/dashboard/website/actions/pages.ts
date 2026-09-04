@@ -28,8 +28,19 @@ import type {
  * expose them yet.
  */
 
+/**
+ * `location_id` is in here deliberately, and was missing for a long time.
+ *
+ * `SitePageSummary` has always *typed* the column, so every caller believed it
+ * held the page's scope while the projection quietly left it `undefined` — and
+ * `undefined` is falsy, so the editor and the preview both concluded "brand
+ * page" for a location page and "not a location page" for everything. It is the
+ * one field that decides whether money may appear on a page (see
+ * `resolvePricingLocation`), so a summary without it cannot answer the question
+ * every consumer asks of it.
+ */
 const PAGE_SUMMARY_COLUMNS =
-  "id, site_id, merchant_id, path, title, is_home, status, revision, published_version_id, published_at, created_at, updated_at";
+  "id, site_id, merchant_id, location_id, path, title, is_home, status, revision, published_version_id, published_at, created_at, updated_at";
 
 export async function ListPages(
   clerkOrgId: string,
@@ -372,7 +383,28 @@ export async function CreateHomePage(
     .insert({
       site_id: siteId,
       merchant_id: siteRow.merchant_id,
-      location_id: input.locationId,
+      /**
+       * NULL — the home page is a **brand page**, not a location page.
+       *
+       * This used to be `input.locationId`, which pinned every merchant's home
+       * page to whichever storefront happened to be selected when they first
+       * opened the builder. That contradicted the schema's own design (see the
+       * foundation migration: `yourcafe.com` is the brand page, `location_id`
+       * NULL) and the settings copy, which tells a single-location merchant to
+       * name a default location so "your home page can show its prices" — advice
+       * that did nothing while home answered for one branch by accident.
+       *
+       * It also silently defeated **Always ask which location**:
+       * `resolvePricingLocation` lets a page's own scope win over any site-wide
+       * rule, so a pinned home page kept quoting one branch's prices however the
+       * merchant set that toggle. Home is now unscoped and the brand layer
+       * decides, which is what both the schema and the settings screen promise.
+       *
+       * `input.locationId` still seeds the starter *document* below: the menu
+       * bindings need a real location to be drawn from, which is a separate
+       * question from what the page is about.
+       */
+      location_id: null,
       // The home page is the site root, so its path is the empty string.
       path: "",
       title: "Home",

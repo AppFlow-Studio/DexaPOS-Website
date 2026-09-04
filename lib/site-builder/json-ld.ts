@@ -93,14 +93,17 @@ export interface RestaurantJsonLdInput {
    */
   brand?: SiteBrand;
   /**
-   * Whether the reservation link may be claimed.
+   * The absolute URL a guest can book at, or null.
    *
-   * The link alone is not enough: a merchant may have pasted one and then
-   * turned Reservations off, and `acceptsReservations: true` on a restaurant
-   * that has stopped taking bookings sends guests to a dead end from a Google
-   * result — which is worse than saying nothing.
+   * One field rather than the `acceptsReservations` boolean plus a separate
+   * link it used to take. Those two could disagree — a merchant who pasted a
+   * booking URL and later switched reservations off left a site claiming
+   * `acceptsReservations: true`, which sends guests to a dead end from a Google
+   * result and is worse than saying nothing. A single nullable URL cannot hold
+   * that contradiction: if there is somewhere to book, we claim it; if there is
+   * not, we say nothing at all.
    */
-  acceptsReservations?: boolean;
+  reservationUrl?: string | null;
 }
 
 /**
@@ -111,7 +114,7 @@ export interface RestaurantJsonLdInput {
  * absence.
  */
 export function buildRestaurantJsonLd(input: RestaurantJsonLdInput): Record<string, unknown> {
-  const { name, url, description, image, location, brand, acceptsReservations } = input;
+  const { name, url, description, image, location, brand, reservationUrl } = input;
 
   const address =
     location?.addressLine1
@@ -157,18 +160,17 @@ export function buildRestaurantJsonLd(input: RestaurantJsonLdInput): Record<stri
     // showing the right social accounts.
     sameAs: brand?.social.length ? brand.social.map((link) => link.url) : undefined,
 
-    // Only claimed when the merchant has both switched reservations on and said
-    // where they happen. `false` is not emitted: "we do not take reservations"
-    // is a claim we have no basis for either, since the merchant may simply
-    // never have opened the settings screen.
-    ...(acceptsReservations && brand?.reservationUrl
+    // Only claimed when there is somewhere to book. `false` is not emitted:
+    // "we do not take reservations" is a claim we have no basis for either,
+    // since the merchant may simply never have opened the settings screen.
+    ...(reservationUrl
       ? {
           acceptsReservations: true,
           potentialAction: {
             "@type": "ReserveAction",
             target: {
               "@type": "EntryPoint",
-              urlTemplate: brand.reservationUrl,
+              urlTemplate: reservationUrl,
               inLanguage: "en",
               actionPlatform: [
                 "http://schema.org/DesktopWebPlatform",

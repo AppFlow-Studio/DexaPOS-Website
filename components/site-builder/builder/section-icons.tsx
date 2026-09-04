@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  CalendarCheck,
   CalendarDays,
   CalendarHeart,
   ClipboardList,
@@ -54,6 +55,7 @@ const ICONS: Record<string, LucideIcon> = {
   // square in the Add Section modal — the failure mode the fallback exists to
   // survive, working exactly as designed and hiding the omission perfectly.
   // `featured-event.test.tsx` now asserts the two lists agree.
+  CalendarCheck,
   CalendarDays,
   CalendarHeart,
   ClipboardList,

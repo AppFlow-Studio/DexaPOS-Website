@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import {
   Route,
@@ -11,11 +12,19 @@ import {
   AlertTriangle,
   ChevronDown,
   Info,
+  ExternalLink,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useAdminPermissions } from "@/lib/hooks/useAdminPermissions";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import {
   Collapsible,
   CollapsibleContent,
@@ -37,6 +46,11 @@ import {
   type KdsPrepStationSource,
   type KdsRoutingOutcome,
 } from "@/app/dashboard/actions/order-routing-trace";
+import {
+  GetOrderDeviceTruth,
+  type OrderDeviceTruth,
+} from "@/app/dashboard/actions/order-device-truth";
+import { KDSDeviceTruthBody } from "./KDSDeviceTruthBody";
 
 // ---------------------------------------------------------------------------
 // Label + tone maps for the routing enums
@@ -316,6 +330,55 @@ function ItemTrace({ item }: { item: OrderRoutingTraceItem }) {
 // Inner body (shared by both surfaces)
 // ---------------------------------------------------------------------------
 
+/**
+ * HQ-only jump from "where was this routed" to "what does that station's board
+ * look like".
+ *
+ * This component renders inside merchant-facing order surfaces, so the link is
+ * gated on the viewer actually being HQ support. useAdminPermissions is inert
+ * for merchant users -- its query is `enabled: isHQAdmin` -- so no extra RPC is
+ * paid to find that out.
+ */
+function MirrorCrossLink({ trace }: { trace: OrderRoutingTrace }) {
+  const { isHQAdmin, hasPermission } = useAdminPermissions();
+
+  // Deep-link straight to the station when every routed decision agrees on one
+  // display; otherwise land on the location-wide view and let the operator pick.
+  const soleDisplayId = React.useMemo(() => {
+    const routed = new Set(
+      trace.items
+        .flatMap((item) => item.routing)
+        .filter((d) => d.outcome === "routed" && d.kds_display_id)
+        .map((d) => d.kds_display_id as string)
+    );
+    return routed.size === 1 ? [...routed][0] : null;
+  }, [trace]);
+
+  if (!isHQAdmin || !hasPermission("hq.support.view")) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    merchant: trace.merchant_id,
+    location: trace.location_id,
+    order: trace.order_id,
+  });
+  if (soleDisplayId) {
+    params.set("display", soleDisplayId);
+  }
+
+  return (
+    <Link
+      href={`/manage/support/kds-mirror?${params.toString()}`}
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+    >
+      <Monitor className="h-3.5 w-3.5" />
+      Open this order on the KDS station mirror
+      <ExternalLink className="h-3 w-3" />
+    </Link>
+  );
+}
+
 function TraceBody({
   trace,
   items,
@@ -325,6 +388,7 @@ function TraceBody({
 }) {
   return (
     <div className="space-y-3">
+      <MirrorCrossLink trace={trace} />
       {trace.has_divergence && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-300/60 bg-amber-50/70 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-200">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -386,6 +450,16 @@ export function KDSRoutingTraceSection({
     staleTime: 30_000,
   });
 
+  // The device lane is what the kitchen displays REPORTED they received and
+  // painted, diffed against the routing trace above. Both run in parallel so
+  // the tab switches instantly once loaded.
+  const { data: deviceTruth, isLoading: deviceIsLoading } = useQuery({
+    queryKey: ["order-device-truth", orderId],
+    queryFn: () => GetOrderDeviceTruth(orderId as string),
+    enabled: !!orderId && enabled,
+    staleTime: 30_000,
+  });
+
   // Only items that were actually fired (have decisions) or need attention.
   const tracedItems = React.useMemo(
     () =>
@@ -395,19 +469,60 @@ export function KDSRoutingTraceSection({
     [trace]
   );
 
-  // Nothing to show for orders that were never sent to the kitchen.
-  if (!isLoading && (!trace || tracedItems.length === 0)) {
+  const [activeTab, setActiveTab] = React.useState<"routing" | "device">(
+    "routing"
+  );
+
+  const hasTrace = tracedItems.length > 0;
+  const hasDevice = (deviceTruth?.items ?? []).length > 0;
+  const doneLoading = !isLoading && !deviceIsLoading;
+
+  // Nothing to show for orders that were never sent to the kitchen and have
+  // no device truth either.
+  if (doneLoading && !hasTrace && !hasDevice) {
     return null;
   }
 
-  const body = isLoading ? (
+  // An order with device truth but no routing trace (a GHOST pattern) should
+  // land on the tab that actually has something to say.
+  const effectiveTab =
+    doneLoading && !hasTrace && hasDevice ? "device" : activeTab;
+
+  const routingBody = isLoading ? (
     <LoadingBody />
   ) : trace ? (
     <TraceBody trace={trace} items={tracedItems} />
-  ) : null;
+  ) : (
+    <p className="text-xs text-muted-foreground">
+      No routing trace for this order.
+    </p>
+  );
+
+  const body = (
+    <Tabs
+      value={effectiveTab}
+      onValueChange={(value) =>
+        setActiveTab(value === "device" ? "device" : "routing")
+      }
+    >
+      <TabsList className="w-fit">
+        <TabsTrigger value="routing">Routing</TabsTrigger>
+        <TabsTrigger value="device">Device view</TabsTrigger>
+      </TabsList>
+      <TabsContent value="routing" className="mt-3">
+        {routingBody}
+      </TabsContent>
+      <TabsContent value="device" className="mt-3">
+        <KDSDeviceTruthBody
+          deviceTruth={deviceTruth as OrderDeviceTruth | null}
+          isLoading={deviceIsLoading}
+        />
+      </TabsContent>
+    </Tabs>
+  );
 
   const description =
-    "Where each fired item was routed across kitchen displays and why.";
+    "Where each fired item was routed, and what the kitchen displays reported rendering.";
 
   if (variant === "sheet") {
     return (

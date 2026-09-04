@@ -23,6 +23,7 @@ import { validatePage, type ValidationIssue } from "@/lib/site-builder/validate"
 import { cn } from "@/lib/utils";
 import { websiteRoutes } from "../routes";
 import OverlayChrome from "../shell/OverlayChrome";
+import DeviceSwitch from "./DeviceSwitch";
 import type { BuilderStore, EditorMode } from "./store";
 
 /**
@@ -56,6 +57,8 @@ export default function EditorTopBar({
   const page = store((s) => s.page);
   const mode = store((s) => s.mode);
   const setMode = store((s) => s.setMode);
+  const previewDevice = store((s) => s.previewDevice);
+  const setPreviewDevice = store((s) => s.setPreviewDevice);
   const openPageSettings = store((s) => s.openPageSettings);
 
   /*
@@ -76,7 +79,14 @@ export default function EditorTopBar({
       // design, so a title that opened it there would appear to do nothing.
       onTitleClick={mode === "build" ? openPageSettings : undefined}
       closeHref={websiteRoutes.pages(locationId)}
-      centre={<ModeSwitch mode={mode} onChange={setMode} />}
+      centre={
+        <div className="flex items-center gap-2">
+          <ModeSwitch mode={mode} onChange={setMode} />
+          {mode === "preview" && (
+            <DeviceSwitch device={previewDevice} onChange={setPreviewDevice} />
+          )}
+        </div>
+      }
       action={
         <div className="flex items-center gap-2">
           {/* Quiet, and to the left of Publish: looking at the live page is a

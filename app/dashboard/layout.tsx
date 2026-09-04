@@ -228,6 +228,15 @@ const navMain = [
             url: "/dashboard/website/forms",
           },
           {
+            // Named for the website, not just "Reservations", because
+            // /dashboard/reservations is a sibling in this same sidebar and
+            // holds a different thing: the actual bookings, whatever their
+            // origin. This one is the website's own booking setup — the master
+            // switch, and when each restaurant seats guests.
+            title: "Website Reservations",
+            url: "/dashboard/website/reservations",
+          },
+          {
             // NOT "Analytics" — it shows no data, and a merchant who clicks
             // Analytics expecting visitor numbers files a support ticket.
             title: "Tracking",

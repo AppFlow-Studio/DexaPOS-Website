@@ -39,6 +39,8 @@ import {
   PROVIDER_SPECS,
   reviewsDefaults,
   reviewsSchema,
+  reservationsDefaults,
+  reservationsSchema,
   scrollingBannerDefaults,
   scrollingBannerSchema,
   videoDefaults,
@@ -60,6 +62,15 @@ import {
   popularItemsDefaults,
   popularItemsSchema,
 } from "./schemas";
+
+/**
+ * A shared `SectionStyle` field a kind's drawer may expose.
+ *
+ * Deliberately a small closed set rather than "any key of SectionStyle":
+ * `hideOn` has no UI yet and `spacing`/`align` are decided by the section's own
+ * layout, so listing them would advertise controls that do not exist.
+ */
+export type StyleControl = "background" | "textTone";
 
 /** Context a defaults factory may need. Some kinds bind to the site's location. */
 export interface SectionDefaultsContext {
@@ -156,6 +167,24 @@ export interface SectionDefinition<K extends SectionKind> {
   editable: boolean;
   deletable: boolean;
   movable: boolean;
+  /**
+   * Which of the shared `SectionStyle` controls this kind's drawer offers.
+   *
+   * `style` is a contract every section shares, but not every field of it makes
+   * sense on every kind — and the drawer used to say so with
+   * `section.kind === "reviews"` written into the panel, which is precisely the
+   * parallel list the registry exists to abolish. A kind that wants a control
+   * now says so here, once.
+   *
+   * - **`background`** — the four-tone band behind the section.
+   * - **`textTone`** — the colour of its copy, resolved against whatever backdrop
+   *   it ends up on. Offered by every kind that renders merchant-authored copy,
+   *   which is all of them except the header: that one is navigation chrome, and
+   *   its own appearance settings are already its editor's subject.
+   *
+   * Omit the field for a kind that offers neither.
+   */
+  styleControls?: readonly StyleControl[];
   /**
    * Fields that make no sense given what the merchant has already chosen.
    *
@@ -259,6 +288,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     // renders no scrim and never reads `overlayOpacity`. Leaving the slider on
     // screen let a merchant drag it and watch nothing happen.
     hiddenFields: (props) => (props.variant === "bistro" ? ["overlayOpacity"] : []),
+    styleControls: ["textTone"],
     schema: heroSchema,
     defaults: () => heroDefaults(),
     bindingTypes: [],
@@ -285,6 +315,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
       if (props.media !== "photo") hidden.push("mediaImage", "alignment");
       return hidden;
     },
+    styleControls: ["textTone"],
     schema: contentSchema,
     defaults: () => contentDefaults(),
     bindingTypes: [],
@@ -304,8 +335,39 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
+    styleControls: ["textTone"],
     schema: cardsSchema,
     defaults: () => cardsDefaults(),
+    bindingTypes: [],
+    liveFields: [],
+  },
+
+  reservations: {
+    kind: "reservations",
+    label: "Reservations",
+    description: "Let guests book a table, on your own site.",
+    icon: "CalendarCheck",
+    zone: "body",
+    category: "visit",
+    titleField: "title",
+    // Not a singleton: a long page can reasonably offer booking near the top
+    // and again at the bottom. They read the same live availability, so there
+    // is no state to diverge.
+    singleton: false,
+    addable: true,
+    // Gated on the merchant turning Reservations on. `resolveReservationMode`
+    // decides whether that means linking out or booking here; this gate only
+    // asks whether the capability exists at all.
+    requiresFeature: "reservations",
+    editable: true,
+    deletable: true,
+    movable: true,
+    styleControls: ["background", "textTone"],
+    schema: reservationsSchema,
+    defaults: () => reservationsDefaults(),
+    // Availability is fetched live by the widget, not resolved through the
+    // binding system: a binding is snapshotted at publish, and a snapshotted
+    // table grid is a grid that sells tables somebody already took.
     bindingTypes: [],
     liveFields: [],
   },
@@ -324,6 +386,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
+    styleControls: ["background", "textTone"],
     schema: reviewsSchema,
     defaults: () => reviewsDefaults(),
     bindingTypes: [],
@@ -342,6 +405,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
+    styleControls: ["textTone"],
     schema: scrollingBannerSchema,
     defaults: () => scrollingBannerDefaults(),
     bindingTypes: [],
@@ -361,6 +425,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
+    styleControls: ["textTone"],
     schema: videoSchema,
     defaults: () => videoDefaults(),
     bindingTypes: [],
@@ -370,6 +435,19 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     hiddenFields: () => ["provider"],
   },
 
+  /**
+   * Retired from the catalogue, not deleted.
+   *
+   * `addable: false` here does not mean "the system places it" the way it does
+   * for header, hero and footer — it means merchants no longer insert one. The
+   * entry stays because a page that already carries a PDF section has to keep
+   * rendering it, and its owner has to keep being able to edit or remove it: a
+   * kind the registry has forgotten is a section that cannot be deleted.
+   *
+   * It was previously offered and permanently greyed out with an `unavailable`
+   * reason, which meant every merchant met a row for something none of them
+   * could ever have. Absent says the same thing and costs no reading.
+   */
   pdf: {
     kind: "pdf",
     label: "PDF",
@@ -379,11 +457,11 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     category: "extras",
     titleField: "title",
     singleton: false,
-    addable: true,
-    unavailable: "Document uploads are not available yet.",
+    addable: false,
     editable: true,
     deletable: true,
     movable: true,
+    styleControls: ["textTone"],
     schema: pdfSchema,
     defaults: () => pdfDefaults(),
     bindingTypes: [],
@@ -406,6 +484,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
+    styleControls: ["textTone"],
     schema: formSchema,
     defaults: () => formDefaults(),
     bindingTypes: [],
@@ -425,6 +504,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
+    styleControls: ["textTone"],
     schema: eventsSchema,
     defaults: () => eventsDefaults(),
     bindingTypes: [],
@@ -495,6 +575,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
         },
       };
     },
+    styleControls: ["textTone"],
     schema: integrationsSchema,
     defaults: () => integrationsDefaults(),
     bindingTypes: [],
@@ -514,6 +595,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
+    styleControls: ["textTone"],
     schema: gallerySchema,
     defaults: () => galleryDefaults(),
     bindingTypes: [],
@@ -533,6 +615,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
+    styleControls: ["textTone"],
     schema: popularItemsSchema,
     defaults: () => popularItemsDefaults(),
     bindingTypes: ["menu_item"],
@@ -552,6 +635,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
+    styleControls: ["textTone"],
     schema: featuresSchema,
     defaults: () => featuresDefaults(),
     bindingTypes: [],
@@ -571,6 +655,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
+    styleControls: ["textTone"],
     schema: faqSchema,
     defaults: () => faqDefaults(),
     bindingTypes: [],
@@ -590,6 +675,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
+    styleControls: ["textTone"],
     schema: locationSchema,
     defaults: (ctx) => locationDefaults(ctx?.locationId),
     bindingTypes: ["location", "hours"],
@@ -617,6 +703,7 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: false,
     movable: false,
+    styleControls: ["textTone"],
     schema: footerSchema,
     defaults: (ctx) => footerDefaults(ctx?.locationId),
     bindingTypes: ["location", "hours"],

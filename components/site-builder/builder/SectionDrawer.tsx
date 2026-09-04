@@ -27,11 +27,14 @@ import {
   type IntegrationProvider,
 } from "@/lib/site-builder/sections/schemas/integrations";
 import { parseVideoRef } from "@/lib/site-builder/sections/schemas/video";
-import type { SectionStyle } from "@/lib/site-builder/sections/primitives";
+import { tintOn } from "@/lib/site-builder/color";
+import type { ThemeTokens } from "@/lib/site-builder/render-context";
+import type { SectionStyle, TextTone } from "@/lib/site-builder/sections/primitives";
 import type { Section } from "@/lib/site-builder/sections/types";
 import { cn } from "@/lib/utils";
 import { websiteRoutes } from "../routes";
 import ReviewStarIcon from "../ReviewStarIcon";
+import ColorPicker from "../shell/ColorPicker";
 import { OverlayRail } from "../shell/OverlayChrome";
 import AssetPicker, { AssetListPicker } from "./AssetPicker";
 import EventPicker from "./EventPicker";
@@ -82,11 +85,13 @@ export default function SectionDrawer({
   locationId,
   clerkOrgId,
   site,
+  theme,
 }: {
   store: BuilderStore;
   locationId: string;
   clerkOrgId: string;
   site: DrawerSite;
+  theme: ThemeTokens;
 }) {
   const doc = store((s) => s.doc);
   const selectedId = store((s) => s.selectedId);
@@ -113,6 +118,7 @@ export default function SectionDrawer({
       locationId={locationId}
       clerkOrgId={clerkOrgId}
       site={site}
+      theme={theme}
       navDraft={navDraft}
     />
   );
@@ -124,6 +130,7 @@ function SectionSettings({
   locationId,
   clerkOrgId,
   site,
+  theme,
   navDraft,
 }: {
   section: Section;
@@ -131,6 +138,7 @@ function SectionSettings({
   locationId: string;
   clerkOrgId: string;
   site: DrawerSite;
+  theme: ThemeTokens;
   navDraft: NavDraft;
 }) {
   const def = SECTION_REGISTRY[section.kind];
@@ -201,10 +209,23 @@ function SectionSettings({
             }
           />
         ))}
-        {section.kind === "reviews" && (
+        {/*
+          The shared style controls, driven by the registry rather than by a
+          `section.kind ===` test written into the panel. Adding one to a kind is
+          a line in its registry entry — the same bargain the generated fields
+          above already make.
+        */}
+        {(def.styleControls ?? []).includes("background") && (
           <SectionBackgroundControl
             value={section.style?.background ?? "default"}
             onChange={(background) => updateStyle(section.id, { background })}
+          />
+        )}
+        {(def.styleControls ?? []).includes("textTone") && (
+          <SectionTextToneControl
+            style={section.style}
+            theme={theme}
+            onChange={(patch) => updateStyle(section.id, patch)}
           />
         )}
         {controls.length === 0 && (
@@ -247,6 +268,144 @@ function SectionBackgroundControl({
       </select>
     </label>
   );
+}
+
+/**
+ * Text colour, as three named tones rather than as a colour.
+ *
+ * The labels are what the merchant is choosing between, not what the tokens are
+ * called: "Brand colour" is a promise the product can keep on any backdrop,
+ * because `textToneColor` resolves it against the band the section actually sits
+ * on and `tintOn` moves its lightness until it reads. A hex field here would
+ * make the same promise and break it on the first dark section.
+ */
+const SECTION_TEXT_TONE_OPTIONS: Array<{ value: TextTone; label: string }> = [
+  { value: "default", label: "Default" },
+  { value: "muted", label: "Muted" },
+  { value: "brand", label: "Brand colour" },
+  { value: "custom", label: "Custom…" },
+];
+
+/** What the picker opens on the first time, before a merchant has chosen. */
+const DEFAULT_CUSTOM_COLOR = "#111827";
+
+function SectionTextToneControl({
+  style,
+  theme,
+  onChange,
+}: {
+  style: SectionStyle | undefined;
+  theme: ThemeTokens;
+  onChange: (patch: Partial<SectionStyle>) => void;
+}) {
+  const tone = style?.textTone ?? "default";
+  const requested = style?.textColor ?? DEFAULT_CUSTOM_COLOR;
+
+  /*
+    A brand band has one readable foreground and no room for another, so the
+    renderer declines a custom colour there. The option is therefore absent
+    rather than present-and-inert: offering a picker that changes nothing is how
+    a merchant concludes the editor is broken. A section already carrying a
+    custom colour keeps the option visible so the state it is in is nameable.
+  */
+  const onBrandBand = (style?.background ?? "default") === "brand";
+  const options = SECTION_TEXT_TONE_OPTIONS.filter(
+    (option) => option.value !== "custom" || !onBrandBand || tone === "custom",
+  );
+
+  // The same question the renderer asks, against the same backdrop, so the note
+  // below cannot claim a colour survived when it did not.
+  const backdrop = backdropColorFor(style?.background ?? "default", theme);
+  const rendered = tintOn(requested, backdrop);
+  const wasAdjusted = tone === "custom" && rendered.toUpperCase() !== requested.toUpperCase();
+
+  return (
+    <div className="border-t pt-5">
+      <label className="block">
+        <span className="mb-1.5 block text-xs font-medium">Text colour</span>
+        <select
+          value={tone}
+          onChange={(event) => {
+            const next = event.target.value as TextTone;
+            // The colour travels with the switch to `custom` so the picker opens
+            // on something rather than nothing. Switching *away* keeps it, so
+            // flipping to Default to compare and back does not lose the mix.
+            onChange(
+              next === "custom" ? { textTone: next, textColor: requested } : { textTone: next },
+            );
+          }}
+          className={inputClass}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {tone === "custom" && !onBrandBand && (
+        <div className="mt-2.5 space-y-2">
+          <ColorPicker
+            value={requested}
+            onChange={(textColor) => onChange({ textTone: "custom", textColor })}
+            label="Section text colour"
+          />
+          {/*
+            Said plainly, and only when it is true.
+
+            A guard that silently moves a merchant’s colour is worse than one
+            that refuses it: they picked a swatch, got a different colour, and
+            have no way to find out why. Refusing is worse still — it reads as a
+            broken control. So the colour is applied, adjusted only as far as it
+            must be, and the panel says so and shows what was drawn.
+          */}
+          {wasAdjusted && (
+            <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-muted-foreground">
+              <span
+                aria-hidden="true"
+                className="mt-0.5 size-3 shrink-0 rounded-sm ring-1 ring-inset ring-black/15"
+                style={{ background: rendered }}
+              />
+              <span>
+                Adjusted to <span className="font-mono uppercase">{rendered}</span> so it
+                stays readable on this section’s background.
+              </span>
+            </p>
+          )}
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            A custom colour stops following your site’s theme. The other three
+            options update on their own when you change your brand colour.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The backdrop a section is painted on, as a colour.
+ *
+ * A local copy of the renderer’s mapping rather than an import: the renderer is
+ * a server-rendered module tree and this panel is a client component.
+ * `__tests__/text-tone-guard.test.ts` asserts the two agree — the failure they
+ * would otherwise share is a panel promising one colour and a canvas drawing
+ * another.
+ */
+function backdropColorFor(
+  background: NonNullable<SectionStyle["background"]>,
+  theme: ThemeTokens,
+): string {
+  switch (background) {
+    case "muted":
+      return theme.surfaceMuted;
+    case "brand":
+      return theme.brand;
+    case "dark":
+      return theme.surfaceDark;
+    default:
+      return theme.surface;
+  }
 }
 
 function DoneButton({ onClick }: { onClick: () => void }) {

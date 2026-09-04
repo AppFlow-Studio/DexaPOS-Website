@@ -50,6 +50,25 @@ export interface MerchantSiteRow {
   features: Record<string, unknown>;
   /** Brand facts a page may display. Read through `resolveBrand()`. */
   brand: Record<string, unknown>;
+  /**
+   * The auto-provisioned reservations page, if it still exists.
+   *
+   * NULL either because reservations were never switched to native booking, or
+   * because the merchant has since deleted the page — the FK is
+   * `ON DELETE SET NULL`. Do not use this to decide whether to provision: see
+   * the field below.
+   */
+  reservations_page_id: string | null;
+  /**
+   * When that page was first created — set once and **never cleared**, not when
+   * the page is deleted and not when reservations are switched off.
+   *
+   * This, not `reservations_page_id`, is what provisioning checks. Keying off
+   * the id would mean a merchant who deliberately deleted their reservations
+   * page finds it recreated the next time they save a setting, and a page that
+   * grows back is worse than no page.
+   */
+  reservations_page_provisioned_at: string | null;
   schema_version: number;
   max_pages: number | null;
   max_asset_bytes: number | null;

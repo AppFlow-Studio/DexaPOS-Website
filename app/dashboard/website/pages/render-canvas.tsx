@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { resolveWebsiteOrgId } from "@/lib/site-builder/request-org";
 
 import PageRenderer, { SiteChrome } from "@/components/site-builder/PageRenderer";
 import { collectAssetIds, collectBindings } from "@/lib/site-builder/bindings/collect";
@@ -12,7 +12,11 @@ import { collectFormIds, formResolver, loadFormMap } from "@/lib/site-builder/fo
 import { loadEvents } from "@/lib/site-builder/events/event-map";
 import { pageNeedsEvents } from "@/lib/site-builder/sections/registry";
 import type { RenderMode } from "@/lib/site-builder/render-context";
-import { buildRenderContext, loadSiteContext } from "@/lib/site-builder/site-context";
+import {
+  buildRenderContext,
+  loadSiteContext,
+  resolveEditorPricingLocation,
+} from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -43,8 +47,20 @@ export async function renderCanvas(
    * for empty sections — which is the whole point of the Build/Preview toggle.
    */
   mode: "build" | "preview" = "build",
+  /**
+   * The scope of the page on the canvas — `site_pages.location_id`, null on a
+   * brand page.
+   *
+   * Separate from `locationId` above, which is the storefront being edited. The
+   * canvas used to know only the latter and therefore priced every page as
+   * though the visitor had already picked a branch, which is the one thing a
+   * brand page must not do. Untrusted like everything else that arrives here:
+   * it is only ever fed to `resolvePricingLocation`, which withholds prices on
+   * anything it cannot account for.
+   */
+  pageLocationId: string | null = null,
 ) {
-  const { orgId } = await auth();
+  const orgId = await resolveWebsiteOrgId();
   if (!orgId) return null;
 
   // When the builder page awaits this action in process, these two are already
@@ -66,6 +82,15 @@ export async function renderCanvas(
 
   const sources = getResolverSources(site.deliveryPricingEnabled);
 
+  /**
+   * What this page is priced against — null when no single number is honest.
+   *
+   * Resolved once and used for both the context and the resolver below, exactly
+   * as `buildPublicRenderContext` does, so the canvas cannot show prices the
+   * live page withholds or filter items the live page keeps.
+   */
+  const pricingLocationId = resolveEditorPricingLocation(site, pageLocationId);
+
   // Menu bindings, photographs and forms are unrelated round trips, so they
   // overlap.
   // Registry-driven, and it must stay identical to the public renderer's test:
@@ -76,7 +101,19 @@ export async function renderCanvas(
   const [{ map: resolved }, assets, forms, events] = await Promise.all([
     resolveBindings(
       collectBindings(page, { includeHidden: true }),
-      { merchantId: site.merchantId, locationId: site.locationId },
+      {
+        merchantId: site.merchantId,
+        /**
+         * An unscoped page still BORROWS a location to read names, descriptions
+         * and photographs — those are merchant-level and identical everywhere.
+         * It is `scoped` that decides whether the borrowed branch's prices and
+         * 86/snooze may be believed. Same bargain as the public renderer.
+         */
+        locationId: pricingLocationId ?? site.locationId,
+        // False on a brand page, which is what stops the canvas filtering out
+        // items one branch happens to have 86'd — the live page shows them.
+        scoped: pricingLocationId !== null,
+      },
       sources,
     ),
     loadAssetMap(createServerSupabaseClient(), collectAssetIds(page)),
@@ -88,7 +125,7 @@ export async function renderCanvas(
   ]);
 
   const ctx = {
-    ...buildRenderContext(site, renderMode, assets),
+    ...buildRenderContext(site, renderMode, assets, pageLocationId),
     resolveForm: formResolver(forms),
     events,
     // No `eventUrl` in the builder: the public address does not exist until the

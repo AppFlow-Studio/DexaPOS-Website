@@ -1,9 +1,9 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { resolveWebsiteOrgId } from "@/lib/site-builder/request-org";
 
 import { getResolverSources } from "@/lib/site-builder/request-scope";
-import { loadSiteContext } from "@/lib/site-builder/site-context";
+import { loadSiteContext, resolveEditorPricingLocation } from "@/lib/site-builder/site-context";
 
 /**
  * The menu items a page on this site may actually bind to.
@@ -47,6 +47,12 @@ export interface MenuCatalog {
    * whole merchant rather than a chosen restaurant — branches can charge
    * different amounts for the same dish, so any single price is a guess. The
    * picker shows names and photos and withholds the money.
+   *
+   * Resolved through `resolveEditorPricingLocation`, the same rule the canvas
+   * uses. It used to be `locationId !== null` against the *storefront* id, which
+   * every caller passes as a real uuid — so the branch that withholds prices was
+   * unreachable and the picker quoted one branch's prices beside a canvas that
+   * had stopped showing them.
    */
   showPrices: boolean;
   /** Set when the catalog could not be read, so the UI can say so plainly. */
@@ -55,18 +61,34 @@ export interface MenuCatalog {
 
 const EMPTY: MenuCatalog = { items: [], showPrices: false };
 
-export async function loadMenuCatalog(locationId: string | null): Promise<MenuCatalog> {
-  const { orgId } = await auth();
+export async function loadMenuCatalog(
+  /** The storefront being edited — which restaurant's menu to read. */
+  locationId: string | null,
+  /**
+   * The scope of the page the picker is open on — `site_pages.location_id`,
+   * null on a brand page.
+   *
+   * Optional because the Style page has no page in hand: it wants the merchant's
+   * dish names and photographs for a miniature and never reads `showPrices`, so
+   * the brand-page default costs it nothing.
+   */
+  pageLocationId: string | null = null,
+): Promise<MenuCatalog> {
+  const orgId = await resolveWebsiteOrgId();
   if (!orgId) return { ...EMPTY, error: "Not signed in." };
 
   const site = await loadSiteContext(orgId, locationId ?? undefined);
   if (!site) return { ...EMPTY, error: "This merchant has no online store yet." };
 
+  const pricingLocationId = resolveEditorPricingLocation(site, pageLocationId);
+
   try {
     const items = await getResolverSources(site.deliveryPricingEnabled).fetchMenuItems({
       merchantId: site.merchantId,
-      locationId: site.locationId,
-      scoped: locationId !== null,
+      // Borrow the storefront when the page is unscoped: names and photographs
+      // are merchant-level, and `scoped` is what governs prices and 86/snooze.
+      locationId: pricingLocationId ?? site.locationId,
+      scoped: pricingLocationId !== null,
     });
 
     return {
@@ -87,7 +109,7 @@ export async function loadMenuCatalog(locationId: string | null): Promise<MenuCa
           (a, b) =>
             Number(b.available) - Number(a.available) || a.name.localeCompare(b.name),
         ),
-      showPrices: locationId !== null,
+      showPrices: pricingLocationId !== null,
     };
   } catch (error) {
     // A picker that cannot load is a bad afternoon; a builder that white-screens

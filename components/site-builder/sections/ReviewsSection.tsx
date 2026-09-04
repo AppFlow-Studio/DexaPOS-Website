@@ -29,7 +29,7 @@ export default function ReviewsSection({ section, ctx }: SectionRenderProps<"rev
   return (
     <section
       className={sectionClassName(section.style)}
-      style={sectionStyleProps(section.style)}
+      style={sectionStyleProps(section.style, ctx.theme)}
     >
       <Container>
         <SectionHeading

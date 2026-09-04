@@ -1,11 +1,17 @@
 import type { SectionRenderProps } from "@/lib/site-builder/render-context";
+import { textToneColor } from "../section-shell";
 
 const SPEEDS = { slow: "45s", normal: "30s", fast: "18s" } as const;
 
-const TONES = {
-  brand: { background: "var(--site-brand)", color: "var(--site-brand-contrast)" },
-  dark: { background: "var(--site-surface-dark)", color: "var(--site-text-on-dark)" },
-  muted: { background: "var(--site-surface-muted)", color: "var(--site-text)" },
+/**
+ * The banner names its own backdrop through a prop rather than through
+ * `style.background`, so it maps that prop onto a backdrop and lets the shared
+ * table resolve the merchant's text tone against it.
+ */
+const TONE_BACKGROUNDS = {
+  brand: "var(--site-brand)",
+  dark: "var(--site-surface-dark)",
+  muted: "var(--site-surface-muted)",
 } as const;
 
 /**
@@ -52,6 +58,7 @@ const TONES = {
  */
 export default function ScrollingBannerSection({
   section,
+  ctx,
 }: SectionRenderProps<"scrolling-banner">) {
   const { items, speed, tone } = section.props;
   if (items.length === 0) return null;
@@ -102,7 +109,13 @@ export default function ScrollingBannerSection({
   ].join("\n");
 
   return (
-    <section className="w-full overflow-hidden py-3" style={TONES[tone]}>
+    <section
+      className="w-full overflow-hidden py-3"
+      style={{
+        background: TONE_BACKGROUNDS[tone],
+        color: textToneColor(tone, section.style, ctx.theme),
+      }}
+    >
       <style>{css}</style>
 
       <div className="sb-marquee">

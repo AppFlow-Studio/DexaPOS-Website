@@ -207,6 +207,28 @@ export const BRAND_SWATCHES: BrandSwatch[] = [
   { name: "Rose", hex: "#E11D48" },
   { name: "Graphite", hex: "#1F2937" },
   { name: "Ink", hex: "#0B1120" },
+
+  /*
+    True neutrals, ending the grid the way the comment above promises.
+
+    Graphite and Ink are blue-tinted, which is what makes them read as a colour
+    choice; these are unsaturated, which is what makes them read as no colour at
+    all. Both are legitimate, and neither was reachable before: the fine-tune
+    ramp stops at 82% lightness and keeps the current hue's saturation, so it
+    can produce a pale tint but never white, and never a neutral grey.
+
+    White is a real brand for a merchant running a dark site, where it is the
+    strongest button fill available. On a LIGHT site it fills a button with the
+    page colour: the derived `brandContrast` keeps the label readable, but the
+    button loses its shape and reads as floating text. That is a deliberate
+    choice left to the merchant, who can see it in the preview beside them.
+  */
+  { name: "White", hex: "#FFFFFF" },
+  { name: "Porcelain", hex: "#F4F4F5" },
+  { name: "Ash", hex: "#D4D4D8" },
+  { name: "Pewter", hex: "#71717A" },
+  { name: "Charcoal", hex: "#3F3F46" },
+  { name: "Black", hex: "#000000" },
 ];
 
 /** The catalogue name for a colour, if it is one of ours. Case-insensitive. */

@@ -14,6 +14,7 @@ import { readNav } from "./public-context";
 import { getRequestSupabase } from "./request-scope";
 import {
   readSiteSettings,
+  resolvePricingLocation,
   siteDisplayName,
   type SiteBrand,
   type SiteFeatures,
@@ -34,11 +35,33 @@ import {
  */
 
 const STORE_COLUMNS =
-  "id, location_id, slug, store_name, logo_url, hero_image_url, phone, primary_color, background_color, text_color, border_color, card_color, font_family, pricing_disclosure_text, delivery_pricing_enabled";
+  "id, location_id, slug, store_name, logo_url, hero_image_url, phone, primary_color, background_color, text_color, border_color, card_color, font_family, pricing_disclosure_text, delivery_pricing_enabled, is_active";
 
 export interface SiteContext {
   merchantId: string;
+  /**
+   * The storefront this editor session is reading from — menu, branding,
+   * delivery pricing.
+   *
+   * **Not the same thing as what a page is priced against.** This is "which
+   * restaurant’s data am I looking at", chosen by `?location=` and always a
+   * real location; a *page* may be about one branch or about the brand, and
+   * only that decides whether money may appear. Conflating the two is what made
+   * `canShowPrices` unable to ever return false in the editor. See
+   * `buildRenderContext`.
+   */
   locationId: string;
+  /**
+   * Every branch a site-wide default may point at — the merchant’s *active*
+   * storefronts, and nothing else.
+   *
+   * Exactly the set `resolvePricingLocation` is allowed to resolve against, and
+   * exactly what the public renderer builds from `online_store_config`. A
+   * default naming a branch that has since been deactivated must resolve to no
+   * default in the canvas for the same reason it does on the live site: the
+   * merchant should find out here, not from a visitor.
+   */
+  availableLocationIds: string[];
   storeConfigId: string;
   slug: string;
   /**
@@ -258,6 +281,15 @@ export async function loadSiteContext(
   return {
     merchantId,
     locationId: String(config.location_id),
+    /**
+     * Active storefronts only, matching `buildPublicRenderContext`'s
+     * `configs.filter((row) => row.is_active !== false)` exactly. The editing
+     * storefront above is deliberately NOT filtered this way: a merchant whose
+     * store is switched off must still be able to open their pages.
+     */
+    availableLocationIds: configs
+      .filter((c) => c.is_active !== false)
+      .map((c) => String(c.location_id)),
     storeConfigId: String(config.id),
     slug: String(config.slug ?? ""),
     subdomain: website.subdomain,
@@ -292,6 +324,36 @@ export async function loadSiteContext(
   };
 }
 
+/**
+ * What an editor-side render is *priced* against, given the page it is drawing.
+ *
+ * The editor's counterpart to the block in `buildPublicRenderContext`, and it
+ * calls the same `resolvePricingLocation` so the two cannot answer differently.
+ * That was the whole defect: `buildRenderContext` passed `site.locationId` —
+ * always a real storefront — straight into `ctx.site.locationId`, so
+ * `canShowPrices` was structurally incapable of returning false. A merchant
+ * could turn **Never show prices before a branch is chosen** on, save it, and
+ * watch the canvas and Preview go on showing prices that their live site had
+ * already stopped showing.
+ *
+ * Exported because three surfaces need the same answer — the canvas context,
+ * the canvas's binding resolver (`scoped`), and the dish picker's catalog — and
+ * a second opinion in any of them is the same class of bug all over again.
+ *
+ * `null` means "no single honest price", exactly as it does publicly.
+ */
+export function resolveEditorPricingLocation(
+  site: Pick<SiteContext, "brand" | "availableLocationIds">,
+  /** `site_pages.location_id` — null on a brand page, which is most of them. */
+  pageLocationId: string | null,
+): string | null {
+  return resolvePricingLocation({
+    pageLocationId,
+    brand: site.brand,
+    availableLocationIds: site.availableLocationIds,
+  });
+}
+
 export function buildRenderContext(
   site: SiteContext,
   mode: RenderMode,
@@ -301,6 +363,16 @@ export function buildRenderContext(
    * canvas draws text and skips photographs.
    */
   assets: AssetMap = EMPTY_ASSET_MAP,
+  /**
+   * The scope of the page being drawn, from `site_pages.location_id`.
+   *
+   * Defaults to `null` — a brand page — because that is both the commonest case
+   * and the safe one: a page whose scope the caller has not established must
+   * withhold prices rather than invent them from the storefront that happens to
+   * be selected. Callers that render no page at all (the theme readers) are
+   * unaffected either way.
+   */
+  pageLocationId: string | null = null,
 ): RenderContext {
   // Two addresses, not one. The storefront is where ordering lives; the brand
   // subdomain is where the built pages live. Collapsing them meant every nav
@@ -314,7 +386,10 @@ export function buildRenderContext(
     mode,
     site: {
       siteId: site.storeConfigId,
-      locationId: site.locationId,
+      // The page's own scope, or the brand default when it has none, or null —
+      // through the one shared rule. NOT `site.locationId`, which is merely the
+      // storefront being edited; see `resolveEditorPricingLocation`.
+      locationId: resolveEditorPricingLocation(site, pageLocationId),
       slug: site.slug,
       name: site.name,
       logoUrl: site.logoUrl,

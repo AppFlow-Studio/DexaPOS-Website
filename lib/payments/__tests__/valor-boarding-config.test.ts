@@ -151,6 +151,22 @@ describe("field mapping + preflight", () => {
     expect(details.mccCode).toBe("5812");
   });
 
+  it("strips the US country code from an E.164 owner phone (11 -> 10 digits)", () => {
+    const e164Merchant: MerchantBoardingRow = {
+      ...fullMerchant,
+      owner_phone: "+13476591866",
+    };
+    // digits() alone would send "13476591866" (11) which Valor rejects as
+    // "not a valid 10-digit mobile number"; toValorMobile() drops the leading 1.
+    expect(mapMerchantToBoardingDetails(e164Merchant, "5812").mobile).toBe(
+      "3476591866"
+    );
+    expect(mapLocationToStore(fullLocation, e164Merchant).superVisorContact).toBe(
+      "3476591866"
+    );
+    expect(missingMerchantFields(e164Merchant)).toEqual([]);
+  });
+
   it("uses the merchant owner as the store supervisor", () => {
     const store = mapLocationToStore(fullLocation, fullMerchant);
     expect(store.superVisorName).toBe("Sam Owner");

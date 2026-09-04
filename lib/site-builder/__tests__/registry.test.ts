@@ -81,9 +81,20 @@ describe("section registry", () => {
       expect(addableKinds()).toContain("gallery");
     });
 
-    it("gates only PDF until the asset library accepts documents", () => {
+    /**
+     * PDF was the last one, and it is no longer offered at all — the row was
+     * retired rather than left greyed out forever. `unavailable` stays as a
+     * mechanism for the next kind that ships ahead of its dependency; nothing
+     * uses it today, and a kind quietly acquiring one is worth noticing.
+     */
+    it("gates nothing today", () => {
       const gated = SECTION_KINDS.filter((kind) => SECTION_REGISTRY[kind].unavailable);
-      expect(gated).toEqual(["pdf"]);
+      expect(gated).toEqual([]);
+    });
+
+    it("no longer offers PDF in the catalogue", () => {
+      expect(SECTION_REGISTRY.pdf.addable).toBe(false);
+      expect(addableKinds()).not.toContain("pdf");
     });
   });
 

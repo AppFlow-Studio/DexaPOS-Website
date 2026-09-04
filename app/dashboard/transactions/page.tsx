@@ -28,6 +28,7 @@ import {
 } from "@/components/dashboard/orders/DateRangePicker";
 import { useReportingQueryRange } from "@/app/dashboard/hooks/useReportingDateRange";
 import { fillDailyFinancialStats } from "@/lib/reporting/date-range";
+import { DataPageSkeleton } from "@/components/dashboard/loading/DataPageSkeleton";
 
 // Restore Component Imports
 import { RevenueSummaryCard } from "./components/RevenueSummaryCard";
@@ -184,6 +185,18 @@ export default function TransactionsPage() {
       count: unpaidOrders.length,
     };
   }, [orders]);
+
+  const isInitialPageLoading =
+    isLoadingKPIs || isLoadingChartKPIs || isLoadingOrders;
+
+  if (isInitialPageLoading) {
+    return (
+      <DataPageSkeleton
+        variant="analytics"
+        label="Loading financial information"
+      />
+    );
+  }
 
   return (
     <PageShell>

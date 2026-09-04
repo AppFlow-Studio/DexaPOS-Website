@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js'
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
 import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
+import { resolveSubscriptionRetrySchedule } from '../_shared/subscription-retry-policy.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -50,6 +51,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const nextAttemptCount = Number(invoice.payment_attempt_count || 0) + 1
     const failureMessage = body.error_message ?? 'Charge failed'
+    const retrySchedule = resolveSubscriptionRetrySchedule(
+      nextAttemptCount,
+      new Date(now),
+    )
     const { error: updateInvoiceError } = await supabase
       .from('subscription_invoices')
       .update({
@@ -57,6 +62,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         payment_attempt_count: nextAttemptCount,
         last_payment_attempt_at: now,
         last_payment_error: failureMessage,
+        next_retry_at: retrySchedule.nextRetryAt,
+        retry_exhausted_at: retrySchedule.retryExhaustedAt,
         updated_at: now,
       })
       .eq('id', invoice.id)

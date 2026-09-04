@@ -14,10 +14,14 @@ import {
   DEFAULT_BRAND,
   DEFAULT_FEATURES,
   AVAILABLE_SITE_FEATURES,
+  FEATURES_WITH_OWN_SCREEN,
+  SETTINGS_CARD_FEATURES,
   MAX_BRAND_NAME,
   MAX_SEO_DESCRIPTION,
   MAX_SEO_SUFFIX,
   resolveBrand,
+  resolveReservationApproval,
+  resolveReservationMode,
   resolveSiteSeo,
   siteDisplayName,
   SITE_FEATURES,
@@ -331,27 +335,38 @@ describe("brand facts in the JSON-LD", () => {
   });
 
   /**
-   * A booking link left behind after Reservations was switched off would send
+   * Claiming reservations for a restaurant that has switched them off sends
    * someone from a search result to a dead end — worse than saying nothing.
+   *
+   * The boolean-plus-link pair this replaced could hold that contradiction: a
+   * merchant who pasted a booking URL and later turned reservations off left
+   * both fields set. One nullable URL cannot.
    */
-  it("claims reservations only when the toggle AND the link are both there", () => {
-    const brand = brandWith({ reservationUrl: "https://resy.com/joes" });
-
+  it("claims reservations only when there is somewhere to book", () => {
+    expect("acceptsReservations" in buildRestaurantJsonLd({ ...base })).toBe(false);
     expect(
-      "acceptsReservations" in buildRestaurantJsonLd({ ...base, brand, acceptsReservations: false }),
+      "acceptsReservations" in buildRestaurantJsonLd({ ...base, reservationUrl: null }),
     ).toBe(false);
 
-    expect(
-      "acceptsReservations" in
-        buildRestaurantJsonLd({ ...base, brand: DEFAULT_BRAND, acceptsReservations: true }),
-    ).toBe(false);
-
-    const claimed = buildRestaurantJsonLd({ ...base, brand, acceptsReservations: true });
+    const claimed = buildRestaurantJsonLd({
+      ...base,
+      reservationUrl: "https://joes.dexaposai.com/reservations",
+    });
     expect(claimed.acceptsReservations).toBe(true);
     expect(claimed.potentialAction).toMatchObject({
       "@type": "ReserveAction",
-      target: { urlTemplate: "https://resy.com/joes" },
+      target: { urlTemplate: "https://joes.dexaposai.com/reservations" },
     });
+  });
+
+  /**
+   * A leftover provider URL in the brand block must not resurrect the claim.
+   * Nothing reads that field any more, and the markup is where a stale one
+   * would do the most damage.
+   */
+  it("ignores a leftover provider url in the brand block", () => {
+    const brand = brandWith({ reservationUrl: "https://resy.com/joes" });
+    expect("acceptsReservations" in buildRestaurantJsonLd({ ...base, brand })).toBe(false);
   });
 });
 
@@ -519,5 +534,198 @@ describe("feature availability", () => {
       if (AVAILABLE_SITE_FEATURES.includes(feature)) continue;
       expect(UNAVAILABLE_FEATURES[feature]).toBeTruthy();
     }
+  });
+
+  /**
+   * Reservations is still a real, settable feature — it is just set at the top
+   * of its own screen, above the branch switches and service times that decide
+   * whether it can take a booking. Two on/off controls on two screens, with
+   * nothing saying which was in charge, is what this split removes.
+   */
+  it("keeps reservations available but off the Features card", () => {
+    expect(AVAILABLE_SITE_FEATURES).toContain("reservations");
+    expect(SETTINGS_CARD_FEATURES).not.toContain("reservations");
+    expect(SETTINGS_CARD_FEATURES).toEqual(["reviews"]);
+  });
+
+  it("sends anyone looking for a relocated toggle to the screen that owns it", () => {
+    for (const feature of AVAILABLE_SITE_FEATURES) {
+      if (SETTINGS_CARD_FEATURES.includes(feature)) continue;
+      expect(FEATURES_WITH_OWN_SCREEN[feature]).toBeTruthy();
+    }
+  });
+});
+
+describe("resolveReservationApproval", () => {
+  const brandWith = (brand: Partial<SiteBrand>) => ({ brand: { ...DEFAULT_BRAND, ...brand } });
+
+  it("is auto when the key is absent — every row written before manual review existed", () => {
+    expect(resolveReservationApproval(brandWith({}))).toBe("auto");
+  });
+
+  it("is manual only for the exact string", () => {
+    expect(resolveReservationApproval(brandWith({ reservationApproval: "manual" }))).toBe("manual");
+    expect(resolveReservationApproval(brandWith({ reservationApproval: "auto" }))).toBe("auto");
+  });
+
+  /**
+   * The SQL side applies the identical rule — `CASE WHEN brand->>'reservationApproval'
+   * = 'manual'` — so anything that is not that exact token must fall to `auto`
+   * in both places. A disagreement means a guest reading "request sent" against
+   * a row that is already confirmed, or the reverse.
+   */
+  it("falls back to auto for casing variants, empty, null and non-strings", () => {
+    for (const value of ["MANUAL", "Manual", " manual", "", null, undefined, 1, {}, []]) {
+      expect(
+        resolveReservationApproval({
+          brand: { ...DEFAULT_BRAND, reservationApproval: value as never },
+        }),
+      ).toBe("auto");
+    }
+  });
+
+  it("ignores whether bookings are switched on at all", () => {
+    // The setting is stored independently of the master switch, so a merchant
+    // who toggles bookings off and on again does not lose their answer.
+    expect(resolveReservationApproval(brandWith({ reservationApproval: "manual" }))).toBe("manual");
+  });
+});
+
+/**
+ * The §2 gotcha, as a test rather than a comment.
+ *
+ * `resolveBrand` is an allowlist that rebuilds the brand object key by key. A
+ * key added to the schema but not to that function stores correctly, reads back
+ * once, and is then wiped by the next unrelated brand write — a merchant
+ * editing their Instagram handle would silently switch their restaurant back to
+ * auto-accept.
+ */
+describe("resolveBrand — reservationApproval survives a round trip", () => {
+  it("keeps a stored manual through resolveBrand", () => {
+    expect(resolveBrand({ reservationApproval: "manual" }).reservationApproval).toBe("manual");
+  });
+
+  it("keeps it alongside an unrelated brand edit", () => {
+    const resolved = resolveBrand({
+      reservationApproval: "manual",
+      social: [{ platform: "instagram", url: "https://instagram.com/joes" }],
+      name: "Joe's",
+    });
+    expect(resolved.reservationApproval).toBe("manual");
+    expect(resolved.name).toBe("Joe's");
+  });
+
+  it("drops an unrecognised value rather than storing it", () => {
+    expect(resolveBrand({ reservationApproval: "MANUAL" }).reservationApproval).toBeUndefined();
+    expect(resolveBrand({ reservationApproval: 7 }).reservationApproval).toBeUndefined();
+  });
+
+  it("leaves the key absent when it was never set", () => {
+    expect(resolveBrand({ name: "Joe's" }).reservationApproval).toBeUndefined();
+  });
+});
+
+describe("resolveReservationMode", () => {
+  const settings = (features: Partial<SiteFeatures>, brand: Partial<SiteBrand>) => ({
+    features: { ...DEFAULT_FEATURES, ...features },
+    brand: { ...DEFAULT_BRAND, ...brand },
+  });
+
+  it("is off when the feature is off, whatever the brand block says", () => {
+    expect(
+      resolveReservationMode(
+        settings({ reservations: false }, { reservationMode: "native" }),
+      ),
+    ).toBe("off");
+  });
+
+  /**
+   * Rows written before native booking existed, and rows a merchant set to link
+   * out to a provider, both look like this: `reservations: true`, a URL, no
+   * mode. Link mode is gone, so they resolve to OFF.
+   *
+   * That is a deliberate behaviour change, not an oversight. Such a site has no
+   * booking page provisioned, so the alternatives are a header button pointing
+   * at a 404 or a restaurant silently switched onto a booking system it never
+   * configured. No button is the honest outcome.
+   */
+  it("reads a stored row with no mode as off, whatever url it carries", () => {
+    expect(
+      resolveReservationMode(
+        settings({ reservations: true }, { reservationUrl: "https://resy.com/x" }),
+      ),
+    ).toBe("off");
+  });
+
+  it("is off when the feature is on but nothing says bookings happen here", () => {
+    expect(resolveReservationMode(settings({ reservations: true }, {}))).toBe("off");
+  });
+
+  it("needs no url, because the destination is the merchant's own page", () => {
+    expect(
+      resolveReservationMode(
+        settings({ reservations: true }, { reservationMode: "native" }),
+      ),
+    ).toBe("native");
+  });
+
+  /**
+   * The whole point of collapsing the modes: this function and the two
+   * SECURITY DEFINER functions now ask the same question. While `link` existed
+   * this could answer "on" where the database answered no, and a page offering
+   * times the server refuses to hold is the worst version of that disagreement.
+   */
+  it("answers exactly what the SQL gate answers", () => {
+    const sqlWouldAllow = (features: Partial<SiteFeatures>, brand: Partial<SiteBrand>) => {
+      const merged = settings(features, brand);
+      // `features->>'reservations' = 'true' AND brand->>'reservationMode' = 'native'`
+      return merged.features.reservations === true && merged.brand.reservationMode === "native";
+    };
+
+    const cases: [Partial<SiteFeatures>, Partial<SiteBrand>][] = [
+      [{ reservations: false }, {}],
+      [{ reservations: false }, { reservationMode: "native" }],
+      [{ reservations: true }, {}],
+      [{ reservations: true }, { reservationUrl: "https://resy.com/x" }],
+      [{ reservations: true }, { reservationMode: "native" }],
+    ];
+
+    for (const [features, brand] of cases) {
+      const allowed = resolveReservationMode(settings(features, brand)) === "native";
+      expect(allowed, JSON.stringify({ features, brand })).toBe(sqlWouldAllow(features, brand));
+    }
+  });
+
+  /**
+   * The value survives so restoring link mode is a matter of reading it again —
+   * zod strips unknown keys, so dropping the field would erase every stored URL
+   * the next time anything else on the brand was saved.
+   */
+  it("keeps a provider url it no longer reads", () => {
+    const brand = resolveBrand({
+      reservationMode: "native",
+      reservationUrl: "https://opentable.com/x",
+      social: [],
+      cuisines: [],
+    });
+
+    expect(brand.reservationUrl).toBe("https://opentable.com/x");
+    expect(resolveReservationMode({ features: { ...DEFAULT_FEATURES, reservations: true }, brand })).toBe(
+      "native",
+    );
+  });
+
+  it("discards an unrecognised stored mode rather than trusting it", () => {
+    const brand = resolveBrand({ reservationMode: "carrier-pigeon", social: [], cuisines: [] });
+    expect(brand.reservationMode).toBeUndefined();
+  });
+
+  /** `link` is now exactly as unrecognised as `carrier-pigeon`. */
+  it("no longer accepts link as a stored mode", () => {
+    const brand = resolveBrand({ reservationMode: "link", social: [], cuisines: [] });
+    expect(brand.reservationMode).toBeUndefined();
+    expect(resolveReservationMode({ features: { ...DEFAULT_FEATURES, reservations: true }, brand })).toBe(
+      "off",
+    );
   });
 });

@@ -1,0 +1,264 @@
+- generic [active] [ref=e1]:
+  - link "Skip to content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e15]:
+    - generic [ref=e18]:
+      - generic [ref=e20]:
+        - img "Joes Coffee Shop" [ref=e22]
+        - generic [ref=e23]:
+          - generic [ref=e24]: Joes Coffee Shop
+          - generic [ref=e25]: Merchant Dashboard
+      - list [ref=e29]:
+        - listitem [ref=e30]:
+          - generic [ref=e31]:
+            - generic [ref=e32]: Operations
+            - list [ref=e33]:
+              - listitem [ref=e34]:
+                - link "Dashboard" [ref=e35] [cursor=pointer]:
+                  - /url: /dashboard
+                  - img [ref=e36]
+                  - generic [ref=e41]: Dashboard
+              - listitem [ref=e42]:
+                - link "Locations" [ref=e43] [cursor=pointer]:
+                  - /url: /dashboard/locations
+                  - img [ref=e44]
+                  - generic [ref=e47]: Locations
+              - listitem [ref=e48]:
+                - button "Orders" [ref=e50]:
+                  - img [ref=e51]
+                  - generic [ref=e55]: Orders
+                  - img [ref=e56]
+              - listitem [ref=e58]:
+                - button "Tables" [ref=e60]:
+                  - img [ref=e61]
+                  - generic [ref=e64]: Tables
+                  - img [ref=e65]
+              - listitem [ref=e67]:
+                - link "Reservations" [ref=e68] [cursor=pointer]:
+                  - /url: /dashboard/reservations
+                  - img [ref=e69]
+                  - generic [ref=e73]: Reservations
+        - listitem [ref=e74]:
+          - generic [ref=e75]:
+            - generic [ref=e76]: Menus & Products
+            - list [ref=e77]:
+              - listitem [ref=e78]:
+                - link "Menus" [ref=e79] [cursor=pointer]:
+                  - /url: /dashboard/menu
+                  - img [ref=e80]
+                  - generic [ref=e83]: Menus
+              - listitem [ref=e84]:
+                - link "Items" [ref=e85] [cursor=pointer]:
+                  - /url: /dashboard/menu/items
+                  - img [ref=e86]
+                  - generic [ref=e87]: Items
+              - listitem [ref=e88]:
+                - link "Out of stock" [ref=e89] [cursor=pointer]:
+                  - /url: /dashboard/menu/out-of-stock
+                  - img [ref=e90]
+                  - generic [ref=e93]: Out of stock
+              - listitem [ref=e94]:
+                - link "Categories" [ref=e95] [cursor=pointer]:
+                  - /url: /dashboard/menu/categories
+                  - img [ref=e96]
+                  - generic [ref=e99]: Categories
+              - listitem [ref=e100]:
+                - link "Discounts" [ref=e101] [cursor=pointer]:
+                  - /url: /dashboard/discounts
+                  - img [ref=e102]
+                  - generic [ref=e105]: Discounts
+              - listitem [ref=e106]:
+                - link "Modifiers" [ref=e107] [cursor=pointer]:
+                  - /url: /dashboard/menu/modifiers
+                  - img [ref=e108]
+                  - generic [ref=e112]: Modifiers
+        - listitem [ref=e113]:
+          - generic [ref=e114]:
+            - generic [ref=e115]: Management
+            - list [ref=e116]:
+              - listitem [ref=e117]:
+                - link "Staff" [ref=e118] [cursor=pointer]:
+                  - /url: /dashboard/staff
+                  - img [ref=e119]
+                  - generic [ref=e124]: Staff
+              - listitem [ref=e125]:
+                - link "Schedules" [ref=e126] [cursor=pointer]:
+                  - /url: /dashboard/schedules
+                  - img [ref=e127]
+                  - generic [ref=e129]: Schedules
+              - listitem [ref=e130]:
+                - link "Online Ordering" [ref=e131] [cursor=pointer]:
+                  - /url: /dashboard/online-ordering
+                  - img [ref=e132]
+                  - generic [ref=e135]: Online Ordering
+              - listitem [ref=e136]:
+                - generic [ref=e138]:
+                  - link "Website" [ref=e139] [cursor=pointer]:
+                    - /url: /dashboard/website/pages
+                    - img [ref=e140]
+                    - generic [ref=e142]: Website
+                  - button [ref=e143]:
+                    - img [ref=e144]
+              - listitem [ref=e146]:
+                - link "Kiosk" [ref=e147] [cursor=pointer]:
+                  - /url: /dashboard/kiosk
+                  - img [ref=e148]
+                  - generic [ref=e151]: Kiosk
+              - listitem [ref=e152]:
+                - link "Customers" [ref=e153] [cursor=pointer]:
+                  - /url: /dashboard/customers
+                  - img [ref=e154]
+                  - generic [ref=e157]: Customers
+              - listitem [ref=e158]:
+                - link "Inventory" [ref=e159] [cursor=pointer]:
+                  - /url: /dashboard/inventory
+                  - img [ref=e160]
+                  - generic [ref=e164]: Inventory
+              - listitem [ref=e165]:
+                - link "Subscriptions" [ref=e166] [cursor=pointer]:
+                  - /url: /dashboard/subscriptions
+                  - img [ref=e167]
+                  - generic [ref=e170]: Subscriptions
+              - listitem [ref=e171]:
+                - link "Devices" [ref=e172] [cursor=pointer]:
+                  - /url: /dashboard/devices
+                  - img [ref=e173]
+                  - generic [ref=e175]: Devices
+              - listitem [ref=e176]:
+                - link "Cash Drawers" [ref=e177] [cursor=pointer]:
+                  - /url: /dashboard/cash-drawers
+                  - img [ref=e178]
+                  - generic [ref=e181]: Cash Drawers
+              - listitem [ref=e182]:
+                - link "Audit Logs" [ref=e183] [cursor=pointer]:
+                  - /url: /dashboard/audit-logs
+                  - img [ref=e184]
+                  - generic [ref=e189]: Audit Logs
+              - listitem [ref=e190]:
+                - button "Reports" [ref=e192]:
+                  - img [ref=e193]
+                  - generic [ref=e195]: Reports
+                  - img [ref=e196]
+        - listitem [ref=e198]:
+          - generic [ref=e199]:
+            - generic [ref=e200]: Financial
+            - list [ref=e201]:
+              - listitem [ref=e202]:
+                - link "Transactions" [ref=e203] [cursor=pointer]:
+                  - /url: /dashboard/transactions
+                  - img [ref=e204]
+                  - generic [ref=e207]: Transactions
+              - listitem [ref=e208]:
+                - link "Invoices" [ref=e209] [cursor=pointer]:
+                  - /url: /dashboard/invoices
+                  - img [ref=e210]
+                  - generic [ref=e213]: Invoices
+              - listitem [ref=e214]:
+                - link "Payments" [ref=e215] [cursor=pointer]:
+                  - /url: /dashboard/payments
+                  - img [ref=e216]
+                  - generic [ref=e218]: Payments
+              - listitem [ref=e219]:
+                - button "Tips" [ref=e221]:
+                  - img [ref=e222]
+                  - generic [ref=e224]: Tips
+                  - img [ref=e225]
+              - listitem [ref=e227]:
+                - link "TSYS Disputes" [ref=e228] [cursor=pointer]:
+                  - /url: /dashboard/payments/disputes
+                  - img [ref=e229]
+                  - generic [ref=e231]: TSYS Disputes
+      - generic [ref=e232]:
+        - list [ref=e233]:
+          - listitem [ref=e234]:
+            - button "Settings" [ref=e236]:
+              - img [ref=e237]
+              - generic [ref=e240]: Settings
+              - img [ref=e241]
+          - listitem [ref=e243]:
+            - link "Support" [ref=e244] [cursor=pointer]:
+              - /url: /dashboard/support
+              - img [ref=e245]
+              - generic [ref=e247]: Support
+        - generic [ref=e248]:
+          - link "Mike Mike Doe mikedoe+clerk_test@gmail.com" [ref=e249] [cursor=pointer]:
+            - /url: /dashboard/profile
+            - img "Mike" [ref=e251]
+            - generic [ref=e252]:
+              - generic [ref=e253]: Mike Doe
+              - generic [ref=e254]: mikedoe+clerk_test@gmail.com
+          - button [ref=e255]:
+            - img
+    - main "Dashboard content" [ref=e256]:
+      - generic [ref=e257]:
+        - button "Toggle Sidebar" [ref=e258]:
+          - img
+          - generic [ref=e259]: Toggle Sidebar
+        - heading "Merchant Dashboard" [level=1] [ref=e260]
+        - button "Uptown Branch" [ref=e362]:
+          - img [ref=e363]
+          - generic [ref=e266]: Uptown Branch
+          - img [ref=e267]
+        - generic [ref=e269]:
+          - button "Toggle theme" [ref=e270]:
+            - img [ref=e271]
+            - generic [ref=e273]: Toggle theme
+          - button "Search (⌘K)" [ref=e274]:
+            - img
+          - link "1 unread support messages" [ref=e275] [cursor=pointer]:
+            - /url: /dashboard/support
+            - img
+            - generic [ref=e276]: "1"
+          - button "1 unread notifications" [ref=e277]:
+            - img
+            - generic [ref=e278]: "1"
+      - main [ref=e280]:
+        - generic [ref=e281]:
+          - generic [ref=e282]:
+            - heading "Reservations" [level=1] [ref=e283]
+            - generic [ref=e284]:
+              - paragraph [ref=e285]:
+                - img [ref=e366]
+                - text: Uptown Branch
+              - button "New Reservation" [ref=e369]:
+                - img
+                - text: New Reservation
+          - paragraph [ref=e289]: Track bookings, arrivals and seating for the selected day
+        - generic [ref=e290]:
+          - generic [ref=e291]:
+            - generic [ref=e292]:
+              - generic [ref=e293]: Saturday, August 29
+              - paragraph [ref=e294]: Today
+            - generic [ref=e295]:
+              - generic [ref=e296]:
+                - button "Previous day" [ref=e297]:
+                  - img
+                - button "Today" [disabled]
+                - button "Next day" [ref=e298]:
+                  - img
+              - button "Aug 29, 2026" [ref=e299]:
+                - img
+                - generic [ref=e300]: Aug 29, 2026
+          - generic [ref=e302]:
+            - generic [ref=e303]:
+              - generic [ref=e305]: Active
+              - paragraph [ref=e370]: "0"
+              - paragraph [ref=e307]: Pending through seated
+            - generic [ref=e308]:
+              - generic [ref=e310]: Expected Covers
+              - paragraph [ref=e371]: "0"
+              - paragraph [ref=e312]: Guests across active bookings
+            - generic [ref=e313]:
+              - generic [ref=e315]: History
+              - paragraph [ref=e372]: "0"
+              - paragraph [ref=e317]: Completed, cancelled and no-shows
+        - generic [ref=e374]:
+          - img [ref=e376]
+          - paragraph [ref=e378]: No reservations for this date.
+          - button "New Reservation" [ref=e379]:
+            - img
+            - text: New Reservation
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e10] [cursor=pointer]:
+    - img [ref=e11]
+  - alert [ref=e14]

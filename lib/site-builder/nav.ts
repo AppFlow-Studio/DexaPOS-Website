@@ -22,6 +22,8 @@
  */
 
 /** A single navigation link, in the shape stored on `merchant_sites.nav`. */
+import { RESERVATIONS_PAGE_PATH } from "./reservations/paths";
+
 export interface NavItem {
   label: string;
   /**
@@ -230,6 +232,11 @@ export interface NavPage {
 export function deriveNavFromPages(pages: NavPage[]): NavItem[] {
   return pages
     .filter((page) => page.isPublished && !page.isHome)
+    // Same rule the publish path follows, and it has to be the same or a
+    // backfilled site would carry a Reservations link that a site built one
+    // publish at a time does not. The header's "Book a table" button is that
+    // page's entry point.
+    .filter((page) => normalizeNavPath(page.path) !== RESERVATIONS_PAGE_PATH)
     .slice(0, MAX_NAV_ITEMS)
     .map((page) => ({ label: page.title.trim() || "Untitled", path: normalizeNavPath(page.path) }));
 }

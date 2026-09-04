@@ -6,6 +6,8 @@ import { createBuilderStore, type BuilderInit, type EditorPage } from "../store"
 const PAGE: EditorPage = {
   id: "page_1",
   title: "Home",
+  // A brand page, which is what a home page is.
+  locationId: null,
   path: "",
   isHome: true,
   status: "draft",

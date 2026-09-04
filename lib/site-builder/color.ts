@@ -239,3 +239,85 @@ export function deriveThemeColors(core: {
     card: lightSurface ? "#FFFFFF" : mix(surface, "#FFFFFF", 0.07),
   };
 }
+
+/** WCAG AA for body-sized text. The same threshold `style-inputs` holds itself to. */
+const AA_BODY = 4.5;
+
+/**
+ * `color` walked in lightness until it clears AA on `background`.
+ *
+ * This is what makes "put this heading in my brand colour" a safe thing to
+ * offer. A merchant's brand is chosen to look right as a *button fill*, where it
+ * carries a derived label colour and its own contrast is nobody's problem. Used
+ * as type directly it frequently fails: a mid-tone teal on white measures around
+ * 2.8:1, which is unreadable and is exactly the trap a raw colour picker sets.
+ *
+ * Rather than refuse the choice, the hue is kept and the lightness moved away
+ * from the background until the pair passes — so a merchant asking for "my
+ * orange" gets their orange, darkened enough to read, rather than a warning
+ * triangle or a page nobody can read. Hue and saturation are untouched, which is
+ * what keeps it recognisably the same colour.
+ *
+ * Falls back to a plain readable neutral in the pathological case where no
+ * lightness of this hue passes — a near-white background and a pale yellow can
+ * fail at every step, and readable type matters more than a preserved hue.
+ */
+export function tintOn(color: string, background: string, headroom = 0.3): string {
+  // Measured as it will actually be rendered: the sections fade their secondary
+  // copy, so a colour that clears AA on its own can fail where it is used. Same
+  // reasoning as `mutedOn`, which carries the long version.
+  const passes = (candidate: string) =>
+    contrastRatio(mix(candidate, background, headroom), background) >= AA_BODY;
+
+  if (passes(color)) return normalizeHex(color) ?? color;
+
+  const { h, s } = hexToHsl(color);
+  // Away from the background: darken type on a light page, lighten it on a dark
+  // one. Trying both directions would let a dark brand jump to a pale tint of
+  // itself, which reads as a different colour entirely.
+  const towardsBlack = isLight(background);
+
+  for (let step = 1; step <= 20; step += 1) {
+    const l = towardsBlack ? 0.5 - step * 0.025 : 0.5 + step * 0.025;
+    const candidate = hslToHex({ h, s, l: Math.min(1, Math.max(0, l)) });
+    if (passes(candidate)) return candidate;
+  }
+
+  return readableOn(background);
+}
+
+/**
+ * The most de-emphasised version of `foreground` on `background` that still
+ * clears AA **with room to spare for a further fade**.
+ *
+ * Two things make this more than a call to `mix`.
+ *
+ * First, `deriveThemeColors` hardcodes 36% for `textMuted` because that number
+ * was measured against the one pair it is used for. Secondary copy on a *brand*
+ * or *dark* band is a different pair with a different limit, so the amount is
+ * found by measurement here rather than assumed — otherwise a muted caption
+ * passes on a navy banner and fails on a pale one.
+ *
+ * Second, and less obvious: **the sections fade their own copy.** A subheading
+ * carries `opacity-75`, a footer column `opacity-70`. Composited against the
+ * backdrop, that is another mix — so a colour sitting exactly on the AA line
+ * lands under it the moment it is used where such copy actually appears, and the
+ * guarantee would hold only for the headline. `headroom` is that second fade,
+ * sized to the strongest one applied to merchant copy anywhere in the section
+ * renderers, so the *rendered* text clears AA rather than the token doing so in
+ * isolation. (A handful of small uppercase labels use `opacity-60`; they are
+ * chrome rather than copy, and holding every muted tone to that would leave the
+ * option indistinguishable from `default`.)
+ */
+export function mutedOn(
+  foreground: string,
+  background: string,
+  { limit = 0.36, headroom = 0.3 }: { limit?: number; headroom?: number } = {},
+): string {
+  for (let amount = limit; amount > 0; amount -= 0.04) {
+    const candidate = mix(foreground, background, amount);
+    const asRendered = mix(candidate, background, headroom);
+    if (contrastRatio(asRendered, background) >= AA_BODY) return candidate;
+  }
+  return normalizeHex(foreground) ?? foreground;
+}

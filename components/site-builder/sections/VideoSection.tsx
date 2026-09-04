@@ -24,7 +24,7 @@ export default function VideoSection({ section, ctx }: SectionRenderProps<"video
   if (!videoId && ctx.mode !== "builder") return null;
 
   return (
-    <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style)}>
+    <section className={sectionClassName(section.style)} style={sectionStyleProps(section.style, ctx.theme)}>
       <Container>
         <SectionHeading
           heading={title}

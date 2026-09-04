@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { cache, type ReactElement } from "react";
 
 import PageRenderer, { SiteChrome } from "@/components/site-builder/PageRenderer";
+import ReservationRuntime from "@/components/site-builder/reservations/ReservationRuntime";
 import SiteAnalyticsScripts from "@/components/site-builder/tracking/SiteAnalyticsScripts";
 import { collectBindings } from "@/lib/site-builder/bindings/collect";
 import { resolveBindings } from "@/lib/site-builder/bindings/resolve";
@@ -16,8 +17,10 @@ import { loadPublicAssetMap } from "@/lib/site-builder/asset-map";
 import { buildPublicRenderContext } from "@/lib/site-builder/public-context";
 import { sitePublicUrl } from "@/lib/site-builder/public-url";
 import { resolveRenderMode } from "@/lib/site-builder/resolve-render-mode";
+import { RESERVATIONS_PAGE_PATH } from "@/lib/site-builder/reservations/paths";
 import {
   readSiteSettings,
+  resolveReservationMode,
   resolveSiteSeo,
   siteDisplayName,
 } from "@/lib/site-builder/site-settings";
@@ -321,7 +324,13 @@ export async function renderBuiltSite(
       image: ctx.site.logoUrl ?? ctx.site.heroImageUrl,
       location: soleLocation(resolved.locations),
       brand: ctx.site.brand,
-      acceptsReservations: ctx.site.features.reservations,
+      // The merchant's own booking page, not a provider link — which is the
+      // only place a guest can book now. Absent when reservations are off, so
+      // the markup never claims a booking a visitor cannot make.
+      reservationUrl:
+        resolveReservationMode({ features: ctx.site.features, brand: ctx.site.brand }) === "native"
+          ? sitePublicUrl(slug, RESERVATIONS_PAGE_PATH)
+          : null,
     }),
   );
 
@@ -334,6 +343,15 @@ export async function renderBuiltSite(
         `resolveTracking`, which is the boundary these values must not cross
         unchecked because they end up inside inline script source.
       */}
+      {/*
+        Mounted beside the page, never inside it: a `reservations` section
+        emits an empty mount point and this portals the booking widget into
+        each one. Importing the widget from a section would put a client
+        component in the render graph and break the builder canvas, which
+        re-renders through renderToStaticMarkup. Same arrangement, and same
+        reason, as the analytics island below it.
+      */}
+      <ReservationRuntime />
       <SiteAnalyticsScripts tracking={resolveTracking(decision.integrations)} />
       <PageRenderer doc={doc} resolved={resolved} ctx={publicCtx} />
     </SiteChrome>

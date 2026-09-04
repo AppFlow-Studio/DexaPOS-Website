@@ -14,16 +14,13 @@ import {
   SECTION_BOUNDARY_SELECTOR,
 } from "./canvas-dom";
 import { deleteSectionWithUndo } from "./delete-section";
+import DevicePreviewFrame from "./DevicePreviewFrame";
 import { applyTextPreviewPatches, getTextPreviewPatches } from "./preview-sync";
 import type { BuilderStore } from "./store";
 
 /**
- * One width, not three.
- *
- * The device switcher is gone. A merchant judging their own restaurant site
- * does it on the machine they are sitting at, and the three widths cost a
- * toolbar group, a store field and three code paths to answer a question the
- * `Preview` mode plus a browser window already answers.
+ * Build stays at one stable desktop width so gutters and section editing do not
+ * jump around. Preview uses independent desktop, tablet and phone viewports.
  */
 const CANVAS_WIDTH = 1120;
 
@@ -49,6 +46,7 @@ export default function Canvas({ store }: { store: BuilderStore }) {
   const doc = store((s) => s.doc);
   const canvas = store((s) => s.canvas);
   const mode = store((s) => s.mode);
+  const previewDevice = store((s) => s.previewDevice);
   const selectedId = store((s) => s.selectedId);
   const isRendering = store((s) => s.isRendering);
   const requestCanvasRefresh = store((s) => s.requestCanvasRefresh);
@@ -187,31 +185,43 @@ export default function Canvas({ store }: { store: BuilderStore }) {
         </p>
       )}
 
-      <div ref={scrollerRef} className="flex-1 overflow-auto px-4 py-6 sm:px-16 sm:py-10">
-        {/* `overflow-visible` on purpose: the gutter controls hang outside this
-            frame, which is the whole point of putting them there. */}
-        <div
-          className="relative mx-auto max-w-full bg-white shadow-[0_18px_50px_-30px_rgb(0_0_0_/_0.45)] ring-1 ring-black/10"
-          style={{ width: CANVAS_WIDTH }}
-        >
-          <div ref={hostRef} onClick={onClick} onMouseOver={onMouseOver} onMouseLeave={() => setHoveredId(null)}>
-            {canvas ?? <CanvasSkeleton />}
-          </div>
+      {building ? (
+        <div ref={scrollerRef} className="flex-1 overflow-auto px-4 py-6 sm:px-16 sm:py-10">
+          {/* `overflow-visible` on purpose: the gutter controls hang outside this
+              frame, which is the whole point of putting them there. */}
+          <div
+            className="relative mx-auto max-w-full bg-white shadow-[0_18px_50px_-30px_rgb(0_0_0_/_0.45)] ring-1 ring-black/10"
+            style={{ width: CANVAS_WIDTH }}
+          >
+            <div
+              ref={hostRef}
+              onClick={onClick}
+              onMouseOver={onMouseOver}
+              onMouseLeave={() => setHoveredId(null)}
+            >
+              {canvas ?? <CanvasSkeleton />}
+            </div>
 
-          {building && (
-            <>
-              <Gutters
-                doc={doc}
-                rects={rects}
-                selectedId={selectedId}
-                hoveredId={hoveredId}
-                store={store}
-              />
-              <AddSectionBands doc={doc} rects={rects} onInsert={openAddSection} />
-            </>
-          )}
+            <Gutters
+              doc={doc}
+              rects={rects}
+              selectedId={selectedId}
+              hoveredId={hoveredId}
+              store={store}
+            />
+            <AddSectionBands doc={doc} rects={rects} onInsert={openAddSection} />
+          </div>
         </div>
-      </div>
+      ) : (
+        <DevicePreviewFrame
+          key={previewDevice}
+          device={previewDevice}
+          hostRef={hostRef}
+          onClick={onClick}
+        >
+          {canvas ?? <CanvasSkeleton />}
+        </DevicePreviewFrame>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 
 import { LogAuditEvent } from "@/app/dashboard/actions/audit-logs";
 import type { ActionResult, SitePageRow, SitePageVersionRow } from "@/lib/site-builder/db-types";
+import { RESERVATIONS_PAGE_PATH } from "@/lib/site-builder/reservations/paths";
 import {
   appendNavItem,
   parseNavItems,
@@ -252,6 +253,18 @@ async function syncNavForPage(
   action: "published" | "unpublished",
 ): Promise<void> {
   if (page.is_home) return;
+
+  // The reservations page is reached from the header's "Book a table" button,
+  // which points at this exact path. Auto-linking it as well gave a merchant TWO
+  // header entries for one page — and this, not the provisioner, is where the
+  // second one actually came from: `EnsureReservationsPage` publishes the page,
+  // and publishing is what appends a nav item.
+  //
+  // Only the append is skipped. Unpublishing still REMOVES the item, which is
+  // what cleans up sites that were provisioned before this rule existed:
+  // switching bookings off drops the stale link, and switching them back on no
+  // longer puts it back.
+  if (action === "published" && page.path === RESERVATIONS_PAGE_PATH) return;
 
   try {
     const { data } = await supabase

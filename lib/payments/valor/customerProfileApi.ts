@@ -33,6 +33,23 @@ export const CUSTOMER_NAME_MAX_LENGTH = 25;
 export interface ValorAddress {
   /** Required, and must be unique within the customer. Max 100 chars. */
   address_label: string;
+  billing_customer_name?: string;
+  billing_street_no?: string;
+  billing_street_name?: string;
+  billing_unit?: string;
+  billing_city?: string;
+  billing_state?: string;
+  billing_zip?: string;
+  shipping_customer_name?: string;
+  shipping_street_no?: string;
+  shipping_street_name?: string;
+  shipping_unit?: string;
+  shipping_city?: string;
+  shipping_state?: string;
+  shipping_zip?: string;
+}
+
+export interface ValorAddressInput {
   customer_name?: string;
   street_number?: string;
   street_name?: string;
@@ -104,7 +121,7 @@ export interface CreateCustomerProfileParams {
   /** 10 digits, numeric only. */
   phone?: string;
   email?: string;
-  address?: Omit<ValorAddress, "address_label">;
+  address?: ValorAddressInput;
 }
 
 /** Build the Add Customer body. Pure — exported for testing. */
@@ -118,14 +135,47 @@ export function buildAddCustomerBody(
     );
   }
 
+  const address = params.address;
+  const addressCustomerName = sanitizeCustomerName(
+    address?.customer_name ?? params.customerName
+  );
+  const addressDetails: ValorAddress = {
+    address_label: params.addressLabel ?? "primary",
+    ...(addressCustomerName
+      ? {
+          billing_customer_name: addressCustomerName,
+          shipping_customer_name: addressCustomerName,
+        }
+      : {}),
+    ...(address?.street_number
+      ? {
+          billing_street_no: address.street_number,
+          shipping_street_no: address.street_number,
+        }
+      : {}),
+    ...(address?.street_name
+      ? {
+          billing_street_name: address.street_name,
+          shipping_street_name: address.street_name,
+        }
+      : {}),
+    ...(address?.unit
+      ? { billing_unit: address.unit, shipping_unit: address.unit }
+      : {}),
+    ...(address?.city
+      ? { billing_city: address.city, shipping_city: address.city }
+      : {}),
+    ...(address?.state
+      ? { billing_state: address.state, shipping_state: address.state }
+      : {}),
+    ...(address?.zip
+      ? { billing_zip: address.zip, shipping_zip: address.zip }
+      : {}),
+  };
+
   return {
     customer_name: customerName,
-    address_details: [
-      {
-        address_label: params.addressLabel ?? "primary",
-        ...(params.address ?? {}),
-      },
-    ],
+    address_details: [addressDetails],
     ...(params.companyName ? { company_name: params.companyName } : {}),
     ...(params.phone ? { customer_phone: params.phone.replace(/\D/g, "") } : {}),
     ...(params.email ? { customer_email: params.email } : {}),

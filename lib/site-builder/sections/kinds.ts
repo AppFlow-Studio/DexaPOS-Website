@@ -33,6 +33,7 @@ export const SECTION_KINDS = [
   "form",
   "events",
   "integrations",
+  "reservations",
   "faq",
   "location",
   "footer",

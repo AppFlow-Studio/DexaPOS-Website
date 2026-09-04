@@ -27,6 +27,16 @@ export const RESERVED_PATH_SEGMENTS: readonly string[] = [
   "reset-password",
   // QR dine-in — app/sites/[slug]/t/[token]
   "t",
+  // Guest reservation management — app/sites/[slug]/r/[token]
+  //
+  // A single reserved segment, NOT `reservations/[token]`. The merchant's own
+  // booking page lives at `reservations` and is served by the `[...path]`
+  // catch-all; a more specific route beats a catch-all in Next, so a
+  // `reservations/[token]` route would silently shadow every sub-page a
+  // merchant later created under it — `reservations/private-dining` would be
+  // looked up as a manage token and 404. `reservations` itself stays
+  // unreserved, because that path is theirs.
+  "r",
   // Platform + convention
   "api",
   "admin",

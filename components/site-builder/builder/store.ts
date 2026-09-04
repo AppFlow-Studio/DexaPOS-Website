@@ -18,6 +18,7 @@ import type { SectionKind } from "@/lib/site-builder/sections/kinds";
 import type { SectionStyle } from "@/lib/site-builder/sections/primitives";
 import { sectionTitle } from "@/lib/site-builder/sections/registry";
 import { DEFAULT_FEATURES, type SiteFeatures } from "@/lib/site-builder/site-settings";
+import type { PreviewDevice } from "./preview-device";
 
 /**
  * Builder state.
@@ -28,11 +29,11 @@ import { DEFAULT_FEATURES, type SiteFeatures } from "@/lib/site-builder/site-set
  * command-pattern project, and it is why every mutation lives in
  * `lib/site-builder/mutations.ts` as a pure function rather than in here.
  *
- * The Owner-shaped rebuild removed four pieces of state rather than restyling
- * them: `device` (no preview widths), `pane` (no three-column layout to switch
- * between), `reviewOpen`/`publishResult` (publishing is a button, not a sheet)
- * and `savedAt` (no save indicator). History survives because deletion still
- * offers an undo and the drawer needs a way back — it just has no toolbar.
+ * The Owner-shaped rebuild removed pane, review-result and saved-at state rather
+ * than restyling it. Device state is intentionally UI-only: it changes the
+ * Preview viewport without becoming part of the page document or its history.
+ * History survives because deletion still offers an undo and the drawer needs
+ * a way back — it just has no toolbar.
  *
  * `toggleHidden` and `duplicateSection` went the same way with the gutter's
  * overflow menu. `setSectionHidden` and `duplicateSection` remain in
@@ -56,6 +57,15 @@ export type EditorMode = "build" | "preview";
 export interface EditorPage {
   id: string;
   title: string;
+  /**
+   * `site_pages.location_id` — the one restaurant this page is about, or null
+   * on a brand page.
+   *
+   * The page's *scope*, not the storefront being edited: it is what decides
+   * whether prices may appear on it (`resolvePricingLocation`), so the canvas
+   * and the dish picker both need it and neither may substitute the storefront.
+   */
+  locationId: string | null;
   /** Site-relative path. Empty string is the home page. */
   path: string;
   isHome: boolean;
@@ -159,6 +169,8 @@ interface BuilderState {
   notice: string | null;
 
   mode: EditorMode;
+  /** Simulated viewport used in Preview. This is UI state, never page content. */
+  previewDevice: PreviewDevice;
 
   /** The page's own settings — name and address — in the drawer. */
   pageSettingsOpen: boolean;
@@ -229,6 +241,7 @@ interface BuilderState {
   setSaveState: (state: SaveState) => void;
   clearNotice: () => void;
   setMode: (mode: EditorMode) => void;
+  setPreviewDevice: (device: PreviewDevice) => void;
   openPageSettings: () => void;
   closeDrawer: () => void;
   openAddSection: (atIndex?: number | null) => void;
@@ -332,6 +345,7 @@ export function createBuilderStore(init: BuilderInit) {
       saveState: "idle",
       notice: null,
       mode: "build",
+      previewDevice: "desktop",
       pageSettingsOpen: false,
       addOpen: false,
       insertIndex: null,
@@ -474,6 +488,8 @@ export function createBuilderStore(init: BuilderInit) {
           selectedId: mode === "preview" ? null : state.selectedId,
           pageSettingsOpen: mode === "preview" ? false : state.pageSettingsOpen,
         })),
+
+      setPreviewDevice: (previewDevice) => set({ previewDevice }),
 
       openPageSettings: () => set({ pageSettingsOpen: true, selectedId: null }),
 

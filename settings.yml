@@ -1,0 +1,353 @@
+- generic [active] [ref=e1]:
+  - link "Skip to content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e15]:
+    - generic [ref=e18]:
+      - generic [ref=e20]:
+        - img "Joes Coffee Shop" [ref=e22]
+        - generic [ref=e23]:
+          - generic [ref=e24]: Joes Coffee Shop
+          - generic [ref=e25]: Merchant Dashboard
+      - list [ref=e29]:
+        - listitem [ref=e30]:
+          - generic [ref=e31]:
+            - generic [ref=e32]: Operations
+            - list [ref=e33]:
+              - listitem [ref=e34]:
+                - link "Dashboard" [ref=e35] [cursor=pointer]:
+                  - /url: /dashboard
+                  - img [ref=e36]
+                  - generic [ref=e41]: Dashboard
+              - listitem [ref=e42]:
+                - link "Locations" [ref=e43] [cursor=pointer]:
+                  - /url: /dashboard/locations
+                  - img [ref=e44]
+                  - generic [ref=e47]: Locations
+              - listitem [ref=e48]:
+                - button "Orders" [ref=e50]:
+                  - img [ref=e51]
+                  - generic [ref=e55]: Orders
+                  - img [ref=e56]
+              - listitem [ref=e58]:
+                - button "Tables" [ref=e60]:
+                  - img [ref=e61]
+                  - generic [ref=e64]: Tables
+                  - img [ref=e65]
+              - listitem [ref=e67]:
+                - link "Reservations" [ref=e68] [cursor=pointer]:
+                  - /url: /dashboard/reservations
+                  - img [ref=e69]
+                  - generic [ref=e73]: Reservations
+        - listitem [ref=e74]:
+          - generic [ref=e75]:
+            - generic [ref=e76]: Menus & Products
+            - list [ref=e77]:
+              - listitem [ref=e78]:
+                - link "Menus" [ref=e79] [cursor=pointer]:
+                  - /url: /dashboard/menu
+                  - img [ref=e80]
+                  - generic [ref=e83]: Menus
+              - listitem [ref=e84]:
+                - link "Items" [ref=e85] [cursor=pointer]:
+                  - /url: /dashboard/menu/items
+                  - img [ref=e86]
+                  - generic [ref=e87]: Items
+              - listitem [ref=e88]:
+                - link "Out of stock" [ref=e89] [cursor=pointer]:
+                  - /url: /dashboard/menu/out-of-stock
+                  - img [ref=e90]
+                  - generic [ref=e93]: Out of stock
+              - listitem [ref=e94]:
+                - link "Categories" [ref=e95] [cursor=pointer]:
+                  - /url: /dashboard/menu/categories
+                  - img [ref=e96]
+                  - generic [ref=e99]: Categories
+              - listitem [ref=e100]:
+                - link "Discounts" [ref=e101] [cursor=pointer]:
+                  - /url: /dashboard/discounts
+                  - img [ref=e102]
+                  - generic [ref=e105]: Discounts
+              - listitem [ref=e106]:
+                - link "Modifiers" [ref=e107] [cursor=pointer]:
+                  - /url: /dashboard/menu/modifiers
+                  - img [ref=e108]
+                  - generic [ref=e112]: Modifiers
+        - listitem [ref=e113]:
+          - generic [ref=e114]:
+            - generic [ref=e115]: Management
+            - list [ref=e116]:
+              - listitem [ref=e117]:
+                - link "Staff" [ref=e118] [cursor=pointer]:
+                  - /url: /dashboard/staff
+                  - img [ref=e119]
+                  - generic [ref=e124]: Staff
+              - listitem [ref=e125]:
+                - link "Schedules" [ref=e126] [cursor=pointer]:
+                  - /url: /dashboard/schedules
+                  - img [ref=e127]
+                  - generic [ref=e129]: Schedules
+              - listitem [ref=e130]:
+                - link "Online Ordering" [ref=e131] [cursor=pointer]:
+                  - /url: /dashboard/online-ordering
+                  - img [ref=e132]
+                  - generic [ref=e135]: Online Ordering
+              - listitem [ref=e136]:
+                - generic [ref=e137]:
+                  - generic [ref=e138]:
+                    - link "Website" [ref=e139] [cursor=pointer]:
+                      - /url: /dashboard/website/pages
+                      - img [ref=e140]
+                      - generic [ref=e142]: Website
+                    - button [expanded] [ref=e143]:
+                      - img [ref=e144]
+                  - list [ref=e147]:
+                    - listitem [ref=e148]:
+                      - link "Pages" [ref=e149] [cursor=pointer]:
+                        - /url: /dashboard/website/pages
+                        - generic [ref=e150]: Pages
+                    - listitem [ref=e151]:
+                      - link "Events" [ref=e152] [cursor=pointer]:
+                        - /url: /dashboard/website/events
+                        - generic [ref=e153]: Events
+                    - listitem [ref=e154]:
+                      - link "Forms" [ref=e155] [cursor=pointer]:
+                        - /url: /dashboard/website/forms
+                        - generic [ref=e156]: Forms
+                    - listitem [ref=e157]:
+                      - link "Reservations" [ref=e158] [cursor=pointer]:
+                        - /url: /dashboard/website/reservations
+                        - generic [ref=e159]: Reservations
+                    - listitem [ref=e160]:
+                      - link "Tracking" [ref=e161] [cursor=pointer]:
+                        - /url: /dashboard/website/tracking
+                        - generic [ref=e162]: Tracking
+                    - listitem [ref=e163]:
+                      - link "Settings" [ref=e164] [cursor=pointer]:
+                        - /url: /dashboard/website/settings
+                        - generic [ref=e165]: Settings
+              - listitem [ref=e166]:
+                - link "Kiosk" [ref=e167] [cursor=pointer]:
+                  - /url: /dashboard/kiosk
+                  - img [ref=e168]
+                  - generic [ref=e171]: Kiosk
+              - listitem [ref=e172]:
+                - link "Customers" [ref=e173] [cursor=pointer]:
+                  - /url: /dashboard/customers
+                  - img [ref=e174]
+                  - generic [ref=e177]: Customers
+              - listitem [ref=e178]:
+                - link "Inventory" [ref=e179] [cursor=pointer]:
+                  - /url: /dashboard/inventory
+                  - img [ref=e180]
+                  - generic [ref=e184]: Inventory
+              - listitem [ref=e185]:
+                - link "Subscriptions" [ref=e186] [cursor=pointer]:
+                  - /url: /dashboard/subscriptions
+                  - img [ref=e187]
+                  - generic [ref=e190]: Subscriptions
+              - listitem [ref=e191]:
+                - link "Devices" [ref=e192] [cursor=pointer]:
+                  - /url: /dashboard/devices
+                  - img [ref=e193]
+                  - generic [ref=e195]: Devices
+              - listitem [ref=e196]:
+                - link "Cash Drawers" [ref=e197] [cursor=pointer]:
+                  - /url: /dashboard/cash-drawers
+                  - img [ref=e198]
+                  - generic [ref=e201]: Cash Drawers
+              - listitem [ref=e202]:
+                - link "Audit Logs" [ref=e203] [cursor=pointer]:
+                  - /url: /dashboard/audit-logs
+                  - img [ref=e204]
+                  - generic [ref=e209]: Audit Logs
+              - listitem [ref=e210]:
+                - button "Reports" [ref=e212]:
+                  - img [ref=e213]
+                  - generic [ref=e215]: Reports
+                  - img [ref=e216]
+        - listitem [ref=e218]:
+          - generic [ref=e219]:
+            - generic [ref=e220]: Financial
+            - list [ref=e221]:
+              - listitem [ref=e222]:
+                - link "Transactions" [ref=e223] [cursor=pointer]:
+                  - /url: /dashboard/transactions
+                  - img [ref=e224]
+                  - generic [ref=e227]: Transactions
+              - listitem [ref=e228]:
+                - link "Invoices" [ref=e229] [cursor=pointer]:
+                  - /url: /dashboard/invoices
+                  - img [ref=e230]
+                  - generic [ref=e233]: Invoices
+              - listitem [ref=e234]:
+                - link "Payments" [ref=e235] [cursor=pointer]:
+                  - /url: /dashboard/payments
+                  - img [ref=e236]
+                  - generic [ref=e238]: Payments
+              - listitem [ref=e239]:
+                - button "Tips" [ref=e241]:
+                  - img [ref=e242]
+                  - generic [ref=e244]: Tips
+                  - img [ref=e245]
+              - listitem [ref=e247]:
+                - link "TSYS Disputes" [ref=e248] [cursor=pointer]:
+                  - /url: /dashboard/payments/disputes
+                  - img [ref=e249]
+                  - generic [ref=e251]: TSYS Disputes
+      - generic [ref=e252]:
+        - list [ref=e253]:
+          - listitem [ref=e254]:
+            - button "Settings" [ref=e256]:
+              - img [ref=e257]
+              - generic [ref=e260]: Settings
+              - img [ref=e261]
+          - listitem [ref=e263]:
+            - link "Support" [ref=e264] [cursor=pointer]:
+              - /url: /dashboard/support
+              - img [ref=e265]
+              - generic [ref=e267]: Support
+        - generic [ref=e268]:
+          - link "Mike Mike Doe mikedoe+clerk_test@gmail.com" [ref=e269] [cursor=pointer]:
+            - /url: /dashboard/profile
+            - img "Mike" [ref=e271]
+            - generic [ref=e272]:
+              - generic [ref=e273]: Mike Doe
+              - generic [ref=e274]: mikedoe+clerk_test@gmail.com
+          - button [ref=e275]:
+            - img
+    - main "Dashboard content" [ref=e276]:
+      - generic [ref=e277]:
+        - button "Toggle Sidebar" [ref=e278]:
+          - img
+          - generic [ref=e279]: Toggle Sidebar
+        - heading "Merchant Dashboard" [level=1] [ref=e280]
+        - button "Uptown Branch" [ref=e281]:
+          - img [ref=e282]
+          - generic [ref=e285]: Uptown Branch
+          - img [ref=e286]
+        - generic [ref=e288]:
+          - button "Toggle theme" [ref=e289]:
+            - img [ref=e290]
+            - generic [ref=e292]: Toggle theme
+          - button "Search (⌘K)" [ref=e293]:
+            - img
+          - link "1 unread support messages" [ref=e294] [cursor=pointer]:
+            - /url: /dashboard/support
+            - img
+            - generic [ref=e295]: "1"
+          - button "6 unread notifications" [ref=e296]:
+            - img
+            - generic [ref=e297]: "6"
+      - generic [ref=e299]:
+        - generic [ref=e301]:
+          - heading "Website settings" [level=1] [ref=e302]
+          - paragraph [ref=e303]: What your website offers, and the details every page shows.
+        - generic [ref=e304]:
+          - generic [ref=e305]:
+            - heading "Business name" [level=2] [ref=e306]
+            - paragraph [ref=e307]: What your website calls you, in the header and the footer of every page.
+          - generic [ref=e308]:
+            - textbox "Business name" [ref=e309]:
+              - /placeholder: Joes Coffee Shop
+              - text: Joes Coffee Shop QA
+            - paragraph [ref=e310]: Leave this empty to use Joes Coffee Shop. Your branches keep their own names on your ordering pages — this is the name for the website as a whole.
+        - generic [ref=e311]:
+          - generic [ref=e312]:
+            - heading "Search appearance" [level=2] [ref=e313]
+            - paragraph [ref=e314]: How your website shows up in Google and when someone shares a link to it.
+          - generic [ref=e315]:
+            - generic [ref=e316]:
+              - generic [ref=e317]: Site name in search results
+              - textbox "Site name in search results" [ref=e318]:
+                - /placeholder: Joes Coffee Shop QA
+              - paragraph [ref=e319]:
+                - text: Added after each page name, so your home page reads
+                - generic [ref=e320]: Home — Joes Coffee Shop QA
+                - text: . Leave it empty to use Joes Coffee Shop QA.
+            - generic [ref=e321]:
+              - generic [ref=e322]: Default description
+              - textbox "Default description" [ref=e323]:
+                - /placeholder: A wood-fired pizzeria in Brooklyn, open late seven nights a week.
+              - paragraph [ref=e324]: The sentence under your link in search results, used on any page that has not written its own. 160 characters left.
+        - generic [ref=e325]:
+          - generic [ref=e326]:
+            - heading "Features" [level=2] [ref=e327]
+            - paragraph [ref=e328]: Turn on what your restaurant actually does. Sections you can add to a page follow from these.
+          - generic [ref=e331] [cursor=pointer]:
+            - generic [ref=e332]:
+              - generic [ref=e333]: Customer reviews
+              - generic [ref=e334]: Show what guests have said about you, in their own words.
+            - switch "Customer reviews" [checked] [ref=e335]
+          - paragraph [ref=e336]: Turning one off removes it from the Add Section list. Sections already on a page stay where they are — nothing you have published disappears.
+          - paragraph [ref=e337]:
+            - text: Reservations are set up under
+            - link "Reservations" [ref=e338] [cursor=pointer]:
+              - /url: /dashboard/website/reservations
+            - text: in the sidebar, where the switch sits with your service times and the branches that take bookings.
+          - paragraph [ref=e339]: Rewards and Gift cards are on the way. They are not switches yet, because there is nothing behind them to put on a page.
+        - generic [ref=e340]:
+          - generic [ref=e341]:
+            - heading "Social accounts" [level=2] [ref=e342]
+            - paragraph [ref=e343]: Shown in your footer, and used to connect your website to these accounts in search results.
+          - generic [ref=e344]:
+            - list [ref=e345]:
+              - listitem [ref=e346]:
+                - generic [ref=e347]: Instagram
+                - textbox "Instagram address" [ref=e350]:
+                  - /placeholder: https://instagram.com/your-restaurant
+                  - text: https://instagram.com/resturantsfortesting
+                - button "Remove Instagram" [ref=e351]:
+                  - img
+            - combobox [ref=e352]:
+              - generic [ref=e353]:
+                - img
+                - text: Add an account
+              - img
+        - generic [ref=e354]:
+          - generic [ref=e355]:
+            - heading "About your restaurant" [level=2] [ref=e356]
+            - paragraph [ref=e357]: These do not appear on your pages. They tell search engines what kind of restaurant you are.
+          - generic [ref=e358]:
+            - generic [ref=e359]:
+              - generic [ref=e360]:
+                - text: Cuisines
+                - generic [ref=e361]: 0/5
+              - generic [ref=e362]:
+                - textbox "Thai, Pizza, Vegan…" [ref=e363]
+                - button "Add" [disabled]:
+                  - img
+                  - text: Add
+            - generic [ref=e364]:
+              - generic [ref=e365]: Price range
+              - combobox [ref=e366]:
+                - generic:
+                  - generic: $
+                  - generic: Under $15 a head
+                - img
+        - generic [ref=e367]:
+          - generic [ref=e368]:
+            - heading "Prices and locations" [level=2] [ref=e369]
+            - paragraph [ref=e370]: What a visitor sees before they have chosen a branch.
+          - generic [ref=e371]:
+            - generic [ref=e372]:
+              - generic [ref=e373]: Default location
+              - combobox [ref=e374]:
+                - generic: Joes Coffee Shop
+                - img
+              - paragraph [ref=e375]: Your branches can charge different amounts, so pages that are not about one branch hide prices until a guest picks one. Naming a default shows that branch’s prices instead.
+            - generic [ref=e376] [cursor=pointer]:
+              - generic [ref=e377]:
+                - generic [ref=e378]: Never show prices before a branch is chosen
+                - generic [ref=e379]: "Overrides the default above: pages that are not about one branch show no prices at all. Guests see prices once they open a branch's page or start an order."
+              - switch "Never show prices before a branch is chosen" [ref=e380]
+        - generic [ref=e382]:
+          - paragraph [ref=e383]: These changes go live on your website as soon as you save them.
+          - generic [ref=e384]:
+            - button "Discard" [ref=e385]
+            - button "Save changes" [ref=e386]:
+              - text: Save changes
+              - img
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e10] [cursor=pointer]:
+    - img [ref=e11]
+  - alert [ref=e14]
