@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PosSettingsBodySkeleton } from "@/components/dashboard/loading/DataPageSkeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -244,10 +244,7 @@ export default function PosSettingsPage() {
             />
           }
         />
-        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-          <Skeleton className="h-[520px] w-full rounded-3xl" />
-          <Skeleton className="h-[520px] w-full rounded-3xl" />
-        </div>
+        <PosSettingsBodySkeleton />
       </PageShell>
     );
   }
@@ -590,9 +587,10 @@ export default function PosSettingsPage() {
                 />
               </div>
 
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <Button
                   variant="outline"
+                  className="w-full sm:w-auto"
                   disabled={!locationIsDirty || saveLocationMutation.isPending}
                   onClick={() => {
                     if (data?.location.pos_config) {
@@ -606,6 +604,7 @@ export default function PosSettingsPage() {
                   Reset
                 </Button>
                 <Button
+                  className="w-full sm:w-auto"
                   disabled={!locationIsDirty || saveLocationMutation.isPending}
                   onClick={handleSaveLocation}
                 >

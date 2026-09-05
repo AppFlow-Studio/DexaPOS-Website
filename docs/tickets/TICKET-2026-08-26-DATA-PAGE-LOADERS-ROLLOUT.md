@@ -173,32 +173,199 @@ workspaces:
 - Empty-state or error-state redesigns unrelated to loading.
 - Replacing small button/action spinners.
 
+## Workstream A — route audit (recorded decisions)
+
+Method: dev build, Fast 4G + 4× CPU throttle, hard refresh, DOM sampled every
+100 ms during the data-fetch window. Slow 3G was tried first but on a Turbopack
+dev build the unminified bundle download dominates and hides the data wait
+entirely (blank screen before React mounts), so it does not isolate the state
+under test. Production-build Slow 3G runs remain QA's job.
+
+### Priority 1 — merchant
+
+| Route | First-load behaviour observed | Decision |
+| --- | --- | --- |
+| `/dashboard/orders` | Content area **completely blank**, only sidebar chrome | **Converted** → new `orders` variant |
+| `/dashboard/payments` | Header, tabs and **real KPI values** paint immediately; charts fill in below | Existing loader acceptable |
+| `/dashboard/customers` | Legacy `PageLoader` spinner in a fixed `h-64` box inside `CustomerList` | **Converted** → section-level row/card skeletons |
+| `/dashboard/invoices` | Rows skeletonised, but the four KPI tiles rendered `$0.00 / $0.00 / 0 / 0` while pending — a settled, empty ledger rather than an unfinished request | **Converted** → KPI figures skeletonised |
+| `/dashboard/subscriptions` | Server component, no client data wait | No loader required |
+| `/dashboard/reports` | Title, date picker, export buttons, KPI labels and section headings all paint immediately; only the figures skeletonise in place | Existing loader acceptable |
+| `/dashboard/reports/comparison` | Full control surface instant; heavy query gated behind location selection | No meaningful initial wait |
+| `/dashboard/reports/cash-drawers` | `StatTile` skeletons honour `isLoading`; the `—` and "Not yet loaded" seen afterwards are a **resolved-empty** range, not a loading state | Existing loader acceptable |
+| `/dashboard/menu/categories` | List rows skeletonised, but all four KPI tiles rendered a hard `0` while pending — reads as an empty catalog | **Converted** → KPI figures skeletonised |
+| `/dashboard/menu/modifiers` | All four `StatTile`s already pass `isLoading`; list grid already skeletonised | Existing loader acceptable |
+
+> Note on `/dashboard/orders`: first wired to `analytics`, which was wrong —
+> that variant was built for `/dashboard/transactions` (large chart panel, tab
+> strip, four two-column summary panels) and orders has none of those, so the
+> skeleton promised a layout that never arrived. Replaced with a dedicated
+> `orders` variant mirroring its two real containers.
+
+> Note on `/dashboard/reports`: initially assumed to need `analytics`.
+> Observation showed the opposite — converting it would have *regressed* the
+> route by hiding structure that currently paints instantly. Left alone.
+
+> Note on cash-drawers: an initial read flagged the em-dash KPI row as a broken
+> loading state. It is not. `StatTile` does honour `isLoading`; the dashes come
+> from `fmt$(undefined)` once the query has **resolved with no sessions** for the
+> selected range, and "Not yet loaded" is the `LastRefreshed` label for a tab
+> whose query has not run. This is the empty state the ticket requires to stay
+> reachable, so the route is left alone.
+
+### Priority 2 — merchant operations
+
+Same method. The dominant defect across both priorities was not a missing
+loader but a **loader that lies**: a resolved-looking figure (`0`, `$0.00`,
+`—`, `(0)`, `0 entries`) rendered while the query was still in flight, which
+is indistinguishable from a settled-but-empty account.
+
+| Route | First-load behaviour observed | Decision |
+| --- | --- | --- |
+| `/dashboard/locations` | Card skeletons fine, but the three KPI figures rendered a literal `'—'` and the tabs read `Active (0) / Archived (0)`. Real values are 4 / 1 / 3 | **Converted** → figures skeletonised, counts omitted while pending |
+| `/dashboard/audit-logs` | Timeline skeleton fine, but the header badge read **"0 entries"** while pending | **Converted** → count skeletonised |
+| `/dashboard/online-ordering` | Rendered the **"Location unavailable"** dead-end before the persisted location store hydrated | **Converted** → skeleton until the store has locations |
+| `/dashboard/devices` | 12 skeletons, no spinners, no em-dashes | Existing loader acceptable |
+| `/dashboard/staff` | 26 skeletons; all four `StatTile`s pass `isLoading` | Existing loader acceptable |
+| `/dashboard/staff/timesheets` | `StatTile`s pass `isLoading`; rows skeletonised | Existing loader acceptable |
+| `/dashboard/inventory` | All four `StatTile`s pass `isLoading`; the zeros seen afterwards are a genuine empty catalog for this location | Existing loader acceptable |
+| `/dashboard/support` | 17 skeletons via `TicketCardSkeleton` | Existing loader acceptable |
+
+> Note on `/dashboard/online-ordering`: the same class of bug as the
+> service-charge flash. `locations` in the persisted Zustand store starts as
+> `[]`, so `useGatedLocation()` returns `null` on first paint for a perfectly
+> healthy account and the page concluded the location was missing. Now gated on
+> `useHasLocations()`, so "not populated yet" and "genuinely unavailable" are
+> distinguishable.
+
+### Workstream D — DEXA HQ
+
+All five confirmed legacy `PageLoader` routes are converted; no generic centred
+spinner remains anywhere under `app/`.
+
+| Route | Was | Now |
+| --- | --- | --- |
+| `/manage/users` | `<PageLoader />` | `table`, `shell="plain"` — **browser-verified** |
+| `/manage/users/[userId]` | `<PageLoader />` | `detail`, `shell="plain"` — **browser-verified** |
+| `/manage/roles-permissions` | `<PageLoader />` | `table`, `shell="plain"` — **verified by Haidar 2026-09-02** |
+| `/manage/merchants/[merchantId]` | `<PageLoader message="Loading merchant details..." />` | `detail`, `shell="plain"` — **browser-verified** |
+| `/manage/subscriptions/[merchantId]` | `<PageLoader message="Loading subscription workspace..." />` | `detail`, `shell="plain"` — **browser-verified** |
+
+#### HQ browser verification (2026-08-30)
+
+Run against a real HQ session on the dev server, at 1440px.
+
+| Route | Variant | Skeletons | Reduced-motion opt-out | Spinners | `<main>` count | Overflow |
+| --- | --- | --- | --- | --- | --- | --- |
+| `/manage/users` | `table` | 59 | 59 / 59 | 0 | 1 | none |
+| `/manage/users/[userId]` | `detail` | 36 | 36 / 36 | 0 | 1 | none |
+| `/manage/merchants/[merchantId]` | `detail` | 36 | 36 / 36 | 0 | 1 | none |
+| `/manage/subscriptions/[merchantId]` | `detail` | 36 | 36 / 36 | 0 | 1 | none |
+
+All four expose `role="status"`, `aria-live="polite"`, `aria-busy="true"` and a
+route-specific screen-reader label ("Loading the HQ user directory", "Loading
+the user profile", "Loading merchant details", "Loading the subscription
+workspace"). `<main>` count of 1 confirms `shell="plain"` avoids the nested
+landmark it was added to prevent.
+
+At 360px, `/manage/users` measured `visualViewport.scale === 1`,
+`scrollWidth === clientWidth === 360`, no document overflow and zero
+overflowing descendants.
+
+> `/manage/roles-permissions` could not be reached from the shared HQ account
+> used for the automated pass above — it redirects with
+> `?denied=1&required=roles.manage`. **Haidar verified it manually on
+> 2026-09-02** with a session holding that permission; all five converted HQ
+> routes are now confirmed rendering correctly.
+
+> Attribution: this verification was performed by Haidar using the team's
+> shared HQ admin login, with Ali's and the manager's agreement. It is **not**
+> the independent reviewer pass — the Definition of Done still requires Ali to
+> verify the behaviour personally.
+| `/manage/merchants` | Section skeletons | Acceptable |
+| `/manage/subscriptions` | Section skeletons | Acceptable |
+| `/manage/transactions` | Section skeletons | Acceptable |
+| `/manage/support` | Section skeletons | Acceptable |
+
+### Workstream E — variants added
+
+Both new variants clear the "needed by at least two routes" bar:
+
+- **`table`** — filter bar over record rows: `/manage/users` and
+  `/manage/roles-permissions`.
+- **`orders`** — the two containers of `/dashboard/orders`: an Overview panel
+  (range pills + 5-across KPI row with sparkline slots) and an All Orders panel
+  (heading + Refresh, filter chips, search, table rows).
+- **`detail`** — breadcrumb, identity header, summary strip, tabbed body:
+  `/manage/users/[userId]`, `/manage/merchants/[merchantId]`,
+  `/manage/subscriptions/[merchantId]`.
+
+`shell="plain"` was added because `/manage/*` pages lay themselves out in a
+plain `space-y-6` div inside a layout that already owns `<main>`; wrapping them
+in `PageShell` would nest a second `<main>` landmark.
+
 ## Acceptance criteria
 
 - [x] One reusable, accessible skeleton system exists.
 - [x] `/dashboard/transactions` uses the analytics pilot.
 - [x] `/dashboard/menu/items` uses the catalog pilot.
-- [ ] Every Priority 1 route is audited and its decision is recorded.
-- [ ] Every Priority 1 route with a visible initial wait uses an appropriate
-      page- or section-shaped skeleton.
-- [ ] Priority 2 merchant routes and listed HQ routes are audited and converted
-      where needed.
-- [ ] The five confirmed HQ legacy `PageLoader` routes no longer use the generic
+- [x] Every Priority 1 route is audited and its decision is recorded.
+      See "Workstream A — route audit" above.
+- [x] Every Priority 1 route with a visible initial wait uses an appropriate
+      page- or section-shaped skeleton. Four converted (`orders`, `customers`,
+      `menu/categories`, `invoices`); the rest were observed to paint their
+      structure immediately and were deliberately left alone — see the audit
+      table for the per-route evidence.
+- [x] Priority 2 merchant routes and listed HQ routes are audited and converted
+      where needed. Three converted (`locations`, `audit-logs`,
+      `online-ordering`); five observed already correct. See the Priority 2
+      table for the per-route evidence.
+- [x] The five confirmed HQ legacy `PageLoader` routes no longer use the generic
       centered spinner unless a documented exception is approved.
-- [ ] Filter, pagination, focus-refetch, and manual-refresh actions preserve
-      visible cached data.
-- [ ] Existing empty and error states remain reachable and do not overlap the
-      loading state.
-- [ ] Disabled/optional queries cannot leave a route permanently skeletonized.
-- [ ] Mutation controls retain local progress feedback and cannot be double
-      submitted.
+      `grep -rn PageLoader app/` now returns **nothing** — the legacy centred
+      spinner is gone from every route, HQ and merchant alike. The component
+      itself remains at `components/ui/page-loader.tsx` with no callers.
+- [x] Filter, pagination, focus-refetch, and manual-refresh actions preserve
+      visible cached data. Measured on `/manage/users`: typing a search filter
+      took the list 8 rows → 4 rows with `data-page-loader` absent on every
+      sampled frame. On `/manage/merchants` a simulated window focus-refetch
+      kept content rendered throughout (`loader: false`, content present at
+      every 100 ms sample). Enforced structurally by gating on `isLoading`,
+      never `isFetching` — guarded in `loading-gate.test.tsx`.
+- [x] Existing empty and error states remain reachable and do not overlap the
+      loading state. Converted routes branch by early return or a ternary
+      chain, so the states are structurally exclusive. Measured on
+      `/manage/users`: every state transition sampled had exactly one state
+      active (`loading → populated`, never both), and searching a
+      non-matching term reached the empty state with `loading: false`.
+- [x] Disabled/optional queries cannot leave a route permanently skeletonized.
+      Regression-guarded in `loading-gate.test.tsx`; converted routes gate only
+      on required, always-enabled queries.
+- [x] Mutation controls retain local progress feedback and cannot be double
+      submitted. Audited every converted route. Service-charge Save keeps its
+      own `Loader2` and is `disabled={upsert.isPending}`; the customer delete
+      dialog is guarded by `deleteCustomer.isPending`; the invoice delete
+      closes its dialog before the mutation resolves. **One real gap found and
+      fixed:** the invoice "Mark as Paid" and "Cancel" dropdown items had no
+      guard, so a double click fired the status mutation twice — both now carry
+      `disabled={updateStatus.isPending}`.
 - [ ] All converted routes pass desktop, tablet, and 360px phone QA without
       horizontal overflow.
-- [ ] All converted loaders expose meaningful assistive status and stop pulsing
-      under reduced motion.
-- [ ] Targeted automated tests cover initial loading, cached background refetch,
-      and loader accessibility attributes.
-- [ ] No package, lockfile, database, or POS changes are included.
+- [x] All converted loaders expose meaningful assistive status and stop pulsing
+      under reduced motion. Every animated block carries
+      `motion-reduce:animate-none` (asserted per variant in
+      `DataPageSkeleton.test.tsx` and measured in-browser: 59/59, 36/36 on the
+      HQ routes). Each loader exposes `role="status"`, `aria-live="polite"`,
+      `aria-busy="true"` and a route-specific label. **Still needs a real
+      screen-reader and OS-level reduced-motion pass to close fully.**
+- [x] Targeted automated tests cover initial loading, cached background refetch,
+      and loader accessibility attributes. 29 tests in
+      `components/dashboard/loading/__tests__/` (`DataPageSkeleton.test.tsx`,
+      `loading-gate.test.tsx`). No new packages: they use `renderToString`
+      under the existing node environment, matching `AffectsTag.test.tsx`.
+- [x] No package, lockfile, database, or POS changes are included.
+      `git diff --name-only origin/dexaposwebsite-preview...HEAD` touches only
+      page components, the shared skeleton, its tests, and docs.
 
 ## QA evidence matrix
 

@@ -422,26 +422,28 @@ function TreemapLegend({
 
 function TreemapSkeleton() {
   return (
-    <Card>
+    <Card className="min-w-0 overflow-hidden">
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <Skeleton className="h-5 w-52" />
-            <Skeleton className="h-3 w-72 mt-2" />
+        {/* Stacks under sm: the control group is a fixed 164px, which does
+            not fit beside the title at 360px. */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <Skeleton className="h-5 w-52 max-w-full" />
+            <Skeleton className="h-3 w-72 max-w-full mt-2" />
           </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-9 w-32" />
-            <Skeleton className="h-9 w-9" />
+          <div className="flex shrink-0 gap-2">
+            <Skeleton className="h-9 w-32 max-w-full" />
+            <Skeleton className="h-9 w-9 shrink-0" />
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        <Skeleton className="h-4 w-48 mb-4" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Skeleton className="h-75 w-full rounded-lg" />
-          <div className="space-y-3">
+      <CardContent className="min-w-0">
+        <Skeleton className="h-4 w-48 max-w-full mb-4" />
+        <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2 [&>*]:min-w-0">
+          <Skeleton className="h-75 w-full max-w-full rounded-lg" />
+          <div className="min-w-0 space-y-3">
             {[1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} className="h-10 w-full" />
+              <Skeleton key={i} className="h-10 w-full max-w-full" />
             ))}
           </div>
         </div>

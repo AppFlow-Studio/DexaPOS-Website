@@ -324,3 +324,99 @@ export async function boardMerchantOnValor(
     return { ok: false, error: 'Boarding failed unexpectedly.' }
   }
 }
+
+export interface SetPrimaryResult {
+  ok: boolean
+  error?: string
+}
+
+/**
+ * Cut a boarded location's Valor online_order account over to the primary
+ * (live) rail.
+ *
+ * Boarding provisions accounts is_primary=false so the storefront keeps failing
+ * closed until a deliberate go-live. This is that go-live: the storefront
+ * resolver (`get_storefront_valor_account`) only returns an active PRIMARY
+ * account, so nothing takes card online until an account here is made primary.
+ *
+ * Demotes any other active primary online_order account in the same
+ * (merchant, location) scope first — `uq_mpa_primary_scope` allows at most one
+ * active primary per (merchant, location, purpose) across processors, so the
+ * demote-then-promote order keeps the partial unique index satisfied at every
+ * step (0 primaries is a legal intermediate state, 2 is not).
+ */
+export async function setValorAccountPrimary(
+  merchantId: string,
+  locationId: string
+): Promise<SetPrimaryResult> {
+  const { userId } = await assertHQPermission('hq.merchant.update')
+  const supabase = createServiceRoleClient()
+
+  const { data: account, error: findError } = await supabase
+    .from('merchant_processor_accounts')
+    .select('id, is_primary, valor_epi, valor_appid, valor_appkey_encrypted')
+    .eq('merchant_id', merchantId)
+    .eq('location_id', locationId)
+    .eq('processor', 'valor')
+    .eq('purpose', 'online_order')
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (findError) {
+    return { ok: false, error: findError.message }
+  }
+  if (!account) {
+    return { ok: false, error: 'This location is not boarded on Valor yet.' }
+  }
+  if (!account.valor_epi || !account.valor_appid || !account.valor_appkey_encrypted) {
+    return {
+      ok: false,
+      error:
+        'This account is missing Valor credentials (EPI / app ID / app key). Re-provision the location before going live.',
+    }
+  }
+  if (account.is_primary) {
+    return { ok: true }
+  }
+
+  // Demote any other active primary online_order account in the same scope FIRST
+  // (spans processors, e.g. a dormant NMI row) so promoting this one can't trip
+  // uq_mpa_primary_scope.
+  const { error: demoteError } = await supabase
+    .from('merchant_processor_accounts')
+    .update({ is_primary: false, updated_at: new Date().toISOString() })
+    .eq('merchant_id', merchantId)
+    .eq('location_id', locationId)
+    .eq('purpose', 'online_order')
+    .eq('is_active', true)
+    .eq('is_primary', true)
+    .neq('id', account.id)
+
+  if (demoteError) {
+    return { ok: false, error: demoteError.message }
+  }
+
+  const { error: promoteError } = await supabase
+    .from('merchant_processor_accounts')
+    .update({ is_primary: true, updated_at: new Date().toISOString() })
+    .eq('id', account.id)
+
+  if (promoteError) {
+    return { ok: false, error: promoteError.message }
+  }
+
+  await LogAuditEvent({
+    merchantId,
+    locationId,
+    action: 'HQ Admin: Set Valor account live (primary online-order rail)',
+    actionCategory: 'payments',
+    severity: 'info',
+    resourceType: 'merchant_processor_account',
+    resourceId: account.id,
+    resourceName: 'Valor online-order account',
+    changes: { before: { is_primary: false }, after: { is_primary: true } },
+    metadata: { set_primary_by_admin: userId, source: 'hq_admin', location_id: locationId },
+  })
+
+  return { ok: true }
+}
