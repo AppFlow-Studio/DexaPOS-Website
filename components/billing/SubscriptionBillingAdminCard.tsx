@@ -217,13 +217,6 @@ export function SubscriptionBillingAdminCard({
         setSubscriptions(nextSubscriptions)
         setInvoices(nextInvoices)
         setSubscriptionServiceMap(nextAssignmentMap)
-        const merchantWideValorProfile = billingProfiles.find(
-          (profile) =>
-            !profile.location_id &&
-            profile.processor === 'valor' &&
-            profile.billing_method === 'card' &&
-            profile.is_active,
-        )
         setBillingProfilesByLocation(
           Object.fromEntries(
             locations.flatMap((location) => {
@@ -232,9 +225,10 @@ export function SubscriptionBillingAdminCard({
                   profile.location_id === location.id &&
                   profile.processor === 'valor' &&
                   profile.billing_method === 'card' &&
+                  profile.is_primary &&
                   profile.is_active,
               )
-              const effectiveProfile = locationProfile ?? merchantWideValorProfile
+              const effectiveProfile = locationProfile
               return effectiveProfile ? [[location.id, effectiveProfile]] : []
             }),
           ),

@@ -340,6 +340,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     devicesResult,
     pendingTierRequestResult,
     pendingHardwareRequestsResult,
+    tierBillingResult,
   ] = await Promise.all([
     serviceRole.rpc('get_merchant_subscription_status', {
       p_merchant_id: merchantId,
@@ -386,7 +387,8 @@ export async function getMerchantSubscriptionOverview(): Promise<{
       .eq('merchant_id', merchantId)
       .eq('is_primary', true)
       .eq('is_active', true)
-      .not('location_id', 'is', null)
+      .eq('processor', 'valor')
+      .eq('billing_method', 'card')
       .order('created_at', { ascending: true }),
     serviceRole
       .from('admin_device_inventory')
@@ -414,7 +416,16 @@ export async function getMerchantSubscriptionOverview(): Promise<{
       .eq('merchant_id', merchantId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false }),
+    serviceRole.from('merchant_subscriptions')
+      .select('billing_profile_id')
+      .eq('merchant_id', merchantId)
+      .contains('metadata', { billing_scope: 'merchant_tier' })
+      .maybeSingle(),
   ])
+
+  if (tierBillingResult.error) {
+    throw new Error('Failed to load the merchant tier billing card.')
+  }
 
   if (merchantPlanStatusResult.error) {
     console.error(
@@ -750,7 +761,11 @@ export async function getMerchantSubscriptionOverview(): Promise<{
       ? (locationNameById.get(profile.location_id) ?? null)
       : null,
   }))
-  const primaryBillingProfile = normalizedBillingProfiles[0] ?? null
+  const tierBillingProfileId = tierBillingResult.data?.billing_profile_id
+  const primaryBillingProfile = tierBillingProfileId
+    ? normalizedBillingProfiles.find((profile) => profile.id === tierBillingProfileId) ?? null
+    : normalizedBillingProfiles.find((profile) => profile.location_id === null) ??
+      normalizedBillingProfiles.find((profile) => profile.location_id === normalizedLocations[0]?.id) ?? null
 
   const pendingHardwareRequests = (
     (pendingHardwareRequestsResult.data ?? []) as Array<{

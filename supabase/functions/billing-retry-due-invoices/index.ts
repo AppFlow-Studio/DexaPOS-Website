@@ -27,7 +27,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   const { data: invoices, error } = await supabase
     .from('subscription_invoices')
-    .select('id')
+    .select('id, merchant_subscriptions!inner(status, metadata)')
+    .neq('merchant_subscriptions.status', 'canceled')
     .eq('status', 'failed')
     .not('next_retry_at', 'is', null)
     .lte('next_retry_at', new Date().toISOString())

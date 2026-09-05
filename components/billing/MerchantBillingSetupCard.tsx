@@ -253,7 +253,7 @@ export function MerchantBillingSetupCard({
         <Shield className="h-4 w-4" />
         <AlertTitle>Security Notice</AlertTitle>
         <AlertDescription>
-          Billing profiles can be saved merchant-wide or per location. Subscription billing should use the location-specific profile, while legacy or non-subscription flows can still rely on merchant-wide ACH/card records.
+          The merchant card pays the merchant tier. Each location needs its own card for its devices, integrations, and add-ons. Updating one location&apos;s card does not change other locations.
         </AlertDescription>
       </Alert>
 
@@ -261,7 +261,7 @@ export function MerchantBillingSetupCard({
         <CardHeader>
           <CardTitle>Billing Profile Scope</CardTitle>
           <CardDescription>
-            Choose which location owns the billing method. Per-location billing profiles are recommended for subscriptions.
+            Choose Merchant-wide for the tier card, or a location for that location&apos;s subscription card. Before a merchant-wide card is configured, the tier uses the first location&apos;s card.
           </CardDescription>
         </CardHeader>
         <CardContent>

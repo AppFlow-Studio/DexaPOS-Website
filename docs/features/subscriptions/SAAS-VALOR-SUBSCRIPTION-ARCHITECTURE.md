@@ -1,6 +1,7 @@
 # SaaS and Valor Subscription Summary
 
-Last reviewed: 2026-09-03
+Last reviewed: 2026-09-06. Scope separation requires the migration and Edge
+Function deployment described in [the rollout guide](./BILLING-SCOPE-SEPARATION-QA.md).
 
 ## Core Model
 
@@ -14,24 +15,29 @@ Merchant
 |
 +-- One merchant-wide tier
 |   +-- Stored in merchant_plan_subscriptions
-|   +-- Billed through one location-backed anchor
+|   +-- Own invoice and Valor schedule, paid by the merchant card
 |
 +-- Location A add-ons
-|   +-- Services, devices, and station quantities
+|   +-- Services, devices, and station quantities, paid by Location A's card
 |
 +-- Location B add-ons
-    +-- Independent services, devices, and quantities
+    +-- Independent subscription, invoices, and Location B's card
 ```
 
 The tier is not duplicated for every location. The billing anchor only supplies
 the `location_id` required by the current invoice structure.
+
+Legacy combined subscriptions are archived without deleting their invoices or
+service history. Replacement tier/location records start without a card and
+cannot bill until HQ completes **Migrated billing: setup required**, then explicitly
+activates them through **Save & Charge**. Preparation alone never charges.
 
 ## Main Records
 
 | Record | Scope | Purpose |
 | --- | --- | --- |
 | `merchant_plan_subscriptions` | Merchant | Current merchant-wide tier and status. |
-| `merchant_subscriptions` | Location | Billing container for a location. One row also acts as the merchant-tier anchor. |
+| `merchant_subscriptions` | Merchant tier or location | Separate rows identified by `metadata.billing_scope`. The first location can back a tier row AND have its own add-on row. |
 | `merchant_subscription_services` | Location | Enabled add-ons and quantities for that location. |
 | `device_billing_service_mappings` | Global | Maps a device category, such as KDS, to a billable service. |
 | `merchant_billing_profiles` | Merchant or location | Stores Valor vault payment-profile references. |
@@ -45,8 +51,8 @@ it at `/manage/subscriptions/[merchantId]`.
 1. The merchant selects a tier and accepts the recurring-charge terms.
 2. HQ receives a notification and approves or denies the request.
 3. Approval updates the merchant-wide tier.
-4. Dexa finds an active primary Valor billing profile.
-5. Dexa uses one location subscription as the billing anchor.
+4. Dexa uses the merchant-wide primary Valor card, or the first-created location's card if no merchant-wide card exists.
+5. Dexa uses a dedicated merchant-tier billing row, separate from location add-ons.
 6. Dexa creates the invoice and activates or updates the Valor schedule.
 7. The tier remains active only if Valor approves the payment operation.
 8. The merchant receives the approval or denial notification.
@@ -58,12 +64,13 @@ unpaid access.
 
 The billing anchor is a technical requirement, not a location-specific tier.
 
-- A merchant-global payment profile uses an active location as its invoice
+- A merchant-global payment profile uses the first-created location as its invoice
   anchor.
-- A location-specific primary profile uses that profile's location.
+- Without a merchant-wide card, only the earliest-created location's primary card is eligible. Dexa does not pick an arbitrary location with a card.
 - Changing the dashboard location must not change the merchant's tier.
-- The anchor row can contain both the merchant-tier base charge and that
-  location's add-ons in one invoice and Valor schedule.
+- The tier row contains only the tier charge. Even the anchor location's add-ons
+  have their own row, invoice, and Valor schedule.
+- Location subscriptions cannot fall back to the merchant card or another location's card.
 
 ## Location Add-ons
 
@@ -81,12 +88,15 @@ HQ configures these from the location section of
 `/manage/subscriptions/[merchantId]`.
 
 1. Select the location.
-2. Enable services and set quantities.
+2. Save a primary Valor card for that location, then enable services and set quantities.
 3. Review the calculated recurring total.
 4. Select `Create & Charge` or `Save & Charge`.
 5. Valor must approve the operation before the new configuration becomes active.
 
 Changing Location A must not affect Location B.
+Replacing the merchant card updates the tier only. Replacing a location card
+updates that location's subscription and the tier only if the tier was already
+using that location's card.
 
 ## What Mapping Means
 
@@ -125,8 +135,9 @@ plan or tier base price
 = invoice total
 ```
 
-The merchant-tier anchor combines the tier base price with the anchor location's
-add-ons. Other locations have independent billing streams.
+The tier invoice includes only the tier price and its applicable surcharge.
+Location invoices include only that location's service plan, devices, add-ons,
+and applicable surcharge. Each stream has its own Valor schedule.
 
 Invoice line items preserve the amount charged for that billing period even if
 catalog prices change later.

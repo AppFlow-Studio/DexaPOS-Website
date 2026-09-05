@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { SubscriptionCutoverReview } from './SubscriptionCutoverReview'
+import { subscriptionBillingScope } from '@/supabase/functions/_shared/subscription-billing-scope'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
@@ -557,7 +559,7 @@ export function HqSubscriptionsWorkspace({
   )
 
   const selectedLocationSubscription = useMemo(
-    () => subscriptions.find((subscription) => subscription.location_id === selectedLocation?.id) ?? null,
+    () => subscriptions.find((subscription) => subscription.location_id === selectedLocation?.id && subscriptionBillingScope(subscription.metadata) === 'location') ?? null,
     [selectedLocation, subscriptions]
   )
 
@@ -824,13 +826,6 @@ export function HqSubscriptionsWorkspace({
         )
 
         const nextAssignmentMap = Object.fromEntries(assignmentEntries)
-        const merchantWideValorProfile = billingProfiles.find(
-          (profile) =>
-            !profile.location_id &&
-            profile.processor === 'valor' &&
-            profile.billing_method === 'card' &&
-            profile.is_active,
-        )
         const nextBillingProfilesByLocation = Object.fromEntries(
           sortedLocations.flatMap((location) => {
             const locationProfile = billingProfiles.find(
@@ -838,9 +833,10 @@ export function HqSubscriptionsWorkspace({
                 profile.location_id === location.id &&
                 profile.processor === 'valor' &&
                 profile.billing_method === 'card' &&
+                profile.is_primary &&
                 profile.is_active,
             )
-            const effectiveProfile = locationProfile ?? merchantWideValorProfile
+            const effectiveProfile = locationProfile
             return effectiveProfile ? [[location.id, effectiveProfile]] : []
           }),
         )
@@ -1364,9 +1360,11 @@ export function HqSubscriptionsWorkspace({
           <Badge variant="outline">{merchant.clerk_org_id || merchant.id}</Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          Manage the merchant-wide tier and each location&apos;s add-ons through the Valor billing rail.
+          One merchant tier is charged to the merchant billing card. Each location&apos;s devices and add-ons use its own card and separate subscription.
         </p>
       </div>
+
+      <SubscriptionCutoverReview key={merchant.id} merchantId={merchant.id} merchantRouteId={merchant.clerk_org_id || merchant.id} onPrepared={refresh} />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
@@ -1438,12 +1436,12 @@ export function HqSubscriptionsWorkspace({
         <CardHeader>
           <CardTitle>Merchant Tier</CardTitle>
           <CardDescription>
-            Manage the plan that applies to the merchant as a whole. Location add-ons are managed separately.
+            One subscription for the whole merchant, charged to the designated merchant card or the first location&apos;s card. Location add-ons are billed separately.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {pendingMerchantTierRequest ? (
-            <div className="rounded-2xl border border-primary/25 bg-primary/[0.04] p-4 sm:p-5">
+            <div className="border-b pb-6">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -1509,7 +1507,7 @@ export function HqSubscriptionsWorkspace({
             </div>
           ) : null}
           <div className="grid gap-4">
-            <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
+            <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="text-lg font-semibold">
                   {merchantTierStatus.plan?.name || 'No active plan'}
@@ -1566,7 +1564,7 @@ export function HqSubscriptionsWorkspace({
               ) : null}
             </div>
 
-            <div className="space-y-4 rounded-xl border p-4">
+            <div className="space-y-4 border-t pt-6">
               <div className="space-y-3">
                 <Label>Assign Tier</Label>
                 <div className="grid gap-4 xl:grid-cols-3">
@@ -1594,7 +1592,7 @@ export function HqSubscriptionsWorkspace({
                         <div className="mt-3 text-sm text-muted-foreground">
                           {plan.description || formatMerchantTierBillingUnit(plan)}
                         </div>
-                        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
+                        <div className="mt-4 border-t pt-3 text-xs font-medium text-muted-foreground">
                           {formatMerchantTierBillingUnit(plan)}
                         </div>
                         <div className="mt-4 space-y-2 text-sm text-muted-foreground">
@@ -1694,7 +1692,7 @@ export function HqSubscriptionsWorkspace({
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 xl:grid-cols-2">
-          <div className="space-y-4 rounded-xl border p-4">
+          <div className="min-w-0 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="font-medium">Service Billing Plan</div>
@@ -1804,7 +1802,7 @@ export function HqSubscriptionsWorkspace({
             </Button>
           </div>
 
-          <div className="space-y-4 rounded-xl border p-4">
+          <div className="min-w-0 space-y-4 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="font-medium">Billable Services & Add-ons</div>
@@ -1978,7 +1976,7 @@ export function HqSubscriptionsWorkspace({
             </Button>
           </div>
 
-          <div className="space-y-4 rounded-xl border p-4 xl:col-span-2">
+          <div className="space-y-4 border-t pt-6 xl:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="font-medium">Device Billing Mappings</div>
@@ -2152,7 +2150,7 @@ export function HqSubscriptionsWorkspace({
               ) : null}
             </div>
 
-            <div className="grid gap-4 rounded-2xl bg-muted/30 p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] md:items-end">
+            <div className="grid gap-4 border-t pt-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] md:items-end">
               <div className="space-y-2">
                 <Label htmlFor="billing-grace-until">Grace period until</Label>
                 <Input
@@ -2202,7 +2200,7 @@ export function HqSubscriptionsWorkspace({
         </CardHeader>
         <CardContent className="space-y-6">
           {pendingHardwareRequests.length > 0 ? (
-            <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50/40 p-4 sm:p-5">
+            <div className="space-y-4 border-b pb-6">
               <div>
                 <h3 className="font-semibold">Pending hardware requests</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -2211,7 +2209,7 @@ export function HqSubscriptionsWorkspace({
               </div>
               <div className="grid gap-4 xl:grid-cols-2">
                 {pendingHardwareRequests.map((request) => (
-                  <div key={request.id} className="space-y-4 rounded-xl border bg-background p-4">
+                  <div key={request.id} className="min-w-0 space-y-4 border-t pt-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -2227,7 +2225,7 @@ export function HqSubscriptionsWorkspace({
                       </div>
                     </div>
                     {request.request_note ? (
-                      <p className="rounded-lg bg-muted/50 p-3 text-sm">{request.request_note}</p>
+                      <p className="border-l-2 pl-3 text-sm text-muted-foreground">{request.request_note}</p>
                     ) : null}
                     <div className="space-y-2">
                       <Label htmlFor={`hardware-decision-note-${request.id}`}>
@@ -2294,7 +2292,7 @@ export function HqSubscriptionsWorkspace({
             </div>
           ) : null}
 
-          <div className="overflow-x-auto rounded-xl border">
+          <div className="overflow-x-auto border-y">
             <table className="w-full min-w-[860px] text-sm">
               <thead className="bg-muted/35 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
                 <tr>
@@ -2385,7 +2383,7 @@ export function HqSubscriptionsWorkspace({
             </table>
           </div>
 
-          <div className="grid gap-4 rounded-xl border bg-background p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid gap-6 border-t pt-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <div className="space-y-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -2451,7 +2449,7 @@ export function HqSubscriptionsWorkspace({
                   {quoteError}
                 </div>
               ) : quote?.line_items?.length ? (
-                <div className="overflow-x-auto rounded-lg border">
+                <div className="overflow-x-auto border-y">
                   <table className="w-full min-w-[620px] text-sm">
                     <thead className="bg-muted/35 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
                       <tr>
@@ -2491,7 +2489,7 @@ export function HqSubscriptionsWorkspace({
               )}
             </div>
 
-            <div className="space-y-3 rounded-xl border bg-muted/25 p-4">
+            <div className="min-w-0 space-y-3 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
               <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Quote Total</div>
               <div className="text-3xl font-semibold">{formatMoney(quote?.total_amount ?? 0)}</div>
               <div className="space-y-2 text-sm">
@@ -2518,10 +2516,15 @@ export function HqSubscriptionsWorkspace({
             </div>
           </div>
 
-          <div className="grid gap-4 rounded-xl border bg-muted/20 p-4 md:grid-cols-3">
+          <div className="grid gap-4 border-t pt-6 md:grid-cols-3">
             <div className="space-y-1">
               <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Payment Method</div>
               <div className="font-medium">{buildPaymentMethodLabel(selectedBillingProfile)}</div>
+              <p className="text-xs text-muted-foreground">
+                {selectedBillingProfile
+                  ? 'Only this location\u0027s card pays for these services. The merchant tier is billed separately.'
+                  : 'Add a Valor card for this location before activation. The merchant card is not used as a fallback.'}
+              </p>
               <div className="text-xs text-muted-foreground">
                 {selectedBillingProfile?.billing_email || 'No billing email on file'}
               </div>
@@ -2619,9 +2622,9 @@ export function HqSubscriptionsWorkspace({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1.25fr)_minmax(0,0.9fr)]">
-            <Card className="border-muted">
-              <CardContent className="space-y-5 pt-6">
+          <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1.25fr)_minmax(0,0.9fr)]">
+            <div className="min-w-0">
+              <div className="space-y-5">
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Net collected</div>
                   <div className="text-3xl font-semibold">{formatMoney(transactionSummary.paid)}</div>
@@ -2657,11 +2660,11 @@ export function HqSubscriptionsWorkspace({
                     <span className="font-medium">{transactionSummary.failedCount}</span>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card className="border-muted">
-              <CardContent className="pt-6">
+            <div className="min-w-0 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
+              <div>
                 {transactionTrendData.length === 0 ? (
                   <div className="flex h-[220px] items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
                     No charge activity yet.
@@ -2701,11 +2704,11 @@ export function HqSubscriptionsWorkspace({
                     </AreaChart>
                   </ChartContainer>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card className="border-muted">
-              <CardContent className="pt-6">
+            <div className="min-w-0 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
+              <div>
                 {transactionStatusData.length === 0 ? (
                   <div className="flex h-[220px] items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
                     No status distribution yet.
@@ -2737,8 +2740,8 @@ export function HqSubscriptionsWorkspace({
                     </BarChart>
                   </ChartContainer>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -2839,7 +2842,7 @@ export function HqSubscriptionsWorkspace({
                   {filteredInvoices.map((invoice) => (
                     <tr key={invoice.id} className="border-b last:border-0">
                       <td className="py-3 pr-4 font-medium">{invoice.invoice_number}</td>
-                      <td className="py-3 pr-4">{invoice.location_name}</td>
+                      <td className="py-3 pr-4">{subscriptionBillingScope(invoice.metadata) === 'merchant_tier' ? 'Merchant tier' : invoice.location_name}</td>
                       <td className="py-3 pr-4">
                         <div className="flex items-center gap-2">
                           <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />

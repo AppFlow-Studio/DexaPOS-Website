@@ -14,6 +14,7 @@ import {
 } from '@/lib/payments/valor/customerProfileApi'
 import { getClientToken } from '@/lib/payments/valor/saleApi'
 import { updateSubscription } from '@/lib/payments/valor/subscriptionApi'
+import { shouldRebindSubscriptionCard } from '@/supabase/functions/_shared/subscription-billing-scope'
 
 const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID!
 
@@ -474,16 +475,27 @@ export async function saveMerchantBillingCardWithVault(
       },
     )
 
-    let subscriptionsQuery = supabase
+    let previousProfilesQuery = supabase.from('merchant_billing_profiles')
+      .select('id').eq('merchant_id', merchantId)
+    previousProfilesQuery = locationId
+      ? previousProfilesQuery.eq('location_id', locationId)
+      : previousProfilesQuery.is('location_id', null)
+    const { data: previousProfiles, error: previousProfilesError } = await previousProfilesQuery
+    if (previousProfilesError) {
+      return { success: false, error: 'Failed to resolve the previous billing cards.' }
+    }
+    const subscriptionsQuery = supabase
       .from('merchant_subscriptions')
-      .select('id, monthly_amount, next_billing_date, processor_subscription_id')
+      .select('id, location_id, billing_profile_id, metadata, monthly_amount, next_billing_date, processor_subscription_id')
       .eq('merchant_id', merchantId)
       .neq('status', 'canceled')
-    if (locationId) subscriptionsQuery = subscriptionsQuery.eq('location_id', locationId)
-    const { data: subscriptions, error: subscriptionsError } = await subscriptionsQuery
+    const { data: allSubscriptions, error: subscriptionsError } = await subscriptionsQuery
     if (subscriptionsError) {
       return { success: false, error: 'Failed to load the active subscription schedule.' }
     }
+    const subscriptions = (allSubscriptions ?? []).filter((subscription) =>
+      shouldRebindSubscriptionCard(subscription, locationId, (previousProfiles ?? []).map((profile) => profile.id)),
+    )
 
     const { data: stagedProfile, error: stagedProfileError } = await supabase
       .from('merchant_billing_profiles')
@@ -583,7 +595,7 @@ export async function saveMerchantBillingCardWithVault(
       return { success: false, error: activateError.message }
     }
 
-    let bindSubscriptions = supabase
+    const bindSubscriptions = supabase
       .from('merchant_subscriptions')
       .update({
         billing_profile_id: stagedProfile.id,
@@ -593,8 +605,8 @@ export async function saveMerchantBillingCardWithVault(
       } as any)
       .eq('merchant_id', merchantId)
       .neq('status', 'canceled')
-    if (locationId) bindSubscriptions = bindSubscriptions.eq('location_id', locationId)
-    const { error: bindingError } = await bindSubscriptions
+      .in('id', subscriptions.map((subscription) => subscription.id))
+    const { error: bindingError } = subscriptions.length ? await bindSubscriptions : { error: null }
     if (bindingError) {
       console.error('[saveMerchantBillingCardWithVault] Subscription binding error:', bindingError)
       return { success: false, error: 'Valor card was saved, but the subscription binding failed.' }
