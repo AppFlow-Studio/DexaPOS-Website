@@ -72,11 +72,24 @@ export interface QrTableManagerRow {
   generatedAt: string | null;
 }
 
+/**
+ * Branding pulled from `online_store_config` so QR codes can be rendered in the
+ * merchant's identity instead of plain black on white. Null when the store has
+ * no config row yet — the renderer degrades to an unbranded code.
+ */
+export interface QrBrandingSource {
+  logoUrl: string | null;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+  backgroundColor: string | null;
+}
+
 export interface QrTableManagerSnapshot {
   success: boolean;
   storeName: string | null;
   storeSlug: string | null;
   customDomain: string | null;
+  branding: QrBrandingSource | null;
   acceptsDineIn: boolean;
   qrKillSwitch: boolean;
   tables: QrTableManagerRow[];
@@ -1394,6 +1407,15 @@ function compareQrManagerRows(a: QrTableManagerRow, b: QrTableManagerRow) {
   });
 }
 
+function readQrBranding(config: Record<string, unknown>): QrBrandingSource {
+  return {
+    logoUrl: (config.logo_url as string | null) ?? null,
+    primaryColor: (config.primary_color as string | null) ?? null,
+    secondaryColor: (config.secondary_color as string | null) ?? null,
+    backgroundColor: (config.background_color as string | null) ?? null,
+  };
+}
+
 export async function getQrTableManagerSnapshot(
   locationId: string
 ): Promise<QrTableManagerSnapshot> {
@@ -1403,6 +1425,7 @@ export async function getQrTableManagerSnapshot(
       storeName: null,
       storeSlug: null,
       customDomain: null,
+      branding: null,
       acceptsDineIn: false,
       qrKillSwitch: false,
       tables: [],
@@ -1429,6 +1452,7 @@ export async function getQrTableManagerSnapshot(
       storeName: null,
       storeSlug: null,
       customDomain: null,
+      branding: null,
       acceptsDineIn: false,
       qrKillSwitch: false,
       tables: [],
@@ -1441,7 +1465,7 @@ export async function getQrTableManagerSnapshot(
   const { data: config, error: configError } = await supabase
     .from("online_store_config")
     .select(
-      "id, store_name, slug, custom_domain, setup_request_status, accepts_dine_in, qr_kill_switch"
+      "id, store_name, slug, custom_domain, setup_request_status, accepts_dine_in, qr_kill_switch, logo_url, primary_color, secondary_color, background_color"
     )
     .eq("location_id", locationId)
     .maybeSingle();
@@ -1452,6 +1476,7 @@ export async function getQrTableManagerSnapshot(
       storeName: null,
       storeSlug: null,
       customDomain: null,
+      branding: null,
       acceptsDineIn: false,
       qrKillSwitch: false,
       tables: [],
@@ -1467,6 +1492,7 @@ export async function getQrTableManagerSnapshot(
       storeName: null,
       storeSlug: null,
       customDomain: null,
+      branding: null,
       acceptsDineIn: false,
       qrKillSwitch: false,
       tables: [],
@@ -1491,6 +1517,7 @@ export async function getQrTableManagerSnapshot(
       storeName: (config.store_name as string | null) ?? null,
       storeSlug: (config.slug as string | null) ?? null,
       customDomain: (config.custom_domain as string | null) ?? null,
+      branding: readQrBranding(config),
       acceptsDineIn: Boolean(config.accepts_dine_in),
       qrKillSwitch: Boolean(config.qr_kill_switch),
       tables: [],
@@ -1507,6 +1534,7 @@ export async function getQrTableManagerSnapshot(
       storeName: (config.store_name as string | null) ?? null,
       storeSlug: (config.slug as string | null) ?? null,
       customDomain: (config.custom_domain as string | null) ?? null,
+      branding: readQrBranding(config),
       acceptsDineIn: Boolean(config.accepts_dine_in),
       qrKillSwitch: Boolean(config.qr_kill_switch),
       tables: [],
@@ -1541,6 +1569,7 @@ export async function getQrTableManagerSnapshot(
       storeName: (config.store_name as string | null) ?? null,
       storeSlug: (config.slug as string | null) ?? null,
       customDomain: (config.custom_domain as string | null) ?? null,
+      branding: readQrBranding(config),
       acceptsDineIn: Boolean(config.accepts_dine_in),
       qrKillSwitch: Boolean(config.qr_kill_switch),
       tables: [],
@@ -1556,6 +1585,7 @@ export async function getQrTableManagerSnapshot(
       storeName: (config.store_name as string | null) ?? null,
       storeSlug: (config.slug as string | null) ?? null,
       customDomain: (config.custom_domain as string | null) ?? null,
+      branding: readQrBranding(config),
       acceptsDineIn: Boolean(config.accepts_dine_in),
       qrKillSwitch: Boolean(config.qr_kill_switch),
       tables: [],
@@ -1633,6 +1663,7 @@ export async function getQrTableManagerSnapshot(
     storeName: (config.store_name as string | null) ?? null,
     storeSlug: (config.slug as string | null) ?? null,
     customDomain: (config.custom_domain as string | null) ?? null,
+    branding: readQrBranding(config),
     acceptsDineIn: Boolean(config.accepts_dine_in),
     qrKillSwitch: Boolean(config.qr_kill_switch),
     generatedCount: rows.filter((row) => row.qrStatus !== "not_generated").length,

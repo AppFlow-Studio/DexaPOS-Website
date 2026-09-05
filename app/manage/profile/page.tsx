@@ -1,16 +1,19 @@
 "use client";
 
-import { UserProfile } from "@clerk/nextjs";
+import { UserProfile, useUser } from "@clerk/nextjs";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useAdminPermissions } from "@/lib/hooks/useAdminPermissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UserProfileFallback } from "@/components/profile/UserProfileFallback";
 
 export default function AdminProfilePage() {
   const { data: userInfo, isLoading } = useUserInfo();
   const { role } = useAdminPermissions();
+  // Clerk renders nothing until its script boots; hold the shape until then.
+  const { isLoaded: isClerkLoaded } = useUser();
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 p-6">
@@ -59,16 +62,25 @@ export default function AdminProfilePage() {
         </CardContent>
       </Card>
 
-      <UserProfile
-        routing="hash"
-        appearance={{
-          elements: {
-            rootBox: "w-full",
-            cardBox: "w-full shadow-none",
-            card: "w-full shadow-none border rounded-lg",
-          },
-        }}
-      />
+      {!isClerkLoaded ? (
+        <Card>
+          <CardContent className="p-6">
+            <UserProfileFallback />
+          </CardContent>
+        </Card>
+      ) : null}
+      <div className={isClerkLoaded ? undefined : "hidden"}>
+        <UserProfile
+          routing="hash"
+          appearance={{
+            elements: {
+              rootBox: "w-full",
+              cardBox: "w-full shadow-none",
+              card: "w-full shadow-none border rounded-lg",
+            },
+          }}
+        />
+      </div>
     </div>
   );
 }

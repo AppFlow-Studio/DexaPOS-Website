@@ -79,6 +79,12 @@ export interface MerchantSubscriptionInvoiceViewRecord {
   payment_attempt_count: number
   last_payment_attempt_at: string | null
   last_payment_error: string | null
+  next_retry_at: string | null
+  retry_exhausted_at: string | null
+  processor: 'valor' | null
+  processor_account_id: string | null
+  processor_transaction_id: string | null
+  processor_response: Record<string, unknown> | null
   nmi_transaction_id: string | null
   nmi_response: Record<string, unknown> | null
   line_items: Array<Record<string, unknown>>
@@ -497,7 +503,7 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     throw new Error('Failed to load provisioned devices.')
   }
 
-  const normalizedInvoices = (
+  let normalizedInvoices = (
     (invoicesResult.data ?? []) as MerchantSubscriptionInvoiceViewRecord[]
   ).map((row) => ({
     ...row,
@@ -506,7 +512,67 @@ export async function getMerchantSubscriptionOverview(): Promise<{
     card_surcharge: toNumber(row.card_surcharge),
     total_amount: toNumber(row.total_amount),
     payment_attempt_count: toNumber(row.payment_attempt_count),
+    next_retry_at: row.next_retry_at ?? null,
+    retry_exhausted_at: row.retry_exhausted_at ?? null,
   }))
+
+  if (normalizedInvoices.length > 0) {
+    const { data: retryRows, error: retryError } = await (serviceRole as any)
+      .from('subscription_invoices')
+      .select(
+        'id, next_retry_at, retry_exhausted_at, processor, processor_account_id, processor_transaction_id, processor_response',
+      )
+      .in(
+        'id',
+        normalizedInvoices.map((invoice) => invoice.id),
+      )
+
+    if (retryError && retryError.code !== '42703') {
+      console.error(
+        '[getMerchantSubscriptionOverview] retry schedule error:',
+        retryError,
+      )
+      throw new Error('Failed to load invoice retry schedules.')
+    }
+
+    const retryByInvoiceId = new Map<
+      string,
+      {
+        next_retry_at: string | null
+        retry_exhausted_at: string | null
+        processor: 'valor' | null
+        processor_account_id: string | null
+        processor_transaction_id: string | null
+        processor_response: Record<string, unknown> | null
+      }
+    >(
+      (retryRows ?? []).map((row: any) => [
+        row.id,
+        {
+          next_retry_at: row.next_retry_at ?? null,
+          retry_exhausted_at: row.retry_exhausted_at ?? null,
+          processor: row.processor ?? null,
+          processor_account_id: row.processor_account_id ?? null,
+          processor_transaction_id: row.processor_transaction_id ?? null,
+          processor_response: row.processor_response ?? null,
+        },
+      ]),
+    )
+    normalizedInvoices = normalizedInvoices.map((invoice) => ({
+      ...invoice,
+      next_retry_at:
+        retryByInvoiceId.get(invoice.id)?.next_retry_at ?? null,
+      retry_exhausted_at:
+        retryByInvoiceId.get(invoice.id)?.retry_exhausted_at ?? null,
+      processor: retryByInvoiceId.get(invoice.id)?.processor ?? null,
+      processor_account_id:
+        retryByInvoiceId.get(invoice.id)?.processor_account_id ?? null,
+      processor_transaction_id:
+        retryByInvoiceId.get(invoice.id)?.processor_transaction_id ?? null,
+      processor_response:
+        retryByInvoiceId.get(invoice.id)?.processor_response ?? null,
+    }))
+  }
 
   const stationIds = Array.from(
     new Set(

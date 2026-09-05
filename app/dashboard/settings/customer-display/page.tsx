@@ -7,6 +7,7 @@ import { MultiFileUpload } from '@/components/ui/multi-file-upload'
 import { useGatedLocationId, useGatedLocation } from '@/stores/location-store'
 import { MapPin, Loader2, Trash2, Save, Info } from 'lucide-react'
 import Image from 'next/image'
+import { MediaGalleryGridSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
 import {
     AlertDialog,
     AlertDialogAction,
@@ -445,11 +446,7 @@ export default function CustomerDisplaySettingsPage() {
                     caption="Active images automatically appear on the Customer Display app."
                 >
                 {loading ? (
-                     <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        {[1, 2, 3].map((i) => (
-                            <div key={i} className="h-48 animate-pulse rounded-2xl bg-muted" />
-                        ))}
-                    </div>
+                    <MediaGalleryGridSkeleton />
                 ) : images.length === 0 ? (
                     <div className="rounded-2xl border-0 bg-muted/60 p-10 text-center shadow-none">
                         <p className="text-muted-foreground">No images uploaded yet.</p>

@@ -15,6 +15,11 @@ import {
   type SubscriptionInvoiceLineItem,
 } from '@/lib/subscription-billing/invoice-template'
 import { resolveMonthlyBillingPeriod } from '@/lib/subscription-billing/billing-period'
+import {
+  activateSubscription as activateValorSubscription,
+  deactivateSubscription as deactivateValorSubscription,
+  deleteSubscription as deleteValorSubscription,
+} from '@/lib/payments/valor/subscriptionApi'
 
 export interface SubscriptionPlanRecord {
   id: string
@@ -148,6 +153,10 @@ export interface MerchantSubscriptionRecord {
   trial_ends_at: string | null
   canceled_at: string | null
   cancel_reason: string | null
+  grace_period_ends_at: string | null
+  grace_reason: string | null
+  grace_extended_at: string | null
+  grace_extended_by: string | null
   billing_profile_id: string | null
   billing_method: 'ach' | 'card' | null
   metadata: Record<string, unknown>
@@ -187,6 +196,12 @@ export interface SubscriptionInvoiceRecord {
   payment_attempt_count: number
   last_payment_attempt_at: string | null
   last_payment_error: string | null
+  next_retry_at: string | null
+  retry_exhausted_at: string | null
+  processor: 'valor' | null
+  processor_account_id: string | null
+  processor_transaction_id: string | null
+  processor_response: Record<string, unknown> | null
   nmi_transaction_id: string | null
   nmi_response: Record<string, unknown> | null
   line_items: Array<Record<string, unknown>>
@@ -491,6 +506,195 @@ function addOneMonthPeriod(
   }
 }
 
+interface ValorSubscriptionCredentialRow {
+  valor_appid: string
+  valor_epi: string
+  decrypted_appkey: string
+}
+
+type SubscriptionChargeMode = 'manual' | 'automatic' | 'configuration'
+
+interface SubscriptionChargeResult {
+  success: boolean
+  invoiceId?: string
+  status?: string
+  transactionId?: string | null
+  error?: string
+}
+
+async function chargeSubscriptionInvoiceViaValor(
+  invoiceId: string,
+  mode: SubscriptionChargeMode,
+): Promise<SubscriptionChargeResult> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return { success: false, error: 'Missing Supabase server configuration.' }
+  }
+
+  try {
+    const response = await fetch(
+      `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/billing-charge-subscription`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${serviceRoleKey}`,
+          apikey: serviceRoleKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ invoice_id: invoiceId, mode }),
+        cache: 'no-store',
+      },
+    )
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      success?: boolean
+      error?: string
+      invoice_id?: string
+      status?: string
+      transaction_id?: string | null
+    }
+
+    if (!response.ok || !payload.success) {
+      return {
+        success: false,
+        invoiceId: payload.invoice_id ?? invoiceId,
+        error: payload.error || 'Failed to charge invoice.',
+      }
+    }
+
+    return {
+      success: true,
+      invoiceId: payload.invoice_id ?? invoiceId,
+      status: payload.status,
+      transactionId: payload.transaction_id ?? null,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      invoiceId,
+      error:
+        error instanceof Error
+          ? `Valor billing service could not be reached: ${error.message}`
+          : 'Valor billing service could not be reached.',
+    }
+  }
+}
+
+async function syncValorSubscriptionLifecycle(params: {
+  subscriptionId: string
+  targetStatus: 'trial' | 'active' | 'past_due' | 'suspended' | 'canceled'
+}): Promise<{ success: boolean; error?: string }> {
+  const serviceRole = createServiceRoleClient() as any
+  const { data: subscription, error: subscriptionError } = await serviceRole
+    .from('merchant_subscriptions')
+    .select(
+      'id, processor, processor_account_id, processor_subscription_id, processor_subscription_status',
+    )
+    .eq('id', params.subscriptionId)
+    .maybeSingle()
+
+  if (subscriptionError || !subscription) {
+    return { success: false, error: 'Failed to load the subscription processor schedule.' }
+  }
+
+  const processorSubscriptionId = subscription.processor_subscription_id?.trim()
+  if (!processorSubscriptionId) return { success: true }
+
+  if (subscription.processor !== 'valor' || !subscription.processor_account_id) {
+    return {
+      success: false,
+      error: 'The native recurring schedule is not linked to a Valor subscription account.',
+    }
+  }
+
+  if (
+    params.targetStatus === 'past_due' ||
+    params.targetStatus === 'trial' ||
+    (params.targetStatus === 'active' &&
+      !['deactivated', 'deleted'].includes(
+        subscription.processor_subscription_status ?? '',
+      )) ||
+    (params.targetStatus === 'suspended' &&
+      subscription.processor_subscription_status === 'deactivated') ||
+    (params.targetStatus === 'canceled' &&
+      subscription.processor_subscription_status === 'deleted')
+  ) {
+    return { success: true }
+  }
+
+  const { data: credentialRows, error: credentialError } = await serviceRole.rpc(
+    'get_valor_account_credentials',
+    { p_account_id: subscription.processor_account_id },
+  )
+  const row = (Array.isArray(credentialRows)
+    ? credentialRows[0]
+    : credentialRows) as ValorSubscriptionCredentialRow | null
+  const appId = row?.valor_appid?.trim()
+  const appKey = row?.decrypted_appkey?.trim()
+  const epi = row?.valor_epi?.trim()
+  if (credentialError || !appId || !appKey || !epi) {
+    return { success: false, error: 'Valor subscription credentials are unavailable.' }
+  }
+
+  const valorOptions = { credentials: { appId, appKey, epi } }
+  const persistProcessorSchedule = async (
+    updates: Record<string, unknown>,
+  ): Promise<{ success: boolean; error?: string }> => {
+    const { error } = await serviceRole
+      .from('merchant_subscriptions')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', params.subscriptionId)
+
+    return error
+      ? {
+          success: false,
+          error: `Valor schedule changed, but the local subscription could not be updated: ${error.message}`,
+        }
+      : { success: true }
+  }
+
+  try {
+    if (params.targetStatus === 'canceled') {
+      await deleteValorSubscription(valorOptions, processorSubscriptionId)
+      return persistProcessorSchedule({ processor_subscription_status: 'deleted' })
+    }
+
+    if (params.targetStatus === 'suspended') {
+      await deactivateValorSubscription(valorOptions, processorSubscriptionId)
+      return persistProcessorSchedule({ processor_subscription_status: 'deactivated' })
+    }
+
+    if (params.targetStatus === 'active') {
+      if (subscription.processor_subscription_status === 'deleted') {
+        return persistProcessorSchedule({
+          processor_subscription_id: null,
+          processor_subscription_status: null,
+          processor_schedule_created_at: null,
+          processor_next_payment_at: null,
+        })
+      }
+
+      await activateValorSubscription(valorOptions, processorSubscriptionId)
+      return persistProcessorSchedule({ processor_subscription_status: 'active' })
+    }
+
+    return { success: true }
+  } catch (error) {
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Valor subscription lifecycle update failed.',
+    }
+  }
+}
+
 async function syncMerchantTierBillingArtifacts(params: {
   merchantId: string
   merchantTierSubscriptionId: string
@@ -505,9 +709,11 @@ async function syncMerchantTierBillingArtifacts(params: {
     .from('merchant_billing_profiles')
     .select('id, location_id, created_at')
     .eq('merchant_id', params.merchantId)
+    .eq('billing_method', 'card')
+    .eq('processor', 'valor')
     .eq('is_active', true)
     .eq('is_primary', true)
-    .not('location_id', 'is', null)
+    .order('location_id', { ascending: true, nullsFirst: true })
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
@@ -523,12 +729,32 @@ async function syncMerchantTierBillingArtifacts(params: {
     }
   }
 
-  if (!anchorProfile?.location_id) {
+  if (!anchorProfile?.id) {
     return {
       success: false as const,
       error:
-        'No location billing profile is available to anchor merchant tier billing.',
+        'No active primary Valor billing card is available for merchant tier billing.',
     }
+  }
+
+  let anchorLocationId = anchorProfile.location_id as string | null
+  if (!anchorLocationId) {
+    const { data: anchorLocation, error: anchorLocationError } = await serviceRole
+      .from('locations')
+      .select('id')
+      .eq('merchant_id', params.merchantId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    if (anchorLocationError || !anchorLocation?.id) {
+      return {
+        success: false as const,
+        error: 'No active location is available to anchor merchant tier billing.',
+      }
+    }
+    anchorLocationId = anchorLocation.id as string
   }
 
   const {
@@ -536,9 +762,11 @@ async function syncMerchantTierBillingArtifacts(params: {
     error: existingAnchorSubscriptionError,
   } = await serviceRole
     .from('merchant_subscriptions')
-    .select('id, metadata')
+    .select(
+      'id, metadata, status, plan_id, current_period_start, current_period_end, next_billing_date, trial_ends_at, billing_profile_id, monthly_amount, station_count, processor, processor_account_id, processor_subscription_id, processor_subscription_status, processor_schedule_created_at, processor_next_payment_at',
+    )
     .eq('merchant_id', params.merchantId)
-    .eq('location_id', anchorProfile.location_id)
+    .eq('location_id', anchorLocationId)
     .maybeSingle()
 
   if (existingAnchorSubscriptionError) {
@@ -562,7 +790,7 @@ async function syncMerchantTierBillingArtifacts(params: {
     await serviceRole.rpc('upsert_merchant_subscription', {
       p_subscription_id: existingAnchorSubscription?.id ?? null,
       p_merchant_id: params.merchantId,
-      p_location_id: anchorProfile.location_id,
+      p_location_id: anchorLocationId,
       p_plan_id: params.planId,
       p_current_period_start: params.currentPeriodStart,
       p_current_period_end: params.currentPeriodEnd,
@@ -586,12 +814,45 @@ async function syncMerchantTierBillingArtifacts(params: {
     }
   }
 
+  const lifecycleResult = await syncValorSubscriptionLifecycle({
+    subscriptionId: anchorSubscriptionId as string,
+    targetStatus: params.status === 'cancelled' ? 'canceled' : params.status,
+  })
+  if (!lifecycleResult.success) {
+    if (existingAnchorSubscription?.id) {
+      await serviceRole
+        .from('merchant_subscriptions')
+        .update({
+          status: existingAnchorSubscription.status,
+          plan_id: existingAnchorSubscription.plan_id,
+          current_period_start: existingAnchorSubscription.current_period_start,
+          current_period_end: existingAnchorSubscription.current_period_end,
+          next_billing_date: existingAnchorSubscription.next_billing_date,
+          trial_ends_at: existingAnchorSubscription.trial_ends_at,
+          billing_profile_id: existingAnchorSubscription.billing_profile_id,
+          metadata: existingAnchorSubscription.metadata,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', anchorSubscriptionId as string)
+    } else {
+      await serviceRole
+        .from('merchant_subscriptions')
+        .delete()
+        .eq('id', anchorSubscriptionId as string)
+    }
+    return {
+      success: false as const,
+      error: lifecycleResult.error || 'Failed to synchronize the Valor billing schedule.',
+    }
+  }
+
   if (params.status === 'cancelled') {
     return {
       success: true as const,
-      anchorLocationId: anchorProfile.location_id as string,
+      anchorLocationId,
       anchorSubscriptionId: anchorSubscriptionId as string,
       invoiceId: null,
+      previousAnchorSubscription: existingAnchorSubscription,
     }
   }
 
@@ -601,7 +862,7 @@ async function syncMerchantTierBillingArtifacts(params: {
     .select('id, created_at')
     .eq('subscription_id', anchorSubscriptionId as string)
     .eq('billing_period_start', params.currentPeriodStart)
-    .eq('location_id', anchorProfile.location_id)
+    .eq('location_id', anchorLocationId)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -686,9 +947,10 @@ async function syncMerchantTierBillingArtifacts(params: {
 
   return {
     success: true as const,
-    anchorLocationId: anchorProfile.location_id as string,
+    anchorLocationId,
     anchorSubscriptionId: anchorSubscriptionId as string,
     invoiceId,
+    previousAnchorSubscription: existingAnchorSubscription,
   }
 }
 
@@ -704,6 +966,16 @@ export interface UpsertMerchantSubscriptionParams {
   trialEndsAt?: string | null
   billingProfileId?: string | null
   metadata?: Record<string, unknown>
+}
+
+export interface SaveAndChargeMerchantSubscriptionParams
+  extends UpsertMerchantSubscriptionParams {
+  services: Array<{
+    serviceId: string
+    quantity: number
+    enabled?: boolean
+    metadata?: Record<string, unknown>
+  }>
 }
 
 interface InvoiceDocumentContext {
@@ -1629,7 +1901,9 @@ export async function upsertMerchantTierSubscription(
   const serviceRole = createServiceRoleClient()
   const { data: existing, error: existingError } = await serviceRole
     .from('merchant_plan_subscriptions')
-    .select('id, plan_id, status')
+    .select(
+      'id, plan_id, status, current_period_start, current_period_end, trial_ends_at',
+    )
     .eq('merchant_id', params.merchantId)
     .order('updated_at', { ascending: false })
     .order('created_at', { ascending: false })
@@ -1719,7 +1993,133 @@ export async function upsertMerchantTierSubscription(
   })
 
   if (!synced.success) {
+    if (existing?.id) {
+      const { error: rollbackError } = await serviceRole
+        .from('merchant_plan_subscriptions')
+        .update({
+          plan_id: existing.plan_id,
+          status: existing.status,
+          current_period_start: existing.current_period_start,
+          current_period_end: existing.current_period_end,
+          trial_ends_at: existing.trial_ends_at,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+      if (rollbackError) {
+        console.error(
+          '[upsertMerchantTierSubscription] rollback error:',
+          rollbackError,
+        )
+      }
+    } else {
+      const { error: rollbackError } = await serviceRole
+        .from('merchant_plan_subscriptions')
+        .delete()
+        .eq('id', result.data.id as string)
+      if (rollbackError) {
+        console.error(
+          '[upsertMerchantTierSubscription] insert rollback error:',
+          rollbackError,
+        )
+      }
+    }
     return { success: false, error: synced.error }
+  }
+
+  if (params.status === 'active' && synced.invoiceId) {
+    const chargeResult = await chargeSubscriptionInvoiceViaValor(
+      synced.invoiceId,
+      'configuration',
+    )
+
+    if (!chargeResult.success) {
+      const rollbackErrors: string[] = []
+      const merchantPlanRollback = existing?.id
+        ? await serviceRole
+            .from('merchant_plan_subscriptions')
+            .update({
+              plan_id: existing.plan_id,
+              status: existing.status,
+              current_period_start: existing.current_period_start,
+              current_period_end: existing.current_period_end,
+              trial_ends_at: existing.trial_ends_at,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id)
+        : await serviceRole
+            .from('merchant_plan_subscriptions')
+            .delete()
+            .eq('id', result.data.id as string)
+
+      if (merchantPlanRollback.error) {
+        rollbackErrors.push(`merchant tier: ${merchantPlanRollback.error.message}`)
+      }
+
+      const previousAnchor = synced.previousAnchorSubscription
+      const anchorRollback = previousAnchor
+        ? await serviceRole
+            .from('merchant_subscriptions')
+            .update({
+              metadata: previousAnchor.metadata,
+              status: previousAnchor.status,
+              plan_id: previousAnchor.plan_id,
+              current_period_start: previousAnchor.current_period_start,
+              current_period_end: previousAnchor.current_period_end,
+              next_billing_date: previousAnchor.next_billing_date,
+              trial_ends_at: previousAnchor.trial_ends_at,
+              billing_profile_id: previousAnchor.billing_profile_id,
+              monthly_amount: previousAnchor.monthly_amount,
+              station_count: previousAnchor.station_count,
+              processor: previousAnchor.processor,
+              processor_account_id: previousAnchor.processor_account_id,
+              processor_subscription_id: previousAnchor.processor_subscription_id,
+              processor_subscription_status:
+                previousAnchor.processor_subscription_status,
+              processor_schedule_created_at:
+                previousAnchor.processor_schedule_created_at,
+              processor_next_payment_at:
+                previousAnchor.processor_next_payment_at,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', synced.anchorSubscriptionId)
+        : await serviceRole
+            .from('merchant_subscriptions')
+            .update({
+              status: 'past_due',
+              metadata: {
+                billing_scope: 'merchant_tier',
+                merchant_tier_subscription_id: result.data.id,
+                merchant_tier_plan_id: params.planId,
+                activation_failed: true,
+              },
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', synced.anchorSubscriptionId)
+
+      if (anchorRollback.error) {
+        rollbackErrors.push(`billing anchor: ${anchorRollback.error.message}`)
+      }
+
+      await serviceRole
+        .from('subscription_invoices')
+        .update({
+          status: 'failed',
+          last_payment_error:
+            chargeResult.error || 'Valor rejected the automatic subscription charge.',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', synced.invoiceId)
+        .in('status', ['open', 'processing'])
+
+      return {
+        success: false,
+        error:
+          `Valor did not approve the payment, so the merchant tier was not changed. ${chargeResult.error || ''}`.trim() +
+          (rollbackErrors.length > 0
+            ? ` Rollback needs review: ${rollbackErrors.join('; ')}.`
+            : ''),
+      }
+    }
   }
 
   const notificationWarning =
@@ -1983,11 +2383,126 @@ export async function getMerchantSubscriptions(
     throw new Error('Failed to load merchant subscriptions.')
   }
 
-  return ((data ?? []) as MerchantSubscriptionRecord[]).map((row) => ({
-    ...row,
-    station_count: Number(row.station_count || 0),
-    monthly_amount: Number(row.monthly_amount || 0),
-  }))
+  const serviceRole = createServiceRoleClient() as any
+  const { data: graceRows, error: graceError } = await serviceRole
+    .from('merchant_subscriptions')
+    .select(
+      'id, grace_period_ends_at, grace_reason, grace_extended_at, grace_extended_by',
+    )
+    .eq('merchant_id', merchantId)
+
+  if (graceError && graceError.code !== '42703') {
+    console.error('[getMerchantSubscriptions] Grace lookup error:', graceError)
+    throw new Error('Failed to load subscription grace periods.')
+  }
+
+  const graceBySubscriptionId = new Map<
+    string,
+    {
+      grace_period_ends_at: string | null
+      grace_reason: string | null
+      grace_extended_at: string | null
+      grace_extended_by: string | null
+    }
+  >(
+    (graceRows ?? []).map((row: any) => [row.id, row]),
+  )
+
+  return ((data ?? []) as MerchantSubscriptionRecord[]).map((row) => {
+    const grace = graceBySubscriptionId.get(row.id)
+    return {
+      ...row,
+      station_count: Number(row.station_count || 0),
+      monthly_amount: Number(row.monthly_amount || 0),
+      grace_period_ends_at: grace?.grace_period_ends_at ?? null,
+      grace_reason: grace?.grace_reason ?? null,
+      grace_extended_at: grace?.grace_extended_at ?? null,
+      grace_extended_by: grace?.grace_extended_by ?? null,
+    }
+  })
+}
+
+export async function setMerchantSubscriptionGracePeriod(params: {
+  subscriptionId: string
+  gracePeriodEndsAt: string | null
+  reason: string
+}): Promise<{ success: boolean; error?: string }> {
+  const { userId } = await assertHQPermission('system.billing.manage')
+  const subscriptionId = params.subscriptionId?.trim()
+  const reason = params.reason?.trim()
+
+  if (!subscriptionId) {
+    return { success: false, error: 'Subscription is required.' }
+  }
+  if (!reason || reason.length < 5) {
+    return {
+      success: false,
+      error: 'Enter a reason of at least 5 characters for the audit log.',
+    }
+  }
+
+  const gracePeriodEndsAt = params.gracePeriodEndsAt
+    ? new Date(params.gracePeriodEndsAt)
+    : null
+  if (gracePeriodEndsAt && Number.isNaN(gracePeriodEndsAt.getTime())) {
+    return { success: false, error: 'Grace-period end is invalid.' }
+  }
+  if (gracePeriodEndsAt && gracePeriodEndsAt.getTime() <= Date.now()) {
+    return { success: false, error: 'Grace-period end must be in the future.' }
+  }
+
+  const serviceRole = createServiceRoleClient() as any
+  const { data: subscription, error: lookupError } = await serviceRole
+    .from('merchant_subscriptions')
+    .select('id, merchant_id, location_id, grace_period_ends_at')
+    .eq('id', subscriptionId)
+    .maybeSingle()
+
+  if (lookupError || !subscription) {
+    return { success: false, error: 'Subscription not found.' }
+  }
+
+  const now = new Date().toISOString()
+  const nextGraceEnd = gracePeriodEndsAt?.toISOString() ?? null
+  const { error: updateError } = await serviceRole
+    .from('merchant_subscriptions')
+    .update({
+      grace_period_ends_at: nextGraceEnd,
+      grace_reason: reason,
+      grace_extended_at: now,
+      grace_extended_by: userId ?? null,
+      updated_at: now,
+    })
+    .eq('id', subscriptionId)
+
+  if (updateError) {
+    console.error('[setMerchantSubscriptionGracePeriod] update error:', updateError)
+    return { success: false, error: updateError.message }
+  }
+
+  await serviceRole.rpc('log_subscription_billing_event', {
+    p_action: nextGraceEnd ? 'subscription_grace_extended' : 'subscription_grace_cleared',
+    p_merchant_id: subscription.merchant_id,
+    p_location_id: subscription.location_id,
+    p_resource_type: 'merchant_subscription',
+    p_resource_name: subscriptionId,
+    p_resource_id: subscriptionId,
+    p_changes: {
+      grace_period_ends_at: {
+        old: subscription.grace_period_ends_at,
+        new: nextGraceEnd,
+      },
+      reason,
+    },
+    p_metadata: {
+      source: 'hq_subscription_workspace',
+      actor_user_id: userId ?? null,
+    },
+  })
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath('/dashboard/subscriptions')
+  return { success: true }
 }
 
 export async function upsertMerchantSubscription(
@@ -2000,6 +2515,17 @@ export async function upsertMerchantSubscription(
   }
 
   const supabase = createServerSupabaseClient()
+  const serviceRole = createServiceRoleClient() as any
+  let previousSubscriptionQuery = serviceRole
+    .from('merchant_subscriptions')
+    .select('id, status')
+  previousSubscriptionQuery = params.subscriptionId
+    ? previousSubscriptionQuery.eq('id', params.subscriptionId)
+    : previousSubscriptionQuery
+        .eq('merchant_id', params.merchantId)
+        .eq('location_id', params.locationId)
+  const { data: previousSubscription } = await previousSubscriptionQuery.maybeSingle()
+
   const { data, error } = await supabase.rpc('upsert_merchant_subscription', {
     p_subscription_id: params.subscriptionId ?? null,
     p_merchant_id: params.merchantId,
@@ -2019,8 +2545,29 @@ export async function upsertMerchantSubscription(
     return { success: false, error: error.message }
   }
 
+  const lifecycleResult = await syncValorSubscriptionLifecycle({
+    subscriptionId: data as string,
+    targetStatus: params.status ?? 'active',
+  })
+  if (!lifecycleResult.success) {
+    if (previousSubscription?.status) {
+      await serviceRole
+        .from('merchant_subscriptions')
+        .update({
+          status: previousSubscription.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', data as string)
+    }
+    return {
+      success: false,
+      error:
+        lifecycleResult.error ||
+        'The subscription was not saved because the Valor schedule could not be synchronized.',
+    }
+  }
+
   try {
-    const serviceRole = createServiceRoleClient()
     const [
       subscriptionRecord,
       locationRecord,
@@ -2193,7 +2740,7 @@ export async function replaceSubscriptionServiceAssignments(
 
     if (
       subscriptionRecord.data &&
-      subscriptionRecord.data.status !== 'canceled'
+      subscriptionRecord.data.status === 'active'
     ) {
       const [
         { data: merchantRecord },
@@ -2295,6 +2842,232 @@ export async function replaceSubscriptionServiceAssignments(
   return { success: true }
 }
 
+export async function saveAndChargeMerchantSubscription(
+  params: SaveAndChargeMerchantSubscriptionParams,
+): Promise<{
+  success: boolean
+  subscriptionId?: string
+  invoiceId?: string
+  transactionId?: string | null
+  error?: string
+}> {
+  await assertHQPermission('system.billing.manage')
+
+  const targetStatus = params.status ?? 'active'
+  const serviceRole = createServiceRoleClient() as any
+  let previousQuery = serviceRole
+    .from('merchant_subscriptions')
+    .select(
+      'id, plan_id, status, current_period_start, current_period_end, next_billing_date, trial_ends_at, billing_profile_id, metadata, monthly_amount, station_count, processor, processor_account_id, processor_subscription_id, processor_subscription_status, processor_schedule_created_at, processor_next_payment_at',
+    )
+
+  previousQuery = params.subscriptionId
+    ? previousQuery.eq('id', params.subscriptionId)
+    : previousQuery
+        .eq('merchant_id', params.merchantId)
+        .eq('location_id', params.locationId)
+
+  const { data: previousSubscription, error: previousSubscriptionError } =
+    await previousQuery.maybeSingle()
+
+  if (previousSubscriptionError) {
+    return { success: false, error: 'Failed to snapshot the current subscription.' }
+  }
+
+  const { data: previousAssignments, error: previousAssignmentsError } =
+    previousSubscription?.id
+      ? await serviceRole
+          .from('merchant_subscription_services')
+          .select('service_id, quantity, is_enabled, metadata')
+          .eq('subscription_id', previousSubscription.id)
+      : { data: [], error: null }
+
+  if (previousAssignmentsError) {
+    return { success: false, error: 'Failed to snapshot the current paid services.' }
+  }
+
+  let billingProfileId = params.billingProfileId ?? null
+  if (targetStatus === 'active') {
+    const { data: valorProfile, error: valorProfileError } = await serviceRole
+      .from('merchant_billing_profiles')
+      .select('id')
+      .eq('merchant_id', params.merchantId)
+      .eq('billing_method', 'card')
+      .eq('processor', 'valor')
+      .eq('is_active', true)
+      .eq('is_primary', true)
+      .order('location_id', { ascending: true, nullsFirst: true })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    if (valorProfileError || !valorProfile?.id) {
+      return {
+        success: false,
+        error:
+          'Save an active primary Valor billing card before activating paid services.',
+      }
+    }
+    billingProfileId = valorProfile.id
+  }
+
+  // Active configurations remain non-entitled until Valor approves the charge.
+  const subscriptionResult = await upsertMerchantSubscription({
+    ...params,
+    billingProfileId,
+    status: targetStatus === 'active' ? 'past_due' : targetStatus,
+  })
+
+  if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
+    return subscriptionResult
+  }
+
+  const subscriptionId = subscriptionResult.subscriptionId
+  let invoiceId: string | undefined
+
+  const rollback = async (reason: string) => {
+    const rollbackErrors: string[] = []
+    const restoreAssignments = (previousAssignments ?? []).map((assignment: any) => ({
+      service_id: assignment.service_id,
+      quantity: assignment.quantity,
+      enabled: assignment.is_enabled,
+      metadata: assignment.metadata ?? {},
+    }))
+    const { error: assignmentsRollbackError } = await serviceRole.rpc(
+      'replace_merchant_subscription_services',
+      {
+        p_subscription_id: subscriptionId,
+        p_services: previousSubscription ? restoreAssignments : [],
+      },
+    )
+    if (assignmentsRollbackError) {
+      rollbackErrors.push(`services: ${assignmentsRollbackError.message}`)
+    }
+
+    const subscriptionRollback = previousSubscription
+      ? await serviceRole
+          .from('merchant_subscriptions')
+          .update({
+            plan_id: previousSubscription.plan_id,
+            status: previousSubscription.status,
+            current_period_start: previousSubscription.current_period_start,
+            current_period_end: previousSubscription.current_period_end,
+            next_billing_date: previousSubscription.next_billing_date,
+            trial_ends_at: previousSubscription.trial_ends_at,
+            billing_profile_id: previousSubscription.billing_profile_id,
+            metadata: previousSubscription.metadata,
+            monthly_amount: previousSubscription.monthly_amount,
+            station_count: previousSubscription.station_count,
+            processor: previousSubscription.processor,
+            processor_account_id: previousSubscription.processor_account_id,
+            processor_subscription_id:
+              previousSubscription.processor_subscription_id,
+            processor_subscription_status:
+              previousSubscription.processor_subscription_status,
+            processor_schedule_created_at:
+              previousSubscription.processor_schedule_created_at,
+            processor_next_payment_at:
+              previousSubscription.processor_next_payment_at,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', subscriptionId)
+      : await serviceRole
+          .from('merchant_subscriptions')
+          .update({
+            status: 'past_due',
+            metadata: {
+              ...(params.metadata ?? {}),
+              activation_failed: true,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', subscriptionId)
+
+    if (subscriptionRollback.error) {
+      rollbackErrors.push(`subscription: ${subscriptionRollback.error.message}`)
+    }
+
+    if (invoiceId) {
+      await serviceRole
+        .from('subscription_invoices')
+        .update({
+          status: 'failed',
+          last_payment_error: reason,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', invoiceId)
+        .in('status', ['open', 'processing'])
+    }
+
+    revalidatePath('/manage/subscriptions')
+    revalidatePath(`/manage/subscriptions/${params.merchantId}`)
+    revalidatePath('/dashboard/subscriptions')
+
+    return rollbackErrors.length > 0
+      ? `${reason} The prior configuration could not be fully restored: ${rollbackErrors.join('; ')}.`
+      : reason
+  }
+
+  const serviceResult = await replaceSubscriptionServiceAssignments(
+    subscriptionId,
+    targetStatus === 'canceled' ? [] : params.services,
+  )
+  if (!serviceResult.success) {
+    return {
+      success: false,
+      subscriptionId,
+      error: await rollback(
+        serviceResult.error || 'Failed to save paid service assignments.',
+      ),
+    }
+  }
+
+  if (targetStatus !== 'active') {
+    return { success: true, subscriptionId }
+  }
+
+  const invoiceResult = await generateSubscriptionInvoiceManually(
+    subscriptionId,
+    null,
+  )
+  invoiceId = invoiceResult.invoiceId
+  if (!invoiceResult.success || !invoiceId) {
+    return {
+      success: false,
+      subscriptionId,
+      error: await rollback(
+        invoiceResult.error || 'Failed to generate the activation invoice.',
+      ),
+    }
+  }
+
+  const chargeResult = await chargeSubscriptionInvoiceViaValor(
+    invoiceId,
+    'configuration',
+  )
+  if (!chargeResult.success) {
+    return {
+      success: false,
+      subscriptionId,
+      invoiceId,
+      error: await rollback(
+        `Valor did not approve the payment, so the subscription was not activated or updated. ${chargeResult.error || ''}`.trim(),
+      ),
+    }
+  }
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath(`/manage/subscriptions/${params.merchantId}`)
+  revalidatePath('/dashboard/subscriptions')
+
+  return {
+    success: true,
+    subscriptionId,
+    invoiceId,
+    transactionId: chargeResult.transactionId ?? null,
+  }
+}
+
 export async function generateSubscriptionInvoiceManually(
   subscriptionId: string,
   dueDate?: string | null,
@@ -2387,14 +3160,64 @@ export async function getSubscriptionInvoices(
     throw new Error('Failed to load subscription invoices.')
   }
 
-  return ((data ?? []) as SubscriptionInvoiceRecord[]).map((row) => ({
+  let invoices = ((data ?? []) as SubscriptionInvoiceRecord[]).map((row) => ({
     ...row,
     station_count_snapshot: Number(row.station_count_snapshot || 0),
     subtotal: Number(row.subtotal || 0),
     card_surcharge: Number(row.card_surcharge || 0),
     total_amount: Number(row.total_amount || 0),
     payment_attempt_count: Number(row.payment_attempt_count || 0),
+    next_retry_at: row.next_retry_at ?? null,
+    retry_exhausted_at: row.retry_exhausted_at ?? null,
   }))
+
+  if (invoices.length > 0) {
+    const serviceRole = createServiceRoleClient() as any
+    const { data: retryRows, error: retryError } = await serviceRole
+      .from('subscription_invoices')
+      .select(
+        'id, next_retry_at, retry_exhausted_at, processor, processor_account_id, processor_transaction_id, processor_response',
+      )
+      .in(
+        'id',
+        invoices.map((invoice) => invoice.id),
+      )
+
+    if (retryError && retryError.code !== '42703') {
+      console.error('[getSubscriptionInvoices] Retry lookup error:', retryError)
+      throw new Error('Failed to load invoice retry schedules.')
+    }
+
+    const retryByInvoiceId = new Map<
+      string,
+      {
+        next_retry_at: string | null
+        retry_exhausted_at: string | null
+        processor: 'valor' | null
+        processor_account_id: string | null
+        processor_transaction_id: string | null
+        processor_response: Record<string, unknown> | null
+      }
+    >(
+      (retryRows ?? []).map((row: any) => [row.id, row]),
+    )
+    invoices = invoices.map((invoice) => ({
+      ...invoice,
+      next_retry_at:
+        retryByInvoiceId.get(invoice.id)?.next_retry_at ?? null,
+      retry_exhausted_at:
+        retryByInvoiceId.get(invoice.id)?.retry_exhausted_at ?? null,
+      processor: retryByInvoiceId.get(invoice.id)?.processor ?? null,
+      processor_account_id:
+        retryByInvoiceId.get(invoice.id)?.processor_account_id ?? null,
+      processor_transaction_id:
+        retryByInvoiceId.get(invoice.id)?.processor_transaction_id ?? null,
+      processor_response:
+        retryByInvoiceId.get(invoice.id)?.processor_response ?? null,
+    }))
+  }
+
+  return invoices
 }
 
 export async function getSubscriptionInvoiceDocument(
@@ -2527,41 +3350,11 @@ export async function chargeSubscriptionInvoiceManually(
     return { success: false, error: 'invoiceId is required.' }
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return { success: false, error: 'Missing Supabase server configuration.' }
-  }
-
-  const response = await fetch(
-    `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/billing-charge-subscription`,
-    {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${serviceRoleKey}`,
-      apikey: serviceRoleKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ invoice_id: invoiceId }),
-    cache: 'no-store',
-    },
+  const chargeResult = await chargeSubscriptionInvoiceViaValor(
+    invoiceId,
+    'manual',
   )
-
-  const payload = (await response.json().catch(() => ({}))) as {
-    success?: boolean
-    error?: string
-    invoice_id?: string
-    status?: string
-    transaction_id?: string | null
-  }
-
-  if (!response.ok || !payload.success) {
-    return {
-      success: false,
-      error: payload.error || 'Failed to charge invoice.',
-    }
-  }
+  if (!chargeResult.success) return chargeResult
 
   const serviceRole = createServiceRoleClient()
   const { data: invoice } = await serviceRole
@@ -2578,8 +3371,8 @@ export async function chargeSubscriptionInvoiceManually(
 
   return {
     success: true,
-    invoiceId: payload.invoice_id,
-    status: payload.status,
-    transactionId: payload.transaction_id ?? null,
+    invoiceId: chargeResult.invoiceId ?? invoiceId,
+    status: chargeResult.status,
+    transactionId: chargeResult.transactionId ?? null,
   }
 }

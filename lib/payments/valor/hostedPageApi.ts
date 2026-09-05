@@ -3,8 +3,7 @@
  *
  * Generates a Valor-hosted payment URL that gets emailed or texted to a payer.
  * Because the page is served by Valor, card data never touches DEXA at all —
- * this is the lowest-PCI-scope surface in the system, and the replacement for
- * the current NMI invoice payment page.
+ * this is the lowest-PCI-scope surface in the system.
  *
  * Source re-fetched 2026-08-09: [V-HPS] hosted-page-sale-api.
  */
