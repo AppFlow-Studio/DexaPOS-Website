@@ -16,6 +16,8 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { useIsSingleLocation } from '@/stores/location-store'
+import { MenuChannelVisibilityControls } from '../MenuChannelVisibilityControls'
+import type { MenuChannelVisibility } from '@/lib/menu/menu-channel-visibility'
 
 interface MenuSettingsTabProps {
     menu: MenuWithCategories
@@ -28,11 +30,15 @@ interface MenuSettingsTabProps {
     isTogglingActive: boolean
     isSavingSettings: boolean
     selectedLocationId: string | null
+    channelVisibilityLocationId: string | null
+    channelVisibility: MenuChannelVisibility
+    isSavingChannelVisibility: boolean
     locations: LocationsModel[]
     onNameChange: (name: string) => void
     onDescriptionChange: (description: string) => void
     onLocationChange: (locationId: string | null) => void
     onToggleActive: () => void
+    onChannelVisibilityChange: (visibility: MenuChannelVisibility) => void
     onSaveSettings: () => void
     onCancelSettings: () => void
     onDeleteMenu: () => void
@@ -49,11 +55,15 @@ export function MenuSettingsTab({
     isTogglingActive,
     isSavingSettings,
     selectedLocationId,
+    channelVisibilityLocationId,
+    channelVisibility,
+    isSavingChannelVisibility,
     locations,
     onNameChange,
     onDescriptionChange,
     onLocationChange,
     onToggleActive,
+    onChannelVisibilityChange,
     onSaveSettings,
     onCancelSettings,
     onDeleteMenu,
@@ -103,6 +113,23 @@ export function MenuSettingsTab({
                         </>
                     )}
                 </Button>
+            </PanelSection>
+
+            <PanelSection
+                icon={Settings}
+                label="Platform Visibility"
+                caption="Choose where this menu can be browsed at the selected location. Active status and schedules still apply."
+            >
+                <MenuChannelVisibilityControls
+                    value={channelVisibility}
+                    disabled={!channelVisibilityLocationId || isSavingChannelVisibility}
+                    onChange={onChannelVisibilityChange}
+                />
+                {!channelVisibilityLocationId && (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                        Select a location to configure platform visibility.
+                    </p>
+                )}
             </PanelSection>
 
             {/* Menu scope only has meaning when the merchant can choose among locations. */}
