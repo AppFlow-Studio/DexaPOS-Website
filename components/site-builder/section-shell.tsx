@@ -226,8 +226,17 @@ export function SectionHeading({
   subheadingAttrs?: Record<string, string | undefined>;
 }) {
   if (!heading && !subheading) return null;
+  /*
+    `text-center` as well as `mx-auto`. Centring only the box leaves a short
+    heading sitting against the left edge of a centred column — visibly
+    off-centre, and not what a merchant who picked "Centre" asked for. Body copy
+    that must stay left-aligned says so itself: the FAQ keeps its questions left
+    through `.site-faq`'s own `text-left`.
+  */
   return (
-    <header className={`mb-8 ${align === "center" ? "mx-auto max-w-2xl" : "max-w-2xl"}`}>
+    <header
+      className={`mb-8 ${align === "center" ? "mx-auto max-w-2xl text-center" : "max-w-2xl"}`}
+    >
       {heading && (
         <h2
           className="text-2xl font-semibold tracking-tight md:text-3xl"
