@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import {
@@ -9,6 +9,8 @@ import {
   ArrowUpRight,
   BarChart3,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Eye,
   FileText,
@@ -442,10 +444,48 @@ interface HqSubscriptionsWorkspaceProps {
   canManageBilling: boolean
 }
 
+const SUBSCRIPTION_STEPS = [
+  { id: 'tier', title: 'Merchant Tier', description: 'Review or change the plan for this merchant.' },
+  { id: 'catalog', title: 'Pricing & Device Mapping', description: 'Review shared pricing and device mappings. Continue if the existing setup is correct.' },
+  { id: 'locations', title: 'Location Add-ons', description: 'Choose a location, configure its services, and review the amount before saving.' },
+  { id: 'billing', title: 'Billing Review', description: 'Review invoices and payment results for the selected location.' },
+] as const
+
+function SubscriptionStepNavigation({
+  step,
+  disabled,
+  onChange,
+}: {
+  step: number
+  disabled: boolean
+  onChange: (step: number) => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <Button type="button" variant="outline" disabled={disabled || step === 0} onClick={() => onChange(step - 1)}>
+        <ChevronLeft className="h-4 w-4" />
+        Back
+      </Button>
+      <span className="text-xs text-muted-foreground">Step {step + 1} of {SUBSCRIPTION_STEPS.length}</span>
+      {step < SUBSCRIPTION_STEPS.length - 1 ? (
+        <Button type="button" disabled={disabled} onClick={() => onChange(step + 1)}>
+          Next
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      ) : (
+        <span className="text-sm font-medium text-muted-foreground">Final step</span>
+      )}
+    </div>
+  )
+}
+
 export function HqSubscriptionsWorkspace({
   merchant,
   canManageBilling,
 }: HqSubscriptionsWorkspaceProps) {
+  const [currentStep, setCurrentStep] = useState(0)
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null)
+  const activeStep = SUBSCRIPTION_STEPS[currentStep]
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
   const [services, setServices] = useState<BillableServiceRecord[]>([])
@@ -496,6 +536,15 @@ export function HqSubscriptionsWorkspace({
   const [selectedMerchantTierPlanId, setSelectedMerchantTierPlanId] = useState('')
   const [merchantTierSubscriptionStatus, setMerchantTierSubscriptionStatus] = useState<'active' | 'past_due' | 'suspended' | 'cancelled'>('active')
   const [merchantTierPeriodStart, setMerchantTierPeriodStart] = useState(startOfMonthIso())
+
+  const changeStep = (step: number) => {
+    if (isPending || step < 0 || step >= SUBSCRIPTION_STEPS.length) return
+    setCurrentStep(step)
+    requestAnimationFrame(() => {
+      stepHeadingRef.current?.focus({ preventScroll: true })
+      stepHeadingRef.current?.scrollIntoView({ block: 'start' })
+    })
+  }
 
   const sortedLocations = useMemo(
     () => [...merchant.locations].sort((a, b) => a.name.localeCompare(b.name)),
@@ -1315,8 +1364,7 @@ export function HqSubscriptionsWorkspace({
           <Badge variant="outline">{merchant.clerk_org_id || merchant.id}</Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          Location-scoped SaaS subscriptions use the merchant&apos;s Valor billing rail. This workspace manages
-          subscription services, invoices, recurring charges, and recovery.
+          Manage the merchant-wide tier and each location&apos;s add-ons through the Valor billing rail.
         </p>
       </div>
 
@@ -1347,11 +1395,50 @@ export function HqSubscriptionsWorkspace({
         </Card>
       </div>
 
-      <Card>
+      <div className="space-y-6">
+        <div className="space-y-5 rounded-2xl border bg-card p-4 sm:p-6">
+          <ol aria-label="Subscription setup progress" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {SUBSCRIPTION_STEPS.map((step, index) => (
+              <li
+                key={step.id}
+                aria-current={index === currentStep ? 'step' : undefined}
+                className={`flex min-w-0 items-center gap-3 rounded-xl border p-3 text-sm ${
+                  index === currentStep ? 'border-primary/40 bg-primary/5 text-primary' : 'border-transparent text-muted-foreground'
+                }`}
+              >
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-semibold ${
+                  index === currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                }`}>
+                  {index + 1}
+                </span>
+                <span className="min-w-0 font-medium">{step.title}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="space-y-1">
+            <h2 id="subscription-step-heading" ref={stepHeadingRef} tabIndex={-1} className="scroll-mt-24 text-xl font-semibold focus:outline-none">
+              {activeStep.title}
+            </h2>
+            <p className="text-sm text-muted-foreground">{activeStep.description}</p>
+            {activeStep.id === 'locations' && pendingHardwareRequests.length > 0 ? (
+              <p className="text-sm font-medium text-primary">
+                {pendingHardwareRequests.length} pending hardware request{pendingHardwareRequests.length === 1 ? '' : 's'} to review.
+              </p>
+            ) : null}
+          </div>
+          <SubscriptionStepNavigation step={currentStep} disabled={isPending || isLoading} onChange={changeStep} />
+          <p className="text-xs text-muted-foreground">
+            Next and Back keep your entries while you navigate. Use the Save or Charge action within a step to apply changes.
+          </p>
+        </div>
+
+        {activeStep.id === 'tier' && (
+        <section aria-labelledby="subscription-step-heading" className="space-y-6">
+          <Card>
         <CardHeader>
           <CardTitle>Merchant Tier</CardTitle>
           <CardDescription>
-            Merchant-wide plan visibility sits here. Location-level service billing below stays separate.
+            Manage the plan that applies to the merchant as a whole. Location add-ons are managed separately.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -1418,73 +1505,6 @@ export function HqSubscriptionsWorkspace({
                     </Button>
                   </div>
                 </div>
-              </div>
-            </div>
-          ) : null}
-          {pendingHardwareRequests.length > 0 ? (
-            <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50/40 p-4 sm:p-5">
-              <div>
-                <h3 className="font-semibold">Pending hardware requests</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Review each location independently. Approval starts fulfillment and does not assign inventory automatically.
-                </p>
-              </div>
-              <div className="grid gap-4 xl:grid-cols-2">
-                {pendingHardwareRequests.map((request) => (
-                  <div key={request.id} className="space-y-4 rounded-xl border bg-background p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">{request.request_number}</Badge>
-                          <Badge variant="secondary">{request.requested_quantity} device{request.requested_quantity === 1 ? '' : 's'}</Badge>
-                        </div>
-                        <p className="mt-2 font-medium">{request.location_name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Requested {formatDate(request.requested_at)}
-                        </p>
-                      </div>
-                    </div>
-                    {request.request_note ? (
-                      <p className="rounded-lg bg-muted/50 p-3 text-sm">{request.request_note}</p>
-                    ) : null}
-                    <div className="space-y-2">
-                      <Label htmlFor={`hardware-decision-note-${request.id}`}>
-                        Decision note (optional)
-                      </Label>
-                      <Textarea
-                        id={`hardware-decision-note-${request.id}`}
-                        value={hardwareDecisionNotes[request.id] ?? ''}
-                        onChange={(event) =>
-                          setHardwareDecisionNotes((current) => ({
-                            ...current,
-                            [request.id]: event.target.value,
-                          }))
-                        }
-                        placeholder="Add fulfillment details or explain the decision."
-                        rows={2}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Button
-                        type="button"
-                        className="sm:flex-1"
-                        disabled={isPending}
-                        onClick={() => handleHardwareRequestDecision(request, 'approved')}
-                      >
-                        Approve request
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="sm:flex-1"
-                        disabled={isPending}
-                        onClick={() => handleHardwareRequestDecision(request, 'denied')}
-                      >
-                        Deny request
-                      </Button>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           ) : null}
@@ -1659,14 +1679,18 @@ export function HqSubscriptionsWorkspace({
             </div>
           </div>
         </CardContent>
-      </Card>
+          </Card>
+        </section>
+        )}
 
-      <Card>
+        {activeStep.id === 'catalog' && (
+        <section aria-labelledby="subscription-step-heading" className="space-y-6">
+          <Card>
         <CardHeader>
           <CardTitle>Billing Catalog Controls</CardTitle>
           <CardDescription>
-            HQ-owned pricing controls for the service-billing plan and billable add-ons. Saves go through audited RPCs
-            and recalculate affected active subscriptions for future cycles.
+            Configure reusable plan prices, billable services, and device-to-service mappings. Changes affect future
+            calculations; existing invoice snapshots remain unchanged.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 xl:grid-cols-2">
@@ -2035,9 +2059,13 @@ export function HqSubscriptionsWorkspace({
             </Button>
           </div>
         </CardContent>
-      </Card>
+          </Card>
+        </section>
+        )}
 
-      <Card>
+        {activeStep.id === 'locations' && (
+        <section aria-labelledby="subscription-step-heading" className="space-y-6">
+          <Card>
         <CardHeader className="gap-4">
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-5">
@@ -2173,6 +2201,75 @@ export function HqSubscriptionsWorkspace({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {pendingHardwareRequests.length > 0 ? (
+            <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50/40 p-4 sm:p-5">
+              <div>
+                <h3 className="font-semibold">Pending hardware requests</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Review each location independently. Approval starts fulfillment and does not assign inventory automatically.
+                </p>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {pendingHardwareRequests.map((request) => (
+                  <div key={request.id} className="space-y-4 rounded-xl border bg-background p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{request.request_number}</Badge>
+                          <Badge variant="secondary">
+                            {request.requested_quantity} device{request.requested_quantity === 1 ? '' : 's'}
+                          </Badge>
+                        </div>
+                        <p className="mt-2 font-medium">{request.location_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Requested {formatDate(request.requested_at)}
+                        </p>
+                      </div>
+                    </div>
+                    {request.request_note ? (
+                      <p className="rounded-lg bg-muted/50 p-3 text-sm">{request.request_note}</p>
+                    ) : null}
+                    <div className="space-y-2">
+                      <Label htmlFor={`hardware-decision-note-${request.id}`}>
+                        Decision note (optional)
+                      </Label>
+                      <Textarea
+                        id={`hardware-decision-note-${request.id}`}
+                        value={hardwareDecisionNotes[request.id] ?? ''}
+                        onChange={(event) =>
+                          setHardwareDecisionNotes((current) => ({
+                            ...current,
+                            [request.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="Add fulfillment details or explain the decision."
+                        rows={2}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        type="button"
+                        className="sm:flex-1"
+                        disabled={isPending}
+                        onClick={() => handleHardwareRequestDecision(request, 'approved')}
+                      >
+                        Approve request
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="sm:flex-1"
+                        disabled={isPending}
+                        onClick={() => handleHardwareRequestDecision(request, 'denied')}
+                      >
+                        Deny request
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {selectedLocationSubscription?.status === 'suspended' ? (
             <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
               <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
@@ -2484,9 +2581,34 @@ export function HqSubscriptionsWorkspace({
             </div>
           </div>
         </CardContent>
-      </Card>
+          </Card>
+        </section>
+        )}
 
-      <Card>
+        {activeStep.id === 'billing' && (
+        <section aria-labelledby="subscription-step-heading" className="space-y-6">
+          <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="w-full space-y-2 sm:max-w-sm">
+              <Label>Billing Location</Label>
+              <Select value={selectedLocation?.id || ''} onValueChange={setSelectedLocationId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortedLocations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Transactions and invoices below are filtered to the selected location.
+            </p>
+          </div>
+
+          <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5" />
@@ -2679,16 +2801,16 @@ export function HqSubscriptionsWorkspace({
             )}
           </div>
         </CardContent>
-      </Card>
+          </Card>
 
-      <Card>
+          <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
             Subscription Invoices
           </CardTitle>
           <CardDescription>
-            Existing invoice workflow stays unchanged here. View, download, and charge location invoices from the same workspace.
+            View, download, and manage invoices for the selected location.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -2791,7 +2913,13 @@ export function HqSubscriptionsWorkspace({
             </div>
           )}
         </CardContent>
-      </Card>
+          </Card>
+        </section>
+        )}
+        <div className="rounded-xl border bg-card p-4 sm:p-6">
+          <SubscriptionStepNavigation step={currentStep} disabled={isPending || isLoading} onChange={changeStep} />
+        </div>
+      </div>
 
       <Dialog open={isInvoicePreviewOpen} onOpenChange={setIsInvoicePreviewOpen}>
         <DialogContent className="max-w-5xl">
