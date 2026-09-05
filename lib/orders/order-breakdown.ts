@@ -81,6 +81,20 @@ export interface OrderBreakdown {
   primary: LaneBreakdown;
 }
 
+/**
+ * Customer-facing grand total for the resolved pricing lane.
+ *
+ * Stored lane totals intentionally exclude gratuity, while captured payment
+ * totals include it. Mixed tenders use the amount actually collected; every
+ * other order adds the separately stored tip exactly once.
+ */
+export function getOrderDisplayTotal(breakdown: OrderBreakdown): number {
+  const lane = breakdown.primary;
+  return breakdown.isMixed && lane.amountPaid > 0
+    ? lane.amountPaid
+    : lane.total + lane.tip;
+}
+
 function num(v: Money): number {
   const x = typeof v === "string" ? Number(v) : v;
   return typeof x === "number" && Number.isFinite(x) ? x : 0;

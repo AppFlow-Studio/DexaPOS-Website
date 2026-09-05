@@ -9748,8 +9748,10 @@ export type Database = {
           location_id: string | null
           merchant_id: string
           payment_device_id: string | null
+          payment_profile_id: string | null
           platform_billing_config_id: string | null
           processor: string
+          processor_account_id: string | null
           routing_number_last_four: string | null
           updated_at: string
           vault_initial_transaction_id: string | null
@@ -9776,8 +9778,10 @@ export type Database = {
           location_id?: string | null
           merchant_id: string
           payment_device_id?: string | null
+          payment_profile_id?: string | null
           platform_billing_config_id?: string | null
           processor?: string
+          processor_account_id?: string | null
           routing_number_last_four?: string | null
           updated_at?: string
           vault_initial_transaction_id?: string | null
@@ -9804,14 +9808,23 @@ export type Database = {
           location_id?: string | null
           merchant_id?: string
           payment_device_id?: string | null
+          payment_profile_id?: string | null
           platform_billing_config_id?: string | null
           processor?: string
+          processor_account_id?: string | null
           routing_number_last_four?: string | null
           updated_at?: string
           vault_initial_transaction_id?: string | null
           verified_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "merchant_billing_profiles_processor_account_id_fkey"
+            columns: ["processor_account_id"]
+            isOneToOne: false
+            referencedRelation: "merchant_processor_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "merchant_billing_profiles_location_id_fkey"
             columns: ["location_id"]
@@ -10356,6 +10369,10 @@ export type Database = {
           created_at: string
           current_period_end: string
           current_period_start: string
+          grace_extended_at: string | null
+          grace_extended_by: string | null
+          grace_period_ends_at: string | null
+          grace_reason: string | null
           id: string
           location_id: string
           merchant_id: string
@@ -10363,6 +10380,12 @@ export type Database = {
           monthly_amount: number
           next_billing_date: string
           plan_id: string
+          processor: string | null
+          processor_account_id: string | null
+          processor_next_payment_at: string | null
+          processor_schedule_created_at: string | null
+          processor_subscription_id: string | null
+          processor_subscription_status: string | null
           started_at: string
           station_count: number
           status: string
@@ -10376,6 +10399,10 @@ export type Database = {
           created_at?: string
           current_period_end: string
           current_period_start: string
+          grace_extended_at?: string | null
+          grace_extended_by?: string | null
+          grace_period_ends_at?: string | null
+          grace_reason?: string | null
           id?: string
           location_id: string
           merchant_id: string
@@ -10383,6 +10410,12 @@ export type Database = {
           monthly_amount: number
           next_billing_date: string
           plan_id: string
+          processor?: string | null
+          processor_account_id?: string | null
+          processor_next_payment_at?: string | null
+          processor_schedule_created_at?: string | null
+          processor_subscription_id?: string | null
+          processor_subscription_status?: string | null
           started_at?: string
           station_count?: number
           status?: string
@@ -10396,6 +10429,10 @@ export type Database = {
           created_at?: string
           current_period_end?: string
           current_period_start?: string
+          grace_extended_at?: string | null
+          grace_extended_by?: string | null
+          grace_period_ends_at?: string | null
+          grace_reason?: string | null
           id?: string
           location_id?: string
           merchant_id?: string
@@ -10403,6 +10440,12 @@ export type Database = {
           monthly_amount?: number
           next_billing_date?: string
           plan_id?: string
+          processor?: string | null
+          processor_account_id?: string | null
+          processor_next_payment_at?: string | null
+          processor_schedule_created_at?: string | null
+          processor_subscription_id?: string | null
+          processor_subscription_status?: string | null
           started_at?: string
           station_count?: number
           status?: string
@@ -10410,6 +10453,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "merchant_subscriptions_processor_account_id_fkey"
+            columns: ["processor_account_id"]
+            isOneToOne: false
+            referencedRelation: "merchant_processor_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "merchant_subscriptions_billing_profile_id_fkey"
             columns: ["billing_profile_id"]
@@ -19407,8 +19457,14 @@ export type Database = {
           metadata: Json
           nmi_response: Json | null
           nmi_transaction_id: string | null
+          next_retry_at: string | null
           paid_at: string | null
           payment_attempt_count: number
+          processor: string | null
+          processor_account_id: string | null
+          processor_response: Json | null
+          processor_transaction_id: string | null
+          retry_exhausted_at: string | null
           station_count_snapshot: number
           status: string
           subscription_id: string
@@ -19434,8 +19490,14 @@ export type Database = {
           metadata?: Json
           nmi_response?: Json | null
           nmi_transaction_id?: string | null
+          next_retry_at?: string | null
           paid_at?: string | null
           payment_attempt_count?: number
+          processor?: string | null
+          processor_account_id?: string | null
+          processor_response?: Json | null
+          processor_transaction_id?: string | null
+          retry_exhausted_at?: string | null
           station_count_snapshot?: number
           status?: string
           subscription_id: string
@@ -19461,8 +19523,14 @@ export type Database = {
           metadata?: Json
           nmi_response?: Json | null
           nmi_transaction_id?: string | null
+          next_retry_at?: string | null
           paid_at?: string | null
           payment_attempt_count?: number
+          processor?: string | null
+          processor_account_id?: string | null
+          processor_response?: Json | null
+          processor_transaction_id?: string | null
+          retry_exhausted_at?: string | null
           station_count_snapshot?: number
           status?: string
           subscription_id?: string
@@ -19471,6 +19539,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "subscription_invoices_processor_account_id_fkey"
+            columns: ["processor_account_id"]
+            isOneToOne: false
+            referencedRelation: "merchant_processor_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "subscription_invoices_billing_profile_id_fkey"
             columns: ["billing_profile_id"]
@@ -21526,6 +21601,66 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      valor_recurring_webhook_events: {
+        Row: {
+          error_message: string | null
+          event_key: string
+          event_name: string
+          id: string
+          merchant_subscription_id: string | null
+          payload: Json
+          processed_at: string | null
+          processor_subscription_id: string | null
+          processor_transaction_id: string | null
+          received_at: string
+          status: string
+          subscription_invoice_id: string | null
+        }
+        Insert: {
+          error_message?: string | null
+          event_key: string
+          event_name: string
+          id?: string
+          merchant_subscription_id?: string | null
+          payload?: Json
+          processed_at?: string | null
+          processor_subscription_id?: string | null
+          processor_transaction_id?: string | null
+          received_at?: string
+          status?: string
+          subscription_invoice_id?: string | null
+        }
+        Update: {
+          error_message?: string | null
+          event_key?: string
+          event_name?: string
+          id?: string
+          merchant_subscription_id?: string | null
+          payload?: Json
+          processed_at?: string | null
+          processor_subscription_id?: string | null
+          processor_transaction_id?: string | null
+          received_at?: string
+          status?: string
+          subscription_invoice_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "valor_recurring_webhook_events_merchant_subscription_id_fkey"
+            columns: ["merchant_subscription_id"]
+            isOneToOne: false
+            referencedRelation: "merchant_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "valor_recurring_webhook_events_subscription_invoice_id_fkey"
+            columns: ["subscription_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       valor_webhook_events: {
         Row: {

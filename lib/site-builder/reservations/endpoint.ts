@@ -89,27 +89,38 @@ export async function withinRateLimit(
   return rateLimit({ ip: getClientIp(request), action, max, windowSeconds });
 }
 
+/** The distinct automated-submission signals a payload can trip. */
+export type BotSignal = "honeypot" | "timing";
+
 /**
- * Honeypot first, timing second.
+ * Which signal a payload trips, or null for none. Honeypot first, timing second.
  *
- * The honeypot is the real filter; the elapsed-time check is a soft signal
- * against the crudest tooling and is trivially spoofable, exactly as
- * `lib/cms/form-security.ts` describes its own version.
- *
+ * Split out from `looksAutomated` so the endpoint can LOG which signal fired. A
+ * booking silently rejected as a bot is exactly the failure that stays invisible
+ * until a guest screenshots "we could not complete your booking" — and the
+ * reason (a password manager filling the honeypot vs. a too-fast submit) points
+ * straight at the fix. The honeypot is the real filter; the elapsed-time check
+ * is a soft signal against the crudest tooling and is trivially spoofable.
+ */
+export function botSignal(body: Record<string, unknown>): BotSignal | null {
+  const honeypot = body[HONEYPOT_FIELD];
+  if (typeof honeypot === "string" && honeypot.trim() !== "") return "honeypot";
+
+  const renderedAt = Number(body[RENDERED_AT_FIELD]);
+  if (!Number.isFinite(renderedAt) || renderedAt <= 0) return null;
+
+  const elapsed = Date.now() - renderedAt;
+  // Negative means clock skew or a forged stamp, not a fast human.
+  return elapsed >= 0 && elapsed < MIN_FILL_MS ? "timing" : null;
+}
+
+/**
  * Callers should treat a `true` here as a SILENT SUCCESS on write endpoints —
  * show the confirmation, store nothing — so an automated submitter learns
  * nothing to iterate against.
  */
 export function looksAutomated(body: Record<string, unknown>): boolean {
-  const honeypot = body[HONEYPOT_FIELD];
-  if (typeof honeypot === "string" && honeypot.trim() !== "") return true;
-
-  const renderedAt = Number(body[RENDERED_AT_FIELD]);
-  if (!Number.isFinite(renderedAt) || renderedAt <= 0) return false;
-
-  const elapsed = Date.now() - renderedAt;
-  // Negative means clock skew or a forged stamp, not a fast human.
-  return elapsed >= 0 && elapsed < MIN_FILL_MS;
+  return botSignal(body) !== null;
 }
 
 export function serviceClient() {

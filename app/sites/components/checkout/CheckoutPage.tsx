@@ -26,6 +26,10 @@ import { PlaceOrderButton } from "./PlaceOrderButton";
 import { OrderConfirmation } from "./OrderConfirmation";
 import { PaymentCardForm, type PaymentCardFormHandle } from "./PaymentCardForm";
 import { PassageCheckout } from "@/lib/payments/valor/passageClient";
+import {
+  readPassageBillingDetails,
+  type PassageBillingDetails,
+} from "@/lib/payments/valor/passageBilling";
 import { ConfirmDialog } from "../ConfirmDialog";
 import {
   type PlaceOrderItem,
@@ -35,6 +39,7 @@ import {
 import type { AppliedPromo } from "./PromoCodeSection";
 import { isStoreOpenNow } from "../StoreInfoBar";
 import { getSavedAddresses, addSavedAddress, type SavedAddress } from "../../customer-actions";
+import { getQrOrderStatus } from "../../qr-actions";
 import type { Site, OnlineOrderingConfig } from "@/types/site";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -121,6 +126,36 @@ export function CheckoutPage({
   // Hydration guard — cart is in localStorage
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
+
+  // A refresh clears the in-memory confirmation state but preserves the QR
+  // session. Recover its active order from the server instead of showing an
+  // empty checkout after a successful payment.
+  const recoveredOrderRef = useRef(false);
+  useEffect(() => {
+    if (!hydrated || !isQrTableMode || recoveredOrderRef.current) return;
+    if (useCart.getState().items.length !== 0) return;
+
+    const session = useSession.getState();
+    if (!session.sessionToken) return;
+    recoveredOrderRef.current = true;
+
+    let cancelled = false;
+    void (async () => {
+      if (session.activeOrderId) {
+        if (!cancelled) router.replace(storePath(`/order/${session.activeOrderId}`));
+        return;
+      }
+
+      const status = await getQrOrderStatus(session.sessionToken!);
+      if (!cancelled && status.success && status.hasOrder && status.orderId) {
+        router.replace(storePath(`/order/${status.orderId}`));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, isQrTableMode, router, storePath]);
 
   // Step
   const [step, setStep] = useState<"checkout" | "confirmation">("checkout");
@@ -212,6 +247,8 @@ export function CheckoutPage({
   } | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [payCashInStore, setPayCashInStore] = useState(false);
+  const valorPaymentTokenRef = useRef<string | null>(null);
+  const valorSubmissionRef = useRef(false);
 
   useEffect(() => {
     if (!isQrTableMode) return;
@@ -394,7 +431,10 @@ export function CheckoutPage({
     handlePlaceOrder();
   };
 
-  const handlePlaceOrder = async (valorToken?: string) => {
+  const handlePlaceOrder = async (
+    valorToken?: string,
+    valorBilling?: PassageBillingDetails
+  ) => {
     const { sessionToken } = useSession.getState();
 
     setLoading(true);
@@ -527,7 +567,7 @@ export function CheckoutPage({
       }).catch(() => {});
     }
 
-    // Step 2: Call create-online-order edge function with the NMI payment token
+    // Step 2: Call create-online-order with the processor token returned by Passage.
     try {
       const res = await fetch(
         `${SUPABASE_URL}/functions/v1/create-online-order`,
@@ -551,6 +591,10 @@ export function CheckoutPage({
             ...(paymentToken ? { payment_token: paymentToken } : {}),
             ...(paymentCardType ? { payment_card_type: paymentCardType } : {}),
             ...(paymentCardLastFour ? { payment_card_last_four: paymentCardLastFour } : {}),
+            ...(valorBilling?.address1
+              ? { billing_address1: valorBilling.address1 }
+              : {}),
+            ...(valorBilling?.zip ? { billing_zip: valorBilling.zip } : {}),
             // Contact info (always sent — edge function uses session data if available)
             customer_name: `${firstName} ${lastName}`.trim() || undefined,
             customer_phone: customer?.phone || normalizePhone(phone) || phone.trim() || undefined,
@@ -904,16 +948,41 @@ export function CheckoutPage({
                     isDemo={valorBootstrap.isDemo}
                     formAction="/api/valor/passage-callback"
                     submitText={`Pay $${total.toFixed(2)}`}
+                    showBillingAddress
                     onTokenReceived={({ token }) => {
-                      // Passage owns the Pay button, so it can fire before the rest
-                      // of the form is valid — guard, then charge with the token.
+                      // Passage invokes onFormSubmit immediately after this callback;
+                      // hold the token in a ref so it can be paired with AVS data.
+                      valorPaymentTokenRef.current = token;
+                    }}
+                    onFormSubmit={(formData) => {
+                      const token = valorPaymentTokenRef.current;
+                      valorPaymentTokenRef.current = null;
+
                       if (!canPlaceOrder) {
                         setPaymentError(
                           "Please complete your contact and order details above, then tap Pay again."
                         );
                         return;
                       }
-                      void handlePlaceOrder(token);
+                      const billing = readPassageBillingDetails(formData);
+                      if (!billing.address1 || !billing.zip) {
+                        setPaymentError(
+                          "Enter the billing street address and ZIP code for this card."
+                        );
+                        return;
+                      }
+                      if (!token) {
+                        setPaymentError(
+                          "Card tokenization did not complete. Please try again."
+                        );
+                        return;
+                      }
+                      if (valorSubmissionRef.current) return;
+
+                      valorSubmissionRef.current = true;
+                      void handlePlaceOrder(token, billing).finally(() => {
+                        valorSubmissionRef.current = false;
+                      });
                     }}
                     onError={(e) =>
                       setPaymentError(e.message ?? "Payment error. Please try again.")
