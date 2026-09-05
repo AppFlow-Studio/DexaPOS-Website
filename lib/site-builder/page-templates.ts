@@ -166,25 +166,14 @@ function showcase({ locationId, title }: PageTemplateOptions): PageDocument {
         id: "s_tpl_features",
         kind: "features",
         props: {
-          heading: "Why order direct",
+          heading: "Featuring",
           items: [
-            {
-              icon: "Truck",
-              title: "Delivery and pickup",
-              description: "Replace this with a delivery area, a minimum, or a promise you keep.",
-            },
-            {
-              icon: "Clock",
-              title: "Open seven days",
-              description: "Tell guests when your kitchen is busiest and when it closes.",
-            },
-            {
-              icon: "Leaf",
-              title: "Made fresh daily",
-              description: "Say something specific about how or where you source your food.",
-            },
+            { title: "Delivery", icon: "Truck" },
+            { title: "Takeout", icon: "UtensilsCrossed" },
+            { title: "Dine In", icon: "House" },
+            { title: "Catering", icon: "ShoppingBag" },
           ],
-          columns: 3,
+          iconTone: "brand",
         },
       },
       {
