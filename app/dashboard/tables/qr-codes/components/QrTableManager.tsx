@@ -1,6 +1,7 @@
 "use client";
 
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { type CSSProperties, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import {
   DEFAULT_BACKGROUND_COLOR,
@@ -16,12 +17,11 @@ import {
 import {
   generateMissingQrCodesForLocation,
   generateQrCodeForTable,
-  getQrTableManagerSnapshot,
   revokeTableQrCode,
   type QrTableManagerRow,
   type QrTableManagerSnapshot,
-} from "../actions";
-import { BrandedQrPreview } from "./BrandedQrPreview";
+} from "@/app/dashboard/online-ordering/actions";
+import { BrandedQrPreview } from "@/components/dashboard/qr/BrandedQrPreview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,14 +66,24 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+/**
+ * The snapshot is owned by the page, not by this component. It used to load
+ * its own rows while the storefront flags and the billing gate arrived as
+ * props from the online-ordering settings store — two fetches that could
+ * disagree about whether the rows on screen were gated. One fetch now feeds
+ * the rows, the banners and the sibling analytics panel alike.
+ */
 interface QrTableManagerProps {
   locationId: string;
-  locationName: string;
-  storefrontEnabled: boolean;
-  acceptsDineIn: boolean;
-  qrKillSwitch: boolean;
-  qrEntitled: boolean;
-  qrGateMessage?: string | null;
+  /**
+   * The branch name as the location store already knows it, so the heading
+   * reads correctly on first paint instead of after the round trip. The
+   * snapshot's own `locationName` wins once it arrives.
+   */
+  fallbackLocationName: string;
+  snapshot: QrTableManagerSnapshot | null;
+  isLoading: boolean;
+  refresh: () => Promise<unknown>;
 }
 
 type StatusFilter = "all" | QrTableManagerRow["qrStatus"];
@@ -166,15 +176,23 @@ function slugifyFileName(value: string) {
 
 export function QrTableManager({
   locationId,
-  locationName,
-  storefrontEnabled,
-  acceptsDineIn,
-  qrKillSwitch,
-  qrEntitled,
-  qrGateMessage,
+  fallbackLocationName,
+  snapshot,
+  isLoading,
+  refresh,
 }: QrTableManagerProps) {
-  const [snapshot, setSnapshot] = useState<QrTableManagerSnapshot | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const locationName = snapshot?.locationName || fallbackLocationName;
+  const storefrontEnabled = snapshot?.storefrontEnabled ?? false;
+  const acceptsDineIn = snapshot?.acceptsDineIn ?? false;
+  const qrKillSwitch = snapshot?.qrKillSwitch ?? false;
+  // Closed until the snapshot says otherwise: a component that cannot see the
+  // gate must not render an entitled UI. The banners below are held back until
+  // the snapshot lands, so this default disables controls without telling a
+  // perfectly entitled merchant they are locked out for the second it loads.
+  const qrEntitled = snapshot?.billingGate.entitled ?? false;
+  const qrGateMessage = snapshot?.billingGate.reason ?? null;
+  const hasSnapshot = Boolean(snapshot);
+
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [brandMode, setBrandMode] = useState<QrBrandMode>("merchant");
   const [bulkProgress, setBulkProgress] = useState<{
@@ -186,31 +204,6 @@ export function QrTableManager({
   // One page cursor per zone, so paging through the bar does not move the patio.
   // Absent key means page 1; the map is cleared whenever the filters change.
   const [zonePages, setZonePages] = useState<Record<string, number>>({});
-
-  const loadSnapshot = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const result = await getQrTableManagerSnapshot(locationId);
-      setSnapshot(result);
-      if (!result.success && result.error) {
-        toast.error(result.error);
-      }
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to load QR manager"
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [locationId]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadSnapshot();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [loadSnapshot]);
 
   const allRows = useMemo(() => snapshot?.tables ?? [], [snapshot?.tables]);
 
@@ -294,7 +287,7 @@ export function QrTableManager({
                 ? `Generated ${totalGenerated} QR code${totalGenerated === 1 ? "" : "s"}, then stopped: ${result.error ?? "unknown error"}`
                 : result.error || "Failed to generate QR codes"
             );
-            await loadSnapshot();
+            await refresh();
             return;
           }
 
@@ -315,7 +308,7 @@ export function QrTableManager({
             ? `Generated ${totalGenerated} QR code${totalGenerated === 1 ? "" : "s"}`
             : "No missing QR codes to generate"
         );
-        await loadSnapshot();
+        await refresh();
       } finally {
         setBulkProgress(null);
       }
@@ -339,7 +332,7 @@ export function QrTableManager({
       } else {
         showQrGeneratedToast(`QR generated for ${row.tableLabel}`);
       }
-      await loadSnapshot();
+      await refresh();
     });
   }
 
@@ -351,7 +344,7 @@ export function QrTableManager({
         return;
       }
       toast.success(`QR revoked for ${row.tableLabel}`);
-      await loadSnapshot();
+      await refresh();
     });
   }
 
@@ -653,7 +646,11 @@ export function QrTableManager({
       <PanelSection
         icon={QrCode}
         label="QR code manager"
-        caption={`Generate, preview, export, regenerate, and revoke table QR codes for ${locationName}.`}
+        caption={
+          locationName
+            ? `Generate, preview, export, regenerate, and revoke table QR codes for ${locationName}.`
+            : "Generate, preview, export, regenerate, and revoke table QR codes for this location."
+        }
         action={
           <div className="flex min-w-0 flex-wrap gap-2">
             {/* Segmented control → the pill rail used for tabs (DS-CTL-05).
@@ -690,7 +687,7 @@ export function QrTableManager({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void loadSnapshot()}
+              onClick={() => void refresh()}
               disabled={isLoading || busyKey !== null}
             >
               {isLoading ? (
@@ -752,26 +749,37 @@ export function QrTableManager({
           </div>
         </div>
 
-        {!acceptsDineIn ? (
+        {/* These switches live on Online Ordering, not on this screen — this
+            screen prints codes, it does not set policy. Each banner links to
+            the switch it is complaining about so the fix is one click away. */}
+        {hasSnapshot && !acceptsDineIn ? (
           <div className="rounded-2xl border-0 bg-muted px-4 py-3 text-sm text-foreground shadow-none">
-            QR scan handling is currently disabled for this store. You can still prepare codes here, but guests will not be allowed to order from scans until <span className="font-medium">Enable QR Table Ordering</span> is turned on above.
+            QR scan handling is currently disabled for this store. You can still prepare codes here, but guests will not be allowed to order from scans until <span className="font-medium">Enable QR table ordering</span> is turned on in{" "}
+            <Link href="/dashboard/online-ordering" className="font-medium underline underline-offset-4">
+              Online Ordering
+            </Link>
+            .
           </div>
         ) : null}
 
-        {!storefrontEnabled ? (
+        {hasSnapshot && !storefrontEnabled ? (
           <div className="rounded-2xl border-0 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-none dark:bg-amber-900/20 dark:text-amber-200">
-            The main online store is currently disabled. QR preview and real guest scans will fail closed until <span className="font-medium">Enable Online Ordering</span> is turned on for this location.
+            The main online store is currently disabled. QR preview and real guest scans will fail closed until the store is switched on in{" "}
+            <Link href="/dashboard/online-ordering" className="font-medium underline underline-offset-4">
+              Online Ordering
+            </Link>
+            .
           </div>
         ) : null}
 
-        {!qrEntitled ? (
+        {hasSnapshot && !qrEntitled ? (
           <div className="rounded-2xl border-0 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-none dark:bg-amber-900/20 dark:text-amber-200">
             {qrGateMessage ||
               "QR Table Ordering is not available for the current subscription tier."}
           </div>
         ) : null}
 
-        {qrKillSwitch ? (
+        {hasSnapshot && qrKillSwitch ? (
           <div className="rounded-2xl border-0 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-none">
             QR kill switch is active. Existing codes remain visible here, but new guest scans should fail closed until the switch is turned off.
           </div>

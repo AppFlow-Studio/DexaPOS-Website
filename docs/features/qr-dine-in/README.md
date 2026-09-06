@@ -10,6 +10,7 @@ QR table ordering, payments, analytics, alerts, and cross-client handoffs.
 - [PLAN-2026-05-27-QR-DINE-IN-UNIFIED.md](PLAN-2026-05-27-QR-DINE-IN-UNIFIED.md) - QR Dine-In Unified Plan and Status
 - [PLAN-2026-08-29-QR-VALOR-PAYMENT-LIFECYCLE.md](PLAN-2026-08-29-QR-VALOR-PAYMENT-LIFECYCLE.md) - QR checkout, cancellation, and refund integration with Valor
 - [PLAN-2026-09-01-MARKETING-QR-PART-B.md](PLAN-2026-09-01-MARKETING-QR-PART-B.md) - Table-less marketing QR: schema, RPCs, routes, CRUD, sequencing
+- [PLAN-2026-09-06-TABLE-QR-RELOCATION.md](PLAN-2026-09-06-TABLE-QR-RELOCATION.md) - Move table QR management from Online Ordering to Tables › QR Codes (marketing QR stays)
 - [REVIEW-2026-09-02-BRANDED-QR-PART-A.md](REVIEW-2026-09-02-BRANDED-QR-PART-A.md) - Code review of branded QR rendering: 6 issues, 2 blocking DoD
 - [SCRATCH-2026-08-26-BRANDED-AND-MARKETING-QR.md](SCRATCH-2026-08-26-BRANDED-AND-MARKETING-QR.md) - Branded QR + marketing QR plan, approach decisions, and browser QA
 - [todo.md](todo.md) - QR Table Ordering â€” Track B Implementation Plan (Ali Awdi)

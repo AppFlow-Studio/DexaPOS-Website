@@ -25,7 +25,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Panel, PanelSection } from "@/components/dashboard/shell";
+import {
+  Panel,
+  PanelSection,
+  StatRow,
+  StatTile,
+} from "@/components/dashboard/shell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,7 +55,7 @@ import {
   type BrandedQrOptions,
 } from "@/lib/qr/render";
 
-import { BrandedQrPreview } from "./BrandedQrPreview";
+import { BrandedQrPreview } from "@/components/dashboard/qr/BrandedQrPreview";
 import { MarketingQrCreateDialog } from "./MarketingQrCreateDialog";
 import {
   createMarketingQrCode,
@@ -359,6 +364,19 @@ export function MarketingQrManager({
 
   const activeCount = rows.filter((row) => row.isActive).length;
 
+  // Marketing scans used to be counted in the QR funnel on the table-QR
+  // screen, which was wrong twice over: it inflated the top of a funnel these
+  // scans can never reach the bottom of, and it left them invisible here.
+  // A flyer code has exactly one stage — `resolve_marketing_qr` only ever
+  // writes `scanned` — so this is a count, not a funnel. Anything shaped like
+  // a conversion chart would be stuck on step one forever.
+  const totalScans = rows.reduce((sum, row) => sum + row.scanCount, 0);
+  const lastScanAt = rows.reduce<string | null>((latest, row) => {
+    if (!row.lastScannedAt) return latest;
+    if (!latest) return row.lastScannedAt;
+    return row.lastScannedAt > latest ? row.lastScannedAt : latest;
+  }, null);
+
   return (
     <Panel>
       <PanelSection
@@ -403,6 +421,19 @@ export function MarketingQrManager({
               printing.
             </div>
           ) : null}
+
+          <StatRow columns={3}>
+            <StatTile label="Codes" value={rows.length} isLoading={isLoading} />
+            <StatTile label="Active" value={activeCount} isLoading={isLoading} />
+            <StatTile
+              label="Scans"
+              value={totalScans}
+              meta={
+                lastScanAt ? `Last scan ${formatDate(lastScanAt)}` : "No scans yet"
+              }
+              isLoading={isLoading}
+            />
+          </StatRow>
 
           <div className="flex flex-col gap-3 rounded-2xl border bg-muted/40 p-4 sm:flex-row sm:items-center">
             <BrandedQrPreview
@@ -506,12 +537,19 @@ export function MarketingQrManager({
               <div className="divide-y divide-border/60 rounded-2xl border-0 bg-muted/40 px-3 shadow-none">
                 {filteredRows.map((row) => {
                   const isBusy = busyKey?.endsWith(row.id) ?? false;
+                  const isPreviewing = selected?.id === row.id;
 
                   return (
+                    // Selection is by click only. This row used to select on
+                    // `onMouseEnter`, which made the Preview button look dead:
+                    // reaching for it already switched the preview, so the
+                    // click set the id it had just been set to. The preview
+                    // also drifted to whatever row the cursor crossed on its
+                    // way elsewhere, and hover reaches neither keyboard nor
+                    // touch. The marker below is what tells you it worked.
                     <div
                       key={row.id}
                       className="flex flex-col gap-3 py-3 lg:flex-row lg:items-center lg:justify-between"
-                      onMouseEnter={() => setSelectedId(row.id)}
                     >
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -540,10 +578,11 @@ export function MarketingQrManager({
                       <div className="flex shrink-0 flex-wrap gap-2">
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant={isPreviewing ? "secondary" : "outline"}
                           onClick={() => setSelectedId(row.id)}
+                          aria-pressed={isPreviewing}
                         >
-                          Preview
+                          {isPreviewing ? "Previewing" : "Preview"}
                         </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
