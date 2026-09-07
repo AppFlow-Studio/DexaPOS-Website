@@ -1,5 +1,11 @@
 # All Tickets Reference
 
+## Per-Location Menu Visibility by Platform
+
+- Website implementation and QA: `docs/features/menu-management/FEATURE-2026-08-21-PER-LOCATION-MENU-CHANNEL-VISIBILITY-WEB.md`
+- Shared migration owner: POS repository, `utils/supabase/migrations/20260821120000_menu_channel_visibility.sql`
+- Current status: website code complete; migration deployment, generated types, and manual cross-surface QA pending
+
 ## Purpose
 
 Single index for active ticket streams and their source trackers.
