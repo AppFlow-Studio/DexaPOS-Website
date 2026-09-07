@@ -15,6 +15,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js'
 import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
+import { isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope.ts'
 
 const VALOR_WEBHOOK_SECRET = Deno.env.get('VALOR_WEBHOOK_SECRET') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -268,13 +269,13 @@ Deno.serve(async (req) => {
     const { data: subscription, error: subscriptionError } = await supabase!
       .from('merchant_subscriptions')
       .select(
-        'id, merchant_id, location_id, status, next_billing_date, processor_account_id',
+        'id, merchant_id, location_id, status, metadata, next_billing_date, processor_account_id',
       )
       .eq('processor', 'valor')
       .eq('processor_subscription_id', subscriptionId)
       .maybeSingle()
 
-    if (subscriptionError || !subscription) {
+    if (subscriptionError || !subscription || isSubscriptionBillingHeld(subscription.metadata)) {
       await supabase!
         .from('valor_recurring_webhook_events')
         .update({

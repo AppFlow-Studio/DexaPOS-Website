@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js'
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
+import { isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope.ts'
 import {
   deactivateRecurringSubscription,
   type ValorCredentials,
@@ -61,6 +62,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
         due_date,
         status,
         merchant_subscriptions(
+          metadata,
+          status,
           grace_period_ends_at,
           processor,
           processor_account_id,
@@ -88,6 +91,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         ? invoice.merchant_subscriptions[0]
         : invoice.merchant_subscriptions
       const gracePeriodEndsAt = subscription?.grace_period_ends_at
+      if (!subscription || subscription.status === 'canceled' || isSubscriptionBillingHeld(subscription.metadata)) continue
       if (gracePeriodEndsAt && new Date(gracePeriodEndsAt).getTime() > Date.now()) {
         continue
       }

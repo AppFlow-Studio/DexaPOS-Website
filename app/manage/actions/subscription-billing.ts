@@ -14,6 +14,8 @@ import {
   type SubscriptionInvoiceDocumentData,
   type SubscriptionInvoiceLineItem,
 } from '@/lib/subscription-billing/invoice-template'
+import { resolveSubscriptionBillingProfile } from '@/lib/subscription-billing/profile-resolver'
+import { subscriptionBillingScope, isSubscriptionBillingHeld } from '@/supabase/functions/_shared/subscription-billing-scope'
 import { resolveMonthlyBillingPeriod } from '@/lib/subscription-billing/billing-period'
 import {
   activateSubscription as activateValorSubscription,
@@ -705,18 +707,10 @@ async function syncMerchantTierBillingArtifacts(params: {
 }) {
   const serviceRole = createServiceRoleClient()
 
-  const { data: anchorProfile, error: anchorProfileError } = await serviceRole
-    .from('merchant_billing_profiles')
-    .select('id, location_id, created_at')
-    .eq('merchant_id', params.merchantId)
-    .eq('billing_method', 'card')
-    .eq('processor', 'valor')
-    .eq('is_active', true)
-    .eq('is_primary', true)
-    .order('location_id', { ascending: true, nullsFirst: true })
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
+  const { profile: anchorProfile, error: anchorProfileError } = await resolveSubscriptionBillingProfile({
+    merchantId: params.merchantId,
+    scope: 'merchant_tier',
+  })
 
   if (anchorProfileError) {
     console.error(
@@ -725,7 +719,7 @@ async function syncMerchantTierBillingArtifacts(params: {
     )
     return {
       success: false as const,
-      error: 'Failed to resolve billing anchor location.',
+      error: anchorProfileError,
     }
   }
 
@@ -745,13 +739,14 @@ async function syncMerchantTierBillingArtifacts(params: {
       .eq('merchant_id', params.merchantId)
       .eq('is_active', true)
       .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
       .limit(1)
       .maybeSingle()
 
     if (anchorLocationError || !anchorLocation?.id) {
       return {
         success: false as const,
-        error: 'No active location is available to anchor merchant tier billing.',
+        error: 'No location is available to anchor merchant tier billing.',
       }
     }
     anchorLocationId = anchorLocation.id as string
@@ -763,7 +758,7 @@ async function syncMerchantTierBillingArtifacts(params: {
   } = await serviceRole
     .from('merchant_subscriptions')
     .select(
-      'id, metadata, status, plan_id, current_period_start, current_period_end, next_billing_date, trial_ends_at, billing_profile_id, monthly_amount, station_count, processor, processor_account_id, processor_subscription_id, processor_subscription_status, processor_schedule_created_at, processor_next_payment_at',
+      'id, location_id, metadata, status, plan_id, current_period_start, current_period_end, next_billing_date, trial_ends_at, billing_profile_id, monthly_amount, station_count, processor, processor_account_id, processor_subscription_id, processor_subscription_status, processor_schedule_created_at, processor_next_payment_at',
     )
     .eq('merchant_id', params.merchantId)
     .eq('location_id', anchorLocationId)
@@ -778,6 +773,11 @@ async function syncMerchantTierBillingArtifacts(params: {
       success: false as const,
       error: 'Failed to resolve location anchor subscription.',
     }
+  }
+
+  // A global card may change without moving the existing invoice anchor.
+  if (existingAnchorSubscription && !anchorProfile.location_id) {
+    anchorLocationId = existingAnchorSubscription.location_id
   }
 
   const anchorMetadata = {
@@ -1899,6 +1899,18 @@ export async function upsertMerchantTierSubscription(
   }
 
   const serviceRole = createServiceRoleClient()
+  const { data: tierBillingReadiness, error: tierBillingReadinessError } = await serviceRole
+    .from('merchant_subscriptions')
+    .select('id, status, metadata')
+    .eq('merchant_id', params.merchantId)
+    .contains('metadata', { billing_scope: 'merchant_tier' })
+    .maybeSingle()
+  if (tierBillingReadinessError) {
+    return { success: false, error: 'Failed to load merchant tier billing readiness.' }
+  }
+  if (tierBillingReadiness && isSubscriptionBillingHeld(tierBillingReadiness.metadata)) {
+    return { success: false, error: 'Complete the migrated billing review before assigning or activating this tier.' }
+  }
   const { data: existing, error: existingError } = await serviceRole
     .from('merchant_plan_subscriptions')
     .select(
@@ -1959,7 +1971,7 @@ export async function upsertMerchantTierSubscription(
   // A prior approval attempt may have saved billing successfully but failed
   // before closing the request. Finalize that request without generating a
   // second invoice or repeating location billing synchronization.
-  if (!subscriptionChanged && params.requestId) {
+  if (!subscriptionChanged && params.requestId && tierBillingReadiness?.status === 'active') {
     const notificationWarning = await notifyMerchantOfTierAssignment({
       merchantId: params.merchantId,
       planId: params.planId,
@@ -2408,7 +2420,7 @@ export async function getMerchantSubscriptions(
     (graceRows ?? []).map((row: any) => [row.id, row]),
   )
 
-  return ((data ?? []) as MerchantSubscriptionRecord[]).map((row) => {
+  return ((data ?? []) as MerchantSubscriptionRecord[]).filter((row) => subscriptionBillingScope(row.metadata) === 'location').map((row) => {
     const grace = graceBySubscriptionId.get(row.id)
     return {
       ...row,
@@ -2537,7 +2549,7 @@ export async function upsertMerchantSubscription(
     p_status: params.status ?? 'active',
     p_trial_ends_at: params.trialEndsAt ?? null,
     p_billing_profile_id: params.billingProfileId ?? null,
-    p_metadata: params.metadata ?? {},
+    p_metadata: { ...(params.metadata ?? {}), billing_scope: 'location' },
   })
 
   if (error) {
@@ -2861,6 +2873,10 @@ export async function saveAndChargeMerchantSubscription(
       'id, plan_id, status, current_period_start, current_period_end, next_billing_date, trial_ends_at, billing_profile_id, metadata, monthly_amount, station_count, processor, processor_account_id, processor_subscription_id, processor_subscription_status, processor_schedule_created_at, processor_next_payment_at',
     )
 
+    .eq('merchant_id', params.merchantId)
+    .eq('location_id', params.locationId)
+    .contains('metadata', { billing_scope: 'location' })
+
   previousQuery = params.subscriptionId
     ? previousQuery.eq('id', params.subscriptionId)
     : previousQuery
@@ -2888,24 +2904,18 @@ export async function saveAndChargeMerchantSubscription(
 
   let billingProfileId = params.billingProfileId ?? null
   if (targetStatus === 'active') {
-    const { data: valorProfile, error: valorProfileError } = await serviceRole
-      .from('merchant_billing_profiles')
-      .select('id')
-      .eq('merchant_id', params.merchantId)
-      .eq('billing_method', 'card')
-      .eq('processor', 'valor')
-      .eq('is_active', true)
-      .eq('is_primary', true)
-      .order('location_id', { ascending: true, nullsFirst: true })
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle()
+    const { profile: valorProfile, error: valorProfileError } = await resolveSubscriptionBillingProfile({
+      merchantId: params.merchantId,
+      locationId: params.locationId,
+      scope: 'location',
+      profileId: params.billingProfileId,
+    })
 
     if (valorProfileError || !valorProfile?.id) {
       return {
         success: false,
         error:
-          'Save an active primary Valor billing card before activating paid services.',
+          valorProfileError || 'Save an active primary Valor card for this location before activating paid services.',
       }
     }
     billingProfileId = valorProfile.id

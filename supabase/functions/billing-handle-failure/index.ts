@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js'
+import { isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope.ts'
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
 import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
 import { resolveSubscriptionRetrySchedule } from '../_shared/subscription-retry-policy.ts'
@@ -41,12 +42,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const { data: invoice, error: invoiceError } = await supabase
       .from('subscription_invoices')
-      .select('id, subscription_id, merchant_id, location_id, invoice_number, payment_attempt_count')
+      .select('id, subscription_id, merchant_id, location_id, invoice_number, payment_attempt_count, merchant_subscriptions(metadata)')
       .eq('id', body.invoice_id)
       .single()
 
     if (invoiceError || !invoice) {
       return jsonResponse({ success: false, error: 'Invoice not found' }, 404)
+    }
+    const subscription = Array.isArray(invoice.merchant_subscriptions)
+      ? invoice.merchant_subscriptions[0] : invoice.merchant_subscriptions
+    if (!subscription || isSubscriptionBillingHeld(subscription.metadata)) {
+      return jsonResponse({ success: false, error: 'Billing cutover requires reconciliation.', code: 'billing_cutover_review_required' }, 409)
     }
 
     const nextAttemptCount = Number(invoice.payment_attempt_count || 0) + 1

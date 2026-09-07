@@ -9,6 +9,7 @@ import {
 import { sendSubscriptionInvoicePaymentEmail } from '../_shared/payment-emails.ts'
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
 import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
+import { billingProfileMatchesSubscription, isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -110,6 +111,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         payment_attempt_count,
         merchant_subscriptions (
           id,
+          merchant_id,
+          location_id,
+          metadata,
           status,
           billing_profile_id,
           processor,
@@ -149,11 +153,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
     if (!subscription) {
       return jsonResponse({ success: false, error: 'Subscription not found' }, 404)
     }
+    if (isSubscriptionBillingHeld(subscription.metadata)) {
+      return jsonResponse({ success: false, code: 'billing_cutover_review_required',
+        error: 'Legacy billing is archived or awaiting review. Reconcile historical balances and prepare the new billing scope in HQ before activation.' }, 409)
+    }
+    if (subscription.status === 'canceled') {
+      return jsonResponse({ success: false, code: 'subscription_canceled', error: 'Canceled subscriptions cannot be charged.' }, 409)
+    }
 
     const { data: billingProfile, error: billingProfileError } = await supabase
       .from('merchant_billing_profiles')
       .select(`
         id,
+        merchant_id,
+        location_id,
         billing_email,
         billing_method,
         customer_vault_id,
@@ -177,6 +190,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
         },
         400,
       )
+    }
+    if (subscription.merchant_id !== invoice.merchant_id ||
+        subscription.location_id !== invoice.location_id ||
+        !billingProfileMatchesSubscription(subscription, billingProfile)) {
+      return jsonResponse({
+        success: false,
+        error: 'This subscription must use its own billing card. Ask HQ to correct the billing profile before retrying.',
+        code: 'billing_profile_scope_mismatch',
+      }, 400)
     }
     if (!billingProfile.customer_vault_id?.trim()) {
       return jsonResponse(
