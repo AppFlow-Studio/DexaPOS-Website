@@ -532,7 +532,13 @@ export async function saveMerchantBillingCardWithVault(
     try {
       for (const subscription of subscriptions ?? []) {
         if (!subscription.processor_subscription_id || Number(subscription.monthly_amount) <= 0) continue
-        const startsOn = new Date(`${subscription.next_billing_date}T12:00:00.000Z`)
+        // Valor rejects a past subscription start date (SUB08); clamp to today
+        // when the scheduled cycle has already elapsed, but keep the original
+        // day-of-month as the recurring charge_on.
+        const scheduledStart = new Date(`${subscription.next_billing_date}T12:00:00.000Z`)
+        const todayStart = new Date(`${new Date().toISOString().slice(0, 10)}T12:00:00.000Z`)
+        const startsOn =
+          scheduledStart.getTime() < todayStart.getTime() ? todayStart : scheduledStart
         await updateSubscription(
           { credentials },
           {
@@ -542,7 +548,7 @@ export async function saveMerchantBillingCardWithVault(
               currency: 'USD',
             },
             interval: 'monthly',
-            chargeOn: Math.min(startsOn.getUTCDate(), 30),
+            chargeOn: Math.min(scheduledStart.getUTCDate(), 30),
             startsOn,
             vaultCustomerId: customer.vaultCustomerId,
             paymentProfileId: paymentProfile.paymentProfileId ?? undefined,

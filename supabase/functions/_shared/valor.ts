@@ -509,7 +509,7 @@ function buildValorRecurringBody(
     // grace/suspension state but must not independently charge the same cycle.
     retry_count: '1',
     additional_prompts: [],
-    ...(params.invoiceNumber ? { invoice_no: params.invoiceNumber.slice(0, 12) } : {}),
+    ...(params.invoiceNumber ? { invoice_no: normalizeValorInvoiceNumber(params.invoiceNumber) } : {}),
     ...(params.email ? { email: params.email.slice(0, 50) } : {}),
   }
 }
