@@ -35,10 +35,25 @@ verify the pooler-url target before any `db push`). Rollout is staging-first.
 
 ## 3. Database migration (production)
 
-- [ ] Apply `20260906120000_separate_subscription_billing_scopes.sql` **out-of-band**. Prod is behind and has version-slot collisions; a blind `db push` would **silently skip** it (see [[project_prod_staging_migration_slot_divergence]] / [[project_prod_migration_gap_and_813120000_collision]]). Reconcile `schema_migrations` and verify the RPCs exist afterward:
+> **CONFIRMED 2026-09-07 (prod `hifouuofcaytijrkbvcy`):** `merchant_subscriptions`
+> is missing `processor_subscription_id` / `_status` / `_next_payment_at`, so
+> `20260906120000` aborts in preflight with `42703`. Cause: version slots
+> `20260830120000` and `20260830130000` on prod hold the **reservation** migrations
+> (`create_public_reservation_approval_mode`, `expire_stale_reservation_requests`),
+> so the two **billing** migrations that own those slots in the repo
+> (`subscription_billing_grace_and_retry_foundation`, `valor_saas_billing_lifecycle`)
+> never ran. A `db push` **silently skips** them and re-fails. Prod's max version is
+> `20260904120000`. The migration preflight aborted → **nothing was written; prod is unchanged.**
+
+- [ ] Apply the ready-made reconciliation set in [`prod-reconcile/`](./prod-reconcile/) **out-of-band, in order** (do NOT `db push`, do NOT bypass the preflight):
+  1. [ ] `prod-reconcile/20260905120000_subscription_billing_grace_and_retry_foundation.sql`
+  2. [ ] `prod-reconcile/20260905130000_valor_saas_billing_lifecycle.sql` (adds the missing `processor_*` columns + `valor_recurring_webhook_events`)
+  3. [ ] `supabase/migrations/20260906120000_separate_subscription_billing_scopes.sql` (slot is free on prod)
+- [ ] Record all three versions in `supabase_migrations.schema_migrations` (see the reconcile README) so future `db push` stays consistent. Note the **permanent** version-number divergence (billing lives under `20260905*` on prod vs `20260830*` in the repo).
+- [ ] Verify the RPCs exist afterward:
   - [ ] `resolve_subscription_billing_profile`
   - [ ] `prepare_migrated_subscription`
-- [ ] Test the full-schema migration on an **isolated prod copy** first; compare historical invoice IDs/amounts/statuses/card links before/after. Known native-schedule blockers must roll it back.
+- [ ] Run the whole set on an **isolated prod copy** first; compare historical invoice IDs/amounts/statuses/card links before/after. Known native-schedule blockers must roll it back.
 - [ ] Regenerate Supabase TypeScript types for both RPCs and remove the temporary RPC adapter casts.
 
 ## 4. Deploy website + Edge Functions together (production)
