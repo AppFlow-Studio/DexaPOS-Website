@@ -36,6 +36,21 @@ describe('Valor SaaS recurring request contract', () => {
     })
   })
 
+  it('normalizes the invoice number to <=12 alphanumerics (Valor A40)', () => {
+    // Real invoice numbers contain hyphens (e.g. "SUB-202608-0002"); Valor's
+    // add_subscription rejects anything that is not 12 alphanumeric chars (A40).
+    expect(
+      buildAddSubscriptionBody({ ...baseParams, invoiceNo: 'SUB-202608-0002' }).invoice_no,
+    ).toBe('UB2026080002')
+    expect(
+      buildUpdateSubscriptionBody({
+        ...baseParams,
+        subscriptionId: 'valor-sub-789',
+        invoiceNo: 'SUB-202608-0002',
+      }).invoice_no,
+    ).toBe('UB2026080002')
+  })
+
   it('replaces the payment profile and charges a past-due cycle through updateSub', () => {
     expect(
       buildUpdateSubscriptionBody({
