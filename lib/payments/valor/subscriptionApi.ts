@@ -22,6 +22,7 @@ import {
   VALOR_MAX_AMOUNT_MINOR,
   type ValorSurchargeIndicator,
 } from "./config";
+import { normalizeValorInvoiceNumber } from "./saleApi";
 
 /** Valor's `recurring_type` enum ([V-SUB]). */
 export const RECURRING_TYPE = {
@@ -204,7 +205,9 @@ export function buildAddSubscriptionBody(
     ...(params.productDescription
       ? { product_description: params.productDescription }
       : {}),
-    ...(params.invoiceNo ? { invoice_no: params.invoiceNo } : {}),
+    ...(params.invoiceNo
+      ? { invoice_no: normalizeValorInvoiceNumber(params.invoiceNo) }
+      : {}),
     ...(params.email ? { email: params.email } : {}),
     ...(params.phone ? { phone: params.phone } : {}),
     ...(params.retryCount !== undefined
