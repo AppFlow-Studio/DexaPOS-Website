@@ -81,7 +81,12 @@ function mapStoreConfigToSite(config: any): Site {
     operatingHours: config.operating_hours,
     menuLayout: config.menu_layout || "cards",
     pickupEnabled: config.accepts_pickup,
-    deliveryEnabled: config.accepts_delivery,
+    // TEMP: online ordering is live with pickup + card only. Delivery is
+    // disabled site-wide (checkout order-type, StoreInfoBar, InfoPanel,
+    // MarketLayout all read this) until the delivery flow goes live. The
+    // merchant's saved `accepts_delivery` value is preserved in the DB — to
+    // re-enable, restore: deliveryEnabled: config.accepts_delivery.
+    deliveryEnabled: false,
     deliveryPricingEnabled: config.delivery_pricing_enabled ?? true,
     minimumOrderAmount: Number(config.min_order ?? 0),
     preparationLeadTime: config.estimated_prep_minutes,

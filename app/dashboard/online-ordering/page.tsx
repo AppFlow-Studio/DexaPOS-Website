@@ -61,6 +61,13 @@ import {
 } from "./actions";
 import { OnlineOrderingSkeleton } from "./OnlineOrderingSkeleton";
 
+// TEMP: online ordering is live with pickup + card only. The storefront hard-
+// disables delivery site-wide (see app/sites/actions.ts mapStoreConfigToSite),
+// so the merchant-facing delivery controls below are disabled to avoid offering
+// a setting that has no effect. Flip to false to restore delivery configuration
+// once the delivery flow goes live. Saved `accepts_delivery` values are preserved.
+const DELIVERY_TEMPORARILY_DISABLED = true;
+
 function SettingsToggleRow({
   title,
   description,
@@ -1011,10 +1018,14 @@ function CompletedSetupPanel({
                 />
                 <SettingsToggleRow
                   title="Delivery"
-                  description="Allow customers to place delivery orders."
-                  checked={settings.deliveryEnabled}
+                  description={
+                    DELIVERY_TEMPORARILY_DISABLED
+                      ? "Delivery is temporarily unavailable. Online ordering currently supports pickup only — this will be re-enabled soon."
+                      : "Allow customers to place delivery orders."
+                  }
+                  checked={DELIVERY_TEMPORARILY_DISABLED ? false : settings.deliveryEnabled}
                   onCheckedChange={(checked) => onUpdate({ deliveryEnabled: checked })}
-                  disabled={isSaving}
+                  disabled={isSaving || DELIVERY_TEMPORARILY_DISABLED}
                 />
               </div>
 
@@ -1066,6 +1077,7 @@ function CompletedSetupPanel({
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
+                {/* Delivery-only fields — disabled while delivery is off (see DELIVERY_TEMPORARILY_DISABLED). */}
                 <div className="space-y-2">
                   <Label>Delivery Fee ($)</Label>
                   <Input
@@ -1074,6 +1086,7 @@ function CompletedSetupPanel({
                     min={0}
                     step="0.01"
                     onChange={(e) => onUpdate({ baseDeliveryFee: Number(e.target.value) })}
+                    disabled={DELIVERY_TEMPORARILY_DISABLED}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1084,6 +1097,7 @@ function CompletedSetupPanel({
                     min={0}
                     step="0.01"
                     onChange={(e) => onUpdate({ freeDeliveryThreshold: Number(e.target.value) })}
+                    disabled={DELIVERY_TEMPORARILY_DISABLED}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1098,6 +1112,7 @@ function CompletedSetupPanel({
                         deliveryRadiusMiles: e.target.value === "" ? null : Number(e.target.value),
                       })
                     }
+                    disabled={DELIVERY_TEMPORARILY_DISABLED}
                   />
                 </div>
               </div>

@@ -16,7 +16,6 @@ import { CheckoutHeader } from "./CheckoutHeader";
 import { ContactSection } from "./ContactSection";
 import { OrderTypeSection } from "./OrderTypeSection";
 import { OrderDetailsSection } from "./OrderDetailsSection";
-import { Switch } from "@/components/ui/switch";
 import { TipSection } from "./TipSection";
 import { OrderSummarySection } from "./OrderSummarySection";
 import { PromoCodeSection } from "./PromoCodeSection";
@@ -200,9 +199,6 @@ export function CheckoutPage({
   const [pickupTime, setPickupTime] = useState<"asap" | "scheduled">("asap");
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(new Date());
   const [scheduledTime, setScheduledTime] = useState("");
-
-  // Curbside
-  const [curbside, setCurbside] = useState(false);
 
   // Delivery
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
@@ -534,14 +530,6 @@ export function CheckoutPage({
       requestedTime = new Date(utcCandidate.getTime() + offsetMs).toISOString();
     }
 
-    // Build special instructions with curbside
-    let instructions = specialInstructions;
-    if (curbside && orderType === "pickup") {
-      instructions = instructions
-        ? `CURBSIDE PICKUP: Bring order to my car. ${instructions}`
-        : "CURBSIDE PICKUP: Bring order to my car";
-    }
-
     const orderItems: PlaceOrderItem[] = items.map((item) => ({
       id: item.id,
       name: item.name,
@@ -586,7 +574,7 @@ export function CheckoutPage({
             delivery_address: deliveryAddress,
             requested_time: requestedTime,
             tip: tipAmount,
-            special_instructions: instructions || undefined,
+            special_instructions: specialInstructions || undefined,
             pay_cash_in_store: payCashInStore,
             ...(paymentToken ? { payment_token: paymentToken } : {}),
             ...(paymentCardType ? { payment_card_type: paymentCardType } : {}),
@@ -896,8 +884,6 @@ export function CheckoutPage({
                 maxFutureDays={config?.futureOrderMaxDays || 30}
                 prepTime={prepTimeMins}
                 operatingHours={config?.operatingHours}
-                curbside={curbside}
-                onCurbsideChange={setCurbside}
                 storeAddress={storeAddress}
                 storeLat={storeLat}
                 storeLng={storeLng}
@@ -918,29 +904,10 @@ export function CheckoutPage({
 
             {config?.acceptOnlinePayments && (
               <>
-                {orderType === "pickup" && !isQrTableMode && (
-                  <div
-                    className="flex items-center justify-between px-4 py-3 rounded-lg"
-                    style={{
-                      border: "1px solid var(--border)",
-                      backgroundColor: "var(--card)",
-                      borderRadius: "var(--radius)",
-                    }}
-                  >
-                    <div>
-                      <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-                        Pay cash in store
-                      </p>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                        Pay at the counter when you pick up
-                      </p>
-                    </div>
-                    <Switch
-                      checked={payCashInStore}
-                      onCheckedChange={setPayCashInStore}
-                    />
-                  </div>
-                )}
+                {/* TEMP: "Pay cash in store" toggle removed while online ordering
+                    is live with card only. `payCashInStore` stays false so the
+                    card payment form always renders. Restore the toggle here to
+                    re-enable paying with cash at pickup. */}
                 {!payCashInStore && valorBootstrap && (
                   <PassageCheckout
                     clientToken={valorBootstrap.clientToken}
