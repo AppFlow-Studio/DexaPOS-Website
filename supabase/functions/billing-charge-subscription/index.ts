@@ -339,9 +339,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
       )
     }
 
-    const startsOn = parseBillingDate(
+    // Valor rejects a subscription whose start date is in the past (SUB08). When
+    // recovering a past-due/overdue cycle we are charging now, so clamp the
+    // schedule start to today rather than the elapsed next_billing_date.
+    const scheduledStart = parseBillingDate(
       subscription.next_billing_date || invoice.billing_period_end || invoice.due_date,
     )
+    const todayStart = parseBillingDate(now)
+    const startsOn =
+      scheduledStart.getTime() < todayStart.getTime() ? todayStart : scheduledStart
     const recurringParams = {
       amountMinor: toMinorUnits(invoice.total_amount),
       vaultCustomerId: billingProfile.customer_vault_id.trim(),
