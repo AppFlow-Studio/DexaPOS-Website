@@ -26,6 +26,7 @@ import {
   resolveIntegrationEmbed,
   type IntegrationProvider,
 } from "@/lib/site-builder/sections/schemas/integrations";
+import type { FeaturesProps } from "@/lib/site-builder/sections/schemas/features";
 import { parseVideoRef } from "@/lib/site-builder/sections/schemas/video";
 import { tintOn } from "@/lib/site-builder/color";
 import type { ThemeTokens } from "@/lib/site-builder/render-context";
@@ -37,6 +38,13 @@ import ReviewStarIcon from "../ReviewStarIcon";
 import ColorPicker from "../shell/ColorPicker";
 import { OverlayRail } from "../shell/OverlayChrome";
 import AssetPicker, { AssetListPicker } from "./AssetPicker";
+import { backdropColorFor } from "./backdrop-color";
+import {
+  FeatureItemForm,
+  FeaturesList,
+  IconColorControl,
+  type FeatureItem,
+} from "./FeaturesEditor";
 import EventPicker from "./EventPicker";
 import FormPicker from "./FormPicker";
 import MenuItemPicker from "./MenuItemPicker";
@@ -161,8 +169,44 @@ function SectionSettings({
   }, [def, props]);
 
   const isHeader = section.kind === "header";
+  const isFeatures = section.kind === "features";
   const title = isHeader ? "Navigation" : sectionTitle(section);
   const subtitle = title === def.label ? null : def.label;
+
+  /*
+    Which highlight the merchant has open, if any. Held here rather than in
+    `FeaturesEditor` because editing one replaces the whole panel — the heading
+    field and the style controls belong to the section, not to the item, and
+    showing them under an item's fields is how a merchant edits the wrong thing.
+
+    `SectionSettings` is keyed on the section id, so this resets on its own when
+    the selection changes.
+  */
+  const [editingFeature, setEditingFeature] = useState<number | null>(null);
+  const featureItems = isFeatures ? ((props.items ?? []) as FeatureItem[]) : [];
+  const editingItem =
+    editingFeature !== null ? (featureItems[editingFeature] ?? null) : null;
+
+  if (isFeatures && editingItem) {
+    return (
+      <OverlayRail footer={<DoneButton onClick={() => setEditingFeature(null)} />}>
+        <div className="border-b px-4 py-3">
+          <h2 className="truncate text-sm font-semibold">
+            {editingItem.title || "New feature"}
+          </h2>
+          <p className="truncate text-xs text-muted-foreground">{def.label}</p>
+        </div>
+        <FeatureItemForm
+          item={editingItem}
+          onChange={(next) =>
+            updateProps(section.id, {
+              items: featureItems.map((item, i) => (i === editingFeature ? next : item)),
+            })
+          }
+        />
+      </OverlayRail>
+    );
+  }
 
   return (
     <OverlayRail
@@ -210,6 +254,26 @@ function SectionSettings({
           />
         ))}
         {/*
+          The highlights list, below the section's own Title and above the
+          shared style controls — the order Owner's panel uses, and the order
+          the merchant reads it in.
+        */}
+        {isFeatures && (
+          <>
+            <FeaturesList
+              items={featureItems}
+              onChange={(items) => updateProps(section.id, { items })}
+              onEdit={setEditingFeature}
+            />
+            <IconColorControl
+              props={section.props as FeaturesProps}
+              style={section.style}
+              theme={theme}
+              onChange={(patch) => updateProps(section.id, patch)}
+            />
+          </>
+        )}
+        {/*
           The shared style controls, driven by the registry rather than by a
           `section.kind ===` test written into the panel. Adding one to a kind is
           a line in its registry entry — the same bargain the generated fields
@@ -219,6 +283,12 @@ function SectionSettings({
           <SectionBackgroundControl
             value={section.style?.background ?? "default"}
             onChange={(background) => updateStyle(section.id, { background })}
+          />
+        )}
+        {(def.styleControls ?? []).includes("align") && (
+          <SectionAlignControl
+            value={section.style?.align ?? "center"}
+            onChange={(align) => updateStyle(section.id, { align })}
           />
         )}
         {(def.styleControls ?? []).includes("textTone") && (
@@ -233,6 +303,52 @@ function SectionSettings({
         )}
       </div>
     </OverlayRail>
+  );
+}
+
+type SectionAlign = NonNullable<SectionStyle["align"]>;
+
+/**
+ * Where the section's heading sits.
+ *
+ * Two options, so a segmented pair rather than a select — the same shape Owner
+ * uses for their two-value choices, and it shows both states at once instead of
+ * hiding one behind a click.
+ */
+function SectionAlignControl({
+  value,
+  onChange,
+}: {
+  value: SectionAlign;
+  onChange: (align: SectionAlign) => void;
+}) {
+  const options: Array<{ value: SectionAlign; label: string }> = [
+    { value: "left", label: "Left" },
+    { value: "center", label: "Centre" },
+  ];
+
+  return (
+    <div className="border-t pt-5">
+      <span className="mb-1.5 block text-xs font-medium">Alignment</span>
+      <div role="group" aria-label="Alignment" className="flex gap-1 rounded-md border p-1">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={value === option.value}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors",
+              value === option.value
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-accent/50",
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -383,30 +499,6 @@ function SectionTextToneControl({
   );
 }
 
-/**
- * The backdrop a section is painted on, as a colour.
- *
- * A local copy of the renderer’s mapping rather than an import: the renderer is
- * a server-rendered module tree and this panel is a client component.
- * `__tests__/text-tone-guard.test.ts` asserts the two agree — the failure they
- * would otherwise share is a panel promising one colour and a canvas drawing
- * another.
- */
-function backdropColorFor(
-  background: NonNullable<SectionStyle["background"]>,
-  theme: ThemeTokens,
-): string {
-  switch (background) {
-    case "muted":
-      return theme.surfaceMuted;
-    case "brand":
-      return theme.brand;
-    case "dark":
-      return theme.surfaceDark;
-    default:
-      return theme.surface;
-  }
-}
 
 function DoneButton({ onClick }: { onClick: () => void }) {
   return (
