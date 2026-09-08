@@ -79,12 +79,13 @@ Source code cannot prove that remote jobs, secrets, or functions are deployed. B
 - `valor-webhook` has a valid secret, receives signed recurring events, and records successful processing.
 - Valor sandbox card charge, decline, recovery, tier-wide suspension, location isolation, and restoration QA all pass.
 
-Read-only audit on 2026-09-08:
+Deployment audit on 2026-09-08:
 
 - `20260906120000_separate_subscription_billing_scopes.sql` is applied on the linked environment.
-- `20260908120000_saas_admin_access_entitlements_and_authorizations.sql` is not applied.
+- `20260908120000_saas_admin_access_entitlements_and_authorizations.sql` is applied on linked project `dfwqakoyittmrwbqvxgw`.
+- `app/database.types.ts` was regenerated from the linked schema after the migration.
 - `billing-charge-subscription`, `billing-mark-paid`, and `valor-webhook` are active, but the restoration changes in this branch are not deployed.
 - `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `SUPPORT_TICKET_NOTIFICATION_EMAILS`, and `VALOR_WEBHOOK_SECRET` are present.
 - `BILLING_NOTIFICATION_EMAILS` is not present. Support still receives restoration mail through `SUPPORT_TICKET_NOTIFICATION_EMAILS` and the mandatory `support@mtechdistributors.com` recipient.
-- Migration history has unrelated drift that must be reconciled before rollout: `20260903120000` exists remotely but not locally, while `20260903121000` exists locally but not remotely.
+- Migration history was reconciled from remote `20260903120000` to repository version `20260903121000` after confirming their SQL differs only by blank lines.
 - Edge Function presence does not prove cron scheduling or recent successful execution; verify those records in Supabase before sign-off.
