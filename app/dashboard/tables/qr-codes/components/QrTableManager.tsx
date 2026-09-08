@@ -42,21 +42,34 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { buildQrTableUrl } from "@/app/sites/lib/store-url";
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   Ban,
   Check,
   ChevronLeft,
   ChevronRight,
   Copy,
-  Download,
   ExternalLink,
   FileImage,
   FileText,
   Loader2,
+  MoreHorizontal,
   Printer,
   QrCode,
   RefreshCw,
@@ -95,6 +108,46 @@ type StatusFilter = "all" | QrTableManagerRow["qrStatus"];
  */
 const ROWS_PER_PAGE = 25;
 
+type SortKey =
+  | "tableLabel"
+  | "capacity"
+  | "status"
+  | "scanCount7d"
+  | "scanCountLifetime"
+  | "generatedAt"
+  | "lastScannedAt";
+
+type SortState = { key: SortKey; direction: "asc" | "desc" } | null;
+
+/**
+ * Status sorts by how much attention it wants, not alphabetically: a merchant
+ * sorting this column is asking "what still needs doing", and "Not generated"
+ * is the answer that belongs at the top.
+ */
+const QR_STATUS_RANK: Record<QrTableManagerRow["qrStatus"], number> = {
+  not_generated: 0,
+  revoked: 1,
+  active: 2,
+};
+
+/**
+ * Empty values sort last in **both** directions, which is why `direction` is
+ * applied here rather than to this function's result: multiplying the verdict
+ * outside would flip nulls to the top on a descending sort, and 200 "Never"
+ * rows above the answer is exactly what the merchant did not ask for.
+ */
+function compareNullsLast<T>(
+  a: T | null | undefined,
+  b: T | null | undefined,
+  direction: number,
+  compare: (x: T, y: T) => number
+) {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return direction * compare(a, b);
+}
+
 const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
   all: "All statuses",
   active: "Active",
@@ -102,15 +155,29 @@ const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
   not_generated: "Not generated",
 };
 
+const STATUS_LABELS: Record<QrTableManagerRow["qrStatus"], string> = {
+  active: "Active",
+  revoked: "Revoked",
+  not_generated: "Not generated",
+};
+
+/**
+ * One neutral pill for every state (DS-CTL-09). "Active" used to render
+ * `bg-emerald-600`, which is the rule's canonical counter-example: status is
+ * never colour-coded anywhere in the dashboard, because a screen where every
+ * state carries its own hue becomes a colour key the merchant has to learn.
+ * The word carries the meaning; finding all the codes of one status is the
+ * status filter's job, not colour's.
+ */
 function getStatusBadge(status: QrTableManagerRow["qrStatus"]) {
-  switch (status) {
-    case "active":
-      return <Badge className="bg-emerald-600 hover:bg-emerald-600">Active</Badge>;
-    case "revoked":
-      return <Badge variant="secondary">Revoked</Badge>;
-    default:
-      return <Badge variant="outline">Not generated</Badge>;
-  }
+  return (
+    <Badge
+      variant="secondary"
+      className="w-fit rounded-full border-0 px-2.5 text-xs font-medium"
+    >
+      {STATUS_LABELS[status]}
+    </Badge>
+  );
 }
 
 function formatDateTime(value: string | null) {
@@ -118,14 +185,40 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
-/**
- * `merchant` renders the store's own logo and brand colours; `dexa` renders the
- * neutral Dexa-blue code with no logo, for merchants who would rather not brand
- * their table tents.
- */
-type QrBrandMode = "merchant" | "dexa";
+const RELATIVE_UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+  ["year", 365 * 24 * 60 * 60 * 1000],
+  ["month", 30 * 24 * 60 * 60 * 1000],
+  ["week", 7 * 24 * 60 * 60 * 1000],
+  ["day", 24 * 60 * 60 * 1000],
+  ["hour", 60 * 60 * 1000],
+  ["minute", 60 * 1000],
+];
 
-const DEXA_BRAND_COLOR = "#0C4FD1";
+/**
+ * "3 weeks ago" rather than "8/17/2026, 9:10:44 PM".
+ *
+ * A generation timestamp to the second is noise on one row and a wall of
+ * digits on 233 of them, and the column it sits in is scanned for recency, not
+ * read for precision. The exact stamp stays available through the cell's
+ * `title`, so nothing is actually lost.
+ */
+function formatRelative(value: string | null) {
+  if (!value) return null;
+
+  const then = new Date(value).getTime();
+  if (Number.isNaN(then)) return null;
+
+  const elapsed = Date.now() - then;
+  if (Math.abs(elapsed) < 60 * 1000) return "Just now";
+
+  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  for (const [unit, ms] of RELATIVE_UNITS) {
+    if (Math.abs(elapsed) >= ms) {
+      return formatter.format(-Math.round(elapsed / ms), unit);
+    }
+  }
+  return "Just now";
+}
 
 /**
  * A branding failure must never leave the merchant with a silently unbranded
@@ -194,18 +287,30 @@ export function QrTableManager({
   const hasSnapshot = Boolean(snapshot);
 
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [brandMode, setBrandMode] = useState<QrBrandMode>("merchant");
   const [bulkProgress, setBulkProgress] = useState<{
     done: number;
     total: number;
   } | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  // null = the server's own floor order (zone, then numeric table label).
+  const [sort, setSort] = useState<SortState>(null);
   // One page cursor per zone, so paging through the bar does not move the patio.
   // Absent key means page 1; the map is cleared whenever the filters change.
   const [zonePages, setZonePages] = useState<Record<string, number>>({});
+  // Selection is cleared whenever the filters change. Carrying it across a
+  // filter would let a merchant revoke tables they can no longer see, and the
+  // bulk bar's count would stop describing what is on screen.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const allRows = useMemo(() => snapshot?.tables ?? [], [snapshot?.tables]);
+
+  const totalTables = allRows.length;
+  const generatedCount = snapshot?.generatedCount ?? 0;
+  const activeCount = snapshot?.activeCount ?? 0;
+  // The figure a merchant is actually here for, and the one that was never on
+  // screen: the tables still waiting on a code.
+  const missingCount = Math.max(0, totalTables - generatedCount);
 
   const isFiltered = search.trim() !== "" || statusFilter !== "all";
 
@@ -224,14 +329,94 @@ export function QrTableManager({
     });
   }, [allRows, search, statusFilter]);
 
+  /**
+   * Sorting runs before grouping, so each zone lands already ordered.
+   *
+   * `sort === null` means the server's own order — zone, then numeric-aware
+   * table label — which is what a merchant reading a floor plan expects. A
+   * header click overrides it; clicking the active header a third time returns
+   * to it, so there is always a way back to floor order.
+   */
+  const sortedRows = useMemo(() => {
+    if (!sort) return filteredRows;
+
+    const direction = sort.direction === "asc" ? 1 : -1;
+    const rows = [...filteredRows];
+
+    rows.sort((a, b) => {
+      switch (sort.key) {
+        case "tableLabel":
+          return (
+            direction *
+            a.tableLabel.localeCompare(b.tableLabel, undefined, {
+              numeric: true,
+              sensitivity: "base",
+            })
+          );
+        case "capacity":
+          return compareNullsLast(
+            a.capacity,
+            b.capacity,
+            direction,
+            (x, y) => x - y
+          );
+        case "status":
+          return (
+            direction *
+            (QR_STATUS_RANK[a.qrStatus] - QR_STATUS_RANK[b.qrStatus])
+          );
+        case "scanCount7d":
+          return direction * (a.scanCount7d - b.scanCount7d);
+        case "scanCountLifetime":
+          return direction * (a.scanCountLifetime - b.scanCountLifetime);
+        case "generatedAt":
+          return compareNullsLast(
+            a.generatedAt,
+            b.generatedAt,
+            direction,
+            (x, y) => new Date(x).getTime() - new Date(y).getTime()
+          );
+        case "lastScannedAt":
+          return compareNullsLast(
+            a.lastScannedAt,
+            b.lastScannedAt,
+            direction,
+            (x, y) => new Date(x).getTime() - new Date(y).getTime()
+          );
+        default:
+          return 0;
+      }
+    });
+
+    return rows;
+  }, [filteredRows, sort]);
+
   const groupedRows = useMemo(() => {
     const groups = new Map<string, QrTableManagerRow[]>();
-    for (const row of filteredRows) {
+    for (const row of sortedRows) {
       const key = row.zoneName || "Unassigned";
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
     return Array.from(groups.entries());
-  }, [filteredRows]);
+  }, [sortedRows]);
+
+  /**
+   * asc → desc → off. Re-sorting invalidates every page cursor the same way a
+   * filter change does: page 3 of one ordering is not page 3 of another.
+   */
+  function toggleSort(key: SortKey) {
+    setZonePages({});
+    setSort((prev) => {
+      if (!prev || prev.key !== key) return { key, direction: "asc" };
+      if (prev.direction === "asc") return { key, direction: "desc" };
+      return null;
+    });
+  }
+
+  // A zone heading distinguishes one group from another. With every table in a
+  // single zone there is nothing to distinguish, so the heading, its count and
+  // its badge are pure chrome — 233 tables under one "Unassigned" title.
+  const showZoneHeadings = groupedRows.length > 1;
 
   // Changing what is being looked at invalidates every cursor: page 7 of the
   // unfiltered list is not page 7 of the search results. Reset at the point of
@@ -240,11 +425,50 @@ export function QrTableManager({
   function updateSearch(value: string) {
     setSearch(value);
     setZonePages({});
+    setSelectedIds(new Set());
   }
 
   function updateStatusFilter(value: StatusFilter) {
     setStatusFilter(value);
     setZonePages({});
+    setSelectedIds(new Set());
+  }
+
+  /**
+   * The stat tiles double as the status filter (a tile already showing
+   * "Generated 120" is the most direct way to ask for those 120). Clicking the
+   * tile that is already applied clears it, so the control is a toggle rather
+   * than a one-way trip.
+   */
+  function toggleStatusFilter(value: StatusFilter) {
+    updateStatusFilter(statusFilter === value ? "all" : value);
+  }
+
+  const selectedRows = useMemo(
+    () => filteredRows.filter((row) => selectedIds.has(row.floorPlanObjectId)),
+    [filteredRows, selectedIds]
+  );
+
+  function toggleRowSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllSelected(rows: QrTableManagerRow[]) {
+    const ids = rows.map((row) => row.floorPlanObjectId);
+    const allOn = ids.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (allOn) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
   }
 
   function getZonePage(zoneName: string, totalRows: number) {
@@ -370,15 +594,6 @@ export function QrTableManager({
    * tent from drifting apart.
    */
   const qrBranding = useMemo((): Omit<BrandedQrOptions, "value"> => {
-    if (brandMode === "dexa") {
-      return {
-        logoUrl: null,
-        moduleColor: DEXA_BRAND_COLOR,
-        backgroundColor: DEFAULT_BACKGROUND_COLOR,
-        secondaryColor: null,
-      };
-    }
-
     return {
       logoUrl: snapshot?.branding?.logoUrl ?? null,
       moduleColor: snapshot?.branding?.primaryColor ?? DEFAULT_MODULE_COLOR,
@@ -386,7 +601,7 @@ export function QrTableManager({
         snapshot?.branding?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR,
       secondaryColor: snapshot?.branding?.secondaryColor ?? null,
     };
-  }, [brandMode, snapshot?.branding]);
+  }, [snapshot?.branding]);
 
   const hasMerchantLogo = Boolean(snapshot?.branding?.logoUrl);
 
@@ -401,12 +616,7 @@ export function QrTableManager({
   }, [snapshot?.tables]);
 
   function getBrandTitle() {
-    if (brandMode === "dexa") return "DEXA";
     return snapshot?.storeName || locationName || "Store";
-  }
-
-  function getBrandSubtitle() {
-    return brandMode === "dexa" ? "Scan to order" : "Table ordering";
   }
 
   async function handleCopyLink(row: QrTableManagerRow) {
@@ -474,7 +684,12 @@ export function QrTableManager({
     }
   }
 
-  async function buildPdfBlob(row: QrTableManagerRow) {
+  /**
+   * The artwork for one table's tent, rendered through the same pipeline as
+   * the on-screen preview. Kept separate from the drawing below so a batch can
+   * render each table's code and lay them all into one document.
+   */
+  async function renderTentAssets(row: QrTableManagerRow) {
     const qrUrl = getRowQrUrl(row);
     if (!qrUrl) {
       throw new Error("QR URL is not ready for this table yet.");
@@ -492,24 +707,40 @@ export function QrTableManager({
       value: qrUrl,
       sizePx: 1400,
     });
-    reportBrandingWarnings(warnings);
 
     // Panel chrome follows the same colour the modules ended up with, so a
     // fallback to safe defaults degrades the whole sheet coherently rather
     // than leaving Dexa blue framing a black-and-white code.
     const chrome = parseHexColor(branding.moduleColor) ?? { r: 12, g: 79, b: 209 };
 
-    const doc = new jsPDF({
+    return { qrUrl, qrImage, chrome, warnings };
+  }
+
+  function createTentDoc() {
+    return new jsPDF({
       orientation: "landscape",
       unit: "mm",
       format: "letter",
     });
+  }
 
+  /**
+   * Draws one table's two-up tent onto the document's **current** page. The
+   * caller owns paging, which is what lets a batch put 113 tables into one
+   * PDF instead of 113 downloads.
+   */
+  function drawTentSheet(
+    doc: jsPDF,
+    row: QrTableManagerRow,
+    qrUrl: string,
+    qrImage: string,
+    chrome: { r: number; g: number; b: number }
+  ) {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const panelWidth = pageWidth / 2;
     const brandTitle = getBrandTitle();
-    const brandSubtitle = getBrandSubtitle();
+    const brandSubtitle = "Table ordering";
     const title = row.tableLabel;
 
     const renderPanel = (originX: number) => {
@@ -575,8 +806,51 @@ export function QrTableManager({
     for (let y = 6; y < pageHeight - 6; y += 4) {
       doc.line(panelWidth, y, panelWidth, y + 2);
     }
+  }
 
+  async function buildPdfBlob(row: QrTableManagerRow) {
+    const { qrUrl, qrImage, chrome, warnings } = await renderTentAssets(row);
+    reportBrandingWarnings(warnings);
+
+    const doc = createTentDoc();
+    drawTentSheet(doc, row, qrUrl, qrImage, chrome);
     return doc.output("blob");
+  }
+
+  /**
+   * Every selected table's tent in one document, one table per sheet.
+   *
+   * Warnings are collected and de-duplicated across the whole run rather than
+   * raised per table: a branding failure on a 113-table batch is one problem,
+   * not 113 toasts. A table whose code is not ready is skipped and named in
+   * the summary instead of aborting the run — a merchant printing a floor
+   * should get the 112 sheets that are ready.
+   */
+  async function buildBatchPdfBlob(
+    rows: QrTableManagerRow[],
+    onProgress: (done: number) => void
+  ) {
+    const doc = createTentDoc();
+    const warnings = new Set<string>();
+    const skipped: string[] = [];
+    let sheets = 0;
+
+    for (const [index, row] of rows.entries()) {
+      try {
+        const assets = await renderTentAssets(row);
+        for (const warning of assets.warnings) warnings.add(warning);
+
+        if (sheets > 0) doc.addPage();
+        drawTentSheet(doc, row, assets.qrUrl, assets.qrImage, assets.chrome);
+        sheets += 1;
+      } catch {
+        skipped.push(row.tableLabel);
+      }
+      onProgress(index + 1);
+    }
+
+    reportBrandingWarnings([...warnings]);
+    return { blob: sheets > 0 ? doc.output("blob") : null, sheets, skipped };
   }
 
   async function handleDownloadPdf(row: QrTableManagerRow) {
@@ -589,6 +863,98 @@ export function QrTableManager({
         error instanceof Error ? error.message : "Failed to export PDF"
       );
     }
+  }
+
+  async function handleDownloadSelectedPdf() {
+    const rows = selectedRows.filter((row) => row.qrStatus !== "not_generated");
+    if (rows.length === 0) {
+      toast.error("None of the selected tables have a QR code to print yet.");
+      return;
+    }
+
+    await withBusy("bulk-pdf", async () => {
+      try {
+        setBulkProgress({ done: 0, total: rows.length });
+        const { blob, sheets, skipped } = await buildBatchPdfBlob(
+          rows,
+          (done) => setBulkProgress({ done, total: rows.length })
+        );
+
+        if (!blob) {
+          toast.error("None of the selected tables could be rendered.");
+          return;
+        }
+
+        const storeName = snapshot?.storeName || locationName || "store";
+        downloadBlob(blob, `${slugifyFileName(storeName)}-table-tents.pdf`);
+        toast.success(
+          skipped.length > 0
+            ? `Downloaded ${sheets} table tent${sheets === 1 ? "" : "s"}; skipped ${skipped.length} without a ready code.`
+            : `Downloaded ${sheets} table tent${sheets === 1 ? "" : "s"} in one PDF`
+        );
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to export the PDF"
+        );
+      } finally {
+        setBulkProgress(null);
+      }
+    });
+  }
+
+  /**
+   * Reprint or revoke a selection, one request per table. The per-row actions
+   * re-check the billing gate server-side, so a closed gate fails each call
+   * rather than being trusted from the client.
+   */
+  async function handleBulkLifecycle(mode: "reprint" | "revoke") {
+    const rows =
+      mode === "revoke"
+        ? selectedRows.filter((row) => row.qrStatus === "active")
+        : selectedRows;
+
+    if (rows.length === 0) {
+      toast.error(
+        mode === "revoke"
+          ? "None of the selected tables have an active code to revoke."
+          : "Select at least one table first."
+      );
+      return;
+    }
+
+    await withBusy(`bulk-${mode}`, async () => {
+      let done = 0;
+      let failed = 0;
+      setBulkProgress({ done: 0, total: rows.length });
+
+      for (const row of rows) {
+        const result =
+          mode === "revoke"
+            ? await revokeTableQrCode(row.floorPlanObjectId)
+            : await generateQrCodeForTable(row.floorPlanObjectId, {
+                regenerate: false,
+              });
+        if (result.success) done += 1;
+        else failed += 1;
+        setBulkProgress({ done: done + failed, total: rows.length });
+      }
+
+      setBulkProgress(null);
+      setSelectedIds(new Set());
+
+      if (failed > 0) {
+        toast.error(
+          `${mode === "revoke" ? "Revoked" : "Reprinted"} ${done} of ${rows.length}; ${failed} failed.`
+        );
+      } else {
+        showQrGeneratedToast(
+          mode === "revoke"
+            ? `Revoked ${done} QR code${done === 1 ? "" : "s"}`
+            : `${done} QR code${done === 1 ? "" : "s"} ready to reprint`
+        );
+      }
+      await refresh();
+    });
   }
 
   async function handlePrintPdf(row: QrTableManagerRow) {
@@ -641,7 +1007,204 @@ export function QrTableManager({
     toast.success(`Guest preview opened for ${row.tableLabel}`);
   }
 
+  /**
+   * Every per-table action behind one ghost icon (§5.2). Four outline buttons
+   * used to sit on every row at equal weight — 932 of them on this location —
+   * which made the row unreadable and, worse, hid a real hazard: Reprint and
+   * Regenerate looked identical, but Regenerate mints a new token and
+   * invalidates every code already printed for that table. Regenerate and
+   * Revoke now carry `text-destructive`, which the no-colour rule explicitly
+   * allows for an action's consequence (as opposed to a record's state).
+   */
+  /**
+   * A sortable column heading — the ghost pill the design system prescribes
+   * (§5.2), not bare text, so a header that responds to a click looks like it
+   * will. The arrow is direction-bearing once active rather than the neutral
+   * up/down glyph, because a merchant who just sorted needs to see which way.
+   */
+  function SortableHead({
+    label,
+    sortKey,
+    align = "left",
+    className,
+  }: {
+    label: string;
+    sortKey: SortKey;
+    align?: "left" | "right";
+    className?: string;
+  }) {
+    const active = sort?.key === sortKey;
+    const ariaSort = !active
+      ? "none"
+      : sort?.direction === "asc"
+        ? "ascending"
+        : "descending";
+
+    const alignRight = align === "right";
+
+    // The arrow leads on a right-aligned column so the *label* ends where the
+    // figures end. With the arrow trailing, the label stopped ~20px short of
+    // its own column of numbers and the heading read as belonging to the
+    // column on its left.
+    const icon = (
+      <span className={cn("shrink-0", alignRight ? "mr-2" : "ml-2")}>
+        {active ? (
+          sort?.direction === "asc" ? (
+            <ArrowUp className="h-3 w-3" />
+          ) : (
+            <ArrowDown className="h-3 w-3" />
+          )
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-50" />
+        )}
+      </span>
+    );
+
+    return (
+      <TableHead
+        aria-sort={ariaSort}
+        className={cn(alignRight && "text-right", className)}
+      >
+        {/* One-sided negative margin cancels the button's own padding on the
+            side that has to line up, so the label's edge sits exactly on the
+            cell's text edge — the same edge the values below are aligned to. */}
+        <Button
+          variant="ghost"
+          onClick={() => toggleSort(sortKey)}
+          className={cn(
+            "h-8 rounded-full px-2 font-medium",
+            alignRight ? "-mr-2" : "-ml-2",
+            active ? "text-foreground" : "text-muted-foreground"
+          )}
+        >
+          {alignRight ? (
+            <>
+              {icon}
+              {label}
+            </>
+          ) : (
+            <>
+              {label}
+              {icon}
+            </>
+          )}
+        </Button>
+      </TableHead>
+    );
+  }
+
+  function renderRowActions(row: QrTableManagerRow) {
+    const isBusy =
+      busyKey === `gen-${row.floorPlanObjectId}` ||
+      busyKey === `regen-${row.floorPlanObjectId}` ||
+      busyKey === `revoke-${row.floorPlanObjectId}`;
+    const hasCode = row.qrStatus !== "not_generated";
+    const canExport = hasCode && Boolean(row.tableToken);
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            className="h-8 w-8 shrink-0 rounded-full p-0"
+            disabled={busyKey !== null}
+            aria-label={`Actions for ${row.tableLabel}`}
+          >
+            {isBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <MoreHorizontal className="h-4 w-4" />
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          {/* Muted group labels rather than separators — horizontal rules are
+              banned outright (§5.5), and a label says more than a line. */}
+          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+            Code
+          </DropdownMenuLabel>
+          {hasCode ? (
+            <>
+              <DropdownMenuItem
+                onClick={() => void handleGenerate(row, false)}
+                disabled={!qrEntitled}
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Reprint
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => void handleGenerate(row, true)}
+                disabled={!qrEntitled}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Regenerate
+              </DropdownMenuItem>
+              {row.qrStatus === "active" ? (
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => void handleRevoke(row)}
+                >
+                  <Ban className="mr-2 h-4 w-4" />
+                  Revoke
+                </DropdownMenuItem>
+              ) : null}
+            </>
+          ) : (
+            <DropdownMenuItem
+              onClick={() => void handleGenerate(row, false)}
+              disabled={!qrEntitled}
+            >
+              <QrCode className="mr-2 h-4 w-4" />
+              Generate
+            </DropdownMenuItem>
+          )}
+
+          {canExport ? (
+            <>
+              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                Guest link
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                disabled={!storefrontEnabled}
+                onClick={() => handlePreview(row)}
+              >
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Preview guest view
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleCopyLink(row)}>
+                <Copy className="mr-2 h-4 w-4" />
+                Copy guest link
+              </DropdownMenuItem>
+
+              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                Download
+              </DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => void handleDownloadSvg(row)}>
+                <FileImage className="mr-2 h-4 w-4" />
+                SVG
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleDownloadPng(row)}>
+                <FileImage className="mr-2 h-4 w-4" />
+                PNG
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleDownloadPdf(row)}>
+                <FileText className="mr-2 h-4 w-4" />
+                PDF table tent
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handlePrintPdf(row)}>
+                <Printer className="mr-2 h-4 w-4" />
+                Print table tent
+              </DropdownMenuItem>
+            </>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
   return (
+    <>
     <Panel>
       <PanelSection
         icon={QrCode}
@@ -653,37 +1216,6 @@ export function QrTableManager({
         }
         action={
           <div className="flex min-w-0 flex-wrap gap-2">
-            {/* Segmented control → the pill rail used for tabs (DS-CTL-05).
-                The active half was `bg-primary`, which is violet, not the
-                brand blue (C5). */}
-            <div className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-muted/70 p-1 text-xs">
-              <button
-                type="button"
-                onClick={() => setBrandMode("merchant")}
-                aria-pressed={brandMode === "merchant"}
-                className={cn(
-                  "rounded-full px-3 py-1 font-medium transition-colors",
-                  brandMode === "merchant"
-                    ? "bg-background text-foreground shadow-sm ring-1 ring-border"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Merchant
-              </button>
-              <button
-                type="button"
-                onClick={() => setBrandMode("dexa")}
-                aria-pressed={brandMode === "dexa"}
-                className={cn(
-                  "rounded-full px-3 py-1 font-medium transition-colors",
-                  brandMode === "dexa"
-                    ? "bg-background text-foreground shadow-sm ring-1 ring-border"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                DEXA
-              </button>
-            </div>
             <Button
               variant="outline"
               size="sm"
@@ -716,32 +1248,50 @@ export function QrTableManager({
       >
         <div className="space-y-4">
 
-        {/* Three tinted wells → one hairline-separated StatRow (DS-CTL-07),
-            matching the figures on every other converted page. */}
+        {/* The figures double as the status filter. A merchant looking for the
+            tables still missing a code was previously reading a number that was
+            not on screen at all (it is total minus generated) and then finding
+            it in a select; the tile that states the count now applies it.
+            "Missing" replaces "Generated" as the third figure because it is the
+            actionable one — generated is still shown, as the meta under Tables. */}
         <StatRow columns={3}>
-          <StatTile label="Tables" value={snapshot?.tables.length ?? 0} />
-          <StatTile label="Generated" value={snapshot?.generatedCount ?? 0} />
-          <StatTile label="Active" value={snapshot?.activeCount ?? 0} />
+          <StatTile
+            label="Tables"
+            value={totalTables}
+            meta={`${generatedCount} generated`}
+            onClick={() => toggleStatusFilter("all")}
+            isActive={statusFilter === "all"}
+          />
+          <StatTile
+            label="Active"
+            value={activeCount}
+            meta="Scannable by guests"
+            onClick={() => toggleStatusFilter("active")}
+            isActive={statusFilter === "active"}
+          />
+          <StatTile
+            label="Missing"
+            value={missingCount}
+            meta="No code generated yet"
+            onClick={() => toggleStatusFilter("not_generated")}
+            isActive={statusFilter === "not_generated"}
+          />
         </StatRow>
 
         <div className="flex flex-col gap-4 rounded-2xl border bg-muted/40 p-4 sm:flex-row sm:items-center">
           <BrandedQrPreview value={previewQrUrl} branding={qrBranding} />
           <div className="min-w-0 space-y-1">
             <p className="text-sm font-medium">
-              {brandMode === "dexa"
-                ? "Dexa branding"
-                : hasMerchantLogo
-                  ? "Your logo and brand colours"
-                  : "Your brand colours"}
+              {hasMerchantLogo
+                ? "Your logo and brand colours"
+                : "Your brand colours"}
             </p>
             <p className="text-sm text-muted-foreground">
-              {brandMode === "dexa"
-                ? "Codes print in Dexa blue with no logo."
-                : hasMerchantLogo
-                  ? "Every download and printed table tent uses this exact artwork."
-                  : "Add a logo in Online Store settings to place it at the centre of every code."}
+              {hasMerchantLogo
+                ? "Every download and printed table tent uses this exact artwork."
+                : "Add a logo in Online Store settings to place it at the centre of every code."}
             </p>
-            {brandMode === "merchant" && hasMerchantLogo ? (
+            {hasMerchantLogo ? (
               <p className="text-xs text-muted-foreground">
                 Scan this preview with your phone before printing a full run.
               </p>
@@ -784,7 +1334,14 @@ export function QrTableManager({
             QR kill switch is active. Existing codes remain visible here, but new guest scans should fail closed until the switch is turned off.
           </div>
         ) : null}
+        </div>
+      </PanelSection>
+    </Panel>
 
+    {/* The table is deliberately outside the panel above (§5.2): the data
+        table's own `rounded-2xl bg-muted/20` container is a surface in its own
+        right, and nesting it inside a tier-1 panel draws a box inside a box. */}
+    <div className="space-y-4">
         {snapshot && !snapshot.success && snapshot.error ? (
           <div className="rounded-2xl border-0 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-none">
             {snapshot.error}
@@ -876,229 +1433,339 @@ export function QrTableManager({
           </div>
         ) : null}
 
-        {!isLoading &&
-          groupedRows.map(([zoneName, rows]) => {
-            const pageCount = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
-            const page = getZonePage(zoneName, rows.length);
-            const firstIndex = (page - 1) * ROWS_PER_PAGE;
-            const pageRows = rows.slice(firstIndex, firstIndex + ROWS_PER_PAGE);
-
-            return (
-            // Borderless: this bordered card sat inside the panel, and each of
-            // its table rows drew a third frame. With 236 tables that was a
-            // wall of nested boxes running thousands of pixels tall.
-            <div key={zoneName} className="min-w-0 space-y-3">
-              <div className="flex min-w-0 items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="font-semibold">{zoneName}</h3>
-                  <p className="text-sm text-muted-foreground tabular-nums">
-                    {rows.length} table{rows.length === 1 ? "" : "s"}
-                  </p>
-                </div>
-                <Badge variant="outline" className="shrink-0 tabular-nums">
-                  {rows.filter((row) => row.qrStatus === "active").length} active
-                </Badge>
+        {!isLoading && filteredRows.length > 0 ? (
+          <>
+            {/* Bulk bar (§5.2): ghost pills on a tinted well, count in
+                tabular-nums. At 233 tables the real jobs are "print the ones
+                that are missing" and "revoke that zone" — both were previously
+                one dropdown per table. */}
+            {selectedRows.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border-0 bg-muted/60 px-3 py-3 shadow-none">
+                <span className="px-1 text-sm font-medium tabular-nums">
+                  {selectedRows.length} selected
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 rounded-full px-3"
+                  onClick={() => void handleDownloadSelectedPdf()}
+                  disabled={busyKey !== null}
+                >
+                  {busyKey === "bulk-pdf" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="mr-2 h-4 w-4" />
+                  )}
+                  {busyKey === "bulk-pdf" && bulkProgress
+                    ? `Rendering ${bulkProgress.done} of ${bulkProgress.total}`
+                    : "Download tents as one PDF"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 rounded-full px-3"
+                  onClick={() => void handleBulkLifecycle("reprint")}
+                  disabled={busyKey !== null || !qrEntitled}
+                >
+                  {busyKey === "bulk-reprint" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  {busyKey === "bulk-reprint" && bulkProgress
+                    ? `Reprinting ${bulkProgress.done} of ${bulkProgress.total}`
+                    : "Reprint"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 rounded-full px-3 text-destructive hover:text-destructive"
+                  onClick={() => void handleBulkLifecycle("revoke")}
+                  disabled={busyKey !== null}
+                >
+                  {busyKey === "bulk-revoke" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Ban className="mr-2 h-4 w-4" />
+                  )}
+                  Revoke
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto h-8 rounded-full px-3 text-muted-foreground"
+                  onClick={() => setSelectedIds(new Set())}
+                  disabled={busyKey !== null}
+                >
+                  Clear
+                </Button>
               </div>
+            ) : null}
 
-              {/* Hairline-divided rows in a capped scroller: a zone with 236
-                  tables is now a fixed-height list instead of the page. */}
-              <div className="thin-scrollbar min-w-0 max-h-[32rem] divide-y divide-border/60 overflow-y-auto rounded-2xl border-0 bg-muted/40 px-3 shadow-none">
-                {pageRows.map((row) => {
-                  const isBusy =
-                    busyKey === `gen-${row.floorPlanObjectId}` ||
-                    busyKey === `regen-${row.floorPlanObjectId}` ||
-                    busyKey === `revoke-${row.floorPlanObjectId}`;
+            {groupedRows.map(([zoneName, rows]) => {
+              const pageCount = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+              const page = getZonePage(zoneName, rows.length);
+              const firstIndex = (page - 1) * ROWS_PER_PAGE;
+              const pageRows = rows.slice(firstIndex, firstIndex + ROWS_PER_PAGE);
+              const allOnPageSelected =
+                pageRows.length > 0 &&
+                pageRows.every((row) => selectedIds.has(row.floorPlanObjectId));
 
-                  return (
-                    <div
-                      key={row.floorPlanObjectId}
-                      className="flex min-w-0 flex-col gap-3 py-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4"
-                    >
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium">{row.tableLabel}</p>
-                          {getStatusBadge(row.qrStatus)}
-                          {row.capacity ? (
-                            <Badge variant="outline">Seats {row.capacity}</Badge>
-                          ) : null}
-                          {row.tokenVersion ? (
-                            <Badge variant="secondary">v{row.tokenVersion}</Badge>
-                          ) : null}
-                        </div>
-
-                        <div className="grid gap-1 text-sm text-muted-foreground sm:grid-cols-2 xl:grid-cols-4">
-                          <p>Scans (7d): <span className="font-medium text-foreground">{row.scanCount7d}</span></p>
-                          <p>Scans (all): <span className="font-medium text-foreground">{row.scanCountLifetime}</span></p>
-                          <p>Generated: <span className="font-medium text-foreground">{formatDateTime(row.generatedAt)}</span></p>
-                          <p>Last scanned: <span className="font-medium text-foreground">{formatDateTime(row.lastScannedAt)}</span></p>
-                        </div>
+              return (
+                <div key={zoneName} className="min-w-0 space-y-3">
+                  {/* A single zone gets no heading. 233 tables in "Unassigned"
+                      was carrying a title, a count and a badge that partitioned
+                      nothing — the heading only earns its place when there is a
+                      second zone to tell it apart from. */}
+                  {showZoneHeadings ? (
+                    <div className="flex min-w-0 items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="font-semibold">{zoneName}</h3>
+                        <p className="text-sm text-muted-foreground tabular-nums">
+                          {rows.length} table{rows.length === 1 ? "" : "s"}
+                        </p>
                       </div>
+                      <Badge
+                        variant="secondary"
+                        className="w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium tabular-nums"
+                      >
+                        {rows.filter((row) => row.qrStatus === "active").length} active
+                      </Badge>
+                    </div>
+                  ) : null}
 
-                      <div className="grid w-full grid-cols-2 gap-2 sm:w-64 lg:w-64 [&_button]:w-full [&_button]:justify-start [&_button]:px-2 [&_button]:text-xs">
-                        {row.qrStatus === "not_generated" ? (
-                          <Button
-                            size="sm"
-                            className="col-start-2"
-                            onClick={() => void handleGenerate(row, false)}
-                            disabled={busyKey !== null || !qrEntitled}
-                          >
-                            {isBusy ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <QrCode className="mr-2 h-4 w-4" />
+                  <Table
+                    variant="data"
+                    containerClassName="hidden xl:block"
+                    className="min-w-[980px]"
+                  >
+                    <TableHeader className="[&_tr]:border-0">
+                      <TableRow>
+                        <TableHead className="w-10">
+                          <Checkbox
+                            checked={allOnPageSelected}
+                            onCheckedChange={() => toggleAllSelected(pageRows)}
+                            aria-label={`Select every table shown in ${zoneName}`}
+                          />
+                        </TableHead>
+                        {/* Read left to right as three groups: which table,
+                            what state its code is in, how it is being used.
+                            Generated used to sit between the scan counts and
+                            Last scan, splitting the usage group in half with a
+                            lifecycle field. Seats is its own column so the
+                            figures line up and can be read down — inside the
+                            Table cell it neither aligned nor made sense on a
+                            table actually named "2-Person Booth". */}
+                        <SortableHead label="Table" sortKey="tableLabel" />
+                        <SortableHead
+                          label="Seats"
+                          sortKey="capacity"
+                          align="right"
+                          className="w-24"
+                        />
+                        <SortableHead
+                          label="Status"
+                          sortKey="status"
+                          className="w-40"
+                        />
+                        <SortableHead
+                          label="Generated"
+                          sortKey="generatedAt"
+                          className="w-40"
+                        />
+                        {/* Two labelled columns rather than one "Scans" cell
+                            reading "0 / 0", which gave the reader no way to
+                            know which number was which. */}
+                        <SortableHead
+                          label="Scans (7d)"
+                          sortKey="scanCount7d"
+                          align="right"
+                          className="w-28"
+                        />
+                        <SortableHead
+                          label="Scans (all)"
+                          sortKey="scanCountLifetime"
+                          align="right"
+                          className="w-28"
+                        />
+                        <SortableHead
+                          label="Last scan"
+                          sortKey="lastScannedAt"
+                          className="w-40"
+                        />
+                        <TableHead className="w-12" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pageRows.map((row) => (
+                        <TableRow key={row.floorPlanObjectId}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedIds.has(row.floorPlanObjectId)}
+                              onCheckedChange={() =>
+                                toggleRowSelected(row.floorPlanObjectId)
+                              }
+                              aria-label={`Select ${row.tableLabel}`}
+                            />
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {row.tableLabel}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {row.capacity ?? (
+                              <span className="text-muted-foreground">—</span>
                             )}
-                            Generate
-                          </Button>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void handleGenerate(row, false)}
-                              disabled={busyKey !== null || !qrEntitled}
-                            >
-                              {isBusy && busyKey?.startsWith("gen-") ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              ) : (
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                              )}
-                              Reprint
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void handleGenerate(row, true)}
-                              disabled={busyKey !== null || !qrEntitled}
-                            >
-                              {isBusy && busyKey?.startsWith("regen-") ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              ) : (
-                                <RotateCcw className="mr-2 h-4 w-4" />
-                              )}
-                              Regenerate
-                            </Button>
-                            {row.qrStatus === "active" ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void handleRevoke(row)}
-                                disabled={busyKey !== null}
+                          </TableCell>
+                          <TableCell>{getStatusBadge(row.qrStatus)}</TableCell>
+                          <TableCell
+                            className="whitespace-nowrap"
+                            title={formatDateTime(row.generatedAt)}
+                          >
+                            {formatRelative(row.generatedAt) ?? (
+                              <span className="text-muted-foreground">Never</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {row.scanCount7d}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {row.scanCountLifetime}
+                          </TableCell>
+                          <TableCell
+                            className="whitespace-nowrap"
+                            title={formatDateTime(row.lastScannedAt)}
+                          >
+                            {formatRelative(row.lastScannedAt) ?? (
+                              <span className="text-muted-foreground">Never</span>
+                            )}
+                          </TableCell>
+                          <TableCell>{renderRowActions(row)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  {/* Below xl this is a card grid, never a sideways-scrolling
+                      table (§5.3). */}
+                  <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+                    {pageRows.map((row) => {
+                      const isSelected = selectedIds.has(row.floorPlanObjectId);
+                      return (
+                        <div
+                          key={row.floorPlanObjectId}
+                          className={cn(
+                            "min-w-0 rounded-2xl border-0 p-4",
+                            isSelected ? "bg-muted ring-1 ring-border" : "bg-muted/45"
+                          )}
+                        >
+                          <div className="flex min-w-0 items-start justify-between gap-3">
+                            <div className="flex min-w-0 items-start gap-3">
+                              <Checkbox
+                                className="mt-1"
+                                checked={isSelected}
+                                onCheckedChange={() =>
+                                  toggleRowSelected(row.floorPlanObjectId)
+                                }
+                                aria-label={`Select ${row.tableLabel}`}
+                              />
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">
+                                  {row.tableLabel}
+                                </p>
+                                <div className="mt-1.5">
+                                  {getStatusBadge(row.qrStatus)}
+                                </div>
+                              </div>
+                            </div>
+                            {renderRowActions(row)}
+                          </div>
+
+                          <div className="mt-4 grid min-w-0 grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                            {/* Same order as the desktop columns, so the two
+                                layouts teach the same reading. */}
+                            <div className="min-w-0">
+                              <p className="text-muted-foreground">Seats</p>
+                              <p className="mt-0.5 tabular-nums">
+                                {row.capacity ?? "—"}
+                              </p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-muted-foreground">Generated</p>
+                              <p
+                                className="mt-0.5 truncate"
+                                title={formatDateTime(row.generatedAt)}
                               >
-                                {isBusy && busyKey?.startsWith("revoke-") ? (
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Ban className="mr-2 h-4 w-4" />
-                                )}
-                                Revoke
-                              </Button>
-                            ) : null}
-                          </>
-                        )}
-                        {row.qrStatus !== "not_generated" ? (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={!row.tableToken}
+                                {formatRelative(row.generatedAt) ?? "Never"}
+                              </p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-muted-foreground">Scans (7d)</p>
+                              <p className="mt-0.5 tabular-nums">{row.scanCount7d}</p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-muted-foreground">Scans (all)</p>
+                              <p className="mt-0.5 tabular-nums">
+                                {row.scanCountLifetime}
+                              </p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-muted-foreground">Last scan</p>
+                              <p
+                                className="mt-0.5 truncate"
+                                title={formatDateTime(row.lastScannedAt)}
                               >
-                                <Download className="mr-2 h-4 w-4" />
-                                QR assets
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-52">
-                              <DropdownMenuItem
-                                disabled={!storefrontEnabled}
-                                onClick={() => handlePreview(row)}
-                              >
-                                <ExternalLink className="mr-2 h-4 w-4" />
-                                Preview guest view
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => void handleCopyLink(row)}
-                              >
-                                <Copy className="mr-2 h-4 w-4" />
-                                Copy guest link
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => void handleDownloadSvg(row)}
-                              >
-                                <FileImage className="mr-2 h-4 w-4" />
-                                Download SVG
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => void handleDownloadPng(row)}
-                              >
-                                <FileImage className="mr-2 h-4 w-4" />
-                                Download PNG
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => void handleDownloadPdf(row)}
-                              >
-                                <FileText className="mr-2 h-4 w-4" />
-                                Download PDF Tent
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => void handlePrintPdf(row)}
-                              >
-                                <Printer className="mr-2 h-4 w-4" />
-                                Print PDF Tent
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        ) : null}
+                                {formatRelative(row.lastScannedAt) ?? "Never"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Only zones large enough to page get a pager: a six-table
+                      patio should not carry the chrome of a 233-table floor. */}
+                  {pageCount > 1 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs text-muted-foreground tabular-nums sm:text-sm">
+                        Showing {firstIndex + 1}–{firstIndex + pageRows.length} of{" "}
+                        {rows.length}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                          onClick={() => setZonePage(zoneName, page - 1)}
+                          disabled={page <= 1}
+                          aria-label={`Previous page of ${zoneName}`}
+                        >
+                          <ChevronLeft className="mr-1 h-4 w-4" />
+                          Previous
+                        </Button>
+                        <span className="text-sm text-muted-foreground tabular-nums">
+                          Page {page} of {pageCount}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                          onClick={() => setZonePage(zoneName, page + 1)}
+                          disabled={page >= pageCount}
+                          aria-label={`Next page of ${zoneName}`}
+                        >
+                          Next
+                          <ChevronRight className="ml-1 h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* Only zones large enough to page get a pager: a six-table patio
-                  should not carry the chrome of a 233-table floor. */}
-              {pageCount > 1 ? (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-sm text-muted-foreground tabular-nums">
-                    Showing {firstIndex + 1}–{firstIndex + pageRows.length} of{" "}
-                    {rows.length}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setZonePage(zoneName, page - 1)}
-                      disabled={page <= 1}
-                      aria-label={`Previous page of ${zoneName}`}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                      Previous
-                    </Button>
-                    <span className="text-sm text-muted-foreground tabular-nums">
-                      Page {page} of {pageCount}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setZonePage(zoneName, page + 1)}
-                      disabled={page >= pageCount}
-                      aria-label={`Next page of ${zoneName}`}
-                    >
-                      Next
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
-            );
-          })}
-
-        <div className="rounded-2xl border-0 bg-muted px-4 py-3 text-sm text-foreground shadow-none">
-          <p>
-            Preview and export actions now use the shared store host contract and current table token. They still need end-to-end staging scan validation before the related ticket items are safe to close.
-          </p>
-        </div>
-        </div>
-      </PanelSection>
-    </Panel>
+              );
+            })}
+          </>
+        ) : null}
+    </div>
+    </>
   );
 }
