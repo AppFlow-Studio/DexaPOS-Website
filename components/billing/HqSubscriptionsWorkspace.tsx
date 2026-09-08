@@ -18,6 +18,7 @@ import {
   FileText,
   Loader2,
   RefreshCcw,
+  ShieldCheck,
   Wallet,
 } from 'lucide-react'
 import type { MerchantDetails } from '@/types/merchant'
@@ -35,6 +36,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -78,6 +80,7 @@ import {
   getSubscriptionInvoices,
   getSubscriptionServiceAssignments,
   setMerchantSubscriptionGracePeriod,
+  setMerchantBillingExemption,
   saveAndChargeMerchantSubscription,
   type BillableServiceRecord,
   type DeviceBillingServiceMappingRecord,
@@ -576,6 +579,24 @@ export function HqSubscriptionsWorkspace({
   const activeStep = SUBSCRIPTION_STEPS[currentStep]
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
+  const [billingExemption, setBillingExemption] = useState(() => ({
+    enabled: Boolean(merchant.billing_exempt),
+    active: Boolean(merchant.billing_exempt) && (
+      !merchant.billing_exempt_expires_at ||
+      new Date(merchant.billing_exempt_expires_at).getTime() > Date.now()
+    ),
+    reason: merchant.billing_exempt_reason ?? null,
+    expiresAt: merchant.billing_exempt_expires_at ?? null,
+    grantedAt: merchant.billing_exempt_granted_at ?? null,
+    grantedBy: merchant.billing_exempt_granted_by ?? null,
+  }))
+  const [billingExemptionRequested, setBillingExemptionRequested] = useState(
+    billingExemption.active,
+  )
+  const [billingExemptionReason, setBillingExemptionReason] = useState('')
+  const [billingExemptionExpiresAt, setBillingExemptionExpiresAt] = useState(
+    billingExemption.expiresAt?.slice(0, 16) ?? '',
+  )
   const [services, setServices] = useState<BillableServiceRecord[]>([])
   const [deviceBillingMappings, setDeviceBillingMappings] = useState<DeviceBillingServiceMappingRecord[]>([])
   const [servicePlans, setServicePlans] = useState<SubscriptionPlanRecord[]>([])
@@ -627,6 +648,34 @@ export function HqSubscriptionsWorkspace({
   const [selectedMerchantTierPlanId, setSelectedMerchantTierPlanId] = useState('')
   const [merchantTierSubscriptionStatus, setMerchantTierSubscriptionStatus] = useState<'active' | 'past_due' | 'suspended' | 'cancelled'>('active')
   const [merchantTierPeriodStart, setMerchantTierPeriodStart] = useState(startOfMonthIso())
+
+  const saveBillingExemption = () => {
+    startTransition(async () => {
+      const result = await setMerchantBillingExemption({
+        merchantId: merchant.id,
+        enabled: billingExemptionRequested,
+        reason: billingExemptionReason,
+        expiresAt:
+          billingExemptionRequested && billingExemptionExpiresAt
+            ? new Date(billingExemptionExpiresAt).toISOString()
+            : null,
+      })
+      if (!result.success || !result.exemption) {
+        toast.error(result.error || 'Failed to update the billing exemption.')
+        return
+      }
+      setBillingExemption(result.exemption)
+      setBillingExemptionRequested(result.exemption.active)
+      setBillingExemptionReason('')
+      setBillingExemptionExpiresAt(result.exemption.expiresAt?.slice(0, 16) ?? '')
+      toast.success(
+        result.exemption.active
+          ? 'Billing exemption enabled. Valor charging is paused.'
+          : 'Billing exemption disabled. Normal billing will resume.',
+      )
+      refresh()
+    })
+  }
 
   const changeStep = (step: number) => {
     if (isPending || step < 0 || step >= SUBSCRIPTION_STEPS.length) return
@@ -1185,9 +1234,13 @@ export function HqSubscriptionsWorkspace({
           ? 'Subscription canceled.'
           : status === 'canceled'
             ? 'Selected services removed. Subscription remains active.'
-            : selectedLocationSubscription
-              ? 'Subscription updated and automatic payment approved.'
-              : 'Subscription created and automatic payment approved.'
+            : billingExemption.active
+              ? selectedLocationSubscription
+                ? 'Complimentary services updated without a charge.'
+                : 'Complimentary services activated without a charge.'
+              : selectedLocationSubscription
+                ? 'Subscription updated and automatic payment approved.'
+                : 'Subscription created and automatic payment approved.'
       )
 
       refresh()
@@ -1195,6 +1248,10 @@ export function HqSubscriptionsWorkspace({
   }
 
   const handleGenerateInvoice = (subscriptionId: string) => {
+    if (billingExemption.active) {
+      toast.error('Disable the merchant billing exemption before generating an invoice.')
+      return
+    }
     startTransition(async () => {
       const result = await generateSubscriptionInvoiceManually(subscriptionId, null)
       if (!result.success) {
@@ -1207,6 +1264,10 @@ export function HqSubscriptionsWorkspace({
   }
 
   const handleChargeInvoice = (invoiceId: string) => {
+    if (billingExemption.active) {
+      toast.error('This merchant is billing exempt. Existing invoices remain available for records but cannot be charged.')
+      return
+    }
     startTransition(async () => {
       const result = await chargeSubscriptionInvoiceManually(invoiceId)
       if (!result.success) {
@@ -1284,7 +1345,9 @@ export function HqSubscriptionsWorkspace({
       }
 
       toast.success(
-        result.invoiceId
+        billingExemption.active
+          ? 'Merchant tier updated under the billing exemption.'
+          : result.invoiceId
           ? 'Merchant tier updated and automatic payment approved.'
           : 'Merchant tier updated.',
       )
@@ -1488,6 +1551,72 @@ export function HqSubscriptionsWorkspace({
         </p>
       </div>
 
+      <div className="rounded-xl border border-amber-300/70 bg-amber-50/60 p-4 dark:border-amber-900 dark:bg-amber-950/20">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 text-amber-700 dark:text-amber-400" />
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-semibold">Merchant billing exemption</h2>
+                <Badge variant={billingExemption.active ? 'default' : 'secondary'}>
+                  {billingExemption.active ? 'Active' : billingExemption.enabled ? 'Expired' : 'Off'}
+                </Badge>
+              </div>
+              <p className="max-w-3xl text-sm text-muted-foreground">
+                Waives SaaS card and payment enforcement for this merchant. Plans and location add-ons must still be assigned normally, and a manual merchant suspension still blocks POS access.
+              </p>
+              {billingExemption.active && billingExemption.reason ? (
+                <p className="text-xs text-muted-foreground">
+                  Reason: {billingExemption.reason}
+                  {billingExemption.expiresAt
+                    ? ` | Expires ${new Date(billingExemption.expiresAt).toLocaleString()}`
+                    : ' | No automatic expiration'}
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="merchant-billing-exempt">Exempt from billing</Label>
+            <Switch
+              id="merchant-billing-exempt"
+              checked={billingExemptionRequested}
+              onCheckedChange={setBillingExemptionRequested}
+              disabled={isPending}
+            />
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
+          <div className="space-y-2">
+            <Label htmlFor="billing-exemption-reason">Audit reason</Label>
+            <Input
+              id="billing-exemption-reason"
+              value={billingExemptionReason}
+              onChange={(event) => setBillingExemptionReason(event.target.value)}
+              placeholder={billingExemptionRequested ? 'Internal, demo, partner, or complimentary account' : 'Why normal billing is being restored'}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="billing-exemption-expires">Optional expiration</Label>
+            <Input
+              id="billing-exemption-expires"
+              type="datetime-local"
+              value={billingExemptionExpiresAt}
+              onChange={(event) => setBillingExemptionExpiresAt(event.target.value)}
+              disabled={!billingExemptionRequested}
+            />
+          </div>
+          <Button
+            type="button"
+            variant={billingExemptionRequested ? 'default' : 'outline'}
+            onClick={saveBillingExemption}
+            disabled={isPending || billingExemptionReason.trim().length < 5}
+          >
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Apply
+          </Button>
+        </div>
+      </div>
+
       <SubscriptionCutoverReview key={merchant.id} merchantId={merchant.id} merchantRouteId={merchant.clerk_org_id || merchant.id} onPrepared={refresh} />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1625,7 +1754,9 @@ export function HqSubscriptionsWorkspace({
                       }}
                     >
                       {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Approve, charge & activate
+                      {billingExemption.active
+                        ? 'Approve complimentary tier'
+                        : 'Approve, charge & activate'}
                     </Button>
                     <Button
                       type="button"
@@ -1800,12 +1931,16 @@ export function HqSubscriptionsWorkspace({
                 <Button onClick={() => handleSaveMerchantTier()} disabled={isPending || !selectedMerchantTierPlanId}>
                   {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {merchantTierSubscriptionStatus === 'active'
-                    ? 'Save Tier & Charge'
+                    ? billingExemption.active
+                      ? 'Save Complimentary Tier'
+                      : 'Save Tier & Charge'
                     : 'Save Merchant Tier'}
                 </Button>
                 {merchantTierSubscriptionStatus === 'active' ? (
                   <span className="text-xs text-muted-foreground">
-                    The prior tier remains unchanged unless Valor approves the automatic charge.
+                    {billingExemption.active
+                      ? 'The tier is assigned without an invoice or Valor charge while the exemption is active.'
+                      : 'The prior tier remains unchanged unless Valor approves the automatic charge.'}
                   </span>
                 ) : null}
               </div>
@@ -2216,7 +2351,12 @@ export function HqSubscriptionsWorkspace({
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedBillingProfile ? (
+                {billingExemption.active ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="default">Complimentary</Badge>
+                    <span>No card or charge is required while the exemption is active.</span>
+                  </div>
+                ) : selectedBillingProfile ? (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Badge variant="default">Valor ready</Badge>
                     <span>An active vaulted Valor billing card is available.</span>
@@ -2266,21 +2406,27 @@ export function HqSubscriptionsWorkspace({
                 disabled={
                   isPending ||
                   !selectedLocation ||
-                  (status === 'active' && !selectedBillingProfile)
+                  (status === 'active' && !selectedBillingProfile && !billingExemption.active)
                 }
               >
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {status === 'active'
-                  ? selectedLocationSubscription
-                    ? 'Save & Charge'
-                    : 'Create & Charge'
+                  ? billingExemption.active
+                    ? selectedLocationSubscription
+                      ? 'Save Complimentary Services'
+                      : 'Create Complimentary Services'
+                    : selectedLocationSubscription
+                      ? 'Save & Charge'
+                      : 'Create & Charge'
                   : selectedLocationSubscription
                     ? 'Save Changes'
                     : 'Create Subscription'}
               </Button>
               {status === 'active' ? (
                 <span className="text-xs text-muted-foreground">
-                  Valor must approve the automatic charge before these services become active.
+                  {billingExemption.active
+                    ? 'Services activate without an invoice or payment while the exemption is active.'
+                    : 'Valor must approve the automatic charge before these services become active.'}
                 </span>
               ) : null}
             </div>
@@ -2383,7 +2529,9 @@ export function HqSubscriptionsWorkspace({
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <Button type="button" className="sm:flex-1" disabled={isPending || request.status === 'processing'} onClick={() => handleServiceRequestDecision(request, 'approved')}>
-                        Approve, charge & activate
+                        {billingExemption.active
+                          ? 'Approve complimentary service'
+                          : 'Approve, charge & activate'}
                       </Button>
                       <Button type="button" variant="outline" className="sm:flex-1" disabled={isPending || request.status === 'processing'} onClick={() => handleServiceRequestDecision(request, 'denied')}>
                         Deny request
@@ -2806,7 +2954,7 @@ export function HqSubscriptionsWorkspace({
               <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  disabled={!selectedLocationSubscription || isPending}
+                  disabled={!selectedLocationSubscription || isPending || billingExemption.active}
                   onClick={() => selectedLocationSubscription && handleGenerateInvoice(selectedLocationSubscription.id)}
                 >
                   Generate Invoice
@@ -3135,7 +3283,7 @@ export function HqSubscriptionsWorkspace({
                               size="sm"
                               variant="outline"
                               onClick={() => handleChargeInvoice(invoice.id)}
-                              disabled={isPending}
+                              disabled={isPending || billingExemption.active}
                             >
                               {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                               Charge

@@ -11059,6 +11059,11 @@ export type Database = {
       merchants: {
         Row: {
           activated_at: string | null
+          billing_exempt: boolean
+          billing_exempt_expires_at: string | null
+          billing_exempt_granted_at: string | null
+          billing_exempt_granted_by: string | null
+          billing_exempt_reason: string | null
           business_address_line1: string | null
           business_address_line2: string | null
           business_city: string | null
@@ -11093,6 +11098,11 @@ export type Database = {
         }
         Insert: {
           activated_at?: string | null
+          billing_exempt?: boolean
+          billing_exempt_expires_at?: string | null
+          billing_exempt_granted_at?: string | null
+          billing_exempt_granted_by?: string | null
+          billing_exempt_reason?: string | null
           business_address_line1?: string | null
           business_address_line2?: string | null
           business_city?: string | null
@@ -11127,6 +11137,11 @@ export type Database = {
         }
         Update: {
           activated_at?: string | null
+          billing_exempt?: boolean
+          billing_exempt_expires_at?: string | null
+          billing_exempt_granted_at?: string | null
+          billing_exempt_granted_by?: string | null
+          billing_exempt_reason?: string | null
           business_address_line1?: string | null
           business_address_line2?: string | null
           business_city?: string | null
@@ -25282,6 +25297,10 @@ export type Database = {
           success: boolean
         }[]
       }
+      advance_billing_exempt_subscription: {
+        Args: { p_as_of_date?: string; p_subscription_id: string }
+        Returns: Json
+      }
       advance_course:
         | {
             Args: {
@@ -28062,6 +28081,10 @@ export type Database = {
         Args: { p_merchant_id: string }
         Returns: boolean
       }
+      is_merchant_billing_exempt: {
+        Args: { p_merchant_id: string }
+        Returns: boolean
+      }
       is_merchant_owner: { Args: { p_merchant_id: string }; Returns: boolean }
       is_order_reportable:
         | {
@@ -29660,6 +29683,16 @@ export type Database = {
           p_quantity: number
         }
         Returns: undefined
+      }
+      set_merchant_billing_exemption: {
+        Args: {
+          p_actor_user_id?: string
+          p_enabled: boolean
+          p_expires_at?: string
+          p_merchant_id: string
+          p_reason: string
+        }
+        Returns: Json
       }
       set_modifier_group_snooze_v1: {
         Args: {

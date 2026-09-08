@@ -161,6 +161,45 @@ and restoration.
 Dexa does not retry invoices that already belong to a native Valor schedule. This
 prevents Valor and Dexa from charging the same invoice twice.
 
+## Merchant Billing Exemption
+
+HQ can mark an internal, demo, partner, or complimentary merchant as billing
+exempt from `/manage/subscriptions/[merchantId]`. A reason is mandatory and an
+expiration is optional.
+
+- The exemption covers the merchant tier and every location subscription.
+- Plans, add-ons, and quantities must still be assigned normally. The flag does
+  not grant features.
+- No card, invoice, charge, retry, failed-payment escalation, or overdue
+  suspension is created while the exemption is active.
+- Existing valid billing-profile links are preserved for later use; a new
+  complimentary subscription may be created without a card.
+- Billing periods are advanced without accumulating charges that become due
+  after the exemption ends.
+- Existing invoices remain visible for audit history but cannot be charged.
+- Canceled subscriptions and a manually suspended merchant remain blocked.
+- Active Valor recurring schedules must be paused before HQ can enable the flag.
+- Enabling/disabling the exemption is written to the billing audit log with the
+  actor, reason, timestamp, and optional expiration.
+
+After the exemption expires or HQ disables it, normal billing resumes on the
+next billing cycle. A card must exist before creating or reactivating paid
+subscriptions.
+
+### Exemption rollout
+
+1. Apply `20260908130000_merchant_billing_exemption.sql` after
+   `20260908120000_saas_admin_access_entitlements_and_authorizations.sql`.
+2. Deploy `billing-charge-subscription`, `billing-generate-monthly-invoices`,
+   `billing-handle-failure`, `billing-suspend-overdue`, and `valor-webhook`.
+3. Regenerate `app/database.types.ts` from the deployed Supabase schema and
+   confirm it matches the checked-in contract.
+4. Run the billing exemption QA below before enabling it for a real merchant.
+
+The migration and Edge Function source being merged does not mean either one is
+deployed. Existing Valor schedules must be reachable when HQ first enables an
+exemption because the website pauses each schedule before saving the flag.
+
 ## Additional Station Conflict
 
 The current merchant tier cards are:
@@ -211,6 +250,17 @@ must not be treated as the same thing.
 - Verify a failed payment becomes `past_due`.
 - Verify successful recovery restores the invoice and subscription state.
 
+### Billing exemption
+
+- Enable the exemption with a reason and no card, then assign a tier and a
+  location add-on; verify both activate without an invoice or charge.
+- Verify an unassigned add-on remains unavailable.
+- Verify Location A assignments do not appear at Location B.
+- Verify existing invoices can be viewed/downloaded but not charged.
+- Cancel a subscription and manually suspend the merchant; verify both still
+  block access.
+- Set an expiration, pass it, and verify normal card/payment enforcement resumes.
+
 ## Main Code Areas
 
 - `app/manage/actions/subscription-billing.ts`
@@ -219,4 +269,8 @@ must not be treated as the same thing.
 - `app/dashboard/subscriptions/page.tsx`
 - `supabase/functions/billing-charge-subscription/index.ts`
 - `supabase/functions/billing-generate-monthly-invoices/index.ts`
+- `supabase/functions/billing-handle-failure/index.ts`
+- `supabase/functions/billing-suspend-overdue/index.ts`
+- `supabase/functions/valor-webhook/index.ts`
+- `supabase/migrations/20260908130000_merchant_billing_exemption.sql`
 - `supabase/migrations/20260830130000_valor_saas_billing_lifecycle.sql`
