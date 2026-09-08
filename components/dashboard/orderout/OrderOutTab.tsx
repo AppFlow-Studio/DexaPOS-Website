@@ -1,6 +1,8 @@
 "use client";
 
-import { Panel, PanelSection } from "@/components/dashboard/shell";
+import { useState } from "react";
+import Link from "next/link";
+import { Panel, PanelSection, StatRow, StatTile } from "@/components/dashboard/shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,24 +13,39 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import Image from "next/image";
 import {
   CheckCircle2,
   Circle,
   ExternalLink,
+  Loader2,
   Plug,
   Plus,
+  Star,
   UtensilsCrossed,
   ShoppingBag,
-  RefreshCw,
-  Package,
 } from "lucide-react";
 import {
-  useOrderOutSyncedMenus,
   useRecentOrderOutOrders,
   useOnboardOrderOut,
   useOrderOutWebhookHealth,
+  useLocationOnlineMenu,
+  usePublishOnlineMenu,
+  usePushMenuToChannels,
+  usePushChannelsLiveStatus,
 } from "@/app/dashboard/online-ordering/hooks/useOrderOutStatus";
+import {
+  useOrderOutMenuSync,
+  useMenuPayloadDiff,
+} from "@/app/dashboard/hooks/useOrderOutMenuSync";
 import { OrderOutOnboardingForm, type OnboardingFormData } from "./OrderOutOnboardingForm";
 import type {
   OrderOutLocationStatus,
@@ -39,11 +56,27 @@ import {
   formatRelativeTime,
 } from "@/lib/orderout/helpers";
 import { getChannelLabel, getChannelLogo } from "@/lib/orderout/platform";
-import { PushChannelsRowAction } from "./PushChannelsRowAction";
-import { PushChannelsCard } from "./PushChannelsCard";
 import { PushChannelsHistoryCard } from "./PushChannelsHistoryCard";
 import { ChannelSelfConfirmCard } from "./ChannelSelfConfirmCard";
 import { TestOrderCard } from "./TestOrderCard";
+import { MenuChannelsCard } from "./MenuChannelsCard";
+import {
+  MenuSyncHistoryTable,
+  MenuSyncPayloadPreview,
+} from "./MenuSyncHistory";
+import { OnlineMenuControlCard } from "@/components/dashboard/menu/menuId/MenuOrderOutTab";
+import { OrderOutLiveMenuCheck } from "@/components/dashboard/menu/menuId/OrderOutLiveMenuCheck";
+import {
+  SyncStatusBadge,
+  formatTimeAgo,
+} from "@/components/dashboard/menu/menuId/OrderOutMenuStatus";
+
+/** The location's designated online menu, as returned by useLocationOnlineMenu. */
+type LocationOnlineMenu = {
+  primaryMenuId: string | null;
+  primaryMenuName: string | null;
+  linkedMenuIds: string[];
+};
 
 // ============================================================================
 // Types
@@ -117,20 +150,6 @@ function getPlatformStyle(platform: string): { color: string; bg: string } {
   }
 }
 
-function getSyncStatusBadge(status: string | null) {
-  switch (status) {
-    case "success":
-      return <Badge variant="default" className="bg-green-600">In Sync</Badge>;
-    case "failed":
-      return <Badge variant="destructive">Failed</Badge>;
-    case "pending":
-    case "syncing":
-      return <Badge variant="secondary">Syncing...</Badge>;
-    default:
-      return <Badge variant="outline">Unknown</Badge>;
-  }
-}
-
 function getAcceptStatusBadge(status: string) {
   switch (status) {
     case "accepted":
@@ -159,17 +178,15 @@ export function OrderOutTab({
   locationName,
   locationDefaults,
 }: OrderOutTabProps) {
-  const { data: syncedMenusData } = useOrderOutSyncedMenus(clerkOrgId, locationId);
+  const { data: onlineMenu } = useLocationOnlineMenu(clerkOrgId, locationId);
   const { data: recentOrdersData } = useRecentOrderOutOrders(clerkOrgId, locationId);
   const { data: webhookHealthData } = useOrderOutWebhookHealth(clerkOrgId, locationId);
-  const syncedMenus = syncedMenusData?.data || [];
   const recentOrders = recentOrdersData?.data || [];
   const webhookHealth = webhookHealthData?.data ?? null;
 
   // Union: webhook-verified ∪ merchant self-confirmed.
-  // This one derivation unlocks every downstream gate — Setup Progress, the
-  // Connected Channels grid, PushChannelsRowAction, and PushChannelsCard all
-  // receive the union and treat it as "connected".
+  // This one derivation unlocks every downstream gate — Setup Progress and the
+  // Connected Channels grid both receive the union and treat it as "connected".
   const verified = extractConnectedPlatforms(orderOutStatus?.connectedChannels);
   const confirmed = (orderOutStatus?.channelsConfirmedByMerchant ?? []).map(
     (c) => c.toUpperCase()
@@ -183,7 +200,8 @@ export function OrderOutTab({
   const hasAccount = !!orderOutStatus?.hasAccount;
   const hasRestaurant = !!orderOutStatus?.hasRestaurant;
   const hasChannels = channels.length > 0;
-  const hasSyncedMenus = syncedMenus.length > 0;
+  // A linked menu IS a synced menu — the online-menu link is created on push.
+  const hasSyncedMenus = (onlineMenu?.linkedMenuIds.length ?? 0) > 0;
   const allSetupDone = hasAccount && hasRestaurant && hasChannels && hasSyncedMenus;
 
   // ── Not onboarded: show CTA or form ──
@@ -415,74 +433,14 @@ export function OrderOutTab({
         </PanelSection>
       </Panel>
 
-      {/* C. Synced Menus */}
-      <Panel>
-        <PanelSection
-          icon={RefreshCw}
-          label="Synced menus"
-          caption="Menus pushed to OrderOut for delivery platforms."
-        >
-          {syncedMenus.length === 0 ? (
-            <div className="flex flex-col items-center py-6 text-center">
-              <Package className="h-8 w-8 text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground">
-                No menus synced yet. Go to a menu&apos;s OrderOut tab to push it.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-            <Table className="min-w-[760px]">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Menu Name</TableHead>
-                  <TableHead>OrderOut Menu ID</TableHead>
-                  <TableHead>Last Synced</TableHead>
-                  <TableHead className="text-right">Items</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {syncedMenus.map((menu) => (
-                  <TableRow key={menu.menuId}>
-                    <TableCell className="font-medium">{menu.menuName}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground font-mono">
-                      {menu.ooMenuId}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {menu.lastPushedAt ? formatRelativeTime(menu.lastPushedAt) : "Never"}
-                    </TableCell>
-                    <TableCell className="text-right">{menu.itemsSynced}</TableCell>
-                    <TableCell>{getSyncStatusBadge(menu.lastSyncStatus)}</TableCell>
-                    <TableCell className="text-right">
-                      <PushChannelsRowAction
-                        clerkOrgId={clerkOrgId}
-                        locationId={locationId}
-                        menuId={menu.menuId}
-                        menuName={menu.menuName}
-                        ooMenuId={menu.ooMenuId}
-                        connectedChannels={channels}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            </div>
-          )}
-        </PanelSection>
-      </Panel>
-
-      {/* C2. Push to Channels + History */}
-      <PushChannelsCard
+      {/* C. The single online menu — publish control + full insights, scoped to
+          the ONE designated online menu. Replaces the old multi-menu synced-menus
+          table + "Push All Menus" controls: OrderOut serves one menu per store. */}
+      <OnlineMenuSection
         clerkOrgId={clerkOrgId}
         locationId={locationId}
-        syncedMenus={syncedMenus}
-        connectedChannels={channels}
-        isOnboarded={isOnboarded}
+        onlineMenu={onlineMenu ?? null}
       />
-
-      <PushChannelsHistoryCard clerkOrgId={clerkOrgId} locationId={locationId} />
 
       {/* D. Recent Orders */}
       <Panel>
@@ -599,6 +557,253 @@ function SetupStep({
           </a>
         </Button>
       )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Online Menu Section (internal)
+// ----------------------------------------------------------------------------
+// The location tab's single, focused view of the ONE designated online menu.
+// All insight surfaces (control card, verify-sync widget, channel push, sync
+// stats/history, payload preview) are scoped to `primaryMenuId`, reusing the
+// same components the per-menu editor tab renders. There is deliberately no
+// menu picker or "push all menus" here — OrderOut serves one menu per store.
+// ============================================================================
+
+function OnlineMenuSection({
+  clerkOrgId,
+  locationId,
+  onlineMenu,
+}: {
+  clerkOrgId: string;
+  locationId: string;
+  onlineMenu: LocationOnlineMenu | null;
+}) {
+  const primaryMenuId = onlineMenu?.primaryMenuId ?? null;
+  const primaryMenuName = onlineMenu?.primaryMenuName ?? null;
+  const linkedMenuIds = onlineMenu?.linkedMenuIds ?? [];
+
+  const { data: syncResult, refetch } = useOrderOutMenuSync(
+    clerkOrgId,
+    locationId,
+    primaryMenuId ?? undefined,
+  );
+  const { data: diffResult } = useMenuPayloadDiff(
+    clerkOrgId,
+    locationId,
+    primaryMenuId ?? "",
+  );
+  const publishMutation = usePublishOnlineMenu(clerkOrgId);
+  const pushChannelsMutation = usePushMenuToChannels(clerkOrgId);
+  const [activeSyncId, setActiveSyncId] = useState<string | null>(null);
+  const channelsLive = usePushChannelsLiveStatus(clerkOrgId, activeSyncId);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const syncStatus = syncResult?.data ?? null;
+  const lastSync = syncStatus?.lastSync;
+  const ooMenuId = syncStatus?.ooMenuId ?? null;
+  const syncHistory = syncStatus?.syncHistory ?? [];
+  const platformStatuses = syncStatus?.platformStatuses ?? [];
+  const connectedChannels = syncStatus?.connectedChannels ?? [];
+
+  const diffData = diffResult?.data ?? null;
+  const hasChanges = diffData?.hasChanges ?? false;
+  const isNewMenu = diffData?.isNewMenu ?? false;
+  const itemCount = diffData?.currentItemCount ?? lastSync?.itemsSynced ?? 0;
+
+  const handlePushChannels = () => {
+    if (!primaryMenuId) return;
+    pushChannelsMutation.mutate(
+      { clerkOrgId, menuId: primaryMenuId, locationId },
+      {
+        onSuccess: (res) => {
+          if (res.success && res.data?.syncId) setActiveSyncId(res.data.syncId);
+        },
+      },
+    );
+  };
+
+  // No designateMenuId: publishOnlineMenu always resolves to the location's ONE
+  // online menu server-side, so a non-online menu can never be pushed here.
+  const runPublish = () => {
+    publishMutation.mutate({ locationId }, { onSuccess: () => refetch() });
+    setConfirmOpen(false);
+  };
+
+  // No menu linked yet — publishing is a per-menu choice, so send them there.
+  if (!primaryMenuId && linkedMenuIds.length === 0) {
+    return (
+      <Panel>
+        <PanelSection
+          icon={UtensilsCrossed}
+          label="Online menu"
+          caption="OrderOut serves one menu per store. Choose which menu handles online orders to manage it and see its insights here."
+        >
+          <div className="flex flex-col items-start gap-3 py-1">
+            <p className="text-sm text-muted-foreground">
+              No menu has been published to OrderOut yet. Open a menu&apos;s
+              OrderOut tab to make it your online menu.
+            </p>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/dashboard/menu">Go to Menus</Link>
+            </Button>
+          </div>
+        </PanelSection>
+      </Panel>
+    );
+  }
+
+  // Menus are linked but none is flagged as THE online menu yet. One button
+  // converges the state (the server flags the resolved menu primary) — no picker.
+  if (!primaryMenuId) {
+    return (
+      <Panel className="border-0 bg-blue-50/60 dark:bg-blue-950/20">
+        <PanelSection
+          icon={Star}
+          label="Choose your online menu"
+          caption="OrderOut serves one menu per store. Publish now to lock in your online menu, then manage it and view insights here."
+        >
+          <Button onClick={runPublish} disabled={publishMutation.isPending}>
+            {publishMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Star className="mr-2 h-4 w-4" />
+            )}
+            Publish my online menu
+          </Button>
+        </PanelSection>
+      </Panel>
+    );
+  }
+
+  // Happy path: the ONE online menu, with full insights.
+  return (
+    <div className="space-y-6">
+      <OnlineMenuControlCard
+        state="this"
+        thisMenuName={primaryMenuName ?? "Your online menu"}
+        onlineMenuHref={primaryMenuId ? `/dashboard/menu/${primaryMenuId}` : null}
+        primaryMenuName={primaryMenuName}
+        itemCount={itemCount}
+        hasChanges={hasChanges}
+        isNewMenu={isNewMenu}
+        isPublishing={publishMutation.isPending}
+        onPublish={() => setConfirmOpen(true)}
+        onMakeOnline={() => setConfirmOpen(true)}
+      />
+
+      <OrderOutLiveMenuCheck clerkOrgId={clerkOrgId} locationId={locationId} />
+
+      <MenuChannelsCard
+        ooMenuId={ooMenuId}
+        platformStatuses={platformStatuses}
+        connectedChannels={connectedChannels}
+        onPush={handlePushChannels}
+        isPushing={pushChannelsMutation.isPending}
+        live={channelsLive.data?.data ?? null}
+      />
+
+      <Panel>
+        <PanelSection
+          label={
+            primaryMenuName
+              ? `Sync status · ${primaryMenuName}`
+              : "Sync status"
+          }
+          action={<SyncStatusBadge lastSync={lastSync ?? null} />}
+        >
+          <StatRow columns={3}>
+            <StatTile
+              label="Last Synced"
+              value={
+                lastSync?.completedAt
+                  ? formatTimeAgo(lastSync.completedAt)
+                  : "Never"
+              }
+            />
+            <StatTile
+              label="Items Synced"
+              value={lastSync?.itemsSynced ?? 0}
+              meta={
+                (lastSync?.itemsFailed ?? 0) > 0 ? (
+                  <span className="text-destructive">
+                    {lastSync?.itemsFailed} failed
+                  </span>
+                ) : undefined
+              }
+            />
+            <StatTile label="Total Syncs" value={syncStatus?.totalSyncs ?? 0} />
+          </StatRow>
+
+          <div className="mt-6 flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">OrderOut Menu ID</span>
+            {ooMenuId ? (
+              <code className="rounded-full bg-muted/60 px-2.5 py-0.5 font-mono text-xs">
+                {ooMenuId}
+              </code>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+          </div>
+        </PanelSection>
+      </Panel>
+
+      <MenuSyncHistoryTable syncHistory={syncHistory} />
+
+      <PushChannelsHistoryCard
+        clerkOrgId={clerkOrgId}
+        locationId={locationId}
+        menuId={primaryMenuId}
+      />
+
+      <MenuSyncPayloadPreview
+        syncHistory={syncHistory}
+        menuName={primaryMenuName ?? "Online menu"}
+      />
+
+      {/* Publish confirmation — names the exact menu + item count so the
+          merchant sees precisely what customers will get. */}
+      <Dialog
+        open={confirmOpen}
+        onOpenChange={(open) => !open && setConfirmOpen(false)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Publish your online menu?</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Publishing your online menu:{" "}
+                  <span className="font-semibold text-foreground">
+                    {primaryMenuName ?? "your online menu"}
+                  </span>{" "}
+                  — <span className="font-semibold text-foreground">{itemCount} items</span>.
+                </p>
+                <p>
+                  This is exactly what customers see on your online store and
+                  connected delivery apps (Uber Eats, DoorDash, Grubhub).
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmOpen(false)}
+              disabled={publishMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button onClick={runPublish} disabled={publishMutation.isPending}>
+              {publishMutation.isPending ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : null}
+              Publish
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

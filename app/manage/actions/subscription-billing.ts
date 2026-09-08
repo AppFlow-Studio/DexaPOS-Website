@@ -3166,6 +3166,8 @@ export async function saveAndChargeMerchantSubscription(
   subscriptionId?: string
   invoiceId?: string
   transactionId?: string | null
+  queuedForNextCycle?: boolean
+  message?: string
   error?: string
 }> {
   await assertHQPermission('system.billing.manage')
@@ -3339,6 +3341,50 @@ export async function saveAndChargeMerchantSubscription(
 
   if (targetStatus !== 'active') {
     return { success: true, subscriptionId }
+  }
+
+  // Don't double-charge a period that's already been paid. If the current
+  // billing period already has a paid invoice, save the updated configuration
+  // and let the change bill on the next cycle (next month's recurring invoice
+  // reads the current assignments) instead of charging the card again now.
+  const { data: currentPeriodRow } = await serviceRole
+    .from('merchant_subscriptions')
+    .select('current_period_start')
+    .eq('id', subscriptionId)
+    .maybeSingle()
+  const currentPeriodStart =
+    currentPeriodRow?.current_period_start ??
+    previousSubscription?.current_period_start ??
+    null
+  if (currentPeriodStart) {
+    const { data: paidThisPeriod } = await serviceRole
+      .from('subscription_invoices')
+      .select('id')
+      .eq('subscription_id', subscriptionId)
+      .eq('billing_period_start', currentPeriodStart)
+      .eq('status', 'paid')
+      .limit(1)
+      .maybeSingle()
+    if (paidThisPeriod?.id) {
+      // Already paid this period — activate the saved config now and defer the
+      // charge to the next billing cycle (no card charge today).
+      await serviceRole
+        .from('merchant_subscriptions')
+        .update({ status: 'active', updated_at: new Date().toISOString() })
+        .eq('id', subscriptionId)
+
+      revalidatePath('/manage/subscriptions')
+      revalidatePath(`/manage/subscriptions/${params.merchantId}`)
+      revalidatePath('/dashboard/subscriptions')
+
+      return {
+        success: true,
+        subscriptionId,
+        queuedForNextCycle: true,
+        message:
+          'This period is already paid — the updated services are saved and will be billed on the next cycle. No charge was made today.',
+      }
+    }
   }
 
   const invoiceResult = await generateSubscriptionInvoiceManually(

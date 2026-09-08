@@ -108,6 +108,12 @@ import {
 import { downloadSubscriptionInvoicePdf } from '@/lib/subscription-billing/invoice-pdf'
 import { getMerchantTierPresentation } from '@/lib/subscription-billing/merchant-tier-presentation'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
+import { MerchantBillingSection } from '@/app/manage/merchants/[merchantId]/components/subscription/MerchantBillingSection'
+import { LocationBillingList } from '@/app/manage/merchants/[merchantId]/components/subscription/LocationBillingList'
+import { LocationsWithoutSubscription } from '@/app/manage/merchants/[merchantId]/components/subscription/LocationsWithoutSubscription'
+import { ReviewChangesSection } from '@/app/manage/merchants/[merchantId]/components/subscription/ReviewChangesSection'
+import { BillingHistorySection } from '@/app/manage/merchants/[merchantId]/components/subscription/BillingHistorySection'
+import { Pencil } from 'lucide-react'
 
 type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'suspended' | 'canceled'
 type ServiceFormState = Record<string, { enabled: boolean; quantity: string }>
@@ -533,9 +539,8 @@ interface HqSubscriptionsWorkspaceProps {
 }
 
 const SUBSCRIPTION_STEPS = [
-  { id: 'tier', title: 'Merchant Tier', description: 'Review or change the plan for this merchant.' },
-  { id: 'catalog', title: 'Pricing & Device Mapping', description: 'Review shared pricing and device mappings. Continue if the existing setup is correct.' },
-  { id: 'locations', title: 'Location Add-ons', description: 'Choose a location, configure its services, and review the amount before saving.' },
+  { id: 'tier', title: 'Merchant Tier', description: 'Confirm the merchant-wide tier (auto-set by active locations) and merchant unlocks.' },
+  { id: 'locations', title: 'Location Add-ons', description: 'Choose a location, set its stations, devices, and features, and review the amount before saving.' },
   { id: 'billing', title: 'Billing Review', description: 'Review invoices and payment results for the selected location.' },
 ] as const
 
@@ -571,6 +576,7 @@ export function HqSubscriptionsWorkspace({
   merchant,
   canManageBilling,
 }: HqSubscriptionsWorkspaceProps) {
+  const [mode, setMode] = useState<'overview' | 'edit'>('overview')
   const [currentStep, setCurrentStep] = useState(0)
   const stepHeadingRef = useRef<HTMLHeadingElement>(null)
   const activeStep = SUBSCRIPTION_STEPS[currentStep]
@@ -583,6 +589,7 @@ export function HqSubscriptionsWorkspace({
   const [invoices, setInvoices] = useState<SubscriptionInvoiceRecord[]>([])
   const [subscriptionServiceMap, setSubscriptionServiceMap] = useState<Record<string, SubscriptionServiceAssignmentRecord[]>>({})
   const [billingProfilesByLocation, setBillingProfilesByLocation] = useState<Record<string, MerchantBillingProfileRecord>>({})
+  const [allBillingProfiles, setAllBillingProfiles] = useState<MerchantBillingProfileRecord[]>([])
   const [serviceFormState, setServiceFormState] = useState<ServiceFormState>({})
   const [selectedServicePlanId, setSelectedServicePlanId] = useState('')
   const [servicePlanForm, setServicePlanForm] = useState<ServicePlanFormState>(() => planToFormState(null))
@@ -722,6 +729,48 @@ export function HqSubscriptionsWorkspace({
       issueCount,
     }
   }, [sortedLocations.length, subscriptions])
+
+  // Overview-mode derivations (read-only): location-scoped subscriptions, the
+  // locations that still need one, and the merchant-level billing card.
+  const locationSubscriptions = useMemo(
+    () =>
+      subscriptions
+        .filter(
+          (subscription) =>
+            subscriptionBillingScope(subscription.metadata) === 'location' &&
+            subscription.status !== 'canceled',
+        )
+        .sort((a, b) => (a.location_name || '').localeCompare(b.location_name || '')),
+    [subscriptions],
+  )
+
+  const locationsWithoutSub = useMemo(() => {
+    const withSub = new Set(locationSubscriptions.map((subscription) => subscription.location_id))
+    return sortedLocations
+      .filter((location) => !withSub.has(location.id))
+      .map((location) => ({ id: location.id, name: location.name }))
+  }, [locationSubscriptions, sortedLocations])
+
+  const merchantCardProfile = useMemo(() => {
+    const cards = allBillingProfiles.filter(
+      (profile) => profile.billing_method === 'card' && profile.is_active,
+    )
+    return (
+      cards.find((profile) => profile.location_id === null && profile.is_primary) ??
+      cards.find((profile) => profile.is_primary) ??
+      cards[0] ??
+      null
+    )
+  }, [allBillingProfiles])
+
+  const startEdit = (locationId?: string) => {
+    if (locationId) {
+      setSelectedLocationId(locationId)
+      const locationsStep = SUBSCRIPTION_STEPS.findIndex((step) => step.id === 'locations')
+      if (locationsStep >= 0) setCurrentStep(locationsStep)
+    }
+    setMode('edit')
+  }
 
   const filteredInvoices = useMemo(
     () => invoices.filter((invoice) => !selectedLocation || invoice.location_id === selectedLocation.id),
@@ -941,6 +990,7 @@ export function HqSubscriptionsWorkspace({
         setInvoices(nextInvoices)
         setSubscriptionServiceMap(nextAssignmentMap)
         setBillingProfilesByLocation(nextBillingProfilesByLocation)
+        setAllBillingProfiles(billingProfiles)
         setMerchantTierPlans(nextMerchantTierPlans)
         setMerchantTierStatus(nextMerchantTierStatus)
         setMerchantTierSubscription(nextMerchantTierSubscription)
@@ -1177,6 +1227,15 @@ export function HqSubscriptionsWorkspace({
 
       if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
         toast.error(subscriptionResult.error || 'Failed to save and charge subscription.')
+        return
+      }
+
+      if (subscriptionResult.queuedForNextCycle) {
+        toast.success(
+          subscriptionResult.message ||
+            'This period is already paid — the change is saved and bills on the next cycle. No charge was made today.'
+        )
+        refresh()
         return
       }
 
@@ -1517,7 +1576,86 @@ export function HqSubscriptionsWorkspace({
         </Card>
       </div>
 
+      {mode === 'overview' && (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Read-only overview. Use{' '}
+              <span className="font-medium text-foreground">Edit billing</span> to change the tier,
+              location add-ons, or run a charge.
+            </p>
+            <Button onClick={() => startEdit()}>
+              <Pencil className="mr-1.5 h-4 w-4" />
+              Edit billing
+            </Button>
+          </div>
+
+          <MerchantBillingSection
+            tierStatus={merchantTierStatus}
+            tierSubscription={merchantTierSubscription}
+            cardProfile={merchantCardProfile}
+          />
+
+          {locationSubscriptions.length > 0 && (
+            <LocationBillingList
+              subscriptions={locationSubscriptions}
+              assignmentsBySubscription={subscriptionServiceMap}
+              billingProfilesByLocation={billingProfilesByLocation}
+            />
+          )}
+
+          <LocationsWithoutSubscription locations={locationsWithoutSub} onSetup={startEdit} />
+
+          <ReviewChangesSection
+            pendingTierRequest={pendingMerchantTierRequest}
+            onApproveTier={() =>
+              pendingMerchantTierRequest &&
+              handleSaveMerchantTier(
+                pendingMerchantTierRequest.requested_plan_id,
+                'active',
+                pendingMerchantTierRequest.id,
+              )
+            }
+            onDenyTier={handleDenyMerchantTierRequest}
+            tierNote={merchantTierDecisionNote}
+            onTierNoteChange={setMerchantTierDecisionNote}
+            pendingServiceRequests={pendingServiceRequests}
+            onServiceDecision={handleServiceRequestDecision}
+            serviceNotes={serviceDecisionNotes}
+            onServiceNoteChange={(id, value) =>
+              setServiceDecisionNotes((current) => ({ ...current, [id]: value }))
+            }
+            pendingHardwareRequests={pendingHardwareRequests}
+            onHardwareDecision={handleHardwareRequestDecision}
+            hardwareNotes={hardwareDecisionNotes}
+            onHardwareNoteChange={(id, value) =>
+              setHardwareDecisionNotes((current) => ({ ...current, [id]: value }))
+            }
+            isBusy={isPending}
+          />
+
+          <BillingHistorySection
+            invoices={invoices}
+            invoiceActionId={invoiceActionId}
+            isBusy={isPending}
+            onPreview={handlePreviewInvoice}
+            onDownload={handleDownloadInvoice}
+            onCharge={handleChargeInvoice}
+          />
+        </div>
+      )}
+
+      {mode === 'edit' && (
       <div className="space-y-6">
+        <div className="flex items-center justify-between gap-3">
+          <Button variant="ghost" size="sm" onClick={() => setMode('overview')}>
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            Back to overview
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/manage/settings/billing-catalog">Manage global pricing</Link>
+          </Button>
+        </div>
         <div className="space-y-5 rounded-2xl border bg-card p-4 sm:p-6">
           <ol aria-label="Subscription setup progress" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {SUBSCRIPTION_STEPS.map((step, index) => (
@@ -1816,386 +1954,6 @@ export function HqSubscriptionsWorkspace({
         </section>
         )}
 
-        {activeStep.id === 'catalog' && (
-        <section aria-labelledby="subscription-step-heading" className="space-y-6">
-          <Card>
-        <CardHeader>
-          <CardTitle>Billing Catalog Controls</CardTitle>
-          <CardDescription>
-            Configure reusable plan prices, billable services, and device-to-service mappings. Changes affect future
-            calculations; existing invoice snapshots remain unchanged.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-6 xl:grid-cols-2">
-          <div className="min-w-0 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="font-medium">Service Billing Plan</div>
-                <p className="text-xs text-muted-foreground">
-                  Base station price, included stations, extra-station price, and card surcharge.
-                </p>
-              </div>
-              <Badge variant={servicePlanForm.isActive ? 'default' : 'secondary'}>
-                {servicePlanForm.isActive ? 'Active' : 'Inactive'}
-              </Badge>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Plan</Label>
-                <Select value={selectedServicePlanId} onValueChange={setSelectedServicePlanId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select plan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {servicePlans.map((plan) => (
-                      <SelectItem key={plan.id} value={plan.id}>
-                        {plan.display_name} ({plan.plan_code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Plan Code</Label>
-                <Input
-                  value={servicePlanForm.planCode}
-                  onChange={(event) => setServicePlanForm((current) => ({ ...current, planCode: event.target.value }))}
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>Display Name</Label>
-                <Input
-                  value={servicePlanForm.displayName}
-                  onChange={(event) => setServicePlanForm((current) => ({ ...current, displayName: event.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>First Station Price</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={servicePlanForm.basePriceMonthly}
-                  onChange={(event) =>
-                    setServicePlanForm((current) => ({ ...current, basePriceMonthly: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Included Stations</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="1"
-                  value={servicePlanForm.includedStations}
-                  onChange={(event) =>
-                    setServicePlanForm((current) => ({ ...current, includedStations: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Additional Station Price</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={servicePlanForm.perExtraStationPrice}
-                  onChange={(event) =>
-                    setServicePlanForm((current) => ({ ...current, perExtraStationPrice: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Card Surcharge %</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.01"
-                  value={servicePlanForm.cardSurchargePct}
-                  onChange={(event) =>
-                    setServicePlanForm((current) => ({ ...current, cardSurchargePct: event.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={servicePlanForm.isActive}
-                onCheckedChange={(checked) =>
-                  setServicePlanForm((current) => ({ ...current, isActive: Boolean(checked) }))
-                }
-              />
-              Active plan
-            </label>
-
-            <Button onClick={handleSaveServicePlan} disabled={isPending}>
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Plan Pricing
-            </Button>
-          </div>
-
-          <div className="min-w-0 space-y-4 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="font-medium">Billable Services & Add-ons</div>
-                <p className="text-xs text-muted-foreground">
-                  Edit POS tablet, KDS, online ordering, loyalty, delivery integration, franchise, and future services.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSelectedCatalogServiceId('')
-                  setBillableServiceForm(serviceToFormState(null))
-                }}
-              >
-                New Service
-              </Button>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Service</Label>
-                <Select value={selectedCatalogServiceId} onValueChange={setSelectedCatalogServiceId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {services.map((service) => (
-                      <SelectItem key={service.id} value={service.id}>
-                        {service.display_name} ({service.service_code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Service Code</Label>
-                <Input
-                  value={billableServiceForm.serviceCode}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, serviceCode: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>Display Name</Label>
-                <Input
-                  value={billableServiceForm.displayName}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, displayName: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select
-                  value={billableServiceForm.serviceCategory}
-                  onValueChange={(value) =>
-                    setBillableServiceForm((current) => ({
-                      ...current,
-                      serviceCategory: value as BillableServiceRecord['service_category'],
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hardware">Hardware</SelectItem>
-                    <SelectItem value="software">Software</SelectItem>
-                    <SelectItem value="service">Service</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Pricing Model</Label>
-                <Select
-                  value={billableServiceForm.pricingModel}
-                  onValueChange={(value) =>
-                    setBillableServiceForm((current) => ({
-                      ...current,
-                      pricingModel: value as BillableServiceRecord['pricing_model'],
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="flat">Flat</SelectItem>
-                    <SelectItem value="per_unit">Per unit</SelectItem>
-                    <SelectItem value="tiered">Tiered</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Base Monthly Price</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={billableServiceForm.basePriceMonthly}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, basePriceMonthly: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Additional Unit Price</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={billableServiceForm.additionalUnitPrice}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, additionalUnitPrice: event.target.value }))
-                  }
-                  placeholder="Only for tiered pricing"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Included Quantity</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="1"
-                  value={billableServiceForm.includedQuantity}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, includedQuantity: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Unit Label</Label>
-                <Input
-                  value={billableServiceForm.unitLabel}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, unitLabel: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Card Surcharge %</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.01"
-                  value={billableServiceForm.cardSurchargePct}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, cardSurchargePct: event.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={billableServiceForm.isActive}
-                onCheckedChange={(checked) =>
-                  setBillableServiceForm((current) => ({ ...current, isActive: Boolean(checked) }))
-                }
-              />
-              Active service
-            </label>
-
-            <Button onClick={handleSaveBillableService} disabled={isPending}>
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Service Pricing
-            </Button>
-          </div>
-
-          <div className="space-y-4 border-t pt-6 xl:col-span-2">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="font-medium">Device Billing Mappings</div>
-                <p className="text-xs text-muted-foreground">
-                  Controls which deployed device categories automatically adjust billable service quantities.
-                </p>
-              </div>
-              <Badge variant={deviceMappingForm.isActive ? 'default' : 'secondary'}>
-                {deviceMappingForm.isActive ? 'Active mapping' : 'Inactive mapping'}
-              </Badge>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Device Category</Label>
-                <Select
-                  value={deviceMappingForm.deviceCategory}
-                  onValueChange={(value) => {
-                    setSelectedDeviceMappingCategory(value)
-                    setDeviceMappingForm((current) => ({ ...current, deviceCategory: value }))
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BILLABLE_DEVICE_CATEGORIES.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category.replace(/_/g, ' ')}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>Billable Service</Label>
-                <Select
-                  value={deviceMappingForm.serviceCode}
-                  onValueChange={(value) =>
-                    setDeviceMappingForm((current) => ({ ...current, serviceCode: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select billable service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {services.map((service) => (
-                      <SelectItem key={service.id} value={service.service_code}>
-                        {service.display_name} ({service.service_code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={deviceMappingForm.isActive}
-                  onCheckedChange={(checked) =>
-                    setDeviceMappingForm((current) => ({ ...current, isActive: Boolean(checked) }))
-                  }
-                />
-                Active mapping
-              </label>
-              <div className="text-xs text-muted-foreground">
-                Device assignment sync recalculates subscription quantities after deployed device changes.
-              </div>
-            </div>
-
-            <Button
-              onClick={handleSaveDeviceBillingMapping}
-              disabled={isPending || !deviceMappingForm.serviceCode}
-            >
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Device Mapping
-            </Button>
-          </div>
-        </CardContent>
-          </Card>
-        </section>
-        )}
-
         {activeStep.id === 'locations' && (
         <section aria-labelledby="subscription-step-heading" className="space-y-6">
           <Card>
@@ -2285,7 +2043,11 @@ export function HqSubscriptionsWorkspace({
               ) : null}
             </div>
 
-            <div className="grid gap-4 border-t pt-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] md:items-end">
+            <details className="border-t pt-4">
+              <summary className="cursor-pointer list-none text-sm font-medium text-muted-foreground hover:text-foreground">
+                Advanced — grace period &amp; billing exceptions
+              </summary>
+              <div className="mt-3 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] md:items-end">
               <div className="space-y-2">
                 <Label htmlFor="billing-grace-until">Grace period until</Label>
                 <Input
@@ -2327,6 +2089,7 @@ export function HqSubscriptionsWorkspace({
                 ) : null}
               </div>
             </div>
+            </details>
           </div>
           <CardDescription>
             The first available location is loaded automatically. Services below show both currently subscribed items
@@ -3161,6 +2924,7 @@ export function HqSubscriptionsWorkspace({
           <SubscriptionStepNavigation step={currentStep} disabled={isPending || isLoading} onChange={changeStep} />
         </div>
       </div>
+      )}
 
       <Dialog open={isInvoicePreviewOpen} onOpenChange={setIsInvoicePreviewOpen}>
         <DialogContent className="max-w-5xl">
