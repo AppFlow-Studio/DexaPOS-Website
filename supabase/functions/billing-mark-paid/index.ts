@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js'
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
+import { notifySubscriptionRestored } from '../_shared/subscription-restoration-notifications.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -103,6 +104,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
           source: 'billing-mark-paid',
         },
       })
+      try {
+        await notifySubscriptionRestored({ supabase, invoiceId: invoice.id })
+      } catch (notificationError) {
+        console.error('[billing-mark-paid] Restoration notification error:', notificationError)
+      }
     }
 
     await supabase.rpc('log_subscription_billing_event', {

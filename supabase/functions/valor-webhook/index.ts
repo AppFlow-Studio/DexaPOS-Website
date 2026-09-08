@@ -15,6 +15,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js'
 import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
+import { notifySubscriptionRestored } from '../_shared/subscription-restoration-notifications.ts'
 import { isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope.ts'
 
 const VALOR_WEBHOOK_SECRET = Deno.env.get('VALOR_WEBHOOK_SECRET') ?? ''
@@ -476,6 +477,13 @@ Deno.serve(async (req) => {
           p_changes: { restored_by_valor_webhook: true },
           p_metadata: { processor: 'valor', transaction_id: transactionId || null },
         })
+        if (invoice?.id) {
+          try {
+            await notifySubscriptionRestored({ supabase: supabase!, invoiceId: invoice.id })
+          } catch (notificationError) {
+            console.error('[valor-webhook] Restoration notification error:', notificationError)
+          }
+        }
       }
     } else {
       if (invoice) {

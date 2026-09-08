@@ -183,3 +183,26 @@ export async function sendSubscriptionPaymentFailedEmail(params: {
     html,
   )
 }
+
+export async function sendSubscriptionRestoredEmail(params: {
+  to: string
+  merchantName: string
+  locationName: string
+  invoiceNumber: string
+  totalAmount: number
+}): Promise<void> {
+  if (!hasEmailConfig()) throw new Error('RESEND_API_KEY is not configured')
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#111827;">
+      <h2 style="margin-bottom:8px;">Subscription billing restored</h2>
+      <p>The outstanding payment for <strong>${escapeHtml(params.merchantName)}</strong> was collected successfully.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;">Location</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;">${escapeHtml(params.locationName)}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;">Invoice</td><td style="padding:8px 0;border-bottom:1px solid #e5e7eb;text-align:right;">${escapeHtml(params.invoiceNumber)}</td></tr>
+        <tr><td style="padding:8px 0;font-weight:700;">Amount paid</td><td style="padding:8px 0;text-align:right;font-weight:700;">${formatUsd(params.totalAmount)}</td></tr>
+      </table>
+      <p style="color:#4b5563;font-size:14px;">The subscription is current again. Any billing suspension is being removed automatically.</p>
+    </div>
+  `
+  await sendEmail(params.to, `Dexa subscription restored - ${params.invoiceNumber}`, html)
+}
