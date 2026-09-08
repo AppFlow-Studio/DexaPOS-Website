@@ -11,6 +11,7 @@ const foundation = read('supabase/migrations/20260507150000_subscription_billing
 const services = read('supabase/migrations/20260508173000_subscription_billing_service_catalog.sql')
 const access = read('supabase/migrations/20260713130000_hq_billing_device_bridge_and_access_gates.sql')
 const migration = read('supabase/migrations/20260906120000_separate_subscription_billing_scopes.sql')
+const completion = read('supabase/migrations/20260908120000_saas_admin_access_entitlements_and_authorizations.sql')
 const table = (sql, name) => {
   const start = sql.indexOf(`create table if not exists public.${name} (`)
   assert(start >= 0)
@@ -29,7 +30,7 @@ const rejects = async (sql, args, message) => {
 }
 try {
   await db.exec(`
-    create role authenticated; create role service_role;
+    create role anon; create role authenticated; create role service_role;
     create schema auth;
     create function auth.jwt() returns jsonb language sql as $$select '{"role":"service_role"}'::jsonb$$;
     create function public.is_dexapos_admin() returns boolean language sql as $$select true$$;
@@ -47,7 +48,11 @@ try {
   await db.exec(table(foundation, 'subscription_plans'))
   await db.exec('alter table subscription_plans add column plan_scope text, add column monthly_price_cents integer default 0')
   await db.exec(table(foundation, 'merchant_subscriptions'))
-  await db.exec('alter table merchant_subscriptions add column processor_subscription_id text, add column processor_subscription_status text, add column processor_next_payment_at timestamptz')
+  await db.exec(`alter table merchant_subscriptions
+    add column processor_subscription_id text,
+    add column processor_subscription_status text,
+    add column processor_next_payment_at timestamptz,
+    add column grace_period_ends_at timestamptz`)
   await db.exec(table(foundation, 'subscription_invoices'))
   await db.exec(table(services, 'billable_services'))
   await db.exec(table(services, 'merchant_subscription_services'))
@@ -222,5 +227,63 @@ try {
   await rejects('select * from list_merchant_subscriptions(null)',[],/Unauthorized/)
   await rejects('select resolve_subscription_billing_profile($1,$2,$3,null)',[merchant,a,'location'],/Only HQ\/system/)
   await assert.rejects(upsert('location',a,locationPlan,aCard),/Only HQ/); checks++
+
+  await db.exec(`
+    create or replace function public.is_dexapos_admin() returns boolean language sql as $$select true$$;
+    create or replace function auth.jwt() returns jsonb language sql as $$select '{"role":"service_role"}'::jsonb$$;
+    create function auth.role() returns text language sql as $$select 'service_role'::text$$;
+    alter table merchants add column onboarding_status text default 'active';
+    create function public.user_merchant_id() returns uuid language sql as $$select null::uuid$$;
+    create function public.is_merchant_admin(uuid) returns boolean language sql as $$select false$$;
+    create function public.hq_has_permission(text) returns boolean language sql as $$select true$$;
+    create function public.update_updated_at_column() returns trigger language plpgsql as $$begin new.updated_at=now(); return new; end$$;
+    create table public.app_notifications(id uuid primary key default gen_random_uuid());
+    create table public.merchant_plan_subscriptions(
+      id uuid primary key default gen_random_uuid(), merchant_id uuid not null references merchants,
+      plan_id uuid not null references subscription_plans, status text not null default 'active',
+      current_period_start date, current_period_end date, created_at timestamptz default now(), updated_at timestamptz default now()
+    );
+  `)
+  await db.exec(completion)
+  checks++
+
+  const accessMerchant = await scalar('insert into merchants(id,onboarding_status) values(gen_random_uuid(),\'active\') returning id')
+  const accessA = await scalar('insert into locations(id,merchant_id,created_at) values(gen_random_uuid(),$1,\'2026-01-01\') returning id',[accessMerchant])
+  const accessB = await scalar('insert into locations(id,merchant_id,created_at) values(gen_random_uuid(),$1,\'2026-02-01\') returning id',[accessMerchant])
+  const accessCard = await scalar('insert into merchant_billing_profiles(id,merchant_id,location_id) values(gen_random_uuid(),$1,$2) returning id',[accessMerchant,accessA])
+  await db.query("insert into merchant_plan_subscriptions(merchant_id,plan_id,status) values($1,$2,'active')",[accessMerchant,tierPlan])
+  const accessTier = await scalar(`insert into merchant_subscriptions(merchant_id,location_id,plan_id,current_period_start,current_period_end,next_billing_date,monthly_amount,billing_profile_id,metadata)
+    values($1,$2,$3,'2026-09-01','2026-09-30','2026-10-01',99.99,$4,'{"billing_scope":"merchant_tier"}') returning id`,[accessMerchant,accessA,tierPlan,accessCard])
+  const accessLocation = await scalar(`insert into merchant_subscriptions(merchant_id,location_id,plan_id,current_period_start,current_period_end,next_billing_date,monthly_amount,billing_profile_id,metadata)
+    values($1,$2,$3,'2026-09-01','2026-09-30','2026-10-01',25,$4,'{"billing_scope":"location"}') returning id`,[accessMerchant,accessA,locationPlan,accessCard])
+  const accessStationA = await scalar('insert into stations(location_id) values($1) returning id',[accessA])
+  const accessStationB = await scalar('insert into stations(location_id) values($1) returning id',[accessB])
+  check((await scalar('select get_subscription_access_state($1,$2)',[accessMerchant,accessA])).allowed === true)
+  await db.query("update merchant_subscriptions set status='past_due' where id=$1",[accessTier])
+  const graceAccess = await scalar('select get_subscription_access_state($1,$2)',[accessMerchant,accessA])
+  check(graceAccess.allowed === true && graceAccess.status === 'past_due_grace')
+  check(await scalar('select status from merchant_plan_subscriptions where merchant_id=$1',[accessMerchant]) === 'past_due')
+  await db.query("update merchant_subscriptions set status='suspended' where id=$1",[accessTier])
+  check(await scalar('select is_active from stations where id=$1',[accessStationA]) === false)
+  check(await scalar('select is_active from stations where id=$1',[accessStationB]) === false)
+  check((await scalar('select get_subscription_access_state($1,$2)',[accessMerchant,accessB])).allowed === false)
+  await db.query("update merchant_subscriptions set status='active' where id=$1",[accessTier])
+  check(await scalar('select is_active from stations where id=$1',[accessStationA]) === true)
+  check(await scalar('select is_active from stations where id=$1',[accessStationB]) === true)
+  await db.query("update merchant_subscriptions set status='suspended' where id=$1",[accessLocation])
+  check(await scalar('select is_active from stations where id=$1',[accessStationA]) === false)
+  check(await scalar('select is_active from stations where id=$1',[accessStationB]) === true)
+  check((await scalar('select get_subscription_access_state($1,$2)',[accessMerchant,accessA])).allowed === false)
+  check((await scalar('select get_subscription_access_state($1,$2)',[accessMerchant,accessB])).allowed === true)
+
+  const authRequest = await scalar(`insert into subscription_service_requests(
+    merchant_id,location_id,service_id,merchant_name_snapshot,location_name_snapshot,service_name_snapshot,
+    requested_by,authorization_reference,authorization_accepted,
+    authorization_accepted_at,authorization_terms_version,authorization_text,authorized_subtotal,
+    authorized_card_surcharge,authorized_total,authorized_billing_cadence)
+    values($1,$2,$3,'Merchant','Location A','Service','user','AUTH-TEST',true,now(),'v1','Accepted',10,0.4,10.4,'monthly_recurring') returning id`,
+    [accessMerchant,accessA,service])
+  await rejects('update subscription_service_requests set authorized_total=12 where id=$1',[authRequest],/immutable/)
+  await rejects('delete from subscription_service_requests where id=$1',[authRequest],/cannot be deleted/)
   console.log(`PASS: ${checks} isolated PostgreSQL billing-scope checks`)
 } finally { await db.close() }

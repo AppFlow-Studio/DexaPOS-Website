@@ -285,6 +285,47 @@ export interface MerchantTierPlanRequestRecord {
   reviewed_by: string | null
   decision_note: string | null
   applied_subscription_id: string | null
+  authorization_reference: string | null
+  authorization_accepted_at: string | null
+  authorization_terms_version: string | null
+  authorization_text: string | null
+  authorized_price_cents: number | null
+  authorized_billing_cadence: string | null
+  authorization_ip_address: string | null
+  authorization_user_agent: string | null
+}
+
+export interface MerchantServiceRequestRecord {
+  id: string
+  request_number: string
+  merchant_id: string
+  location_id: string
+  location_name: string
+  service_id: string
+  service_code: string
+  service_name: string
+  merchant_name_snapshot: string
+  location_name_snapshot: string
+  service_name_snapshot: string
+  requested_quantity: number
+  requested_by: string
+  requested_by_email: string | null
+  status: 'pending' | 'processing' | 'approved' | 'denied' | 'cancelled'
+  authorization_reference: string
+  authorization_accepted_at: string
+  authorization_terms_version: string
+  authorization_text: string
+  authorized_subtotal: number
+  authorized_card_surcharge: number
+  authorized_total: number
+  authorized_billing_cadence: 'monthly_recurring' | 'one_time'
+  authorization_ip_address: string | null
+  authorization_user_agent: string | null
+  requested_at: string
+  reviewed_at: string | null
+  reviewed_by: string | null
+  decision_note: string | null
+  applied_subscription_id: string | null
 }
 
 export interface MerchantHardwareRequestRecord {
@@ -1452,6 +1493,17 @@ export async function getPendingMerchantTierRequest(
     reviewed_by: request.reviewed_by ?? null,
     decision_note: request.decision_note ?? null,
     applied_subscription_id: request.applied_subscription_id ?? null,
+    authorization_reference: request.authorization_reference ?? null,
+    authorization_accepted_at: request.authorization_accepted_at ?? null,
+    authorization_terms_version: request.authorization_terms_version ?? null,
+    authorization_text: request.authorization_text ?? null,
+    authorized_price_cents:
+      request.authorized_price_cents === null
+        ? null
+        : Number(request.authorized_price_cents),
+    authorized_billing_cadence: request.authorized_billing_cadence ?? null,
+    authorization_ip_address: request.authorization_ip_address ?? null,
+    authorization_user_agent: request.authorization_user_agent ?? null,
   }
 }
 
@@ -1619,6 +1671,259 @@ export async function denyMerchantTierPlanRequest(
   }
 
   return { success: true }
+}
+
+export async function getPendingMerchantServiceRequests(
+  merchantId: string,
+  includeClosed = false,
+): Promise<MerchantServiceRequestRecord[]> {
+  await assertHQPermission('system.billing.manage')
+  const serviceRole = createServiceRoleClient() as any
+  let query = serviceRole
+    .from('subscription_service_requests')
+    .select(`
+      *,
+      locations!inner(name),
+      billable_services!inner(service_code, display_name)
+    `)
+    .eq('merchant_id', merchantId)
+    .order('created_at', { ascending: false })
+  if (!includeClosed) query = query.in('status', ['pending', 'processing'])
+  const { data, error } = await query
+
+  if (error) {
+    console.error('[getPendingMerchantServiceRequests] lookup failed:', error)
+    throw new Error('Failed to load pending add-on requests.')
+  }
+
+  return (data ?? []).map((request: any) => ({
+    id: request.id,
+    request_number: request.request_number,
+    merchant_id: request.merchant_id,
+    location_id: request.location_id,
+    location_name: request.location_name_snapshot ?? (Array.isArray(request.locations)
+      ? request.locations[0]?.name ?? 'Unknown location'
+      : request.locations?.name ?? 'Unknown location'),
+    service_id: request.service_id,
+    service_code: Array.isArray(request.billable_services)
+      ? request.billable_services[0]?.service_code ?? ''
+      : request.billable_services?.service_code ?? '',
+    service_name: request.service_name_snapshot ?? (Array.isArray(request.billable_services)
+      ? request.billable_services[0]?.display_name ?? 'Paid add-on'
+      : request.billable_services?.display_name ?? 'Paid add-on'),
+    merchant_name_snapshot: request.merchant_name_snapshot,
+    location_name_snapshot: request.location_name_snapshot,
+    service_name_snapshot: request.service_name_snapshot,
+    requested_quantity: Number(request.requested_quantity ?? 1),
+    requested_by: request.requested_by,
+    requested_by_email: request.requested_by_email ?? null,
+    status: request.status,
+    authorization_reference: request.authorization_reference,
+    authorization_accepted_at: request.authorization_accepted_at,
+    authorization_terms_version: request.authorization_terms_version,
+    authorization_text: request.authorization_text,
+    authorized_subtotal: Number(request.authorized_subtotal ?? 0),
+    authorized_card_surcharge: Number(request.authorized_card_surcharge ?? 0),
+    authorized_total: Number(request.authorized_total ?? 0),
+    authorized_billing_cadence: request.authorized_billing_cadence,
+    authorization_ip_address: request.authorization_ip_address ?? null,
+    authorization_user_agent: request.authorization_user_agent ?? null,
+    requested_at: request.created_at,
+    reviewed_at: request.reviewed_at ?? null,
+    reviewed_by: request.reviewed_by ?? null,
+    decision_note: request.decision_note ?? null,
+    applied_subscription_id: request.applied_subscription_id ?? null,
+  }))
+}
+
+export async function reviewMerchantServiceRequest(params: {
+  requestId: string
+  decision: 'approved' | 'denied'
+  decisionNote?: string
+}): Promise<{ success: boolean; notificationWarning?: string; error?: string }> {
+  const { userId } = await assertHQPermission('system.billing.manage')
+  const serviceRole = createServiceRoleClient() as any
+  const { data: request, error: requestError } = await serviceRole
+    .from('subscription_service_requests')
+    .select('*, locations!inner(name), billable_services!inner(service_code, display_name)')
+    .eq('id', params.requestId)
+    .maybeSingle()
+
+  if (requestError || !request) {
+    return { success: false, error: 'Add-on request not found.' }
+  }
+  if (!['pending', 'processing'].includes(request.status)) {
+    return { success: false, error: `Request ${request.request_number} is no longer pending.` }
+  }
+  if (request.status === 'processing') {
+    return {
+      success: false,
+      error: `Request ${request.request_number} has an unconfirmed payment attempt and requires billing reconciliation before retrying.`,
+    }
+  }
+
+  const service = Array.isArray(request.billable_services)
+    ? request.billable_services[0]
+    : request.billable_services
+  const location = Array.isArray(request.locations)
+    ? request.locations[0]
+    : request.locations
+  const note = params.decisionNote?.trim() || null
+  const now = new Date().toISOString()
+
+  if (params.decision === 'approved') {
+    const claim = await serviceRole
+      .from('subscription_service_requests')
+      .update({ status: 'processing', reviewed_by: userId, reviewed_at: now, decision_note: note })
+      .eq('id', request.id)
+      .eq('status', 'pending')
+      .select('id')
+      .maybeSingle()
+    if (claim.error || !claim.data) {
+      return { success: false, error: 'Another HQ user is already reviewing this request.' }
+    }
+
+    const [subscriptionResult, planResult] = await Promise.all([
+      serviceRole
+        .from('merchant_subscriptions')
+        .select('*')
+        .eq('merchant_id', request.merchant_id)
+        .eq('location_id', request.location_id)
+        .contains('metadata', { billing_scope: 'location' })
+        .neq('status', 'canceled')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      serviceRole
+        .from('subscription_plans')
+        .select('id')
+        .eq('plan_code', 'SERVICE_CATALOG')
+        .maybeSingle(),
+    ])
+    if (subscriptionResult.error || planResult.error || !planResult.data) {
+      await serviceRole.from('subscription_service_requests').update({ status: 'pending' }).eq('id', request.id)
+      return { success: false, error: 'Failed to load the location billing subscription.' }
+    }
+
+    const subscription = subscriptionResult.data
+    const assignmentsResult = subscription?.id
+      ? await serviceRole
+          .from('merchant_subscription_services')
+          .select('service_id, quantity, is_enabled, metadata')
+          .eq('subscription_id', subscription.id)
+      : { data: [], error: null }
+    if (assignmentsResult.error) {
+      await serviceRole.from('subscription_service_requests').update({ status: 'pending' }).eq('id', request.id)
+      return { success: false, error: 'Failed to load the current add-on assignments.' }
+    }
+
+    const assignments = (assignmentsResult.data ?? [])
+      .filter((assignment: any) => assignment.service_id !== request.service_id)
+      .map((assignment: any) => ({
+        serviceId: assignment.service_id,
+        quantity: Number(assignment.quantity ?? 1),
+        enabled: Boolean(assignment.is_enabled),
+        metadata: assignment.metadata ?? {},
+      }))
+    assignments.push({
+      serviceId: request.service_id,
+      quantity: Number(request.requested_quantity ?? 1),
+      enabled: true,
+      metadata: {
+        source: 'merchant_authorized_addon_request',
+        authorization_reference: request.authorization_reference,
+        request_id: request.id,
+      },
+    })
+
+    const today = new Date()
+    const periodStart = subscription?.current_period_start ?? today.toISOString().slice(0, 10)
+    const nextMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 1))
+    const periodEnd = subscription?.current_period_end ?? new Date(nextMonth.getTime() - 86_400_000).toISOString().slice(0, 10)
+    const nextBillingDate = subscription?.next_billing_date ?? nextMonth.toISOString().slice(0, 10)
+    const saveResult = await saveAndChargeMerchantSubscription({
+      subscriptionId: subscription?.id,
+      merchantId: request.merchant_id,
+      locationId: request.location_id,
+      planId: subscription?.plan_id ?? planResult.data.id,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+      nextBillingDate,
+      status: 'active',
+      billingProfileId: subscription?.billing_profile_id ?? null,
+      services: assignments,
+      metadata: {
+        ...(subscription?.metadata ?? {}),
+        billing_scope: 'location',
+        approved_service_request_id: request.id,
+      },
+    })
+
+    if (!saveResult.success || !saveResult.subscriptionId) {
+      await serviceRole
+        .from('subscription_service_requests')
+        .update({ status: 'pending', reviewed_by: null, reviewed_at: null, decision_note: saveResult.error ?? null })
+        .eq('id', request.id)
+      return { success: false, error: saveResult.error || 'The add-on could not be activated.' }
+    }
+
+    const updateResult = await serviceRole
+      .from('subscription_service_requests')
+      .update({
+        status: 'approved', reviewed_by: userId, reviewed_at: now,
+        decision_note: note, applied_subscription_id: saveResult.subscriptionId,
+      })
+      .eq('id', request.id)
+      .eq('status', 'processing')
+      .select('id')
+      .maybeSingle()
+    if (updateResult.error || !updateResult.data) {
+      return { success: false, error: 'The add-on was charged, but the request status could not be finalized.' }
+    }
+  } else {
+    const updateResult = await serviceRole
+      .from('subscription_service_requests')
+      .update({ status: 'denied', reviewed_by: userId, reviewed_at: now, decision_note: note })
+      .eq('id', request.id)
+      .eq('status', 'pending')
+      .select('id')
+      .maybeSingle()
+    if (updateResult.error || !updateResult.data) {
+      return { success: false, error: 'The request changed before it could be denied.' }
+    }
+  }
+
+  const [merchantResult, billingProfileResult] = await Promise.all([
+    serviceRole.from('merchants').select('name, owner_email, clerk_org_id').eq('id', request.merchant_id).maybeSingle(),
+    serviceRole.from('merchant_billing_profiles').select('billing_email')
+      .eq('merchant_id', request.merchant_id).eq('is_primary', true).eq('is_active', true)
+      .order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+  ])
+  const decisionLabel = params.decision === 'approved' ? 'approved and activated' : 'not approved'
+  const body = `Your request for ${service?.display_name ?? 'a paid add-on'} at ${location?.name ?? 'your location'} was ${decisionLabel}.${note ? ` Note: ${note}` : ''}`
+  const inApp = await createAppNotification({
+    audience: 'merchant', merchantId: request.merchant_id,
+    notificationType: `subscription_service_request_${params.decision}`,
+    title: `Add-on request ${request.request_number} ${params.decision}`,
+    body, href: '/dashboard/subscriptions', actorUserId: userId,
+    subscriptionServiceRequestId: request.id,
+    metadata: { service_id: request.service_id, location_id: request.location_id },
+  })
+  const recipient = billingProfileResult.data?.billing_email?.trim() || merchantResult.data?.owner_email?.trim() || ''
+  let emailFailed = false
+  if (recipient) {
+    const email = await sendEmail(recipient, `DEXA add-on request ${params.decision}`,
+      buildEmailTemplate('DEXA POS', 'Paid add-on request update', body))
+    emailFailed = 'error' in email
+  }
+
+  revalidatePath('/manage/subscriptions')
+  revalidatePath(`/manage/subscriptions/${merchantResult.data?.clerk_org_id ?? request.merchant_id}`)
+  revalidatePath('/dashboard/subscriptions')
+  const notificationWarning = inApp.error || emailFailed
+    ? 'The decision was saved, but one or more merchant notifications could not be confirmed.'
+    : undefined
+  return { success: true, notificationWarning }
 }
 
 export async function getPendingMerchantHardwareRequests(
@@ -2156,7 +2461,7 @@ export async function upsertMerchantTierSubscription(
     success: true,
     subscriptionId: result.data.id as string,
     invoiceId: synced.invoiceId,
-    anchorLocationId: synced.anchorLocationId,
+    anchorLocationId: synced.anchorLocationId ?? undefined,
     notificationWarning,
   }
 }
