@@ -1,5 +1,6 @@
 "use server";
 
+import { grantsAllMerchantLocations } from "@/lib/auth/merchant-location-access";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { LocationsModel } from "@/types/db-modles";
 import { GetUserRole } from "@/utils/get-user-role";
@@ -63,12 +64,13 @@ export async function GetLocations(clerkOrgId: string, user_id: string) {
 
   const userRole = await GetUserRoleInMerchant(clerkOrgId, user_id);
 
-  // Check for owner or admin roles to grant full access
-  const isOwnerOrAdmin =
-    userRole?.role === "merchant.owner" ||
-    userRole?.role === "merchant.admin" ||
-    userRole?.role === "org:admin" ||
-    userRole?.role === "admin";
+  // Check for owner or admin roles to grant full access.
+  //
+  // The rule lives in `lib/auth/merchant-location-access.ts` rather than here,
+  // because `user_location_ids()` in SQL has to answer the same question and
+  // the two used to disagree — the picker offered locations RLS then refused,
+  // and screens showed an empty list instead of an access error.
+  const isOwnerOrAdmin = grantsAllMerchantLocations(userRole?.role);
 
   if (isOwnerOrAdmin) {
     const { data: locations, error: locationsError } = await supabase
@@ -89,11 +91,18 @@ export async function GetLocations(clerkOrgId: string, user_id: string) {
   // Then get locations for this merchant
 
   // Check the locations this user has in the merchant organization
+  // `is_active` matters here for the same reason it matters in
+  // `user_location_ids()`, which is what RLS and every reservations/orders RPC
+  // actually gate on: an inactive membership is a revoked one. Without this
+  // filter the picker offered branches the data layer then refused, and the
+  // screen showed "0 bookings" rather than "you do not have access" — a false
+  // answer dressed as a real one.
   const { data: userLocations, error: userLocationsError } = await supabase
     .from("location_members")
     .select("*")
     .eq("user_id", user_id)
-    .eq("merchant_id", merchant.id);
+    .eq("merchant_id", merchant.id)
+    .eq("is_active", true);
 
   if (userLocationsError) {
     console.error(

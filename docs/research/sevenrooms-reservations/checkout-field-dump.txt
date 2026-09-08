@@ -1,0 +1,30 @@
+button(button)[dt=back-button] :: Go back to the previous step
+button(button)[dt=forward-button] :: 
+label[dt=firstName-label] :: First Name *
+input(text)[dt=sr-reservation-first-name] :: First Name
+label[dt=lastName-label] :: Last Name *
+input(text)[dt=sr-reservation-last-name] :: Last Name
+label[dt=emailAddress-label] :: Email Address *
+input(email)[dt=sr-reservation-email-address] :: Email Address
+label[dt=phoneNumber-label] :: Phone Number *
+button(button)[dt=select-country-button] :: Select country
+input(tel)[dt=sr-reservation-phone-number] :: Phone Number
+label[dt=birthdayDay-label] :: Birthday
+input(text)[dt=birthdayMonth] :: mm
+input(text)[dt=birthdayDay] :: dd
+input(hidden) :: 
+button(button)[dt=special-occasion-tags-toggle] :: Expand Is this a Special Occasion?
+button(button)[dt=client-dietary-preference-tags-toggle] :: Expand Do you have any dietary restrictions?
+button(button)[dt=party-dietary-preference-tags-toggle] :: Expand Does your party have any dietary restrictions?
+button(button)[dt=guest-preferences-other-info-toggle] :: Expand Anything else we should know?
+label :: Cancellation Policy*
+input(checkbox)[dt=sr-agreed-to-booking-policy] :: on
+button(button)[dt=agreement-term-info-button] :: Additional Information
+label :: Receive news and offers for this venue
+input(checkbox)[dt=sr-agreed-to-venue-specific-marketing-on] :: on
+label :: Receive news and offers for all our locations
+input(checkbox)[dt=sr-agreed-to-venue-group-marketing-opt-in] :: on
+label :: Yes, I’d like to receive text message updates related to this reservation such as reminder
+input(checkbox)[dt=sr-agreed-to-reservation-sms-opt-in] :: on
+button(submit)[dt=checkout-button-complete] :: Submit
+button(button)[dt=venue-map] :: Open map

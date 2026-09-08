@@ -402,6 +402,7 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
           baseDeliveryFee: currentSettings.baseDeliveryFee,
           freeDeliveryThreshold: currentSettings.freeDeliveryThreshold,
           deliveryRadiusMiles: currentSettings.deliveryRadiusMiles,
+          notificationPrefs: currentSettings.notificationPrefs,
         });
         await get().loadSettings(locationId);
       } catch (error) {

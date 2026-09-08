@@ -98,7 +98,6 @@ function toSaleParams(request: SaleRequest): ValorSaleParams {
     token: request.paymentToken,
     invoiceNumber: request.orderId ?? "",
     productLines,
-    cardholderName: contactName(request.contact),
     email: request.contact?.email,
     phone: request.contact?.phone,
     address1: request.contact?.address1,

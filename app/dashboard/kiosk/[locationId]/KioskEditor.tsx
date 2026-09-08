@@ -47,13 +47,26 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader, PageShell, Panel } from "@/components/dashboard/shell";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { CROPPABLE_MIME_TYPES, ImageCropDialog } from "@/components/ui/image-crop-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  useMerchantCdnVideoUpload,
+  validateKioskVideoFile,
+} from "@/lib/cdn/use-merchant-cdn-video-upload";
 import { cn } from "@/lib/utils";
 import { KioskPreview } from "./KioskPreview";
 
@@ -522,14 +535,20 @@ function KioskGallerySlot({
 
 /**
  * Single idle-only video slot (no gallery — one video per orientation).
- * Currently unused — video upload is disabled, see the comment in the Assets
- * tab's Idle screen card. Kept here ready to reconnect once uploadKioskAsset
- * moves off the Server Action body path.
+ *
+ * On pick, a confirm dialog plays the local file inside an aspect-locked
+ * `object-fit: cover` frame — a faithful WYSIWYG of the kiosk, which renders the
+ * idle video with expo-video's `contentFit="cover"` (center-cropped, no
+ * reposition). The set value renders the same cover preview inline. Upload goes
+ * direct to the `cdn-upload` Edge Function via useMerchantCdnVideoUpload,
+ * bypassing the Server Action body limit that previously blocked video.
  */
 function KioskVideoSlot({
   title,
   helper,
   value,
+  aspectRatio,
+  aspectLabel,
   onUpload,
   onClear,
   disabled,
@@ -538,49 +557,159 @@ function KioskVideoSlot({
   title: string;
   helper: string;
   value: string | null;
+  aspectRatio: number;
+  aspectLabel: string;
   onUpload: (file: File) => void;
   onClear: () => void;
   disabled: boolean;
   uploading: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+  const [durationWarning, setDurationWarning] = useState(false);
+
+  // Revoke the previous object URL when it changes or the slot unmounts. The URL
+  // is created in the pick handler (an event), not here — so no setState in an
+  // effect, just cleanup.
+  useEffect(() => {
+    if (!pendingUrl) return;
+    return () => URL.revokeObjectURL(pendingUrl);
+  }, [pendingUrl]);
+
+  function pickFile() {
+    if (disabled || uploading) return;
+    inputRef.current?.click();
+  }
+
+  function handleFilePicked(file: File | null) {
+    if (!file) return;
+    const validationError = validateKioskVideoFile(file);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+    setDurationWarning(false);
+    setPendingFile(file);
+    setPendingUrl(URL.createObjectURL(file));
+  }
+
+  function closeDialog() {
+    setPendingFile(null);
+    setPendingUrl(null);
+    setDurationWarning(false);
+  }
+
+  function confirmPending() {
+    if (!pendingFile) return;
+    onUpload(pendingFile);
+    closeDialog();
+  }
+
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-3">
       <SlotHeader
         icon={<Video className="h-4 w-4" />}
         title={title}
         helper={helper}
         badge={
-          value ? (
-            <Badge variant="outline" className="shrink-0 border-emerald-400/40 bg-emerald-400/10 text-emerald-700 dark:text-emerald-400">
-              Uploaded
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Badge variant="outline" className="font-mono text-[10px] font-normal text-muted-foreground">
+              {aspectLabel}
             </Badge>
-          ) : undefined
+            {value ? (
+              <Badge variant="outline" className="border-emerald-400/40 bg-emerald-400/10 text-emerald-700 dark:text-emerald-400">
+                Uploaded
+              </Badge>
+            ) : null}
+            <Button type="button" variant="outline" size="sm" onClick={pickFile} disabled={disabled || uploading}>
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              {value ? "Replace" : "Upload"}
+            </Button>
+            {value ? (
+              <Button type="button" variant="ghost" size="icon" onClick={onClear} disabled={disabled} aria-label={`Remove ${title}`}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+          </div>
         }
       />
 
-      <div className="flex shrink-0 items-center gap-1 sm:pl-3">
-        <Button variant="outline" size="sm" className="relative overflow-hidden" disabled={disabled || uploading}>
-          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-          {value ? "Replace" : "Upload"}
-          <input
-            aria-label={title}
-            type="file"
-            accept="video/mp4"
-            disabled={disabled || uploading}
-            className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) onUpload(file);
-              event.currentTarget.value = "";
-            }}
-          />
-        </Button>
-        {value ? (
-          <Button type="button" variant="ghost" size="icon" onClick={onClear} disabled={disabled} aria-label={`Remove ${title}`}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        ) : null}
-      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/mp4"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0] || null;
+          event.currentTarget.value = "";
+          handleFilePicked(file);
+        }}
+      />
+
+      {value ? (
+        <div
+          className="relative mx-auto w-full max-w-[220px] overflow-hidden rounded-xl border border-border/60 bg-muted/40"
+          style={{ aspectRatio }}
+        >
+          <video key={value} src={value} className="h-full w-full object-cover" autoPlay muted loop playsInline />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={pickFile}
+          disabled={disabled || uploading}
+          className="mx-auto flex w-full max-w-[220px] flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border/60 bg-muted/30 text-muted-foreground transition-colors hover:border-border hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ aspectRatio }}
+        >
+          <FileVideo className="h-5 w-5" />
+          <span className="text-xs">No video</span>
+        </button>
+      )}
+
+      <Dialog open={Boolean(pendingFile)} onOpenChange={(open) => { if (!open) closeDialog(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Fit video to {aspectLabel}</DialogTitle>
+            <DialogDescription>
+              Exactly how it appears on the kiosk — center-cropped to fill, muted and looping.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center">
+            <div
+              className="relative w-full max-w-[240px] overflow-hidden rounded-xl border border-border/60 bg-black"
+              style={{ aspectRatio }}
+            >
+              {pendingUrl ? (
+                <video
+                  src={pendingUrl}
+                  className="h-full w-full object-cover"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  onLoadedMetadata={(event) => {
+                    setDurationWarning(event.currentTarget.duration > 22);
+                  }}
+                />
+              ) : null}
+            </div>
+          </div>
+          {durationWarning ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              This clip is longer than ~20s. Shorter loops feel snappier on the kiosk.
+            </p>
+          ) : null}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" onClick={pickFile}>
+              Choose another
+            </Button>
+            <Button type="button" onClick={confirmPending}>
+              Use this video
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -627,6 +756,14 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
   );
   const minimumContrast = Math.min(textContrast, headerContrast);
   const isExistingProfile = draft.id !== "draft";
+
+  // Direct browser -> Edge Function video upload (bypasses the Server Action
+  // body limit). Bound to the current profile's merchant; only usable once the
+  // profile is saved (a draft has no merchant_id yet).
+  const videoUpload = useMerchantCdnVideoUpload({
+    merchantId: draft.merchant_id,
+    fileNamePrefix: "kiosk-idle-video",
+  });
 
   function updateDraft(updates: Partial<KioskProfile>) {
     setDraft((current) => ({ ...current, ...updates }));
@@ -806,18 +943,35 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
     });
   }
 
-  // Currently unused — video upload is disabled, see the comment in the
-  // Assets tab's Idle screen card.
   function uploadIdleVideo(file: File, orientation: "vertical" | "horizontal") {
-    if (file.size > 30 * 1024 * 1024) {
-      toast.error("Idle video must be 30MB or smaller.");
+    // A draft has no merchant_id yet, and the upload is scoped to a merchant.
+    if (!isExistingProfile || !draft.merchant_id) {
+      toast.error("Save the profile before uploading a video.");
       return;
     }
     const assetType: KioskAssetType = orientation === "vertical" ? "idle_video_vertical" : "idle_video_horizontal";
     const field = orientation === "vertical" ? "idle_video_vertical" : "idle_video_horizontal";
+    setUploadingAsset(assetType);
     startTransition(async () => {
-      const url = await uploadAsset(file, assetType);
-      if (url) updateDraft({ [field]: url });
+      try {
+        const { cdnUrl } = await videoUpload.uploadVideo(file);
+        updateDraft({ [field]: cdnUrl });
+        toast.success("Video uploaded", {
+          icon: <Check className="h-5 w-5 text-foreground" />,
+          style: {
+            background: "#e5e7eb",
+            borderColor: "#d1d5db",
+            color: "#111827",
+            "--success-bg": "#e5e7eb",
+            "--success-border": "#d1d5db",
+            "--success-text": "#111827",
+          } as CSSProperties,
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Video upload failed");
+      } finally {
+        setUploadingAsset(null);
+      }
     });
   }
 
@@ -1073,8 +1227,8 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
             title="Idle screen"
             description={
               <>
-                Shown when no one is ordering. Vertical and horizontal kiosks need separate images for their screen
-                shape — video, when set, replaces the image carousel.
+                Shown when no one is ordering. Vertical and horizontal kiosks need separate media for their screen
+                shape. A video, when set, plays after the idle images in the loop.
               </>
             }
             className="space-y-6"
@@ -1104,38 +1258,32 @@ export function KioskEditor({ initialData }: { initialData: KioskEditorData }) {
                 />
               </div>
 
-              {/*
-                Video upload disabled for now: uploadKioskAsset routes the
-                raw file through a Next.js Server Action, which base64-encodes
-                it (~1.33x size) and is capped by next.config.ts's
-                bodySizeLimit (6mb) — a 30MB video encodes to ~40MB and fails
-                outright. Needs a direct client -> Supabase Edge Function
-                upload (see lib/cdn/use-merchant-cdn-image-upload.ts for the
-                existing pattern) before this can come back.
+              <Separator />
 
-                <Separator />
-
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <KioskVideoSlot
-                    title="Video — Vertical"
-                    helper="MP4, up to 30MB"
-                    value={draft.idle_video_vertical}
-                    disabled={isPending}
-                    uploading={uploadingAsset === "idle_video_vertical"}
-                    onUpload={(file) => uploadIdleVideo(file, "vertical")}
-                    onClear={() => updateDraft({ idle_video_vertical: null })}
-                  />
-                  <KioskVideoSlot
-                    title="Video — Horizontal"
-                    helper="MP4, up to 30MB"
-                    value={draft.idle_video_horizontal}
-                    disabled={isPending}
-                    uploading={uploadingAsset === "idle_video_horizontal"}
-                    onUpload={(file) => uploadIdleVideo(file, "horizontal")}
-                    onClear={() => updateDraft({ idle_video_horizontal: null })}
-                  />
-                </div>
-              */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <KioskVideoSlot
+                  title="Video — Vertical"
+                  helper="MP4, up to 20MB — plays after the images"
+                  value={draft.idle_video_vertical}
+                  aspectRatio={9 / 16}
+                  aspectLabel="9:16"
+                  disabled={isPending}
+                  uploading={uploadingAsset === "idle_video_vertical"}
+                  onUpload={(file) => uploadIdleVideo(file, "vertical")}
+                  onClear={() => updateDraft({ idle_video_vertical: null })}
+                />
+                <KioskVideoSlot
+                  title="Video — Horizontal"
+                  helper="MP4, up to 20MB — plays after the images"
+                  value={draft.idle_video_horizontal}
+                  aspectRatio={16 / 9}
+                  aspectLabel="16:9"
+                  disabled={isPending}
+                  uploading={uploadingAsset === "idle_video_horizontal"}
+                  onUpload={(file) => uploadIdleVideo(file, "horizontal")}
+                  onClear={() => updateDraft({ idle_video_horizontal: null })}
+                />
+              </div>
           </KioskSection>
 
           <KioskSection

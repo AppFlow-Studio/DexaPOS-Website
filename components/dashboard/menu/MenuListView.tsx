@@ -25,6 +25,11 @@ import {
   Star,
 } from "lucide-react";
 import { MenuActionsDropdown } from "./MenuActionsDropdown";
+import { MenuChannelVisibilityControls } from "./MenuChannelVisibilityControls";
+import {
+  normalizeMenuChannelVisibility,
+  type MenuChannelVisibility,
+} from "@/lib/menu/menu-channel-visibility";
 import { useIsSingleLocation } from "@/stores/location-store";
 import {
   DndContext,
@@ -56,6 +61,9 @@ export interface MenuWithLocation {
   display_order: number | null;
   created_at: string;
   updated_at: string;
+  is_visible_on_pos?: boolean;
+  is_visible_on_kiosk?: boolean;
+  is_visible_online?: boolean;
   // Location relation from join
   locations?: {
     id: string;
@@ -87,6 +95,12 @@ interface MenuListViewProps {
   /** Menu ids linked+active on OrderOut for the location (eligible to become primary) */
   linkedMenuIds?: string[];
   onSetOnlineMenu?: (menuId: string) => void;
+  onChannelVisibilityChange?: (
+    menuId: string,
+    visibility: MenuChannelVisibility,
+  ) => void;
+  channelVisibilityDisabled?: boolean;
+  savingVisibilityMenuId?: string | null;
   /** Show effective menu availability across locations in the table view. */
   showLocations?: boolean;
 }
@@ -107,6 +121,9 @@ function SortableGridCard({
   isFiltered,
   onlineMenuId,
   linkedMenuIds,
+  onChannelVisibilityChange,
+  channelVisibilityDisabled,
+  isSavingVisibility,
 }: {
   menu: MenuWithLocation;
   handleRowClick: (id: string) => void;
@@ -114,9 +131,14 @@ function SortableGridCard({
   isFiltered?: boolean;
   onlineMenuId?: string | null;
   linkedMenuIds?: string[];
+  onChannelVisibilityChange?: MenuListViewProps["onChannelVisibilityChange"];
+  channelVisibilityDisabled?: boolean;
+  isSavingVisibility?: boolean;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
-  const canSetOnlineMenu = linkedMenuIds?.includes(menu.id) ?? false;
+  const visibility = normalizeMenuChannelVisibility(menu);
+  const canSetOnlineMenu = visibility.is_visible_online &&
+    (linkedMenuIds?.includes(menu.id) ?? false);
   const {
     attributes,
     listeners,
@@ -175,6 +197,15 @@ function SortableGridCard({
           </div>
         </div>
 
+        <div className="pt-3" onClick={(event) => event.stopPropagation()}>
+          <MenuChannelVisibilityControls
+            compact
+            value={visibility}
+            disabled={channelVisibilityDisabled || isSavingVisibility}
+            onChange={(next) => onChannelVisibilityChange?.(menu.id, next)}
+          />
+        </div>
+
         <div className="mt-auto flex min-w-0 flex-wrap items-center gap-2 pt-3">
           <span
             className={cn(
@@ -219,6 +250,9 @@ function SortableTableRow({
   isFiltered,
   onlineMenuId,
   linkedMenuIds,
+  onChannelVisibilityChange,
+  channelVisibilityDisabled,
+  isSavingVisibility,
   showLocations,
 }: {
   menu: MenuWithLocation;
@@ -227,10 +261,15 @@ function SortableTableRow({
   isFiltered?: boolean;
   onlineMenuId?: string | null;
   linkedMenuIds?: string[];
+  onChannelVisibilityChange?: MenuListViewProps["onChannelVisibilityChange"];
+  channelVisibilityDisabled?: boolean;
+  isSavingVisibility?: boolean;
   showLocations: boolean;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
-  const canSetOnlineMenu = linkedMenuIds?.includes(menu.id) ?? false;
+  const visibility = normalizeMenuChannelVisibility(menu);
+  const canSetOnlineMenu = visibility.is_visible_online &&
+    (linkedMenuIds?.includes(menu.id) ?? false);
   const {
     attributes,
     listeners,
@@ -328,6 +367,17 @@ function SortableTableRow({
           </div>
         </div>
       </TableCell>
+      <TableCell
+        className="hidden md:table-cell"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <MenuChannelVisibilityControls
+          compact
+          value={visibility}
+          disabled={channelVisibilityDisabled || isSavingVisibility}
+          onChange={(next) => onChannelVisibilityChange?.(menu.id, next)}
+        />
+      </TableCell>
       <TableCell className="hidden text-muted-foreground sm:table-cell">
         {new Date(menu.created_at).toLocaleDateString()}
       </TableCell>
@@ -363,6 +413,9 @@ export function MenuListView({
   onlineMenuId,
   linkedMenuIds,
   onSetOnlineMenu,
+  onChannelVisibilityChange,
+  channelVisibilityDisabled = false,
+  savingVisibilityMenuId,
   showLocations = false,
 }: MenuListViewProps) {
   const router = useRouter();
@@ -455,6 +508,9 @@ export function MenuListView({
                 isFiltered={isFiltered}
                 onlineMenuId={onlineMenuId}
                 linkedMenuIds={linkedMenuIds}
+                onChannelVisibilityChange={onChannelVisibilityChange}
+                channelVisibilityDisabled={channelVisibilityDisabled}
+                isSavingVisibility={savingVisibilityMenuId === menu.id}
               />
             ))}
           </div>
@@ -465,7 +521,7 @@ export function MenuListView({
             containerClassName="thin-scrollbar min-w-0 animate-in fade-in duration-300"
             className={cn(
               "min-w-[400px] table-auto max-sm:[&_td]:px-1.5 max-sm:[&_th]:px-1.5",
-              showLocations ? "sm:min-w-[760px]" : "sm:min-w-[610px]",
+              showLocations ? "sm:min-w-[760px] md:min-w-[1080px]" : "sm:min-w-[610px] md:min-w-[910px]",
             )}
           >
             <caption className="sr-only">Menus</caption>
@@ -482,6 +538,7 @@ export function MenuListView({
                   </TableHead>
                 )}
                 <TableHead className="w-[90px] sm:w-[100px]">Status</TableHead>
+                <TableHead className="hidden w-[300px] md:table-cell">Platforms</TableHead>
                 <TableHead className="hidden w-[120px] sm:table-cell">Created</TableHead>
                 <TableHead className="w-[64px] text-right sm:w-[80px]">Actions</TableHead>
               </TableRow>
@@ -500,6 +557,9 @@ export function MenuListView({
                     isFiltered={isFiltered}
                     onlineMenuId={onlineMenuId}
                     linkedMenuIds={linkedMenuIds}
+                    onChannelVisibilityChange={onChannelVisibilityChange}
+                    channelVisibilityDisabled={channelVisibilityDisabled}
+                    isSavingVisibility={savingVisibilityMenuId === menu.id}
                     showLocations={showLocations}
                   />
                 ))}

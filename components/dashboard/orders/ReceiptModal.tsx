@@ -23,7 +23,10 @@ import {
   getReceiptTemplate,
   type ReceiptTemplate,
 } from "@/app/dashboard/actions/receipt-templates";
-import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
+import {
+  getOrderBreakdown,
+  getOrderDisplayTotal,
+} from "@/lib/orders/order-breakdown";
 import { resolveReceiptHeader } from "@/lib/receipts/header";
 import { formatReceiptDateTime } from "@/lib/receipts/format";
 import { useQuery } from "@tanstack/react-query";
@@ -605,11 +608,7 @@ export function ReceiptModal({
                     : "TOTAL"}
                 </span>
                 <span>
-                  {formatCurrency(
-                    breakdown.isMixed && lane.amountPaid > 0
-                      ? lane.amountPaid
-                      : lane.total + lane.tip
-                  )}
+                  {formatCurrency(getOrderDisplayTotal(breakdown))}
                 </span>
               </div>
             </div>

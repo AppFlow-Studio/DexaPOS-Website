@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import {
   Sheet,
   SheetContent,
@@ -10,15 +12,30 @@ import {
 } from '@/components/ui/sheet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Loader2, Pencil, Phone, Clock3, Users, Star, Armchair, Hash } from 'lucide-react'
+import { Loader2, Pencil, Phone, Clock3, Users, Star, Armchair, Hash, Globe } from 'lucide-react'
 import {
   useCancelReservation,
   useUpdateReservationStatus
 } from '@/app/dashboard/hooks/useReservations'
+import { useClerkOrgId } from '@/app/dashboard/hooks/useLocationScoped'
+import { RespondToReservationRequestAction } from '@/app/dashboard/actions/floor-plan-actions'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import CancelReservationDialog from './CancelReservationDialog'
 import EditReservationDialog from './EditReservationDialog'
 import type { Reservation } from '@/types/floor-plan'
 import { formatPhoneForDisplay } from '@/lib/phone'
+import {
+  isWebsiteReservation,
+  WEBSITE_SOURCE_STYLE
+} from '@/lib/constants/reservation-source'
 import {
   reservationStatusLabel,
   reservationStatusStyle
@@ -38,10 +55,22 @@ type StatusTransition = {
 const STATUS_TRANSITIONS: Partial<
   Record<Reservation['status'], StatusTransition[]>
 > = {
-  pending: [
-    { label: 'Confirm', status: 'confirmed' },
-    { label: 'Mark No-Show', status: 'no_show' }
-  ],
+  /*
+    `pending` is deliberately absent.
+
+    It used to carry Confirm and Mark No-Show, and both were wrong once a
+    booking request could be pending:
+
+      • **Confirm** went through `update_reservation_status`, which writes the
+        column and tells the guest nothing. A guest who was told "we'll answer
+        shortly" would be confirmed in silence. Confirm and Decline now route
+        through `RespondToReservationRequestAction` instead — see the pending
+        block in the actions footer.
+      • **Mark No-Show** cannot apply. A guest cannot fail to turn up to a table
+        nobody has granted them. It was in this map because the map predates
+        requests existing.
+  */
+
   confirmed: [
     { label: 'Mark Arrived', status: 'arrived' },
     { label: 'Mark No-Show', status: 'no_show' }
@@ -110,6 +139,11 @@ export default function ReservationDetailSheet ({
   const [pendingStatus, setPendingStatus] = useState<Reservation['status'] | null>(
     null
   )
+  const [declineOpen, setDeclineOpen] = useState(false)
+  const [declineReason, setDeclineReason] = useState('')
+  const [answering, setAnswering] = useState<'accept' | 'decline' | null>(null)
+  const queryClient = useQueryClient()
+  const clerkOrgId = useClerkOrgId()
   const updateStatus = useUpdateReservationStatus(date)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _cancelMutation = useCancelReservation(date)
@@ -117,6 +151,9 @@ export default function ReservationDetailSheet ({
   useEffect(() => {
     setDisplayedReservation(reservation)
     setPendingStatus(null)
+    setDeclineOpen(false)
+    setDeclineReason('')
+    setAnswering(null)
   }, [reservation])
 
   if (!reservation || !displayedReservation) return null
@@ -140,7 +177,68 @@ export default function ReservationDetailSheet ({
     )
   }
 
+  /**
+   * Answering a booking request.
+   *
+   * **Passes the reservation's OWN location**, not the dashboard's selected
+   * one. On the day view those are the same thing, but this sheet is reused by
+   * screens that list more than one branch, and reading the picker there would
+   * write the wrong restaurant into the audit log.
+   *
+   * `acted: false` means the request had already been answered — the other
+   * manager got there first, or the guest withdrew. That is success from this
+   * user's point of view: the outcome they wanted is already true. Showing a
+   * red toast would teach staff the button is broken.
+   */
+  const respond = async (accept: boolean) => {
+    // Auth is still resolving, or the session lapsed. Sending `''` would reach
+    // the action, fail its own guard, and surface as a generic error — so say
+    // the true thing instead and leave the request untouched.
+    if (!clerkOrgId) {
+      toast.error('Still signing you in. Try that again in a moment.')
+      return
+    }
+
+    setAnswering(accept ? 'accept' : 'decline')
+    try {
+      const outcome = (await RespondToReservationRequestAction(
+        clerkOrgId,
+        reservation.id,
+        accept,
+        accept ? undefined : declineReason
+      )) as { acted?: boolean; status?: string }
+
+      const next = (outcome?.status ?? (accept ? 'confirmed' : 'cancelled')) as Reservation['status']
+      setDisplayedReservation(prev => (prev ? { ...prev, status: next } : prev))
+      setDeclineOpen(false)
+
+      if (outcome?.acted === false) {
+        toast.info('This request had already been answered.')
+      } else {
+        toast.success(
+          accept
+            ? 'Booking confirmed. The guest has been told.'
+            : 'Request declined. The guest has been told.'
+        )
+      }
+
+      // Refetch every branch's list for this date rather than guessing which
+      // key holds this row: `location_id` is optional on the Reservation type,
+      // so a precise key could silently miss and leave a stale card on screen.
+      await queryClient.invalidateQueries({
+        queryKey: ['reservations'],
+        refetchType: 'active'
+      })
+    } catch (err) {
+      console.error('[respondToReservationRequest] failed:', err)
+      toast.error('We could not save that. Please try again.')
+    } finally {
+      setAnswering(null)
+    }
+  }
+
   const transitions = STATUS_TRANSITIONS[displayedReservation.status] ?? []
+  const isRequest = displayedReservation.status === 'pending'
   const canCancel = CANCELLABLE_STATUSES.includes(displayedReservation.status)
   const isTerminal = ['completed', 'cancelled', 'no_show'].includes(
     displayedReservation.status
@@ -173,6 +271,18 @@ export default function ReservationDetailSheet ({
                       <SheetTitle className='truncate text-2xl font-semibold tracking-tight'>
                         {displayedReservation.party_name}
                       </SheetTitle>
+                      {isWebsiteReservation(displayedReservation.source) && (
+                        <Badge
+                          className={cn(
+                            'shrink-0 gap-1 rounded-full border-0 px-2.5 py-0.5 text-xs font-medium shadow-none',
+                            WEBSITE_SOURCE_STYLE.bg,
+                            WEBSITE_SOURCE_STYLE.text
+                          )}
+                        >
+                          <Globe className='mr-1 h-3 w-3' />
+                          Website
+                        </Badge>
+                      )}
                       {displayedReservation.is_vip && (
                         <Badge className='shrink-0 gap-1 rounded-full border-0 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 shadow-none dark:bg-amber-900/20 dark:text-amber-400'>
                           <Star className='mr-1 h-3 w-3 fill-current' />
@@ -353,6 +463,41 @@ export default function ReservationDetailSheet ({
                   </p>
                 ) : (
                   <>
+                    {/*
+                      A booking REQUEST, waiting on this merchant.
+
+                      Its own block rather than two more rows in
+                      `STATUS_TRANSITIONS`, because both buttons go through a
+                      different RPC — one that messages the guest, records
+                      `cancelled_by`, and refuses to act twice. The map's
+                      buttons do none of that.
+                    */}
+                    {isRequest && (
+                      <>
+                        <p className='text-sm text-muted-foreground'>
+                          This guest is waiting for an answer. They were told their table is
+                          held while you decide.
+                        </p>
+                        <Button
+                          className='h-10 w-full rounded-full text-sm font-medium shadow-sm'
+                          disabled={answering !== null}
+                          onClick={() => respond(true)}
+                        >
+                          {answering === 'accept' && (
+                            <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                          )}
+                          Confirm booking
+                        </Button>
+                        <Button
+                          className='h-10 w-full rounded-full text-sm font-medium shadow-sm'
+                          variant='outline'
+                          disabled={answering !== null}
+                          onClick={() => setDeclineOpen(true)}
+                        >
+                          Decline
+                        </Button>
+                      </>
+                    )}
                     {transitions.map(t => (
                       <Button
                         key={t.status}
@@ -383,6 +528,65 @@ export default function ReservationDetailSheet ({
           </div>
         </SheetContent>
       </Sheet>
+
+      {/*
+        Declining, with an optional word to the guest.
+
+        The reason is OPTIONAL and it is SENT. Both facts are on the dialog,
+        because the natural assumption about a text box in a dashboard is that
+        it is a note for staff — and someone typing "double booked, our fault"
+        for their manager would be mailing it to the customer.
+      */}
+      <Dialog open={declineOpen} onOpenChange={setDeclineOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Decline this request?</DialogTitle>
+            <DialogDescription>
+              {/* Explicit {" "} — a bare space here does not survive the JSX text-node join. */}
+              {reservation.party_name}{" "}
+              will be told you can&rsquo;t fit them in, and the table you were holding is
+              released.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className='space-y-2'>
+            <label htmlFor='decline-reason' className='text-sm font-medium'>
+              Add a reason (optional)
+            </label>
+            <Textarea
+              id='decline-reason'
+              value={declineReason}
+              onChange={e => setDeclineReason(e.target.value)}
+              placeholder="We're fully booked that evening"
+              maxLength={300}
+              rows={3}
+            />
+            <p className='text-xs text-muted-foreground'>
+              This is sent to the guest, so write it for them — not as a note for your team.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant='outline'
+              disabled={answering !== null}
+              onClick={() => setDeclineOpen(false)}
+            >
+              Keep the request
+            </Button>
+            <Button
+              variant='destructive'
+              disabled={answering !== null}
+              onClick={() => respond(false)}
+            >
+              {answering === 'decline' && (
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+              )}
+              Decline and tell the guest
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <CancelReservationDialog
         open={cancelDialogOpen}

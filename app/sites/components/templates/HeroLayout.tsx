@@ -17,6 +17,7 @@ import { useCart } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
 import { useQrFunnelTracking } from "../../hooks/useQrFunnelTracking";
+import { useActiveItemAutoScroll } from "../../hooks/useActiveItemAutoScroll";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { getTodayHoursString, isStoreOpenNow } from "../StoreInfoBar";
 import { MenuSearch } from "../MenuSearch";
@@ -97,6 +98,7 @@ export function HeroLayout({
   // user scrolls meaningfully away from it (handles short trailing sections that
   // can never reach the boundary because the page bottom stops the scroll).
   const scrollLockSettleYRef = useRef<number | null>(null);
+  const menuNavRef = useRef<HTMLDivElement>(null);
   const categoryNavRef = useRef<HTMLElement>(null);
 
   const { setOpen: setCartOpen, pendingModalItem, clearPendingModalItem } = useCart();
@@ -235,20 +237,8 @@ export function HeroLayout({
     if (pendingModalItem) { handleItemClick(pendingModalItem); clearPendingModalItem(); }
   }, [pendingModalItem, handleItemClick, clearPendingModalItem]);
 
-  // Keep the active category pill visible within its horizontal nav strip, so
-  // scroll-spy never highlights a pill scrolled off-screen (mobile/tablet).
-  useEffect(() => {
-    if (!activeCategory) return;
-    const container = categoryNavRef.current;
-    if (!container) return;
-    const pill = container.querySelector<HTMLElement>(`[data-cat-pill="${activeCategory}"]`);
-    if (!pill) return;
-    const cRect = container.getBoundingClientRect();
-    const pRect = pill.getBoundingClientRect();
-    if (pRect.left < cRect.left || pRect.right > cRect.right) {
-      container.scrollBy({ left: pRect.left - cRect.left - (cRect.width - pRect.width) / 2, behavior: "smooth" });
-    }
-  }, [activeCategory]);
+  useActiveItemAutoScroll(menuNavRef, activeMenuId);
+  useActiveItemAutoScroll(categoryNavRef, activeCategory);
 
   const scrollToCategory = (categoryId: string) => {
     setActiveCategory(categoryId);
@@ -328,12 +318,13 @@ export function HeroLayout({
             {/* Menu tabs row — only when multiple menus */}
             {menus.length > 1 && (
               <div className="container mx-auto px-4 border-b" style={{ borderColor: "#E5E5E5" }}>
-                <div className="flex overflow-x-auto gap-1" style={{ scrollbarWidth: "none" }}>
+                <div ref={menuNavRef} className="flex overflow-x-auto gap-1" style={{ scrollbarWidth: "none" }}>
                   {menus.map((menu) => {
                     const isActive = activeMenuId === menu.id;
                     return (
                       <button
                         key={menu.id}
+                        data-auto-scroll-id={menu.id}
                         type="button"
                         onClick={() => setActiveMenuId(menu.id)}
                         className="px-4 py-2.5 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-px shrink-0 uppercase tracking-wide"
@@ -360,7 +351,7 @@ export function HeroLayout({
                     <button
                       key={cat.id}
                       type="button"
-                      data-cat-pill={cat.id}
+                      data-auto-scroll-id={cat.id}
                       onClick={() => scrollToCategory(cat.id)}
                       className="relative text-sm font-medium whitespace-nowrap transition-colors pb-1 shrink-0"
                       style={{ color: isActive ? "var(--primary)" : "#666666" }}
@@ -494,22 +485,22 @@ function HeroItemCard({
       onClick={isSoldOut ? undefined : onClick}
       onMouseEnter={isSoldOut ? undefined : handleEnter}
       onMouseLeave={isSoldOut ? undefined : handleLeave}
-      className={`group flex gap-3 p-4 rounded-xl border transition-all duration-200 ${isSoldOut ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+      className={`group flex min-h-36 gap-2 overflow-hidden rounded-xl border p-2 transition-all duration-200 ${isSoldOut ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
       style={{ backgroundColor: "#FFFFFF", border: "1px solid #E5E5E5", borderRadius: "var(--radius)" }}
     >
       {/* Content left */}
-      <div className="flex-1 flex flex-col justify-between min-w-0">
+      <div className="flex-1 flex flex-col justify-between min-w-0 p-2">
         <div>
             <div className="flex items-start justify-between gap-2 mb-1">
-              <h4 className="font-semibold text-sm leading-tight line-clamp-2 group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#1A1A1A" }}>
+              <h4 className="font-bold text-sm leading-tight line-clamp-2 group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#1A1A1A" }}>
                 {item.name}
               </h4>
-              <span className="text-sm font-semibold shrink-0 px-2 py-0.5 rounded-md" style={{ backgroundColor: "#F8F9FA", color: "#1A1A1A" }}>
+              <span className="hidden text-sm font-semibold shrink-0 rounded-md bg-[#F8F9FA] px-2 py-0.5 sm:inline-flex" style={{ color: "#1A1A1A" }}>
               ${getStorefrontBrowsePrice(item).toFixed(2)}
               </span>
             </div>
             {item.description && (
-              <p className="text-xs line-clamp-2 leading-relaxed" style={{ color: "#666666" }}>
+              <p className="hidden text-xs leading-relaxed sm:line-clamp-2" style={{ color: "#666666" }}>
                 {item.description}
               </p>
             )}
@@ -519,7 +510,10 @@ function HeroItemCard({
               </p>
             )}
         </div>
-        <div className="mt-3">
+        <div className="mt-3 flex items-center gap-2">
+          <span className="text-sm font-semibold sm:hidden" style={{ color: "#1A1A1A" }}>
+            ${getStorefrontBrowsePrice(item).toFixed(2)}
+          </span>
           {isSoldOut ? (
             <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: "#F3F4F6", color: "#6B7280" }}>
               Sold Out
@@ -538,15 +532,15 @@ function HeroItemCard({
         </div>
       </div>
 
-      {/* Image right — 100×100 */}
-      <div className="shrink-0 w-24 h-24 rounded-lg overflow-hidden relative" style={{ backgroundColor: "#F3F4F6" }}>
+      {/* Larger square image with a small inset from the card edges. */}
+      <div className="shrink-0 size-28 sm:size-32 self-center rounded-lg overflow-hidden relative" style={{ backgroundColor: "#F3F4F6" }}>
         {showImage ? (
           <Image
             src={item.image!}
             fill
             alt={item.name}
             className="object-cover group-hover:scale-105 transition-transform duration-500"
-            sizes="96px"
+            sizes="(max-width: 640px) 112px, 128px"
             onError={() => onImageError(item.id)}
           />
         ) : (

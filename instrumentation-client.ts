@@ -4,14 +4,32 @@
 
 import * as Sentry from "@sentry/nextjs";
 
+/**
+ * Performance tracing and session replay are disabled in development.
+ *
+ * `next.config.ts` sets `tunnelRoute: "/api/ingest"`, so every Sentry event is
+ * proxied through the Next server rather than sent straight to Sentry. In
+ * production that is the point — it survives ad blockers. In development it
+ * means telemetry competes with page renders for the same single-threaded dev
+ * server: measured at 294 ingest requests totalling 37 s of dev-server time,
+ * and 8 requests during a 12 s idle window with nobody touching the browser.
+ *
+ * Session replay is the expensive half, and the drag-and-drop builder is its
+ * worst case — every drag emits a stream of DOM mutation records.
+ *
+ * Error capture stays on, so dev still reports real failures. Production
+ * behaviour is completely unchanged.
+ */
+const isDev = process.env.NODE_ENV === "development";
+
 Sentry.init({
   dsn: "https://82d5a5c61852d6bcd0d99c57ce185d0f@o4511212537380864.ingest.us.sentry.io/4511226223460352",
 
   // Add optional integrations for additional features
-  integrations: [Sentry.replayIntegration()],
+  integrations: isDev ? [] : [Sentry.replayIntegration()],
 
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
-  tracesSampleRate: 1,
+  tracesSampleRate: isDev ? 0 : 1,
   // Enable logs to be sent to Sentry
   enableLogs: true,
 

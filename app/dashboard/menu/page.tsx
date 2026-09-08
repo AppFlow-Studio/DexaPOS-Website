@@ -67,6 +67,8 @@ import { cn } from '@/lib/utils'
 import { useLocations } from '../hooks/useLocations'
 import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-upload'
 import { useState } from 'react'
+import { SetLocationMenuChannelVisibility } from '../actions/location-menus'
+import type { MenuChannelVisibility } from '@/lib/menu/menu-channel-visibility'
 const menuSchema = z.object({
   name: z
     .string()
@@ -93,6 +95,8 @@ export default function MenuPage () {
   const selectedLocationId = selectedLocation?.id || null
   const isAllLocations = selectedLocationId === 'all' || !selectedLocationId
   const isSingleLocation = useIsSingleLocation()
+  const gatedLocationId = useGatedLocationId()
+  const menuLocationId = gatedLocationId ?? selectedLocationId
   const imageUpload = useMerchantCdnImageUpload({
     merchantId,
     category: 'menus',
@@ -106,11 +110,10 @@ export default function MenuPage () {
     data: menus,
     isLoading,
     refetch
-  } = useMenus(clerkOrgId || '', selectedLocationId)
+  } = useMenus(clerkOrgId || '', menuLocationId)
 
   // OrderOut canonical online-ordering menu for the resolved location (single-loc
   // resolves to its one store; multi-loc on "All" -> null, so no badge shown).
-  const gatedLocationId = useGatedLocationId()
   const { data: onlineMenu } = useLocationOnlineMenu(clerkOrgId || '', gatedLocationId)
   const setOnlineMenuMutation = useSetPrimaryOnlineMenu(clerkOrgId || '')
   const handleSetOnlineMenu = (menuId: string) => {
@@ -124,6 +127,42 @@ export default function MenuPage () {
   const [reorderedMenus, setReorderedMenus] = useState<MenuWithLocation[]>([])
   const [hasOrderChanges, setHasOrderChanges] = useState(false)
   const [isSavingOrder, setIsSavingOrder] = useState(false)
+  const [savingVisibilityMenuId, setSavingVisibilityMenuId] = useState<string | null>(null)
+
+  const handleChannelVisibilityChange = async (
+    menuId: string,
+    visibility: MenuChannelVisibility
+  ) => {
+    if (!gatedLocationId) {
+      toast.error('Select a location', {
+        description: 'Platform visibility is configured separately for each location.'
+      })
+      return
+    }
+
+    setSavingVisibilityMenuId(menuId)
+    try {
+      const result = await SetLocationMenuChannelVisibility(
+        gatedLocationId,
+        menuId,
+        visibility
+      )
+      if (result.error) {
+        toast.error('Visibility update failed', { description: result.error })
+        return
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['menus'] }),
+        queryClient.invalidateQueries({ queryKey: ['location-online-menu'] }),
+        queryClient.invalidateQueries({ queryKey: ['orderout'] }),
+        queryClient.invalidateQueries({ queryKey: ['online-ordering'] })
+      ])
+      toast.success('Platform visibility updated')
+    } finally {
+      setSavingVisibilityMenuId(null)
+    }
+  }
 
   // Cast menus to include location info
   const menusList = (Array.isArray(menus) ? menus : []) as MenuWithLocation[]
@@ -760,6 +799,9 @@ export default function MenuPage () {
             onlineMenuId={onlineMenu?.primaryMenuId ?? null}
             linkedMenuIds={onlineMenu?.linkedMenuIds ?? []}
             onSetOnlineMenu={handleSetOnlineMenu}
+            onChannelVisibilityChange={handleChannelVisibilityChange}
+            channelVisibilityDisabled={!gatedLocationId}
+            savingVisibilityMenuId={savingVisibilityMenuId}
             showLocations={isAllLocations && !isSingleLocation}
           />
           {filteredMenus.length > 0 && (

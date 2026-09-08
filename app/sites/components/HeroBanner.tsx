@@ -13,14 +13,7 @@ interface HeroBannerProps {
 export function HeroBanner({ site, className }: HeroBannerProps) {
   const heroImageUrl = site?.theme_config?.heroImageUrl;
   const heroVideoUrl = site?.theme_config?.heroVideoUrl;
-  const templateId = site?.theme_config?.templateId || "classic";
-
-  const heroHeight =
-    templateId === "minimal"
-      ? "h-40 sm:h-[200px]"
-      : templateId === "bold"
-      ? "h-52 sm:h-[360px] lg:h-[400px]"
-      : "h-52 sm:h-[300px] lg:h-[360px]";
+  const heroHeight = "h-52 sm:h-[300px] lg:h-[360px]";
 
   return (
     <HeroShell

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { PageLoader } from '@/components/ui/page-loader'
+import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
 import { HqSubscriptionsWorkspace } from '@/components/billing/HqSubscriptionsWorkspace'
 import { useAdminMerchantDetails } from '@/lib/queries/use-admin-merchant'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
@@ -15,7 +15,13 @@ export default function ManageMerchantSubscriptionsPage() {
   const { hasPermission } = useAdminPermissions()
 
   if (isLoading) {
-    return <PageLoader message="Loading subscription workspace..." />
+    return (
+      <DataPageSkeleton
+        variant="detail"
+        shell="plain"
+        label="Loading the subscription workspace"
+      />
+    )
   }
 
   if (isError || !merchantDetails) {

@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -78,39 +78,39 @@ export function OverviewTab({
           title="LAST VISIT"
           value={lastVisitRelative}
           subtitle={lastVisitAbsolute ?? undefined}
-          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
+          className="rounded-2xl border-0 bg-muted/60 shadow-none"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="TOTAL VISITS"
           value={String(totalVisits)}
           trend={visitTrendLabel ? { direction: visitTrendDir, label: visitTrendLabel } : undefined}
-          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
+          className="rounded-2xl border-0 bg-muted/60 shadow-none"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="LIFETIME SPEND"
           value={`$${lifetimeSpend.toLocaleString()}`}
           badge={percentileBadge ?? undefined}
-          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
+          className="rounded-2xl border-0 bg-muted/60 shadow-none"
           isLoading={isLoadingProfile || isLoadingSpend}
         />
         <MetricCard
           title="AVG. SPEND"
           value={`$${avgSpend.toFixed(2)}`}
-          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
+          className="rounded-2xl border-0 bg-muted/60 shadow-none"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="AVG. TIP"
           value={`${avgTip.toFixed(1)}%`}
-          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
+          className="rounded-2xl border-0 bg-muted/60 shadow-none"
           isLoading={isLoadingProfile}
         />
         <MetricCard
           title="CUSTOMER SINCE"
           value={customerSince ?? "—"}
-          className="rounded-2xl border-0 bg-muted/60 p-6 shadow-none"
+          className="rounded-2xl border-0 bg-muted/60 shadow-none"
           isLoading={isLoadingProfile}
         />
       </div>
@@ -126,9 +126,8 @@ export function OverviewTab({
           </CardHeader>
           <CardContent>
             {isLoadingSpend ? (
-              <div className="h-35 flex items-center justify-center">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
+              // Chart-shaped: the area chart below is 140px tall.
+              <Skeleton className="h-35 w-full rounded-lg motion-reduce:animate-none" />
             ) : spendTrend && spendTrend.length > 0 ? (
               <ResponsiveContainer width="100%" height={140}>
                 <AreaChart data={spendTrend} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
@@ -199,8 +198,18 @@ export function OverviewTab({
           </CardHeader>
           <CardContent className="flex items-center justify-between pl-0">
             {isLoadingChannels ? (
-              <div className="w-full h-35 flex items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              // Mirrors the populated layout: a legend column beside the
+              // donut, rather than a spinner floating in an empty box.
+              <div className="flex w-full min-w-0 items-center justify-between gap-4">
+                <div className="min-w-0 space-y-3 pl-6">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Skeleton className="h-2.5 w-2.5 shrink-0 rounded-full motion-reduce:animate-none" />
+                      <Skeleton className="h-3.5 w-20 rounded-full motion-reduce:animate-none" />
+                    </div>
+                  ))}
+                </div>
+                <Skeleton className="h-28 w-28 shrink-0 rounded-full motion-reduce:animate-none" />
               </div>
             ) : orderChannels.length > 0 ? (
               <>
@@ -292,10 +301,12 @@ export function OverviewTab({
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-start gap-4 p-4 bg-muted/20 rounded-lg">
-                <div className="h-10 w-10 bg-muted animate-pulse rounded-lg shrink-0" />
-                <div className="flex-1 space-y-2 min-w-0">
-                  <div className="h-4 w-40 bg-muted animate-pulse rounded" />
-                  <div className="h-3 w-56 bg-muted animate-pulse rounded" />
+                <div className="h-10 w-10 bg-muted animate-pulse rounded-lg shrink-0 motion-reduce:animate-none" />
+                {/* Relative widths: w-40 and w-56 are 160px and 224px, which
+                    overflow this panel on a phone however narrow the track. */}
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="h-4 w-3/5 max-w-40 bg-muted animate-pulse rounded motion-reduce:animate-none" />
+                  <div className="h-3 w-4/5 max-w-56 bg-muted animate-pulse rounded motion-reduce:animate-none" />
                 </div>
               </div>
             ))}

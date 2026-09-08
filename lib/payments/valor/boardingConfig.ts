@@ -154,6 +154,18 @@ function digits(value: string | null | undefined): string {
   return (value ?? "").replace(/\D/g, "");
 }
 
+/**
+ * Valor's boarding validator wants a bare 10-digit US mobile. DEXA stores phones
+ * in E.164 (`+1XXXXXXXXXX`), which `digits()` renders as 11 digits with a leading
+ * country code — Valor rejects that as "not a valid 10-digit mobile number". Drop
+ * the US country code so a stored E.164 number boards cleanly. Non-country-coded
+ * 10-digit input is returned unchanged.
+ */
+function toValorMobile(value: string | null | undefined): string {
+  const d = digits(value);
+  return d.length === 11 && d.startsWith("1") ? d.slice(1) : d;
+}
+
 /** US timezone abbreviations Valor accepts on store/legal timezone. */
 const VALOR_TIMEZONES = new Set(["EST", "CST", "MST", "PST", "AKST", "HST"]);
 
@@ -206,7 +218,7 @@ export function mapMerchantToBoardingDetails(
     firstName: row.owner_first_name ?? "",
     lastName: row.owner_last_name ?? "",
     emailId: normalizeValorEmail(row.owner_email),
-    mobile: digits(row.owner_phone),
+    mobile: toValorMobile(row.owner_phone),
     legalAddress: row.business_address_line1 ?? "",
     legalCity: row.business_city ?? "",
     legalState: (row.business_state ?? "").toUpperCase(),
@@ -232,7 +244,7 @@ export function mapLocationToStore(
     // is captured later.
     superVisorName: `${merchant.owner_first_name ?? ""} ${merchant.owner_last_name ?? ""}`.trim(),
     superVisorEmail: normalizeValorEmail(merchant.owner_email),
-    superVisorContact: digits(merchant.owner_phone),
+    superVisorContact: toValorMobile(merchant.owner_phone),
   };
 }
 

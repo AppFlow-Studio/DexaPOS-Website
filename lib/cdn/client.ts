@@ -6,7 +6,8 @@ export type MerchantAssetCategory =
   | "menu-categories"
   | "menu-items"
   | "menus"
-  | "documents";
+  | "documents"
+  | "kiosk";
 
 export type OrganizationAssetCategory = "logos";
 

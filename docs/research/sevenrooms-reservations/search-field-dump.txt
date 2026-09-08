@@ -1,0 +1,29 @@
+button :: Guests 2 Guests
+button :: Date Aug 27
+button :: Time All Times
+button[dt=venue-special-attention] :: Our commitment to your safety
+button[dt=reservation-timeslot-button-4:00 PM] :: 4:00 PM
+button[dt=reservation-timeslot-button-5:00 PM] :: 5:00 PM
+button[dt=reservation-timeslot-button-5:15 PM] :: 5:15 PM
+button[dt=reservation-timeslot-button-5:30 PM] :: 5:30 PM
+button[dt=reservation-timeslot-button-5:45 PM] :: 5:45 PM
+button[dt=reservation-timeslot-button-6:00 PM] :: 6:00 PM
+button[dt=reservation-timeslot-button-6:15 PM] :: 6:15 PM
+button[dt=reservation-timeslot-button-6:30 PM] :: 6:30 PM
+button[dt=reservation-timeslot-button-6:45 PM] :: 6:45 PM
+button[dt=reservation-timeslot-button-7:00 PM] :: 7:00 PM
+button[dt=reservation-timeslot-button-7:15 PM] :: 7:15 PM
+button[dt=reservation-timeslot-button-7:30 PM] :: 7:30 PM
+button[dt=reservation-timeslot-button-7:45 PM] :: 7:45 PM
+button[dt=reservation-timeslot-button-8:00 PM] :: 8:00 PM
+button[dt=reservation-timeslot-button-8:15 PM] :: 8:15 PM
+button[dt=reservation-timeslot-button-8:30 PM] :: 8:30 PM
+button[dt=reservation-timeslot-button-8:45 PM] :: 8:45 PM
+button[dt=reservation-timeslot-button-9:00 PM] :: 9:00 PM
+button[dt=reservation-timeslot-button-9:15 PM] :: 9:15 PM
+button[dt=reservation-timeslot-button-9:30 PM] :: 9:30 PM
+button[dt=reservation-timeslot-button-9:45 PM] :: 9:45 PM
+button[dt=reservation-timeslot-button-10:00 PM] :: 10:00 PM
+button[dt=alert-me-button] :: Alert Me
+button[dt=other-reservation-availability-summary] :: Other dates with availability
+button[dt=auto-truncating-text-show-more-button] :: View More

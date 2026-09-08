@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
+import { subscriptionBillingScope } from '@/supabase/functions/_shared/subscription-billing-scope'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
@@ -288,6 +290,9 @@ export function MerchantSubscriptionOverviewCard({
   const billingProfilesByLocationId =
     overviewQuery.data?.billingProfilesByLocationId ?? EMPTY_BILLING_PROFILES
   const primaryBillingProfile = overviewQuery.data?.primaryBillingProfile ?? null
+  const billingSettingsHref = `/dashboard/settings/billing?billingScope=${encodeURIComponent(
+    primaryBillingProfile?.location_id || '__merchant_wide__',
+  )}`
 
   const invoicePreviewHtml = useMemo(
     () => (invoicePreviewDocument ? renderSubscriptionInvoiceHtml(invoicePreviewDocument) : ''),
@@ -1008,7 +1013,31 @@ export function MerchantSubscriptionOverviewCard({
 
           {activeSection === 'billing' ? (
             <div className="min-w-0">
+      {transactionSummary.pending > 0 ? (
+        <div className="mb-5 flex flex-col gap-3 rounded-2xl bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div>
+              <div className="font-medium">Outstanding balance: {formatMoney(transactionSummary.pending)}</div>
+              <div className="mt-1 text-sm text-amber-800">
+                Update the saved card so DEXA Billing can automatically retry eligible invoices.
+              </div>
+            </div>
+          </div>
+          <Button asChild size="sm" variant="outline" className="rounded-full border-amber-300 bg-white">
+            <Link href={billingSettingsHref}>Review payment method</Link>
+          </Button>
+        </div>
+      ) : null}
       <PanelSection label="Merchant Payment Method" caption="The primary payment profile used for merchant-wide subscription billing.">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            This card pays the merchant tier only. Each location pays its own devices and add-ons using its own card.
+          </p>
+          <Button asChild size="sm" variant="outline" className="rounded-full">
+            <Link href={billingSettingsHref}>Update payment method</Link>
+          </Button>
+        </div>
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Loading payment method...</div>
         ) : (
@@ -1036,7 +1065,7 @@ export function MerchantSubscriptionOverviewCard({
             ) : null}
           </div>
         )}
-        {Object.keys(billingProfilesByLocationId).length > 1 ? (
+        {Object.keys(billingProfilesByLocationId).length > 0 ? (
           <div className="mt-5 space-y-2">
             <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
               Location payment profiles
@@ -1051,6 +1080,10 @@ export function MerchantSubscriptionOverviewCard({
                     ) : null}
                   </div>
                   <div className="mt-1 text-sm font-medium">{buildPaymentMethodLabel(profile)}</div>
+                  <p className="mt-1 text-xs text-muted-foreground">Pays this location&apos;s subscription only.</p>
+                  <Link className="mt-2 inline-block text-sm text-primary underline" href={`/dashboard/settings/billing?billingScope=${encodeURIComponent(profile.location_id || '')}`}>
+                    Update location card
+                  </Link>
                 </div>
               ))}
             </div>
@@ -1101,7 +1134,11 @@ export function MerchantSubscriptionOverviewCard({
                 <TableBody>
                   {invoices.map((invoice) => {
                     const activityDate = invoice.paid_at || invoice.last_payment_attempt_at || invoice.created_at
-                    const reference = invoice.nmi_transaction_id || invoice.last_payment_error || '-'
+                    const reference =
+                      invoice.processor_transaction_id ||
+                      invoice.nmi_transaction_id ||
+                      invoice.last_payment_error ||
+                      '-'
 
                     return (
                       <TableRow key={`merchant-txn-${invoice.id}`} className="border-0">
@@ -1112,7 +1149,7 @@ export function MerchantSubscriptionOverviewCard({
                           <StatusBadge label={invoiceStatusLabel(invoice.status)} />
                         </TableCell>
                         <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
-                        <TableCell>{invoice.location_name}</TableCell>
+                        <TableCell>{subscriptionBillingScope(invoice.metadata) === 'merchant_tier' ? 'Merchant tier' : invoice.location_name}</TableCell>
                         <TableCell className="text-right font-medium tabular-nums">{formatMoney(invoice.total_amount)}</TableCell>
                       </TableRow>
                     )
@@ -1127,7 +1164,7 @@ export function MerchantSubscriptionOverviewCard({
       <PanelSection
         icon={FileText}
         label="Billing History"
-        caption="View and download invoices across all merchant locations."
+        caption="Invoices are charged automatically through the saved Valor billing method. View and download records across all merchant locations."
       >
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Loading invoices...</div>
@@ -1157,11 +1194,20 @@ export function MerchantSubscriptionOverviewCard({
                       <StatusBadge label={invoiceStatusLabel(invoice.status)} />
                     </TableCell>
                     <TableCell>
-                      Subscription billing for {invoice.location_name}
+                      {subscriptionBillingScope(invoice.metadata) === 'merchant_tier' ? 'Merchant tier subscription' : `Location subscription: ${invoice.location_name}`}
+                      {invoice.status === 'failed' ? (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {invoice.next_retry_at
+                            ? `Automatic retry scheduled ${formatDate(invoice.next_retry_at)}`
+                            : invoice.retry_exhausted_at
+                              ? 'Automatic retries are exhausted. Update the payment method or contact DEXA Billing.'
+                              : 'Payment failed. Update the payment method or contact DEXA Billing.'}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{formatMoney(invoice.total_amount)}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex flex-wrap justify-end gap-2">
                         <Button
                           size="sm"
                           variant="outline"

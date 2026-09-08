@@ -4,6 +4,8 @@ Menus, categories, items, modifiers, recipes, ordering, and POS menu synchroniza
 
 ## Documents
 
+- [FEATURE-2026-08-21-PER-LOCATION-MENU-CHANNEL-VISIBILITY-WEB.md](FEATURE-2026-08-21-PER-LOCATION-MENU-CHANNEL-VISIBILITY-WEB.md) - Per-Location Menu Visibility by Platform - Website
+
 - [category-flow-bugfix-changelog.md](category-flow-bugfix-changelog.md) - Category & Menu Flow â€” Bug Fixes & Changes Changelog
 - [HANDOFF-2026-06-04-MODIFIER-DISPLAY-ORDER-FRONTEND.md](HANDOFF-2026-06-04-MODIFIER-DISPLAY-ORDER-FRONTEND.md) - Modifier Display Order Frontend Handoff
 - [INVESTIGATION-2026-06-10-SAUCY-POS-MENU-SYNC.md](INVESTIGATION-2026-06-10-SAUCY-POS-MENU-SYNC.md) - Saucy POS Menu Sync Investigation

@@ -17,6 +17,7 @@ import { useCart } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
 import { useQrFunnelTracking } from "../../hooks/useQrFunnelTracking";
+import { useActiveItemAutoScroll } from "../../hooks/useActiveItemAutoScroll";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { MenuSearch } from "../MenuSearch";
 import {
@@ -95,6 +96,7 @@ export function BoutiqueLayout({
   const scrollLockRef = useRef<string | null>(null);
   const scrollLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollLockSettleYRef = useRef<number | null>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
   const mobilePillsRef = useRef<HTMLDivElement>(null);
 
   const { setOpen: setCartOpen, items: cartItems, pendingModalItem, clearPendingModalItem } = useCart();
@@ -254,20 +256,8 @@ export function BoutiqueLayout({
     if (pendingModalItem) { handleItemClick(pendingModalItem); clearPendingModalItem(); }
   }, [pendingModalItem, handleItemClick, clearPendingModalItem]);
 
-  // Keep the active category pill visible within the mobile nav strip, so
-  // scroll-spy never highlights a pill scrolled off-screen.
-  useEffect(() => {
-    if (!activeCategory) return;
-    const container = mobilePillsRef.current;
-    if (!container) return;
-    const pill = container.querySelector<HTMLElement>(`[data-cat-pill="${activeCategory}"]`);
-    if (!pill) return;
-    const cRect = container.getBoundingClientRect();
-    const pRect = pill.getBoundingClientRect();
-    if (pRect.left < cRect.left || pRect.right > cRect.right) {
-      container.scrollBy({ left: pRect.left - cRect.left - (cRect.width - pRect.width) / 2, behavior: "smooth" });
-    }
-  }, [activeCategory]);
+  useActiveItemAutoScroll(mobileMenuRef, activeMenuId);
+  useActiveItemAutoScroll(mobilePillsRef, activeCategory);
 
   const scrollToCategory = (categoryId: string) => {
     setActiveCategory(categoryId);
@@ -492,13 +482,14 @@ export function BoutiqueLayout({
             >
               {/* Mobile menu tabs */}
               {menus.length > 1 && (
-                <div className="overflow-x-auto mb-2 -mx-4 px-4 border-b pb-2" style={{ scrollbarWidth: "none", borderColor: "#E5E7EB" }}>
+                <div ref={mobileMenuRef} className="overflow-x-auto mb-2 -mx-4 px-4 border-b pb-2" style={{ scrollbarWidth: "none", borderColor: "#E5E7EB" }}>
                   <div className="flex gap-1">
                     {menus.map((menu) => {
                       const isActive = activeMenuId === menu.id;
                       return (
                         <button
                           key={menu.id}
+                          data-auto-scroll-id={menu.id}
                           type="button"
                           onClick={() => setActiveMenuId(menu.id)}
                           className="px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 -mb-[9px] shrink-0 uppercase tracking-wide"
@@ -531,7 +522,7 @@ export function BoutiqueLayout({
                       <button
                         key={cat.id}
                         type="button"
-                        data-cat-pill={cat.id}
+                        data-auto-scroll-id={cat.id}
                         onClick={() => scrollToCategory(cat.id)}
                         className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
                         style={{
@@ -699,7 +690,7 @@ function BoutiqueItemCard({
       }}
     >
       {/* Image top */}
-      <div className="w-full aspect-[4/3] relative overflow-hidden" style={{ backgroundColor: "#F3F4F6" }}>
+      <div className="relative m-2 mb-0 aspect-square w-[calc(100%-1rem)] overflow-hidden rounded-lg sm:m-0 sm:aspect-[4/3] sm:w-full sm:rounded-none" style={{ backgroundColor: "#F3F4F6" }}>
         {showImage ? (
           <Image
             src={item.image!}
@@ -758,7 +749,7 @@ function BoutiqueItemCard({
           </div>
         )}
         <h4
-          className="font-semibold text-base leading-tight line-clamp-2 mb-1"
+          className="font-bold text-base leading-tight line-clamp-2 mb-1"
           style={{ color: "#1A1A1A", fontFamily: "var(--font-display)" }}
         >
           {item.name}

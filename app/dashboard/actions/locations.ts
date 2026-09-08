@@ -1,5 +1,11 @@
 "use server";
 
+import { after } from "next/server";
+
+import {
+  cancelFutureReservationsForLocation,
+  notifyClosureCancellations,
+} from "@/lib/site-builder/reservations/location-closure";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   Location,
@@ -546,6 +552,17 @@ export async function UpdateBatchSummaryEmailSettings(
 // ARCHIVE / RESTORE OPERATIONS  (replaces hard-delete)
 // ============================================================================
 
+/**
+ * Archiving a branch closes a door, and somebody may be planning to walk
+ * through it.
+ *
+ * Website bookings at an archived location are invisible to the merchant — the
+ * dashboard scopes to active locations — so without this a guest keeps a
+ * confirmation number for a restaurant that no longer opens. The bookings are
+ * cancelled before the merchant is told the archive succeeded, so the count
+ * they read is the truth; the messages go out afterwards, because a mail
+ * provider must not decide whether a branch can be archived.
+ */
 export async function ArchiveLocation(locationId: string) {
   if (!locationId) {
     return { error: "Location ID is required" };
@@ -567,6 +584,20 @@ export async function ArchiveLocation(locationId: string) {
     return { error: result.error };
   }
 
+  // After the archive, never before: cancelling a guest's dinner because an
+  // archive was *about* to happen would be unrecoverable if the archive then
+  // failed.
+  const closure = await cancelFutureReservationsForLocation(
+    locationId,
+    `${result.name ?? "This location"} has closed.`,
+  );
+  if (closure.error) {
+    console.error("Error cancelling reservations for archived location:", closure.error);
+  }
+  if (closure.reservationIds.length > 0) {
+    after(() => notifyClosureCancellations(closure.reservationIds));
+  }
+
   const { data: locationData } = await supabase
     .from("locations")
     .select("merchant_id")
@@ -585,7 +616,7 @@ export async function ArchiveLocation(locationId: string) {
     });
   }
 
-  return { success: true };
+  return { success: true, cancelledReservations: closure.cancelled };
 }
 
 export async function RestoreLocation(locationId: string) {

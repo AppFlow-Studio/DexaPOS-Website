@@ -2,6 +2,9 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+import { isPublicStorefrontApiPath } from '@/lib/site-builder/public-api-paths'
+import { SITE_DOMAIN, brandSubdomainFromHost } from '@/lib/site-builder/public-url'
+
 const isInternalTeamRoutes = createRouteMatcher(['/manage(.*)'])
 const isMerchantRoutes = createRouteMatcher(['/dashboard(.*)'])
 const isStorefrontRoutes = createRouteMatcher(['/sites(.*)'])
@@ -34,8 +37,34 @@ const isCmsAdminRoute = createRouteMatcher(['/admin(.*)'])
 // functions) that authenticate via the x-internal-secret header (401 on mismatch)
 // and have NO Clerk session — so they must skip the middleware sign-in redirect,
 // which would otherwise bounce them to /sign-in and silently break the callers
-// (e.g. the snooze → OrderOut resync). All three own their own authorization.
-const isPublicApiRoute = createRouteMatcher(['/api/contact(.*)', '/api/cms(.*)', '/api/internal(.*)'])
+// (e.g. the snooze → OrderOut resync). All of these own their own authorization.
+//
+// THE THREE BELOW ARE CALLED BY STRANGERS, and every one of them was gated by
+// this middleware until browser QA caught it. `/api(.*)` is in
+// `isKnownAppRoute`, so an API route that is not named here is redirected to
+// /sign-in — which for an anonymous caller is not an error page, it is a 307 to
+// a login form. The endpoints looked correct in isolation and were unreachable
+// in production:
+//
+//   site-reservations — the whole public booking flow (availability, hold,
+//     book, cancel). Every one authenticates by rate limit, honeypot and a
+//     service-role SECURITY DEFINER call; none of them wants a Clerk session,
+//     and a restaurant guest does not have one.
+//   site-forms/submit — a published site's contact form, posted by visitors.
+//   marketing/unsubscribe — the link at the bottom of a marketing email.
+//     Demanding a login to unsubscribe is broken twice over: it does not work,
+//     and "one click to unsubscribe" is a legal requirement, not a nicety.
+//
+// A new public endpoint MUST be added here, and the way to find out is to call
+// it signed out. Signed in, every one of these returns 200 and looks fine.
+const isPublicApiRoute = createRouteMatcher([
+  '/api/contact(.*)',
+  '/api/cms(.*)',
+  '/api/internal(.*)',
+  '/api/site-reservations(.*)',
+  '/api/site-forms(.*)',
+  '/api/marketing/unsubscribe(.*)',
+])
 // The set of gated / app-owned route prefixes. Anything NOT in this set (and not
 // already handled as public above) is treated as public marketing so the
 // (marketing) [...slug] CMS catch-all can serve pages published at arbitrary
@@ -52,29 +81,26 @@ const isKnownAppRoute = createRouteMatcher([
   '/trpc(.*)',
 ])
 
+/**
+ * The brand subdomain this Host addresses, or null for anything else.
+ *
+ * One rule, two roots. `{slug}.dexaposai.com` in production — or whatever
+ * NEXT_PUBLIC_ROOT_DOMAIN says, which is the same value the dashboard builds
+ * its links from; the literal that used to be here was a second copy of that
+ * domain, and the two could disagree, so a deployment on another host handed
+ * out addresses this function then refused to route.
+ *
+ * Development keeps `localhost` as its root whatever is configured, so
+ * `joes.localhost:3000` works with no extra setup. What it no longer keeps is a
+ * *separate implementation*: the old dev branch applied neither the reserved
+ * names nor the single-label rule, so the one environment anybody can test in
+ * was the one that did not behave like production.
+ */
 function extractStoreSlug(hostname: string): string | null {
   const hostWithoutPort = hostname.split(':')[0];
+  const root = process.env.NODE_ENV === 'development' ? 'localhost' : SITE_DOMAIN;
 
-  if (process.env.NODE_ENV === 'development') {
-    if (hostWithoutPort === 'localhost') return null;
-    if (hostWithoutPort.endsWith('.localhost')) {
-      return hostWithoutPort.replace('.localhost', '');
-    }
-    return null;
-  }
-
-  // Production: {slug}.dexaposai.com
-  if (hostWithoutPort.endsWith('.dexaposai.com')) {
-    const parts = hostWithoutPort.split('.');
-    // slug.dexaposai.com → ['slug', 'dexaposai', 'com'] (3 parts)
-    if (parts.length !== 3) return null;
-    const subdomain = parts[0];
-    const RESERVED = new Set(['www', 'api', 'app', 'admin', 'mail', 'cdn', 'assets', 'static']);
-    if (RESERVED.has(subdomain)) return null;
-    return subdomain;
-  }
-
-  return null;
+  return brandSubdomainFromHost(hostWithoutPort, root);
 }
 
 type StoreMatch = {
@@ -108,6 +134,40 @@ async function getStoreBySlug(slug: string): Promise<StoreMatch | null> {
       slug: data.slug,
       isActive: data.is_active !== false,
     };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A brand website address — `{subdomain}.dexaposai.com`.
+ *
+ * Checked only after the storefront lookup misses, because the two share one
+ * namespace and the database refuses to let them collide: a slug is either a
+ * storefront or a brand site, never both.
+ *
+ * Goes through `get_public_site_page` rather than reading `merchant_sites`
+ * directly, because the website tables are REVOKED from anon by design and this
+ * runs with the publishable key. That function is the only public door, and it
+ * is exactly the one the route itself will use a moment later.
+ */
+async function lookupBrandSite(slug: string): Promise<StoreMatch | null> {
+  try {
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    );
+    const { data } = await supabase.rpc('get_public_site_page', {
+      p_slug: slug,
+      p_path: '',
+    });
+
+    const row = (data as { addressed_by_subdomain?: boolean }[] | null)?.[0];
+    // A storefront slug also returns a row here; only a subdomain match means
+    // this host belongs to the brand site.
+    if (!row?.addressed_by_subdomain) return null;
+
+    return { slug, isActive: true };
   } catch {
     return null;
   }
@@ -153,7 +213,8 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
 
   // Custom domain fallback (production only)
   if (extractedSlug) {
-    storeMatch = await getStoreBySlug(extractedSlug);
+    storeMatch =
+      (await getStoreBySlug(extractedSlug)) ?? (await lookupBrandSite(extractedSlug));
   } else if (process.env.NODE_ENV !== 'development') {
     storeMatch = await lookupCustomDomain(hostname);
   }
@@ -161,6 +222,16 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
   if (storeMatch?.slug) {
     if (!storeMatch.isActive) {
       return notFoundResponse();
+    }
+
+    // The storefront's own public API, which must reach its route handler
+    // rather than the storefront's page tree. Rewriting these turned every
+    // booking request and every contact-form submission on a subdomain or a
+    // custom domain into a 404 HTML page — see `isPublicStorefrontApiPath` for
+    // why it is these two prefixes and not all of `/api`. Checked AFTER the
+    // is-active gate above, so a suspended store's endpoints stay dark too.
+    if (isPublicStorefrontApiPath(req.nextUrl.pathname)) {
+      return NextResponse.next();
     }
 
     const { slug } = storeMatch;
@@ -174,7 +245,10 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
 
   const directStoreSlug = extractSitesRouteSlug(req.nextUrl.pathname);
   if (directStoreSlug) {
-    const directStoreMatch = await getStoreBySlug(directStoreSlug);
+    // A brand site is reachable at /sites/{subdomain} as well, which is the
+    // form used in development and by anything that links internally.
+    const directStoreMatch =
+      (await getStoreBySlug(directStoreSlug)) ?? (await lookupBrandSite(directStoreSlug));
     if (!directStoreMatch?.slug || !directStoreMatch.isActive) {
       return notFoundResponse();
     }

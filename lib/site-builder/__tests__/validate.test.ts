@@ -1,0 +1,290 @@
+import { describe, expect, it } from "vitest";
+
+import { addSection, updateSectionProps, updateSeo } from "../mutations";
+import {
+  createEmptyPage,
+  createSection,
+  createStarterPage,
+  type PageDocument,
+} from "../page-document";
+import { SECTION_REGISTRY } from "../sections/registry";
+import { validatePage } from "../validate";
+
+function starter(): PageDocument {
+  const doc = createStarterPage({ locationId: "loc_1" });
+  return updateSeo(doc, {
+    title: "Tony's Pizza — Brooklyn",
+    description:
+      "Wood-fired Neapolitan pizza in Williamsburg. Order online for pickup or delivery, open until 11pm.",
+  });
+}
+
+const codes = (issues: { code: string }[]) => issues.map((i) => i.code);
+
+describe("validatePage", () => {
+  it("passes a complete starter page", () => {
+    const result = validatePage(starter());
+    expect(result.errors).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+
+  it("errors when a locked section is missing", () => {
+    const doc = starter();
+    const withoutFooter = { ...doc, sections: doc.sections.filter((s) => s.kind !== "footer") };
+    const result = validatePage(withoutFooter);
+    expect(result.ok).toBe(false);
+    expect(codes(result.errors)).toContain("missing_required_section");
+  });
+
+  it("errors on a page with nothing between the hero and the footer", () => {
+    const result = validatePage(createEmptyPage({ locationId: "loc_1" }));
+    expect(result.ok).toBe(false);
+    expect(codes(result.errors)).toContain("empty_page");
+  });
+
+  it("errors on a duplicate singleton", () => {
+    const doc = starter();
+    const hero = doc.sections.find((s) => s.kind === "hero")!;
+    const result = validatePage({
+      ...doc,
+      sections: [...doc.sections, { ...hero, id: "s_hero_2" }],
+    });
+    expect(result.ok).toBe(false);
+    expect(codes(result.errors)).toContain("duplicate_singleton");
+  });
+
+  it("errors on duplicate section ids", () => {
+    const doc = starter();
+    const result = validatePage({
+      ...doc,
+      sections: doc.sections.map((s) => ({ ...s, id: "s_same" })),
+    });
+    expect(result.ok).toBe(false);
+    expect(codes(result.errors)).toContain("duplicate_section_id");
+  });
+
+  it("errors when zones are out of order", () => {
+    const doc = starter();
+    const footer = doc.sections.find((s) => s.kind === "footer")!;
+    const rest = doc.sections.filter((s) => s.kind !== "footer");
+    const result = validatePage({ ...doc, sections: [rest[0], footer, ...rest.slice(1)] });
+    expect(result.ok).toBe(false);
+    expect(codes(result.errors)).toContain("zone_out_of_order");
+  });
+
+  it("errors when a required binding has no id", () => {
+    const doc = createStarterPage(); // no locationId → footer/location bindings empty
+    const result = validatePage(doc);
+    expect(result.ok).toBe(false);
+    expect(codes(result.errors)).toContain("unset_binding");
+  });
+
+  /**
+   * The D6 consequence that matters most: a merchant who deleted a menu item
+   * last month must still be able to publish a typo fix.
+   */
+  it("treats a deleted menu item as a warning, never an error", () => {
+    const doc = starter();
+    const popularId = doc.sections.find((s) => s.kind === "popular-items")!.id;
+    const bound = updateSectionProps(doc, popularId, {
+      items: [
+        { type: "menu_item", id: "4471" },
+        { type: "menu_item", id: "4472" },
+      ],
+    });
+    expect(bound.ok).toBe(true);
+    if (!bound.ok) return;
+
+    const result = validatePage(bound.doc, { unresolvedBindingIds: ["4472"] });
+    expect(result.ok).toBe(true);
+    expect(codes(result.warnings)).toContain("unresolved_binding");
+  });
+
+  describe("SEO warnings", () => {
+    it("warns when the title and description are missing", () => {
+      const result = validatePage(createStarterPage({ locationId: "loc_1" }));
+      expect(codes(result.warnings)).toContain("seo_missing_title");
+      expect(codes(result.warnings)).toContain("seo_missing_description");
+    });
+
+    it("warns on an over-long title", () => {
+      const result = validatePage(updateSeo(starter(), { title: "x".repeat(80) }));
+      expect(codes(result.warnings)).toContain("seo_title_long");
+    });
+
+    it("warns on a too-short description", () => {
+      const result = validatePage(updateSeo(starter(), { description: "Too short." }));
+      expect(codes(result.warnings)).toContain("seo_description_length");
+    });
+
+    it("warns when the page is set to noindex", () => {
+      const result = validatePage(updateSeo(starter(), { noindex: true }));
+      expect(codes(result.warnings)).toContain("seo_noindex");
+    });
+
+    it("never blocks publishing on SEO alone", () => {
+      const result = validatePage(createStarterPage({ locationId: "loc_1" }));
+      expect(result.ok).toBe(true);
+      expect(result.warnings.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("warns about empty sections", () => {
+    // The starter's gallery and FAQ ship empty by design.
+    const result = validatePage(starter());
+    expect(codes(result.warnings)).toContain("empty_section");
+  });
+
+  it("warns about an image with no alt text", () => {
+    const doc = starter();
+    const heroId = doc.sections.find((s) => s.kind === "hero")!.id;
+    const withImage = updateSectionProps(doc, heroId, { image: { assetId: "as_1" } });
+    expect(withImage.ok).toBe(true);
+    if (!withImage.ok) return;
+    expect(codes(validatePage(withImage.doc).warnings)).toContain("image_missing_alt");
+  });
+
+  it("does not warn once alt text is supplied", () => {
+    const doc = starter();
+    const heroId = doc.sections.find((s) => s.kind === "hero")!.id;
+    const withAlt = updateSectionProps(doc, heroId, {
+      image: { assetId: "as_1", alt: "Pizza coming out of a wood-fired oven" },
+    });
+    expect(withAlt.ok).toBe(true);
+    if (!withAlt.ok) return;
+    const heroWarnings = validatePage(withAlt.doc).warnings.filter(
+      (w) => w.sectionId === heroId && w.code === "image_missing_alt",
+    );
+    expect(heroWarnings).toEqual([]);
+  });
+
+  it("reports invalid props as an error", () => {
+    const doc = starter();
+    const result = validatePage({
+      ...doc,
+      sections: doc.sections.map((s) =>
+        s.kind === "hero"
+          ? // Deliberately invalid: this is the shape a corrupted or
+            // hand-edited document would arrive in.
+            ({ ...s, props: { ...s.props, variant: "neon" } } as unknown as typeof s)
+          : s,
+      ),
+    });
+    expect(result.ok).toBe(false);
+    expect(codes(result.errors)).toContain("invalid_section_props");
+  });
+
+  it.each(["form", "integrations"] as const)(
+    "blocks an incomplete visible %s section",
+    (kind) => {
+      const added = addSection(starter(), kind);
+      expect(added.ok).toBe(true);
+      if (!added.ok) return;
+      const result = validatePage(added.doc);
+      expect(codes(result.errors)).toContain("incomplete_section");
+    },
+  );
+
+  /**
+   * PDF is no longer offered in the Add Section catalogue, so it cannot be put
+   * on a page through `addSection` any more — but pages published while it was
+   * offered still carry one, and an empty one still has to block a republish.
+   * Built directly here for exactly that reason.
+   */
+  it("blocks an incomplete visible pdf section left over from when it was offered", () => {
+    const doc = starter();
+    const result = validatePage({
+      ...doc,
+      sections: [...doc.sections, createSection("pdf")],
+    });
+    expect(codes(result.errors)).toContain("incomplete_section");
+  });
+
+  it("allows an empty video section to publish and warns that it will be omitted", () => {
+    const added = addSection(starter(), "video");
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+
+    const result = validatePage(added.doc);
+    const videoWarnings = result.warnings.filter((warning) => warning.kind === "video");
+    expect(result.ok).toBe(true);
+    expect(codes(result.errors)).not.toContain("incomplete_section");
+    expect(codes(videoWarnings)).toContain("empty_section");
+  });
+
+  it("allows an incomplete section to remain as a hidden draft", () => {
+    const added = addSection(starter(), "form");
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    const formId = added.doc.sections.find((section) => section.kind === "form")!.id;
+    const hidden = {
+      ...added.doc,
+      sections: added.doc.sections.map((section) =>
+        section.id === formId ? { ...section, hidden: true } : section,
+      ),
+    };
+    expect(codes(validatePage(hidden).errors)).not.toContain("incomplete_section");
+  });
+
+  it("blocks destinations that need a value when none is selected", () => {
+    const doc = starter();
+    const heroId = doc.sections.find((section) => section.kind === "hero")!.id;
+    const changed = updateSectionProps(doc, heroId, {
+      primaryCta: { label: "About us", target: { kind: "page" } },
+    });
+    expect(changed.ok).toBe(true);
+    if (!changed.ok) return;
+    expect(codes(validatePage(changed.doc).errors)).toContain("incomplete_link");
+  });
+
+  it("derives its required kinds from the registry, not a hardcoded list", () => {
+    const required = Object.values(SECTION_REGISTRY)
+      .filter((d) => !d.deletable)
+      .map((d) => d.kind)
+      .sort();
+    expect(required).toEqual(["footer", "header", "hero"]);
+  });
+});
+
+/**
+ * §U4 — a repeater row starts empty rather than holding the word "New".
+ *
+ * The two halves are inseparable and belong in one place: the schema has to
+ * *admit* the empty row (otherwise the section refuses every edit, §C4), and
+ * the publish gate has to *refuse* it (otherwise "" reaches a live page, which
+ * is the same accident "New" caused, only quieter).
+ */
+describe("an unfinished repeater row", () => {
+  function pageWithFaq(items: unknown[]): PageDocument {
+    const doc = starter();
+    const added = addSection(doc, "faq", { atIndex: 1 });
+    if (!added.ok) throw new Error("could not add the faq section");
+    const faq = added.doc.sections.find((s) => s.kind === "faq")!;
+    const updated = updateSectionProps(added.doc, faq.id, { items });
+    if (!updated.ok) throw new Error(`faq items refused: ${updated.message}`);
+    return updated.doc;
+  }
+
+  it("is storable, so the row stays editable while it is written", () => {
+    // Throws inside the helper if the schema refuses it.
+    expect(() => pageWithFaq([{ question: "", answer: "" }])).not.toThrow();
+  });
+
+  it("blocks publishing until it is filled in", () => {
+    const result = validatePage(pageWithFaq([{ question: "", answer: "" }]));
+    expect(result.ok).toBe(false);
+    expect(codes(result.errors)).toContain("incomplete_section");
+  });
+
+  it("stops blocking once the merchant writes it", () => {
+    const result = validatePage(
+      pageWithFaq([{ question: "Do you deliver?", answer: "Yes, within three miles." }]),
+    );
+    expect(codes(result.errors)).not.toContain("incomplete_section");
+  });
+
+  it("does not fire on a section whose optional fields are simply absent", () => {
+    const result = validatePage(pageWithFaq([{ question: "Parking?", answer: "Out back." }]));
+    expect(result.ok).toBe(true);
+  });
+});

@@ -39,6 +39,7 @@ export function MenuSearch({
   const [expanded, setExpanded] = useState(false); // icon mode only
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const toggleButtonRef = useRef<HTMLButtonElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const allItems = useMemo(() => flattenItems(menus), [menus]);
@@ -84,6 +85,22 @@ export function MenuSearch({
     inputRef.current?.focus();
   };
 
+  const closeIconSearch = useCallback(() => {
+    setExpanded(false);
+    setFocused(false);
+    setQuery("");
+  }, []);
+
+  const toggleIconSearch = () => {
+    if (expanded) {
+      closeIconSearch();
+      return;
+    }
+
+    setExpanded(true);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
   if (variant === "icon") {
     return (
       <div ref={containerRef} className="relative flex items-center">
@@ -105,6 +122,12 @@ export function MenuSearch({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onFocus={() => setFocused(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      closeIconSearch();
+                      toggleButtonRef.current?.focus();
+                    }
+                  }}
                   placeholder={placeholder}
                   autoFocus
                   className="w-full pl-8 pr-8 py-1.5 text-sm rounded-full border outline-none"
@@ -120,13 +143,15 @@ export function MenuSearch({
           ) : null}
         </AnimatePresence>
         <button
+          ref={toggleButtonRef}
           type="button"
-          onClick={() => { setExpanded(true); setTimeout(() => inputRef.current?.focus(), 50); }}
+          onClick={toggleIconSearch}
           className="ml-1 w-9 h-9 flex items-center justify-center rounded-full transition-colors hover:bg-gray-100"
           style={{ color: "var(--primary)" }}
-          aria-label="Search menu"
+          aria-label={expanded ? "Close menu search" : "Search menu"}
+          aria-expanded={expanded}
         >
-          <Search className="h-5 w-5" />
+          {expanded ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
         </button>
 
         {/* Dropdown */}

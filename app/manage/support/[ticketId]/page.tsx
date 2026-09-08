@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SupportTicketSkeleton } from "./SupportTicketSkeleton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
@@ -302,16 +303,7 @@ export default function AdminTicketDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex gap-6 h-full">
-        <div className="flex-1 space-y-4">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-6 w-64" />
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full" />
-          ))}
-        </div>
-        <Skeleton className="w-64 h-full" />
-      </div>
+      <SupportTicketSkeleton />
     );
   }
 
@@ -348,9 +340,9 @@ export default function AdminTicketDetailPage() {
   const canSend = !!reply.trim() && !sendMutation.isPending;
 
   return (
-    <div className="flex gap-6" style={{ height: "calc(100vh - 100px)" }}>
+    <div className="flex min-w-0 flex-col gap-6 lg:h-[calc(100vh-100px)] lg:flex-row">
       {/* Left: Chat */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Header */}
         <div className="shrink-0 space-y-2 pb-4 border-b">
           <div className="flex items-center gap-2">
@@ -363,7 +355,7 @@ export default function AdminTicketDetailPage() {
           </div>
           <div className="flex items-start justify-between gap-3 px-1">
             <div className="min-w-0">
-              <h1 className="font-semibold text-xl leading-snug truncate mb-2">{ticket.subject}</h1>
+              <h1 className="mb-2 break-words text-xl font-semibold leading-snug">{ticket.subject}</h1>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-mono text-muted-foreground">{ticket.ticket_number}</span>
                 <Badge
@@ -393,7 +385,7 @@ export default function AdminTicketDetailPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto py-4 space-y-4 min-h-0 px-1">
+        <div className="min-h-0 flex-1 space-y-4 px-1 py-4 lg:overflow-y-auto">
           {messagesWithSeparators.map((item) =>
             item.type === "separator" ? (
               <DateSeparator key={item.key} date={item.date} />
@@ -503,7 +495,7 @@ export default function AdminTicketDetailPage() {
       </div>
 
       {/* Right: Sidebar */}
-      <div className="w-72 shrink-0 overflow-y-auto space-y-5 border-l pl-5">
+      <div className="w-full min-w-0 shrink-0 space-y-5 border-t pt-5 lg:w-72 lg:overflow-y-auto lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
         {/* Ticket Details */}
         <SidebarSection title="Ticket Details">
           <div className="space-y-2.5">

@@ -98,7 +98,7 @@ export async function RefundOnlineOrder(
   const { data: payment } = await svc
     .from("order_payments")
     .select(
-      "id, order_id, merchant_id, location_id, processor_name, transaction_id, authorization_code, rrn, status, amount, tip_amount, refunded_amount, is_settled, settled_at, settlement_batch_id, metadata"
+      "id, order_id, merchant_id, location_id, processor_name, transaction_id, authorization_code, rrn, status, amount, total_amount, tip_amount, refunded_amount, is_settled, settled_at, settlement_batch_id, metadata"
     )
     .eq("id", paymentId)
     .single();
@@ -123,7 +123,10 @@ export async function RefundOnlineOrder(
   }
 
   // 3. Amounts (integer cents throughout).
-  const paymentAmountCents = Math.round(Number(payment.amount ?? 0) * 100);
+  // `total_amount` is the canonical charged amount; `amount` is a legacy fallback.
+  const paymentAmountCents = Math.round(
+    Number(payment.total_amount ?? payment.amount ?? 0) * 100
+  );
   const alreadyRefundedCents = Math.round(Number(payment.refunded_amount ?? 0) * 100);
   const maxRefundableCents = paymentAmountCents - alreadyRefundedCents;
   const requestedCents = input.amountCents ?? maxRefundableCents;
@@ -134,11 +137,8 @@ export async function RefundOnlineOrder(
     };
   }
   const isFull = requestedCents >= maxRefundableCents;
-  // tip_amount is a subset already inside `amount` (order_payments.amount = grand
-  // total from process_online_order), so the refund `amount` already returns the
-  // tip to the card. tipRefundCents only tells apply_refund_to_payment_v4 how much
-  // of the refund was tip, for the proportional tip-fee reversal — full tip on a
-  // full refund, prorated on a partial.
+  // tip_amount is a subset of total_amount. tipRefundCents tells the local
+  // accounting RPC how much of the processor reversal was gratuity.
   const tipCapCents = Math.round(Number(payment.tip_amount ?? 0) * 100);
   const tipRefundCents = isFull
     ? tipCapCents

@@ -14,3 +14,11 @@
 - Do not edit the POS repository from a website-only ticket. Inspect it read-only when a shared contract must be verified, then document the remaining POS work.
 - Do not execute shared-database migrations unless the user explicitly asks. Follow the migration discipline written in the source ticket.
 - Do not commit or push unless the user explicitly asks.
+
+## Pull Requests
+
+- Every pull request must have a descriptive title and a structured body covering the problem, implemented solution, changed areas, automated verification, manual QA, deployment requirements, and remaining work.
+- List every added or changed migration by exact filename. Explain what each migration changes, why it is required, its data/behavioral impact, and the intended staging-to-production rollout order.
+- List every Edge Function, webhook, cron, or environment variable that must be deployed or configured separately from the Git merge.
+- Clearly distinguish code that is complete from migrations, deployments, external credentials, manual QA, recordings, and verifier sign-off that are still pending.
+- Never describe a database or Edge Function change as deployed merely because its source file was committed or pushed.

@@ -5,7 +5,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Star } from "lucide-react";
+import { Star } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useCustomerFeedback, useAddFeedbackResponse, useUpdateFeedbackFlag } from "../../hooks/useCustomerFeedback";
 import { useLocationStore } from "@/stores/location-store";
 import type { CustomerListItem } from "@/types/customer";
@@ -97,7 +98,11 @@ export function FeedbackTab({ customer }: FeedbackTabProps) {
       {/* Feedback List */}
       <div className="space-y-3">
         {isLoading ? (
-          <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-2xl motion-reduce:animate-none" />
+            ))}
+          </div>
         ) : feedback.length === 0 ? (
           <div className="text-center p-8 text-muted-foreground">No feedback yet</div>
         ) : (

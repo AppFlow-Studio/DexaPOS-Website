@@ -17,6 +17,7 @@ import { useCart } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
 import { useQrFunnelTracking } from "../../hooks/useQrFunnelTracking";
+import { useActiveItemAutoScroll } from "../../hooks/useActiveItemAutoScroll";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
 import { MenuSearch } from "../MenuSearch";
 import { StoreHoursModal } from "../StoreHoursModal";
@@ -92,6 +93,7 @@ export function MarketLayout({
   const [navHeight, setNavHeight] = useState(0);
   const mobilePillsRef = useRef<HTMLDivElement>(null);
   const sidebarNavRef = useRef<HTMLDivElement>(null);
+  const menuTabsRef = useRef<HTMLDivElement>(null);
   const popularRowRef = useRef<HTMLDivElement>(null);
   // While a pill click is smooth-scrolling, lock the highlight to the target so
   // the scroll-spy doesn't flicker to sections passed en route.
@@ -149,7 +151,15 @@ export function MarketLayout({
 
   // Items scoped to the active menu only (not all menus)
   const allItems = useMemo(
-    () => allCategories.flatMap((c) => c.items),
+    () => {
+      const uniqueItems = new Map<string, StorefrontItem>();
+      for (const category of allCategories) {
+        for (const item of category.items) {
+          if (!uniqueItems.has(item.id)) uniqueItems.set(item.id, item);
+        }
+      }
+      return Array.from(uniqueItems.values());
+    },
     [allCategories]
   );
 
@@ -355,17 +365,12 @@ export function MarketLayout({
     };
   }, [sectionsWithItems, headerHeight, navHeight]);
 
-  // Keep the active pill visible within each horizontal/vertical nav strip.
+  useActiveItemAutoScroll(mobilePillsRef, activeCategory);
+  useActiveItemAutoScroll(menuTabsRef, activeMenuId);
+
+  // Keep the active category visible within the desktop vertical sidebar.
   useEffect(() => {
     if (!activeCategory) return;
-    const mobile = mobilePillsRef.current?.querySelector<HTMLElement>(`[data-cat-pill="${activeCategory}"]`);
-    if (mobile && mobilePillsRef.current) {
-      const c = mobilePillsRef.current.getBoundingClientRect();
-      const p = mobile.getBoundingClientRect();
-      if (p.left < c.left || p.right > c.right) {
-        mobilePillsRef.current.scrollBy({ left: p.left - c.left - (c.width - p.width) / 2, behavior: "smooth" });
-      }
-    }
     const side = sidebarNavRef.current?.querySelector<HTMLElement>(`[data-cat-pill="${activeCategory}"]`);
     side?.scrollIntoView({ block: "nearest" });
   }, [activeCategory]);
@@ -475,7 +480,7 @@ export function MarketLayout({
                         <button
                           key={cat.id}
                           type="button"
-                          data-cat-pill={cat.id}
+                          data-auto-scroll-id={cat.id}
                           onClick={() => scrollToCategory(cat.id)}
                           className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
                           style={{
@@ -551,12 +556,13 @@ export function MarketLayout({
 
                 {/* Menu tabs — sit under the branch details, above the items */}
                 {menus.length > 1 && (
-                  <div className="mt-4 flex overflow-x-auto gap-1" style={{ scrollbarWidth: "none" }}>
+                  <div ref={menuTabsRef} className="mt-4 flex overflow-x-auto gap-1" style={{ scrollbarWidth: "none" }}>
                     {menus.map((menu) => {
                       const isActive = activeMenuId === menu.id;
                       return (
                         <button
                           key={menu.id}
+                          data-auto-scroll-id={menu.id}
                           type="button"
                           onClick={() => setActiveMenuId(menu.id)}
                           className="px-4 py-3 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 shrink-0 uppercase tracking-wide"
@@ -788,7 +794,7 @@ function PopularItemCard({
       </div>
 
       <h4
-        className="mt-2 text-sm font-medium line-clamp-2 group-hover:text-[color:var(--primary)] transition-colors"
+        className="mt-2 text-sm font-bold line-clamp-2 group-hover:text-[color:var(--primary)] transition-colors"
         style={{ color: "#111827" }}
       >
         {item.name}
@@ -845,7 +851,7 @@ function MarketItemCard({
     >
       {/* Details — left */}
       <div className="flex-1 min-w-0 p-4 flex flex-col">
-        <h4 className="font-semibold text-sm group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#111827" }}>
+        <h4 className="font-bold text-sm group-hover:text-[color:var(--primary)] transition-colors" style={{ color: "#111827" }}>
           {item.name}
         </h4>
         <div className="flex flex-col mt-1">
@@ -872,14 +878,14 @@ function MarketItemCard({
       </div>
 
       {/* Photo — right */}
-      <div className="relative w-32 sm:w-40 shrink-0 self-stretch" style={{ backgroundColor: "#F3F4F6" }}>
+      <div className="relative m-2 ml-0 size-28 shrink-0 self-center overflow-hidden rounded-lg sm:m-0 sm:h-auto sm:w-40 sm:self-stretch sm:rounded-none" style={{ backgroundColor: "#F3F4F6" }}>
         {showImage ? (
           <Image
             src={item.image!}
             fill
             alt={item.name}
             className="object-cover"
-            sizes="160px"
+            sizes="(max-width: 640px) 112px, 160px"
             onError={() => onImageError(item.id)}
           />
         ) : (

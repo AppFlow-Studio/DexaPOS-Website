@@ -84,6 +84,18 @@ export default function ReservationsPage() {
     HISTORY_STATUSES.includes(r.status)
   );
   const covers = active.reduce((sum, r) => sum + (r.party_size ?? 0), 0);
+  /**
+   * Requests still waiting on an answer — **for this branch, on this date, and
+   * the tile says so.**
+   *
+   * A merchant in manual review needs to know something is waiting before they
+   * go looking, and this is the only place that can tell them today. It is also
+   * structurally incapable of being the whole answer: this screen is one branch
+   * and one day by construction, so a request for next Friday at another
+   * restaurant is not counted here and the meta line must not imply otherwise.
+   * The cross-branch, cross-day version is the website inbox's job.
+   */
+  const awaitingAnswer = active.filter((r) => r.status === "pending");
 
   return (
     <PageShell>
@@ -159,9 +171,27 @@ export default function ReservationsPage() {
 
         <div className="px-6 py-6">
           <StatRow
-            columns={3}
+            columns={awaitingAnswer.length > 0 ? 4 : 3}
             className="sm:divide-x-0 [&>*]:sm:pl-0"
           >
+            {/*
+              Only when there is something waiting. A permanent "Awaiting
+              answer: 0" on an auto-accept merchant's screen is a tile that can
+              never do anything, and it would push the three that matter along
+              for every restaurant that never turned manual review on.
+            */}
+            {awaitingAnswer.length > 0 && (
+              <StatTile
+                label="Awaiting your answer"
+                value={awaitingAnswer.length}
+                // "this branch today" was wrong: the date picker can show any
+                // day, so on a selected date the word "today" made a false
+                // claim about which requests this number covers. Caught in
+                // browser QA, 2026-08-30.
+                meta="Guests waiting, this branch and day"
+                isLoading={isLoading}
+              />
+            )}
             <StatTile
               label="Active"
               value={active.length}

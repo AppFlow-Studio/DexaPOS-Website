@@ -1,5 +1,13 @@
 import { createClient } from 'npm:@supabase/supabase-js'
-import { refundSale, voidSale } from '../_shared/nmi.ts'
+import {
+  refundSale as refundNmiSale,
+  voidSale as voidNmiSale,
+  type NmiVoidReason,
+} from '../_shared/nmi.ts'
+import {
+  refundSale as refundValorSale,
+  voidSale as voidValorSale,
+} from '../_shared/valor.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -84,13 +92,19 @@ Deno.serve(async (req: Request): Promise<Response> => {
         id,
         payment_method,
         status,
+        amount,
         total_amount,
+        tip_amount,
         transaction_id,
+        authorization_code,
+        rrn,
         reference_number,
         processor_name,
         payment_device_id,
         is_settled,
-        settled_at
+        settled_at,
+        settlement_batch_id,
+        metadata
       `)
       .eq('order_id', body.order_id)
       .order('initiated_at', { ascending: false })
@@ -111,11 +125,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
     } | null = null
 
     if (cardPaymentNeedsReversal) {
-      if (payment.processor_name && payment.processor_name !== 'nmi') {
+      const processorName = String(payment.processor_name || 'nmi').toLowerCase()
+      if (!['nmi', 'valor'].includes(processorName)) {
         return jsonResponse(
           {
             success: false,
-            error: `Automatic cancellation is only supported for NMI online payments. Found processor "${payment.processor_name}".`,
+            error: `Automatic cancellation is not supported for processor "${payment.processor_name}".`,
           },
           409,
         )
@@ -131,59 +146,150 @@ Deno.serve(async (req: Request): Promise<Response> => {
         )
       }
 
-      let paymentDeviceId = payment.payment_device_id as string | null
+      const amount = Number(
+        Number(payment.total_amount ?? payment.amount ?? order.total_amount ?? 0).toFixed(2),
+      )
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return jsonResponse({ success: false, error: 'Payment amount is invalid.' }, 409)
+      }
 
-      if (!paymentDeviceId) {
-        const { data: storefrontPaymentConfigRows, error: storefrontPaymentConfigError } =
-          await supabase.rpc('get_storefront_payment_config', {
-            p_location_id: order.location_id,
-          })
+      let shouldRefund = Boolean(
+        payment.is_settled || payment.settled_at || payment.settlement_batch_id,
+      )
+      let gatewayTransactionId = ''
+      let gatewayRrn: string | null = null
 
-        if (storefrontPaymentConfigError) {
-          console.error('[CANCEL_ORDER] Failed to resolve storefront payment config:', storefrontPaymentConfigError)
+      if (processorName === 'valor') {
+        const valorAccountId = (
+          payment.metadata as { valor_account_id?: string } | null
+        )?.valor_account_id
+        if (!valorAccountId) {
+          return jsonResponse(
+            { success: false, error: 'Valor account reference is missing on this payment.' },
+            502,
+          )
+        }
+
+        const { data: credentialRows, error: credentialError } = await supabase.rpc(
+          'get_valor_account_credentials',
+          { p_account_id: valorAccountId },
+        )
+        const credential = ((credentialRows as Array<{
+          valor_appid: string
+          valor_epi: string
+          decrypted_appkey: string
+        }> | null) ?? [])[0] ?? null
+
+        if (credentialError || !credential?.decrypted_appkey) {
+          console.error('[CANCEL_ORDER] Failed to resolve Valor credentials:', credentialError)
           return jsonResponse({ success: false, error: 'Payment configuration is unavailable.' }, 502)
         }
 
-        paymentDeviceId =
-          ((storefrontPaymentConfigRows as Array<{ device_id: string; provider: string }> | null) ?? [])
-            .find((row) => row.provider === 'nmi')
-            ?.device_id ?? null
-      }
+        const valorCredentials = {
+          appId: credential.valor_appid,
+          appKey: credential.decrypted_appkey,
+          epi: credential.valor_epi,
+        }
 
-      if (!paymentDeviceId) {
-        return jsonResponse({ success: false, error: 'NMI payment device is not configured.' }, 502)
-      }
+        await supabase.from('merchant_payment_credential_access_log').insert({
+          merchant_id: order.merchant_id,
+          function_name: 'cancel-online-order',
+          store_config_id: session.store_config_id,
+          actor_user_id: null,
+          metadata: {
+            order_id: body.order_id,
+            payment_id: payment.id,
+            trigger: body.trigger ?? 'customer',
+            provider: 'valor',
+            valor_account_id: valorAccountId,
+          },
+        })
 
-      const { data: credentialRows, error: credentialError } = await supabase.rpc(
-        'get_nmi_device_credentials',
-        {
-          p_device_id: paymentDeviceId,
-        },
-      )
+        const doValorVoid = () =>
+          voidValorSale(valorCredentials, { transactionId: payment.transaction_id })
+        const doValorRefund = () =>
+          refundValorSale(valorCredentials, {
+            transactionId: payment.transaction_id,
+            amountMinor: Math.round(amount * 100),
+            authCode: payment.authorization_code ?? undefined,
+            rrn: payment.rrn ?? undefined,
+          })
 
-      if (credentialError) {
-        console.error('[CANCEL_ORDER] Failed to resolve NMI device credentials:', credentialError)
-        return jsonResponse({ success: false, error: 'Payment configuration is unavailable.' }, 502)
-      }
+        let reversalResult = shouldRefund
+          ? await doValorRefund()
+          : await doValorVoid()
+        const settlementStateMismatch = () =>
+          /pending settlement|not settled|already settled|settled transaction/i.test(
+            reversalResult.details.responseText,
+          )
 
-      const nmiDeviceCredential = ((credentialRows as Array<{
-        device_id: string
-        merchant_id: string
-        location_id: string
-        environment: string
-        provider_merchant_id: string | null
-        provider_gateway_id: string | null
-        provider_public_key: string | null
-        decrypted_security_key: string
-      }> | null) ?? [])[0] ?? null
+        if (!reversalResult.success && settlementStateMismatch()) {
+          shouldRefund = !shouldRefund
+          reversalResult = shouldRefund
+            ? await doValorRefund()
+            : await doValorVoid()
+        }
 
-      if (!nmiDeviceCredential?.decrypted_security_key) {
-        return jsonResponse({ success: false, error: 'NMI credentials are not configured.' }, 502)
-      }
+        if (!reversalResult.success) {
+          console.error('[CANCEL_ORDER] Valor reversal failed:', reversalResult)
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                reversalResult.details.responseText ||
+                'Unable to reverse the payment automatically.',
+            },
+            reversalResult.status >= 500 ? 502 : 409,
+          )
+        }
 
-      await supabase
-        .from('payment_credential_access_log')
-        .insert({
+        gatewayTransactionId = reversalResult.details.transactionId
+        gatewayRrn = reversalResult.details.rrn || null
+        reversalDetails = {
+          responseCode: reversalResult.details.responseCode,
+          responseMessage:
+            reversalResult.details.responseText || (shouldRefund ? 'Refunded' : 'Voided'),
+          authCode: reversalResult.details.authCode,
+          referenceNumber:
+            reversalResult.details.rrn ||
+            reversalResult.details.transactionId ||
+            payment.transaction_id,
+        }
+      } else {
+        let paymentDeviceId = payment.payment_device_id as string | null
+
+        if (!paymentDeviceId) {
+          const { data: configRows, error: configError } = await supabase.rpc(
+            'get_storefront_payment_config',
+            { p_location_id: order.location_id },
+          )
+          if (configError) {
+            console.error('[CANCEL_ORDER] Failed to resolve NMI payment config:', configError)
+            return jsonResponse({ success: false, error: 'Payment configuration is unavailable.' }, 502)
+          }
+          paymentDeviceId =
+            ((configRows as Array<{ device_id: string; provider: string }> | null) ?? [])
+              .find((row) => row.provider === 'nmi')?.device_id ?? null
+        }
+
+        if (!paymentDeviceId) {
+          return jsonResponse({ success: false, error: 'NMI payment device is not configured.' }, 502)
+        }
+
+        const { data: credentialRows, error: credentialError } = await supabase.rpc(
+          'get_nmi_device_credentials',
+          { p_device_id: paymentDeviceId },
+        )
+        const credential = ((credentialRows as Array<{
+          decrypted_security_key: string
+        }> | null) ?? [])[0] ?? null
+
+        if (credentialError || !credential?.decrypted_security_key) {
+          console.error('[CANCEL_ORDER] Failed to resolve NMI credentials:', credentialError)
+          return jsonResponse({ success: false, error: 'Payment configuration is unavailable.' }, 502)
+        }
+
+        await supabase.from('payment_credential_access_log').insert({
           device_id: paymentDeviceId,
           function_name: 'cancel-online-order',
           store_config_id: session.store_config_id,
@@ -195,48 +301,67 @@ Deno.serve(async (req: Request): Promise<Response> => {
           },
         })
 
-      const shouldRefund = Boolean(payment.is_settled || payment.settled_at)
-      const amount = Number(Number(payment.total_amount ?? order.total_amount ?? 0).toFixed(2))
-      const reversalResult = shouldRefund
-        ? await refundSale(
-          { apiKey: nmiDeviceCredential.decrypted_security_key },
-          payment.transaction_id,
-          { amount },
-        )
-        : await voidSale(
-          { apiKey: nmiDeviceCredential.decrypted_security_key },
-          payment.transaction_id,
-          reason,
-        )
+        const nmiVoidReason: NmiVoidReason =
+          body.trigger === 'timeout' ? 'pos_timeout' : 'user_cancel'
+        const doNmiVoid = () =>
+          voidNmiSale(
+            { apiKey: credential.decrypted_security_key },
+            payment.transaction_id,
+            nmiVoidReason,
+          )
+        const doNmiRefund = () =>
+          refundNmiSale(
+            { apiKey: credential.decrypted_security_key },
+            payment.transaction_id,
+            { amount },
+          )
 
-      if (!reversalResult.success) {
-        console.error('[CANCEL_ORDER] NMI reversal failed:', reversalResult)
-        return jsonResponse(
-          {
-            success: false,
-            error:
-              reversalResult.details.responseText ||
-              'Unable to reverse the payment automatically.',
-          },
-          reversalResult.status >= 500 ? 502 : 409,
-        )
-      }
+        let reversalResult = shouldRefund ? await doNmiRefund() : await doNmiVoid()
+        const settlementStateMismatch = () =>
+          /pending settlement|not settled|already settled|settled transaction/i.test(
+            `${reversalResult.details.responseText ?? ''} ${reversalResult.text ?? ''}`,
+          )
 
-      reversalDetails = {
-        responseCode: reversalResult.details.responseCode || reversalResult.details.response,
-        responseMessage: reversalResult.details.responseText || (shouldRefund ? 'Refunded' : 'Voided'),
-        authCode: reversalResult.details.authCode,
-        referenceNumber: reversalResult.details.referenceNumber || reversalResult.details.transactionId,
+        if (!reversalResult.success && settlementStateMismatch()) {
+          shouldRefund = !shouldRefund
+          reversalResult = shouldRefund ? await doNmiRefund() : await doNmiVoid()
+        }
+
+        if (!reversalResult.success) {
+          console.error('[CANCEL_ORDER] NMI reversal failed:', reversalResult)
+          return jsonResponse(
+            {
+              success: false,
+              error:
+                reversalResult.details.responseText ||
+                'Unable to reverse the payment automatically.',
+            },
+            reversalResult.status >= 500 ? 502 : 409,
+          )
+        }
+
+        gatewayTransactionId = reversalResult.details.transactionId
+        reversalDetails = {
+          responseCode:
+            reversalResult.details.responseCode || reversalResult.details.response,
+          responseMessage:
+            reversalResult.details.responseText || (shouldRefund ? 'Refunded' : 'Voided'),
+          authCode: reversalResult.details.authCode,
+          referenceNumber:
+            reversalResult.details.referenceNumber ||
+            reversalResult.details.transactionId ||
+            payment.transaction_id,
+        }
       }
 
       const { error: refundApplyError } = await supabase.rpc('apply_refund_to_payment', {
         p_payment_id: payment.id,
         p_refund_amount: Number(amount),
         p_reversal_type: shouldRefund ? 'refund' : 'void',
-        p_return_rrn: null,
+        p_return_rrn: gatewayRrn,
         p_return_auth_code: reversalDetails.authCode || null,
         p_return_reference_id: reversalDetails.referenceNumber || payment.transaction_id,
-        p_return_number: reversalResult.details.transactionId || null,
+        p_return_number: gatewayTransactionId || null,
         p_return_reason: reason,
         p_initiated_by: null,
         p_restore_paid_quantity: false,
@@ -247,17 +372,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
           paymentId: payment.id,
           orderId: body.order_id,
           reversalType: shouldRefund ? 'refund' : 'void',
-          gatewayReference:
-            reversalResult.details.transactionId ||
-            reversalDetails.referenceNumber ||
-            null,
+          gatewayReference: gatewayTransactionId || reversalDetails.referenceNumber || null,
           error: refundApplyError,
         })
         return jsonResponse(
           {
             success: false,
             error:
-              `Payment reversal was accepted by NMI but could not be recorded locally. ` +
+              `Payment reversal was accepted by ${processorName.toUpperCase()} but could not be recorded locally. ` +
               `Do not retry. Contact support with order ${body.order_id}.`,
           },
           500,
