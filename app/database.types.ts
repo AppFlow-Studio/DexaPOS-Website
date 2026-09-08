@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -121,6 +121,7 @@ export type Database = {
           notification_type: string
           recipient_user_id: string | null
           subscription_plan_request_id: string | null
+          subscription_service_request_id: string | null
           title: string
         }
         Insert: {
@@ -135,6 +136,7 @@ export type Database = {
           notification_type: string
           recipient_user_id?: string | null
           subscription_plan_request_id?: string | null
+          subscription_service_request_id?: string | null
           title: string
         }
         Update: {
@@ -149,6 +151,7 @@ export type Database = {
           notification_type?: string
           recipient_user_id?: string | null
           subscription_plan_request_id?: string | null
+          subscription_service_request_id?: string | null
           title?: string
         }
         Relationships: [
@@ -171,6 +174,13 @@ export type Database = {
             columns: ["subscription_plan_request_id"]
             isOneToOne: false
             referencedRelation: "subscription_plan_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_notifications_subscription_service_request_id_fkey"
+            columns: ["subscription_service_request_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_service_requests"
             referencedColumns: ["id"]
           },
         ]
@@ -507,6 +517,114 @@ export type Database = {
           },
         ]
       }
+      cash_drawer_kick_events: {
+        Row: {
+          cash_drawer_id: string | null
+          command_acked: boolean | null
+          created_at: string
+          drawer_confirmed: boolean | null
+          error_message: string | null
+          id: string
+          kicked_at: string
+          location_id: string
+          merchant_id: string
+          outcome: string
+          printer_id: string
+          raw: Json
+          source: string | null
+          station_id: string | null
+        }
+        Insert: {
+          cash_drawer_id?: string | null
+          command_acked?: boolean | null
+          created_at?: string
+          drawer_confirmed?: boolean | null
+          error_message?: string | null
+          id?: string
+          kicked_at: string
+          location_id: string
+          merchant_id: string
+          outcome: string
+          printer_id: string
+          raw: Json
+          source?: string | null
+          station_id?: string | null
+        }
+        Update: {
+          cash_drawer_id?: string | null
+          command_acked?: boolean | null
+          created_at?: string
+          drawer_confirmed?: boolean | null
+          error_message?: string | null
+          id?: string
+          kicked_at?: string
+          location_id?: string
+          merchant_id?: string
+          outcome?: string
+          printer_id?: string
+          raw?: Json
+          source?: string | null
+          station_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_drawer_kick_events_cash_drawer_id_fkey"
+            columns: ["cash_drawer_id"]
+            isOneToOne: false
+            referencedRelation: "cash_drawers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_drawer_kick_events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_drawer_kick_events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_drawer_kick_events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "cash_drawer_kick_events_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_drawer_kick_events_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_drawer_kick_events_printer_id_fkey"
+            columns: ["printer_id"]
+            isOneToOne: false
+            referencedRelation: "printers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_drawer_kick_events_station_id_fkey"
+            columns: ["station_id"]
+            isOneToOne: false
+            referencedRelation: "stations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cash_drawer_operations: {
         Row: {
           amount: number
@@ -774,6 +892,7 @@ export type Database = {
           current_session_id: string | null
           device_id: string | null
           drawer_number: number | null
+          host_printer_id: string | null
           id: string
           is_active: boolean | null
           is_open: boolean | null
@@ -788,6 +907,7 @@ export type Database = {
           current_session_id?: string | null
           device_id?: string | null
           drawer_number?: number | null
+          host_printer_id?: string | null
           id?: string
           is_active?: boolean | null
           is_open?: boolean | null
@@ -802,6 +922,7 @@ export type Database = {
           current_session_id?: string | null
           device_id?: string | null
           drawer_number?: number | null
+          host_printer_id?: string | null
           id?: string
           is_active?: boolean | null
           is_open?: boolean | null
@@ -817,6 +938,13 @@ export type Database = {
             columns: ["device_id"]
             isOneToOne: false
             referencedRelation: "device_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_drawers_host_printer_id_fkey"
+            columns: ["host_printer_id"]
+            isOneToOne: false
+            referencedRelation: "printers"
             referencedColumns: ["id"]
           },
           {
@@ -4840,6 +4968,326 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_location_menu_items"
             referencedColumns: ["menu_item_id"]
+          },
+        ]
+      }
+      kds_board_snapshots: {
+        Row: {
+          board: Json
+          board_hash: string
+          captured_at: string
+          id: string
+          item_count: number
+          kds_display_id: string
+          location_id: string
+          merchant_id: string
+          order_id: string | null
+          reason: string
+          ticket_count: number
+        }
+        Insert: {
+          board: Json
+          board_hash: string
+          captured_at?: string
+          id?: string
+          item_count?: number
+          kds_display_id: string
+          location_id: string
+          merchant_id: string
+          order_id?: string | null
+          reason: string
+          ticket_count?: number
+        }
+        Update: {
+          board?: Json
+          board_hash?: string
+          captured_at?: string
+          id?: string
+          item_count?: number
+          kds_display_id?: string
+          location_id?: string
+          merchant_id?: string
+          order_id?: string | null
+          reason?: string
+          ticket_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_board_snapshots_kds_display_id_fkey"
+            columns: ["kds_display_id"]
+            isOneToOne: false
+            referencedRelation: "kds_displays"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_board_snapshots_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_board_snapshots_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_board_snapshots_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "kds_board_snapshots_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_board_snapshots_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_board_snapshots_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "online_order_unmapped_items"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "kds_board_snapshots_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_board_snapshots_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_stuck_paid_active_sessions"
+            referencedColumns: ["order_id"]
+          },
+        ]
+      }
+      kds_device_events: {
+        Row: {
+          app_version: string | null
+          client_event_at: string
+          clock_skew_ms: number | null
+          device_origin_id: string | null
+          event_type: string
+          id: string
+          kds_display_id: string
+          location_id: string
+          merchant_id: string
+          order_id: string | null
+          order_item_id: string
+          received_at: string
+        }
+        Insert: {
+          app_version?: string | null
+          client_event_at: string
+          clock_skew_ms?: number | null
+          device_origin_id?: string | null
+          event_type: string
+          id?: string
+          kds_display_id: string
+          location_id: string
+          merchant_id: string
+          order_id?: string | null
+          order_item_id: string
+          received_at?: string
+        }
+        Update: {
+          app_version?: string | null
+          client_event_at?: string
+          clock_skew_ms?: number | null
+          device_origin_id?: string | null
+          event_type?: string
+          id?: string
+          kds_display_id?: string
+          location_id?: string
+          merchant_id?: string
+          order_id?: string | null
+          order_item_id?: string
+          received_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_device_events_kds_display_id_fkey"
+            columns: ["kds_display_id"]
+            isOneToOne: false
+            referencedRelation: "kds_displays"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_device_events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_device_events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_device_events_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "kds_device_events_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_device_events_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_device_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "online_order_unmapped_items"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "kds_device_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_device_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_stuck_paid_active_sessions"
+            referencedColumns: ["order_id"]
+          },
+          {
+            foreignKeyName: "kds_device_events_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "online_order_unmapped_items"
+            referencedColumns: ["order_item_id"]
+          },
+          {
+            foreignKeyName: "kds_device_events_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kds_device_snapshots: {
+        Row: {
+          app_version: string | null
+          client_captured_at: string | null
+          clock_skew_ms: number | null
+          device_origin_id: string | null
+          id: string
+          item_count: number
+          kds_display_id: string
+          location_id: string
+          merchant_id: string
+          payload: Json
+          payload_hash: string
+          received_at: string
+          ticket_count: number
+        }
+        Insert: {
+          app_version?: string | null
+          client_captured_at?: string | null
+          clock_skew_ms?: number | null
+          device_origin_id?: string | null
+          id?: string
+          item_count?: number
+          kds_display_id: string
+          location_id: string
+          merchant_id: string
+          payload: Json
+          payload_hash: string
+          received_at?: string
+          ticket_count?: number
+        }
+        Update: {
+          app_version?: string | null
+          client_captured_at?: string | null
+          clock_skew_ms?: number | null
+          device_origin_id?: string | null
+          id?: string
+          item_count?: number
+          kds_display_id?: string
+          location_id?: string
+          merchant_id?: string
+          payload?: Json
+          payload_hash?: string
+          received_at?: string
+          ticket_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_device_snapshots_kds_display_id_fkey"
+            columns: ["kds_display_id"]
+            isOneToOne: false
+            referencedRelation: "kds_displays"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_device_snapshots_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_device_snapshots_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_device_snapshots_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "kds_device_snapshots_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_device_snapshots_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -8940,6 +9388,90 @@ export type Database = {
           },
         ]
       }
+      marketing_qr_codes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          deactivated_at: string | null
+          destination_path: string
+          id: string
+          is_active: boolean
+          last_scanned_at: string | null
+          location_id: string
+          merchant_id: string
+          name: string
+          scan_count: number
+          short_code: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          deactivated_at?: string | null
+          destination_path?: string
+          id?: string
+          is_active?: boolean
+          last_scanned_at?: string | null
+          location_id: string
+          merchant_id: string
+          name: string
+          scan_count?: number
+          short_code: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          deactivated_at?: string | null
+          destination_path?: string
+          id?: string
+          is_active?: boolean
+          last_scanned_at?: string | null
+          location_id?: string
+          merchant_id?: string
+          name?: string
+          scan_count?: number
+          short_code?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_qr_codes_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_qr_codes_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_qr_codes_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "marketing_qr_codes_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_qr_codes_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketing_recipients: {
         Row: {
           campaign_id: string
@@ -9819,13 +10351,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "merchant_billing_profiles_processor_account_id_fkey"
-            columns: ["processor_account_id"]
-            isOneToOne: false
-            referencedRelation: "merchant_processor_accounts"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "merchant_billing_profiles_location_id_fkey"
             columns: ["location_id"]
             isOneToOne: false
@@ -9872,6 +10397,13 @@ export type Database = {
             columns: ["platform_billing_config_id"]
             isOneToOne: false
             referencedRelation: "platform_billing_provider_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchant_billing_profiles_processor_account_id_fkey"
+            columns: ["processor_account_id"]
+            isOneToOne: false
+            referencedRelation: "merchant_processor_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -10239,6 +10771,8 @@ export type Database = {
           merchant_id: string
           nav: Json
           render_mode: string
+          reservations_page_id: string | null
+          reservations_page_provisioned_at: string | null
           schema_version: number
           site_seo: Json
           subdomain: string | null
@@ -10261,6 +10795,8 @@ export type Database = {
           merchant_id: string
           nav?: Json
           render_mode?: string
+          reservations_page_id?: string | null
+          reservations_page_provisioned_at?: string | null
           schema_version?: number
           site_seo?: Json
           subdomain?: string | null
@@ -10283,6 +10819,8 @@ export type Database = {
           merchant_id?: string
           nav?: Json
           render_mode?: string
+          reservations_page_id?: string | null
+          reservations_page_provisioned_at?: string | null
           schema_version?: number
           site_seo?: Json
           subdomain?: string | null
@@ -10309,6 +10847,13 @@ export type Database = {
             columns: ["merchant_id"]
             isOneToOne: true
             referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchant_sites_reservations_page_id_fkey"
+            columns: ["reservations_page_id"]
+            isOneToOne: false
+            referencedRelation: "site_pages"
             referencedColumns: ["id"]
           },
         ]
@@ -10454,13 +10999,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "merchant_subscriptions_processor_account_id_fkey"
-            columns: ["processor_account_id"]
-            isOneToOne: false
-            referencedRelation: "merchant_processor_accounts"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "merchant_subscriptions_billing_profile_id_fkey"
             columns: ["billing_profile_id"]
             isOneToOne: false
@@ -10470,21 +11008,21 @@ export type Database = {
           {
             foreignKeyName: "merchant_subscriptions_location_id_fkey"
             columns: ["location_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "location_summary"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "merchant_subscriptions_location_id_fkey"
             columns: ["location_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "locations"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "merchant_subscriptions_location_id_fkey"
             columns: ["location_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "v_location_menu_items"
             referencedColumns: ["location_id"]
           },
@@ -10507,6 +11045,13 @@ export type Database = {
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "merchant_subscriptions_processor_account_id_fkey"
+            columns: ["processor_account_id"]
+            isOneToOne: false
+            referencedRelation: "merchant_processor_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -16107,6 +16652,7 @@ export type Database = {
           id: string
           ip_hash: string | null
           location_id: string
+          marketing_qr_code_id: string | null
           merchant_id: string
           occurred_at: string
           online_order_session_id: string | null
@@ -16120,6 +16666,7 @@ export type Database = {
           id?: string
           ip_hash?: string | null
           location_id: string
+          marketing_qr_code_id?: string | null
           merchant_id: string
           occurred_at?: string
           online_order_session_id?: string | null
@@ -16133,6 +16680,7 @@ export type Database = {
           id?: string
           ip_hash?: string | null
           location_id?: string
+          marketing_qr_code_id?: string | null
           merchant_id?: string
           occurred_at?: string
           online_order_session_id?: string | null
@@ -16141,7 +16689,15 @@ export type Database = {
           table_qr_code_id?: string | null
           user_agent?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "qr_scan_events_marketing_qr_code_id_fkey"
+            columns: ["marketing_qr_code_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_qr_codes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       qr_scan_rate_limit: {
         Row: {
@@ -16602,12 +17158,447 @@ export type Database = {
           },
         ]
       }
+      reservation_alerts: {
+        Row: {
+          created_at: string
+          email: string | null
+          expires_at: string
+          id: string
+          location_id: string
+          merchant_id: string
+          name: string
+          notified_at: string | null
+          notify_email: boolean
+          notify_sms: boolean
+          party_size: number
+          phone: string | null
+          reservation_date: string
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          expires_at: string
+          id?: string
+          location_id: string
+          merchant_id: string
+          name: string
+          notified_at?: string | null
+          notify_email?: boolean
+          notify_sms?: boolean
+          party_size: number
+          phone?: string | null
+          reservation_date: string
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          expires_at?: string
+          id?: string
+          location_id?: string
+          merchant_id?: string
+          name?: string
+          notified_at?: string | null
+          notify_email?: boolean
+          notify_sms?: boolean
+          party_size?: number
+          phone?: string | null
+          reservation_date?: string
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_alerts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_alerts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_alerts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "reservation_alerts_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_alerts_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reservation_blackouts: {
+        Row: {
+          created_at: string
+          date: string
+          end_time: string | null
+          id: string
+          location_id: string
+          merchant_id: string
+          reason: string | null
+          start_time: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          end_time?: string | null
+          id?: string
+          location_id: string
+          merchant_id: string
+          reason?: string | null
+          start_time?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          end_time?: string | null
+          id?: string
+          location_id?: string
+          merchant_id?: string
+          reason?: string | null
+          start_time?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_blackouts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_blackouts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_blackouts_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "reservation_blackouts_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_blackouts_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reservation_holds: {
+        Row: {
+          converted_reservation_id: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          location_id: string
+          merchant_id: string
+          party_size: number
+          reservation_date: string
+          reservation_time: string
+          service_period_id: string
+          table_ids: string[]
+          token: string
+        }
+        Insert: {
+          converted_reservation_id?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          location_id: string
+          merchant_id: string
+          party_size: number
+          reservation_date: string
+          reservation_time: string
+          service_period_id: string
+          table_ids?: string[]
+          token: string
+        }
+        Update: {
+          converted_reservation_id?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          location_id?: string
+          merchant_id?: string
+          party_size?: number
+          reservation_date?: string
+          reservation_time?: string
+          service_period_id?: string
+          table_ids?: string[]
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_holds_converted_reservation_id_fkey"
+            columns: ["converted_reservation_id"]
+            isOneToOne: false
+            referencedRelation: "reservations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_holds_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_holds_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_holds_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "reservation_holds_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_holds_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_holds_service_period_id_fkey"
+            columns: ["service_period_id"]
+            isOneToOne: false
+            referencedRelation: "reservation_service_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reservation_service_periods: {
+        Row: {
+          created_at: string
+          days_of_week: number[]
+          end_time: string
+          id: string
+          is_active: boolean
+          lead_time_min: number
+          location_id: string
+          max_advance_days: number
+          max_covers_per_slot: number | null
+          max_party_size: number
+          merchant_id: string
+          min_party_size: number
+          name: string
+          slot_interval_min: number
+          start_time: string
+          turn_time_min: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          days_of_week: number[]
+          end_time: string
+          id?: string
+          is_active?: boolean
+          lead_time_min?: number
+          location_id: string
+          max_advance_days?: number
+          max_covers_per_slot?: number | null
+          max_party_size?: number
+          merchant_id: string
+          min_party_size?: number
+          name: string
+          slot_interval_min?: number
+          start_time: string
+          turn_time_min?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          days_of_week?: number[]
+          end_time?: string
+          id?: string
+          is_active?: boolean
+          lead_time_min?: number
+          location_id?: string
+          max_advance_days?: number
+          max_covers_per_slot?: number | null
+          max_party_size?: number
+          merchant_id?: string
+          min_party_size?: number
+          name?: string
+          slot_interval_min?: number
+          start_time?: string
+          turn_time_min?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_service_periods_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_service_periods_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_service_periods_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "reservation_service_periods_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_service_periods_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reservation_settings: {
+        Row: {
+          accepts_reservations: boolean
+          booking_policy: string | null
+          cancellation_cutoff_min: number
+          collect_birthday: boolean
+          created_at: string
+          dietary_tags: string[]
+          large_party_phone: string | null
+          location_id: string
+          merchant_id: string
+          notify_emails: string[]
+          occasion_tags: string[]
+          updated_at: string
+        }
+        Insert: {
+          accepts_reservations?: boolean
+          booking_policy?: string | null
+          cancellation_cutoff_min?: number
+          collect_birthday?: boolean
+          created_at?: string
+          dietary_tags?: string[]
+          large_party_phone?: string | null
+          location_id: string
+          merchant_id: string
+          notify_emails?: string[]
+          occasion_tags?: string[]
+          updated_at?: string
+        }
+        Update: {
+          accepts_reservations?: boolean
+          booking_policy?: string | null
+          cancellation_cutoff_min?: number
+          collect_birthday?: boolean
+          created_at?: string
+          dietary_tags?: string[]
+          large_party_phone?: string | null
+          location_id?: string
+          merchant_id?: string
+          notify_emails?: string[]
+          occasion_tags?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_settings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_settings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_settings_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: true
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "reservation_settings_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_settings_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reservations: {
         Row: {
           arrived_at: string | null
           assigned_table_ids: string[] | null
           cancellation_reason: string | null
           cancelled_at: string | null
+          cancelled_by: string | null
           confirmation_number: string
           confirmation_sent_at: string | null
           created_at: string | null
@@ -16616,6 +17607,7 @@ export type Database = {
           deposit_amount: number | null
           deposit_paid_at: string | null
           deposit_payment_id: string | null
+          dietary_tags: string[]
           duration_minutes: number | null
           email: string | null
           external_reference: string | null
@@ -16624,11 +17616,14 @@ export type Database = {
           last_notification_at: string | null
           last_notification_template: string | null
           location_id: string
+          manage_token: string | null
+          marketing_opt_in: boolean
           merchant_id: string
           no_show_marked_at: string | null
           notes: string | null
           notification_count: number
           notification_failures: number
+          occasion_tags: string[]
           party_name: string
           party_size: number
           phone: string
@@ -16640,6 +17635,8 @@ export type Database = {
           seated_at: string | null
           seated_session_id: string | null
           seating_preference: string | null
+          service_period_id: string | null
+          sms_opt_in: boolean
           source: string | null
           special_requests: string | null
           status: Database["public"]["Enums"]["reservation_status"]
@@ -16650,6 +17647,7 @@ export type Database = {
           assigned_table_ids?: string[] | null
           cancellation_reason?: string | null
           cancelled_at?: string | null
+          cancelled_by?: string | null
           confirmation_number: string
           confirmation_sent_at?: string | null
           created_at?: string | null
@@ -16658,6 +17656,7 @@ export type Database = {
           deposit_amount?: number | null
           deposit_paid_at?: string | null
           deposit_payment_id?: string | null
+          dietary_tags?: string[]
           duration_minutes?: number | null
           email?: string | null
           external_reference?: string | null
@@ -16666,11 +17665,14 @@ export type Database = {
           last_notification_at?: string | null
           last_notification_template?: string | null
           location_id: string
+          manage_token?: string | null
+          marketing_opt_in?: boolean
           merchant_id: string
           no_show_marked_at?: string | null
           notes?: string | null
           notification_count?: number
           notification_failures?: number
+          occasion_tags?: string[]
           party_name: string
           party_size: number
           phone: string
@@ -16682,6 +17684,8 @@ export type Database = {
           seated_at?: string | null
           seated_session_id?: string | null
           seating_preference?: string | null
+          service_period_id?: string | null
+          sms_opt_in?: boolean
           source?: string | null
           special_requests?: string | null
           status?: Database["public"]["Enums"]["reservation_status"]
@@ -16692,6 +17696,7 @@ export type Database = {
           assigned_table_ids?: string[] | null
           cancellation_reason?: string | null
           cancelled_at?: string | null
+          cancelled_by?: string | null
           confirmation_number?: string
           confirmation_sent_at?: string | null
           created_at?: string | null
@@ -16700,6 +17705,7 @@ export type Database = {
           deposit_amount?: number | null
           deposit_paid_at?: string | null
           deposit_payment_id?: string | null
+          dietary_tags?: string[]
           duration_minutes?: number | null
           email?: string | null
           external_reference?: string | null
@@ -16708,11 +17714,14 @@ export type Database = {
           last_notification_at?: string | null
           last_notification_template?: string | null
           location_id?: string
+          manage_token?: string | null
+          marketing_opt_in?: boolean
           merchant_id?: string
           no_show_marked_at?: string | null
           notes?: string | null
           notification_count?: number
           notification_failures?: number
+          occasion_tags?: string[]
           party_name?: string
           party_size?: number
           phone?: string
@@ -16724,6 +17733,8 @@ export type Database = {
           seated_at?: string | null
           seated_session_id?: string | null
           seating_preference?: string | null
+          service_period_id?: string | null
+          sms_opt_in?: boolean
           source?: string | null
           special_requests?: string | null
           status?: Database["public"]["Enums"]["reservation_status"]
@@ -16806,6 +17817,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_stuck_paid_active_sessions"
             referencedColumns: ["session_id"]
+          },
+          {
+            foreignKeyName: "reservations_service_period_id_fkey"
+            columns: ["service_period_id"]
+            isOneToOne: false
+            referencedRelation: "reservation_service_periods"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -19455,9 +20473,9 @@ export type Database = {
           location_id: string
           merchant_id: string
           metadata: Json
+          next_retry_at: string | null
           nmi_response: Json | null
           nmi_transaction_id: string | null
-          next_retry_at: string | null
           paid_at: string | null
           payment_attempt_count: number
           processor: string | null
@@ -19488,9 +20506,9 @@ export type Database = {
           location_id: string
           merchant_id: string
           metadata?: Json
+          next_retry_at?: string | null
           nmi_response?: Json | null
           nmi_transaction_id?: string | null
-          next_retry_at?: string | null
           paid_at?: string | null
           payment_attempt_count?: number
           processor?: string | null
@@ -19521,9 +20539,9 @@ export type Database = {
           location_id?: string
           merchant_id?: string
           metadata?: Json
+          next_retry_at?: string | null
           nmi_response?: Json | null
           nmi_transaction_id?: string | null
-          next_retry_at?: string | null
           paid_at?: string | null
           payment_attempt_count?: number
           processor?: string | null
@@ -19539,13 +20557,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "subscription_invoices_processor_account_id_fkey"
-            columns: ["processor_account_id"]
-            isOneToOne: false
-            referencedRelation: "merchant_processor_accounts"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "subscription_invoices_billing_profile_id_fkey"
             columns: ["billing_profile_id"]
@@ -19586,6 +20597,13 @@ export type Database = {
             columns: ["merchant_id"]
             isOneToOne: false
             referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_invoices_processor_account_id_fkey"
+            columns: ["processor_account_id"]
+            isOneToOne: false
+            referencedRelation: "merchant_processor_accounts"
             referencedColumns: ["id"]
           },
           {
@@ -19773,6 +20791,155 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      subscription_service_requests: {
+        Row: {
+          applied_subscription_id: string | null
+          authorization_accepted: boolean
+          authorization_accepted_at: string
+          authorization_ip_address: string | null
+          authorization_reference: string
+          authorization_terms_version: string
+          authorization_text: string
+          authorization_user_agent: string | null
+          authorized_billing_cadence: string
+          authorized_card_surcharge: number
+          authorized_subtotal: number
+          authorized_total: number
+          created_at: string
+          decision_note: string | null
+          id: string
+          location_id: string
+          location_name_snapshot: string
+          merchant_id: string
+          merchant_name_snapshot: string
+          metadata: Json
+          request_number: string
+          requested_by: string
+          requested_by_email: string | null
+          requested_quantity: number
+          reviewed_at: string | null
+          reviewed_by: string | null
+          service_id: string
+          service_name_snapshot: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          applied_subscription_id?: string | null
+          authorization_accepted: boolean
+          authorization_accepted_at: string
+          authorization_ip_address?: string | null
+          authorization_reference: string
+          authorization_terms_version: string
+          authorization_text: string
+          authorization_user_agent?: string | null
+          authorized_billing_cadence: string
+          authorized_card_surcharge?: number
+          authorized_subtotal: number
+          authorized_total: number
+          created_at?: string
+          decision_note?: string | null
+          id?: string
+          location_id: string
+          location_name_snapshot: string
+          merchant_id: string
+          merchant_name_snapshot: string
+          metadata?: Json
+          request_number?: string
+          requested_by: string
+          requested_by_email?: string | null
+          requested_quantity?: number
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          service_id: string
+          service_name_snapshot: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          applied_subscription_id?: string | null
+          authorization_accepted?: boolean
+          authorization_accepted_at?: string
+          authorization_ip_address?: string | null
+          authorization_reference?: string
+          authorization_terms_version?: string
+          authorization_text?: string
+          authorization_user_agent?: string | null
+          authorized_billing_cadence?: string
+          authorized_card_surcharge?: number
+          authorized_subtotal?: number
+          authorized_total?: number
+          created_at?: string
+          decision_note?: string | null
+          id?: string
+          location_id?: string
+          location_name_snapshot?: string
+          merchant_id?: string
+          merchant_name_snapshot?: string
+          metadata?: Json
+          request_number?: string
+          requested_by?: string
+          requested_by_email?: string | null
+          requested_quantity?: number
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          service_id?: string
+          service_name_snapshot?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_service_requests_applied_subscription_id_fkey"
+            columns: ["applied_subscription_id"]
+            isOneToOne: false
+            referencedRelation: "merchant_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_service_requests_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_service_requests_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_service_requests_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "subscription_service_requests_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_service_requests_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_service_requests_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "billable_services"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       support_ticket_attachments: {
         Row: {
@@ -23329,6 +24496,66 @@ export type Database = {
           },
         ]
       }
+      v_kds_device_truth_health: {
+        Row: {
+          ack_rate_pct: number | null
+          acked_items: number | null
+          arrived_items: number | null
+          device_reporting: boolean | null
+          display_name: string | null
+          kds_display_id: string | null
+          location_id: string | null
+          merchant_id: string | null
+          observed_at: string | null
+          render_suspect_items: number | null
+          routed_items: number | null
+          unreported_items: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kds_routing_log_kds_display_id_fkey"
+            columns: ["kds_display_id"]
+            isOneToOne: false
+            referencedRelation: "kds_displays"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_routing_log_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "location_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_routing_log_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_routing_log_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "v_location_menu_items"
+            referencedColumns: ["location_id"]
+          },
+          {
+            foreignKeyName: "kds_routing_log_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "admin_merchant_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kds_routing_log_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_kds_routing_health: {
         Row: {
           items_dropped: number | null
@@ -23566,6 +24793,10 @@ export type Database = {
           p_source_system: string
         }
         Returns: boolean
+      }
+      _display_number_from_order_number: {
+        Args: { p_order_number: string }
+        Returns: string
       }
       _distribute_weighted_with_remainder: {
         Args: {
@@ -23867,6 +25098,33 @@ export type Database = {
           p_category_name?: string
           p_course_number?: number
           p_idempotency_key?: string
+          p_item_name?: string
+          p_location_exclusive_item_id?: string
+          p_menu_id?: string
+          p_menu_item_id?: string
+          p_menu_name?: string
+          p_modifiers?: Json
+          p_order_id: string
+          p_origin_id?: string
+          p_quantity?: number
+          p_seat_number?: number
+          p_selected_size_id?: string
+          p_selected_size_name?: string
+          p_size_price_modifier?: number
+          p_special_instructions?: string
+          p_station_id?: string
+          p_unit_price?: number
+        }
+        Returns: Json
+      }
+      add_order_item_v5: {
+        Args: {
+          p_cash_unit_price?: number
+          p_category_id?: string
+          p_category_name?: string
+          p_course_number?: number
+          p_idempotency_key?: string
+          p_item_id?: string
           p_item_name?: string
           p_location_exclusive_item_id?: string
           p_menu_id?: string
@@ -24432,6 +25690,10 @@ export type Database = {
         Args: { p_cancel_reason?: string; p_order_id: string }
         Returns: Json
       }
+      cancel_public_reservation: {
+        Args: { p_reason?: string; p_token: string }
+        Returns: Json
+      }
       cancel_reservation_for_voided_order: {
         Args: { p_order_id: string; p_reason?: string }
         Returns: Json
@@ -24439,6 +25701,19 @@ export type Database = {
       cancel_transfer: {
         Args: { p_transfer_id: string; p_user_id: string; p_user_name: string }
         Returns: Json
+      }
+      capture_kds_board_snapshot: {
+        Args: {
+          p_kds_display_id: string
+          p_location_id: string
+          p_order_id?: string
+          p_reason: string
+        }
+        Returns: string
+      }
+      capture_kds_board_snapshots_for_items: {
+        Args: { p_order_item_ids: string[]; p_reason: string }
+        Returns: number
       }
       capture_preauth_v1: {
         Args: {
@@ -24721,6 +25996,14 @@ export type Database = {
         }
         Returns: Json
       }
+      create_marketing_qr_code: {
+        Args: {
+          p_destination_path?: string
+          p_location_id: string
+          p_name: string
+        }
+        Returns: Json
+      }
       create_next_course: { Args: { p_order_id: string }; Returns: Json }
       create_nmi_payment_device: {
         Args: {
@@ -24811,6 +26094,50 @@ export type Database = {
             }
             Returns: Json
           }
+      create_order_v4: {
+        Args: {
+          p_created_by_staff_id: string
+          p_customer_name: string
+          p_customer_phone: string
+          p_device_id: string
+          p_idempotency_key?: string
+          p_location_id: string
+          p_merchant_id: string
+          p_order_id?: string
+          p_order_number?: string
+          p_order_type: Database["public"]["Enums"]["order_type"]
+          p_special_instructions: string
+          p_station_id?: string
+          p_table_number: string
+        }
+        Returns: Json
+      }
+      create_public_reservation: {
+        Args: {
+          p_dietary_tags?: string[]
+          p_email: string
+          p_first_name: string
+          p_hold_token: string
+          p_last_name: string
+          p_marketing_opt_in?: boolean
+          p_occasion_tags?: string[]
+          p_phone: string
+          p_site_id: string
+          p_sms_opt_in?: boolean
+          p_special_requests?: string
+        }
+        Returns: Json
+      }
+      create_public_reservation_hold: {
+        Args: {
+          p_date: string
+          p_location_id: string
+          p_party_size: number
+          p_site_id: string
+          p_time: string
+        }
+        Returns: Json
+      }
       create_reservation: {
         Args: {
           p_assigned_table_ids?: string[]
@@ -25045,6 +26372,16 @@ export type Database = {
         Args: { p_location_id: string; p_party_size: number }
         Returns: number
       }
+      expire_stale_reservation_requests: {
+        Args: {
+          p_grace_minutes?: number
+          p_lookback_hours?: number
+          p_reason?: string
+        }
+        Returns: {
+          reservation_id: string
+        }[]
+      }
       export_tip_distribution: {
         Args: {
           p_destination: string
@@ -25111,6 +26448,7 @@ export type Database = {
         Returns: string
       }
       generate_po_number: { Args: never; Returns: string }
+      generate_reservation_manage_token: { Args: never; Returns: string }
       generate_subscription_invoice: {
         Args: { p_due_date?: string; p_subscription_id: string }
         Returns: string
@@ -25890,6 +27228,14 @@ export type Database = {
         Args: { p_location_id?: string; p_merchant_id: string }
         Returns: Json
       }
+      get_kds_device_truth_for_order: {
+        Args: { p_order_id: string }
+        Returns: Json
+      }
+      get_kds_display_truth_window: {
+        Args: { p_from: string; p_kds_display_id: string; p_to: string }
+        Returns: Json
+      }
       get_kds_tickets: {
         Args: { p_location_id: string; p_statuses?: string[] }
         Returns: Json
@@ -26240,6 +27586,10 @@ export type Database = {
       get_pos_bootstrap_v2: { Args: { p_location_id: string }; Returns: Json }
       get_pos_full_sync: { Args: { p_location_id: string }; Returns: Json }
       get_pos_inventory_sync: { Args: { p_location_id: string }; Returns: Json }
+      get_pos_menu_version_v1: {
+        Args: { p_location_id: string }
+        Returns: string
+      }
       get_pto_balance: { Args: { p_employee_id: string }; Returns: number }
       get_public_invoice: { Args: { p_token: string }; Returns: Json }
       get_public_locations: {
@@ -26264,6 +27614,40 @@ export type Database = {
       get_public_receipt: {
         Args: { p_order_token: string; p_send_token?: string }
         Returns: Json
+      }
+      get_public_reservation_availability: {
+        Args: {
+          p_date: string
+          p_location_id: string
+          p_party_size: number
+          p_site_id: string
+        }
+        Returns: {
+          service_name: string
+          service_period_id: string
+          slot_time: string
+        }[]
+      }
+      get_public_reservation_by_token: {
+        Args: { p_token: string }
+        Returns: Json
+      }
+      get_public_reservation_config: {
+        Args: { p_site_id: string }
+        Returns: {
+          address: string
+          booking_policy: string
+          cancellation_cutoff_min: number
+          collect_birthday: boolean
+          large_party_phone: string
+          location_id: string
+          location_name: string
+          max_advance_days: number
+          max_party_size: number
+          min_party_size: number
+          phone: string
+          timezone: string
+        }[]
       }
       get_public_site_assets: {
         Args: { p_asset_ids: string[]; p_merchant_id: string }
@@ -26422,6 +27806,18 @@ export type Database = {
           has_credentials: boolean
         }[]
       }
+      get_subscription_access_state: {
+        Args: { p_location_id?: string; p_merchant_id: string }
+        Returns: Json
+      }
+      get_subscription_entitlement: {
+        Args: {
+          p_location_id: string
+          p_merchant_id: string
+          p_service_code: string
+        }
+        Returns: Json
+      }
       get_support_dashboard_stats: { Args: never; Returns: Json }
       get_table_performance_stats: {
         Args: {
@@ -26572,6 +27968,47 @@ export type Database = {
       hq_can_impersonate_merchant: {
         Args: { p_merchant_id: string }
         Returns: boolean
+      }
+      hq_get_kds_board_mirror_v1: {
+        Args: { p_kds_display_id?: string; p_location_id: string }
+        Returns: Json
+      }
+      hq_get_kds_board_snapshot_v1: {
+        Args: { p_snapshot_id: string }
+        Returns: Json
+      }
+      hq_get_kds_board_snapshots_v1: {
+        Args: {
+          p_from?: string
+          p_kds_display_id: string
+          p_limit?: number
+          p_to?: string
+        }
+        Returns: Json
+      }
+      hq_get_kds_send_ledger_v1: {
+        Args: {
+          p_from?: string
+          p_limit?: number
+          p_location_id: string
+          p_order_id?: string
+          p_to?: string
+        }
+        Returns: Json
+      }
+      hq_get_kds_unsent_items_v1: {
+        Args: {
+          p_from?: string
+          p_limit?: number
+          p_location_id: string
+          p_order_id?: string
+          p_to?: string
+        }
+        Returns: Json
+      }
+      hq_get_location_kds_displays_v1: {
+        Args: { p_location_id: string }
+        Returns: Json
       }
       hq_has_permission: {
         Args: { p_permission_code: string }
@@ -27113,6 +28550,7 @@ export type Database = {
       mark_dlq_replay_success: { Args: { p_id: string }; Returns: undefined }
       mark_online_order_ready: { Args: { p_order_id: string }; Returns: Json }
       mark_stale_stations_offline: { Args: never; Returns: number }
+      marketing_qr_generate_short_code: { Args: never; Returns: string }
       merchant_open_drawer_sessions: {
         Args: { p_merchant_id: string }
         Returns: {
@@ -27220,6 +28658,7 @@ export type Database = {
       phone_last10: { Args: { p: string }; Returns: string }
       ping: { Args: never; Returns: number }
       poke_orderout_status_relay: { Args: never; Returns: undefined }
+      poke_reservation_request_expiry: { Args: never; Returns: undefined }
       pos_config_deep_merge: {
         Args: { p_base: Json; p_overlay: Json }
         Returns: Json
@@ -27281,6 +28720,14 @@ export type Database = {
           p_terminal_id: string
         }
         Returns: Json
+      }
+      prepare_migrated_subscription: {
+        Args: {
+          p_external_billing_reviewed: boolean
+          p_start_date: string
+          p_subscription_id: string
+        }
+        Returns: undefined
       }
       prepare_valor_settlement: {
         Args: {
@@ -27638,6 +29085,8 @@ export type Database = {
         Args: { p_merchant_id: string; p_schedule_id: string }
         Returns: boolean
       }
+      purge_kds_board_snapshots: { Args: never; Returns: Json }
+      purge_kds_device_truth: { Args: never; Returns: Json }
       purge_kds_trace_ledgers: { Args: never; Returns: Json }
       qr_base64url_decode: { Args: { p_value: string }; Returns: string }
       qr_base64url_encode: { Args: { p_value: string }; Returns: string }
@@ -27945,6 +29394,18 @@ export type Database = {
         }
         Returns: Json
       }
+      report_kds_device_events: {
+        Args: {
+          p_app_version?: string
+          p_client_clock_at?: string
+          p_device_origin_id?: string
+          p_events: Json
+          p_idempotency_key?: string
+          p_kds_display_id: string
+          p_snapshot?: Json
+        }
+        Returns: Json
+      }
       request_merchant_suspension: {
         Args: {
           p_force?: boolean
@@ -27957,6 +29418,18 @@ export type Database = {
       resend_waitlist_notification: {
         Args: { p_notification_type?: string; p_waitlist_id: string }
         Returns: Json
+      }
+      reservation_hold_minutes: { Args: never; Returns: number }
+      reservation_occupancy: {
+        Args: { p_date: string; p_location_id: string }
+        Returns: {
+          end_min: number
+          party_size: number
+          source: string
+          source_id: string
+          start_min: number
+          table_ids: string[]
+        }[]
       }
       reset_castles_txn_counter: {
         Args: { p_batch_number?: string; p_terminal_id: string }
@@ -28002,9 +29475,26 @@ export type Database = {
         }
         Returns: string
       }
+      resolve_marketing_qr: {
+        Args: { p_short_code: string; p_slug: string }
+        Returns: Json
+      }
       resolve_qr_guest_alert: { Args: { p_alert_id: string }; Returns: Json }
+      resolve_subscription_billing_profile: {
+        Args: {
+          p_location_id?: string
+          p_merchant_id: string
+          p_profile_id?: string
+          p_scope?: string
+        }
+        Returns: string
+      }
       resolve_table_qr: {
         Args: { p_slug: string; p_table_token: string }
+        Returns: Json
+      }
+      respond_to_reservation_request: {
+        Args: { p_accept: boolean; p_reason?: string; p_reservation_id: string }
         Returns: Json
       }
       restore_expired_item_snoozes: { Args: never; Returns: undefined }
@@ -28082,6 +29572,26 @@ export type Database = {
             }
             Returns: Json
           }
+      seat_guests_v4: {
+        Args: {
+          p_create_order?: boolean
+          p_device_id?: string
+          p_guest_name?: string
+          p_guest_notes?: string
+          p_guest_phone?: string
+          p_idempotency_key?: string
+          p_order_id?: string
+          p_order_number?: string
+          p_party_size: number
+          p_reservation_id?: string
+          p_session_id?: string
+          p_staff_id?: string
+          p_station_id?: string
+          p_table_ids: string[]
+          p_waitlist_id?: string
+        }
+        Returns: Json
+      }
       seat_reservation: {
         Args: { p_reservation_id: string; p_table_ids?: string[] }
         Returns: Json
@@ -28959,12 +30469,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -28988,11 +30498,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -29013,11 +30523,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -29038,11 +30548,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -29055,11 +30565,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
