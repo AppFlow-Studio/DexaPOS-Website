@@ -11,6 +11,7 @@ import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-
 import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
 import { notifySubscriptionRestored } from '../_shared/subscription-restoration-notifications.ts'
 import { billingProfileMatchesSubscription, isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope.ts'
+import { loadMerchantBillingExemption } from '../_shared/merchant-billing-exemption.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -162,6 +163,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return jsonResponse({ success: false, code: 'subscription_canceled', error: 'Canceled subscriptions cannot be charged.' }, 409)
     }
 
+    const billingExemption = await loadMerchantBillingExemption(
+      supabase,
+      invoice.merchant_id,
+    )
+    if (billingExemption.active) {
+      await supabase
+        .from('subscription_invoices')
+        .update({ next_retry_at: null, last_payment_error: null, updated_at: now })
+        .eq('id', invoice.id)
+
+      return jsonResponse({
+        success: true,
+        invoice_id: invoice.id,
+        subscription_id: invoice.subscription_id,
+        skipped: true,
+        reason: 'merchant_billing_exempt',
+        billing_exempt_expires_at: billingExemption.expiresAt,
+      })
+    }
+
     const { data: billingProfile, error: billingProfileError } = await supabase
       .from('merchant_billing_profiles')
       .select(`
@@ -269,7 +290,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // Valor owns retries for an existing native schedule. The Dexa retry sweep
     // must never independently charge that same billing cycle.
-    if (mode === 'automatic' && subscription.processor_subscription_id) {
+    if (
+      mode === 'automatic' &&
+      subscription.processor_subscription_id &&
+      subscription.processor_subscription_status !== 'deactivated'
+    ) {
       await supabase
         .from('subscription_invoices')
         .update({ next_retry_at: null, updated_at: now })
