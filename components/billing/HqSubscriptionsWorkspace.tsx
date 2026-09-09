@@ -60,11 +60,13 @@ import {
   getMerchantTierPlans,
   getPendingMerchantTierRequest,
   getPendingMerchantHardwareRequests,
+  getPendingMerchantServiceRequests,
   getMerchantTierStatus,
   getMerchantTierSubscription,
   approveMerchantHardwareRequest,
   denyMerchantHardwareRequest,
   denyMerchantTierPlanRequest,
+  reviewMerchantServiceRequest,
   chargeSubscriptionInvoiceManually,
   calculateSubscriptionTotal,
   generateSubscriptionInvoiceManually,
@@ -84,6 +86,7 @@ import {
   type MerchantTierPlanRecord,
   type MerchantTierPlanRequestRecord,
   type MerchantHardwareRequestRecord,
+  type MerchantServiceRequestRecord,
   type MerchantTierStatusRecord,
   type MerchantTierSubscriptionRecord,
   type MerchantSubscriptionRecord,
@@ -255,6 +258,89 @@ function formatDate(date: string | null | undefined): string {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+function exportAuthorizationEvidence(
+  filename: string,
+  evidence: Record<string, unknown>,
+) {
+  const rows = Object.entries(evidence).map(([key, value]) =>
+    `"${String(key).replace(/"/g, '""')}","${String(value ?? '').replace(/"/g, '""')}"`,
+  )
+  const blob = new Blob([`Field,Value\n${rows.join('\n')}`], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+function AuthorizationEvidence({
+  reference,
+  acceptedAt,
+  termsVersion,
+  text,
+  price,
+  cadence,
+  requestedBy,
+  ipAddress,
+  userAgent,
+  merchantName,
+  locationName,
+  featureName,
+}: {
+  reference: string | null
+  acceptedAt: string | null
+  termsVersion: string | null
+  text: string | null
+  price: string
+  cadence: string | null
+  requestedBy: string
+  ipAddress: string | null
+  userAgent: string | null
+  merchantName?: string | null
+  locationName?: string | null
+  featureName?: string | null
+}) {
+  const evidence = {
+    authorization_reference: reference,
+    merchant_name: merchantName,
+    location_name: locationName,
+    feature_name: featureName,
+    accepted_at: acceptedAt,
+    terms_version: termsVersion,
+    authorized_price: price,
+    billing_cadence: cadence,
+    requested_by: requestedBy,
+    ip_address: ipAddress,
+    user_agent: userAgent,
+    authorization_text: text,
+  }
+
+  return (
+    <details className="rounded-xl border p-3 text-sm">
+      <summary className="cursor-pointer font-medium">Authorization evidence</summary>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {Object.entries(evidence).map(([key, value]) => (
+          <div key={key} className={key === 'authorization_text' || key === 'user_agent' ? 'sm:col-span-2' : ''}>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{key.replace(/_/g, ' ')}</p>
+            <p className="mt-1 break-words">{String(value || 'Not captured')}</p>
+          </div>
+        ))}
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="mt-3"
+        onClick={() => exportAuthorizationEvidence(`${reference || 'authorization'}.csv`, evidence)}
+      >
+        <Download className="mr-2 h-4 w-4" />
+        Export evidence
+      </Button>
+    </details>
+  )
 }
 
 function formatDateTimeLocalInput(value: string | null | undefined): string {
@@ -534,7 +620,10 @@ export function HqSubscriptionsWorkspace({
   const [pendingMerchantTierRequest, setPendingMerchantTierRequest] = useState<MerchantTierPlanRequestRecord | null>(null)
   const [merchantTierDecisionNote, setMerchantTierDecisionNote] = useState('')
   const [pendingHardwareRequests, setPendingHardwareRequests] = useState<MerchantHardwareRequestRecord[]>([])
+  const [pendingServiceRequests, setPendingServiceRequests] = useState<MerchantServiceRequestRecord[]>([])
+  const [serviceRequestHistory, setServiceRequestHistory] = useState<MerchantServiceRequestRecord[]>([])
   const [hardwareDecisionNotes, setHardwareDecisionNotes] = useState<Record<string, string>>({})
+  const [serviceDecisionNotes, setServiceDecisionNotes] = useState<Record<string, string>>({})
   const [selectedMerchantTierPlanId, setSelectedMerchantTierPlanId] = useState('')
   const [merchantTierSubscriptionStatus, setMerchantTierSubscriptionStatus] = useState<'active' | 'past_due' | 'suspended' | 'cancelled'>('active')
   const [merchantTierPeriodStart, setMerchantTierPeriodStart] = useState(startOfMonthIso())
@@ -804,6 +893,8 @@ export function HqSubscriptionsWorkspace({
           nextMerchantTierSubscription,
           nextPendingMerchantTierRequest,
           nextPendingHardwareRequests,
+          nextPendingServiceRequests,
+          nextServiceRequestHistory,
         ] = await Promise.all([
           getBillableServices(),
           getDeviceBillingServiceMappings(),
@@ -816,6 +907,8 @@ export function HqSubscriptionsWorkspace({
           getMerchantTierSubscription(merchant.id),
           getPendingMerchantTierRequest(merchant.id),
           getPendingMerchantHardwareRequests(merchant.id),
+          getPendingMerchantServiceRequests(merchant.id),
+          getPendingMerchantServiceRequests(merchant.id, true),
         ])
 
         const assignmentEntries = await Promise.all(
@@ -853,6 +946,8 @@ export function HqSubscriptionsWorkspace({
         setMerchantTierSubscription(nextMerchantTierSubscription)
         setPendingMerchantTierRequest(nextPendingMerchantTierRequest)
         setPendingHardwareRequests(nextPendingHardwareRequests)
+        setPendingServiceRequests(nextPendingServiceRequests)
+        setServiceRequestHistory(nextServiceRequestHistory)
 
         const defaultServicePlan =
           nextServicePlans.find((plan) => plan.id === selectedServicePlanId) ??
@@ -1249,6 +1344,35 @@ export function HqSubscriptionsWorkspace({
     })
   }
 
+  const handleServiceRequestDecision = (
+    request: MerchantServiceRequestRecord,
+    decision: 'approved' | 'denied',
+  ) => {
+    startTransition(async () => {
+      const result = await reviewMerchantServiceRequest({
+        requestId: request.id,
+        decision,
+        decisionNote: serviceDecisionNotes[request.id]?.trim(),
+      })
+      if (!result.success) {
+        toast.error(result.error || 'Failed to review the add-on request.')
+        return
+      }
+      toast.success(
+        decision === 'approved'
+          ? `Request ${request.request_number} charged and activated.`
+          : `Request ${request.request_number} denied.`,
+      )
+      if (result.notificationWarning) toast.warning(result.notificationWarning)
+      setServiceDecisionNotes((current) => {
+        const next = { ...current }
+        delete next[request.id]
+        return next
+      })
+      refresh()
+    })
+  }
+
   const handleSaveServicePlan = () => {
     startTransition(async () => {
       const result = await upsertSubscriptionPlan({
@@ -1418,9 +1542,9 @@ export function HqSubscriptionsWorkspace({
               {activeStep.title}
             </h2>
             <p className="text-sm text-muted-foreground">{activeStep.description}</p>
-            {activeStep.id === 'locations' && pendingHardwareRequests.length > 0 ? (
+            {activeStep.id === 'locations' && pendingHardwareRequests.length + pendingServiceRequests.length > 0 ? (
               <p className="text-sm font-medium text-primary">
-                {pendingHardwareRequests.length} pending hardware request{pendingHardwareRequests.length === 1 ? '' : 's'} to review.
+                {pendingHardwareRequests.length + pendingServiceRequests.length} pending location request{pendingHardwareRequests.length + pendingServiceRequests.length === 1 ? '' : 's'} to review.
               </p>
             ) : null}
           </div>
@@ -1461,6 +1585,17 @@ export function HqSubscriptionsWorkspace({
                   <p className="text-sm text-muted-foreground">
                     Current plan: {pendingMerchantTierRequest.current_plan_name || 'No active plan'}
                   </p>
+                  <AuthorizationEvidence
+                    reference={pendingMerchantTierRequest.authorization_reference}
+                    acceptedAt={pendingMerchantTierRequest.authorization_accepted_at}
+                    termsVersion={pendingMerchantTierRequest.authorization_terms_version}
+                    text={pendingMerchantTierRequest.authorization_text}
+                    price={formatTierPrice(pendingMerchantTierRequest.authorized_price_cents ?? pendingMerchantTierRequest.requested_monthly_price_cents)}
+                    cadence={pendingMerchantTierRequest.authorized_billing_cadence}
+                    requestedBy={pendingMerchantTierRequest.requested_by}
+                    ipAddress={pendingMerchantTierRequest.authorization_ip_address}
+                    userAgent={pendingMerchantTierRequest.authorization_user_agent}
+                  />
                 </div>
 
                 <div className="w-full space-y-3 lg:max-w-md">
@@ -2199,6 +2334,66 @@ export function HqSubscriptionsWorkspace({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {pendingServiceRequests.length > 0 ? (
+            <div className="space-y-4 border-b pb-6">
+              <div>
+                <h3 className="font-semibold">Pending paid add-on requests</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Approval charges the location&apos;s Valor card. The feature remains inactive if payment fails.
+                </p>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {pendingServiceRequests.map((request) => (
+                  <div key={request.id} className="space-y-4 border-t pt-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{request.request_number}</Badge>
+                          <Badge variant={request.status === 'processing' ? 'default' : 'secondary'}>{request.status}</Badge>
+                        </div>
+                        <p className="mt-2 font-medium">{request.service_name} · {request.location_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Quantity {request.requested_quantity} · {formatMoney(request.authorized_total)}/month · Requested {formatDate(request.requested_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <AuthorizationEvidence
+                      reference={request.authorization_reference}
+                      acceptedAt={request.authorization_accepted_at}
+                      termsVersion={request.authorization_terms_version}
+                      text={request.authorization_text}
+                      price={`${formatMoney(request.authorized_total)}/month`}
+                      cadence={request.authorized_billing_cadence}
+                      requestedBy={request.requested_by_email || request.requested_by}
+                      ipAddress={request.authorization_ip_address}
+                      userAgent={request.authorization_user_agent}
+                      merchantName={request.merchant_name_snapshot}
+                      locationName={request.location_name_snapshot}
+                      featureName={request.service_name_snapshot}
+                    />
+                    <div className="space-y-2">
+                      <Label htmlFor={`service-decision-note-${request.id}`}>Decision note (optional)</Label>
+                      <Textarea
+                        id={`service-decision-note-${request.id}`}
+                        value={serviceDecisionNotes[request.id] ?? ''}
+                        onChange={(event) => setServiceDecisionNotes((current) => ({ ...current, [request.id]: event.target.value }))}
+                        placeholder="Add activation details or explain the decision."
+                        rows={2}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button type="button" className="sm:flex-1" disabled={isPending || request.status === 'processing'} onClick={() => handleServiceRequestDecision(request, 'approved')}>
+                        Approve, charge & activate
+                      </Button>
+                      <Button type="button" variant="outline" className="sm:flex-1" disabled={isPending || request.status === 'processing'} onClick={() => handleServiceRequestDecision(request, 'denied')}>
+                        Deny request
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {pendingHardwareRequests.length > 0 ? (
             <div className="space-y-4 border-b pb-6">
               <div>
@@ -2265,6 +2460,49 @@ export function HqSubscriptionsWorkspace({
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          ) : null}
+          {serviceRequestHistory.some((request) => !['pending', 'processing'].includes(request.status)) ? (
+            <div className="space-y-4 border-b pb-6">
+              <div>
+                <h3 className="font-semibold">Add-on authorization history</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Permanent approved, denied, and cancelled authorization records remain available for review and export.
+                </p>
+              </div>
+              <div className="divide-y divide-border/60">
+                {serviceRequestHistory
+                  .filter((request) => !['pending', 'processing'].includes(request.status))
+                  .map((request) => (
+                    <details key={`history-${request.id}`} className="py-4">
+                      <summary className="cursor-pointer list-none">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium">{request.request_number} · {request.service_name}</p>
+                            <p className="text-sm text-muted-foreground">{request.location_name} · {formatMoney(request.authorized_total)}/month</p>
+                          </div>
+                          <Badge variant={request.status === 'approved' ? 'default' : 'secondary'}>{request.status}</Badge>
+                        </div>
+                      </summary>
+                      <div className="mt-4">
+                        <AuthorizationEvidence
+                          reference={request.authorization_reference}
+                          acceptedAt={request.authorization_accepted_at}
+                          termsVersion={request.authorization_terms_version}
+                          text={request.authorization_text}
+                          price={`${formatMoney(request.authorized_total)}/month`}
+                          cadence={request.authorized_billing_cadence}
+                          requestedBy={request.requested_by_email || request.requested_by}
+                          ipAddress={request.authorization_ip_address}
+                          userAgent={request.authorization_user_agent}
+                          merchantName={request.merchant_name_snapshot}
+                          locationName={request.location_name_snapshot}
+                          featureName={request.service_name_snapshot}
+                        />
+                      </div>
+                    </details>
+                  ))}
               </div>
             </div>
           ) : null}

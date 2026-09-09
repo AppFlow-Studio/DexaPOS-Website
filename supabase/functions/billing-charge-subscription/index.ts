@@ -9,6 +9,7 @@ import {
 import { sendSubscriptionInvoicePaymentEmail } from '../_shared/payment-emails.ts'
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
 import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
+import { notifySubscriptionRestored } from '../_shared/subscription-restoration-notifications.ts'
 import { billingProfileMatchesSubscription, isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -531,6 +532,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         p_changes: { restored_by_invoice_id: invoice.id },
         p_metadata: { source: 'billing-charge-subscription', processor: 'valor' },
       })
+      try {
+        await notifySubscriptionRestored({ supabase, invoiceId: invoice.id })
+      } catch (notificationError) {
+        console.error('[billing-charge-subscription] Restoration notification error:', notificationError)
+      }
     }
 
     await supabase.rpc('log_subscription_billing_event', {

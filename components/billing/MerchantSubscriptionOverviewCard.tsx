@@ -15,6 +15,7 @@ import {
   FileText,
   Loader2,
   Monitor,
+  Puzzle,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -51,6 +52,7 @@ import { PageHeader, PageShell, Panel, PanelSection } from '@/components/dashboa
 import {
   getMerchantSubscriptionInvoiceDocument,
   RequestMerchantTierPlan,
+  RequestMerchantServiceAddOn,
   RequestSubscriptionHardware,
   type MerchantBillingLocationViewRecord,
   type MerchantPlanStatusView,
@@ -58,6 +60,7 @@ import {
   type MerchantSubscriptionBillingProfileViewRecord,
   type MerchantSubscriptionInvoiceViewRecord,
   type MerchantTierPlanViewRecord,
+  type MerchantBillableServiceViewRecord,
 } from '@/app/dashboard/actions/subscription-billing'
 import {
   useMerchantSubscriptionOverview,
@@ -83,7 +86,7 @@ interface MerchantSubscriptionOverviewCardProps {
 }
 
 const LOCATION_PAGE_SIZE = 10
-type SubscriptionSection = 'plan' | 'hardware' | 'billing'
+type SubscriptionSection = 'plan' | 'addons' | 'hardware' | 'billing'
 
 const EMPTY_PLAN_STATUS: MerchantPlanStatusView = {
   plan: null,
@@ -104,6 +107,11 @@ const SUBSCRIPTION_SECTIONS: Array<{
   label: string
   icon: React.ComponentType<{ className?: string }>
 }> = [
+  {
+    id: 'addons',
+    label: 'Add-ons',
+    icon: Puzzle,
+  },
   {
     id: 'plan',
     label: 'Plan & coverage',
@@ -199,6 +207,16 @@ function formatTierBillingUnit(plan: MerchantTierPlanViewRecord): string {
   return `${plan.min_locations ?? 0}-${plan.max_locations} locations`
 }
 
+function addOnMonthlyAmount(service: MerchantBillableServiceViewRecord, quantity: number): number {
+  const safeQuantity = Math.max(1, Math.floor(quantity || 1))
+  const subtotal = service.pricing_model === 'flat'
+    ? service.base_price_monthly
+    : service.pricing_model === 'per_unit'
+      ? service.base_price_monthly * safeQuantity
+      : service.base_price_monthly + Math.max(0, safeQuantity - service.included_quantity) * (service.additional_unit_price ?? 0)
+  return subtotal + subtotal * (service.card_surcharge_pct / 100)
+}
+
 function merchantTierHighlights(plan: MerchantTierPlanViewRecord): string[] {
   return getMerchantTierPresentation(plan.plan_code)?.highlights ?? [
     'Merchant-wide plan',
@@ -270,6 +288,10 @@ export function MerchantSubscriptionOverviewCard({
   const [activeSection, setActiveSection] = useState<SubscriptionSection>('plan')
   const [locationPage, setLocationPage] = useState(1)
   const [openLocationIds, setOpenLocationIds] = useState<string[]>([])
+  const [selectedAddOn, setSelectedAddOn] = useState<MerchantBillableServiceViewRecord | null>(null)
+  const [addOnQuantity, setAddOnQuantity] = useState('1')
+  const [hasAcceptedAddOnAuthorization, setHasAcceptedAddOnAuthorization] = useState(false)
+  const [isSubmittingAddOnRequest, setIsSubmittingAddOnRequest] = useState(false)
 
   const devicesRef = useRef<HTMLDivElement | null>(null)
   const sectionNavRef = useRef<HTMLElement | null>(null)
@@ -277,6 +299,10 @@ export function MerchantSubscriptionOverviewCard({
   const merchantPlanStatus = overviewQuery.data?.merchantPlanStatus ?? EMPTY_PLAN_STATUS
   const pendingTierRequest = overviewQuery.data?.pendingTierRequest ?? null
   const pendingHardwareRequests = overviewQuery.data?.pendingHardwareRequests ?? []
+  const availableServices = overviewQuery.data?.availableServices ?? []
+  const serviceAssignments = overviewQuery.data?.serviceAssignments ?? []
+  const pendingServiceRequests = overviewQuery.data?.pendingServiceRequests ?? []
+  const serviceRequestHistory = overviewQuery.data?.serviceRequestHistory ?? []
   const locations = overviewQuery.data?.locations ?? EMPTY_LOCATIONS
   const merchantTierPlans = useMemo(
     () =>
@@ -536,6 +562,30 @@ export function MerchantSubscriptionOverviewCard({
     setHardwareRequestQuantity('1')
     setHardwareRequestNote('')
     setContactModalMode(null)
+  }
+
+  const handleRequestAddOn = async () => {
+    if (!selectedLocation || !selectedAddOn) return
+    setIsSubmittingAddOnRequest(true)
+    const result = await RequestMerchantServiceAddOn(
+      {
+        locationId: selectedLocation.id,
+        serviceId: selectedAddOn.id,
+        quantity: Number(addOnQuantity),
+      },
+      { accepted: hasAcceptedAddOnAuthorization },
+    )
+    setIsSubmittingAddOnRequest(false)
+    if (!result.success) {
+      toast.error(result.error || 'Failed to submit the add-on request.')
+      return
+    }
+    toast.success(`Add-on request ${result.requestNumber ?? ''} submitted for DEXA review.`.trim())
+    if (result.notificationWarning) toast.warning(result.notificationWarning)
+    setSelectedAddOn(null)
+    setAddOnQuantity('1')
+    setHasAcceptedAddOnAuthorization(false)
+    await overviewQuery.refetch()
   }
 
   const planAmountLabel = merchantPlanStatus.plan
@@ -1246,6 +1296,81 @@ export function MerchantSubscriptionOverviewCard({
       </PanelSection>
             </div>
           ) : null}
+
+          {activeSection === 'addons' ? (
+            <div className="min-w-0">
+              <PanelSection
+                label="Location Add-ons"
+                caption="Request recurring paid features for one location. DEXA reviews the request and Valor must approve the charge before activation."
+                action={
+                  locations.length > 0 ? (
+                    <Select value={selectedLocation?.id || ''} onValueChange={selectLocation}>
+                      <SelectTrigger className="w-[220px]"><SelectValue placeholder="Select location" /></SelectTrigger>
+                      <SelectContent>
+                        {locations.map((location) => <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : null
+                }
+              >
+                {availableServices.length === 0 ? (
+                  <Empty icon={Puzzle} title="No add-ons available" description="DEXA has not published any paid software or service add-ons." />
+                ) : (
+                  <div className="divide-y divide-border/60">
+                    {availableServices.map((service) => {
+                      const assignment = serviceAssignments.find(
+                        (item) => item.location_id === selectedLocation?.id && item.service_id === service.id,
+                      )
+                      const pending = pendingServiceRequests.find(
+                        (item) => item.location_id === selectedLocation?.id && item.service_id === service.id,
+                      )
+                      const latestRequest = serviceRequestHistory.find(
+                        (item) => item.location_id === selectedLocation?.id && item.service_id === service.id,
+                      )
+                      const featureState = assignment
+                        ? 'Active'
+                        : pending
+                          ? 'Pending'
+                          : latestRequest?.status === 'cancelled'
+                            ? 'Cancelled'
+                            : latestRequest?.status === 'denied'
+                              ? 'Inactive · last request denied'
+                              : 'Inactive'
+                      return (
+                        <div key={service.id} className="flex flex-col gap-4 py-5 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium">{service.display_name}</p>
+                              <Badge variant="outline">{featureState}</Badge>
+                            </div>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {formatMoney(addOnMonthlyAmount(service, 1))}/month including card surcharge
+                              {service.pricing_model !== 'flat' ? ` per ${service.unit_label}` : ''}
+                            </p>
+                            {assignment ? <p className="mt-1 text-xs text-muted-foreground">Quantity {assignment.quantity} · {assignment.status.replace('_', ' ')}</p> : null}
+                            {pending ? <p className="mt-1 text-xs text-muted-foreground">{pending.request_number} is awaiting DEXA review.</p> : null}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="rounded-full"
+                            disabled={!selectedLocation || Boolean(assignment) || Boolean(pending)}
+                            onClick={() => {
+                              setSelectedAddOn(service)
+                              setAddOnQuantity('1')
+                              setHasAcceptedAddOnAuthorization(false)
+                            }}
+                          >
+                            {assignment ? 'Active' : pending ? 'Pending review' : 'Request add-on'}
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </PanelSection>
+            </div>
+          ) : null}
       </Panel>
 
       <Dialog
@@ -1404,6 +1529,51 @@ export function MerchantSubscriptionOverviewCard({
                 </Button>
               )}
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(selectedAddOn)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedAddOn(null)
+            setHasAcceptedAddOnAuthorization(false)
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Authorize paid add-on</DialogTitle>
+            <DialogDescription>
+              Review the recurring location charge before sending it to DEXA HQ.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedAddOn ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 rounded-2xl bg-muted/45 p-4 text-sm sm:grid-cols-2">
+                <div><p className="text-muted-foreground">Feature</p><p className="font-medium">{selectedAddOn.display_name}</p></div>
+                <div><p className="text-muted-foreground">Location</p><p className="font-medium">{selectedLocation?.name}</p></div>
+                <div className="space-y-2">
+                  <Label htmlFor="addon-quantity">Quantity</Label>
+                  <Input id="addon-quantity" type="number" min={1} max={1000} value={addOnQuantity} onChange={(event) => setAddOnQuantity(event.target.value)} />
+                </div>
+                <div><p className="text-muted-foreground">Authorized recurring total</p><p className="text-xl font-semibold">{formatMoney(addOnMonthlyAmount(selectedAddOn, Number(addOnQuantity)))}/month</p></div>
+              </div>
+              <div className="flex items-start gap-3 rounded-2xl border p-4">
+                <Checkbox id="addon-charge-authorization" checked={hasAcceptedAddOnAuthorization} onCheckedChange={(checked) => setHasAcceptedAddOnAuthorization(checked === true)} />
+                <Label htmlFor="addon-charge-authorization" className="cursor-pointer text-sm font-normal leading-5">
+                  I authorize DEXA POS to charge <span className="font-semibold">{formatMoney(addOnMonthlyAmount(selectedAddOn, Number(addOnQuantity)))}/month</span> for {selectedAddOn.display_name} at {selectedLocation?.name}. I understand the charge is recurring, requires DEXA HQ approval, and continues until cancellation.
+                </Label>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSelectedAddOn(null)}>Cancel</Button>
+            <Button type="button" disabled={!hasAcceptedAddOnAuthorization || isSubmittingAddOnRequest || Number(addOnQuantity) < 1} onClick={handleRequestAddOn}>
+              {isSubmittingAddOnRequest ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Send request
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
