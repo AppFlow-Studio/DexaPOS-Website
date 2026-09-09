@@ -47,6 +47,7 @@ import {
   UpdateTicketPriority,
   UpdateTicketCategory,
   GetAdminSupportUploadUrl,
+  DiscardAdminSupportUpload,
   GetHQTeamMembers,
 } from "../../actions/support";
 import {
@@ -286,8 +287,19 @@ export default function AdminTicketDetailPage() {
     },
   });
 
-  const handleGetUploadUrl = (fileName: string, fileId: string, _sessionId: string) =>
-    GetAdminSupportUploadUrl(ticketId, fileName, fileId);
+  const handleGetUploadUrl = (
+    fileName: string,
+    fileId: string,
+    sessionId: string,
+    contentType: string,
+  ) =>
+    GetAdminSupportUploadUrl(
+      ticketId,
+      fileName,
+      fileId,
+      sessionId,
+      contentType,
+    );
 
   const handleSend = () => {
     const trimmed = reply.trim();
@@ -434,6 +446,7 @@ export default function AdminTicketDetailPage() {
             key={uploadKey}
             onUploadsChange={setAttachments}
             getUploadUrl={handleGetUploadUrl}
+            onDiscardUpload={DiscardAdminSupportUpload}
             sessionId={uploadSessionId}
             disabled={sendMutation.isPending}
           />

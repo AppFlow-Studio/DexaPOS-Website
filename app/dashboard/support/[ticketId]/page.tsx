@@ -19,6 +19,7 @@ import {
   useAddMessage,
   useReopenTicket,
   GetSupportUploadUrl,
+  DiscardSupportUpload,
 } from "../../hooks/useSupport";
 import { useClerkOrgId } from "../../hooks/useLocationScoped";
 import {
@@ -146,9 +147,25 @@ export default function TicketDetailPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  const handleGetUploadUrl = async (fileName: string, fileId: string, sessionId: string) => {
+  const handleGetUploadUrl = async (
+    fileName: string,
+    fileId: string,
+    sessionId: string,
+    contentType: string,
+  ) => {
     if (!clerkOrgId) return { error: "Not authenticated" };
-    return GetSupportUploadUrl(clerkOrgId, fileName, fileId, sessionId);
+    return GetSupportUploadUrl(
+      clerkOrgId,
+      fileName,
+      fileId,
+      sessionId,
+      contentType,
+    );
+  };
+
+  const handleDiscardUpload = async (filePath: string) => {
+    if (!clerkOrgId) return;
+    return DiscardSupportUpload(clerkOrgId, filePath);
   };
 
   const handleSend = async () => {
@@ -320,6 +337,7 @@ export default function TicketDetailPage() {
                     chipsContainer={chipsNode}
                     onUploadsChange={setAttachments}
                     getUploadUrl={handleGetUploadUrl}
+                    onDiscardUpload={handleDiscardUpload}
                     sessionId={uploadSessionId}
                     disabled={isSending}
                   />
