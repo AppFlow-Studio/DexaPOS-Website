@@ -24,8 +24,8 @@ describe('Valor SaaS recurring request contract', () => {
       amount: '99.99',
       txn_type: 'add_subscription',
       payment_info: {
-        vault_id: 'vault-123',
-        payment_id: 'payment-456',
+        CustomerProfileID: 'vault-123',
+        PaymentProfileID: 'payment-456',
       },
       recurring_type: '2',
       is_validate_card: '0',
@@ -64,8 +64,8 @@ describe('Valor SaaS recurring request contract', () => {
       is_validate_card: '0',
       failure_notification: '1',
       payment_info: {
-        vault_id: 'vault-123',
-        payment_id: 'payment-456',
+        CustomerProfileID: 'vault-123',
+        PaymentProfileID: 'payment-456',
       },
     })
   })

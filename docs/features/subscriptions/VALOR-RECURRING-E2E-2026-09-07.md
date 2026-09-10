@@ -19,7 +19,7 @@ finding confirmed against Valor's published error reference
 
 | Valor code | Meaning | Cause | Status |
 | --- | --- | --- | --- |
-| `A44` | INVALID PAYMENT INFO | Card vaulted on `demo.valorpaytech.com`; `/?addSub` runs on `securelink-staging.valorpaytech.com`. The vault_id is not resolvable across those sandbox hosts. Reproduced with a freshly-created vault entry, so not stale data. | **OPEN — see Valor question** |
+| `A44` | INVALID PAYMENT INFO | **NOT cross-host.** The subscription `payment_info` was built with the wrong keys `vault_id` / `payment_id`; Valor's `add_subscription` contract names the vault reference `CustomerProfileID` / `PaymentProfileID`, so the gateway saw no vault reference at all. The earlier cross-host theory was a mis-diagnosis: the raw-card isolation test also changed the keys. Confirmed 2026-09-10 (see resolution below). | **FIXED** |
 | `E07` | INVALID EXPIRY DATE | `expiry_date` must be `MMYY` (docs); `MM/YY` is rejected. Card-method only (the vault path sends no expiry). | Noted |
 | `SUB08` | STARTS FROM PAST DATE | The charge sent `subscription_starts_from` = the elapsed `next_billing_date` when recovering a past-due cycle. | **FIXED** |
 | `A40` | INVOICE # MUST BE 12 ALPHANUMERIC | Recurring path used a naive `invoiceNumber.slice(0,12)`, leaving the hyphens in `SUB-202608-0002`. Breaks **every** recurring charge (all invoice numbers contain hyphens). | **FIXED** |
@@ -36,6 +36,9 @@ After the two fixes below + using a card whose token resolves on the transaction
    - `supabase/functions/_shared/valor.ts` (`buildValorRecurringBody`).
    - `lib/payments/valor/subscriptionApi.ts` (`buildAddSubscriptionBody`; `buildUpdateSubscriptionBody` inherits it).
    - Regression assertions added to `tests/valor-subscription-api.test.ts`.
+3. **`A44` — correct the `payment_info` vault-reference key names** (fix landed 2026-09-10, after Valor support confirmed vault ids created via the Vault API *do* apply to subscription calls):
+   - `lib/payments/valor/subscriptionApi.ts` (`buildAddSubscriptionBody` + `ValorSubscriptionPaymentInfo`) and `supabase/functions/_shared/valor.ts` (`buildValorRecurringBody`) now emit `CustomerProfileID` / `PaymentProfileID` (was `vault_id` / `payment_id`). `buildUpdateSubscriptionBody` / `updateRecurringSubscription` inherit the shared builder, so the card-repoint and past-due recovery paths are fixed too.
+   - Tests updated (`tests/valor-subscription-api.test.ts`, `lib/payments/__tests__/valor-vault.test.ts`) + new Node↔Deno `payment_info` parity guard (`lib/payments/__tests__/valor-subscription-deno-parity.test.ts`).
 
 ## Verified working through the UI (unchanged by this change)
 
@@ -48,31 +51,42 @@ After the two fixes below + using a card whose token resolves on the transaction
   prior profile was demoted — i.e. card replacement is correctly scoped.
 - Live pricing quote (`$730.08` = `$702.00` + 4% card surcharge) matches the cascade line items.
 
-## Outstanding blocker — cross-host vault (`A44`)
+## Resolution — `A44` was wrong `payment_info` keys, not cross-host (confirmed 2026-09-10)
 
-The vault APIs run on `demo.valorpaytech.com`; the subscription/transaction APIs run on
-`securelink-staging.valorpaytech.com`. A `vault_id`/`payment_id` created on the former is
-rejected as INVALID PAYMENT INFO by `/?addSub` on the latter. Valor's docs do not document
-cross-host vault compatibility. A raw card in `payment_info` (same request, same host/creds)
-is accepted, which isolates the failure to the cross-host vault reference.
+Valor support answered the question below:
 
-### Question for Valor (isvsupport@valorpaytech.com)
+> "vault id and payment ids created via Vault API **can be applied** to your subscription
+> calls." (And separately: the path is routed solely by `txn_type`; `/?addSub` and
+> `/?addSubs` are processed identically.)
+
+Cross-host vault references *are* supported. The real defect was the key names: the
+`add_subscription` `payment_info` object must use `CustomerProfileID` / `PaymentProfileID`
+(per <https://valorapi.readme.io/reference/add-subscriptions>), but the code sent
+`vault_id` / `payment_id`, so Valor saw no vault reference → `A44 INVALID PAYMENT INFO`.
+The prior cross-host theory was confounded because the raw-card isolation test *also*
+switched to the correct keys (`card_number`/`expiry_date`/`cvv`).
+
+### Staging proof (Uptown Branch, sub `d3d9f799` / Valor `55000`, vault `130618`/`124285`, EPI `…2412333540`)
+
+Same account, same vault refs, same cross-host setup (demo vault → securelink `/?addSub`):
+
+| Invoice | `payment_info` keys | `processor_response` | Invoice status |
+| --- | --- | --- | --- |
+| `SUB-202608-0006` / `-0007` | `vault_id` / `payment_id` | `{error_no:"A44", desc:"INVALID PAYMENT INFO"}` | voided |
+| `SUB-202608-0008` (after fix) | `CustomerProfileID` / `PaymentProfileID` | `{error_no:"S00", error_code:"00", msg:"SUBSRIPTION_EDITED"}` | **paid** |
+
+`S00` came back on the `updateSub` path (sub `55000` pre-existed), which shares the same
+`payment_info` builder as `addSub`, so both the create and update/recovery paths are proven.
+Subscription stayed `active`.
+
+### Original question sent to Valor (isvsupport@valorpaytech.com) — now answered
 
 > In the Valor sandbox, can a recurring subscription created via `add_subscription`
 > (`https://securelink-staging.valorpaytech.com:443/?addSub`) reference a `vault_id` +
 > `payment_id` that were created through the Vault APIs on
-> `https://demo.valorpaytech.com` (`/api/valor-vault/addcustomer`,
-> `/api/fl-valor-vault/addpaymentprofile/{vault_id}`)? We create the customer/payment
-> profile successfully on the demo host and receive valid ids, but `add_subscription` on
-> the securelink host returns `error_no A44 "INVALID PAYMENT INFO"` for those ids (a raw
-> card in `payment_info` is accepted on the same call). If cross-host vault references are
-> not supported in sandbox, what host/flow should back a recurring subscription's
-> `payment_info` — must the vault be created on the same host as the subscription API, or
-> should we pass a Passage.js token / card at subscription time?
->
-> Secondary: the docs page for Add Subscription lists the path as `/?addSubs`, but the
-> live gateway processes `/?addSub` (and `/?addSubs`) identically — please confirm the
-> canonical path.
+> `https://demo.valorpaytech.com`? … Secondary: the docs page for Add Subscription lists
+> the path as `/?addSubs`, but the live gateway processes `/?addSub` (and `/?addSubs`)
+> identically — please confirm the canonical path.
 
 ## Environment note (not a PR defect)
 
