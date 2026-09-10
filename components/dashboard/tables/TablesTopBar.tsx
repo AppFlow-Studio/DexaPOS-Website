@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import {
     Select,
@@ -9,7 +10,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { Edit } from 'lucide-react'
+import { Edit, QrCode } from 'lucide-react'
 import { Location } from '@/types/merchant_locations'
 import { FloorPlan } from '@/types/floor-plan'
 
@@ -71,6 +72,15 @@ export function TablesTopBar({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+                {/* No location prop: drilling into a floor plan already calls
+                    `setSelectedLocation`, so the QR page resolves the same
+                    branch from the store. */}
+                <Button variant="outline" size="sm" asChild className="h-8 text-xs px-3">
+                    <Link href="/dashboard/tables/qr-codes">
+                        <QrCode className="h-3.5 w-3.5 mr-1.5" />
+                        QR Codes
+                    </Link>
+                </Button>
                 <Button variant="default" size="sm" onClick={onEditLayout} className="h-8 text-xs px-3">
                     <Edit className="h-3.5 w-3.5 mr-1.5" />
                     Edit
