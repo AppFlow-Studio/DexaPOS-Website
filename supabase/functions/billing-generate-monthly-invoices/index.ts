@@ -2,9 +2,92 @@ import { createClient } from 'npm:@supabase/supabase-js'
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
 import { isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope.ts'
 import { loadMerchantBillingExemption } from '../_shared/merchant-billing-exemption.ts'
+import { sendSubscriptionInvoiceIssuedEmail } from '../_shared/payment-emails.ts'
+import { runSubscriptionNotificationDelivery } from '../_shared/subscription-failure-notifications.ts'
+import {
+  buildSubscriptionInvoiceLinks,
+  fetchSubscriptionInvoicePdfAttachment,
+} from '../_shared/subscription-invoice-links.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+/**
+ * Email the merchant their freshly-issued invoice (Stripe-style, PDF attached,
+ * hosted link). Best-effort + idempotent via the notification delivery ledger,
+ * so a retry of invoice generation never double-sends or fails the run.
+ */
+async function emailIssuedInvoice(
+  supabase: ReturnType<typeof createClient>,
+  invoiceId: string,
+): Promise<void> {
+  try {
+    const { data: invoice } = await supabase
+      .from('subscription_invoices')
+      .select(
+        'id, subscription_id, merchant_id, location_id, invoice_number, billing_period_start, billing_period_end, line_items, subtotal, card_surcharge, total_amount, due_date, created_at, public_token, status',
+      )
+      .eq('id', invoiceId)
+      .maybeSingle()
+    if (!invoice || invoice.status !== 'open') return
+
+    const [{ data: merchant }, { data: location }, { data: subscription }] = await Promise.all([
+      supabase.from('merchants').select('name, owner_email').eq('id', invoice.merchant_id).maybeSingle(),
+      invoice.location_id
+        ? supabase.from('locations').select('name').eq('id', invoice.location_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase.from('merchant_subscriptions').select('billing_profile_id').eq('id', invoice.subscription_id).maybeSingle(),
+    ])
+
+    let billingEmail: string | null = null
+    if (subscription?.billing_profile_id) {
+      const { data: profile } = await supabase
+        .from('merchant_billing_profiles')
+        .select('billing_email')
+        .eq('id', subscription.billing_profile_id)
+        .maybeSingle()
+      billingEmail = (profile?.billing_email as string | null)?.trim() || null
+    }
+
+    const recipient = (billingEmail || (merchant?.owner_email as string | null)?.trim() || '').toLowerCase()
+    if (!recipient) return
+
+    const { viewUrl, pdfUrl } = buildSubscriptionInvoiceLinks(invoice.public_token as string | null)
+    const pdfAttachment = await fetchSubscriptionInvoicePdfAttachment(
+      invoice.id as string,
+      (invoice.invoice_number as string) || 'dexa-invoice',
+    )
+
+    await runSubscriptionNotificationDelivery({
+      supabase,
+      invoiceId: invoice.id as string,
+      eventKey: 'subscription_invoice_issued',
+      channel: 'email',
+      recipient,
+      deliver: () =>
+        sendSubscriptionInvoiceIssuedEmail({
+          to: recipient,
+          merchantName: (merchant?.name as string) || 'Dexa POS',
+          locationName: ((location as { name?: string } | null)?.name as string) || 'Location',
+          billingEmail,
+          invoiceNumber: invoice.invoice_number as string,
+          issuedOn: invoice.created_at as string,
+          billingPeriodStart: invoice.billing_period_start as string,
+          billingPeriodEnd: invoice.billing_period_end as string,
+          lineItems: Array.isArray(invoice.line_items) ? (invoice.line_items as Array<Record<string, unknown>>) : [],
+          subtotal: Number(invoice.subtotal ?? 0),
+          cardSurcharge: Number(invoice.card_surcharge ?? 0),
+          totalAmount: Number(invoice.total_amount ?? 0),
+          dueDate: invoice.due_date as string,
+          viewUrl,
+          pdfUrl,
+          attachments: pdfAttachment ? [pdfAttachment] : undefined,
+        }),
+    })
+  } catch (err) {
+    console.error('[billing-generate-monthly-invoices] issued-email error:', err)
+  }
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -103,6 +186,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
 
       created.push({ subscription_id: subscription.id, invoice_id: invoiceId as string })
+      await emailIssuedInvoice(supabase, invoiceId as string)
     }
 
     return jsonResponse({

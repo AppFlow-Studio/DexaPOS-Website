@@ -5,6 +5,7 @@ import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { buildEmailTemplate, sendEmail } from '@/lib/messaging/resend'
+import { sendSubscriptionPlanDecisionEmail } from '@/lib/email/subscription-emails'
 import { createAppNotification } from '@/lib/notifications/app-notifications'
 import {
   formatLongDate,
@@ -487,15 +488,12 @@ async function notifyMerchantOfTierAssignment(params: {
   let emailError: string | undefined
 
   if (recipient) {
-    const emailResult = await sendEmail(
-      recipient,
-      `DEXA subscription updated - ${plan.display_name}`,
-      buildEmailTemplate(
-        'DEXA POS',
-        'Subscription updated',
-        `${escapeEmailText(merchant.name)},\n\n${escapeEmailText(message)}\n\nYou can review the update on the Subscriptions page in your DEXA dashboard.`,
-      ),
-    )
+    const emailResult = await sendSubscriptionPlanDecisionEmail({
+      to: recipient,
+      merchantName: merchant.name,
+      decision: 'approved',
+      requestLabel: plan.display_name,
+    })
 
     if ('error' in emailResult) {
       emailError = emailResult.error
@@ -1842,15 +1840,12 @@ export async function denyMerchantTierPlanRequest(
     ''
   let emailError: string | undefined
   if (recipient) {
-    const emailResult = await sendEmail(
-      recipient,
-      `DEXA subscription request update - ${planResult.data.display_name}`,
-      buildEmailTemplate(
-        'DEXA POS',
-        'Subscription request update',
-        `${escapeEmailText(merchantResult.data.name)},\n\n${escapeEmailText(body)}\n\nYou can review your current plan on the Subscriptions page in your DEXA dashboard.`,
-      ),
-    )
+    const emailResult = await sendSubscriptionPlanDecisionEmail({
+      to: recipient,
+      merchantName: merchantResult.data.name,
+      decision: 'denied',
+      requestLabel: planResult.data.display_name,
+    })
     if ('error' in emailResult) emailError = emailResult.error
   }
 
@@ -2129,8 +2124,14 @@ export async function reviewMerchantServiceRequest(params: {
   const recipient = billingProfileResult.data?.billing_email?.trim() || merchantResult.data?.owner_email?.trim() || ''
   let emailFailed = false
   if (recipient) {
-    const email = await sendEmail(recipient, `DEXA add-on request ${params.decision}`,
-      buildEmailTemplate('DEXA POS', 'Paid add-on request update', body))
+    const email = await sendSubscriptionPlanDecisionEmail({
+      to: recipient,
+      merchantName: merchantResult.data?.name ?? 'Dexa POS',
+      decision: params.decision === 'approved' ? 'approved' : 'denied',
+      requestLabel: service?.display_name ?? 'a paid add-on',
+      locationName: location?.name ?? null,
+      reason: note ?? null,
+    })
     emailFailed = 'error' in email
   }
 
@@ -2322,11 +2323,14 @@ async function reviewMerchantHardwareRequest(params: {
     ''
   let emailError: string | undefined
   if (recipient) {
-    const emailResult = await sendEmail(
-      recipient,
-      `DEXA hardware request update - ${request.request_number}`,
-      buildEmailTemplate('DEXA POS', 'Hardware request update', body),
-    )
+    const emailResult = await sendSubscriptionPlanDecisionEmail({
+      to: recipient,
+      merchantName: merchantResult.data.name,
+      decision: approved ? 'approved' : 'denied',
+      requestLabel: `${request.requested_quantity} device${request.requested_quantity === 1 ? '' : 's'} (${request.request_number})`,
+      locationName: locationResult.data.name,
+      reason: note ?? null,
+    })
     if ('error' in emailResult) emailError = emailResult.error
   }
 
