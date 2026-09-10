@@ -102,3 +102,25 @@ inverse: a true cash base of $10 stores card $10.40, and `10.40 ÷ 1.04 = 9.9999
 $10.00, not $9.99 — keep `Math.floor(raw*100 + 1e-6)/100`. Meta-lesson: a "more correct" convention
 is never the spec; the number/direction the user states is. This is the second flip of the same
 math — pin the model in one helper + one migration and confirm the direction before touching prices.
+
+## Valor A44 "INVALID PAYMENT INFO" was wrong `payment_info` keys, not cross-host vault (2026-09-10)
+Context: the recurring-billing E2E (`VALOR-RECURRING-E2E-2026-09-07.md`) attributed A44 to a
+cross-host vault (card vaulted on `demo.valorpaytech.com`, `/?addSub` on `securelink-staging`). That
+was a mis-diagnosis. Real cause: `add_subscription` `payment_info` was built with `vault_id` /
+`payment_id`, but Valor's contract names the vault reference `CustomerProfileID` /
+`PaymentProfileID` — so the gateway saw no vault reference at all. Renaming the keys in both builders
+(`lib/payments/valor/subscriptionApi.ts`, `supabase/functions/_shared/valor.ts`) made the SAME
+cross-host vault refs return `S00` on staging.
+Why the original isolation test lied: it "isolated" A44 by swapping the vaulted card for a raw card
+in `payment_info` and seeing it succeed — but raw card ALSO uses different, correct keys
+(`card_number`/`expiry_date`/`cvv`). The test changed TWO variables (host-vs-not AND key names) and
+credited the wrong one.
+Meta-lessons:
+- A one-variable-at-a-time isolation must change exactly one variable. If the "control" path also
+  swaps field names/shape, its success proves nothing about the variable you think you're testing.
+- For a gateway contract, read the actual field-name spec (valorapi.readme.io) before theorizing
+  about hosts/environments. "INVALID PAYMENT INFO" usually means the gateway didn't recognize the
+  fields you sent, not that the referenced entity is unreachable.
+- Verify against the real failing fixture: staging invoices `SUB-202608-0006/0007` carried a stored
+  `A44` `processor_response` for specific vault ids; re-charging those same ids with the corrected
+  keys → `S00` (`SUB-202608-0008`) is proof, where a fresh green run would not be.

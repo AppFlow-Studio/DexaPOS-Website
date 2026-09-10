@@ -8,22 +8,27 @@ Environments: staging Supabase `dfwqakoyittmrwbqvxgw`; production Supabase
 `hifouuofcaytijrkbvcy` (see [[project_supabase_staging_prod_link]] semantics —
 verify the pooler-url target before any `db push`). Rollout is staging-first.
 
-## 0. Hard blocker — must clear before anything else
+## 0. Hard blocker — CLEARED (2026-09-10)
 
-- [ ] **A44 cross-host vault** resolved with Valor. The card is vaulted on the
-      Vault host but `/?addSub` runs on the transaction host, and the vault
-      reference is rejected (`INVALID PAYMENT INFO`). Awaiting Valor's answer
-      (email sent to isvsupport@valorpaytech.com). Once answered, implement their
-      pattern (vault on the same host as the subscription API, or pass a
-      Passage.js token / card at subscription-create time) and **re-run the
-      staging vault-based E2E until `/?addSub` returns `S00`**. Until this is
-      green on staging, do not promote.
+- [x] **A44 resolved.** It was *not* a cross-host vault problem — the
+      `add_subscription` `payment_info` used the wrong key names (`vault_id` /
+      `payment_id` instead of Valor's `CustomerProfileID` / `PaymentProfileID`).
+      Valor support confirmed vault ids created via the Vault API apply to
+      subscription calls; cross-host is supported. Fixed in both builders
+      (`lib/payments/valor/subscriptionApi.ts`, `supabase/functions/_shared/valor.ts`)
+      and **verified green on staging**: with the corrected keys, `/?addSub`
+      (updateSub path) returned `error_no S00` and invoice `SUB-202608-0008` went
+      `paid` for the same vault refs that previously returned `A44` (see
+      [VALOR-RECURRING-E2E-2026-09-07.md](./VALOR-RECURRING-E2E-2026-09-07.md)
+      → "Resolution"). No same-host-vault or token-at-create change was needed.
+- [ ] At prod deploy (§4), redeploy every billing edge function that bundles the
+      corrected `_shared/valor.ts` (esp. `billing-charge-subscription`).
 
 ## 1. Credentials & environment (production)
 
 - [ ] `VALOR_ENV=production` set on prod Supabase Edge Function secrets **and** the web app.
 - [ ] `VALOR_BASE_URL` set to the **prod transaction host** (unpublished — obtain from Valor). The code refuses to run in production without it; it never guesses a host.
-- [ ] Prod Vault host confirmed (may differ from `demo.valorpaytech.com`) and consistent with the A44 resolution.
+- [ ] `VALOR_VAULT_BASE_URL` set to the prod Vault host (may differ from `demo.valorpaytech.com`). Cross-host vault→transaction is supported (that was never the A44 cause), so the Vault host need not match `VALOR_BASE_URL`.
 - [ ] `VALOR_WEBHOOK_SECRET` set for prod.
 - [ ] Confirm the prod app `SUPABASE_SERVICE_ROLE_KEY` matches the value the Edge Functions receive (a mismatch reproduces the "Unauthorized" seen locally). Optionally harden the server action to also send `x-internal-secret`.
 

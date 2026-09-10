@@ -217,12 +217,12 @@ describe("buildAddSubscriptionBody", () => {
     expect(body.shipping_zip).toBe("85284");
   });
 
-  it("omits payment_id when no payment profile id was returned", () => {
+  it("omits PaymentProfileID when no payment profile id was returned", () => {
     // Valor's addpaymentprofiletoken response is undocumented, so the id may
     // legitimately be absent; sending `undefined` would be worse than omitting.
     const body = buildAddSubscriptionBody(base);
-    expect("payment_id" in body.payment_info).toBe(false);
-    expect(body.payment_info.vault_id).toBe("1234");
+    expect("PaymentProfileID" in body.payment_info).toBe(false);
+    expect(body.payment_info.CustomerProfileID).toBe("1234");
   });
 
   it("rejects a zero-amount subscription", () => {

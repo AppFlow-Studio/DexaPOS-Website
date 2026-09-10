@@ -473,7 +473,7 @@ function formatValorSubscriptionDate(date: Date): string {
   ].join('-')
 }
 
-function buildValorRecurringBody(
+export function buildValorRecurringBody(
   params: ValorRecurringParams,
   surchargeIndicator: ValorSurchargeIndicator = '0',
 ): JsonRecord {
@@ -490,9 +490,12 @@ function buildValorRecurringBody(
   return {
     amount: formatMinorUnits(params.amountMinor),
     surchargeAmount: '0.00',
+    // Valor's add_subscription contract names the vault reference
+    // `CustomerProfileID` / `PaymentProfileID` (NOT `vault_id` / `payment_id`);
+    // wrong keys => no vault reference seen => `A44 INVALID PAYMENT INFO`.
     payment_info: {
-      vault_id: params.vaultCustomerId,
-      ...(params.paymentProfileId ? { payment_id: params.paymentProfileId } : {}),
+      CustomerProfileID: params.vaultCustomerId,
+      ...(params.paymentProfileId ? { PaymentProfileID: params.paymentProfileId } : {}),
     },
     surchargeIndicator,
     recurring_type: '2',
