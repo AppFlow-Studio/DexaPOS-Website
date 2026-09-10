@@ -1,7 +1,9 @@
 ﻿'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { SubscriptionCutoverReview } from './SubscriptionCutoverReview'
+import { subscriptionBillingScope } from '@/supabase/functions/_shared/subscription-billing-scope'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
@@ -9,11 +11,14 @@ import {
   ArrowUpRight,
   BarChart3,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Eye,
   FileText,
   Loader2,
   RefreshCcw,
+  ShieldCheck,
   Wallet,
 } from 'lucide-react'
 import type { MerchantDetails } from '@/types/merchant'
@@ -31,6 +36,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -56,11 +62,13 @@ import {
   getMerchantTierPlans,
   getPendingMerchantTierRequest,
   getPendingMerchantHardwareRequests,
+  getPendingMerchantServiceRequests,
   getMerchantTierStatus,
   getMerchantTierSubscription,
   approveMerchantHardwareRequest,
   denyMerchantHardwareRequest,
   denyMerchantTierPlanRequest,
+  reviewMerchantServiceRequest,
   chargeSubscriptionInvoiceManually,
   calculateSubscriptionTotal,
   generateSubscriptionInvoiceManually,
@@ -71,7 +79,9 @@ import {
   getMerchantSubscriptions,
   getSubscriptionInvoices,
   getSubscriptionServiceAssignments,
-  replaceSubscriptionServiceAssignments,
+  setMerchantSubscriptionGracePeriod,
+  setMerchantBillingExemption,
+  saveAndChargeMerchantSubscription,
   type BillableServiceRecord,
   type DeviceBillingServiceMappingRecord,
   type SubscriptionPlanRecord,
@@ -79,6 +89,7 @@ import {
   type MerchantTierPlanRecord,
   type MerchantTierPlanRequestRecord,
   type MerchantHardwareRequestRecord,
+  type MerchantServiceRequestRecord,
   type MerchantTierStatusRecord,
   type MerchantTierSubscriptionRecord,
   type MerchantSubscriptionRecord,
@@ -87,13 +98,8 @@ import {
   upsertBillableService,
   upsertDeviceBillingServiceMapping,
   upsertMerchantTierSubscription,
-  upsertMerchantSubscription,
   upsertSubscriptionPlan,
 } from '@/app/manage/actions/subscription-billing'
-import {
-  getMerchantNmiAccountsSummary,
-  type MerchantNmiAccountRow,
-} from '@/app/manage/actions/admin-merchant/nmi'
 import {
   getMerchantBillingProfiles,
   type MerchantBillingProfileRecord,
@@ -255,6 +261,98 @@ function formatDate(date: string | null | undefined): string {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+function exportAuthorizationEvidence(
+  filename: string,
+  evidence: Record<string, unknown>,
+) {
+  const rows = Object.entries(evidence).map(([key, value]) =>
+    `"${String(key).replace(/"/g, '""')}","${String(value ?? '').replace(/"/g, '""')}"`,
+  )
+  const blob = new Blob([`Field,Value\n${rows.join('\n')}`], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+function AuthorizationEvidence({
+  reference,
+  acceptedAt,
+  termsVersion,
+  text,
+  price,
+  cadence,
+  requestedBy,
+  ipAddress,
+  userAgent,
+  merchantName,
+  locationName,
+  featureName,
+}: {
+  reference: string | null
+  acceptedAt: string | null
+  termsVersion: string | null
+  text: string | null
+  price: string
+  cadence: string | null
+  requestedBy: string
+  ipAddress: string | null
+  userAgent: string | null
+  merchantName?: string | null
+  locationName?: string | null
+  featureName?: string | null
+}) {
+  const evidence = {
+    authorization_reference: reference,
+    merchant_name: merchantName,
+    location_name: locationName,
+    feature_name: featureName,
+    accepted_at: acceptedAt,
+    terms_version: termsVersion,
+    authorized_price: price,
+    billing_cadence: cadence,
+    requested_by: requestedBy,
+    ip_address: ipAddress,
+    user_agent: userAgent,
+    authorization_text: text,
+  }
+
+  return (
+    <details className="rounded-xl border p-3 text-sm">
+      <summary className="cursor-pointer font-medium">Authorization evidence</summary>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {Object.entries(evidence).map(([key, value]) => (
+          <div key={key} className={key === 'authorization_text' || key === 'user_agent' ? 'sm:col-span-2' : ''}>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{key.replace(/_/g, ' ')}</p>
+            <p className="mt-1 break-words">{String(value || 'Not captured')}</p>
+          </div>
+        ))}
+      </div>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="mt-3"
+        onClick={() => exportAuthorizationEvidence(`${reference || 'authorization'}.csv`, evidence)}
+      >
+        <Download className="mr-2 h-4 w-4" />
+        Export evidence
+      </Button>
+    </details>
+  )
+}
+
+function formatDateTimeLocalInput(value: string | null | undefined): string {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return localDate.toISOString().slice(0, 16)
 }
 
 function statusVariant(status: string): 'default' | 'secondary' | 'outline' | 'destructive' {
@@ -437,19 +535,74 @@ interface HqSubscriptionsWorkspaceProps {
   canManageBilling: boolean
 }
 
+const SUBSCRIPTION_STEPS = [
+  { id: 'tier', title: 'Merchant Tier', description: 'Review or change the plan for this merchant.' },
+  { id: 'catalog', title: 'Pricing & Device Mapping', description: 'Review shared pricing and device mappings. Continue if the existing setup is correct.' },
+  { id: 'locations', title: 'Location Add-ons', description: 'Choose a location, configure its services, and review the amount before saving.' },
+  { id: 'billing', title: 'Billing Review', description: 'Review invoices and payment results for the selected location.' },
+] as const
+
+function SubscriptionStepNavigation({
+  step,
+  disabled,
+  onChange,
+}: {
+  step: number
+  disabled: boolean
+  onChange: (step: number) => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <Button type="button" variant="outline" disabled={disabled || step === 0} onClick={() => onChange(step - 1)}>
+        <ChevronLeft className="h-4 w-4" />
+        Back
+      </Button>
+      <span className="text-xs text-muted-foreground">Step {step + 1} of {SUBSCRIPTION_STEPS.length}</span>
+      {step < SUBSCRIPTION_STEPS.length - 1 ? (
+        <Button type="button" disabled={disabled} onClick={() => onChange(step + 1)}>
+          Next
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      ) : (
+        <span className="text-sm font-medium text-muted-foreground">Final step</span>
+      )}
+    </div>
+  )
+}
+
 export function HqSubscriptionsWorkspace({
   merchant,
   canManageBilling,
 }: HqSubscriptionsWorkspaceProps) {
+  const [currentStep, setCurrentStep] = useState(0)
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null)
+  const activeStep = SUBSCRIPTION_STEPS[currentStep]
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
+  const [billingExemption, setBillingExemption] = useState(() => ({
+    enabled: Boolean(merchant.billing_exempt),
+    active: Boolean(merchant.billing_exempt) && (
+      !merchant.billing_exempt_expires_at ||
+      new Date(merchant.billing_exempt_expires_at).getTime() > Date.now()
+    ),
+    reason: merchant.billing_exempt_reason ?? null,
+    expiresAt: merchant.billing_exempt_expires_at ?? null,
+    grantedAt: merchant.billing_exempt_granted_at ?? null,
+    grantedBy: merchant.billing_exempt_granted_by ?? null,
+  }))
+  const [billingExemptionRequested, setBillingExemptionRequested] = useState(
+    billingExemption.active,
+  )
+  const [billingExemptionReason, setBillingExemptionReason] = useState('')
+  const [billingExemptionExpiresAt, setBillingExemptionExpiresAt] = useState(
+    billingExemption.expiresAt?.slice(0, 16) ?? '',
+  )
   const [services, setServices] = useState<BillableServiceRecord[]>([])
   const [deviceBillingMappings, setDeviceBillingMappings] = useState<DeviceBillingServiceMappingRecord[]>([])
   const [servicePlans, setServicePlans] = useState<SubscriptionPlanRecord[]>([])
   const [subscriptions, setSubscriptions] = useState<MerchantSubscriptionRecord[]>([])
   const [invoices, setInvoices] = useState<SubscriptionInvoiceRecord[]>([])
   const [subscriptionServiceMap, setSubscriptionServiceMap] = useState<Record<string, SubscriptionServiceAssignmentRecord[]>>({})
-  const [locationEligibilityMap, setLocationEligibilityMap] = useState<Record<string, MerchantNmiAccountRow>>({})
   const [billingProfilesByLocation, setBillingProfilesByLocation] = useState<Record<string, MerchantBillingProfileRecord>>({})
   const [serviceFormState, setServiceFormState] = useState<ServiceFormState>({})
   const [selectedServicePlanId, setSelectedServicePlanId] = useState('')
@@ -469,6 +622,8 @@ export function HqSubscriptionsWorkspace({
   const [currentPeriodEnd, setCurrentPeriodEnd] = useState(endOfMonthIso())
   const [nextBillingDate, setNextBillingDate] = useState(firstDayNextMonthIso())
   const [trialEndsAt, setTrialEndsAt] = useState('')
+  const [gracePeriodEndsAt, setGracePeriodEndsAt] = useState('')
+  const [graceReason, setGraceReason] = useState('')
   const [invoicePreviewDocument, setInvoicePreviewDocument] = useState<SubscriptionInvoiceDocumentData | null>(null)
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false)
   const [isInvoicePreviewLoading, setIsInvoicePreviewLoading] = useState(false)
@@ -486,10 +641,50 @@ export function HqSubscriptionsWorkspace({
   const [pendingMerchantTierRequest, setPendingMerchantTierRequest] = useState<MerchantTierPlanRequestRecord | null>(null)
   const [merchantTierDecisionNote, setMerchantTierDecisionNote] = useState('')
   const [pendingHardwareRequests, setPendingHardwareRequests] = useState<MerchantHardwareRequestRecord[]>([])
+  const [pendingServiceRequests, setPendingServiceRequests] = useState<MerchantServiceRequestRecord[]>([])
+  const [serviceRequestHistory, setServiceRequestHistory] = useState<MerchantServiceRequestRecord[]>([])
   const [hardwareDecisionNotes, setHardwareDecisionNotes] = useState<Record<string, string>>({})
+  const [serviceDecisionNotes, setServiceDecisionNotes] = useState<Record<string, string>>({})
   const [selectedMerchantTierPlanId, setSelectedMerchantTierPlanId] = useState('')
   const [merchantTierSubscriptionStatus, setMerchantTierSubscriptionStatus] = useState<'active' | 'past_due' | 'suspended' | 'cancelled'>('active')
   const [merchantTierPeriodStart, setMerchantTierPeriodStart] = useState(startOfMonthIso())
+
+  const saveBillingExemption = () => {
+    startTransition(async () => {
+      const result = await setMerchantBillingExemption({
+        merchantId: merchant.id,
+        enabled: billingExemptionRequested,
+        reason: billingExemptionReason,
+        expiresAt:
+          billingExemptionRequested && billingExemptionExpiresAt
+            ? new Date(billingExemptionExpiresAt).toISOString()
+            : null,
+      })
+      if (!result.success || !result.exemption) {
+        toast.error(result.error || 'Failed to update the billing exemption.')
+        return
+      }
+      setBillingExemption(result.exemption)
+      setBillingExemptionRequested(result.exemption.active)
+      setBillingExemptionReason('')
+      setBillingExemptionExpiresAt(result.exemption.expiresAt?.slice(0, 16) ?? '')
+      toast.success(
+        result.exemption.active
+          ? 'Billing exemption enabled. Valor charging is paused.'
+          : 'Billing exemption disabled. Normal billing will resume.',
+      )
+      refresh()
+    })
+  }
+
+  const changeStep = (step: number) => {
+    if (isPending || step < 0 || step >= SUBSCRIPTION_STEPS.length) return
+    setCurrentStep(step)
+    requestAnimationFrame(() => {
+      stepHeadingRef.current?.focus({ preventScroll: true })
+      stepHeadingRef.current?.scrollIntoView({ block: 'start' })
+    })
+  }
 
   const sortedLocations = useMemo(
     () => [...merchant.locations].sort((a, b) => a.name.localeCompare(b.name)),
@@ -502,18 +697,13 @@ export function HqSubscriptionsWorkspace({
   )
 
   const selectedLocationSubscription = useMemo(
-    () => subscriptions.find((subscription) => subscription.location_id === selectedLocation?.id) ?? null,
+    () => subscriptions.find((subscription) => subscription.location_id === selectedLocation?.id && subscriptionBillingScope(subscription.metadata) === 'location') ?? null,
     [selectedLocation, subscriptions]
   )
 
   const selectedAssignments = useMemo(
     () => (selectedLocationSubscription ? subscriptionServiceMap[selectedLocationSubscription.id] ?? [] : []),
     [selectedLocationSubscription, subscriptionServiceMap]
-  )
-
-  const selectedLocationEligibility = useMemo(
-    () => (selectedLocation?.id ? locationEligibilityMap[selectedLocation.id] ?? null : null),
-    [locationEligibilityMap, selectedLocation]
   )
 
   const selectedBillingProfile = useMemo(
@@ -525,6 +715,31 @@ export function HqSubscriptionsWorkspace({
     () => servicePlans.find((plan) => plan.id === selectedServicePlanId) ?? servicePlans[0] ?? null,
     [selectedServicePlanId, servicePlans]
   )
+
+  const saveGracePeriod = (clear = false) => {
+    if (!selectedLocationSubscription) {
+      toast.error('Create the location subscription first.')
+      return
+    }
+
+    startTransition(async () => {
+      const result = await setMerchantSubscriptionGracePeriod({
+        subscriptionId: selectedLocationSubscription.id,
+        gracePeriodEndsAt: clear || !gracePeriodEndsAt
+          ? null
+          : new Date(gracePeriodEndsAt).toISOString(),
+        reason: graceReason,
+      })
+
+      if (!result.success) {
+        toast.error(result.error || 'Failed to update the grace period.')
+        return
+      }
+
+      toast.success(clear ? 'Grace period cleared.' : 'Grace period extended.')
+      refresh()
+    })
+  }
 
   const selectedCatalogService = useMemo(
     () => (selectedCatalogServiceId ? services.find((service) => service.id === selectedCatalogServiceId) ?? null : null),
@@ -721,26 +936,28 @@ export function HqSubscriptionsWorkspace({
           nextServicePlans,
           nextSubscriptions,
           nextInvoices,
-          nmiSummary,
           billingProfiles,
           nextMerchantTierPlans,
           nextMerchantTierStatus,
           nextMerchantTierSubscription,
           nextPendingMerchantTierRequest,
           nextPendingHardwareRequests,
+          nextPendingServiceRequests,
+          nextServiceRequestHistory,
         ] = await Promise.all([
           getBillableServices(),
           getDeviceBillingServiceMappings(),
           getSubscriptionPlans(),
           getMerchantSubscriptions(merchant.id),
           getSubscriptionInvoices(merchant.id, null, 100),
-          getMerchantNmiAccountsSummary(merchant.id),
           getMerchantBillingProfiles(merchant.id),
           getMerchantTierPlans(),
           getMerchantTierStatus(merchant.id),
           getMerchantTierSubscription(merchant.id),
           getPendingMerchantTierRequest(merchant.id),
           getPendingMerchantHardwareRequests(merchant.id),
+          getPendingMerchantServiceRequests(merchant.id),
+          getPendingMerchantServiceRequests(merchant.id, true),
         ])
 
         const assignmentEntries = await Promise.all(
@@ -751,14 +968,19 @@ export function HqSubscriptionsWorkspace({
         )
 
         const nextAssignmentMap = Object.fromEntries(assignmentEntries)
-        const nextEligibilityMap = Object.fromEntries(
-          nmiSummary.locations.map((location) => [location.locationId, location])
-        )
-
         const nextBillingProfilesByLocation = Object.fromEntries(
-          billingProfiles
-            .filter((profile) => profile.location_id)
-            .map((profile) => [profile.location_id as string, profile])
+          sortedLocations.flatMap((location) => {
+            const locationProfile = billingProfiles.find(
+              (profile) =>
+                profile.location_id === location.id &&
+                profile.processor === 'valor' &&
+                profile.billing_method === 'card' &&
+                profile.is_primary &&
+                profile.is_active,
+            )
+            const effectiveProfile = locationProfile
+            return effectiveProfile ? [[location.id, effectiveProfile]] : []
+          }),
         )
 
         setServices(nextServices)
@@ -767,13 +989,14 @@ export function HqSubscriptionsWorkspace({
         setSubscriptions(nextSubscriptions)
         setInvoices(nextInvoices)
         setSubscriptionServiceMap(nextAssignmentMap)
-        setLocationEligibilityMap(nextEligibilityMap)
         setBillingProfilesByLocation(nextBillingProfilesByLocation)
         setMerchantTierPlans(nextMerchantTierPlans)
         setMerchantTierStatus(nextMerchantTierStatus)
         setMerchantTierSubscription(nextMerchantTierSubscription)
         setPendingMerchantTierRequest(nextPendingMerchantTierRequest)
         setPendingHardwareRequests(nextPendingHardwareRequests)
+        setPendingServiceRequests(nextPendingServiceRequests)
+        setServiceRequestHistory(nextServiceRequestHistory)
 
         const defaultServicePlan =
           nextServicePlans.find((plan) => plan.id === selectedServicePlanId) ??
@@ -818,6 +1041,10 @@ export function HqSubscriptionsWorkspace({
             setCurrentPeriodEnd(defaultSubscription.current_period_end)
             setNextBillingDate(defaultSubscription.next_billing_date)
             setTrialEndsAt(defaultSubscription.trial_ends_at?.slice(0, 10) ?? '')
+            setGracePeriodEndsAt(
+              formatDateTimeLocalInput(defaultSubscription.grace_period_ends_at),
+            )
+            setGraceReason(defaultSubscription.grace_reason ?? '')
             setServiceFormState(
               buildInitialServiceFormState(nextServices, nextAssignmentMap[defaultSubscription.id] ?? [])
             )
@@ -827,6 +1054,8 @@ export function HqSubscriptionsWorkspace({
             setCurrentPeriodEnd(endOfMonthIso())
             setNextBillingDate(firstDayNextMonthIso())
             setTrialEndsAt('')
+            setGracePeriodEndsAt('')
+            setGraceReason('')
             setServiceFormState(buildInitialServiceFormState(nextServices))
           }
         }
@@ -878,6 +1107,12 @@ export function HqSubscriptionsWorkspace({
       setCurrentPeriodEnd(selectedLocationSubscription.current_period_end)
       setNextBillingDate(selectedLocationSubscription.next_billing_date)
       setTrialEndsAt(selectedLocationSubscription.trial_ends_at?.slice(0, 10) ?? '')
+      setGracePeriodEndsAt(
+        formatDateTimeLocalInput(
+          selectedLocationSubscription.grace_period_ends_at,
+        ),
+      )
+      setGraceReason(selectedLocationSubscription.grace_reason ?? '')
       setServiceFormState(buildInitialServiceFormState(services, selectedAssignments))
       return
     }
@@ -887,6 +1122,8 @@ export function HqSubscriptionsWorkspace({
     setCurrentPeriodEnd(endOfMonthIso())
     setNextBillingDate(firstDayNextMonthIso())
     setTrialEndsAt('')
+    setGracePeriodEndsAt('')
+    setGraceReason('')
     setServiceFormState(buildInitialServiceFormState(services))
   }, [selectedLocation, selectedLocationSubscription, selectedAssignments, services])
 
@@ -962,7 +1199,7 @@ export function HqSubscriptionsWorkspace({
     }
 
     startTransition(async () => {
-      const subscriptionResult = await upsertMerchantSubscription({
+      const subscriptionResult = await saveAndChargeMerchantSubscription({
         subscriptionId: selectedLocationSubscription?.id,
         merchantId: merchant.id,
         locationId: selectedLocation.id,
@@ -976,16 +1213,7 @@ export function HqSubscriptionsWorkspace({
           source: 'hq_subscriptions_workspace',
           pricingModel: 'service_catalog',
         },
-      })
-
-      if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
-        toast.error(subscriptionResult.error || 'Failed to save subscription.')
-        return
-      }
-
-      const serviceResult = await replaceSubscriptionServiceAssignments(
-        subscriptionResult.subscriptionId,
-        (effectiveStatus === 'canceled' ? [] : enabledServices).map((service) => ({
+        services: (effectiveStatus === 'canceled' ? [] : enabledServices).map((service) => ({
           serviceId: service.serviceId,
           quantity: service.quantity,
           enabled: true,
@@ -993,11 +1221,11 @@ export function HqSubscriptionsWorkspace({
             source: 'hq_subscriptions_workspace',
             serviceCode: service.serviceCode,
           },
-        }))
-      )
+        })),
+      })
 
-      if (!serviceResult.success) {
-        toast.error(serviceResult.error || 'Failed to save service assignments.')
+      if (!subscriptionResult.success || !subscriptionResult.subscriptionId) {
+        toast.error(subscriptionResult.error || 'Failed to save and charge subscription.')
         return
       }
 
@@ -1006,9 +1234,13 @@ export function HqSubscriptionsWorkspace({
           ? 'Subscription canceled.'
           : status === 'canceled'
             ? 'Selected services removed. Subscription remains active.'
-            : selectedLocationSubscription
-              ? 'Subscription updated.'
-              : 'Subscription created.'
+            : billingExemption.active
+              ? selectedLocationSubscription
+                ? 'Complimentary services updated without a charge.'
+                : 'Complimentary services activated without a charge.'
+              : selectedLocationSubscription
+                ? 'Subscription updated and automatic payment approved.'
+                : 'Subscription created and automatic payment approved.'
       )
 
       refresh()
@@ -1016,6 +1248,10 @@ export function HqSubscriptionsWorkspace({
   }
 
   const handleGenerateInvoice = (subscriptionId: string) => {
+    if (billingExemption.active) {
+      toast.error('Disable the merchant billing exemption before generating an invoice.')
+      return
+    }
     startTransition(async () => {
       const result = await generateSubscriptionInvoiceManually(subscriptionId, null)
       if (!result.success) {
@@ -1028,6 +1264,10 @@ export function HqSubscriptionsWorkspace({
   }
 
   const handleChargeInvoice = (invoiceId: string) => {
+    if (billingExemption.active) {
+      toast.error('This merchant is billing exempt. Existing invoices remain available for records but cannot be charged.')
+      return
+    }
     startTransition(async () => {
       const result = await chargeSubscriptionInvoiceManually(invoiceId)
       if (!result.success) {
@@ -1105,8 +1345,10 @@ export function HqSubscriptionsWorkspace({
       }
 
       toast.success(
-        result.invoiceId
-          ? 'Merchant tier updated and invoice generated.'
+        billingExemption.active
+          ? 'Merchant tier updated under the billing exemption.'
+          : result.invoiceId
+          ? 'Merchant tier updated and automatic payment approved.'
           : 'Merchant tier updated.',
       )
       if (result.notificationWarning) {
@@ -1157,6 +1399,35 @@ export function HqSubscriptionsWorkspace({
       )
       if (result.notificationWarning) toast.warning(result.notificationWarning)
       setHardwareDecisionNotes((current) => {
+        const next = { ...current }
+        delete next[request.id]
+        return next
+      })
+      refresh()
+    })
+  }
+
+  const handleServiceRequestDecision = (
+    request: MerchantServiceRequestRecord,
+    decision: 'approved' | 'denied',
+  ) => {
+    startTransition(async () => {
+      const result = await reviewMerchantServiceRequest({
+        requestId: request.id,
+        decision,
+        decisionNote: serviceDecisionNotes[request.id]?.trim(),
+      })
+      if (!result.success) {
+        toast.error(result.error || 'Failed to review the add-on request.')
+        return
+      }
+      toast.success(
+        decision === 'approved'
+          ? `Request ${request.request_number} charged and activated.`
+          : `Request ${request.request_number} denied.`,
+      )
+      if (result.notificationWarning) toast.warning(result.notificationWarning)
+      setServiceDecisionNotes((current) => {
         const next = { ...current }
         delete next[request.id]
         return next
@@ -1276,10 +1547,77 @@ export function HqSubscriptionsWorkspace({
           <Badge variant="outline">{merchant.clerk_org_id || merchant.id}</Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          Location-scoped SaaS subscriptions. Storefront NMI setup stays separate. This workspace manages subscription
-          services, invoices, and charges through the centralized Dexa billing rail.
+          One merchant tier is charged to the merchant billing card. Each location&apos;s devices and add-ons use its own card and separate subscription.
         </p>
       </div>
+
+      <div className="rounded-xl border border-amber-300/70 bg-amber-50/60 p-4 dark:border-amber-900 dark:bg-amber-950/20">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 text-amber-700 dark:text-amber-400" />
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-semibold">Merchant billing exemption</h2>
+                <Badge variant={billingExemption.active ? 'default' : 'secondary'}>
+                  {billingExemption.active ? 'Active' : billingExemption.enabled ? 'Expired' : 'Off'}
+                </Badge>
+              </div>
+              <p className="max-w-3xl text-sm text-muted-foreground">
+                Waives SaaS card and payment enforcement for this merchant. Plans and location add-ons must still be assigned normally, and a manual merchant suspension still blocks POS access.
+              </p>
+              {billingExemption.active && billingExemption.reason ? (
+                <p className="text-xs text-muted-foreground">
+                  Reason: {billingExemption.reason}
+                  {billingExemption.expiresAt
+                    ? ` | Expires ${new Date(billingExemption.expiresAt).toLocaleString()}`
+                    : ' | No automatic expiration'}
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="merchant-billing-exempt">Exempt from billing</Label>
+            <Switch
+              id="merchant-billing-exempt"
+              checked={billingExemptionRequested}
+              onCheckedChange={setBillingExemptionRequested}
+              disabled={isPending}
+            />
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
+          <div className="space-y-2">
+            <Label htmlFor="billing-exemption-reason">Audit reason</Label>
+            <Input
+              id="billing-exemption-reason"
+              value={billingExemptionReason}
+              onChange={(event) => setBillingExemptionReason(event.target.value)}
+              placeholder={billingExemptionRequested ? 'Internal, demo, partner, or complimentary account' : 'Why normal billing is being restored'}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="billing-exemption-expires">Optional expiration</Label>
+            <Input
+              id="billing-exemption-expires"
+              type="datetime-local"
+              value={billingExemptionExpiresAt}
+              onChange={(event) => setBillingExemptionExpiresAt(event.target.value)}
+              disabled={!billingExemptionRequested}
+            />
+          </div>
+          <Button
+            type="button"
+            variant={billingExemptionRequested ? 'default' : 'outline'}
+            onClick={saveBillingExemption}
+            disabled={isPending || billingExemptionReason.trim().length < 5}
+          >
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Apply
+          </Button>
+        </div>
+      </div>
+
+      <SubscriptionCutoverReview key={merchant.id} merchantId={merchant.id} merchantRouteId={merchant.clerk_org_id || merchant.id} onPrepared={refresh} />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
@@ -1308,16 +1646,55 @@ export function HqSubscriptionsWorkspace({
         </Card>
       </div>
 
-      <Card>
+      <div className="space-y-6">
+        <div className="space-y-5 rounded-2xl border bg-card p-4 sm:p-6">
+          <ol aria-label="Subscription setup progress" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {SUBSCRIPTION_STEPS.map((step, index) => (
+              <li
+                key={step.id}
+                aria-current={index === currentStep ? 'step' : undefined}
+                className={`flex min-w-0 items-center gap-3 rounded-xl border p-3 text-sm ${
+                  index === currentStep ? 'border-primary/40 bg-primary/5 text-primary' : 'border-transparent text-muted-foreground'
+                }`}
+              >
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-semibold ${
+                  index === currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                }`}>
+                  {index + 1}
+                </span>
+                <span className="min-w-0 font-medium">{step.title}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="space-y-1">
+            <h2 id="subscription-step-heading" ref={stepHeadingRef} tabIndex={-1} className="scroll-mt-24 text-xl font-semibold focus:outline-none">
+              {activeStep.title}
+            </h2>
+            <p className="text-sm text-muted-foreground">{activeStep.description}</p>
+            {activeStep.id === 'locations' && pendingHardwareRequests.length + pendingServiceRequests.length > 0 ? (
+              <p className="text-sm font-medium text-primary">
+                {pendingHardwareRequests.length + pendingServiceRequests.length} pending location request{pendingHardwareRequests.length + pendingServiceRequests.length === 1 ? '' : 's'} to review.
+              </p>
+            ) : null}
+          </div>
+          <SubscriptionStepNavigation step={currentStep} disabled={isPending || isLoading} onChange={changeStep} />
+          <p className="text-xs text-muted-foreground">
+            Next and Back keep your entries while you navigate. Use the Save or Charge action within a step to apply changes.
+          </p>
+        </div>
+
+        {activeStep.id === 'tier' && (
+        <section aria-labelledby="subscription-step-heading" className="space-y-6">
+          <Card>
         <CardHeader>
           <CardTitle>Merchant Tier</CardTitle>
           <CardDescription>
-            Merchant-wide plan visibility sits here. Location-level service billing below stays separate.
+            One subscription for the whole merchant, charged to the designated merchant card or the first location&apos;s card. Location add-ons are billed separately.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {pendingMerchantTierRequest ? (
-            <div className="rounded-2xl border border-primary/25 bg-primary/[0.04] p-4 sm:p-5">
+            <div className="border-b pb-6">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -1337,6 +1714,17 @@ export function HqSubscriptionsWorkspace({
                   <p className="text-sm text-muted-foreground">
                     Current plan: {pendingMerchantTierRequest.current_plan_name || 'No active plan'}
                   </p>
+                  <AuthorizationEvidence
+                    reference={pendingMerchantTierRequest.authorization_reference}
+                    acceptedAt={pendingMerchantTierRequest.authorization_accepted_at}
+                    termsVersion={pendingMerchantTierRequest.authorization_terms_version}
+                    text={pendingMerchantTierRequest.authorization_text}
+                    price={formatTierPrice(pendingMerchantTierRequest.authorized_price_cents ?? pendingMerchantTierRequest.requested_monthly_price_cents)}
+                    cadence={pendingMerchantTierRequest.authorized_billing_cadence}
+                    requestedBy={pendingMerchantTierRequest.requested_by}
+                    ipAddress={pendingMerchantTierRequest.authorization_ip_address}
+                    userAgent={pendingMerchantTierRequest.authorization_user_agent}
+                  />
                 </div>
 
                 <div className="w-full space-y-3 lg:max-w-md">
@@ -1366,7 +1754,9 @@ export function HqSubscriptionsWorkspace({
                       }}
                     >
                       {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Approve & activate
+                      {billingExemption.active
+                        ? 'Approve complimentary tier'
+                        : 'Approve, charge & activate'}
                     </Button>
                     <Button
                       type="button"
@@ -1382,75 +1772,8 @@ export function HqSubscriptionsWorkspace({
               </div>
             </div>
           ) : null}
-          {pendingHardwareRequests.length > 0 ? (
-            <div className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50/40 p-4 sm:p-5">
-              <div>
-                <h3 className="font-semibold">Pending hardware requests</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Review each location independently. Approval starts fulfillment and does not assign inventory automatically.
-                </p>
-              </div>
-              <div className="grid gap-4 xl:grid-cols-2">
-                {pendingHardwareRequests.map((request) => (
-                  <div key={request.id} className="space-y-4 rounded-xl border bg-background p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">{request.request_number}</Badge>
-                          <Badge variant="secondary">{request.requested_quantity} device{request.requested_quantity === 1 ? '' : 's'}</Badge>
-                        </div>
-                        <p className="mt-2 font-medium">{request.location_name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Requested {formatDate(request.requested_at)}
-                        </p>
-                      </div>
-                    </div>
-                    {request.request_note ? (
-                      <p className="rounded-lg bg-muted/50 p-3 text-sm">{request.request_note}</p>
-                    ) : null}
-                    <div className="space-y-2">
-                      <Label htmlFor={`hardware-decision-note-${request.id}`}>
-                        Decision note (optional)
-                      </Label>
-                      <Textarea
-                        id={`hardware-decision-note-${request.id}`}
-                        value={hardwareDecisionNotes[request.id] ?? ''}
-                        onChange={(event) =>
-                          setHardwareDecisionNotes((current) => ({
-                            ...current,
-                            [request.id]: event.target.value,
-                          }))
-                        }
-                        placeholder="Add fulfillment details or explain the decision."
-                        rows={2}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Button
-                        type="button"
-                        className="sm:flex-1"
-                        disabled={isPending}
-                        onClick={() => handleHardwareRequestDecision(request, 'approved')}
-                      >
-                        Approve request
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="sm:flex-1"
-                        disabled={isPending}
-                        onClick={() => handleHardwareRequestDecision(request, 'denied')}
-                      >
-                        Deny request
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
           <div className="grid gap-4">
-            <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
+            <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="text-lg font-semibold">
                   {merchantTierStatus.plan?.name || 'No active plan'}
@@ -1507,7 +1830,7 @@ export function HqSubscriptionsWorkspace({
               ) : null}
             </div>
 
-            <div className="space-y-4 rounded-xl border p-4">
+            <div className="space-y-4 border-t pt-6">
               <div className="space-y-3">
                 <Label>Assign Tier</Label>
                 <div className="grid gap-4 xl:grid-cols-3">
@@ -1535,7 +1858,7 @@ export function HqSubscriptionsWorkspace({
                         <div className="mt-3 text-sm text-muted-foreground">
                           {plan.description || formatMerchantTierBillingUnit(plan)}
                         </div>
-                        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700">
+                        <div className="mt-4 border-t pt-3 text-xs font-medium text-muted-foreground">
                           {formatMerchantTierBillingUnit(plan)}
                         </div>
                         <div className="mt-4 space-y-2 text-sm text-muted-foreground">
@@ -1607,24 +1930,39 @@ export function HqSubscriptionsWorkspace({
               <div className="flex flex-wrap items-center gap-2">
                 <Button onClick={() => handleSaveMerchantTier()} disabled={isPending || !selectedMerchantTierPlanId}>
                   {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Merchant Tier
+                  {merchantTierSubscriptionStatus === 'active'
+                    ? billingExemption.active
+                      ? 'Save Complimentary Tier'
+                      : 'Save Tier & Charge'
+                    : 'Save Merchant Tier'}
                 </Button>
+                {merchantTierSubscriptionStatus === 'active' ? (
+                  <span className="text-xs text-muted-foreground">
+                    {billingExemption.active
+                      ? 'The tier is assigned without an invoice or Valor charge while the exemption is active.'
+                      : 'The prior tier remains unchanged unless Valor approves the automatic charge.'}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
         </CardContent>
-      </Card>
+          </Card>
+        </section>
+        )}
 
-      <Card>
+        {activeStep.id === 'catalog' && (
+        <section aria-labelledby="subscription-step-heading" className="space-y-6">
+          <Card>
         <CardHeader>
           <CardTitle>Billing Catalog Controls</CardTitle>
           <CardDescription>
-            HQ-owned pricing controls for the service-billing plan and billable add-ons. Saves go through audited RPCs
-            and recalculate affected active subscriptions for future cycles.
+            Configure reusable plan prices, billable services, and device-to-service mappings. Changes affect future
+            calculations; existing invoice snapshots remain unchanged.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 xl:grid-cols-2">
-          <div className="space-y-4 rounded-xl border p-4">
+          <div className="min-w-0 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="font-medium">Service Billing Plan</div>
@@ -1734,7 +2072,7 @@ export function HqSubscriptionsWorkspace({
             </Button>
           </div>
 
-          <div className="space-y-4 rounded-xl border p-4">
+          <div className="min-w-0 space-y-4 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="font-medium">Billable Services & Add-ons</div>
@@ -1908,7 +2246,7 @@ export function HqSubscriptionsWorkspace({
             </Button>
           </div>
 
-          <div className="space-y-4 rounded-xl border p-4 xl:col-span-2">
+          <div className="space-y-4 border-t pt-6 xl:col-span-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="font-medium">Device Billing Mappings</div>
@@ -1989,9 +2327,13 @@ export function HqSubscriptionsWorkspace({
             </Button>
           </div>
         </CardContent>
-      </Card>
+          </Card>
+        </section>
+        )}
 
-      <Card>
+        {activeStep.id === 'locations' && (
+        <section aria-labelledby="subscription-step-heading" className="space-y-6">
+          <Card>
         <CardHeader className="gap-4">
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-5">
@@ -2009,18 +2351,22 @@ export function HqSubscriptionsWorkspace({
                     ))}
                   </SelectContent>
                 </Select>
-                {selectedLocationEligibility ? (
+                {billingExemption.active ? (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant={selectedLocationEligibility.vaultReady ? 'default' : 'secondary'}>
-                      {selectedLocationEligibility.vaultReady ? 'Eligible' : 'Not eligible'}
-                    </Badge>
-                    <span>
-                      {selectedLocationEligibility.vaultReady
-                        ? 'Location has a vaulted billing card.'
-                        : 'Save a billing card for this location before subscription charging.'}
-                    </span>
+                    <Badge variant="default">Complimentary</Badge>
+                    <span>No card or charge is required while the exemption is active.</span>
                   </div>
-                ) : null}
+                ) : selectedBillingProfile ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="default">Valor ready</Badge>
+                    <span>An active vaulted Valor billing card is available.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="secondary">Not ready</Badge>
+                    <span>Save a merchant-wide or location Valor billing card before charging.</span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -2055,10 +2401,77 @@ export function HqSubscriptionsWorkspace({
                 <RefreshCcw className="mr-2 h-4 w-4" />
                 Refresh
               </Button>
-              <Button onClick={handleSave} disabled={isPending || !selectedLocation}>
+              <Button
+                onClick={handleSave}
+                disabled={
+                  isPending ||
+                  !selectedLocation ||
+                  (status === 'active' && !selectedBillingProfile && !billingExemption.active)
+                }
+              >
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {selectedLocationSubscription ? 'Save Changes' : 'Create Subscription'}
+                {status === 'active'
+                  ? billingExemption.active
+                    ? selectedLocationSubscription
+                      ? 'Save Complimentary Services'
+                      : 'Create Complimentary Services'
+                    : selectedLocationSubscription
+                      ? 'Save & Charge'
+                      : 'Create & Charge'
+                  : selectedLocationSubscription
+                    ? 'Save Changes'
+                    : 'Create Subscription'}
               </Button>
+              {status === 'active' ? (
+                <span className="text-xs text-muted-foreground">
+                  {billingExemption.active
+                    ? 'Services activate without an invoice or payment while the exemption is active.'
+                    : 'Valor must approve the automatic charge before these services become active.'}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="grid gap-4 border-t pt-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] md:items-end">
+              <div className="space-y-2">
+                <Label htmlFor="billing-grace-until">Grace period until</Label>
+                <Input
+                  id="billing-grace-until"
+                  type="datetime-local"
+                  value={gracePeriodEndsAt}
+                  onChange={(event) => setGracePeriodEndsAt(event.target.value)}
+                  disabled={!selectedLocationSubscription}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="billing-grace-reason">Reason</Label>
+                <Input
+                  id="billing-grace-reason"
+                  value={graceReason}
+                  onChange={(event) => setGraceReason(event.target.value)}
+                  placeholder="Approved extension or temporary billing exception"
+                  disabled={!selectedLocationSubscription}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => saveGracePeriod(false)}
+                  disabled={isPending || !selectedLocationSubscription || !gracePeriodEndsAt}
+                >
+                  Extend grace
+                </Button>
+                {selectedLocationSubscription?.grace_period_ends_at ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => saveGracePeriod(true)}
+                    disabled={isPending}
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </div>
           <CardDescription>
@@ -2067,6 +2480,180 @@ export function HqSubscriptionsWorkspace({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {pendingServiceRequests.length > 0 ? (
+            <div className="space-y-4 border-b pb-6">
+              <div>
+                <h3 className="font-semibold">Pending paid add-on requests</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Approval charges the location&apos;s Valor card. The feature remains inactive if payment fails.
+                </p>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {pendingServiceRequests.map((request) => (
+                  <div key={request.id} className="space-y-4 border-t pt-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{request.request_number}</Badge>
+                          <Badge variant={request.status === 'processing' ? 'default' : 'secondary'}>{request.status}</Badge>
+                        </div>
+                        <p className="mt-2 font-medium">{request.service_name} · {request.location_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Quantity {request.requested_quantity} · {formatMoney(request.authorized_total)}/month · Requested {formatDate(request.requested_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <AuthorizationEvidence
+                      reference={request.authorization_reference}
+                      acceptedAt={request.authorization_accepted_at}
+                      termsVersion={request.authorization_terms_version}
+                      text={request.authorization_text}
+                      price={`${formatMoney(request.authorized_total)}/month`}
+                      cadence={request.authorized_billing_cadence}
+                      requestedBy={request.requested_by_email || request.requested_by}
+                      ipAddress={request.authorization_ip_address}
+                      userAgent={request.authorization_user_agent}
+                      merchantName={request.merchant_name_snapshot}
+                      locationName={request.location_name_snapshot}
+                      featureName={request.service_name_snapshot}
+                    />
+                    <div className="space-y-2">
+                      <Label htmlFor={`service-decision-note-${request.id}`}>Decision note (optional)</Label>
+                      <Textarea
+                        id={`service-decision-note-${request.id}`}
+                        value={serviceDecisionNotes[request.id] ?? ''}
+                        onChange={(event) => setServiceDecisionNotes((current) => ({ ...current, [request.id]: event.target.value }))}
+                        placeholder="Add activation details or explain the decision."
+                        rows={2}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button type="button" className="sm:flex-1" disabled={isPending || request.status === 'processing'} onClick={() => handleServiceRequestDecision(request, 'approved')}>
+                        {billingExemption.active
+                          ? 'Approve complimentary service'
+                          : 'Approve, charge & activate'}
+                      </Button>
+                      <Button type="button" variant="outline" className="sm:flex-1" disabled={isPending || request.status === 'processing'} onClick={() => handleServiceRequestDecision(request, 'denied')}>
+                        Deny request
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {pendingHardwareRequests.length > 0 ? (
+            <div className="space-y-4 border-b pb-6">
+              <div>
+                <h3 className="font-semibold">Pending hardware requests</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Review each location independently. Approval starts fulfillment and does not assign inventory automatically.
+                </p>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                {pendingHardwareRequests.map((request) => (
+                  <div key={request.id} className="min-w-0 space-y-4 border-t pt-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{request.request_number}</Badge>
+                          <Badge variant="secondary">
+                            {request.requested_quantity} device{request.requested_quantity === 1 ? '' : 's'}
+                          </Badge>
+                        </div>
+                        <p className="mt-2 font-medium">{request.location_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Requested {formatDate(request.requested_at)}
+                        </p>
+                      </div>
+                    </div>
+                    {request.request_note ? (
+                      <p className="border-l-2 pl-3 text-sm text-muted-foreground">{request.request_note}</p>
+                    ) : null}
+                    <div className="space-y-2">
+                      <Label htmlFor={`hardware-decision-note-${request.id}`}>
+                        Decision note (optional)
+                      </Label>
+                      <Textarea
+                        id={`hardware-decision-note-${request.id}`}
+                        value={hardwareDecisionNotes[request.id] ?? ''}
+                        onChange={(event) =>
+                          setHardwareDecisionNotes((current) => ({
+                            ...current,
+                            [request.id]: event.target.value,
+                          }))
+                        }
+                        placeholder="Add fulfillment details or explain the decision."
+                        rows={2}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        type="button"
+                        className="sm:flex-1"
+                        disabled={isPending}
+                        onClick={() => handleHardwareRequestDecision(request, 'approved')}
+                      >
+                        Approve request
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="sm:flex-1"
+                        disabled={isPending}
+                        onClick={() => handleHardwareRequestDecision(request, 'denied')}
+                      >
+                        Deny request
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {serviceRequestHistory.some((request) => !['pending', 'processing'].includes(request.status)) ? (
+            <div className="space-y-4 border-b pb-6">
+              <div>
+                <h3 className="font-semibold">Add-on authorization history</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Permanent approved, denied, and cancelled authorization records remain available for review and export.
+                </p>
+              </div>
+              <div className="divide-y divide-border/60">
+                {serviceRequestHistory
+                  .filter((request) => !['pending', 'processing'].includes(request.status))
+                  .map((request) => (
+                    <details key={`history-${request.id}`} className="py-4">
+                      <summary className="cursor-pointer list-none">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-medium">{request.request_number} · {request.service_name}</p>
+                            <p className="text-sm text-muted-foreground">{request.location_name} · {formatMoney(request.authorized_total)}/month</p>
+                          </div>
+                          <Badge variant={request.status === 'approved' ? 'default' : 'secondary'}>{request.status}</Badge>
+                        </div>
+                      </summary>
+                      <div className="mt-4">
+                        <AuthorizationEvidence
+                          reference={request.authorization_reference}
+                          acceptedAt={request.authorization_accepted_at}
+                          termsVersion={request.authorization_terms_version}
+                          text={request.authorization_text}
+                          price={`${formatMoney(request.authorized_total)}/month`}
+                          cadence={request.authorized_billing_cadence}
+                          requestedBy={request.requested_by_email || request.requested_by}
+                          ipAddress={request.authorization_ip_address}
+                          userAgent={request.authorization_user_agent}
+                          merchantName={request.merchant_name_snapshot}
+                          locationName={request.location_name_snapshot}
+                          featureName={request.service_name_snapshot}
+                        />
+                      </div>
+                    </details>
+                  ))}
+              </div>
+            </div>
+          ) : null}
           {selectedLocationSubscription?.status === 'suspended' ? (
             <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
               <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
@@ -2091,7 +2678,7 @@ export function HqSubscriptionsWorkspace({
             </div>
           ) : null}
 
-          <div className="overflow-x-auto rounded-xl border">
+          <div className="overflow-x-auto border-y">
             <table className="w-full min-w-[860px] text-sm">
               <thead className="bg-muted/35 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
                 <tr>
@@ -2182,7 +2769,7 @@ export function HqSubscriptionsWorkspace({
             </table>
           </div>
 
-          <div className="grid gap-4 rounded-xl border bg-background p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid gap-6 border-t pt-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <div className="space-y-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -2248,7 +2835,7 @@ export function HqSubscriptionsWorkspace({
                   {quoteError}
                 </div>
               ) : quote?.line_items?.length ? (
-                <div className="overflow-x-auto rounded-lg border">
+                <div className="overflow-x-auto border-y">
                   <table className="w-full min-w-[620px] text-sm">
                     <thead className="bg-muted/35 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
                       <tr>
@@ -2288,7 +2875,7 @@ export function HqSubscriptionsWorkspace({
               )}
             </div>
 
-            <div className="space-y-3 rounded-xl border bg-muted/25 p-4">
+            <div className="min-w-0 space-y-3 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
               <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Quote Total</div>
               <div className="text-3xl font-semibold">{formatMoney(quote?.total_amount ?? 0)}</div>
               <div className="space-y-2 text-sm">
@@ -2315,10 +2902,15 @@ export function HqSubscriptionsWorkspace({
             </div>
           </div>
 
-          <div className="grid gap-4 rounded-xl border bg-muted/20 p-4 md:grid-cols-3">
+          <div className="grid gap-4 border-t pt-6 md:grid-cols-3">
             <div className="space-y-1">
               <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Payment Method</div>
               <div className="font-medium">{buildPaymentMethodLabel(selectedBillingProfile)}</div>
+              <p className="text-xs text-muted-foreground">
+                {selectedBillingProfile
+                  ? 'Only this location\u0027s card pays for these services. The merchant tier is billed separately.'
+                  : 'Add a Valor card for this location before activation. The merchant card is not used as a fallback.'}
+              </p>
               <div className="text-xs text-muted-foreground">
                 {selectedBillingProfile?.billing_email || 'No billing email on file'}
               </div>
@@ -2362,7 +2954,7 @@ export function HqSubscriptionsWorkspace({
               <div className="flex gap-2">
                 <Button
                   variant="outline"
-                  disabled={!selectedLocationSubscription || isPending}
+                  disabled={!selectedLocationSubscription || isPending || billingExemption.active}
                   onClick={() => selectedLocationSubscription && handleGenerateInvoice(selectedLocationSubscription.id)}
                 >
                   Generate Invoice
@@ -2378,9 +2970,34 @@ export function HqSubscriptionsWorkspace({
             </div>
           </div>
         </CardContent>
-      </Card>
+          </Card>
+        </section>
+        )}
 
-      <Card>
+        {activeStep.id === 'billing' && (
+        <section aria-labelledby="subscription-step-heading" className="space-y-6">
+          <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="w-full space-y-2 sm:max-w-sm">
+              <Label>Billing Location</Label>
+              <Select value={selectedLocation?.id || ''} onValueChange={setSelectedLocationId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortedLocations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Transactions and invoices below are filtered to the selected location.
+            </p>
+          </div>
+
+          <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5" />
@@ -2391,9 +3008,9 @@ export function HqSubscriptionsWorkspace({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1.25fr)_minmax(0,0.9fr)]">
-            <Card className="border-muted">
-              <CardContent className="space-y-5 pt-6">
+          <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1.25fr)_minmax(0,0.9fr)]">
+            <div className="min-w-0">
+              <div className="space-y-5">
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Net collected</div>
                   <div className="text-3xl font-semibold">{formatMoney(transactionSummary.paid)}</div>
@@ -2429,11 +3046,11 @@ export function HqSubscriptionsWorkspace({
                     <span className="font-medium">{transactionSummary.failedCount}</span>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card className="border-muted">
-              <CardContent className="pt-6">
+            <div className="min-w-0 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
+              <div>
                 {transactionTrendData.length === 0 ? (
                   <div className="flex h-[220px] items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
                     No charge activity yet.
@@ -2473,11 +3090,11 @@ export function HqSubscriptionsWorkspace({
                     </AreaChart>
                   </ChartContainer>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
-            <Card className="border-muted">
-              <CardContent className="pt-6">
+            <div className="min-w-0 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
+              <div>
                 {transactionStatusData.length === 0 ? (
                   <div className="flex h-[220px] items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
                     No status distribution yet.
@@ -2509,8 +3126,8 @@ export function HqSubscriptionsWorkspace({
                     </BarChart>
                   </ChartContainer>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -2542,7 +3159,11 @@ export function HqSubscriptionsWorkspace({
                 <TableBody>
                   {filteredInvoices.map((invoice) => {
                     const activityDate = invoice.paid_at || invoice.last_payment_attempt_at || invoice.created_at
-                    const reference = invoice.nmi_transaction_id || invoice.last_payment_error || '-'
+                    const reference =
+                      invoice.processor_transaction_id ||
+                      invoice.nmi_transaction_id ||
+                      invoice.last_payment_error ||
+                      '-'
 
                     return (
                       <TableRow key={`txn-${invoice.id}`}>
@@ -2569,16 +3190,16 @@ export function HqSubscriptionsWorkspace({
             )}
           </div>
         </CardContent>
-      </Card>
+          </Card>
 
-      <Card>
+          <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
             Subscription Invoices
           </CardTitle>
           <CardDescription>
-            Existing invoice workflow stays unchanged here. View, download, and charge location invoices from the same workspace.
+            View, download, and manage invoices for the selected location.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -2607,7 +3228,7 @@ export function HqSubscriptionsWorkspace({
                   {filteredInvoices.map((invoice) => (
                     <tr key={invoice.id} className="border-b last:border-0">
                       <td className="py-3 pr-4 font-medium">{invoice.invoice_number}</td>
-                      <td className="py-3 pr-4">{invoice.location_name}</td>
+                      <td className="py-3 pr-4">{subscriptionBillingScope(invoice.metadata) === 'merchant_tier' ? 'Merchant tier' : invoice.location_name}</td>
                       <td className="py-3 pr-4">
                         <div className="flex items-center gap-2">
                           <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
@@ -2662,7 +3283,7 @@ export function HqSubscriptionsWorkspace({
                               size="sm"
                               variant="outline"
                               onClick={() => handleChargeInvoice(invoice.id)}
-                              disabled={isPending}
+                              disabled={isPending || billingExemption.active}
                             >
                               {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                               Charge
@@ -2681,7 +3302,13 @@ export function HqSubscriptionsWorkspace({
             </div>
           )}
         </CardContent>
-      </Card>
+          </Card>
+        </section>
+        )}
+        <div className="rounded-xl border bg-card p-4 sm:p-6">
+          <SubscriptionStepNavigation step={currentStep} disabled={isPending || isLoading} onChange={changeStep} />
+        </div>
+      </div>
 
       <Dialog open={isInvoicePreviewOpen} onOpenChange={setIsInvoicePreviewOpen}>
         <DialogContent className="max-w-5xl">

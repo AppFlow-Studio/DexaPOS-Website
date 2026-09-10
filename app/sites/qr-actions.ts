@@ -228,3 +228,66 @@ export async function getQrOrderStatus(
     error: data.error ?? undefined,
   };
 }
+
+/** Why a marketing code did not resolve. Drives which copy the page shows. */
+export type MarketingQrFailureReason =
+  | "not_found"
+  | "inactive"
+  | "store_unavailable"
+  | "rate_limited"
+  | "unavailable";
+
+export interface ResolvedMarketingQr {
+  success: boolean;
+  /** The code's internal name. Never shown to guests — useful in logs. */
+  name?: string | null;
+  reason?: MarketingQrFailureReason;
+}
+
+/**
+ * Resolve a table-less marketing QR (a flyer, decal or delivery-bag code).
+ *
+ * Unlike a table code this starts no session and binds no table: it records
+ * the scan and the storefront then renders normally. `resolve_marketing_qr`
+ * writes the scan event and bumps the counter, so calling this more than once
+ * per request would double-count.
+ */
+export async function resolveMarketingQr(
+  slug: string,
+  shortCode: string
+): Promise<ResolvedMarketingQr> {
+  const supabase = createServiceRoleClient();
+
+  const { data, error } = await supabase.rpc("resolve_marketing_qr", {
+    p_slug: slug,
+    p_short_code: shortCode,
+  });
+
+  if (error || !data || typeof data !== "object") {
+    return { success: false, reason: "unavailable" };
+  }
+
+  const payload = data as Record<string, unknown>;
+
+  if (payload.success !== true) {
+    const raw = typeof payload.error === "string" ? payload.error : "";
+    const known: MarketingQrFailureReason[] = [
+      "not_found",
+      "inactive",
+      "store_unavailable",
+      "rate_limited",
+    ];
+
+    return {
+      success: false,
+      reason: known.includes(raw as MarketingQrFailureReason)
+        ? (raw as MarketingQrFailureReason)
+        : "unavailable",
+    };
+  }
+
+  return {
+    success: true,
+    name: typeof payload.name === "string" ? payload.name : null,
+  };
+}

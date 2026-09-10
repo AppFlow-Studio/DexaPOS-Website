@@ -2,8 +2,8 @@
 // create-online-order Edge Function
 // ============================================================================
 // Validates stock, hours, delivery zone, recalculates prices server-side,
-// creates a payment intent, and processes payment through NMI using a
-// tokenized storefront payment token. On successful card charge, calls
+// creates a payment intent, and processes payment through Valor by default
+// (or NMI behind the migration kill switch). On successful card charge, calls
 // process_online_order RPC to create the order immediately.
 // ============================================================================
 
@@ -78,6 +78,8 @@ interface CreateOnlineOrderRequest {
   pay_cash_in_store?: boolean
   payment_card_type?: string | null
   payment_card_last_four?: string | null
+  billing_address1?: string
+  billing_zip?: string
   // Guest checkout contact info (used when session is not authenticated)
   customer_name?: string
   customer_phone?: string
@@ -227,6 +229,14 @@ function normalizePhone(input?: string | null): string | null {
   if (trimmed.startsWith('+')) return `+${digits}`
 
   return `+${digits}`
+}
+
+function normalizePaymentText(
+  input: string | null | undefined,
+  maxLength: number,
+): string | undefined {
+  const value = input?.trim()
+  return value ? value.slice(0, maxLength) : undefined
 }
 
 function isQrBoundSession(session: Record<string, unknown> | null | undefined): boolean {
@@ -1188,9 +1198,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
       productLines: [],
       tipMinor: Math.round(tipCents),
       taxMinor: Math.round(taxCents),
-      cardholderName: customerName,
       email: customerEmail ?? undefined,
       phone: customerPhone ?? undefined,
+      address1: normalizePaymentText(body.billing_address1, 200),
+      zip: normalizePaymentText(body.billing_zip, 20),
       orderDescription: `Online order ${transactionReferenceId}`,
     })
 
@@ -1207,7 +1218,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
         declineMessage,
         isTransportError ? 'payment_gateway_error' : 'payment_declined',
         isTransportError ? 502 : 402,
-        { responseCode: chargeResult.details.responseCode, responseMessage: declineMessage }
+        {
+          gatewayStatus: chargeResult.status,
+          responseCode: chargeResult.details.responseCode,
+          responseMessage: declineMessage,
+        }
       )
     }
 
@@ -1523,7 +1538,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     })
   }
 
-  if (!payCashInStore) {
+  const notificationPrefs = (
+    storeConfig.notification_prefs as { email_on_order_placed?: boolean } | null
+  ) ?? {}
+
+  if (!payCashInStore && notificationPrefs.email_on_order_placed !== false) {
     const customerEmail =
       session?.customer_email?.trim() ||
       body.customer_email?.trim() ||

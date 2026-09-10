@@ -11,9 +11,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { PageShell, PageHeader, Panel } from "@/components/dashboard/shell";
+import { DataPageSkeleton } from "@/components/dashboard/loading/DataPageSkeleton";
 import {
   useTicketDetail,
   useAddMessage,
@@ -168,17 +168,9 @@ export default function TicketDetailPage() {
   };
 
   if (isLoading) {
-    return (
-      <PageShell width="narrow">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-6 w-64" />
-        <div className="space-y-4 mt-8">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-2xl" />
-          ))}
-        </div>
-      </PageShell>
-    );
+    // Same shape the route loader draws, so the handoff from navigation to
+    // data-fetch does not re-flow the page.
+    return <DataPageSkeleton variant="thread" label="Loading ticket" />;
   }
 
   if (!ticket) {

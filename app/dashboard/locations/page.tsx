@@ -489,9 +489,17 @@ export default function LocationsPage() {
                             <stat.icon className={cn("h-4 w-4 shrink-0", stat.color)} />
                             {stat.label}
                         </div>
-                        <p className="mt-1 text-[2rem] font-medium leading-tight tracking-[-0.02em] tabular-nums">
-                            {isLoading ? '—' : stat.value}
-                        </p>
+                        {/* An em-dash here reads as "no value", not "still
+                            loading" — the same figure a settled-but-empty
+                            merchant would show. A skeleton keeps the two
+                            states distinguishable. */}
+                        {isLoading ? (
+                            <Skeleton className="mt-1 h-8 w-14 motion-reduce:animate-none" />
+                        ) : (
+                            <p className="mt-1 text-[2rem] font-medium leading-tight tracking-[-0.02em] tabular-nums">
+                                {stat.value}
+                            </p>
+                        )}
                     </div>
                 ))}
             </div>
@@ -524,8 +532,11 @@ export default function LocationsPage() {
                 <div className="overflow-x-auto w-full sm:w-auto shrink-0">
                 <div className="flex items-center gap-0.5 rounded-full bg-muted/70 p-1 w-fit">
                     {([
-                        { key: 'active', label: `Active (${activeLocations.length})` },
-                        { key: 'archived', label: `Archived (${archivedLocations.length})` },
+                        // Counts are omitted rather than shown as (0) while the
+                        // query is in flight — a zero here claims the merchant
+                        // has no locations, which is a different fact.
+                        { key: 'active', label: isLoading ? 'Active' : `Active (${activeLocations.length})` },
+                        { key: 'archived', label: isLoading ? 'Archived' : `Archived (${archivedLocations.length})` },
                         { key: 'all', label: 'All' },
                     ] as { key: StatusFilter; label: string }[]).map(tab => (
                         <button

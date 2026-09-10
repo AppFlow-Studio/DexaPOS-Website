@@ -343,6 +343,91 @@ export function valorBoardingErrorMessage(body: ValorEnvelope): string {
   return parts.join("; ") || "unknown error";
 }
 
+/** Compact, log-safe dump of a Valor response body, truncated so it stays
+ * readable in an admin toast and the audit log. Error bodies carry no secrets
+ * (the app id/key only appear on the success path), so this is safe to surface. */
+function rawValorBody(body: ValorEnvelope): string {
+  try {
+    const json = JSON.stringify(body);
+    if (!json || json === "{}") return "empty body";
+    return json.length > 600 ? `${json.slice(0, 600)}…` : json;
+  } catch {
+    return "[unserializable body]";
+  }
+}
+
+/** Render `key=value` request context, dropping undefined entries. */
+function renderContext(context: Record<string, string | undefined>): string {
+  const parts = Object.entries(context)
+    .filter((entry): entry is [string, string] => Boolean(entry[1]))
+    .map(([key, value]) => `${key}=${value}`);
+  return parts.length ? ` [${parts.join(", ")}]` : "";
+}
+
+/** Fix-it guidance for the Valor rejections whose resolution isn't obvious. */
+function boardingFailureHint(valorMessage: string): string {
+  if (/user ?name already exist/i.test(valorMessage)) {
+    return (
+      " — a Valor merchant with this username (the owner email) already exists. " +
+      "Either this DEXA merchant was already boarded (provision its locations " +
+      "instead of re-creating the merchant), or an earlier attempt left an " +
+      "orphaned Valor merchant that must be removed on Valor before retrying."
+    );
+  }
+  return "";
+}
+
+/**
+ * Full, actionable message for a Valor boarding call that returned a FAILURE
+ * envelope (HTTP 4xx, `status:false`, or `code>=400`).
+ *
+ * The old messages surfaced only Valor's text, so an empty or unexpected body
+ * degraded to "unknown error" with nothing to act on. This keeps the HTTP
+ * status, the request context (endpoint + which username/merchant), and a
+ * truncated raw body, so a failure is diagnosable from the returned error alone
+ * without a live re-run — and the common, non-obvious rejections get a hint.
+ */
+export function describeBoardingFailure(args: {
+  label: string;
+  status: number;
+  body: ValorEnvelope;
+  endpoint: string;
+  context?: Record<string, string | undefined>;
+}): string {
+  const valor = valorBoardingErrorMessage(args.body);
+  return (
+    `${args.label} failed (HTTP ${args.status}): ${valor}` +
+    renderContext({ endpoint: args.endpoint, ...args.context }) +
+    `. Raw: ${rawValorBody(args.body)}` +
+    boardingFailureHint(valor)
+  );
+}
+
+/**
+ * Message for a Valor boarding call that THREW before returning a body — a
+ * timeout, DNS failure or connection reset. Names the endpoint and the real
+ * cause, both of which the old flat "Valor X failed" string dropped.
+ */
+export function describeBoardingException(args: {
+  label: string;
+  endpoint: string;
+  error: unknown;
+}): string {
+  const { error } = args;
+  const cause =
+    error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  return `${args.label} failed calling ${args.endpoint}: ${cause}`;
+}
+
+/** Append an error's own message to a generic step message, so a wrapped cause
+ * (a `ValorIdentifierError`'s received-keys list, a persist DB error) is not
+ * lost when only the outer `BoardingError.message` is surfaced. */
+function withCause(message: string, error: unknown): string {
+  const detail =
+    error instanceof Error ? error.message : error != null ? String(error) : "";
+  return detail && !message.includes(detail) ? `${message}: ${detail}` : message;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // HTTP client for the boarding host.
 // ────────────────────────────────────────────────────────────────────────────
@@ -416,10 +501,25 @@ async function generateKeysForEpi(
     // Non-fatal: key generation below is the real gate.
   }
 
+  const keysEndpoint = "/api/valor/getEpiAppKeyDetails?apikey";
   const keysRes = await http.post(
-    "/api/valor/getEpiAppKeyDetails?apikey",
+    keysEndpoint,
     buildGenerateKeysBody(epi, acquirer.associateUserName)
   );
+  // A transport-level failure (4xx / status:false) is reported with its status
+  // and body; only a 2xx-but-missing-keys response falls through to the
+  // identifier error, which names the field to fix.
+  if (!boardingResponseOk(keysRes)) {
+    throw new Error(
+      describeBoardingFailure({
+        label: "Valor Generate API Keys",
+        status: keysRes.status,
+        body: keysRes.body,
+        endpoint: keysEndpoint,
+        context: { epi },
+      })
+    );
+  }
   const appId = readAppId(keysRes.body);
   const appKey = readAppKey(keysRes.body);
   if (!appId || !appKey) {
@@ -489,22 +589,37 @@ export async function onboardValorMerchant(
   const firstParams = paramsFor(first);
   const epiLabel0 = first.epiLabel ?? "VT";
 
+  const createEndpoint = `/api/valor/create?${acquirer.createVariant}`;
   let createRes: { status: number; body: ValorEnvelope };
   try {
     createRes = await http.post(
-      `/api/valor/create?${acquirer.createVariant}`,
+      createEndpoint,
       buildCreateMerchantBody(merchant, first.store, acquirer, fees, epiLabel0)
     );
   } catch (error) {
-    throw new BoardingError("merchant_add", "Valor Merchant Add failed", {}, false, {
-      cause: error,
-    });
+    throw new BoardingError(
+      "merchant_add",
+      describeBoardingException({
+        label: "Valor Merchant Add",
+        endpoint: createEndpoint,
+        error,
+      }),
+      {},
+      false,
+      { cause: error }
+    );
   }
 
   if (!boardingResponseOk(createRes)) {
     throw new BoardingError(
       "merchant_add",
-      `Valor Merchant Add failed: ${valorBoardingErrorMessage(createRes.body)}`,
+      describeBoardingFailure({
+        label: "Valor Merchant Add",
+        status: createRes.status,
+        body: createRes.body,
+        endpoint: createEndpoint,
+        context: { userName: merchant.emailId, dexaMerchantId },
+      }),
       {},
       false
     );
@@ -556,7 +671,11 @@ export async function onboardValorMerchant(
   try {
     keys0 = await generateKeysForEpi(http, acquirer, epi0);
   } catch (error) {
-    return failMerchant("generate_api_keys", "Valor Generate API Keys failed", error);
+    return failMerchant(
+      "generate_api_keys",
+      withCause(`Valor Generate API Keys failed for EPI ${epi0}`, error),
+      error
+    );
   }
 
   const account0 = accountFrom(firstParams, ctx, {
@@ -569,7 +688,10 @@ export async function onboardValorMerchant(
   } catch (error) {
     return failMerchant(
       "persist",
-      "Boarding succeeded on Valor but persisting the first location failed",
+      withCause(
+        "Boarding succeeded on Valor but persisting the first location failed",
+        error
+      ),
       error
     );
   }
@@ -700,10 +822,11 @@ export async function provisionValorLocation(
     );
   };
 
+  const storeEndpoint = `/api/valor/createStore?${acquirer.storeVariant}`;
   let storeRes: { status: number; body: ValorEnvelope };
   try {
     storeRes = await http.post(
-      `/api/valor/createStore?${acquirer.storeVariant}`,
+      storeEndpoint,
       buildCreateStoreBody(
         ctx,
         params.store,
@@ -714,13 +837,27 @@ export async function provisionValorLocation(
       )
     );
   } catch (error) {
-    return failStore("store_add", "Valor Store Add failed", error);
+    return failStore(
+      "store_add",
+      describeBoardingException({
+        label: "Valor Store Add",
+        endpoint: storeEndpoint,
+        error,
+      }),
+      error
+    );
   }
 
   if (!boardingResponseOk(storeRes)) {
     return failStore(
       "store_add",
-      `Valor Store Add failed: ${valorBoardingErrorMessage(storeRes.body)}`
+      describeBoardingFailure({
+        label: "Valor Store Add",
+        status: storeRes.status,
+        body: storeRes.body,
+        endpoint: storeEndpoint,
+        context: { mp_id: ctx.mpId, store: params.store.storeName },
+      })
     );
   }
 
@@ -745,7 +882,11 @@ export async function provisionValorLocation(
   try {
     keys = await generateKeysForEpi(http, acquirer, epi);
   } catch (error) {
-    return failStore("generate_api_keys", "Valor Generate API Keys failed", error);
+    return failStore(
+      "generate_api_keys",
+      withCause(`Valor Generate API Keys failed for EPI ${epi}`, error),
+      error
+    );
   }
 
   const account = accountFrom(params, ctx, { storeId, epi, ...keys });
@@ -754,7 +895,10 @@ export async function provisionValorLocation(
   } catch (error) {
     return failStore(
       "persist",
-      "Location provisioned on Valor but persisting merchant_processor_accounts failed",
+      withCause(
+        "Location provisioned on Valor but persisting merchant_processor_accounts failed",
+        error
+      ),
       error
     );
   }

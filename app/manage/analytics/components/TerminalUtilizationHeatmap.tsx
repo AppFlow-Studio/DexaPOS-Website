@@ -304,13 +304,13 @@ export default function TerminalUtilizationHeatmap() {
                 <>
                     <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                         {Array.from({ length: 4 }).map((_, i) => (
-                            <Card key={i}>
+                            <Card key={i} className="min-w-0 overflow-hidden">
                                 <CardHeader className="pb-2">
-                                    <Skeleton className="h-4 w-28" />
+                                    <Skeleton className="h-4 w-28 max-w-full" />
                                 </CardHeader>
                                 <CardContent>
-                                    <Skeleton className="h-8 w-20" />
-                                    <Skeleton className="h-3 w-32 mt-2" />
+                                    <Skeleton className="h-8 w-20 max-w-full" />
+                                    <Skeleton className="h-3 w-32 max-w-full mt-2" />
                                 </CardContent>
                             </Card>
                         ))}

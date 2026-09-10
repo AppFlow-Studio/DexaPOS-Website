@@ -13,7 +13,7 @@ type MerchantAssetCategory =
   // one below — it rejects SVG outright and verifies the file's magic bytes
   // against its declared type. The allowlist here stays as it was so the
   // categories that predate it keep working.
-  | "website";
+  | "website"
   | "kiosk";
 
 type OrganizationAssetCategory = "logos" | "documents";

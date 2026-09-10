@@ -2056,13 +2056,18 @@ export default function MenuItemsPage() {
     );
   }
 
+  // The scoped queries below are `enabled: !!clerkOrgId`, and a disabled query
+  // reports isLoading: true forever in React Query v5. Once identity has
+  // resolved, an absent org id must not keep the page skeletonised — let it
+  // fall through to the existing empty/error states instead.
+  const isAwaitingIdentity = isUserInfoLoading || isPermissionsLoading;
   const isInitialPageLoading =
-    isLoading ||
-    isUserInfoLoading ||
-    isPermissionsLoading ||
-    isCategoriesLoading ||
-    isModifierGroupsLoading ||
-    isTaxRatesLoading;
+    isAwaitingIdentity ||
+    (!!clerkOrgId &&
+      (isLoading ||
+        isCategoriesLoading ||
+        isModifierGroupsLoading ||
+        isTaxRatesLoading));
 
   if (isInitialPageLoading) {
     return (

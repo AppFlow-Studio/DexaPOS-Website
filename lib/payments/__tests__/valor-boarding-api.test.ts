@@ -400,3 +400,131 @@ describe("onboardValorMerchant", () => {
     expect(deleteStore).toHaveBeenCalledOnce(); // store-level rollback only
   });
 });
+
+describe("detailed boarding errors", () => {
+  const keysOk = () => ({
+    body: {
+      status: "OK",
+      code: 200,
+      data: { epi: "2319991698", appid: "APPID-32-CHARS", appkey: "APPKEY-32-CHARS" },
+    },
+  });
+
+  it("puts HTTP status, endpoint, username, raw body and a hint on merchant_add", async () => {
+    const persist = vi.fn(async () => {});
+    const fetchImpl = makeFetch({
+      "login?isotoken": () => ({ body: { token: "jwt" } }),
+      "/api/valor/create?": () => ({
+        status: 400,
+        body: { status: false, message: "User Name already exist", code: 400 },
+      }),
+    });
+
+    const err: unknown = await onboardValorMerchant(
+      options(fetchImpl),
+      merchant,
+      fees,
+      "m1",
+      [{ store: store("Main"), dexaLocationId: "loc-1" }],
+      persist
+    ).catch((e) => e);
+
+    expect(err).toBeInstanceOf(BoardingError);
+    const message = (err as BoardingError).message;
+    expect(message).toContain("HTTP 400");
+    expect(message).toContain("User Name already exist");
+    expect(message).toContain("endpoint=/api/valor/create?FDcardnet");
+    expect(message).toContain("userName=sam@example.com");
+    expect(message).toContain("dexaMerchantId=m1");
+    expect(message).toContain('Raw: {"status":false'); // truncated dump present
+    expect(message).toMatch(/already exists/i); // actionable hint
+  });
+
+  it("names the endpoint and the real cause when the request throws", async () => {
+    const persist = vi.fn(async () => {});
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("login?isotoken")) {
+        return new Response(JSON.stringify({ token: "jwt" }), { status: 200 });
+      }
+      if (url.includes("/api/valor/create?")) throw new TypeError("fetch failed");
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as unknown as typeof fetch;
+
+    const err: unknown = await onboardValorMerchant(
+      options(fetchImpl),
+      merchant,
+      fees,
+      "m1",
+      [{ store: store("Main"), dexaLocationId: "loc-1" }],
+      persist
+    ).catch((e) => e);
+
+    const message = (err as BoardingError).message;
+    expect(message).toContain("calling /api/valor/create?FDcardnet");
+    expect(message).toContain("TypeError: fetch failed");
+  });
+
+  it("surfaces a persist DB error rather than a generic 'persist failed'", async () => {
+    const persist = vi.fn(async () => {
+      throw new Error("duplicate key value violates unique constraint");
+    });
+    const deleteSpy = vi.fn(() => ({ body: {} }));
+    const fetchImpl = makeFetch({
+      "login?isotoken": () => ({ body: { token: "jwt" } }),
+      "/api/valor/create?": () => ({
+        body: {
+          status: true,
+          mpId: 165163,
+          newUserId: 233518,
+          storeInfo: { "184231": ["2319991698"] },
+        },
+      }),
+      "/api/valor/activateEpi": () => ({ body: {} }),
+      "/api/valor/getEpiAppKeyDetails": keysOk,
+      "/api/valor/delete": deleteSpy,
+    });
+
+    const err: unknown = await onboardValorMerchant(
+      options(fetchImpl),
+      merchant,
+      fees,
+      "m1",
+      [{ store: store("Main"), dexaLocationId: "loc-1" }],
+      persist
+    ).catch((e) => e);
+
+    expect((err as BoardingError).step).toBe("persist");
+    expect((err as BoardingError).message).toContain(
+      "duplicate key value violates unique constraint"
+    );
+  });
+
+  it("puts status, endpoint and store context on a createStore failure", async () => {
+    const persist = vi.fn(async () => {});
+    const fetchImpl = makeFetch({
+      "login?isotoken": () => ({ body: { token: "jwt" } }),
+      "/api/valor/createStore?": () => ({
+        status: 400,
+        body: { status: false, message: "storeCity Required", code: 400 },
+      }),
+    });
+
+    const result = await provisionValorLocations(
+      options(fetchImpl),
+      merchant,
+      fees,
+      "m1",
+      { valorMerchantId: "165163", newUserId: "233518" },
+      [{ store: store("Second"), dexaLocationId: "loc-2" }],
+      persist
+    );
+
+    expect(result.failures).toHaveLength(1);
+    const message = (result.failures[0].error as BoardingError).message;
+    expect(message).toContain("HTTP 400");
+    expect(message).toContain("storeCity Required");
+    expect(message).toContain("endpoint=/api/valor/createStore?storeadd");
+    expect(message).toContain("mp_id=165163");
+    expect(message).toContain("store=Second");
+  });
+});

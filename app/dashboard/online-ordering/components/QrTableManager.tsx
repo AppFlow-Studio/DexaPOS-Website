@@ -2,7 +2,17 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
-import QRCode from "qrcode";
+import {
+  DEFAULT_BACKGROUND_COLOR,
+  DEFAULT_MODULE_COLOR,
+  parseHexColor,
+} from "@/lib/qr/branding-rules";
+import {
+  renderBrandedQrPngBlob,
+  renderBrandedQrPngDataUrl,
+  renderBrandedQrSvg,
+  type BrandedQrOptions,
+} from "@/lib/qr/render";
 import {
   generateMissingQrCodesForLocation,
   generateQrCodeForTable,
@@ -11,8 +21,17 @@ import {
   type QrTableManagerRow,
   type QrTableManagerSnapshot,
 } from "../actions";
+import { BrandedQrPreview } from "./BrandedQrPreview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Panel,
   PanelSection,
@@ -30,6 +49,8 @@ import { buildQrTableUrl } from "@/app/sites/lib/store-url";
 import {
   Ban,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Download,
   ExternalLink,
@@ -41,6 +62,7 @@ import {
   RefreshCw,
   RotateCcw,
   ScanLine,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,6 +75,22 @@ interface QrTableManagerProps {
   qrEntitled: boolean;
   qrGateMessage?: string | null;
 }
+
+type StatusFilter = "all" | QrTableManagerRow["qrStatus"];
+
+/**
+ * Rows rendered per zone before paging. Every row used to mount at once: a
+ * real location with 233 tables put 634 buttons and 233 dropdowns in the DOM,
+ * inside a 512px box holding 20,000px of scroll. This caps both.
+ */
+const ROWS_PER_PAGE = 25;
+
+const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
+  all: "All statuses",
+  active: "Active",
+  revoked: "Revoked",
+  not_generated: "Not generated",
+};
 
 function getStatusBadge(status: QrTableManagerRow["qrStatus"]) {
   switch (status) {
@@ -70,7 +108,26 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
+/**
+ * `merchant` renders the store's own logo and brand colours; `dexa` renders the
+ * neutral Dexa-blue code with no logo, for merchants who would rather not brand
+ * their table tents.
+ */
 type QrBrandMode = "merchant" | "dexa";
+
+const DEXA_BRAND_COLOR = "#0C4FD1";
+
+/**
+ * A branding failure must never leave the merchant with a silently unbranded
+ * code — the ticket calls that out explicitly for the print path. Warnings are
+ * raised once per export rather than per table so a bulk run does not bury the
+ * screen in duplicates.
+ */
+function reportBrandingWarnings(warnings: string[]) {
+  for (const warning of warnings) {
+    toast.warning(warning, { duration: 8000 });
+  }
+}
 
 const neutralQrToastStyle = {
   background: "#e5e7eb",
@@ -124,6 +181,11 @@ export function QrTableManager({
     done: number;
     total: number;
   } | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  // One page cursor per zone, so paging through the bar does not move the patio.
+  // Absent key means page 1; the map is cleared whenever the filters change.
+  const [zonePages, setZonePages] = useState<Record<string, number>>({});
 
   const loadSnapshot = useCallback(async () => {
     setIsLoading(true);
@@ -150,14 +212,58 @@ export function QrTableManager({
     return () => window.clearTimeout(timer);
   }, [loadSnapshot]);
 
+  const allRows = useMemo(() => snapshot?.tables ?? [], [snapshot?.tables]);
+
+  const isFiltered = search.trim() !== "" || statusFilter !== "all";
+
+  // Match on the label a person actually reads off the floor plan, plus the
+  // underlying name, so "12" finds table 12 whichever the merchant named it.
+  const filteredRows = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return allRows.filter((row) => {
+      if (statusFilter !== "all" && row.qrStatus !== statusFilter) return false;
+      if (!needle) return true;
+      return (
+        row.tableLabel.toLowerCase().includes(needle) ||
+        row.tableName.toLowerCase().includes(needle) ||
+        (row.zoneName ?? "").toLowerCase().includes(needle)
+      );
+    });
+  }, [allRows, search, statusFilter]);
+
   const groupedRows = useMemo(() => {
     const groups = new Map<string, QrTableManagerRow[]>();
-    for (const row of snapshot?.tables ?? []) {
+    for (const row of filteredRows) {
       const key = row.zoneName || "Unassigned";
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
     return Array.from(groups.entries());
-  }, [snapshot?.tables]);
+  }, [filteredRows]);
+
+  // Changing what is being looked at invalidates every cursor: page 7 of the
+  // unfiltered list is not page 7 of the search results. Reset at the point of
+  // change rather than in an effect watching it — the effect version renders
+  // once on the stale page before correcting.
+  function updateSearch(value: string) {
+    setSearch(value);
+    setZonePages({});
+  }
+
+  function updateStatusFilter(value: StatusFilter) {
+    setStatusFilter(value);
+    setZonePages({});
+  }
+
+  function getZonePage(zoneName: string, totalRows: number) {
+    const pageCount = Math.max(1, Math.ceil(totalRows / ROWS_PER_PAGE));
+    // Clamp rather than store: a zone can shrink under a filter while a stale
+    // cursor still points past the end, which would render an empty zone.
+    return Math.min(zonePages[zoneName] ?? 1, pageCount);
+  }
+
+  function setZonePage(zoneName: string, page: number) {
+    setZonePages((prev) => ({ ...prev, [zoneName]: page }));
+  }
 
   async function withBusy<T>(key: string, work: () => Promise<T>) {
     setBusyKey(key);
@@ -265,6 +371,42 @@ export function QrTableManager({
     return `${slugifyFileName(storeName)}-${slugifyFileName(row.tableLabel || "table")}`;
   }
 
+  /**
+   * The branding every export path shares. Deriving it in one place is what
+   * keeps the dashboard preview, the SVG/PNG downloads and the printed table
+   * tent from drifting apart.
+   */
+  const qrBranding = useMemo((): Omit<BrandedQrOptions, "value"> => {
+    if (brandMode === "dexa") {
+      return {
+        logoUrl: null,
+        moduleColor: DEXA_BRAND_COLOR,
+        backgroundColor: DEFAULT_BACKGROUND_COLOR,
+        secondaryColor: null,
+      };
+    }
+
+    return {
+      logoUrl: snapshot?.branding?.logoUrl ?? null,
+      moduleColor: snapshot?.branding?.primaryColor ?? DEFAULT_MODULE_COLOR,
+      backgroundColor:
+        snapshot?.branding?.backgroundColor ?? DEFAULT_BACKGROUND_COLOR,
+      secondaryColor: snapshot?.branding?.secondaryColor ?? null,
+    };
+  }, [brandMode, snapshot?.branding]);
+
+  const hasMerchantLogo = Boolean(snapshot?.branding?.logoUrl);
+
+  /**
+   * The preview needs a real encoded URL so it reflects the true module count
+   * — a placeholder string of a different length would render a different-sized
+   * grid and mislead about how tight the print will be.
+   */
+  const previewQrUrl = useMemo(() => {
+    const firstActive = snapshot?.tables.find((row) => row.qrUrl);
+    return firstActive?.qrUrl ?? null;
+  }, [snapshot?.tables]);
+
   function getBrandTitle() {
     if (brandMode === "dexa") return "DEXA";
     return snapshot?.storeName || locationName || "Store";
@@ -299,15 +441,11 @@ export function QrTableManager({
     }
 
     try {
-      const svg = await QRCode.toString(qrUrl, {
-        type: "svg",
-        errorCorrectionLevel: "Q",
-        margin: 4,
-        color: {
-          dark: "#111827",
-          light: "#FFFFFF",
-        },
+      const { data: svg, warnings } = await renderBrandedQrSvg({
+        ...qrBranding,
+        value: qrUrl,
       });
+      reportBrandingWarnings(warnings);
       downloadBlob(
         new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
         `${getRowFileBaseName(row)}.svg`
@@ -328,17 +466,12 @@ export function QrTableManager({
     }
 
     try {
-      const pngUrl = await QRCode.toDataURL(qrUrl, {
-        errorCorrectionLevel: "Q",
-        margin: 4,
-        width: 1200,
-        color: {
-          dark: "#111827",
-          light: "#FFFFFF",
-        },
+      const { data: blob, warnings } = await renderBrandedQrPngBlob({
+        ...qrBranding,
+        value: qrUrl,
+        sizePx: 1200,
       });
-      const response = await fetch(pngUrl);
-      const blob = await response.blob();
+      reportBrandingWarnings(warnings);
       downloadBlob(blob, `${getRowFileBaseName(row)}.png`);
       toast.success(`PNG downloaded for ${row.tableLabel}`);
     } catch (error) {
@@ -354,15 +487,24 @@ export function QrTableManager({
       throw new Error("QR URL is not ready for this table yet.");
     }
 
-    const qrImage = await QRCode.toDataURL(qrUrl, {
-      errorCorrectionLevel: "Q",
-      margin: 2,
-      width: 1400,
-      color: {
-        dark: "#111827",
-        light: "#FFFFFF",
-      },
+    // The printed tent goes through the same renderer as the on-screen
+    // preview. If this ever forks again, branded-on-screen /
+    // unbranded-on-paper comes straight back.
+    const {
+      data: qrImage,
+      warnings,
+      branding,
+    } = await renderBrandedQrPngDataUrl({
+      ...qrBranding,
+      value: qrUrl,
+      sizePx: 1400,
     });
+    reportBrandingWarnings(warnings);
+
+    // Panel chrome follows the same colour the modules ended up with, so a
+    // fallback to safe defaults degrades the whole sheet coherently rather
+    // than leaving Dexa blue framing a black-and-white code.
+    const chrome = parseHexColor(branding.moduleColor) ?? { r: 12, g: 79, b: 209 };
 
     const doc = new jsPDF({
       orientation: "landscape",
@@ -378,10 +520,10 @@ export function QrTableManager({
     const title = row.tableLabel;
 
     const renderPanel = (originX: number) => {
-      doc.setDrawColor(12, 79, 209);
+      doc.setDrawColor(chrome.r, chrome.g, chrome.b);
       doc.setLineWidth(0.5);
       doc.roundedRect(originX + 8, 10, panelWidth - 16, pageHeight - 20, 4, 4);
-      doc.setFillColor(12, 79, 209);
+      doc.setFillColor(chrome.r, chrome.g, chrome.b);
       doc.roundedRect(originX + 8, 10, panelWidth - 16, 16, 4, 4, "F");
 
       doc.setTextColor(255, 255, 255);
@@ -397,7 +539,22 @@ export function QrTableManager({
       doc.setFontSize(22);
       doc.text(title, originX + panelWidth / 2, 41, { align: "center" });
 
-      doc.addImage(qrImage, "PNG", originX + panelWidth / 2 - 28, 47, 56, 56);
+      // jsPDF defaults to no compression, so the 1400px code was embedded as
+      // raw RGB: 1400 × 1400 × 3 = 5,880,000 bytes, measured on a generated
+      // tent. A QR is large flat areas of two colours, which deflates to a
+      // fraction of that. The alias keys jsPDF's image cache to this table's
+      // code so the two panels below provably share one copy, rather than
+      // leaving it to content hashing.
+      doc.addImage(
+        qrImage,
+        "PNG",
+        originX + panelWidth / 2 - 28,
+        47,
+        56,
+        56,
+        `qr-${row.floorPlanObjectId}`,
+        "FAST"
+      );
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
@@ -570,6 +727,31 @@ export function QrTableManager({
           <StatTile label="Active" value={snapshot?.activeCount ?? 0} />
         </StatRow>
 
+        <div className="flex flex-col gap-4 rounded-2xl border bg-muted/40 p-4 sm:flex-row sm:items-center">
+          <BrandedQrPreview value={previewQrUrl} branding={qrBranding} />
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm font-medium">
+              {brandMode === "dexa"
+                ? "Dexa branding"
+                : hasMerchantLogo
+                  ? "Your logo and brand colours"
+                  : "Your brand colours"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {brandMode === "dexa"
+                ? "Codes print in Dexa blue with no logo."
+                : hasMerchantLogo
+                  ? "Every download and printed table tent uses this exact artwork."
+                  : "Add a logo in Online Store settings to place it at the centre of every code."}
+            </p>
+            {brandMode === "merchant" && hasMerchantLogo ? (
+              <p className="text-xs text-muted-foreground">
+                Scan this preview with your phone before printing a full run.
+              </p>
+            ) : null}
+          </div>
+        </div>
+
         {!acceptsDineIn ? (
           <div className="rounded-2xl border-0 bg-muted px-4 py-3 text-sm text-foreground shadow-none">
             QR scan handling is currently disabled for this store. You can still prepare codes here, but guests will not be allowed to order from scans until <span className="font-medium">Enable QR Table Ordering</span> is turned on above.
@@ -617,8 +799,83 @@ export function QrTableManager({
           </div>
         ) : null}
 
+        {!isLoading && allRows.length > 0 ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                value={search}
+                onChange={(event) => updateSearch(event.target.value)}
+                placeholder="Search tables by name or zone"
+                aria-label="Search tables"
+                className="pl-9"
+              />
+            </div>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => updateStatusFilter(value as StatusFilter)}
+            >
+              <SelectTrigger className="sm:w-48" aria-label="Filter by QR status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(
+                  Object.keys(STATUS_FILTER_LABELS) as StatusFilter[]
+                ).map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {STATUS_FILTER_LABELS[value]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="shrink-0 text-sm text-muted-foreground tabular-nums">
+              {isFiltered
+                ? `${filteredRows.length} of ${allRows.length} tables`
+                : `${allRows.length} table${allRows.length === 1 ? "" : "s"}`}
+            </p>
+          </div>
+        ) : null}
+
+        {!isLoading && allRows.length > 0 && filteredRows.length === 0 ? (
+          <div className="flex flex-col items-start gap-3 rounded-2xl border-0 bg-muted/60 px-4 py-8 text-sm text-muted-foreground shadow-none">
+            <p>
+              No tables match{" "}
+              {search.trim() ? (
+                <>
+                  &ldquo;<span className="font-medium text-foreground">{search.trim()}</span>&rdquo;
+                </>
+              ) : (
+                "this filter"
+              )}
+              {statusFilter !== "all" && search.trim()
+                ? ` with status ${STATUS_FILTER_LABELS[statusFilter].toLowerCase()}`
+                : ""}
+              .
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                updateSearch("");
+                updateStatusFilter("all");
+              }}
+            >
+              Clear filters
+            </Button>
+          </div>
+        ) : null}
+
         {!isLoading &&
-          groupedRows.map(([zoneName, rows]) => (
+          groupedRows.map(([zoneName, rows]) => {
+            const pageCount = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+            const page = getZonePage(zoneName, rows.length);
+            const firstIndex = (page - 1) * ROWS_PER_PAGE;
+            const pageRows = rows.slice(firstIndex, firstIndex + ROWS_PER_PAGE);
+
+            return (
             // Borderless: this bordered card sat inside the panel, and each of
             // its table rows drew a third frame. With 236 tables that was a
             // wall of nested boxes running thousands of pixels tall.
@@ -638,7 +895,7 @@ export function QrTableManager({
               {/* Hairline-divided rows in a capped scroller: a zone with 236
                   tables is now a fixed-height list instead of the page. */}
               <div className="thin-scrollbar min-w-0 max-h-[32rem] divide-y divide-border/60 overflow-y-auto rounded-2xl border-0 bg-muted/40 px-3 shadow-none">
-                {rows.map((row) => {
+                {pageRows.map((row) => {
                   const isBusy =
                     busyKey === `gen-${row.floorPlanObjectId}` ||
                     busyKey === `regen-${row.floorPlanObjectId}` ||
@@ -787,8 +1044,45 @@ export function QrTableManager({
                   );
                 })}
               </div>
+
+              {/* Only zones large enough to page get a pager: a six-table patio
+                  should not carry the chrome of a 233-table floor. */}
+              {pageCount > 1 ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground tabular-nums">
+                    Showing {firstIndex + 1}–{firstIndex + pageRows.length} of{" "}
+                    {rows.length}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setZonePage(zoneName, page - 1)}
+                      disabled={page <= 1}
+                      aria-label={`Previous page of ${zoneName}`}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </Button>
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                      Page {page} of {pageCount}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setZonePage(zoneName, page + 1)}
+                      disabled={page >= pageCount}
+                      aria-label={`Next page of ${zoneName}`}
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
-          ))}
+            );
+          })}
 
         <div className="rounded-2xl border-0 bg-muted px-4 py-3 text-sm text-foreground shadow-none">
           <p>

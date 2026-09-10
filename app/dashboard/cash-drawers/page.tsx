@@ -356,20 +356,53 @@ export default function CashDrawersPage() {
   )
 }
 
+/**
+ * Loading state for the drawers page.
+ *
+ * The header and stat LABELS are static — they read the same before and after
+ * the fetch — so they render as their real text rather than as placeholders.
+ * Only the figures and cards, which genuinely depend on the response, are
+ * skeletons. Earlier this announced "Loading cash drawer sessions." and
+ * labelled every tile "Loading"; that text is not part of the page, so it
+ * flashed and was replaced the moment data landed.
+ */
 function PageSkeleton({ title }: { title?: string } = {}) {
   return (
     <PageShell>
       <PageHeader
         title="Cash Drawers"
-        subtitle={title ? `Loading drawers for ${title}.` : 'Loading cash drawer sessions.'}
+        subtitle="Monitor drawer assignments and open sessions from one workspace."
+        indicator={
+          <LocationIndicator
+            isAllLocations={!title}
+            locationName={title}
+          />
+        }
         actions={<Skeleton className="h-9 w-40 rounded-full" />}
       />
       <Panel className="overflow-hidden">
         <div className="px-4 py-6 sm:px-6">
           <StatRow columns={3}>
-            {[0, 1, 2].map((index) => (
-              <StatTile key={index} label="Loading" value="" isLoading />
-            ))}
+            <StatTile
+              label="Configured drawers"
+              value=""
+              icon={<Banknote />}
+              isLoading
+            />
+            <StatTile
+              label="Open sessions"
+              value=""
+              meta="Currently accepting cash"
+              icon={<DoorOpen />}
+              isLoading
+            />
+            <StatTile
+              label="Ready to open"
+              value=""
+              meta="Active without a session"
+              icon={<DoorClosed />}
+              isLoading
+            />
           </StatRow>
         </div>
         <div className="grid gap-3 px-4 pb-6 pt-2 sm:grid-cols-2 sm:px-6">

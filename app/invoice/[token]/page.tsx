@@ -3,7 +3,10 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import type { Metadata } from "next";
 import Image from "next/image";
 import { PayPanel } from "./PayPanel";
-import { getInvoicePaymentBootstrap } from "@/app/actions/invoices/invoice-payment-bootstrap";
+import {
+  getInvoicePaymentBootstrap,
+  type InvoicePaymentBootstrap,
+} from "@/app/actions/invoices/invoice-payment-bootstrap";
 
 interface PageProps {
   params: Promise<{ token: string }>;
@@ -138,11 +141,16 @@ export default async function PublicInvoicePage({ params }: PageProps) {
   const isPaid = invoice.status === "paid";
   const isPayable = !isPaid && invoice.status !== "cancelled";
 
-  // Resolve the NMI Collect.js tokenization key for this invoice's location.
-  // Null when NMI isn't provisioned — the card form degrades gracefully.
-  const { tokenizationKey } = isPayable
+  // Resolve browser-safe payment bootstrap data for the invoice's selected rail.
+  const paymentBootstrap: InvoicePaymentBootstrap = isPayable
     ? await getInvoicePaymentBootstrap(token)
-    : { tokenizationKey: null };
+    : {
+        provider: null,
+        tokenizationKey: null,
+        valorClientToken: null,
+        valorEpi: null,
+        valorIsDemo: false,
+      };
 
   return (
     <div className="min-h-screen bg-neutral-50 flex flex-col items-center justify-start py-8 sm:py-14 px-4 gap-5">
@@ -277,12 +285,12 @@ export default async function PublicInvoicePage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* ── Pay (NMI Collect.js — §3) ───────────────────────── */}
+        {/* ── Pay ──────────────────────────────────────────────── */}
         {isPayable && (
           <PayPanel
             publicToken={token}
             amountDue={amountDue}
-            tokenizationKey={tokenizationKey}
+            bootstrap={paymentBootstrap}
           />
         )}
 

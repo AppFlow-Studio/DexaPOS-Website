@@ -32,6 +32,9 @@ describe("extractValorError", () => {
     expect(extractValorError({ error: ["Customer name already exist"] })).toBe(
       "Customer name already exist"
     );
+    expect(extractValorError({ errors: ["Customer name already exist"] })).toBe(
+      "Customer name already exist"
+    );
   });
 
   it("falls back through the flat message fields", () => {
@@ -99,15 +102,15 @@ describe("readPaymentProfileId", () => {
 });
 
 describe("formatSubscriptionDate", () => {
-  it("formats as YYYYMMDD in UTC", () => {
+  it("formats as YYYY-MM-DD in UTC", () => {
     expect(formatSubscriptionDate(new Date("2026-09-01T00:00:00Z"))).toBe(
-      "20260901"
+      "2026-09-01"
     );
   });
 
   it("zero-pads month and day", () => {
     expect(formatSubscriptionDate(new Date("2026-01-05T00:00:00Z"))).toBe(
-      "20260105"
+      "2026-01-05"
     );
   });
 
@@ -143,9 +146,48 @@ describe("buildAddSubscriptionBody", () => {
     billingZip: "85284",
   };
 
-  it("never surcharges a subscription", () => {
+  it("defaults subscriptions to the traditional MID", () => {
     const body = buildAddSubscriptionBody(base);
     expect(body.surchargeIndicator).toBe("0");
+    expect(body.surchargeAmount).toBe("0.00");
+  });
+
+  it("maps billing input to Valor's documented billing and shipping fields", () => {
+    const body = buildAddCustomerBody({
+      customerName: "Jane Doe",
+      address: {
+        customer_name: "Jane Doe",
+        street_number: "8320",
+        street_name: "Main Street",
+        unit: "1",
+        city: "Tempe",
+        state: "AZ",
+        zip: "85284",
+      },
+    });
+    expect(body.address_details[0]).toMatchObject({
+      billing_customer_name: "Jane Doe",
+      billing_street_no: "8320",
+      billing_street_name: "Main Street",
+      billing_unit: "1",
+      billing_city: "Tempe",
+      billing_state: "AZ",
+      billing_zip: "85284",
+      shipping_customer_name: "Jane Doe",
+      shipping_street_no: "8320",
+      shipping_street_name: "Main Street",
+      shipping_unit: "1",
+      shipping_city: "Tempe",
+      shipping_state: "AZ",
+      shipping_zip: "85284",
+    });
+    expect(body.address_details[0]).not.toHaveProperty("street_number");
+    expect(body.address_details[0]).not.toHaveProperty("zip");
+  });
+
+  it("supports an explicitly resolved sandbox surcharge MID", () => {
+    const body = buildAddSubscriptionBody(base, "1");
+    expect(body.surchargeIndicator).toBe("1");
     expect(body.surchargeAmount).toBe("0.00");
   });
 

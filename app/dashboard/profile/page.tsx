@@ -1,15 +1,50 @@
 "use client";
 
-import { UserProfile } from "@clerk/nextjs";
+import { useEffect, useRef, useState } from "react";
+import { UserProfile, useUser } from "@clerk/nextjs";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useIsDarkTheme } from "@/app/sign-in/clerk-form";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PageShell, PageHeader, Panel } from "@/components/dashboard/shell";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UserProfileFallback } from "@/components/profile/UserProfileFallback";
 
 export default function ProfilePage() {
   const { data: userInfo, isLoading } = useUserInfo();
   const isDark = useIsDarkTheme();
+  // Clerk renders nothing until its script boots, leaving the Panel below an
+  // empty box for seconds. Hold its shape until the widget can paint.
+  const { isLoaded: isClerkLoaded } = useUser();
+  const [isProfilePainted, setIsProfilePainted] = useState(false);
+  const profileWidgetRef = useRef<HTMLDivElement>(null);
+
+  // `useUser().isLoaded` only means Clerk's user resource is ready. The
+  // `<UserProfile>` widget mounts in a later pass, so using that flag alone
+  // briefly exposes an empty, collapsed Panel. Keep the in-panel fallback
+  // visible until the widget has actually painted meaningful content.
+  useEffect(() => {
+    if (!isClerkLoaded) return;
+
+    const host = profileWidgetRef.current;
+    if (!host) return;
+
+    const markPainted = () => {
+      if (host.textContent?.trim()) {
+        setIsProfilePainted(true);
+        return true;
+      }
+      return false;
+    };
+
+    if (markPainted()) return;
+
+    const observer = new MutationObserver(() => {
+      if (markPainted()) observer.disconnect();
+    });
+    observer.observe(host, { childList: true, subtree: true, characterData: true });
+
+    return () => observer.disconnect();
+  }, [isClerkLoaded]);
 
   // `UserProfile` types `appearance` as `Theme`, which omits `baseTheme` — and
   // passing it anyway had no effect (Clerk set none of its `--clerk-color-*`
@@ -37,15 +72,16 @@ export default function ProfilePage() {
       {/* Identity summary — tier 1 panel, not a <Card> (C6/§3.1). */}
       <Panel padded>
         <div className="flex items-center gap-4">
-          {isLoading ? (
+          {isLoading || !userInfo || userInfo instanceof Error ? (
             <>
               <Skeleton className="h-16 w-16 shrink-0 rounded-full" />
-              <div className="min-w-0 space-y-2">
-                <Skeleton className="h-5 w-40" />
-                <Skeleton className="h-4 w-56" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-5 w-40 max-w-full" />
+                <Skeleton className="h-4 w-56 max-w-full" />
+                <Skeleton className="h-5 w-28 max-w-full rounded-full" />
               </div>
             </>
-          ) : userInfo && !(userInfo instanceof Error) ? (
+          ) : (
             <>
               <Avatar className="h-16 w-16 shrink-0">
                 <AvatarImage
@@ -82,7 +118,7 @@ export default function ProfilePage() {
                 )}
               </div>
             </>
-          ) : null}
+          )}
         </div>
       </Panel>
 
@@ -97,14 +133,25 @@ export default function ProfilePage() {
           to a constants module so Tailwind is guaranteed to scan every class
           (C7): a class living only in a `.ts` file generates no CSS rule. */}
       <Panel padded>
-        <UserProfile
-          routing="hash"
-          appearance={{
-            variables: {
-              ...clerkColors,
-              borderRadius: "0.625rem",
-            },
-            elements: {
+        <div className="relative min-w-0">
+          {!isProfilePainted ? <UserProfileFallback /> : null}
+          <div
+            ref={profileWidgetRef}
+            aria-hidden={!isProfilePainted}
+            className={
+              isProfilePainted
+                ? "min-w-0"
+                : "invisible pointer-events-none absolute inset-0 min-w-0"
+            }
+          >
+            <UserProfile
+              routing="hash"
+              appearance={{
+                variables: {
+                  ...clerkColors,
+                  borderRadius: "0.625rem",
+                },
+                elements: {
               // `clerk-themed` hands text colour back to the app's tokens —
               // Clerk bakes its palette into generated classes and honours
               // neither `baseTheme` nor `variables` here, so in dark mode its
@@ -138,10 +185,12 @@ export default function ProfilePage() {
               // does not track the theme; use the muted token instead.
               navbarButton:
                 "!rounded-full !text-muted-foreground hover:!bg-muted/60 hover:!text-foreground",
-              footer: "hidden",
-            },
-          }}
-        />
+                  footer: "hidden",
+                },
+              }}
+            />
+          </div>
+        </div>
       </Panel>
     </PageShell>
   );

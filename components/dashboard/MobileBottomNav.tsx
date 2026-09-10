@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useClerk, useUser } from "@clerk/nextjs";
@@ -49,6 +49,43 @@ export function MobileBottomNav({
   const { signOut } = useClerk();
   const { user } = useUser();
 
+  // Closing the sheet and navigating happen in the same tick, and Radix
+  // restores focus to the trigger as it closes. If that focus lands while the
+  // tap is still resolving, the trigger re-fires and the sheet springs back
+  // open. `closingUntil` swallows any trigger activation for a moment after a
+  // close so the restored focus cannot reopen it.
+  const closingUntil = useRef(0);
+
+  const closeMore = () => {
+    closingUntil.current = Date.now() + 400;
+    setMoreOpen(false);
+  };
+
+  const handleMoreOpenChange = (open: boolean) => {
+    if (!open) {
+      closeMore();
+      return;
+    }
+
+    // Radix can request an open while it restores focus to the trigger during
+    // the close animation. Apply the same guard used by the trigger itself so
+    // that request cannot produce a close -> reopen -> close flash.
+    if (Date.now() < closingUntil.current) return;
+    setMoreOpen(true);
+  };
+
+  // Navigation is the authoritative "the link was followed" signal — more
+  // reliable than the link's own onClick, which can be pre-empted by the
+  // close animation. Closing here is conditional on the sheet actually being
+  // open: arming the guard on every route change would swallow a legitimate
+  // "More" tap right after navigating via one of the bottom tabs.
+  useEffect(() => {
+    setMoreOpen((open) => {
+      if (open) closingUntil.current = Date.now() + 400;
+      return false;
+    });
+  }, [pathname]);
+
   const displayName = user?.fullName || user?.primaryEmailAddress?.emailAddress || "Account";
   const email = user?.primaryEmailAddress?.emailAddress;
 
@@ -87,7 +124,10 @@ export function MobileBottomNav({
 
           {moreItems.length > 0 && (
             <button
-              onClick={() => setMoreOpen(true)}
+              onClick={() => {
+                if (Date.now() < closingUntil.current) return;
+                setMoreOpen(true);
+              }}
               className="flex flex-col items-center justify-center gap-0.5 pt-2 pb-1 flex-1 min-h-[56px] text-muted-foreground hover:text-foreground transition-colors"
             >
               <svg
@@ -112,8 +152,18 @@ export function MobileBottomNav({
         </div>
       </nav>
 
-      <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-        <SheetContent side="bottom" className="h-[70vh] overflow-y-auto">
+      <Sheet
+        open={moreOpen}
+        onOpenChange={handleMoreOpenChange}
+      >
+        <SheetContent
+          side="bottom"
+          className="h-[70vh] overflow-y-auto !rounded-t-[28px] border-x bg-clip-padding"
+          style={{
+            borderTopLeftRadius: "1.75rem",
+            borderTopRightRadius: "1.75rem",
+          }}
+        >
           <SheetHeader className="pb-2">
             <SheetTitle>More</SheetTitle>
           </SheetHeader>
@@ -128,7 +178,7 @@ export function MobileBottomNav({
                 <Link
                   key={item.url}
                   href={item.url}
-                  onClick={() => setMoreOpen(false)}
+                  onClick={closeMore}
                   className={cn(
                     "flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors",
                     isActive

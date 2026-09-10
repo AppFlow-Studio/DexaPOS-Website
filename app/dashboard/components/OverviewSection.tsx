@@ -91,7 +91,11 @@ export function OverviewSection({
         </div>
 
         {href && (
-          <OverviewLinkButton href={href}>{linkLabel}</OverviewLinkButton>
+          // Nudged up so the pill's centre lines up with the section title
+          // rather than floating between the title and the value below it.
+          <OverviewLinkButton href={href} className="-mt-1">
+            {linkLabel}
+          </OverviewLinkButton>
         )}
       </div>
 
