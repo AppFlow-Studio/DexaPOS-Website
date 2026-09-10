@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js'
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
 import { isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope.ts'
+import { loadMerchantBillingExemption } from '../_shared/merchant-billing-exemption.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -61,6 +62,22 @@ Deno.serve(async (req: Request): Promise<Response> => {
     for (const subscription of subscriptions ?? []) {
       if (isSubscriptionBillingHeld(subscription.metadata)) {
         skipped.push({ subscription_id: subscription.id, reason: 'billing_cutover_review_required' })
+        continue
+      }
+      const billingExemption = await loadMerchantBillingExemption(
+        supabase,
+        subscription.merchant_id,
+      )
+      if (billingExemption.active) {
+        const { error: advanceError } = await supabase.rpc(
+          'advance_billing_exempt_subscription',
+          { p_subscription_id: subscription.id, p_as_of_date: billingDate },
+        )
+        if (advanceError) {
+          failures.push({ subscription_id: subscription.id, error: advanceError.message })
+          continue
+        }
+        skipped.push({ subscription_id: subscription.id, reason: 'merchant_billing_exempt' })
         continue
       }
       if (

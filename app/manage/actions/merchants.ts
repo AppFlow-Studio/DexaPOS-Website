@@ -268,7 +268,12 @@ export async function getMerchantDetails(
           business_state,
           business_postal_code,
           business_country,
-          external_merchant_id
+          external_merchant_id,
+          billing_exempt,
+          billing_exempt_reason,
+          billing_exempt_expires_at,
+          billing_exempt_granted_at,
+          billing_exempt_granted_by
         `
       )
       .eq('id', merchant.id)
@@ -385,6 +390,11 @@ export async function getMerchantDetails(
     business_country: merchantLifecycle.business_country,
     external_merchant_id: (merchantLifecycle as { external_merchant_id?: string | null })
       .external_merchant_id ?? null,
+    billing_exempt: Boolean((merchantLifecycle as any).billing_exempt),
+    billing_exempt_reason: (merchantLifecycle as any).billing_exempt_reason ?? null,
+    billing_exempt_expires_at: (merchantLifecycle as any).billing_exempt_expires_at ?? null,
+    billing_exempt_granted_at: (merchantLifecycle as any).billing_exempt_granted_at ?? null,
+    billing_exempt_granted_by: (merchantLifecycle as any).billing_exempt_granted_by ?? null,
     onboarding_checklist: onboardingChecklist,
     locations: locationsWithMetrics,
   }

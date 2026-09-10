@@ -18,6 +18,7 @@ import {
   FileText,
   Loader2,
   RefreshCcw,
+  ShieldCheck,
   Wallet,
 } from 'lucide-react'
 import type { MerchantDetails } from '@/types/merchant'
@@ -35,6 +36,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -78,6 +80,7 @@ import {
   getSubscriptionInvoices,
   getSubscriptionServiceAssignments,
   setMerchantSubscriptionGracePeriod,
+  setMerchantBillingExemption,
   saveAndChargeMerchantSubscription,
   type BillableServiceRecord,
   type DeviceBillingServiceMappingRecord,
@@ -585,6 +588,24 @@ export function HqSubscriptionsWorkspace({
   const activeStep = SUBSCRIPTION_STEPS[currentStep]
   const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
+  const [billingExemption, setBillingExemption] = useState(() => ({
+    enabled: Boolean(merchant.billing_exempt),
+    active: Boolean(merchant.billing_exempt) && (
+      !merchant.billing_exempt_expires_at ||
+      new Date(merchant.billing_exempt_expires_at).getTime() > Date.now()
+    ),
+    reason: merchant.billing_exempt_reason ?? null,
+    expiresAt: merchant.billing_exempt_expires_at ?? null,
+    grantedAt: merchant.billing_exempt_granted_at ?? null,
+    grantedBy: merchant.billing_exempt_granted_by ?? null,
+  }))
+  const [billingExemptionRequested, setBillingExemptionRequested] = useState(
+    billingExemption.active,
+  )
+  const [billingExemptionReason, setBillingExemptionReason] = useState('')
+  const [billingExemptionExpiresAt, setBillingExemptionExpiresAt] = useState(
+    billingExemption.expiresAt?.slice(0, 16) ?? '',
+  )
   const [services, setServices] = useState<BillableServiceRecord[]>([])
   const [deviceBillingMappings, setDeviceBillingMappings] = useState<DeviceBillingServiceMappingRecord[]>([])
   const [servicePlans, setServicePlans] = useState<SubscriptionPlanRecord[]>([])
@@ -637,6 +658,34 @@ export function HqSubscriptionsWorkspace({
   const [selectedMerchantTierPlanId, setSelectedMerchantTierPlanId] = useState('')
   const [merchantTierSubscriptionStatus, setMerchantTierSubscriptionStatus] = useState<'active' | 'past_due' | 'suspended' | 'cancelled'>('active')
   const [merchantTierPeriodStart, setMerchantTierPeriodStart] = useState(startOfMonthIso())
+
+  const saveBillingExemption = () => {
+    startTransition(async () => {
+      const result = await setMerchantBillingExemption({
+        merchantId: merchant.id,
+        enabled: billingExemptionRequested,
+        reason: billingExemptionReason,
+        expiresAt:
+          billingExemptionRequested && billingExemptionExpiresAt
+            ? new Date(billingExemptionExpiresAt).toISOString()
+            : null,
+      })
+      if (!result.success || !result.exemption) {
+        toast.error(result.error || 'Failed to update the billing exemption.')
+        return
+      }
+      setBillingExemption(result.exemption)
+      setBillingExemptionRequested(result.exemption.active)
+      setBillingExemptionReason('')
+      setBillingExemptionExpiresAt(result.exemption.expiresAt?.slice(0, 16) ?? '')
+      toast.success(
+        result.exemption.active
+          ? 'Billing exemption enabled. Valor charging is paused.'
+          : 'Billing exemption disabled. Normal billing will resume.',
+      )
+      refresh()
+    })
+  }
 
   const changeStep = (step: number) => {
     if (isPending || step < 0 || step >= SUBSCRIPTION_STEPS.length) return
@@ -1248,9 +1297,13 @@ export function HqSubscriptionsWorkspace({
           ? 'Subscription canceled.'
           : status === 'canceled'
             ? 'Selected services removed. Subscription remains active.'
-            : selectedLocationSubscription
-              ? 'Subscription updated and automatic payment approved.'
-              : 'Subscription created and automatic payment approved.'
+            : billingExemption.active
+              ? selectedLocationSubscription
+                ? 'Complimentary services updated without a charge.'
+                : 'Complimentary services activated without a charge.'
+              : selectedLocationSubscription
+                ? 'Subscription updated and automatic payment approved.'
+                : 'Subscription created and automatic payment approved.'
       )
 
       refresh()
@@ -1259,6 +1312,10 @@ export function HqSubscriptionsWorkspace({
   }
 
   const handleGenerateInvoice = (subscriptionId: string) => {
+    if (billingExemption.active) {
+      toast.error('Disable the merchant billing exemption before generating an invoice.')
+      return
+    }
     startTransition(async () => {
       const result = await generateSubscriptionInvoiceManually(subscriptionId, null)
       if (!result.success) {
@@ -1271,6 +1328,10 @@ export function HqSubscriptionsWorkspace({
   }
 
   const handleChargeInvoice = (invoiceId: string) => {
+    if (billingExemption.active) {
+      toast.error('This merchant is billing exempt. Existing invoices remain available for records but cannot be charged.')
+      return
+    }
     startTransition(async () => {
       const result = await chargeSubscriptionInvoiceManually(invoiceId)
       if (!result.success) {
@@ -1348,7 +1409,9 @@ export function HqSubscriptionsWorkspace({
       }
 
       toast.success(
-        result.invoiceId
+        billingExemption.active
+          ? 'Merchant tier updated under the billing exemption.'
+          : result.invoiceId
           ? 'Merchant tier updated and automatic payment approved.'
           : 'Merchant tier updated.',
       )
@@ -1550,6 +1613,72 @@ export function HqSubscriptionsWorkspace({
         <p className="text-sm text-muted-foreground">
           One merchant tier is charged to the merchant billing card. Each location&apos;s devices and add-ons use its own card and separate subscription.
         </p>
+      </div>
+
+      <div className="rounded-xl border border-amber-300/70 bg-amber-50/60 p-4 dark:border-amber-900 dark:bg-amber-950/20">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex gap-3">
+            <ShieldCheck className="mt-0.5 h-5 w-5 text-amber-700 dark:text-amber-400" />
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-semibold">Merchant billing exemption</h2>
+                <Badge variant={billingExemption.active ? 'default' : 'secondary'}>
+                  {billingExemption.active ? 'Active' : billingExemption.enabled ? 'Expired' : 'Off'}
+                </Badge>
+              </div>
+              <p className="max-w-3xl text-sm text-muted-foreground">
+                Waives SaaS card and payment enforcement for this merchant. Plans and location add-ons must still be assigned normally, and a manual merchant suspension still blocks POS access.
+              </p>
+              {billingExemption.active && billingExemption.reason ? (
+                <p className="text-xs text-muted-foreground">
+                  Reason: {billingExemption.reason}
+                  {billingExemption.expiresAt
+                    ? ` | Expires ${new Date(billingExemption.expiresAt).toLocaleString()}`
+                    : ' | No automatic expiration'}
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="merchant-billing-exempt">Exempt from billing</Label>
+            <Switch
+              id="merchant-billing-exempt"
+              checked={billingExemptionRequested}
+              onCheckedChange={setBillingExemptionRequested}
+              disabled={isPending}
+            />
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
+          <div className="space-y-2">
+            <Label htmlFor="billing-exemption-reason">Audit reason</Label>
+            <Input
+              id="billing-exemption-reason"
+              value={billingExemptionReason}
+              onChange={(event) => setBillingExemptionReason(event.target.value)}
+              placeholder={billingExemptionRequested ? 'Internal, demo, partner, or complimentary account' : 'Why normal billing is being restored'}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="billing-exemption-expires">Optional expiration</Label>
+            <Input
+              id="billing-exemption-expires"
+              type="datetime-local"
+              value={billingExemptionExpiresAt}
+              onChange={(event) => setBillingExemptionExpiresAt(event.target.value)}
+              disabled={!billingExemptionRequested}
+            />
+          </div>
+          <Button
+            type="button"
+            variant={billingExemptionRequested ? 'default' : 'outline'}
+            onClick={saveBillingExemption}
+            disabled={isPending || billingExemptionReason.trim().length < 5}
+          >
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Apply
+          </Button>
+        </div>
       </div>
 
       <SubscriptionCutoverReview key={merchant.id} merchantId={merchant.id} merchantRouteId={merchant.clerk_org_id || merchant.id} onPrepared={refresh} />
@@ -1834,7 +1963,11 @@ export function HqSubscriptionsWorkspace({
                           disabled={isPending || !selectedMerchantTierPlanId}
                         >
                           {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          {merchantTierSubscriptionStatus === 'active' ? 'Update tier & charge' : 'Update tier'}
+                          {merchantTierSubscriptionStatus === 'active'
+                            ? billingExemption.active
+                              ? 'Update complimentary tier'
+                              : 'Update tier & charge'
+                            : 'Update tier'}
                         </Button>
                       </div>
                     </details>
@@ -2056,10 +2189,16 @@ export function HqSubscriptionsWorkspace({
                 <div className="space-y-5">
                   <Card>
                     <CardContent className="space-y-4 pt-6">
-                      {!selectedBillingProfile && status === 'active' && (
+                      {!selectedBillingProfile && status === 'active' && !billingExemption.active && (
                         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                           No card on file for this location. Add one before charging.
+                        </div>
+                      )}
+                      {billingExemption.active && (
+                        <div className="flex items-start gap-2 rounded-lg border border-amber-300/70 bg-amber-50/60 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
+                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                          This merchant is billing exempt. Services activate without an invoice or charge.
                         </div>
                       )}
                       <div className="overflow-hidden rounded-xl border">
@@ -2090,12 +2229,19 @@ export function HqSubscriptionsWorkspace({
                           </tbody>
                         </table>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        We&apos;ll charge{' '}
-                        <span className="font-medium text-foreground">{buildPaymentMethodLabel(selectedBillingProfile)}</span>{' '}
-                        {formatMoney(quote?.total_amount ?? 0)} today and monthly on the next billing date (
-                        {formatDate(nextBillingDate)}).
-                      </p>
+                      {billingExemption.active ? (
+                        <p className="text-sm text-muted-foreground">
+                          No charge is made while the exemption is active. Services are saved and
+                          activated immediately.
+                        </p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          We&apos;ll charge{' '}
+                          <span className="font-medium text-foreground">{buildPaymentMethodLabel(selectedBillingProfile)}</span>{' '}
+                          {formatMoney(quote?.total_amount ?? 0)} today and monthly on the next billing date (
+                          {formatDate(nextBillingDate)}).
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -2150,10 +2296,16 @@ export function HqSubscriptionsWorkspace({
             ) : (
               <Button
                 onClick={() => handleSave(() => setMode('overview'))}
-                disabled={isPending || !selectedLocation || (status === 'active' && !selectedBillingProfile)}
+                disabled={
+                  isPending ||
+                  !selectedLocation ||
+                  (status === 'active' && !selectedBillingProfile && !billingExemption.active)
+                }
               >
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save &amp; charge {formatMoney(quote?.total_amount ?? 0)}
+                {billingExemption.active
+                  ? 'Save complimentary services'
+                  : `Save & charge ${formatMoney(quote?.total_amount ?? 0)}`}
               </Button>
             )}
           </div>

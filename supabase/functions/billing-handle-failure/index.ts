@@ -3,6 +3,7 @@ import { isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
 import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
 import { resolveSubscriptionRetrySchedule } from '../_shared/subscription-retry-policy.ts'
+import { loadMerchantBillingExemption } from '../_shared/merchant-billing-exemption.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -53,6 +54,24 @@ Deno.serve(async (req: Request): Promise<Response> => {
       ? invoice.merchant_subscriptions[0] : invoice.merchant_subscriptions
     if (!subscription || isSubscriptionBillingHeld(subscription.metadata)) {
       return jsonResponse({ success: false, error: 'Billing cutover requires reconciliation.', code: 'billing_cutover_review_required' }, 409)
+    }
+
+    const billingExemption = await loadMerchantBillingExemption(
+      supabase,
+      invoice.merchant_id,
+    )
+    if (billingExemption.active) {
+      await supabase
+        .from('subscription_invoices')
+        .update({ next_retry_at: null, last_payment_error: null, updated_at: now })
+        .eq('id', invoice.id)
+      return jsonResponse({
+        success: true,
+        invoice_id: invoice.id,
+        subscription_id: invoice.subscription_id,
+        skipped: true,
+        reason: 'merchant_billing_exempt',
+      })
     }
 
     const nextAttemptCount = Number(invoice.payment_attempt_count || 0) + 1
