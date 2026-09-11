@@ -17,6 +17,7 @@ import { createClient } from 'npm:@supabase/supabase-js'
 import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
 import { notifySubscriptionRestored } from '../_shared/subscription-restoration-notifications.ts'
 import { isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope.ts'
+import { loadMerchantBillingExemption } from '../_shared/merchant-billing-exemption.ts'
 
 const VALOR_WEBHOOK_SECRET = Deno.env.get('VALOR_WEBHOOK_SECRET') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -420,6 +421,33 @@ Deno.serve(async (req) => {
         })
         .eq('id', claimedEvent.id)
       return json({ ok: true, recurring: true, duplicate: true }, 200)
+    }
+
+    const billingExemption = await loadMerchantBillingExemption(
+      supabase,
+      subscription.merchant_id,
+    )
+    if (isFailure && billingExemption.active) {
+      await supabase!
+        .from('valor_recurring_webhook_events')
+        .update({
+          merchant_subscription_id: subscription.id,
+          subscription_invoice_id: invoice.id,
+          status: 'processed',
+          processed_at: now,
+        })
+        .eq('id', claimedEvent.id)
+      await supabase!.rpc('log_subscription_billing_event', {
+        p_action: 'invoice_payment_failure_ignored',
+        p_merchant_id: subscription.merchant_id,
+        p_location_id: subscription.location_id,
+        p_resource_type: 'subscription_invoice',
+        p_resource_name: invoice.invoice_number,
+        p_resource_id: invoice.id,
+        p_changes: { ignored: true, reason: 'merchant_billing_exempt' },
+        p_metadata: { source: 'valor-webhook', processor_subscription_id: subscriptionId },
+      })
+      return json({ ok: true, recurring: true, skipped: true, reason: 'merchant_billing_exempt' }, 200)
     }
 
     if (isSuccess) {

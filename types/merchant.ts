@@ -90,6 +90,11 @@ export interface MerchantDetails extends MerchantSummary {
    * `clerk_org_id`.
    */
   external_merchant_id?: string | null
+  billing_exempt?: boolean
+  billing_exempt_reason?: string | null
+  billing_exempt_expires_at?: string | null
+  billing_exempt_granted_at?: string | null
+  billing_exempt_granted_by?: string | null
   onboarding_checklist?: MerchantOnboardingChecklist
   locations: LocationSummary[]
 }

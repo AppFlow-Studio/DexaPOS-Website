@@ -12,6 +12,7 @@ const services = read('supabase/migrations/20260508173000_subscription_billing_s
 const access = read('supabase/migrations/20260713130000_hq_billing_device_bridge_and_access_gates.sql')
 const migration = read('supabase/migrations/20260906120000_separate_subscription_billing_scopes.sql')
 const completion = read('supabase/migrations/20260908120000_saas_admin_access_entitlements_and_authorizations.sql')
+const exemption = read('supabase/migrations/20260908130000_merchant_billing_exemption.sql')
 const table = (sql, name) => {
   const start = sql.indexOf(`create table if not exists public.${name} (`)
   assert(start >= 0)
@@ -232,10 +233,12 @@ try {
     create or replace function public.is_dexapos_admin() returns boolean language sql as $$select true$$;
     create or replace function auth.jwt() returns jsonb language sql as $$select '{"role":"service_role"}'::jsonb$$;
     create function auth.role() returns text language sql as $$select 'service_role'::text$$;
-    alter table merchants add column onboarding_status text default 'active';
+    alter table merchants add column onboarding_status text default 'active',
+      add column name text default 'Test merchant', add column updated_at timestamptz default now();
     create function public.user_merchant_id() returns uuid language sql as $$select null::uuid$$;
     create function public.is_merchant_admin(uuid) returns boolean language sql as $$select false$$;
     create function public.hq_has_permission(text) returns boolean language sql as $$select true$$;
+    create function public.current_user_id() returns text language sql as $$select 'test-admin'::text$$;
     create function public.update_updated_at_column() returns trigger language plpgsql as $$begin new.updated_at=now(); return new; end$$;
     create table public.app_notifications(id uuid primary key default gen_random_uuid());
     create table public.merchant_plan_subscriptions(
@@ -275,6 +278,37 @@ try {
   check(await scalar('select is_active from stations where id=$1',[accessStationB]) === true)
   check((await scalar('select get_subscription_access_state($1,$2)',[accessMerchant,accessA])).allowed === false)
   check((await scalar('select get_subscription_access_state($1,$2)',[accessMerchant,accessB])).allowed === true)
+
+  await db.exec(exemption)
+  checks++
+  await db.query("update merchant_subscriptions set processor_subscription_id='valor-schedule', processor_subscription_status='active' where id=$1",[accessTier])
+  await rejects('select set_merchant_billing_exemption($1,true,$2,null)',[accessMerchant,'Internal test merchant'],/Deactivate active Valor recurring schedules/)
+  await db.query("update merchant_subscriptions set processor_subscription_status='deactivated' where id=$1",[accessTier])
+  await db.query('select set_merchant_billing_exemption($1,true,$2,null,$3)',[accessMerchant,'Internal test merchant','test-admin'])
+  check(await scalar('select is_merchant_billing_exempt($1)',[accessMerchant]) === true)
+  check(await scalar('select billing_exempt_granted_by from merchants where id=$1',[accessMerchant]) === 'test-admin')
+  check(await scalar('select resolve_subscription_billing_profile($1,$2,$3,null)',[accessMerchant,accessA,'location']) === null)
+  check(await scalar('select resolve_subscription_billing_profile($1,$2,$3,$4)',[accessMerchant,accessA,'location',accessCard]) === accessCard)
+  await rejects('select generate_subscription_invoice($1)',[accessLocation],/billing exemption is active/)
+  const exemptAccess = await scalar('select get_subscription_access_state($1,$2)',[accessMerchant,accessA])
+  check(exemptAccess.allowed === true && exemptAccess.status === 'billing_exempt')
+  await db.query('insert into merchant_subscription_services(subscription_id,service_id,quantity) values($1,$2,1)',[accessLocation,service])
+  check((await scalar("select get_subscription_entitlement($1,$2,'kds')",[accessMerchant,accessA])).entitled === true)
+  check((await scalar("select get_subscription_entitlement($1,$2,'kds')",[accessMerchant,accessB])).entitled === false)
+  await db.query("update merchant_subscriptions set status='canceled' where id=$1",[accessLocation])
+  const canceledAccess = await scalar('select get_subscription_access_state($1,$2)',[accessMerchant,accessA])
+  check(canceledAccess.allowed === false && canceledAccess.status === 'location_canceled')
+  await db.query("update merchant_subscriptions set status='suspended' where id=$1",[accessLocation])
+  await db.query("update merchants set onboarding_status='suspended' where id=$1",[accessMerchant])
+  const merchantSuspendedAccess = await scalar('select get_subscription_access_state($1,$2)',[accessMerchant,accessA])
+  check(merchantSuspendedAccess.allowed === false && merchantSuspendedAccess.status === 'merchant_suspended')
+  await db.query("update merchants set onboarding_status='active' where id=$1",[accessMerchant])
+  await db.query("update merchant_subscriptions set status='active', current_period_start='2026-06-01', current_period_end='2026-06-30', next_billing_date='2026-06-01' where id=$1",[accessLocation])
+  const advanced = await scalar("select advance_billing_exempt_subscription($1,date '2026-09-08')",[accessLocation])
+  check(advanced.skipped_cycles === 4 && advanced.next_billing_date === '2026-10-01')
+  await db.query("update merchants set billing_exempt_expires_at=now()-interval '1 minute' where id=$1",[accessMerchant])
+  check(await scalar('select is_merchant_billing_exempt($1)',[accessMerchant]) === false)
+  await db.query('select set_merchant_billing_exemption($1,false,$2,null)',[accessMerchant,'Return to normal billing'])
 
   const authRequest = await scalar(`insert into subscription_service_requests(
     merchant_id,location_id,service_id,merchant_name_snapshot,location_name_snapshot,service_name_snapshot,
