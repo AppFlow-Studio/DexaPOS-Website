@@ -27,6 +27,7 @@ export default function AttachmentList({ attachments }: AttachmentListProps) {
   if (!attachments || attachments.length === 0) return null;
 
   const images = attachments.filter((a) => a.file_type.startsWith("image/"));
+  const videos = attachments.filter((a) => a.file_type.startsWith("video/"));
   const pdfs = attachments.filter((a) => a.file_type === "application/pdf");
 
   return (
@@ -51,6 +52,40 @@ export default function AttachmentList({ attachments }: AttachmentListProps) {
             />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
           </button>
+        ))}
+
+        {/* Inline video players. `preload="metadata"` fetches only the header
+            for duration/dimensions; seeking then pulls ranges on demand, which
+            the attachment proxy serves as 206 responses. */}
+        {videos.map((att) => (
+          <div
+            key={att.id}
+            className="flex w-full max-w-sm flex-col gap-1 rounded-md border border-border/50 bg-muted/30 p-1.5"
+          >
+            <video
+              src={attachmentUrl(att.id)}
+              controls
+              preload="metadata"
+              playsInline
+              className="w-full rounded bg-black"
+            />
+            <div className="flex items-center gap-2 px-1 text-xs">
+              <span className="truncate text-foreground" title={att.file_name}>
+                {att.file_name}
+              </span>
+              <span className="ml-auto shrink-0 text-muted-foreground">
+                {formatBytes(att.file_size)}
+              </span>
+              <a
+                href={attachmentUrl(att.id, { download: true })}
+                download={att.file_name}
+                className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                title="Download"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </a>
+            </div>
+          </div>
         ))}
 
         {/* PDF file cards */}

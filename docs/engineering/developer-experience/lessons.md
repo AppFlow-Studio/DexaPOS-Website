@@ -102,3 +102,90 @@ inverse: a true cash base of $10 stores card $10.40, and `10.40 ÷ 1.04 = 9.9999
 $10.00, not $9.99 — keep `Math.floor(raw*100 + 1e-6)/100`. Meta-lesson: a "more correct" convention
 is never the spec; the number/direction the user states is. This is the second flip of the same
 math — pin the model in one helper + one migration and confirm the direction before touching prices.
+
+## An unstable prop in a test harness kills the vitest worker with no error (2026-09-08)
+Context: adding tests to `tests/file-upload-input.test.tsx` made every test in the file — including
+ones that never touch the code under test — die with `Worker exited unexpectedly` and no JS error,
+after a 70s+ hang. The cause was in the harness, not the component: I changed
+`onUploadsChange={setAttachments}` (a stable setState reference) to an inline arrow
+`onUploadsChange={(next) => {...}}`. `FileUploadInput` has `useEffect(..., [files, onUploadsChange])`,
+so a new function identity every render re-ran the effect forever → stack overflow → hard worker
+crash. React's "Maximum update depth" warning never surfaced because the process died first.
+Rules for next time:
+- A silent worker death with a long hang means infinite recursion, not a flaky environment. Don't
+  reach for `--pool=threads` / reporter flags; look for an unstable identity feeding a `useEffect`
+  dep array.
+- Any callback prop consumed by a dep array must be `useCallback`'d (or a plain setState ref) in
+  tests too. Test harnesses obey the same referential-stability contract as production callers.
+- Bisect against a *known-good baseline* before theorising. `git stash` the test file alone and run
+  it against the modified component: original test passing (even failing cleanly) vs. new test
+  crashing localises the fault to the test file in one step. I burned several cycles blaming
+  `vi.stubGlobal`/happy-dom's XHR instead.
+- Watch for the inverse trap: a passing hand-written probe that differs from the real file in one
+  overlooked detail proves nothing. Diff the probe against the real file rather than concluding
+  "the component is fine."
+
+## Read a ticket's stated root cause as a hypothesis, not a finding (2026-09-08)
+Context: the support-video-attachments ticket confidently described the upload path, the read path,
+and the affected routes. Four claims were wrong: uploads use pre-signed URLs (not `storage.upload()`,
+so its ~6 MB rationale for adopting TUS didn't hold); reads go through an audit-logging proxy that a
+prior hardening pass put in place of signed URLs (so "keep the signed-URL path" would have regressed
+security, and the real work — HTTP Range support — went unmentioned); `/office` is an empty stub, so
+a whole acceptance criterion was untestable; and "silent failure" was actually a generic-but-present
+error. The ticket also missed three server-side gates (Zod MIME enum, 5 MB size cap, filename regex)
+that would each have silently defeated its one-line bucket migration.
+Rule: before planning from a ticket, verify each stated fact against the code — especially claims
+about which code path is in use. Report the corrections and their consequences up front; the parts a
+ticket gets wrong are usually where the actual cost is hiding.
+
+## Confirm the project ref from .env before diagnosing anything hosted (2026-09-10)
+Context: debugging a failing support-video upload, I inspected Supabase project `hifouuofcaytijrkbvcy`
+because older docs in this repo call it "prod". I concluded the Edge Function was undeployed and a
+migration unapplied, wrote that up, and proposed deploying both. The user pushed back — "why is
+production related here, i dont think it is the problem" — and they were right. `.env` points at
+`dfwqakoyittmrwbqvxgw`, where the function was already at v248 with the full feature and the
+migration was applied. The entire diagnosis was against a project the app does not use.
+Rules:
+- Read `NEXT_PUBLIC_SUPABASE_URL` out of `.env` FIRST and use that ref for every hosted query. Never
+  take a project ref from documentation — several docs here name a stale "prod" project, and one
+  warns about duplicate env lines that no longer exist.
+- When a user challenges a premise, re-derive it from the environment instead of defending it. The
+  challenge was the cheapest correction available and I nearly argued past it.
+- Prefer runtime logs over static reasoning for a live failure. `query_logs` on `function_logs`
+  named the real cause ("Invalid JWT form" at `requireAuthenticatedUser`) in one query, after I had
+  spent several turns inferring wrong causes from source code.
+
+## Match the auth pattern of the working caller before inventing one (2026-09-10)
+Context: support video uploads failed Clerk verification with "Invalid JWT form" because
+`FileUploadInput` authorized with a bare `getToken({ skipCache: true })`, which can return a session
+ticket that is not a JWT. The two kiosk CDN uploaders calling the SAME `cdn-upload` function already
+did `getToken({ template: 'supabase' }).catch(() => null) || getToken()`. The support uploader was
+the only CDN caller missing the template.
+Rule: when adding a new caller to an existing authenticated endpoint, grep for the endpoint's other
+callers and copy their auth shape. A lone caller that differs from every sibling is a bug, not a
+simplification — and here the difference only surfaced at runtime, against a real Clerk session.
+
+## Clerk's skipCache does not guarantee a usable token — set leewayInSeconds: 0 (2026-09-10)
+Context: a 90 MB support video failed with a generic network error. The logs showed the prepare call
+rejected with `token-expired` — the JWT expired 7 seconds BEFORE it was used, despite being fetched
+with `skipCache: true`. Clerk session tokens live 60s, and the default leeway lets a cached token be
+served with almost no life remaining; `skipCache` skips the cache lookup but does not guarantee the
+returned token has useful time left. Fix: `getToken({ skipCache: true, leewayInSeconds: 0 })`.
+Rule: any token used for a request that is not instantaneous — an authorization round-trip followed
+by a large transfer, most obviously — needs explicit zero leeway, not just `skipCache`.
+
+## A 502 with no function boot is the gateway, not your code (2026-09-10)
+Context: the same failure showed `POST -> 502` in function_edge_logs with NO corresponding "booted"
+event and no error line in function_logs, even though every 502 path in the function logs first.
+That proves the request never reached the function: the Supabase gateway generated the 502 itself.
+Because a gateway response carries no CORS headers, the browser cannot read it, fires `xhr.onerror`
+instead of `xhr.onload`, and the app can only report a generic failure — the real status exists only
+in the edge logs.
+Rules:
+- Correlate `function_edge_logs` (status codes) with `function_logs` (boot events + your own
+  console lines). A status with no boot means the failure is upstream of your code.
+- Don't trust a client-side "network error" to mean a network problem. If `onload` has good error
+  handling and the user still saw the generic message, the response was unreadable, not absent.
+- Check the deployed function version against local source before diagnosing. Here a stack trace
+  cited line numbers that did not match the version previously read, and the user's reported error
+  string predated the current code — both signs the running build differs from the working tree.
