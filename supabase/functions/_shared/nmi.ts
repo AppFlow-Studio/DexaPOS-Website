@@ -180,22 +180,47 @@ export async function createSale(
   }
 }
 
+/** Values accepted by NMI's v5 void endpoint. */
+export const NMI_VOID_REASONS = [
+  'fraud',
+  'user_cancel',
+  'icc_rejected',
+  'icc_card_removed',
+  'icc_no_confirmation',
+  'pos_timeout',
+] as const
+
+export type NmiVoidReason = typeof NMI_VOID_REASONS[number]
+
+function isReversalApproved(result: {
+  ok: boolean
+  details: NmiTransactionDetails
+}): boolean {
+  if (!result.ok) return false
+  if (isApproved(result.details)) return true
+
+  const condition = (result.details.condition ?? '').toLowerCase()
+  return ['canceled', 'cancelled', 'voided', 'refunded', 'complete'].includes(condition)
+}
+
 export async function voidSale(
   config: NmiRequestConfig,
   transactionId: string,
-  voidReason?: string,
+  voidReason?: NmiVoidReason,
 ) {
+  const isValidReason =
+    !!voidReason && (NMI_VOID_REASONS as readonly string[]).includes(voidReason)
   const result = await callNmi(
     `/api/v5/payments/${transactionId}/void`,
     {
       method: 'POST',
-      body: JSON.stringify(voidReason ? { void_reason: voidReason } : {}),
+      body: JSON.stringify(isValidReason ? { void_reason: voidReason } : {}),
     },
     config,
   )
 
   return {
-    success: result.ok && isApproved(result.details),
+    success: isReversalApproved(result),
     ...result,
   }
 }
@@ -222,7 +247,7 @@ export async function refundSale(
   )
 
   return {
-    success: result.ok && isApproved(result.details),
+    success: isReversalApproved(result),
     ...result,
   }
 }

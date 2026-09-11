@@ -1,4 +1,8 @@
-import { getOrderBreakdown, type BreakdownOrderInput } from "@/lib/orders/order-breakdown";
+import {
+  getOrderBreakdown,
+  getOrderDisplayTotal,
+  type BreakdownOrderInput,
+} from "@/lib/orders/order-breakdown";
 import type { OrderPayment } from "@/types/order-management";
 
 type ReceiptOrder = {
@@ -276,8 +280,7 @@ export function renderReceiptHtml(
   // Split-tender orders show the list ladder bridged by the cash discount down
   // to what was collected; pure lanes already bake the discount into the total.
   const cashDiscount = breakdown.mixedCashDiscount;
-  const chargedTotal =
-    breakdown.isMixed && lane.amountPaid > 0 ? lane.amountPaid : lane.total + tip;
+  const chargedTotal = getOrderDisplayTotal(breakdown);
 
   // ── Banner ──
   const banner =
@@ -450,6 +453,11 @@ export function renderReceiptHtml(
               <tr><td>
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                   ${lineRow("Order", String(orderNumber), { strong: true })}
+                  ${
+                    order.table_number != null && String(order.table_number).trim() !== ""
+                      ? lineRow("Table", escapeHtml(String(order.table_number)), { strong: true })
+                      : ""
+                  }
                   ${lineRow("Ordered", fmtDatetime(order.created_at))}
                 </table>
               </td></tr>

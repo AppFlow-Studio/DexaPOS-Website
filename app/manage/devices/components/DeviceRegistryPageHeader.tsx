@@ -19,19 +19,19 @@ export function DeviceRegistryPageHeader({
   eyebrow = 'Device Registry',
 }: DeviceRegistryPageHeaderProps) {
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-      <div className="space-y-2">
+    <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="min-w-0 space-y-2">
         <p className="text-sm font-medium uppercase tracking-[0.16em] text-muted-foreground">
           {eyebrow}
         </p>
         <DeviceRegistrySectionNav />
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="break-words text-sm text-muted-foreground">{description}</p>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         <DeviceRegistryCommandPaletteTrigger />
         {actions}
       </div>

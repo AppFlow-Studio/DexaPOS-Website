@@ -30,7 +30,7 @@ import {
 const read = (name: string) =>
   readFileSync(resolve(process.cwd(), "supabase/migrations", name), "utf8");
 
-const sweep = read("20260830130000_expire_stale_reservation_requests.sql");
+const sweep = read("20260830131000_expire_stale_reservation_requests.sql");
 const schedule = read("20260830130100_schedule_reservation_request_expiry.sql");
 
 describe("the schedule's own grant", () => {

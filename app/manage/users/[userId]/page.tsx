@@ -54,7 +54,7 @@ import Link from 'next/link'
 import { EditUserDetailsDialog } from './components/edit-user-details-dialog'
 import { EditMembershipDialog } from './components/edit-membership-dialog'
 import { GrantMerchantAccessDialog } from './components/grant-merchant-access-dialog'
-import { PageLoader } from '@/components/ui/page-loader'
+import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
 
 export default function UserInfoPage() {
     const { userId: targetUserId } = useParams()
@@ -86,7 +86,14 @@ export default function UserInfoPage() {
     const grantAccessMutation = useGrantMerchantAccess()
     const revokeAccessMutation = useRevokeMerchantAccess()
 
-    if (isLoading) return <PageLoader />
+    if (isLoading)
+        return (
+            <DataPageSkeleton
+                variant="detail"
+                shell="plain"
+                label="Loading the user profile"
+            />
+        )
 
     if (error) {
         return (

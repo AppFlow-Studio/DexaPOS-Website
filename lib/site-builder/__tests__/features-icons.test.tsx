@@ -3,9 +3,8 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import FeaturesSection, {
-  FEATURE_ICON_NAMES,
-} from "@/components/site-builder/sections/FeaturesSection";
+import FeaturesSection from "@/components/site-builder/sections/FeaturesSection";
+import { FEATURE_ICON_NAMES } from "../sections/feature-icon";
 import { emptyResolvedMap } from "../bindings/resolved";
 import { createRenderContext, type RenderMode } from "../render-context";
 import { featuresDefaults, type FeaturesProps } from "../sections/schemas/features";
@@ -67,7 +66,6 @@ describe("FeaturesSection icons", () => {
   it("renders an allowlisted icon as an SVG with lucide's own geometry", () => {
     const html = render({
       items: [{ icon: "Truck", title: "Delivery and pickup" }],
-      columns: 3,
     });
 
     expect(html).toContain("<svg");
@@ -78,21 +76,38 @@ describe("FeaturesSection icons", () => {
     expect(html).toContain("Delivery and pickup");
   });
 
+  /**
+   * The schema now types `icon` as a name the map has, but stored JSONB is not
+   * bound by the type: a document written by an older build can still carry a
+   * name that has since been dropped from the picker. The item must survive
+   * without its icon rather than throwing and taking the page down.
+   */
   it("renders nothing for an unrecognised icon name but keeps the item", () => {
     const html = render({
-      items: [{ icon: "NotARealIcon", title: "Still here" }],
-      columns: 3,
+      items: [{ icon: "NotARealIcon" as never, title: "Still here" }],
     });
 
     expect(html).not.toContain("<svg");
     expect(html).toContain("Still here");
   });
 
-  it("keeps every showcase-template icon in the allowlist", () => {
-    // The Showcase starter seeds Truck / Clock / Leaf; the picker offers the
-    // rest. A name dropped from the map degrades to no icon, so guard the set.
-    for (const name of ["Truck", "Clock", "Leaf"]) {
+  it("keeps every seeded template icon in the allowlist", () => {
+    // The Showcase starter and the page templates seed these four. A name
+    // dropped from the picker degrades to no icon, so guard the set.
+    for (const name of ["Truck", "UtensilsCrossed", "House", "ShoppingBag"]) {
       expect(FEATURE_ICON_NAMES).toContain(name);
+    }
+  });
+
+  /**
+   * The picker and the renderer are separate maps in separate modules — one
+   * client, one server, by necessity. This is what stops them drifting: every
+   * name a merchant can click must render real geometry.
+   */
+  it("renders geometry for every icon the picker offers", () => {
+    for (const name of FEATURE_ICON_NAMES) {
+      const html = render({ items: [{ icon: name, title: name }] });
+      expect(html, name).toContain("<svg");
     }
   });
 });

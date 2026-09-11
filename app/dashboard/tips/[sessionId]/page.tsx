@@ -130,16 +130,54 @@ export default function SessionReviewPage() {
   const isVoided = session?.status === "voided";
 
   if (isLoading) {
+    // Mirrors the page below: a title with its badge row and actions, then
+    // TipSummaryCard (one Panel holding a 3-up StatRow, not three loose
+    // cards), then the Employee Breakdown heading and its table.
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-6 w-64" />
-        <div className="grid grid-cols-3 gap-4">
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
+      <div
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+        className="min-w-0 space-y-6"
+      >
+        <span className="sr-only">Loading the tip distribution</span>
+
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-2">
+            <Skeleton className="h-8 w-48 max-w-full motion-reduce:animate-none" />
+            <div className="flex flex-wrap items-center gap-2">
+              <Skeleton className="h-5 w-24 rounded-full motion-reduce:animate-none" />
+              <Skeleton className="h-5 w-20 rounded-full motion-reduce:animate-none" />
+            </div>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <Skeleton className="h-9 w-24 rounded-full motion-reduce:animate-none" />
+            <Skeleton className="h-9 w-20 rounded-full motion-reduce:animate-none" />
+          </div>
         </div>
-        <Skeleton className="h-64" />
+
+        <Panel>
+          <div className="grid grid-cols-1 gap-x-5 gap-y-6 px-4 py-6 sm:grid-cols-3 sm:px-6">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="min-w-0 space-y-3">
+                <Skeleton className="h-3 w-24 rounded-full motion-reduce:animate-none" />
+                <Skeleton className="h-8 w-28 max-w-full motion-reduce:animate-none" />
+              </div>
+            ))}
+          </div>
+        </Panel>
+
+        <div className="min-w-0 space-y-3">
+          <Skeleton className="h-4 w-40 max-w-full rounded-full motion-reduce:animate-none" />
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Skeleton
+                key={index}
+                className="h-12 w-full motion-reduce:animate-none"
+              />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

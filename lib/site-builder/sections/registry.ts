@@ -67,10 +67,16 @@ import {
  * A shared `SectionStyle` field a kind's drawer may expose.
  *
  * Deliberately a small closed set rather than "any key of SectionStyle":
- * `hideOn` has no UI yet and `spacing`/`align` are decided by the section's own
- * layout, so listing them would advertise controls that do not exist.
+ * `hideOn` and `spacing` have no UI, so listing them would advertise controls
+ * that do not exist.
+ *
+ * `align` was in that category until the highlights strip needed it. Twelve
+ * renderers already read `section.style?.align` and nothing in the builder had
+ * ever written it, so every one of them was pinned to its default — the field
+ * was live in the renderer and dead in the product. Any kind that wants the
+ * control now adds one word to its `styleControls`.
  */
-export type StyleControl = "background" | "textTone";
+export type StyleControl = "background" | "textTone" | "align";
 
 /** Context a defaults factory may need. Some kinds bind to the site's location. */
 export interface SectionDefaultsContext {
@@ -181,8 +187,10 @@ export interface SectionDefinition<K extends SectionKind> {
    *   it ends up on. Offered by every kind that renders merchant-authored copy,
    *   which is all of them except the header: that one is navigation chrome, and
    *   its own appearance settings are already its editor's subject.
+   * - **`align`** — whether the section's heading sits left or centred. Only the
+   *   kinds whose layout can honour both should offer it.
    *
-   * Omit the field for a kind that offers neither.
+   * Omit the field for a kind that offers none of them.
    */
   styleControls?: readonly StyleControl[];
   /**
@@ -635,11 +643,27 @@ export const SECTION_REGISTRY: { [K in SectionKind]: SectionDefinition<K> } = {
     editable: true,
     deletable: true,
     movable: true,
-    styleControls: ["textTone"],
+    styleControls: ["textTone", "align"],
     schema: featuresSchema,
     defaults: () => featuresDefaults(),
     bindingTypes: [],
     liveFields: [],
+    /**
+     * The generated controls stop at the heading.
+     *
+     * `items` is a reorderable list whose rows open an editor of their own, and
+     * the icon colour is a tone-plus-picker pair — neither is a shape the
+     * schema-derived drawer can express, so both are drawn by `FeaturesEditor`
+     * the way the navigation is drawn by `NavEditor`.
+     */
+    hiddenFields: () => ["items", "iconTone", "iconColor"],
+    /*
+      "Title", not the "Heading" the field name humanizes to. Every other field
+      in this panel belongs to one feature and is labelled Title there, so the
+      section's own field has to use the same word or the merchant is reading
+      two names for the same idea one scroll apart.
+    */
+    fieldOverrides: () => ({ heading: { label: "Title" } }),
   },
 
   faq: {

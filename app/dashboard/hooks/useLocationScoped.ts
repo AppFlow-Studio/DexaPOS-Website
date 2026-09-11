@@ -14,6 +14,7 @@ import {
 } from "@/stores/location-store";
 import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
 import { useImpersonatedMerchant } from "@/stores/impersonation-store";
+import { useAuth } from "@clerk/nextjs";
 import { GetMenus, GetMenuWithLocationContext } from "../actions/menus";
 import {
   GetMenuItems,
@@ -41,10 +42,33 @@ import { invalidateOrderOutSync } from "@/app/dashboard/hooks/useOrderOutMenuSyn
 export function useClerkOrgId() {
   const { data: userInfo } = useUserInfo();
   const impersonated = useImpersonatedMerchant();
-  // While an HQ admin is impersonating, every dashboard query keys off the
-  // impersonated merchant's clerk_org_id. Server actions re-validate via
-  // getEffectiveClerkOrgId before honoring it.
-  return impersonated?.clerkOrgId || userInfo?.members?.[0]?.organizations?.id || "";
+  const { orgId: activeOrgId } = useAuth();
+
+  // Precedence matters, and each step is load-bearing:
+  //
+  // 1. Impersonation wins. While an HQ admin is impersonating, Clerk's active
+  //    org is still the HQ org, so `activeOrgId` would scope every dashboard
+  //    query to HQ rather than the merchant being viewed. Server actions
+  //    re-validate via getEffectiveClerkOrgId before honoring it.
+  //
+  // 2. Clerk's ACTIVE organization. This previously read
+  //    `userInfo.members[0]`, which is an arbitrary entry in a membership
+  //    list, not the org the user actually switched to. A user belonging to
+  //    more than one merchant therefore kept seeing their first merchant's
+  //    data after switching orgs — wrong data, across the whole dashboard,
+  //    since this hook keys menus, orders, reporting and staff alike.
+  //    (Not a privilege escalation: server actions scope to whichever org id
+  //    they receive, and the user was a genuine member of it. But it is the
+  //    wrong tenant's data.)
+  //
+  // 3. `members[0]` remains only as a fallback for the brief window before
+  //    Clerk resolves, and for single-org users where it is unambiguous.
+  return (
+    impersonated?.clerkOrgId ||
+    activeOrgId ||
+    userInfo?.members?.[0]?.organizations?.id ||
+    ""
+  );
 }
 
 function useEffectiveLocationId() {

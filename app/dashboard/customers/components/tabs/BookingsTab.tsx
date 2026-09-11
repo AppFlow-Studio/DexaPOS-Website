@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useCustomerReservations, useCustomerWaitlist, useCustomerDineSessions } from "../../hooks/useCustomerBookings";
 import { useLocationStore } from "@/stores/location-store";
 import type { CustomerListItem } from "@/types/customer";
@@ -92,8 +92,10 @@ export function BookingsTab({ customer }: BookingsTabProps) {
         {/* Reservations */}
         <TabsContent value="reservations" className="mt-6">
           {loadingRes ? (
-            <div className="flex justify-center p-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-2xl motion-reduce:animate-none" />
+              ))}
             </div>
           ) : reservations.length === 0 ? (
             <div className="text-center p-8 text-muted-foreground">No reservations</div>
@@ -136,8 +138,10 @@ export function BookingsTab({ customer }: BookingsTabProps) {
         {/* Waitlist */}
         <TabsContent value="waitlist" className="mt-6">
           {loadingWait ? (
-            <div className="flex justify-center p-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-2xl motion-reduce:animate-none" />
+              ))}
             </div>
           ) : waitlist.length === 0 ? (
             <div className="text-center p-8 text-muted-foreground">No waitlist entries</div>
@@ -178,8 +182,10 @@ export function BookingsTab({ customer }: BookingsTabProps) {
         {/* Dine-In Sessions */}
         <TabsContent value="dine" className="mt-6">
           {loadingDine ? (
-            <div className="flex justify-center p-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-2xl motion-reduce:animate-none" />
+              ))}
             </div>
           ) : dineSessions.length === 0 ? (
             <div className="text-center p-8 text-muted-foreground">No dine-in sessions</div>

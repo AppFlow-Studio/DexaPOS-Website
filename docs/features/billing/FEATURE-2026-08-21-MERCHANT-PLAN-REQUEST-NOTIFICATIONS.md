@@ -34,9 +34,61 @@ The first three SaaS-billing hardening items are implemented in code:
    user agent, acceptance time, and a unique authorization reference. Accepted
    evidence is immutable.
 
-These items are deployed to shared staging. They do not yet implement automatic
-grace-period suspension, a merchant payment-method editor, or
-outstanding-balance collection.
+These items are deployed to shared staging. A later website pass added the
+billing-recovery controls described below; that later migration and its Edge
+Functions still require the approved staging deployment process.
+
+## Billing Recovery Addendum - 2026-08-26
+
+The website now contains the safe recovery pieces supported by the existing NMI
+subscription contract:
+
+1. Merchants can open the existing secure billing-profile editor directly from
+   the subscription page to replace the card stored in the NMI customer vault.
+   Raw PAN and CVV are never stored by Dexa.
+2. Open and failed subscription invoices expose a tenant-scoped **Pay now**
+   action. The action only accepts invoices belonging to the signed-in merchant
+   and reuses the protected subscription charge worker.
+3. Failed attempts persist the next retry time. A protected due-invoice worker
+   retries according to `BILLING_RETRY_DELAYS_DAYS` (default `1,3,5`) and marks
+   the retry lifecycle exhausted after the final attempt.
+4. Invoice charging claims an `open` or `failed` invoice before calling the
+   processor. Concurrent workers receive a claim conflict instead of charging
+   the same invoice twice.
+5. HQ can set or clear a reasoned grace-period deadline on a location
+   subscription. The overdue suspension worker skips that subscription until
+   the deadline expires.
+
+Migration and deployment prerequisites:
+
+- Apply
+  `supabase/migrations/20260830120000_subscription_billing_grace_and_retry_foundation.sql`.
+- Then deploy `billing-charge-subscription`, `billing-handle-failure`,
+  `billing-suspend-overdue`, and `billing-retry-due-invoices`.
+- Schedule the retry and suspension workers with service-role authorization or
+  the matching internal billing secret.
+- Do not deploy the updated workers before the migration because they read and
+  write the new grace/retry columns.
+
+This pass does not pretend that every catalog service is enforced. QR Table
+Ordering has an existing feature-specific billing gate, but there is no shared
+service-code-to-feature contract for all website and POS modules. Merchant
+add-on requests and universal entitlement enforcement remain product/backend
+contract work rather than safe assumptions for this change.
+
+## Valor Compatibility Addendum - 2026-08-26
+
+- Merchant invoice checkout can now resolve and charge an active primary Valor
+  processor account for purpose `invoice`; the legacy NMI path remains intact.
+- SaaS billing does not silently charge NMI when Valor owns the `subscription`
+  purpose. Card setup and charge execution fail closed with an explicit contract
+  message until the team chooses whether DEXA or Valor owns recurrence.
+- `PAYMENTS_FORCE_NMI=true` remains the emergency rollback for both invoice and
+  subscription account resolution.
+- The recommended SaaS architecture is still DEXA-owned invoicing, retries,
+  dunning, suspension, restoration, and notifications. A validated Valor stored-
+  credential charge contract is required before that path can replace NMI.
+- No schema migration was introduced or executed by this compatibility pass.
 
 ## Implemented Flow
 
@@ -162,6 +214,24 @@ that staging schema after deployment.
   - Regenerates database types from the deployed shared staging schema.
 - `tests/subscription-billing-safety.test.ts`
   - Covers billing authorization, consent evidence, and failure alerts.
+- `supabase/migrations/20260830120000_subscription_billing_grace_and_retry_foundation.sql`
+  - Adds HQ grace-period evidence and automatic retry lifecycle timestamps.
+- `supabase/functions/_shared/subscription-retry-policy.ts`
+  - Defines the configurable retry cadence and exhaustion result.
+- `supabase/functions/billing-retry-due-invoices/index.ts`
+  - Claims due failed invoices through the protected charge worker.
+- `supabase/functions/billing-charge-subscription/index.ts`
+  - Adds conditional invoice claiming and persists retry/exhaustion state.
+- `supabase/functions/billing-suspend-overdue/index.ts`
+  - Excludes subscriptions with an active HQ grace deadline.
+- `app/dashboard/actions/subscription-billing.ts`
+  - Adds tenant-scoped payment of open or failed subscription invoices.
+- `app/manage/actions/subscription-billing.ts`
+  - Loads retry/grace state and adds the audited HQ grace-period mutation.
+- `components/billing/MerchantSubscriptionOverviewCard.tsx`
+  - Links payment-method replacement and exposes outstanding-balance recovery.
+- `components/billing/HqSubscriptionsWorkspace.tsx`
+  - Adds reasoned grace-period extension and clearing controls.
 
 ## Environment
 
@@ -175,6 +245,8 @@ that staging schema after deployment.
 - `BILLING_NOTIFICATION_EMAILS` optionally adds billing-specific recipients.
   `support@mtechdistributors.com` and `SUPPORT_TICKET_NOTIFICATION_EMAILS` are
   still included for failed-payment alerts.
+- `BILLING_RETRY_DELAYS_DAYS` optionally defines comma-separated positive retry
+  delays. The default is `1,3,5` days.
 
 ## Verification Completed
 
@@ -194,9 +266,15 @@ that staging schema after deployment.
   contract tests cover request lifecycles, RLS/read-state primitives, exact
   request finalization, merchant-wide billing, location-scoped hardware, and
   the no-automatic-support-ticket boundary.
-- `tests/subscription-billing-safety.test.ts`: 4 tests passed. The contract
+- `tests/subscription-billing-safety.test.ts`: 7 tests passed. The contract
   tests cover internal Edge Function authorization, required consent, immutable
-  evidence, delivery idempotency, and merchant/HQ failed-payment alerts.
+  evidence, delivery idempotency, merchant/HQ failed-payment alerts,
+  tenant-scoped manual payment, retry persistence, duplicate claims, and grace.
+- Focused billing/Valor verification passed: 3 files, 16 tests.
+- Focused ESLint passed for all changed website files with the repository's
+  pre-existing `set-state-in-effect` rule disabled only for the legacy HQ
+  subscriptions workspace pattern.
+- Next.js 16.2.12 production build passed and generated all 119 routes.
 - Shared staging migrations `20260824120000`, `20260824130000`, and
   `20260824140000` are applied and aligned in migration history.
 - The five billing Edge Functions are deployed to shared staging, report
@@ -337,8 +415,41 @@ that staging schema after deployment.
 3. Repeat a scheduled function with the matching internal secret; expect
    normal function behavior.
 
+### 13. Merchant payment recovery
+
+1. Open `/dashboard/subscriptions` as a merchant with an open or failed
+   subscription invoice.
+2. Select **Update payment method** and replace the stored card on
+   `/dashboard/settings/billing`.
+3. Return to subscriptions and select **Pay now**.
+4. Confirm exactly one charge attempt is recorded, the invoice becomes `paid`,
+   the balance refreshes, and the subscription returns to `active` when the
+   existing restoration contract applies.
+5. Double-submit or trigger the retry worker concurrently and confirm only one
+   caller claims the invoice.
+
+### 14. Retry and grace-period lifecycle
+
+1. Cause a controlled NMI decline and confirm the invoice becomes `failed` with
+   `next_retry_at` set.
+2. Invoke `billing-retry-due-invoices` before the due time and confirm no charge
+   is attempted.
+3. In staging, make the retry due and invoke the worker again. Confirm one new
+   attempt and either a new retry date or `retry_exhausted_at`.
+4. In HQ subscriptions, set a future grace deadline and a reason for the
+   affected location subscription.
+5. Invoke `billing-suspend-overdue`; confirm the subscription remains past due
+   during grace.
+6. Clear or expire grace and invoke the worker again; confirm the normal
+   suspension path resumes.
+
 ## Remaining Work
 
+- Apply the billing recovery migration and deploy the four updated/new Edge
+  Functions in the required order.
+- Configure the production retry schedule and confirm the chosen retry cadence.
+- Run merchant payment-method replacement, Pay now, decline/retry, grace,
+  suspension, and restoration QA on controlled staging data.
 - Run authenticated staging QA, including realtime and tenant isolation.
 - Run a controlled declined-payment test and verify attempt-level idempotency.
 - Verify the scheduled-call path with the matching internal secret. The
@@ -349,3 +460,9 @@ that staging schema after deployment.
 - Verify Resend delivery logs.
 - Record merchant request, HQ approval or denial, and merchant notification as
   the closure artifact.
+- Define a canonical service entitlement contract before enforcing all
+  `billable_services` across website and POS modules.
+- Define the merchant add-on request/approval lifecycle and authorization
+  evidence instead of reusing plan requests implicitly.
+- Keep Valor-owned SaaS recurrence blocked until the team selects one recurrence
+  authority and validates Valor stored-credential charging and failure events.

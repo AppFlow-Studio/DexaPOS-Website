@@ -9,7 +9,10 @@ import {
   type ReceiptContractItem,
   type ReceiptContractPayment,
 } from "@/lib/receipts/contract";
-import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
+import {
+  getOrderBreakdown,
+  getOrderDisplayTotal,
+} from "@/lib/orders/order-breakdown";
 import type { OrderPayment } from "@/types/order-management";
 
 interface PageProps {
@@ -141,8 +144,7 @@ export default async function ReceiptPage({ params }: PageProps) {
   const breakdown = getOrderBreakdown(order, payments as unknown as OrderPayment[]);
   const lane = breakdown.primary;
   const laneLabel = breakdown.display === "cash" ? "Cash" : "Card";
-  const grandTotal =
-    breakdown.isMixed && lane.amountPaid > 0 ? lane.amountPaid : lane.total + lane.tip;
+  const grandTotal = getOrderDisplayTotal(breakdown);
 
   const activeItems = items.filter((i) => !i.is_voided);
 

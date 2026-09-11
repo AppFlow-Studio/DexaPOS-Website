@@ -45,9 +45,11 @@ export function LocationListView({ onLocationSelect }: LocationListViewProps) {
     if (isLoading) {
         return (
             <div className="space-y-6">
-                <div>
-                    <Skeleton className="h-6 w-48" />
-                    <Skeleton className="mt-2 h-4 w-96" />
+                <div className="min-w-0">
+                    <Skeleton className="h-6 w-48 max-w-full" />
+                    {/* w-96 is 384px — wider than a 360px viewport, so it
+                        clipped at the page edge on phones. */}
+                    <Skeleton className="mt-2 h-4 w-96 max-w-full" />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {[1, 2, 3].map((i) => (

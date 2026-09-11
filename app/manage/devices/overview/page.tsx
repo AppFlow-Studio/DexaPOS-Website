@@ -111,7 +111,7 @@ export default function DeviceRegistryOverviewPage() {
   const categoryChartConfig = buildCategoryChartConfig(overview?.categoryBreakdown ?? [])
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
       <DeviceRegistryPageHeader
         title="Fleet overview"
         description="HQ summary of current fleet posture, warranty exposure, ownership distribution, and recent intake."
@@ -129,7 +129,7 @@ export default function DeviceRegistryOverviewPage() {
 
       {overviewQuery.isLoading ? (
         <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0">
             {Array.from({ length: 6 }).map((_, index) => (
               <DeviceRegistryMetricCard
                 key={index}
@@ -141,11 +141,11 @@ export default function DeviceRegistryOverviewPage() {
               />
             ))}
           </div>
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="grid min-w-0 gap-6 xl:grid-cols-2 [&>*]:min-w-0">
             <Skeleton className="h-[360px] w-full" />
             <Skeleton className="h-[360px] w-full" />
           </div>
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div className="grid min-w-0 gap-6 xl:grid-cols-2 [&>*]:min-w-0">
             <Skeleton className="h-[320px] w-full" />
             <Skeleton className="h-[320px] w-full" />
           </div>
@@ -158,7 +158,7 @@ export default function DeviceRegistryOverviewPage() {
         />
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0">
             <DeviceRegistryMetricCard
               label="Total fleet"
               value={overview.kpis.total}
@@ -219,15 +219,15 @@ export default function DeviceRegistryOverviewPage() {
             </Card>
           ) : (
             <>
-              <div className="grid gap-6 xl:grid-cols-2">
-                <Card>
+              <div className="grid min-w-0 gap-6 xl:grid-cols-2 [&>*]:min-w-0">
+                <Card className="min-w-0 overflow-hidden">
                   <CardHeader>
                     <CardTitle>Status breakdown</CardTitle>
                     <CardDescription>
                       Current lifecycle distribution across the fleet.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="min-w-0 px-2 sm:px-6">
                     <ChartContainer
                       config={statusChartConfig}
                       className="h-[320px] w-full"
@@ -241,8 +241,8 @@ export default function DeviceRegistryOverviewPage() {
                           data={statusChartData}
                           dataKey="value"
                           nameKey="name"
-                          innerRadius={70}
-                          outerRadius={110}
+                          innerRadius="38%"
+                          outerRadius="62%"
                           strokeWidth={4}
                         >
                           {statusChartData.map((entry) => (
@@ -257,27 +257,28 @@ export default function DeviceRegistryOverviewPage() {
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="min-w-0 overflow-hidden">
                   <CardHeader>
                     <CardTitle>Category mix</CardTitle>
                     <CardDescription>
                       Fleet volume by hardware class.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="min-w-0 px-2 sm:px-6">
                     <ChartContainer
                       config={categoryChartConfig}
                       className="h-[320px] w-full"
                     >
-                      <BarChart data={categoryChartData} layout="vertical" margin={{ left: 20, right: 24 }}>
+                      <BarChart data={categoryChartData} layout="vertical" margin={{ left: 0, right: 8 }}>
                         <CartesianGrid horizontal={false} strokeDasharray="3 3" />
                         <XAxis type="number" allowDecimals={false} />
                         <YAxis
                           dataKey="label"
                           type="category"
-                          width={130}
+                          width={104}
                           tickLine={false}
                           axisLine={false}
+                          tickFormatter={(value: string) => value.length > 16 ? `${value.slice(0, 15)}…` : value}
                         />
                         <ChartTooltip
                           cursor={false}
@@ -294,20 +295,20 @@ export default function DeviceRegistryOverviewPage() {
                 </Card>
               </div>
 
-              <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                <Card>
+              <div className="grid min-w-0 gap-6 xl:grid-cols-[1.2fr_0.8fr] [&>*]:min-w-0">
+                <Card className="min-w-0 overflow-hidden">
                   <CardHeader>
                     <CardTitle>Recent registry intake</CardTitle>
                     <CardDescription>
                       Physical units added to the registry over the last six months.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="min-w-0 px-2 sm:px-6">
                     <ChartContainer
                       config={{ value: { label: 'Devices registered', color: '#2563EB' } }}
                       className="h-[300px] w-full"
                     >
-                      <AreaChart data={overview.registrationTrend} margin={{ left: 12, right: 12 }}>
+                      <AreaChart data={overview.registrationTrend} margin={{ left: 0, right: 8 }}>
                         <defs>
                           <linearGradient id="device-registry-trend" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#2563EB" stopOpacity={0.35} />
@@ -330,7 +331,7 @@ export default function DeviceRegistryOverviewPage() {
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="min-w-0 overflow-hidden">
                   <CardHeader>
                     <CardTitle>Warranty watchlist</CardTitle>
                     <CardDescription>
@@ -362,27 +363,28 @@ export default function DeviceRegistryOverviewPage() {
                 </Card>
               </div>
 
-              <Card>
+              <Card className="min-w-0 overflow-hidden">
                 <CardHeader>
                   <CardTitle>Merchant distribution</CardTitle>
                   <CardDescription>
                     Top merchants by assigned device count.
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="min-w-0 px-2 sm:px-6">
                   <ChartContainer
                     config={{ value: { label: 'Assigned units', color: '#0F766E' } }}
                     className="h-[340px] w-full"
                   >
-                    <BarChart data={merchantChartData} layout="vertical" margin={{ left: 40, right: 24 }}>
+                    <BarChart data={merchantChartData} layout="vertical" margin={{ left: 0, right: 8 }}>
                       <CartesianGrid horizontal={false} strokeDasharray="3 3" />
                       <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
                       <YAxis
                         dataKey="merchantName"
                         type="category"
-                        width={160}
+                        width={112}
                         tickLine={false}
                         axisLine={false}
+                        tickFormatter={(value: string) => value.length > 17 ? `${value.slice(0, 16)}…` : value}
                       />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar dataKey="value" radius={[0, 8, 8, 0]}>

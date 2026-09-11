@@ -43,6 +43,32 @@ export function buildStoreUrl(input: {
   return `http://${slug}.localhost:3000`;
 }
 
+/**
+ * The URL printed on a flyer, decal or delivery bag.
+ *
+ * Short on purpose: the code is 10 Crockford base32 characters so the whole
+ * address stays typable by someone who cannot get the camera to focus. Shares
+ * `buildStoreUrl`'s custom-domain → root-domain → app-URL cascade, so a
+ * merchant on their own domain gets their own domain on the flyer.
+ */
+export function buildMarketingQrUrl(input: {
+  slug?: string | null;
+  customDomain?: string | null;
+  shortCode?: string | null;
+}): string {
+  const shortCode = (input.shortCode || "").trim();
+  if (!shortCode) return "";
+
+  const baseUrl = buildStoreUrl({
+    slug: input.slug,
+    customDomain: input.customDomain,
+  });
+
+  if (!baseUrl) return "";
+
+  return `${baseUrl.replace(/\/+$/, "")}/m/${encodeURIComponent(shortCode)}`;
+}
+
 export function buildQrTableUrl(input: {
   slug?: string | null;
   customDomain?: string | null;

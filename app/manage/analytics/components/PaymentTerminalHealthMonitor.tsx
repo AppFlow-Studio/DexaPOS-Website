@@ -154,13 +154,13 @@ export function PaymentTerminalHealthMonitor() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="min-w-0 space-y-4 overflow-x-hidden">
+        <div className="grid min-w-0 grid-cols-2 gap-4 lg:grid-cols-4 [&>*]:min-w-0">
           {[...Array(4)].map((_, i) => (
-            <Card key={i}><CardContent className="pt-5"><Skeleton className="h-14 w-full" /></CardContent></Card>
+            <Card key={i} className="min-w-0 overflow-hidden"><CardContent className="min-w-0 pt-5"><Skeleton className="h-14 w-full max-w-full" /></CardContent></Card>
           ))}
         </div>
-        <Skeleton className="h-80 w-full" />
+        <Skeleton className="h-80 w-full max-w-full" />
       </div>
     )
   }

@@ -71,7 +71,10 @@ import { AssignCustomerModal } from "@/components/dashboard/orders/AssignCustome
 import { AdjustTipModal } from "@/components/dashboard/orders/AdjustTipModal";
 import { OrderActionBar } from "@/components/dashboard/orders/OrderActionBar";
 import { assignCustomerToOrder } from "@/app/actions/orders/assign-customer";
-import { getOrderBreakdown } from "@/lib/orders/order-breakdown";
+import {
+  getOrderBreakdown,
+  getOrderDisplayTotal,
+} from "@/lib/orders/order-breakdown";
 import { useOrderActions } from "@/app/dashboard/hooks/useOrderActions";
 import type { OrderActionsUserRole } from "@/app/dashboard/hooks/useOrderActions";
 import { useLocationStore } from "@/stores/location-store";
@@ -825,7 +828,7 @@ function PricingBreakdown({
 
   // `effective_total` is always card_total and would show a phantom Amount Due
   // on cash orders; the charged lane's own total is authoritative.
-  const chargedTotal = primaryLane.total;
+  const chargedTotal = getOrderDisplayTotal(breakdown);
   const displayAmountDue = Math.max(0, chargedTotal - amountPaid);
 
   const showDualColumns = isMixed;
@@ -1300,12 +1303,13 @@ export function OrderDetailFullPage({
     queryClient.invalidateQueries({ queryKey: ["order-full-history", orderId] });
   }, [queryClient, orderId]);
 
+  const orderLocationId = order?.location_id;
   const handleViewOnFloorPlan = React.useCallback(() => {
-    if (order?.location_id) {
-      setSelectedLocation(order.location_id);
+    if (orderLocationId) {
+      setSelectedLocation(orderLocationId);
     }
     router.push("/dashboard/tables");
-  }, [order?.location_id, router, setSelectedLocation]);
+  }, [orderLocationId, router, setSelectedLocation]);
 
   React.useEffect(() => {
     document.title = order

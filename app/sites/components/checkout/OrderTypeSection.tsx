@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
-import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -101,8 +100,6 @@ interface OrderTypeSectionProps {
   maxFutureDays: number;
   prepTime: number;
   operatingHours?: WeeklySchedule;
-  curbside: boolean;
-  onCurbsideChange: (v: boolean) => void;
   // Store info
   storeAddress: string;
   storeLat?: number | null;
@@ -135,8 +132,6 @@ export function OrderTypeSection({
   maxFutureDays,
   prepTime,
   operatingHours,
-  curbside,
-  onCurbsideChange,
   storeAddress,
   storeLat,
   storeLng,
@@ -165,7 +160,10 @@ export function OrderTypeSection({
         className="w-full"
       >
         <TabsList
-          className="grid w-full grid-cols-2 h-auto p-1"
+          className={cn(
+            "grid w-full h-auto p-1",
+            deliveryEnabled ? "grid-cols-2" : "grid-cols-1"
+          )}
           style={{ backgroundColor: "var(--bg)", border: "1px solid var(--border)" }}
         >
           <TabsTrigger
@@ -175,13 +173,15 @@ export function OrderTypeSection({
           >
             Pickup
           </TabsTrigger>
-          <TabsTrigger
-            value="delivery"
-            disabled={!deliveryEnabled}
-            className="py-2 data-[state=active]:!bg-[var(--primary)] data-[state=active]:!text-[var(--primary-text)]"
-          >
-            Delivery
-          </TabsTrigger>
+          {/* Delivery hidden entirely while delivery is disabled site-wide. */}
+          {deliveryEnabled && (
+            <TabsTrigger
+              value="delivery"
+              className="py-2 data-[state=active]:!bg-[var(--primary)] data-[state=active]:!text-[var(--primary-text)]"
+            >
+              Delivery
+            </TabsTrigger>
+          )}
         </TabsList>
       </Tabs>
 
@@ -189,22 +189,6 @@ export function OrderTypeSection({
       {orderType === "pickup" && (
         <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
           <StoreMapEmbed lat={storeLat} lng={storeLng} address={storeAddress} />
-
-          {/* Curbside toggle */}
-          <div
-            className="flex items-center justify-between p-3 rounded-lg"
-            style={{ backgroundColor: "var(--card)", border: "1px solid var(--border)" }}
-          >
-            <div>
-              <p className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                Curbside Pickup
-              </p>
-              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                We&apos;ll bring the order to your car
-              </p>
-            </div>
-            <Switch checked={curbside} onCheckedChange={onCurbsideChange} />
-          </div>
         </div>
       )}
 

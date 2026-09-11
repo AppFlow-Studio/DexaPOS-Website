@@ -8,6 +8,7 @@ import {
   SupportTicketWithMessages,
   SupportTicketAttachmentWithUrl,
   AttachmentInput,
+  SupportUploadTarget,
   TicketStatus,
   TicketCategory,
 } from "@/types/support-ticket";
@@ -16,6 +17,14 @@ import {
   requestSupportTicketCreatedNotification,
   requestSupportTicketMessageNotification,
 } from "@/lib/support/ticket-notification-request";
+import { validateMerchantSupportAttachments } from "@/lib/support/attachment-validation";
+import { validateSupportUploadRequest } from "@/lib/support/attachment-validation";
+import {
+  buildSupportCdnFileName,
+  buildSupportCdnStoragePath,
+  buildSupportCdnUrl,
+  parseSupportCdnStoragePath,
+} from "@/lib/support/cdn";
 
 // ============================================================================
 // GET TICKETS (Merchant)
@@ -118,7 +127,9 @@ export async function GetTicketDetail(
   // matching comment in app/manage/actions/support.ts for rationale.
   const { data: attachments } = await supabase
     .from("support_ticket_attachments")
-    .select("*")
+    .select(
+      "id, ticket_id, message_id, uploaded_by, file_name, file_size, file_type, created_at",
+    )
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
 
@@ -158,9 +169,18 @@ export async function GetSupportUploadUrl(
   clerkOrgId: string,
   fileName: string,
   fileId: string,
-  uploadSessionId: string
-): Promise<{ signedUrl?: string; path?: string; error?: string }> {
+  uploadSessionId: string,
+  contentType: string,
+): Promise<{ target?: SupportUploadTarget; error?: string }> {
   if (!clerkOrgId) return { error: "Organization ID is required" };
+
+  const uploadRequest = validateSupportUploadRequest(
+    fileName,
+    fileId,
+    uploadSessionId,
+    contentType,
+  );
+  if ("error" in uploadRequest) return { error: uploadRequest.error };
 
   const supabase = createServiceRoleClient();
 
@@ -172,15 +192,120 @@ export async function GetSupportUploadUrl(
 
   if (merchantError || !merchant) return { error: "Merchant not found" };
 
-  const sanitizedName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${merchant.id}/tickets/${uploadSessionId}/${fileId}_${sanitizedName}`;
+  if (uploadRequest.data.isVideo) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const cdnHostname = process.env.BUNNY_CDN_HOSTNAME;
+    if (!supabaseUrl || !cdnHostname) {
+      return { error: "CDN upload is not configured" };
+    }
+
+    const storedFileName = buildSupportCdnFileName(
+      [uploadRequest.data.uploadSessionId, uploadRequest.data.fileId],
+      uploadRequest.data.fileName,
+    );
+    const storagePath = buildSupportCdnStoragePath(
+      { scope: "merchant", merchantId: merchant.id },
+      storedFileName,
+    );
+
+    return {
+      target: {
+        provider: "cdn",
+        upload_url: `${supabaseUrl}/functions/v1/cdn-upload`,
+        method: "POST",
+        file_path: buildSupportCdnUrl(cdnHostname, storagePath),
+        headers: {
+          "x-cdn-scope": "merchant",
+          "x-cdn-merchant-id": merchant.id,
+          "x-cdn-category": "support",
+          "x-cdn-file-name": storedFileName,
+          "x-cdn-content-type": uploadRequest.data.contentType,
+        },
+      },
+    };
+  }
+
+  const path =
+    `${merchant.id}/tickets/${uploadRequest.data.uploadSessionId}/` +
+    `${uploadRequest.data.fileId}_${uploadRequest.data.sanitizedFileName}`;
 
   const { data, error } = await supabase.storage
     .from("support-attachments")
     .createSignedUploadUrl(path);
 
   if (error) return { error: error.message };
-  return { signedUrl: data.signedUrl, path };
+  return {
+    target: {
+      provider: "supabase",
+      upload_url: data.signedUrl,
+      method: "PUT",
+      file_path: path,
+    },
+  };
+}
+
+// ============================================================================
+// DISCARD UPLOADED ATTACHMENT (Merchant) — cancel / remove before send
+// ============================================================================
+
+/**
+ * Deletes an uploaded object that the user cancelled or removed before sending
+ * the message, so a discarded upload leaves no orphan in the bucket.
+ *
+ * The caller's merchant id is re-derived server-side and the path is required to
+ * sit under that merchant's prefix — a client cannot pass an arbitrary path and
+ * delete another tenant's attachment.
+ */
+export async function DiscardSupportUpload(
+  clerkOrgId: string,
+  filePath: string
+): Promise<{ success?: boolean; error?: string }> {
+  if (!clerkOrgId) return { error: "Organization ID is required" };
+  if (!filePath) return { error: "File path is required" };
+
+  const supabase = createServiceRoleClient();
+
+  const { data: merchant, error: merchantError } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("clerk_org_id", clerkOrgId)
+    .single();
+
+  if (merchantError || !merchant) return { error: "Merchant not found" };
+
+  if (/^https:\/\//i.test(filePath)) {
+    const storagePath = parseSupportCdnStoragePath(
+      filePath,
+      process.env.BUNNY_CDN_HOSTNAME ?? "",
+      `merchants/${merchant.id}`,
+    );
+    if (!storagePath) return { error: "Invalid attachment path" };
+
+    const userSupabase = createServerSupabaseClient();
+    const { data, error } = await userSupabase.functions.invoke("cdn-upload", {
+      method: "DELETE",
+      body: {
+        scope: "merchant",
+        merchantId: merchant.id,
+        storagePath,
+      },
+    });
+
+    if (error) return { error: error.message };
+    if (!data?.success) return { error: data?.error || "Failed to delete upload" };
+    return { success: true };
+  }
+
+  if (!filePath.startsWith(`${merchant.id}/tickets/`)) {
+    return { error: "Invalid attachment path" };
+  }
+
+  const { error } = await supabase.storage
+    .from("support-attachments")
+    .remove([filePath]);
+
+  if (error) return { error: error.message };
+  return { success: true };
 }
 
 // ============================================================================
@@ -219,6 +344,14 @@ export async function CreateTicket(
 
   if (merchantError || !merchant) return { error: "Merchant not found" };
 
+  const attachmentValidation = validateMerchantSupportAttachments(
+    input.attachments,
+    merchant.id,
+  );
+  if (attachmentValidation.error) {
+    return { error: attachmentValidation.error };
+  }
+
   const userName = user.fullName || user.firstName || "Unknown";
   const userEmail = user.emailAddresses?.[0]?.emailAddress || null;
 
@@ -233,7 +366,7 @@ export async function CreateTicket(
     p_submitted_by_email: userEmail,
     p_carrier_id: merchant.carrier_id || null,
     p_metadata: input.metadata || {},
-    p_attachments: input.attachments || [],
+    p_attachments: attachmentValidation.data,
   });
 
   if (error || !data) {
@@ -307,6 +440,14 @@ export async function AddMessage(
   if (!ticket) return { error: "Ticket not found" };
   if (ticket.status === "closed") return { error: "This ticket is closed" };
 
+  const attachmentValidation = validateMerchantSupportAttachments(
+    attachments,
+    merchant.id,
+  );
+  if (attachmentValidation.error) {
+    return { error: attachmentValidation.error };
+  }
+
   const userName = user.fullName || user.firstName || "Unknown";
 
   const { data, error } = await supabase.rpc("add_ticket_message_with_attachments", {
@@ -316,7 +457,7 @@ export async function AddMessage(
     p_sender_role: "merchant",
     p_message: message,
     p_is_internal: false,
-    p_attachments: attachments,
+    p_attachments: attachmentValidation.data,
   });
 
   if (error) return { error: error.message };

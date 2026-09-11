@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getStorefrontData } from "../../../actions";
@@ -9,6 +8,7 @@ import { CartSidebar } from "../../../components/CartSidebar";
 import { FloatingCartBar } from "../../../components/FloatingCartBar";
 import { StorefrontLayout } from "../../../components/StorefrontLayout";
 import { StorefrontRoot } from "../../../components/StorefrontRoot";
+import { QrUnavailableState } from "../../../components/QrUnavailableState";
 import {
   TEMPLATE_DEFAULTS,
   buildThemeVars,
@@ -99,7 +99,7 @@ export async function generateMetadata({
   };
 }
 
-function QrUnavailableState({
+function TableQrUnavailable({
   slug,
   storeName,
   message,
@@ -112,51 +112,13 @@ function QrUnavailableState({
   reason?: string | null;
   nextOpen?: string | null;
 }) {
-  const copy = buildQrUnavailableCopy({ message, reason, nextOpen });
-
   return (
-    <div className="min-h-screen bg-white px-6 py-12">
-      <section
-        className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6"
-        aria-labelledby="qr-unavailable-title"
-        aria-describedby="qr-unavailable-message"
-        role="alert"
-      >
-        <p
-          className="text-xs font-semibold uppercase tracking-[0.18em]"
-          style={{ color: "#0C4FD1" }}
-        >
-          QR Table Ordering
-        </p>
-        <h1
-          id="qr-unavailable-title"
-          className="mt-3 text-2xl font-semibold text-slate-950"
-        >
-          {copy.title}
-        </h1>
-        <p className="mt-2 text-sm font-medium text-slate-700">
-          {storeName}
-        </p>
-        <p id="qr-unavailable-message" className="mt-4 text-sm leading-6 text-slate-600">
-          {copy.message}
-        </p>
-        {copy.nextOpen ? (
-          <p className="mt-3 text-sm text-slate-600">
-            Next open: <span className="font-medium text-slate-900">{copy.nextOpen}</span>
-          </p>
-        ) : null}
-        <p className="mt-3 text-sm text-slate-600">{copy.hint}</p>
-        <div className="mt-6">
-          <Link
-            href={`/sites/${slug}`}
-            className="inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-semibold"
-            style={{ backgroundColor: "#0C4FD1", color: "#FFFFFF" }}
-          >
-            Back to menu
-          </Link>
-        </div>
-      </section>
-    </div>
+    <QrUnavailableState
+      slug={slug}
+      storeName={storeName}
+      eyebrow="QR Table Ordering"
+      copy={buildQrUnavailableCopy({ message, reason, nextOpen })}
+    />
   );
 }
 
@@ -175,7 +137,7 @@ export default async function QrStorefrontPage({ params }: PageProps) {
 
   if (!resolvedSession.success || !resolvedSession.sessionToken) {
     return (
-      <QrUnavailableState
+      <TableQrUnavailable
         slug={slug}
         storeName={site?.title || location.name}
         message={resolvedSession.error || "QR ordering is unavailable for this table."}

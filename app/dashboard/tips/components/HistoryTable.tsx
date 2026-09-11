@@ -164,7 +164,10 @@ export function HistoryTable({ clerkOrgId, locationId }: HistoryTableProps) {
             the checkbox+label pairs read as a form inside what is a toolbar.
             The group scrolls horizontally as one strip on narrow screens so the
             chips stay on a single line instead of stacking down the toolbar. */}
-        <div className="no-scrollbar -mx-1 flex min-w-0 flex-1 basis-full items-center gap-1.5 overflow-x-auto px-1 sm:basis-auto">
+        {/* The negative margin matches the panel's own px-4/px-6 so the strip
+            can scroll to the card edge. Clamped at -mx-1 from sm, where the
+            chips fit and the bleed would only misalign the toolbar. */}
+        <div className="no-scrollbar -mx-4 flex min-w-0 flex-1 basis-full items-center gap-1.5 overflow-x-auto px-4 sm:-mx-1 sm:basis-auto sm:px-1">
           {FILTERABLE_STATUSES.map((s) => {
             const active = statusFilter.includes(s.value);
             return (

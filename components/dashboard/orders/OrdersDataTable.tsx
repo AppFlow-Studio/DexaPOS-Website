@@ -59,7 +59,6 @@ import {
 import { Order, OrderResponse, OrderType } from '@/types/order-management'
 import { OrderStatusBadge } from './OrderStatusBadge'
 import { PaymentStatusBadge } from './PaymentStatusBadge'
-import { DeliveryPlatformBadge } from './DeliveryPlatformBadge'
 import { useIsAllLocations, useLocationStore } from '@/stores/location-store'
 import { useRouter } from 'next/navigation'
 import {
@@ -71,6 +70,10 @@ import { PlatformBadge } from './PlatformBadge'
 import { ReceiptModal } from './ReceiptModal'
 import { RefundVoidDialog, type RefundVoidAction } from './RefundVoidDialog'
 import { useColumnPreferences } from '@/app/dashboard/hooks/useColumnPreferences'
+import {
+    getOrderBreakdown,
+    getOrderDisplayTotal,
+} from '@/lib/orders/order-breakdown'
 
 interface OrdersDataTableProps {
     data: OrderResponse[]
@@ -87,7 +90,6 @@ interface OrdersDataTableProps {
     sortingValue?: SortingState
     onSortingChange?: OnChangeFn<SortingState>
     searchPlaceholder?: string
-    hideOrderTypeBadge?: boolean
 }
 
 // Format date to "Today at 9:53 pm" or "Dec 15 at 2:30 pm"
@@ -205,7 +207,6 @@ export function OrdersDataTable({
     sortingValue,
     onSortingChange,
     searchPlaceholder = 'Search orders...',
-    hideOrderTypeBadge = false,
 }: OrdersDataTableProps) {
     const [localSorting, setLocalSorting] = React.useState<SortingState>([
         { id: 'created_at', desc: true },
@@ -343,14 +344,15 @@ export function OrdersDataTable({
             cell: ({ row }) => {
                 const order = row.original
                 const typeConfig = getOrderTypeConfig(order.order_type)
+                // Fulfilment type only. The delivery platform / online-order
+                // badge used to sit here too, but the Channel column already
+                // carries order origin and the marketplace brand, so showing
+                // it in both places was duplication.
                 return (
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="inline-flex items-center gap-1.5">
-                            {typeConfig.icon}
-                            <span className="font-medium text-foreground/80">{typeConfig.label}</span>
-                        </span>
-                        {!hideOrderTypeBadge && <DeliveryPlatformBadge order={order} />}
-                    </div>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                        {typeConfig.icon}
+                        <span className="font-medium text-foreground/80">{typeConfig.label}</span>
+                    </span>
                 )
             },
         },
@@ -474,11 +476,18 @@ export function OrdersDataTable({
                     <ArrowUpDown className="ml-2 h-3 w-3" />
                 </Button>
             ),
-            cell: ({ row }) => (
-                <div className="text-sm font-medium tabular-nums text-foreground">
-                    {formatCurrency(row.original.total_amount)}
-                </div>
-            ),
+            cell: ({ row }) => {
+                const order = row.original
+                const displayTotal = getOrderDisplayTotal(
+                    getOrderBreakdown(order, order.order_payments || [])
+                )
+
+                return (
+                    <div className="text-sm font-medium tabular-nums text-foreground">
+                        {formatCurrency(displayTotal)}
+                    </div>
+                )
+            },
         },
         {
             accessorKey: 'payment_status',
@@ -715,14 +724,27 @@ export function OrdersDataTable({
                         ))}
                     </TableHeader>
                     <TableBody>
-                        {isLoading ? (
-                            <TableRow>
-                                <TableCell colSpan={visibleColumns.length} className="h-24 text-center">
-                                    <div className="flex items-center justify-center">
-                                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-                                    </div>
-                                </TableCell>
-                            </TableRow>
+                        {/* Only when there is nothing to show. `isLoading` here is
+                            the caller's fetching flag, so keying the placeholder
+                            on it alone replaced a populated table with a spinner
+                            on every refetch — re-entering the route, changing a
+                            filter, hitting Refresh. Rows the user already has
+                            stay put; the toolbar carries the refresh affordance. */}
+                        {isLoading && !table.getRowModel().rows?.length ? (
+                            Array.from({ length: 8 }).map((_, index) => (
+                                <TableRow key={`loading-${index}`} className="border-0">
+                                    {/* getVisibleLeafColumns, not visibleColumns:
+                                        the latter is the full column definition
+                                        list and ignores the Columns filter, so
+                                        the skeleton drew cells for columns the
+                                        header was not rendering. */}
+                                    {table.getVisibleLeafColumns().map((column) => (
+                                        <TableCell key={column.id}>
+                                            <div className="h-4 w-full max-w-28 animate-pulse rounded-full bg-muted/70 motion-reduce:animate-none" />
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))
                         ) : table.getRowModel().rows?.length ? (
                             table.getRowModel().rows.map((row) => (
                                 <TableRow

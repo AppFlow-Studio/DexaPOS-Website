@@ -66,7 +66,7 @@ import {
     resetAdminUserPassword,
 } from '../actions/admin-user-management'
 import { HQ_ROLES, type HQRoleCode } from '@/types/admin'
-import { PageLoader } from '@/components/ui/page-loader'
+import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
 
 const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID ?? ''
 
@@ -122,7 +122,14 @@ export default function UsersPage() {
     const { data: organizationInfo, refetch: refetchOrganizationInfo } = useOrganizationInfo(resolvedOrganizationId as string)
     const adminInvites = organizationInfo?.pending_org_admin_invites || []
 
-    if (permissionsLoading || isLoading) return <PageLoader />
+    if (permissionsLoading || isLoading)
+        return (
+            <DataPageSkeleton
+                variant="table"
+                shell="plain"
+                label="Loading the HQ user directory"
+            />
+        )
     if (error) return <div>Error: {error.message}</div>
     if (!users) return <div>No users found</div>
     if (users instanceof Error) return <div>Error: {users.message}</div>

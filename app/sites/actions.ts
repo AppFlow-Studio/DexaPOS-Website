@@ -1,6 +1,10 @@
 "use server";
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import {
+  filterMenusVisibleOnline,
+  isMissingMenuVisibilitySchema,
+} from "@/lib/menu/menu-channel-visibility";
 import { Site, SiteThemeConfig, OnlineOrderingConfig } from "@/types/site";
 import {
   StorefrontMenu,
@@ -77,7 +81,12 @@ function mapStoreConfigToSite(config: any): Site {
     operatingHours: config.operating_hours,
     menuLayout: config.menu_layout || "cards",
     pickupEnabled: config.accepts_pickup,
-    deliveryEnabled: config.accepts_delivery,
+    // TEMP: online ordering is live with pickup + card only. Delivery is
+    // disabled site-wide (checkout order-type, StoreInfoBar, InfoPanel,
+    // MarketLayout all read this) until the delivery flow goes live. The
+    // merchant's saved `accepts_delivery` value is preserved in the DB — to
+    // re-enable, restore: deliveryEnabled: config.accepts_delivery.
+    deliveryEnabled: false,
     deliveryPricingEnabled: config.delivery_pricing_enabled ?? true,
     minimumOrderAmount: Number(config.min_order ?? 0),
     preparationLeadTime: config.estimated_prep_minutes,
@@ -281,6 +290,29 @@ async function fetchMenus(
   merchantId: string,
   locationId: string
 ): Promise<StorefrontMenu[]> {
+  const { data: visibilityRows, error: visibilityError } = await supabase
+    .from("location_menus")
+    .select("menu_id, is_visible_online")
+    .eq("location_id", locationId);
+
+  if (visibilityError) {
+    if (isMissingMenuVisibilitySchema(visibilityError)) {
+      console.warn(
+        "Menu visibility columns are not deployed; using visible defaults:",
+        visibilityError.message,
+      );
+    } else {
+      console.error(
+        "Unable to enforce online menu visibility; returning no storefront menus:",
+        visibilityError.message,
+      );
+      return [];
+    }
+  }
+
+  const applyOnlineVisibility = (menus: StorefrontMenu[]) =>
+    filterMenusVisibleOnline(menus, visibilityError ? null : visibilityRows);
+
   // Fast path: a single round-trip that runs the per-menu logic inside Postgres
   // and returns every menu at once, instead of one RPC per menu.
   const { data, error } = await supabase.rpc("get_menus_for_location", {
@@ -290,15 +322,17 @@ async function fetchMenus(
 
   if (!error) {
     const rpcMenus = Array.isArray(data) ? data : [];
-    return rpcMenus
+    return applyOnlineVisibility(rpcMenus
       .map((rpcMenu: any) => (rpcMenu ? mapRpcMenuToStorefront(rpcMenu) : null))
-      .filter((m: StorefrontMenu | null): m is StorefrontMenu => m !== null);
+      .filter((m: StorefrontMenu | null): m is StorefrontMenu => m !== null));
   }
 
   // Fallback (e.g. batch RPC not yet deployed): the original per-menu loop.
   // Keeps the storefront working regardless of app/DB deploy ordering.
   console.warn("get_menus_for_location unavailable, falling back to per-menu fetch:", error?.message);
-  return fetchMenusPerMenu(supabase, merchantId, locationId);
+  return applyOnlineVisibility(
+    await fetchMenusPerMenu(supabase, merchantId, locationId),
+  );
 }
 
 async function fetchMenusPerMenu(

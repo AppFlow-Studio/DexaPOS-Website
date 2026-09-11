@@ -15,16 +15,75 @@ import {
   requestSupportTicketMessageNotification,
 } from "@/lib/support/ticket-notification-request";
 import {
+  SUPPORT_ATTACHMENT_MAX_BYTES,
+  SUPPORT_ATTACHMENT_MAX_FILES,
+  SUPPORT_ATTACHMENT_MIME_TYPES,
+  getAttachmentMimeTypeFromFileName,
+  getSupportAttachmentMaxBytes,
+  isSupportVideoMimeType,
+} from "@/lib/support/attachment-constraints";
+import { validateSupportUploadRequest } from "@/lib/support/attachment-validation";
+import {
+  buildSupportCdnFileName,
+  buildSupportCdnStoragePath,
+  buildSupportCdnUrl,
+  parseSupportCdnStoragePath,
+  sanitizeSupportFileName,
+  sanitizeSupportIdentitySegment,
+} from "@/lib/support/cdn";
+import {
   SupportTicket,
   SupportTicketWithMessages,
   SupportTicketAttachmentWithUrl,
   AttachmentInput,
+  SupportUploadTarget,
   SupportDashboardStats,
   TicketFilters,
   TicketStatus,
   TicketPriority,
   TicketCategory,
 } from "@/types/support-ticket";
+
+const hqSupportAttachmentsSchema = z
+  .array(
+    z
+      .object({
+        file_name: z.string().trim().min(1).max(255),
+        file_path: z.string().trim().min(1).max(1000),
+        file_size: z.number().int().positive().max(SUPPORT_ATTACHMENT_MAX_BYTES),
+        file_type: z.enum(SUPPORT_ATTACHMENT_MIME_TYPES),
+      })
+      .strict()
+      .superRefine((attachment, context) => {
+        const expectedType = getAttachmentMimeTypeFromFileName(
+          attachment.file_name,
+        );
+        if (!expectedType) {
+          context.addIssue({
+            code: "custom",
+            path: ["file_name"],
+            message: "Unsupported attachment type",
+          });
+        } else if (expectedType !== attachment.file_type) {
+          context.addIssue({
+            code: "custom",
+            path: ["file_type"],
+            message: "Attachment type does not match its filename",
+          });
+        }
+        if (
+          attachment.file_size >
+          getSupportAttachmentMaxBytes(attachment.file_type)
+        ) {
+          context.addIssue({
+            code: "custom",
+            path: ["file_size"],
+            message: "Attachment exceeds the allowed size",
+          });
+        }
+      }),
+  )
+  .max(SUPPORT_ATTACHMENT_MAX_FILES);
 
 const createHQSupportTicketSchema = z.object({
   subject: z.string().trim().min(5).max(150),
@@ -43,23 +102,37 @@ const createHQSupportTicketSchema = z.object({
   priority: z.enum(["low", "normal", "high", "urgent"]),
   assignedToEmails: z.array(z.string().trim().email()).max(50).optional(),
   uploadSessionId: z.string().uuid().optional(),
-  attachments: z
-    .array(
-      z.object({
-        file_name: z.string().trim().min(1).max(255),
-        file_path: z.string().trim().min(1).max(1000),
-        file_size: z.number().int().positive().max(5 * 1024 * 1024),
-        file_type: z.enum([
-          "image/png",
-          "image/jpeg",
-          "image/webp",
-          "application/pdf",
-        ]),
-      }),
-    )
-    .max(3)
-    .optional(),
+  attachments: hqSupportAttachmentsSchema.optional(),
 });
+
+function isValidHqCdnAttachmentPath(
+  attachment: AttachmentInput,
+  organizationId: string,
+  identityPrefixSegments: string[],
+): boolean {
+  if (!isSupportVideoMimeType(attachment.file_type)) return false;
+
+  const storagePath = parseSupportCdnStoragePath(
+    attachment.file_path,
+    process.env.BUNNY_CDN_HOSTNAME ?? "",
+    `organizations/${organizationId}`,
+  );
+  const storedFileName = storagePath?.split("/").at(-1);
+  const identityPrefix =
+    identityPrefixSegments.map(sanitizeSupportIdentitySegment).join("_") + "_";
+  if (!storedFileName?.startsWith(identityPrefix)) return false;
+
+  const remainder = storedFileName.slice(identityPrefix.length);
+  const fileId = remainder.slice(0, 36);
+  const separator = remainder.charAt(36);
+  const pathFileName = remainder.slice(37);
+
+  return (
+    z.string().uuid().safeParse(fileId).success &&
+    separator === "_" &&
+    pathFileName === sanitizeSupportFileName(attachment.file_name)
+  );
+}
 
 export type CreateHQSupportTicketInput = {
   subject: string;
@@ -243,7 +316,14 @@ export async function CreateHQSupportTicket(
       const expectedPathPrefix =
         `admin/drafts/${userId}/${parsed.data.uploadSessionId}/`;
       const hasInvalidPath = attachments.some(
-        (attachment) => !attachment.file_path.startsWith(expectedPathPrefix),
+        (attachment) =>
+          isSupportVideoMimeType(attachment.file_type)
+            ? !isValidHqCdnAttachmentPath(
+                attachment,
+                orgId,
+                [userId, parsed.data.uploadSessionId!],
+              )
+            : !attachment.file_path.startsWith(expectedPathPrefix),
       );
 
       if (hasInvalidPath) {
@@ -333,45 +413,68 @@ export async function GetHQSupportDraftUploadUrl(
   fileName: string,
   fileId: string,
   uploadSessionId: string,
-): Promise<{ signedUrl?: string; path?: string; error?: string }> {
+  contentType: string,
+): Promise<{ target?: SupportUploadTarget; error?: string }> {
   try {
-    const { userId } = await assertHQPermission("hq.support.manage");
-    const idSchema = z.string().uuid();
-    const fileNameSchema = z
-      .string()
-      .trim()
-      .min(1)
-      .max(255)
-      .regex(/\.(png|jpe?g|webp|pdf)$/i, "Unsupported attachment type");
+    const { userId, orgId } = await assertHQPermission("hq.support.manage");
+    const uploadRequest = validateSupportUploadRequest(
+      fileName,
+      fileId,
+      uploadSessionId,
+      contentType,
+    );
+    if ("error" in uploadRequest) return { error: uploadRequest.error };
 
-    if (
-      !idSchema.safeParse(fileId).success ||
-      !idSchema.safeParse(uploadSessionId).success
-    ) {
-      return { error: "Invalid upload session" };
-    }
+    if (uploadRequest.data.isVideo) {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const cdnHostname = process.env.BUNNY_CDN_HOSTNAME;
+      if (!supabaseUrl || !cdnHostname) {
+        return { error: "CDN upload is not configured" };
+      }
 
-    const parsedFileName = fileNameSchema.safeParse(fileName);
-    if (!parsedFileName.success) {
+      const storedFileName = buildSupportCdnFileName(
+        [userId, uploadRequest.data.uploadSessionId, uploadRequest.data.fileId],
+        uploadRequest.data.fileName,
+      );
+      const storagePath = buildSupportCdnStoragePath(
+        { scope: "organization", organizationId: orgId },
+        storedFileName,
+      );
+
       return {
-        error:
-          parsedFileName.error.issues[0]?.message || "Invalid attachment name",
+        target: {
+          provider: "cdn",
+          upload_url: `${supabaseUrl}/functions/v1/cdn-upload`,
+          method: "POST",
+          file_path: buildSupportCdnUrl(cdnHostname, storagePath),
+          headers: {
+            "x-cdn-scope": "organization",
+            "x-cdn-organization-id": orgId,
+            "x-cdn-category": "support",
+            "x-cdn-file-name": storedFileName,
+            "x-cdn-content-type": uploadRequest.data.contentType,
+          },
+        },
       };
     }
 
-    const sanitizedName = parsedFileName.data.replace(
-      /[^a-zA-Z0-9._-]/g,
-      "_",
-    );
     const path =
-      `admin/drafts/${userId}/${uploadSessionId}/${fileId}_${sanitizedName}`;
+      `admin/drafts/${userId}/${uploadRequest.data.uploadSessionId}/` +
+      `${uploadRequest.data.fileId}_${uploadRequest.data.sanitizedFileName}`;
     const supabase = createServiceRoleClient();
     const { data, error } = await supabase.storage
       .from("support-attachments")
       .createSignedUploadUrl(path);
 
     if (error) return { error: error.message };
-    return { signedUrl: data.signedUrl, path };
+    return {
+      target: {
+        provider: "supabase",
+        upload_url: data.signedUrl,
+        method: "PUT",
+        file_path: path,
+      },
+    };
   } catch (error) {
     return {
       error:
@@ -429,7 +532,9 @@ export async function GetAdminTicketDetail(
   // URLs were never redeemed) and bypassed any audit trail.
   const { data: attachments } = await supabase
     .from("support_ticket_attachments")
-    .select("*")
+    .select(
+      "id, ticket_id, message_id, uploaded_by, file_name, file_size, file_type, created_at",
+    )
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
 
@@ -469,23 +574,130 @@ export async function GetAdminTicketDetail(
 export async function GetAdminSupportUploadUrl(
   ticketId: string,
   fileName: string,
-  fileId: string
-): Promise<{ signedUrl?: string; path?: string; error?: string }> {
-  await assertHQPermission("hq.support.manage");
+  fileId: string,
+  uploadSessionId: string,
+  contentType: string,
+): Promise<{ target?: SupportUploadTarget; error?: string }> {
+  const { userId, orgId } = await assertHQPermission("hq.support.manage");
+
+  const uploadRequest = validateSupportUploadRequest(
+    fileName,
+    fileId,
+    uploadSessionId,
+    contentType,
+  );
+  if ("error" in uploadRequest) return { error: uploadRequest.error };
 
   const supabase = createServiceRoleClient();
   const user = await currentUser();
   if (!user) return { error: "Authentication required" };
 
-  const sanitizedName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `admin/tickets/${ticketId}/${fileId}_${sanitizedName}`;
+  if (uploadRequest.data.isVideo) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const cdnHostname = process.env.BUNNY_CDN_HOSTNAME;
+    if (!supabaseUrl || !cdnHostname) {
+      return { error: "CDN upload is not configured" };
+    }
+
+    const storedFileName = buildSupportCdnFileName(
+      [userId, ticketId, uploadRequest.data.fileId],
+      uploadRequest.data.fileName,
+    );
+    const storagePath = buildSupportCdnStoragePath(
+      { scope: "organization", organizationId: orgId },
+      storedFileName,
+    );
+
+    return {
+      target: {
+        provider: "cdn",
+        upload_url: `${supabaseUrl}/functions/v1/cdn-upload`,
+        method: "POST",
+        file_path: buildSupportCdnUrl(cdnHostname, storagePath),
+        headers: {
+          "x-cdn-scope": "organization",
+          "x-cdn-organization-id": orgId,
+          "x-cdn-category": "support",
+          "x-cdn-file-name": storedFileName,
+          "x-cdn-content-type": uploadRequest.data.contentType,
+        },
+      },
+    };
+  }
+
+  const path =
+    `admin/tickets/${ticketId}/` +
+    `${uploadRequest.data.fileId}_${uploadRequest.data.sanitizedFileName}`;
 
   const { data, error } = await supabase.storage
     .from("support-attachments")
     .createSignedUploadUrl(path);
 
   if (error) return { error: error.message };
-  return { signedUrl: data.signedUrl, path };
+  return {
+    target: {
+      provider: "supabase",
+      upload_url: data.signedUrl,
+      method: "PUT",
+      file_path: path,
+    },
+  };
+}
+
+// ============================================================================
+// DISCARD UPLOADED ATTACHMENT (Admin) — cancel / remove before send
+// ============================================================================
+
+/**
+ * Deletes an uploaded object that an HQ user cancelled or removed before
+ * sending, so a discarded upload leaves no orphan in the bucket.
+ *
+ * Constrained to the `admin/` prefix that HQ uploads write to, so this cannot be
+ * used to delete a merchant's attachments.
+ */
+export async function DiscardAdminSupportUpload(
+  filePath: string,
+): Promise<{ success?: boolean; error?: string }> {
+  const { orgId } = await assertHQPermission("hq.support.manage");
+
+  if (!filePath) return { error: "File path is required" };
+  if (/^https:\/\//i.test(filePath)) {
+    const storagePath = parseSupportCdnStoragePath(
+      filePath,
+      process.env.BUNNY_CDN_HOSTNAME ?? "",
+      `organizations/${orgId}`,
+    );
+    if (!storagePath) return { error: "Invalid attachment path" };
+
+    const userSupabase = createServerSupabaseClient();
+    const { data, error } = await userSupabase.functions.invoke("cdn-upload", {
+      method: "DELETE",
+      body: {
+        scope: "organization",
+        organizationId: orgId,
+        storagePath,
+      },
+    });
+
+    if (error) return { error: error.message };
+    if (!data?.success) return { error: data?.error || "Failed to delete upload" };
+    return { success: true };
+  }
+
+  if (
+    !filePath.startsWith("admin/tickets/") &&
+    !filePath.startsWith("admin/drafts/")
+  ) {
+    return { error: "Invalid attachment path" };
+  }
+
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.storage
+    .from("support-attachments")
+    .remove([filePath]);
+
+  if (error) return { error: error.message };
+  return { success: true };
 }
 
 // ============================================================================
@@ -502,12 +714,34 @@ export async function AdminAddMessage(
   error?: string;
   notificationWarning?: string;
 }> {
-  await assertHQPermission("hq.support.manage");
+  const { userId, orgId } = await assertHQPermission("hq.support.manage");
 
   const supabase = createServiceRoleClient();
   const user = await currentUser();
 
   if (!user) return { error: "Authentication required" };
+
+  const parsedAttachments = hqSupportAttachmentsSchema.safeParse(attachments);
+  if (!parsedAttachments.success) {
+    return {
+      error:
+        parsedAttachments.error.issues[0]?.message ||
+        "Invalid attachment metadata",
+    };
+  }
+
+  const hasInvalidPath = parsedAttachments.data.some((attachment) =>
+    isSupportVideoMimeType(attachment.file_type)
+      ? !isValidHqCdnAttachmentPath(
+          attachment,
+          orgId,
+          [userId, ticketId],
+        )
+      : !attachment.file_path.startsWith(`admin/tickets/${ticketId}/`),
+  );
+  if (hasInvalidPath) {
+    return { error: "One or more attachment paths are invalid" };
+  }
 
   const userName = user.fullName || user.firstName || "DEXA Support";
 
@@ -518,7 +752,7 @@ export async function AdminAddMessage(
     p_sender_role: "admin",
     p_message: message,
     p_is_internal: isInternal,
-    p_attachments: attachments,
+    p_attachments: parsedAttachments.data,
   });
 
   if (error) return { error: error.message };

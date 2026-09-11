@@ -64,16 +64,30 @@ export interface SupportTicketAttachment {
   created_at: string
 }
 
-export interface SupportTicketAttachmentWithUrl extends SupportTicketAttachment {
+export interface SupportTicketAttachmentWithUrl
+  extends Omit<SupportTicketAttachment, 'file_path'> {
   signed_url?: string
 }
 
-/** Passed from the client after direct-upload to Supabase Storage */
+/** Passed from the client after a direct upload to Supabase Storage or Bunny CDN. */
 export interface AttachmentInput {
   file_name: string
   file_path: string
   file_size: number
   file_type: string
+}
+
+/**
+ * Upload instructions minted by a server action after it resolves the caller's
+ * tenant. Videos use the authenticated CDN Edge Function; images and PDFs keep
+ * using signed Supabase Storage uploads.
+ */
+export interface SupportUploadTarget {
+  provider: 'supabase' | 'cdn'
+  upload_url: string
+  method: 'PUT' | 'POST'
+  file_path: string
+  headers?: Record<string, string>
 }
 
 export interface SupportTicketMessage {

@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js'
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
+import { notifySubscriptionRestored } from '../_shared/subscription-restoration-notifications.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -30,6 +31,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
       paid_at?: string
       external_reference?: string | null
       notes?: string | null
+      processor?: 'valor' | null
+      processor_account_id?: string | null
+      processor_response?: Record<string, unknown> | null
     }
 
     if (!body.invoice_id) {
@@ -56,10 +60,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
         status: 'paid',
         paid_at: paidAt,
         updated_at: new Date().toISOString(),
-        nmi_transaction_id: body.external_reference ?? null,
-        nmi_response: body.notes
-          ? { manual_mark_paid_notes: body.notes }
-          : undefined,
+        processor: body.processor ?? null,
+        processor_account_id: body.processor_account_id ?? null,
+        processor_transaction_id: body.external_reference ?? null,
+        processor_response: {
+          ...(body.processor_response ?? {}),
+          ...(body.notes ? { manual_mark_paid_notes: body.notes } : {}),
+        },
       })
       .eq('id', body.invoice_id)
 
@@ -97,6 +104,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
           source: 'billing-mark-paid',
         },
       })
+      try {
+        await notifySubscriptionRestored({ supabase, invoiceId: invoice.id })
+      } catch (notificationError) {
+        console.error('[billing-mark-paid] Restoration notification error:', notificationError)
+      }
     }
 
     await supabase.rpc('log_subscription_billing_event', {
@@ -113,6 +125,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       },
       p_metadata: {
         source: 'billing-mark-paid',
+        processor: body.processor ?? null,
         notes: body.notes ?? null,
       },
     })
