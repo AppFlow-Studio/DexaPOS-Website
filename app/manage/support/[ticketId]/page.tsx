@@ -147,7 +147,7 @@ function MessageBubble({
       aria-label={isMine ? "Your message" : `Message from ${message.sender_name}`}
     >
       {!isMine && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-100 text-xs font-bold text-gray-700">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground ring-1 ring-border/70">
           {initials}
         </div>
       )}
@@ -164,9 +164,15 @@ function MessageBubble({
         <div
           className={cn(
             "rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+            // Own messages read as a tinted surface, not a saturated block:
+            // a soft blue wash in light mode, and a deep muted blue in dark.
+            // A bright fill is uncomfortable over a long thread, and inverting
+            // it (light blue on a dark page) glares worse than the original.
+            // Text stays a near-ink / near-paper tone rather than pure white
+            // on blue, which is what made attachments sit awkwardly on top.
             isMine
-              ? "rounded-tr-sm bg-blue-600 text-white"
-              : "rounded-tl-sm border border-[#E5E7EB] bg-white text-gray-950 shadow-sm"
+              ? "rounded-tr-sm bg-blue-50 text-blue-950 ring-1 ring-blue-200/70 dark:bg-blue-950/50 dark:text-blue-50 dark:ring-blue-900/60"
+              : "rounded-tl-sm bg-card text-card-foreground ring-1 ring-border/70 shadow-sm"
           )}
         >
           <p className="whitespace-pre-wrap">{message.message}</p>

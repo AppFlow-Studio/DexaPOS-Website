@@ -79,8 +79,11 @@ function MessageBubble({
       <div
         className={cn(
           "h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold",
+          // Matches the bubble: soft blue wash in light, deep muted blue in
+          // dark. A saturated avatar beside a tinted bubble reads as two
+          // unrelated elements.
           isOwn
-            ? "bg-[#0C4FD1] dark:bg-[#6CA0FF] text-white dark:text-[#0f1115]"
+            ? "bg-blue-100 text-blue-900 ring-1 ring-blue-200/70 dark:bg-blue-950/70 dark:text-blue-100 dark:ring-blue-900/60"
             : "bg-muted/60 text-muted-foreground"
         )}
       >
@@ -104,9 +107,13 @@ function MessageBubble({
         <div
           className={cn(
             "min-w-0 rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+            // Kept in step with the HQ thread: a soft blue wash in light mode
+            // and a deep muted blue in dark. The previous dark value was a
+            // LIGHT blue (#6CA0FF), which glared against the dark page — the
+            // inverse of what a dark theme needs.
             isOwn
-              ? "bg-[#0C4FD1] dark:bg-[#6CA0FF] text-white dark:text-[#0f1115] rounded-tr-sm"
-              : "bg-muted/60 text-foreground rounded-tl-sm"
+              ? "rounded-tr-sm bg-blue-50 text-blue-950 ring-1 ring-blue-200/70 dark:bg-blue-950/50 dark:text-blue-50 dark:ring-blue-900/60"
+              : "rounded-tl-sm bg-muted/60 text-foreground"
           )}
         >
           <p className="whitespace-pre-wrap break-words">{message.message}</p>
