@@ -272,6 +272,11 @@ const navMain = [
         icon: FileText,
       },
       {
+        title: "Billing & Payments",
+        url: "/dashboard/subscriptions/billing",
+        icon: CreditCard,
+      },
+      {
         title: "Devices",
         url: "/dashboard/devices",
         icon: Monitor,

@@ -271,6 +271,78 @@ async function resolveMerchantForCurrentOrg() {
   }
 }
 
+export interface MerchantBillingHistoryInvoice {
+  id: string
+  invoiceNumber: string | null
+  status: string
+  locationName: string | null
+  billingPeriodStart: string | null
+  billingPeriodEnd: string | null
+  totalAmount: number
+  dueDate: string | null
+  paidAt: string | null
+  createdAt: string
+  publicToken: string | null
+}
+
+export interface MerchantBillingHistory {
+  invoices: MerchantBillingHistoryInvoice[]
+  payments: MerchantBillingHistoryInvoice[]
+  totalPaid: number
+  outstanding: number
+}
+
+/**
+ * Merchant-facing billing + payments history for /dashboard/subscriptions/billing.
+ * Merchant-scoped list of all subscription invoices (with the public_token so the
+ * UI can deep-link to the hosted invoice + PDF), plus a paid-only payments view
+ * and paid/outstanding rollups.
+ */
+export async function getMerchantSubscriptionBillingHistory(): Promise<MerchantBillingHistory> {
+  const { merchantId, serviceRole } = await resolveMerchantForCurrentOrg()
+
+  const { data, error } = await serviceRole
+    .from('subscription_invoices')
+    .select(
+      'id, invoice_number, status, location_id, billing_period_start, billing_period_end, total_amount, due_date, paid_at, created_at, public_token',
+    )
+    .eq('merchant_id', merchantId)
+    .order('created_at', { ascending: false })
+    .limit(200)
+
+  if (error) throw new Error(error.message)
+
+  const rows = data ?? []
+  const locationIds = [...new Set(rows.map((r) => r.location_id).filter(Boolean) as string[])]
+  const locationNames = new Map<string, string>()
+  if (locationIds.length) {
+    const { data: locs } = await serviceRole.from('locations').select('id, name').in('id', locationIds)
+    for (const l of locs ?? []) locationNames.set(l.id as string, l.name as string)
+  }
+
+  const invoices: MerchantBillingHistoryInvoice[] = rows.map((row) => ({
+    id: row.id as string,
+    invoiceNumber: (row.invoice_number as string | null) ?? null,
+    status: (row.status as string) ?? 'open',
+    locationName: row.location_id ? locationNames.get(row.location_id as string) ?? null : null,
+    billingPeriodStart: (row.billing_period_start as string | null) ?? null,
+    billingPeriodEnd: (row.billing_period_end as string | null) ?? null,
+    totalAmount: Number(row.total_amount ?? 0),
+    dueDate: (row.due_date as string | null) ?? null,
+    paidAt: (row.paid_at as string | null) ?? null,
+    createdAt: row.created_at as string,
+    publicToken: (row.public_token as string | null) ?? null,
+  }))
+
+  const payments = invoices.filter((i) => i.status === 'paid')
+  const totalPaid = payments.reduce((sum, i) => sum + i.totalAmount, 0)
+  const outstanding = invoices
+    .filter((i) => i.status === 'open' || i.status === 'failed' || i.status === 'processing')
+    .reduce((sum, i) => sum + i.totalAmount, 0)
+
+  return { invoices, payments, totalPaid, outstanding }
+}
+
 function normalizeSubscriptionInvoiceLineItems(
   rawLineItems: Array<Record<string, unknown>> | null | undefined,
   billingPeriodStart: string,
