@@ -13,7 +13,9 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  CreditCard,
   Download,
+  ExternalLink,
   Eye,
   FileText,
   Loader2,
@@ -71,6 +73,7 @@ import {
   reviewMerchantServiceRequest,
   chargeSubscriptionInvoiceManually,
   calculateSubscriptionTotal,
+  getActiveStationCount,
   generateSubscriptionInvoiceManually,
   getBillableServices,
   getDeviceBillingServiceMappings,
@@ -622,7 +625,11 @@ export function HqSubscriptionsWorkspace({
   const [selectedDeviceMappingCategory, setSelectedDeviceMappingCategory] = useState('pos_tablet')
   const [deviceMappingForm, setDeviceMappingForm] = useState<DeviceBillingMappingFormState>(() => mappingToFormState(null))
   const [quoteBillingMethod, setQuoteBillingMethod] = useState<BillingMethod>('card')
+  // Station count is auto-derived from deployed POS tablet devices, never set by hand:
+  // `quoteStationCount` mirrors `activeStationCount` so the preview matches what the
+  // server actually bills. `null` means "still counting".
   const [quoteStationCount, setQuoteStationCount] = useState('1')
+  const [activeStationCount, setActiveStationCount] = useState<number | null>(null)
   const [quote, setQuote] = useState<SubscriptionQuoteResult | null>(null)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [isQuoteLoading, setIsQuoteLoading] = useState(false)
@@ -1204,9 +1211,33 @@ export function HqSubscriptionsWorkspace({
     setQuoteBillingMethod(selectedBillingProfile?.billing_method === 'ach' ? 'ach' : 'card')
   }, [selectedBillingProfile?.billing_method])
 
+  // Stations = deployed POS tablets. Pull the live count for the selected location so
+  // the preview reflects exactly what the server will bill (it recomputes station_count
+  // from deployed devices on every save and invoice, ignoring any client value).
   useEffect(() => {
-    setQuoteStationCount(String(Math.max(1, selectedLocationSubscription?.station_count ?? 1)))
-  }, [selectedLocationSubscription?.id, selectedLocationSubscription?.station_count])
+    const locationId = selectedLocation?.id
+    if (!locationId) {
+      setActiveStationCount(null)
+      return
+    }
+
+    let cancelled = false
+    setActiveStationCount(null)
+
+    getActiveStationCount(locationId).then((result) => {
+      if (cancelled) return
+      const count = result.success
+        ? result.count ?? 0
+        : selectedLocationSubscription?.station_count ?? 0
+      setActiveStationCount(count)
+      setQuoteStationCount(String(count))
+    })
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLocation?.id])
 
   const updateServiceState = (serviceId: string, patch: Partial<{ enabled: boolean; quantity: string }>) => {
     setServiceFormState((current) => ({
@@ -2001,49 +2032,6 @@ export function HqSubscriptionsWorkspace({
                       </p>
                     </div>
 
-                    {/* Stations */}
-                    <div className="rounded-xl border p-4">
-                      <div className="flex items-center gap-1 text-sm font-medium">
-                        Stations
-                        <InfoHint label="Each POS station at this location. The first station is the base price; each additional station adds the per-station rate." />
-                      </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {selectedServicePlan
-                          ? `First station ${formatMoney(selectedServicePlan.base_price_monthly)}, then ${formatMoney(selectedServicePlan.per_extra_station_price)} each`
-                          : 'Station pricing comes from the billing catalog.'}
-                      </p>
-                      <div className="mt-3 flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() =>
-                            setQuoteStationCount(String(Math.max(0, parsePositiveInteger(quoteStationCount) - 1)))
-                          }
-                        >
-                          −
-                        </Button>
-                        <Input
-                          inputMode="numeric"
-                          className="h-8 w-16 text-center"
-                          value={quoteStationCount}
-                          onChange={(event) => setQuoteStationCount(event.target.value)}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() =>
-                            setQuoteStationCount(String(parsePositiveInteger(quoteStationCount) + 1))
-                          }
-                        >
-                          +
-                        </Button>
-                      </div>
-                    </div>
-
                     {/* Features */}
                     <div className="rounded-xl border p-4">
                       <div className="flex items-center gap-1 text-sm font-medium">
@@ -2089,12 +2077,34 @@ export function HqSubscriptionsWorkspace({
                     <div className="rounded-xl border p-4">
                       <div className="flex items-center gap-1 text-sm font-medium">
                         Devices
-                        <InfoHint label="Hardware-linked charges. These usually sync from the location's deployed devices; adjust only if needed." />
+                        <InfoHint label="Hardware-linked charges. These sync from the location's deployed devices." />
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">Synced from deployed devices.</p>
+
+                      {/* Stations = deployed POS tablets. Auto-counted, read-only — this is
+                          exactly what the server bills, so it's never set by hand. */}
+                      <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border bg-muted/40 p-2.5">
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium">POS Stations</span>
+                            <span className="block text-xs text-muted-foreground">
+                              {activeStationCount === null
+                                ? 'Counting deployed POS tablets…'
+                                : `${activeStationCount} deployed POS tablet${activeStationCount === 1 ? '' : 's'}${
+                                    selectedServicePlan
+                                      ? ` · first ${formatMoney(selectedServicePlan.base_price_monthly)}, then ${formatMoney(selectedServicePlan.per_extra_station_price)} each`
+                                      : ''
+                                  }`}
+                            </span>
+                          </span>
+                          <InfoHint label="A station is a POS tablet, so this is counted automatically from deployed devices and can't be set by hand. It's the same figure billed for the base plan and per-station charge." />
+                        </span>
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Auto</span>
+                      </div>
+
                       <div className="mt-3 space-y-2">
                         {selectedServiceRows.filter((row) => row.service.service_category === 'hardware').length === 0 ? (
-                          <p className="text-xs text-muted-foreground">No device charges.</p>
+                          <p className="text-xs text-muted-foreground">No additional device charges.</p>
                         ) : (
                           selectedServiceRows
                             .filter((row) => row.service.service_category === 'hardware')
@@ -2190,9 +2200,42 @@ export function HqSubscriptionsWorkspace({
                   <Card>
                     <CardContent className="space-y-4 pt-6">
                       {!selectedBillingProfile && status === 'active' && !billingExemption.active && (
-                        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                          No card on file for this location. Add one before charging.
+                        <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 sm:flex-row sm:items-start sm:justify-between">
+                          <span className="flex items-start gap-2">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>
+                              No card on file for {selectedLocation?.name ?? 'this location'}. Add one before charging.
+                            </span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2 sm:pl-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-8 bg-amber-600 text-white hover:bg-amber-700"
+                              asChild
+                            >
+                              <Link
+                                href={`/manage/merchants/${merchant.id}/billing${selectedLocation ? `?billingScope=${selectedLocation.id}` : ''}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <CreditCard className="mr-1.5 h-4 w-4" />
+                                Add a card
+                                <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
+                              </Link>
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 text-amber-800 hover:bg-amber-100 hover:text-amber-900"
+                              onClick={() => refresh()}
+                              disabled={isPending}
+                            >
+                              <RefreshCcw className={`mr-1.5 h-4 w-4${isPending ? ' animate-spin' : ''}`} />
+                              Refresh
+                            </Button>
+                          </span>
                         </div>
                       )}
                       {billingExemption.active && (

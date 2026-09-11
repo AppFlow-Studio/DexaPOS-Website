@@ -2862,6 +2862,38 @@ export async function calculateSubscriptionTotal(
   }
 }
 
+/**
+ * Live count of billable POS stations for a location.
+ *
+ * A "station" is a deployed POS tablet device, so this always matches the
+ * location's deployed devices (falling back to active physical stations for
+ * locations not yet represented in Device Inventory). This is the SAME value
+ * the server persists as `station_count` on save and on every invoice, so the
+ * HQ workspace uses it to render an honest preview instead of letting HQ set a
+ * station count that would just be overridden.
+ */
+export async function getActiveStationCount(
+  locationId: string,
+): Promise<{ success: boolean; count?: number; error?: string }> {
+  await assertHQPermission('system.billing.manage')
+
+  if (!locationId) {
+    return { success: false, error: 'locationId is required.' }
+  }
+
+  const supabase = createServerSupabaseClient() as any
+  const { data, error } = await supabase.rpc('get_active_station_count', {
+    p_location_id: locationId,
+  })
+
+  if (error) {
+    console.error('[getActiveStationCount] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, count: Number(data ?? 0) }
+}
+
 export async function recalculateMerchantSubscription(
   subscriptionId: string,
 ): Promise<{
