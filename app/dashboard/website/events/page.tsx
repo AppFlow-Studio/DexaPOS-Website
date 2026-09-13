@@ -4,8 +4,9 @@ import { redirect } from "next/navigation";
 
 import { ListEvents } from "@/app/dashboard/website/actions/events";
 import EventsScreen from "@/components/site-builder/dashboard/EventsScreen";
+import { WebsiteLocationPicker } from "@/components/site-builder/dashboard/WebsiteLocationPicker";
 import { Button } from "@/components/ui/button";
-import { loadSiteContext } from "@/lib/site-builder/site-context";
+import { loadSiteContext, resolveWebsiteLocation } from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /** The events list. Events are records, so this screen is a table and a form. */
@@ -21,7 +22,12 @@ export default async function WebsiteEventsRoute({
   if (!orgId) redirect("/sign-in");
 
   const params = await searchParams;
-  const storefront = await loadSiteContext(orgId, params.location);
+
+  const scope = await resolveWebsiteLocation(orgId, params.location);
+  if (!scope || scope.kind === "no-storefront") redirect("/dashboard/website/pages");
+  if (scope.kind === "pick") return <WebsiteLocationPicker locations={scope.locations} />;
+
+  const storefront = await loadSiteContext(orgId, scope.locationId);
   if (!storefront) redirect("/dashboard/website/pages");
 
   const [result, { data: storefronts }] = await Promise.all([

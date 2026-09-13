@@ -40,24 +40,27 @@ const TEMPLATES: TemplateOption[] = [
 export default function NewPageOverlay({
   clerkOrgId,
   locationId,
+  locationName,
   siteId,
-  locations = [],
 }: {
   clerkOrgId: string;
+  /** The branch currently being managed (from the single/global/location flow). */
   locationId: string;
+  locationName?: string;
   siteId: string;
-  /** The branches this page may be scoped to (empty for a single-location merchant). */
-  locations?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [template, setTemplate] = useState<PageTemplateId>("article");
   const [title, setTitle] = useState("");
   /**
-   * What the page is ABOUT. "" = a brand page (speaks for the whole business,
-   * shows no prices until a visitor picks a branch); a location id = a location
-   * page (that branch's hours, address, menu and prices — see `CreatePage`).
+   * What the page is ABOUT. The branch id = a location page (that branch's hours,
+   * address, menu and prices — see `CreatePage`); "" = a brand page (speaks for
+   * the whole business, shows no prices until a visitor picks a branch).
+   *
+   * Location-focused default: creating a page while managing a branch makes a
+   * page for that branch, with brand-wide one click away.
    */
-  const [scope, setScope] = useState<string>("");
+  const [scope, setScope] = useState<string>(locationId);
   const [preview, setPreview] = useState<React.ReactNode>(null);
   const [rendering, setRendering] = useState(true);
   const [pending, startTransition] = useTransition();
@@ -68,10 +71,8 @@ export default function NewPageOverlay({
   const valid = trimmed.length > 0 && path !== "" && pathCheck.ok;
 
   // A brand page still needs a real branch to draw menu photos and prices from
-  // in the preview, so fall back to the editing context when no scope is chosen.
+  // in the preview, so fall back to the editing context when brand-wide.
   const renderLocationId = scope || locationId;
-  // Only a multi-location merchant has a meaningful choice to make here.
-  const showScopePicker = locations.length > 1;
 
   usePreview(template, trimmed, renderLocationId, setPreview, setRendering);
 
@@ -132,28 +133,24 @@ export default function NewPageOverlay({
           </div>
         }
       >
-        {showScopePicker && (
-          <label className="mb-5 block">
-            <span className="mb-1.5 block text-xs font-semibold">This page is for</span>
-            <select
-              value={scope}
-              onChange={(event) => setScope(event.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              <option value="">All locations (brand page)</option>
-              {locations.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
-            </select>
-            <span className="mt-1.5 block text-[11px] text-muted-foreground">
-              {scope
-                ? "Shows this location’s hours, address and prices."
-                : "Speaks for the whole business; shows prices only after a visitor picks a location."}
-            </span>
-          </label>
-        )}
+        <label className="mb-5 block">
+          <span className="mb-1.5 block text-xs font-semibold">This page is for</span>
+          <select
+            value={scope}
+            onChange={(event) => setScope(event.target.value)}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <option value={locationId}>
+              {locationName ? `This location — ${locationName}` : "This location"}
+            </option>
+            <option value="">All locations (brand page)</option>
+          </select>
+          <span className="mt-1.5 block text-[11px] text-muted-foreground">
+            {scope
+              ? "Shows this location’s hours, address and prices."
+              : "Speaks for the whole business; shows prices only after a visitor picks a location."}
+          </span>
+        </label>
 
         <label className="mb-5 block">
           <span className="mb-1.5 block text-xs font-semibold">Page name</span>

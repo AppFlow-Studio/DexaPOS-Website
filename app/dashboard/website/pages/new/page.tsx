@@ -6,7 +6,7 @@ import { GetOrCreateSite } from "@/app/dashboard/website/actions/site";
 import NewPageOverlay from "@/components/site-builder/dashboard/NewPageOverlay";
 import { OwnerOnlyPage } from "@/components/site-builder/dashboard/OwnerOnlyPage";
 import { isMerchantOwnerForOrg } from "@/lib/site-builder/owner";
-import { loadSiteContext } from "@/lib/site-builder/site-context";
+import { loadSiteContext, resolveWebsiteLocation } from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -29,7 +29,16 @@ export default async function NewPageRoute({
   if (!orgId) redirect("/sign-in");
 
   const params = await searchParams;
-  const site = await loadSiteContext(orgId, params.location);
+
+  // Follow the single/global/location flow. This is a deep route reached with a
+  // location already chosen; if we land here on "All locations" (several
+  // branches), send the user to the Pages picker to choose one first.
+  const scope = await resolveWebsiteLocation(orgId, params.location);
+  if (!scope || scope.kind === "no-storefront" || scope.kind === "pick") {
+    redirect("/dashboard/website/pages");
+  }
+
+  const site = await loadSiteContext(orgId, scope.locationId);
   if (!site) redirect("/dashboard/website/pages");
 
   // Website editing is owner-only. Placed before `GetOrCreateSite` so a
@@ -63,29 +72,25 @@ export default async function NewPageRoute({
     );
   }
 
-  // The branches a page may be scoped to. Read from `online_store_config` (not
-  // `locations`) so the offered set is exactly what `resolvePricingLocation`
-  // accepts at render time — the same source the Settings default-location list
-  // uses. A location page shows that branch's hours, address and prices; a brand
-  // page (the default) speaks for the whole business.
+  // The branch's own name, for the "This location — <name>" label. Read from
+  // `online_store_config` (the storefront) rather than the site display name,
+  // which resolves to the brand name and would not identify the branch.
   const supabase = createServerSupabaseClient();
-  const { data: storefronts } = await supabase
+  const { data: storefront } = await supabase
     .from("online_store_config")
-    .select("location_id, store_name")
+    .select("store_name")
     .eq("merchant_id", site.merchantId)
-    .eq("is_active", true);
+    .eq("location_id", scope.locationId)
+    .maybeSingle();
 
-  const locations = ((storefronts ?? []) as Record<string, unknown>[]).map((row) => ({
-    id: String(row.location_id),
-    name: String(row.store_name ?? "Untitled location"),
-  }));
+  const locationName = (storefront as { store_name?: string } | null)?.store_name ?? undefined;
 
   return (
     <NewPageOverlay
       clerkOrgId={orgId}
       locationId={site.locationId}
+      locationName={locationName}
       siteId={website.data.id}
-      locations={locations}
     />
   );
 }

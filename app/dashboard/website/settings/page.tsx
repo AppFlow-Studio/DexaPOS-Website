@@ -4,10 +4,11 @@ import { redirect } from "next/navigation";
 
 import { OwnerOnlyPage } from "@/components/site-builder/dashboard/OwnerOnlyPage";
 import SettingsScreen from "@/components/site-builder/dashboard/SettingsScreen";
+import { WebsiteLocationPicker } from "@/components/site-builder/dashboard/WebsiteLocationPicker";
 import { Button } from "@/components/ui/button";
 import { isMerchantOwnerForOrg } from "@/lib/site-builder/owner";
 import type { MerchantSiteRow } from "@/lib/site-builder/db-types";
-import { fetchMerchant, loadSiteContext } from "@/lib/site-builder/site-context";
+import { fetchMerchant, loadSiteContext, resolveWebsiteLocation } from "@/lib/site-builder/site-context";
 import { readSiteSettings, resolveSiteSeo } from "@/lib/site-builder/site-settings";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -35,7 +36,12 @@ export default async function WebsiteSettingsRoute({
   if (!orgId) redirect("/sign-in");
 
   const params = await searchParams;
-  const storefront = await loadSiteContext(orgId, params.location);
+
+  const scope = await resolveWebsiteLocation(orgId, params.location);
+  if (!scope || scope.kind === "no-storefront") redirect("/dashboard/website/pages");
+  if (scope.kind === "pick") return <WebsiteLocationPicker locations={scope.locations} />;
+
+  const storefront = await loadSiteContext(orgId, scope.locationId);
   if (!storefront) redirect("/dashboard/website/pages");
 
   // Website editing is owner-only. Settings are a pure editing surface, so a

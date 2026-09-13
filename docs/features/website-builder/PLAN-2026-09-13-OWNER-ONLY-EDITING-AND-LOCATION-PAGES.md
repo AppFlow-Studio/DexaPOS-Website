@@ -66,6 +66,27 @@ Two owner expectations were unmet:
 - Pages list (`pages/page.tsx` + `PagesScreen`) now selects `location_id` and shows
   a **Brand / <location>** badge per row (multi-location only).
 
+## Follow-up (2026-09-13) — location-scope flow (branch `feat/website-location-scope-flow`)
+The builder previously resolved location only from `?location=` and fell back to the
+first storefront; it ignored the dashboard's location switcher and had no single/
+global/location semantics. Now it follows the standard flow (chosen model:
+**location-focused + picker on All**):
+- `resolveWebsiteLocation(orgId, param)` in `site-context.ts`: `?location=` → the
+  switcher's `x-location-id` cookie → single-location gate → else `pick` (returns
+  the merchant's branches). Reuses the cached merchant/store-config reads.
+- `WebsiteLocationPicker` (client): shown on **entry** routes (pages, events, forms,
+  tracking, settings, reservations) when scope is `pick`; selecting a branch sets the
+  switcher (store + cookie) and navigates with `?location=`. **Deep** routes (editor,
+  new, style, forms/[formId]) `redirect('/dashboard/website/pages')` on `pick`.
+- Pages list is filtered to **brand + the active branch** (`.or(location_id.is.null,
+  location_id.eq.<active>)`); `NewPageOverlay` is a 2-way scope (This location — <name>
+  / All locations) defaulting to the **active branch**.
+- Owner gating is unchanged and still merchant-level (location-independent).
+- Build-safe: `cookies()` lives in `site-context` (server-only); all importers are
+  server components / `use server` actions, so nothing leaks into a client bundle.
+- App-layer only — no migration. tsc clean; `vitest app/dashboard/website` 69/69.
+  Browser E2E on staging (multi-location switch + picker) still pending.
+
 ## Verification
 - **Applied to staging** (`dfwqakoyittmrwbqvxgw`) via MCP `apply_migration`.
 - Policy wiring confirmed: every content table SELECT→admin, INSERT/UPDATE/DELETE→owner.

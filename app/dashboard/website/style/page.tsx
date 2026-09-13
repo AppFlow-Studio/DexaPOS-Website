@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { isMerchantOwnerForOrg } from "@/lib/site-builder/owner";
 import type { MerchantSiteRow } from "@/lib/site-builder/db-types";
 import { parseNavItems } from "@/lib/site-builder/nav";
-import { loadSiteContext } from "@/lib/site-builder/site-context";
+import { loadSiteContext, resolveWebsiteLocation } from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -30,7 +30,12 @@ export default async function StyleRoute({
   if (!orgId) redirect("/sign-in");
 
   const params = await searchParams;
-  const storefront = await loadSiteContext(orgId, params.location);
+
+  const scope = await resolveWebsiteLocation(orgId, params.location);
+  if (!scope || scope.kind === "no-storefront") redirect("/dashboard/website/pages");
+  if (scope.kind === "pick") redirect("/dashboard/website/pages");
+
+  const storefront = await loadSiteContext(orgId, scope.locationId);
   if (!storefront) redirect("/dashboard/website/pages");
 
   // Website editing is owner-only. Colours, fonts and style are a pure editing

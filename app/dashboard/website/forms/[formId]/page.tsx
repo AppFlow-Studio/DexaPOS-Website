@@ -5,7 +5,11 @@ import { GetForm } from "@/app/dashboard/website/actions/forms";
 import FormBuilder from "@/components/site-builder/builder/FormBuilder";
 import { OwnerOnlyPage } from "@/components/site-builder/dashboard/OwnerOnlyPage";
 import { isMerchantOwnerForOrg } from "@/lib/site-builder/owner";
-import { buildRenderContext, loadSiteContext } from "@/lib/site-builder/site-context";
+import {
+  buildRenderContext,
+  loadSiteContext,
+  resolveWebsiteLocation,
+} from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /** The form builder — the page editor's shell, editing a form. */
@@ -25,7 +29,11 @@ export default async function FormEditorRoute({
   const { formId } = await params;
   const { location } = await searchParams;
 
-  const storefront = await loadSiteContext(orgId, location);
+  const scope = await resolveWebsiteLocation(orgId, location);
+  if (!scope || scope.kind === "no-storefront") redirect("/dashboard/website/pages");
+  if (scope.kind === "pick") redirect("/dashboard/website/pages");
+
+  const storefront = await loadSiteContext(orgId, scope.locationId);
   if (!storefront) redirect("/dashboard/website/pages");
 
   // Editing forms is owner-only. Managers manage submissions (a separate route),

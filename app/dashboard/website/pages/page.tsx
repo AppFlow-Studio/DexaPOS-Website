@@ -2,9 +2,10 @@ import { resolveWebsiteOrgId } from "@/lib/site-builder/request-org";
 import { redirect } from "next/navigation";
 
 import PagesScreen from "@/components/site-builder/dashboard/PagesScreen";
+import { WebsiteLocationPicker } from "@/components/site-builder/dashboard/WebsiteLocationPicker";
 import { FeaturePaywall } from "@/components/billing/FeaturePaywall";
 import type { MerchantSiteRow, SitePageSummary } from "@/lib/site-builder/db-types";
-import { loadSiteContext } from "@/lib/site-builder/site-context";
+import { loadSiteContext, resolveWebsiteLocation } from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -26,10 +27,19 @@ export default async function WebsitePagesRoute({
   if (!orgId) redirect("/sign-in");
 
   const params = await searchParams;
-  const site = await loadSiteContext(orgId, params.location);
+
+  // Follow the standard single/global/location flow: a specific branch (param or
+  // switcher cookie) or a single-location gate resolves directly; "All locations"
+  // with several branches shows the picker, since website pages/prices are
+  // per-branch.
+  const scope = await resolveWebsiteLocation(orgId, params.location);
+  if (!scope || scope.kind === "no-storefront") return <NoStorefront />;
+  if (scope.kind === "pick") return <WebsiteLocationPicker locations={scope.locations} />;
+
+  const site = await loadSiteContext(orgId, scope.locationId);
   if (!site) return <NoStorefront />;
 
-  const { website, pages, locations } = await loadPages(site.merchantId);
+  const { website, pages, locations } = await loadPages(site.merchantId, scope.locationId);
 
   return (
     <FeaturePaywall
@@ -54,6 +64,7 @@ export default async function WebsitePagesRoute({
 
 async function loadPages(
   merchantId: string,
+  activeLocationId: string,
 ): Promise<{
   website: MerchantSiteRow | null;
   pages: SitePageSummary[];
@@ -75,12 +86,14 @@ async function loadPages(
         .from("site_pages")
         .select(
           // location_id decides whether a page is brand-wide or a location page —
-          // shown as a badge in the list so a multi-location merchant can tell
-          // their branches' pages apart at a glance.
+          // shown as a badge in the list so a merchant can tell them apart.
           "id, site_id, merchant_id, location_id, path, title, is_home, status, revision, published_version_id, published_at, created_at, updated_at",
         )
         .eq("site_id", (website as MerchantSiteRow).id)
         .neq("status", "archived")
+        // Location-focused: show brand pages (location_id null) plus the branch
+        // currently being managed, never another branch's pages.
+        .or(`location_id.is.null,location_id.eq.${activeLocationId}`)
         .order("is_home", { ascending: false })
         .order("title", { ascending: true }),
       supabase

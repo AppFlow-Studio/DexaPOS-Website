@@ -18,6 +18,7 @@ import {
   buildRenderContext,
   loadSampleMenuItemIds,
   loadSiteContext,
+  resolveWebsiteLocation,
 } from "@/lib/site-builder/site-context";
 import { loadMenuCatalog } from "../menu-catalog";
 import { renderCanvas } from "../render-canvas";
@@ -50,7 +51,11 @@ export default async function EditorRoute({
 
   const [{ pageId }, query] = await Promise.all([params, searchParams]);
 
-  const site = await loadSiteContext(orgId, query.location);
+  const scope = await resolveWebsiteLocation(orgId, query.location);
+  if (!scope || scope.kind === "no-storefront") return <NoStorefront />;
+  if (scope.kind === "pick") redirect("/dashboard/website/pages");
+
+  const site = await loadSiteContext(orgId, scope.locationId);
   if (!site) return <NoStorefront />;
 
   // Request-scoped: `renderCanvas` resolves its bindings from this same
