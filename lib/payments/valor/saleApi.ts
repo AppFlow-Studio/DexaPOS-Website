@@ -125,6 +125,14 @@ export interface ValorSaleParams {
   address1?: string;
   zip?: string;
   shippingCountry?: string;
+  /**
+   * Vault the card during the sale so it can fund the recurring subscription
+   * without a second entry. Valor's Direct Sale accepts `shouldVaultCard: "1"`;
+   * the returned vault ids are read defensively via `readSaleVaultProfile`.
+   */
+  shouldVaultCard?: boolean;
+  /** Cardholder name, required alongside vaulting. */
+  customerName?: string;
 }
 
 function assertChargeable(money: Money): void {
@@ -235,6 +243,7 @@ export function buildSaleRequestBody(
   const phone = normalizePhone(params.phone);
   const address1 = normalizeAlphanumericText(params.address1, 100);
   const zip = normalizeZip(params.zip);
+  const customerName = normalizeAlphanumericText(params.customerName, 50);
 
   return {
     appid: credentials.appId,
@@ -256,6 +265,45 @@ export function buildSaleRequestBody(
     ...(phone ? { phone } : {}),
     ...(address1 ? { address1 } : {}),
     ...(zip ? { zip } : {}),
+    ...(customerName ? { customer_name: customerName } : {}),
+    ...(params.shouldVaultCard ? { shouldVaultCard: "1" } : {}),
+  };
+}
+
+/**
+ * Pull the vault customer/payment profile ids out of a Direct Sale response
+ * when `shouldVaultCard` was set. Valor's response shape for these is
+ * undocumented in this integration, so every plausible key is probed (mirrors
+ * `customerProfileApi.readPaymentProfileId`). Returns nulls if none match —
+ * the sale still succeeded; only the recurring-card persistence is skipped.
+ */
+export function readSaleVaultProfile(body: ValorSaleResponseBody): {
+  customerProfileId: string | null;
+  paymentProfileId: string | null;
+} {
+  const probe = (keys: string[]): string | null => {
+    for (const key of keys) {
+      const value = body[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+      if (typeof value === "number") return String(value);
+    }
+    return null;
+  };
+  return {
+    customerProfileId: probe([
+      "CustomerProfileID",
+      "customer_profile_id",
+      "vault_customer_id",
+      "vault_id",
+      "customerProfileId",
+    ]),
+    paymentProfileId: probe([
+      "PaymentProfileID",
+      "payment_profile_id",
+      "vault_payment_id",
+      "payment_id",
+      "paymentProfileId",
+    ]),
   };
 }
 

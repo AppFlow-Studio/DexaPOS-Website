@@ -1198,6 +1198,63 @@ function toNumber(value: unknown): number {
   return Number.isFinite(amount) ? amount : 0
 }
 
+// --- Purchase-anchored billing cycle helpers -------------------------------
+// Date-only math built from components (TZ-independent). A subscription's first
+// cycle runs from the charge date to the day before the same date next month,
+// so the next bill lands exactly one month out — never a hardcoded month-end.
+function isoDateParts(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function todayServerIso(): string {
+  return isoDateParts(new Date())
+}
+
+function normalizeDateIso(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!match) return null
+  const [, y, m, d] = match
+  return `${y}-${m}-${d}`
+}
+
+function addMonthsIso(baseIso: string, months: number): string {
+  const [y, m, d] = baseIso.split('-').map(Number)
+  const anchor = new Date(y, m - 1 + months, 1)
+  const lastDay = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate()
+  anchor.setDate(Math.min(d, lastDay))
+  return isoDateParts(anchor)
+}
+
+function addDaysIso(baseIso: string, days: number): string {
+  const [y, m, d] = baseIso.split('-').map(Number)
+  return isoDateParts(new Date(y, m - 1, d + days))
+}
+
+/**
+ * Derive a fresh monthly cycle anchored to the charge date. Honors the caller's
+ * requested start only when it's today-or-future (a new activation sends "today";
+ * an admin may intentionally schedule ahead), and falls back to today for stale
+ * values (e.g. reactivating a canceled sub, whose loaded period is in the past).
+ * The period end and next-billing date are always recomputed as start + 1 month,
+ * so a manually-picked next-billing date can never drift out of sync.
+ */
+function freshBillingCycle(requestedStart?: unknown): {
+  currentPeriodStart: string
+  currentPeriodEnd: string
+  nextBillingDate: string
+} {
+  const today = todayServerIso()
+  const requested = normalizeDateIso(requestedStart)
+  const start = requested && requested >= today ? requested : today
+  const nextBillingDate = addMonthsIso(start, 1)
+  return {
+    currentPeriodStart: start,
+    currentPeriodEnd: addDaysIso(nextBillingDate, -1),
+    nextBillingDate,
+  }
+}
+
 function dexaBillingParty() {
   const sender = process.env.RESEND_FROM_EMAIL || 'support@dexaposai.com'
 
@@ -3499,9 +3556,22 @@ export async function saveAndChargeMerchantSubscription(
     billingProfileId = valorProfile.id
   }
 
+  // Anchor the billing cycle to the charge date for any activation that isn't a
+  // mid-cycle edit of an already-active subscription. This keeps monthly billing
+  // dynamic (purchase date + 1 month) rather than depending on a manually-picked
+  // date: a mid-cycle service change on an active sub preserves the running
+  // period (so it isn't re-charged early), while a brand-new activation or a
+  // reactivation from trial/past_due/suspended/canceled starts a fresh month now.
+  const isMidCycleActiveEdit =
+    previousSubscription?.status === 'active' && !!previousSubscription?.current_period_start
+  const anchoredParams =
+    targetStatus === 'active' && !isMidCycleActiveEdit
+      ? { ...params, ...freshBillingCycle(params.currentPeriodStart) }
+      : params
+
   // Active configurations remain non-entitled until Valor approves the charge.
   const subscriptionResult = await upsertMerchantSubscription({
-    ...params,
+    ...anchoredParams,
     billingProfileId,
     status: targetStatus === 'active' && !billingExemption.active ? 'past_due' : targetStatus,
   })
@@ -3565,6 +3635,10 @@ export async function saveAndChargeMerchantSubscription(
             status: 'past_due',
             metadata: {
               ...(params.metadata ?? {}),
+              // billing_scope is immutable (guard trigger) + required (CHECK):
+              // the upsert set it to 'location', so the rollback must keep it or
+              // the cleanup update is rejected ("Subscription billing scope is immutable").
+              billing_scope: (params.metadata as any)?.billing_scope ?? 'location',
               activation_failed: true,
             },
             updated_at: new Date().toISOString(),

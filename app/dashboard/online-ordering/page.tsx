@@ -9,6 +9,7 @@ import {
 } from "./hooks/useOnlineOrderingSettings";
 import { useGatedLocationId, useGatedLocation, useHasLocations } from "@/stores/location-store";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import { FeaturePaywall } from "@/components/billing/FeaturePaywall";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -1288,17 +1289,29 @@ function CompletedSetupPanel({
                   </PanelSection>
                 </Panel>
               ) : (
-                <OrderOutTab
-                  clerkOrgId={orgId}
+                <FeaturePaywall
+                  serviceCode="orderout"
                   locationId={selectedLocationId}
-                  orderOutStatus={(orderOutStatusResult as any)?.data ?? null}
-                  showOnboardingForm={showOrderOutForm}
-                  onShowOnboardingForm={setShowOrderOutForm}
-                  onboardMutation={onboardMutation}
-                  merchantName={orgSlug || "Merchant"}
-                  locationName={locationName}
-                  locationDefaults={locationDefaults as any}
-                />
+                  clerkOrgId={orgId}
+                  title="Orderout"
+                  description="Connect delivery channels such as Uber Eats, DoorDash, and Grubhub, with menu sync and consolidated orders."
+                  grandfathered={Boolean(
+                    (orderOutStatusResult as any)?.data?.hasAccount ||
+                    (orderOutStatusResult as any)?.data?.hasRestaurant
+                  )}
+                >
+                  <OrderOutTab
+                    clerkOrgId={orgId}
+                    locationId={selectedLocationId}
+                    orderOutStatus={(orderOutStatusResult as any)?.data ?? null}
+                    showOnboardingForm={showOrderOutForm}
+                    onShowOnboardingForm={setShowOrderOutForm}
+                    onboardMutation={onboardMutation}
+                    merchantName={orgSlug || "Merchant"}
+                    locationName={locationName}
+                    locationDefaults={locationDefaults as any}
+                  />
+                </FeaturePaywall>
               )}
           </div>
         </TabsContent>
@@ -1333,6 +1346,7 @@ export default function OnlineOrderingPage() {
   const selectedLocationId = gatedLocationId ?? "all";
   const selectedLocation = useGatedLocation();
   const isAllLocations = !gatedLocationId;
+  const paywallOrgId = useClerkOrgId();
   // Distinguishes "the store has not populated yet" from "this account really
   // has no location to show" — see the guard further down.
   const hasLocations = useHasLocations();
@@ -1510,13 +1524,22 @@ export default function OnlineOrderingPage() {
             </div>
           }
         />
-        <StatusCard
-          status={status}
-          settings={currentSettings}
-          locationName={selectedLocation.name}
-          onRequestSetup={() => handleRequestSetup(selectedLocationId)}
-          isLoading={isSaving || requirementsSaving}
-        />
+        <FeaturePaywall
+          serviceCode="online_ordering"
+          locationId={selectedLocationId}
+          clerkOrgId={paywallOrgId}
+          title="Online Ordering"
+          description="Launch a branded online-ordering website for this location so guests can order directly for pickup and delivery."
+          grandfathered={status !== "not_requested"}
+        >
+          <StatusCard
+            status={status}
+            settings={currentSettings}
+            locationName={selectedLocation.name}
+            onRequestSetup={() => handleRequestSetup(selectedLocationId)}
+            isLoading={isSaving || requirementsSaving}
+          />
+        </FeaturePaywall>
 
         <Dialog open={requirementsOpen} onOpenChange={setRequirementsOpen}>
           <DialogContent className="max-w-2xl">

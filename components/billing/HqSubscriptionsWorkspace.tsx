@@ -125,7 +125,7 @@ import { InfoHint } from '@/app/manage/merchants/[merchantId]/components/subscri
 import { Pencil } from 'lucide-react'
 
 type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'suspended' | 'canceled'
-type ServiceFormState = Record<string, { enabled: boolean; quantity: string }>
+type ServiceFormState = Record<string, { enabled: boolean; quantity: string; comped?: boolean }>
 type BillingMethod = 'ach' | 'card'
 
 const BILLABLE_DEVICE_CATEGORIES = [
@@ -226,12 +226,38 @@ function startOfMonthIso(date = new Date()): string {
   return new Date(date.getFullYear(), date.getMonth(), 1).toISOString().slice(0, 10)
 }
 
-function endOfMonthIso(date = new Date()): string {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().slice(0, 10)
+/** Local YYYY-MM-DD (avoids the UTC day-shift `toISOString` can introduce). */
+function isoDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function firstDayNextMonthIso(date = new Date()): string {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 1).toISOString().slice(0, 10)
+function todayIso(): string {
+  return isoDate(new Date())
+}
+
+/** Add whole months to a YYYY-MM-DD date, clamping to the last valid day (Jan 31 + 1mo → Feb 28/29). */
+function addMonthsIso(baseIso: string, months: number): string {
+  const [y, m, d] = baseIso.split('-').map(Number)
+  const anchor = new Date(y, m - 1 + months, 1)
+  const lastDay = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate()
+  anchor.setDate(Math.min(d, lastDay))
+  return isoDate(anchor)
+}
+
+function addDaysIso(baseIso: string, days: number): string {
+  const [y, m, d] = baseIso.split('-').map(Number)
+  return isoDate(new Date(y, m - 1, d + days))
+}
+
+/**
+ * A monthly billing cycle anchored to the charge date rather than the calendar
+ * month: the period runs from `from` to the day before the same date next month,
+ * and the next bill lands exactly one month out. Buy on the 12th → next bill the
+ * 12th, not a hardcoded month-end.
+ */
+function freshBillingCycle(from = todayIso()): { start: string; end: string; nextBilling: string } {
+  const nextBilling = addMonthsIso(from, 1)
+  return { start: from, end: addDaysIso(nextBilling, -1), nextBilling }
 }
 
 function formatMoney(amount: number): string {
@@ -416,6 +442,7 @@ function buildInitialServiceFormState(
         {
           enabled: Boolean(assignment),
           quantity: String(assignment?.quantity ?? 1),
+          comped: String((assignment?.metadata as any)?.comped ?? '') === 'true' || (assignment?.metadata as any)?.comped === true,
         },
       ]
     })
@@ -635,9 +662,9 @@ export function HqSubscriptionsWorkspace({
   const [isQuoteLoading, setIsQuoteLoading] = useState(false)
   const [selectedLocationId, setSelectedLocationId] = useState('')
   const [status, setStatus] = useState<SubscriptionStatus>('active')
-  const [currentPeriodStart, setCurrentPeriodStart] = useState(startOfMonthIso())
-  const [currentPeriodEnd, setCurrentPeriodEnd] = useState(endOfMonthIso())
-  const [nextBillingDate, setNextBillingDate] = useState(firstDayNextMonthIso())
+  const [currentPeriodStart, setCurrentPeriodStart] = useState(() => freshBillingCycle().start)
+  const [currentPeriodEnd, setCurrentPeriodEnd] = useState(() => freshBillingCycle().end)
+  const [nextBillingDate, setNextBillingDate] = useState(() => freshBillingCycle().nextBilling)
   const [trialEndsAt, setTrialEndsAt] = useState('')
   const [gracePeriodEndsAt, setGracePeriodEndsAt] = useState('')
   const [graceReason, setGraceReason] = useState('')
@@ -935,13 +962,16 @@ export function HqSubscriptionsWorkspace({
     () =>
       services.map((service) => {
         const current = serviceFormState[service.id] ?? { enabled: false, quantity: '1' }
+        const comped = Boolean(current.comped)
         const quantity = service.pricing_model === 'flat' ? 1 : parsePositiveInteger(current.quantity)
         const effectiveQuantity = current.enabled ? Math.max(service.pricing_model === 'flat' ? 1 : 0, quantity) : 0
-        const subtotal = current.enabled ? calculateServiceSubtotal(service, effectiveQuantity) : 0
+        // Comped (HQ-granted free) services stay enabled but never bill.
+        const subtotal = current.enabled && !comped ? calculateServiceSubtotal(service, effectiveQuantity) : 0
 
         return {
           service,
           enabled: current.enabled,
+          comped,
           quantity: effectiveQuantity,
           subtotal,
         }
@@ -960,7 +990,7 @@ export function HqSubscriptionsWorkspace({
         stationCount: Math.max(0, parsePositiveInteger(quoteStationCount)),
         billingMethod: quoteBillingMethod,
         services: selectedServiceRows
-          .filter((row) => row.enabled && row.quantity > 0)
+          .filter((row) => row.enabled && row.quantity > 0 && !row.comped)
           .map((row) => ({
             serviceId: row.service.id,
             serviceCode: row.service.service_code,
@@ -1109,10 +1139,11 @@ export function HqSubscriptionsWorkspace({
               buildInitialServiceFormState(nextServices, nextAssignmentMap[defaultSubscription.id] ?? [])
             )
           } else {
+            const cycle = freshBillingCycle()
             setStatus('active')
-            setCurrentPeriodStart(startOfMonthIso())
-            setCurrentPeriodEnd(endOfMonthIso())
-            setNextBillingDate(firstDayNextMonthIso())
+            setCurrentPeriodStart(cycle.start)
+            setCurrentPeriodEnd(cycle.end)
+            setNextBillingDate(cycle.nextBilling)
             setTrialEndsAt('')
             setGracePeriodEndsAt('')
             setGraceReason('')
@@ -1177,10 +1208,11 @@ export function HqSubscriptionsWorkspace({
       return
     }
 
+    const cycle = freshBillingCycle()
     setStatus('active')
-    setCurrentPeriodStart(startOfMonthIso())
-    setCurrentPeriodEnd(endOfMonthIso())
-    setNextBillingDate(firstDayNextMonthIso())
+    setCurrentPeriodStart(cycle.start)
+    setCurrentPeriodEnd(cycle.end)
+    setNextBillingDate(cycle.nextBilling)
     setTrialEndsAt('')
     setGracePeriodEndsAt('')
     setGraceReason('')
@@ -1239,12 +1271,13 @@ export function HqSubscriptionsWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLocation?.id])
 
-  const updateServiceState = (serviceId: string, patch: Partial<{ enabled: boolean; quantity: string }>) => {
+  const updateServiceState = (serviceId: string, patch: Partial<{ enabled: boolean; quantity: string; comped: boolean }>) => {
     setServiceFormState((current) => ({
       ...current,
       [serviceId]: {
         enabled: patch.enabled ?? current[serviceId]?.enabled ?? false,
         quantity: patch.quantity ?? current[serviceId]?.quantity ?? '1',
+        comped: patch.comped ?? current[serviceId]?.comped ?? false,
       },
     }))
   }
@@ -1260,6 +1293,7 @@ export function HqSubscriptionsWorkspace({
         serviceId: service.id,
         serviceCode: service.service_code,
         enabled: serviceFormState[service.id]?.enabled ?? false,
+        comped: Boolean(serviceFormState[service.id]?.comped),
         quantity:
           service.pricing_model === 'flat'
             ? 1
@@ -1304,6 +1338,8 @@ export function HqSubscriptionsWorkspace({
           metadata: {
             source: 'hq_subscriptions_workspace',
             serviceCode: service.serviceCode,
+            // HQ-granted free feature: entitled but excluded from billing.
+            ...(service.comped ? { comped: true } : {}),
           },
         })),
       })
@@ -2044,7 +2080,7 @@ export function HqSubscriptionsWorkspace({
                         ) : (
                           selectedServiceRows
                             .filter((row) => row.service.service_category !== 'hardware')
-                            .map(({ service, enabled, subtotal }) => (
+                            .map(({ service, enabled, comped, subtotal }) => (
                               <div key={service.id} className="flex items-center justify-between gap-3 rounded-lg border p-2.5">
                                 <label className="flex min-w-0 items-start gap-2.5">
                                   <Checkbox
@@ -2058,14 +2094,26 @@ export function HqSubscriptionsWorkspace({
                                   </span>
                                 </label>
                                 <div className="flex items-center gap-2">
-                                  {service.pricing_model !== 'flat' && enabled ? (
+                                  {service.pricing_model !== 'flat' && enabled && !comped ? (
                                     <div className="flex items-center gap-1">
                                       <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateServiceState(service.id, { quantity: String(Math.max(0, parsePositiveInteger(serviceFormState[service.id]?.quantity) - 1)) })}>−</Button>
                                       <Input inputMode="numeric" className="h-7 w-12 text-center" value={serviceFormState[service.id]?.quantity ?? '1'} onChange={(event) => updateServiceState(service.id, { quantity: event.target.value })} />
                                       <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateServiceState(service.id, { quantity: String(parsePositiveInteger(serviceFormState[service.id]?.quantity) + 1) })}>+</Button>
                                     </div>
                                   ) : null}
-                                  <span className="w-16 text-right text-sm font-medium">{enabled ? formatMoney(subtotal) : '—'}</span>
+                                  {enabled ? (
+                                    <Button
+                                      type="button"
+                                      variant={comped ? 'default' : 'outline'}
+                                      size="sm"
+                                      className="h-7 px-2 text-xs"
+                                      title="Grant this feature for free (entitled, not billed)"
+                                      onClick={() => updateServiceState(service.id, { comped: !comped })}
+                                    >
+                                      Free
+                                    </Button>
+                                  ) : null}
+                                  <span className="w-16 text-right text-sm font-medium">{enabled ? (comped ? 'Free' : formatMoney(subtotal)) : '—'}</span>
                                 </div>
                               </div>
                             ))
@@ -2108,7 +2156,7 @@ export function HqSubscriptionsWorkspace({
                         ) : (
                           selectedServiceRows
                             .filter((row) => row.service.service_category === 'hardware')
-                            .map(({ service, enabled, subtotal }) => (
+                            .map(({ service, enabled, comped, subtotal }) => (
                               <div key={service.id} className="flex items-center justify-between gap-3 rounded-lg border p-2.5">
                                 <label className="flex min-w-0 items-start gap-2.5">
                                   <Checkbox
@@ -2122,14 +2170,26 @@ export function HqSubscriptionsWorkspace({
                                   </span>
                                 </label>
                                 <div className="flex items-center gap-2">
-                                  {service.pricing_model !== 'flat' && enabled ? (
+                                  {service.pricing_model !== 'flat' && enabled && !comped ? (
                                     <div className="flex items-center gap-1">
                                       <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateServiceState(service.id, { quantity: String(Math.max(0, parsePositiveInteger(serviceFormState[service.id]?.quantity) - 1)) })}>−</Button>
                                       <Input inputMode="numeric" className="h-7 w-12 text-center" value={serviceFormState[service.id]?.quantity ?? '1'} onChange={(event) => updateServiceState(service.id, { quantity: event.target.value })} />
                                       <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateServiceState(service.id, { quantity: String(parsePositiveInteger(serviceFormState[service.id]?.quantity) + 1) })}>+</Button>
                                     </div>
                                   ) : null}
-                                  <span className="w-16 text-right text-sm font-medium">{enabled ? formatMoney(subtotal) : '—'}</span>
+                                  {enabled ? (
+                                    <Button
+                                      type="button"
+                                      variant={comped ? 'default' : 'outline'}
+                                      size="sm"
+                                      className="h-7 px-2 text-xs"
+                                      title="Grant this feature for free (entitled, not billed)"
+                                      onClick={() => updateServiceState(service.id, { comped: !comped })}
+                                    >
+                                      Free
+                                    </Button>
+                                  ) : null}
+                                  <span className="w-16 text-right text-sm font-medium">{enabled ? (comped ? 'Free' : formatMoney(subtotal)) : '—'}</span>
                                 </div>
                               </div>
                             ))
@@ -2281,8 +2341,10 @@ export function HqSubscriptionsWorkspace({
                         <p className="text-sm text-muted-foreground">
                           We&apos;ll charge{' '}
                           <span className="font-medium text-foreground">{buildPaymentMethodLabel(selectedBillingProfile)}</span>{' '}
-                          {formatMoney(quote?.total_amount ?? 0)} today and monthly on the next billing date (
-                          {formatDate(nextBillingDate)}).
+                          {formatMoney(quote?.total_amount ?? 0)} today for the first month, then the same amount
+                          every month starting{' '}
+                          <span className="font-medium text-foreground">{formatDate(nextBillingDate)}</span> (one month
+                          from today).
                         </p>
                       )}
                     </CardContent>

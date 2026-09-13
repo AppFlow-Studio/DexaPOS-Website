@@ -93,6 +93,68 @@ function digitsOnly(value?: string | null): string {
   return value.replace(/\D/g, '')
 }
 
+/**
+ * Pull non-sensitive card metadata (last four, expiry, brand) out of a Valor
+ * vault response. The vault endpoints are loosely documented, so every plausible
+ * key is probed and anything missing is left null — this is best-effort display
+ * data, never a hard dependency. Raw PANs never reach here (Passage tokenizes
+ * client-side); a "masked_card_number" style value only exposes the last four.
+ */
+function extractVaultCardMeta(raw: unknown): {
+  lastFour: string | null
+  expMonth: number | null
+  expYear: number | null
+  brand: string | null
+} {
+  const empty = { lastFour: null, expMonth: null, expYear: null, brand: null }
+  if (!raw || typeof raw !== 'object') return empty
+  const body = raw as Record<string, unknown>
+
+  const str = (keys: string[]): string | null => {
+    for (const key of keys) {
+      const value = body[key]
+      if (typeof value === 'string' && value.trim()) return value.trim()
+      if (typeof value === 'number') return String(value)
+    }
+    return null
+  }
+
+  // Last four — accept a bare 4-digit field or a masked card number, taking the
+  // final four digits either way.
+  const lastFourRaw = str([
+    'card_last_four', 'last_four', 'last4', 'card_last4', 'cardLastFour',
+    'masked_card_number', 'maskedCardNumber', 'card_number', 'cardNumber', 'masked_card', 'maskedCard',
+  ])
+  const lastFourDigits = digitsOnly(lastFourRaw)
+  const lastFour = lastFourDigits.length >= 4 ? lastFourDigits.slice(-4) : null
+
+  // Expiry — either split month/year fields, or a combined MMYY / MM/YY / MMYYYY.
+  let expMonth: number | null = null
+  let expYear: number | null = null
+  const monthRaw = str(['card_exp_month', 'exp_month', 'expiry_month', 'expMonth', 'expiration_month'])
+  const yearRaw = str(['card_exp_year', 'exp_year', 'expiry_year', 'expYear', 'expiration_year'])
+  if (monthRaw && yearRaw) {
+    expMonth = Number(monthRaw) || null
+    expYear = Number(yearRaw) || null
+  } else {
+    const combined = digitsOnly(str(['exp_date', 'expiry', 'card_exp', 'expiration', 'exp', 'expdate']))
+    if (combined.length === 4) {
+      expMonth = Number(combined.slice(0, 2)) || null
+      expYear = 2000 + (Number(combined.slice(2, 4)) || 0)
+    } else if (combined.length === 6) {
+      expMonth = Number(combined.slice(0, 2)) || null
+      expYear = Number(combined.slice(2, 6)) || null
+    }
+  }
+  // Two-digit years → 20xx.
+  if (expYear !== null && expYear < 100) expYear += 2000
+  if (expMonth !== null && (expMonth < 1 || expMonth > 12)) expMonth = null
+
+  const brand = str(['card_type', 'cardType', 'card_brand', 'cardBrand', 'brand', 'scheme'])
+
+  return { lastFour, expMonth, expYear, brand }
+}
+
 interface ValorCredentialRow {
   valor_appid: string
   valor_epi: string
@@ -256,6 +318,145 @@ export async function getMerchantBillingCardSetup(
     console.error('[getMerchantBillingCardSetup] Error:', error)
     return unavailable
   }
+}
+
+/**
+ * Provision the Valor SaaS (subscription) rail for a scope by reusing the
+ * location's already-boarded online-order Valor credentials.
+ *
+ * A Valor EPI processes both card-present sales and subscriptions, and the app
+ * key is vaulted per (merchant, location) — not per purpose — so the
+ * subscription account can safely point at the same vault secret + EPI + app id
+ * as the online-order account for that scope. This mirrors how the one working
+ * subscription account (verified end-to-end on staging) was set up.
+ *
+ * Fee-schedule / discount fields are intentionally left null: the CHECK
+ * constraint exempts subscription accounts, and the SaaS charge path never reads
+ * them (our surcharge comes from the plan's card_surcharge_pct), so we don't
+ * carry misleading card-present rates onto the SaaS rail.
+ */
+export async function provisionSubscriptionBillingRail(
+  merchantId: string,
+  locationId?: string | null,
+): Promise<{ success: boolean; error?: string }> {
+  const trimmedMerchantId = merchantId?.trim()
+  if (!trimmedMerchantId) {
+    return { success: false, error: 'Merchant is required.' }
+  }
+
+  const { orgId } = await auth()
+  if (orgId === DEXA_HQ_ORG_ID) {
+    await assertHQPermission('hq.merchant.update')
+  } else {
+    await assertMerchantScopeForCurrentOrg(trimmedMerchantId)
+  }
+
+  const scopedLocationId = normalizeText(locationId)
+  const serviceRole = createServiceRoleClient() as any
+
+  // Find the active online-order Valor account for this scope to clone from.
+  // Prefer the primary row, then the most recently provisioned one.
+  let sourceQuery = serviceRole
+    .from('merchant_processor_accounts')
+    .select('valor_epi, valor_appid, valor_appkey_encrypted')
+    .eq('merchant_id', trimmedMerchantId)
+    .eq('processor', 'valor')
+    .eq('purpose', 'online_order')
+    .eq('is_active', true)
+    .order('is_primary', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(1)
+  sourceQuery = scopedLocationId
+    ? sourceQuery.eq('location_id', scopedLocationId)
+    : sourceQuery.is('location_id', null)
+
+  const { data: source, error: sourceError } = await sourceQuery.maybeSingle()
+
+  if (sourceError) {
+    console.error('[provisionSubscriptionBillingRail] Source lookup error:', sourceError)
+    return { success: false, error: 'Failed to look up the location’s Valor account.' }
+  }
+
+  if (!source?.valor_epi || !source?.valor_appkey_encrypted) {
+    return {
+      success: false,
+      error: scopedLocationId
+        ? 'Board this location on Valor (the online-order rail) before setting up subscription billing.'
+        : 'Board this merchant on Valor before setting up subscription billing.',
+    }
+  }
+
+  const now = new Date().toISOString()
+
+  // Only one active primary may exist per (merchant, location, subscription)
+  // across processors — demote any incumbent before promoting this one.
+  let demoteQuery = serviceRole
+    .from('merchant_processor_accounts')
+    .update({ is_primary: false, updated_at: now })
+    .eq('merchant_id', trimmedMerchantId)
+    .eq('purpose', 'subscription')
+    .eq('is_active', true)
+    .eq('is_primary', true)
+  demoteQuery = scopedLocationId
+    ? demoteQuery.eq('location_id', scopedLocationId)
+    : demoteQuery.is('location_id', null)
+  const { error: demoteError } = await demoteQuery
+  if (demoteError) {
+    console.error('[provisionSubscriptionBillingRail] Demote error:', demoteError)
+    return { success: false, error: 'Failed to update the existing subscription account.' }
+  }
+
+  const credentials = {
+    valor_epi: source.valor_epi,
+    valor_appid: source.valor_appid,
+    valor_appkey_encrypted: source.valor_appkey_encrypted,
+    pricing_owner: 'dexa' as const,
+    is_primary: true,
+    is_active: true,
+    updated_at: now,
+  }
+
+  // One row per (merchant, location, processor, purpose) — reuse it if present.
+  let existingQuery = serviceRole
+    .from('merchant_processor_accounts')
+    .select('id')
+    .eq('merchant_id', trimmedMerchantId)
+    .eq('processor', 'valor')
+    .eq('purpose', 'subscription')
+    .limit(1)
+  existingQuery = scopedLocationId
+    ? existingQuery.eq('location_id', scopedLocationId)
+    : existingQuery.is('location_id', null)
+  const { data: existing } = await existingQuery.maybeSingle()
+
+  if (existing?.id) {
+    const { error } = await serviceRole
+      .from('merchant_processor_accounts')
+      .update(credentials)
+      .eq('id', existing.id)
+    if (error) {
+      console.error('[provisionSubscriptionBillingRail] Update error:', error)
+      return { success: false, error: error.message }
+    }
+  } else {
+    const { error } = await serviceRole
+      .from('merchant_processor_accounts')
+      .insert({
+        merchant_id: trimmedMerchantId,
+        location_id: scopedLocationId,
+        processor: 'valor',
+        purpose: 'subscription',
+        ...credentials,
+      })
+    if (error) {
+      console.error('[provisionSubscriptionBillingRail] Insert error:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  revalidatePath('/dashboard/settings/billing')
+  revalidatePath(`/manage/merchants/${trimmedMerchantId}/billing`)
+  return { success: true }
 }
 
 export async function saveMerchantBilling(
@@ -475,6 +676,18 @@ export async function saveMerchantBillingCardWithVault(
       },
     )
 
+    // Best-effort card metadata for display — probe the vault responses (payment
+    // profile first, then customer). Anything Valor doesn't return stays null.
+    const vaultCardMeta = extractVaultCardMeta(paymentProfile.raw)
+    const fallbackCardMeta = extractVaultCardMeta(customer.raw)
+    const resolvedLastFour =
+      (cardLastFour.length === 4 ? cardLastFour : null) ??
+      vaultCardMeta.lastFour ??
+      fallbackCardMeta.lastFour
+    const resolvedBrand = cardBrand ?? vaultCardMeta.brand ?? fallbackCardMeta.brand
+    const resolvedExpMonth = vaultCardMeta.expMonth ?? fallbackCardMeta.expMonth
+    const resolvedExpYear = vaultCardMeta.expYear ?? fallbackCardMeta.expYear
+
     let previousProfilesQuery = supabase.from('merchant_billing_profiles')
       .select('id').eq('merchant_id', merchantId)
     previousProfilesQuery = locationId
@@ -505,10 +718,10 @@ export async function saveMerchantBillingCardWithVault(
         billing_email: billingEmail,
         billing_method: 'card',
         account_holder_name: cardholderName,
-        card_brand: cardBrand,
-        card_last_four: cardLastFour.length === 4 ? cardLastFour : null,
-        card_exp_month: null,
-        card_exp_year: null,
+        card_brand: resolvedBrand,
+        card_last_four: resolvedLastFour,
+        card_exp_month: resolvedExpMonth,
+        card_exp_year: resolvedExpYear,
         card_token: null,
         payment_device_id: null,
         platform_billing_config_id: null,
