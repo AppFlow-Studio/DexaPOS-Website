@@ -41,14 +41,23 @@ export default function NewPageOverlay({
   clerkOrgId,
   locationId,
   siteId,
+  locations = [],
 }: {
   clerkOrgId: string;
   locationId: string;
   siteId: string;
+  /** The branches this page may be scoped to (empty for a single-location merchant). */
+  locations?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [template, setTemplate] = useState<PageTemplateId>("article");
   const [title, setTitle] = useState("");
+  /**
+   * What the page is ABOUT. "" = a brand page (speaks for the whole business,
+   * shows no prices until a visitor picks a branch); a location id = a location
+   * page (that branch's hours, address, menu and prices — see `CreatePage`).
+   */
+  const [scope, setScope] = useState<string>("");
   const [preview, setPreview] = useState<React.ReactNode>(null);
   const [rendering, setRendering] = useState(true);
   const [pending, startTransition] = useTransition();
@@ -58,12 +67,23 @@ export default function NewPageOverlay({
   const pathCheck = checkPagePath(path);
   const valid = trimmed.length > 0 && path !== "" && pathCheck.ok;
 
-  usePreview(template, trimmed, locationId, setPreview, setRendering);
+  // A brand page still needs a real branch to draw menu photos and prices from
+  // in the preview, so fall back to the editing context when no scope is chosen.
+  const renderLocationId = scope || locationId;
+  // Only a multi-location merchant has a meaningful choice to make here.
+  const showScopePicker = locations.length > 1;
+
+  usePreview(template, trimmed, renderLocationId, setPreview, setRendering);
 
   const create = () => {
     if (!valid) return;
     startTransition(async () => {
-      const created = await CreatePage(clerkOrgId, siteId, { title: trimmed, path });
+      const created = await CreatePage(clerkOrgId, siteId, {
+        title: trimmed,
+        path,
+        // Omitted for a brand page; set makes it a location page.
+        locationId: scope || undefined,
+      });
       if (!created.data) {
         toast.error(created.error ?? "Could not create the page.");
         return;
@@ -72,7 +92,10 @@ export default function NewPageOverlay({
       // `CreatePage` seeds an empty document — applying the template is a second
       // write rather than a parameter, which keeps the create action ignorant of
       // templates and the template list free to change without a server deploy.
-      const document = createPageFromTemplate(template, { locationId, title: trimmed });
+      const document = createPageFromTemplate(template, {
+        locationId: renderLocationId,
+        title: trimmed,
+      });
       const saved = await SaveDraft(clerkOrgId, created.data.id, document, created.data.revision);
 
       if (saved.error) {
@@ -109,6 +132,29 @@ export default function NewPageOverlay({
           </div>
         }
       >
+        {showScopePicker && (
+          <label className="mb-5 block">
+            <span className="mb-1.5 block text-xs font-semibold">This page is for</span>
+            <select
+              value={scope}
+              onChange={(event) => setScope(event.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <option value="">All locations (brand page)</option>
+              {locations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {location.name}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1.5 block text-[11px] text-muted-foreground">
+              {scope
+                ? "Shows this location’s hours, address and prices."
+                : "Speaks for the whole business; shows prices only after a visitor picks a location."}
+            </span>
+          </label>
+        )}
+
         <label className="mb-5 block">
           <span className="mb-1.5 block text-xs font-semibold">Page name</span>
           <input

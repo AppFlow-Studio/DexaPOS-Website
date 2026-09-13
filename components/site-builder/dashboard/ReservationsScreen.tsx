@@ -4,6 +4,7 @@ import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { useCallback, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { toast } from "sonner";
 
+import { useIsMerchantOwner } from "@/app/dashboard/hooks/useMerchantRole";
 import {
   SetReservationApproval,
   SetReservationsEnabled,
@@ -225,6 +226,13 @@ export default function ReservationsScreen({
   const [pending, startTransition] = useTransition();
   const { collapsed, toggle: toggleCollapsed } = useCollapsedLocations(siteId);
   const todayIso = localTodayIso();
+  // Turning the website's reservations feature on/off and choosing the approval
+  // mode create/change the reservations *page* (owner-only, like the rest of the
+  // website). The per-location operational settings below — which branches accept
+  // bookings, service hours, blackouts, policy — write the reservation_* tables
+  // and stay editable by managers, so only those two website-level controls are
+  // gated here.
+  const isOwner = useIsMerchantOwner(clerkOrgId);
 
   const run = (
     work: () => Promise<{ data?: LocationReservationConfig[]; error?: string }>,
@@ -336,21 +344,28 @@ export default function ReservationsScreen({
               plan with a table already assigned.
             </p>
           </div>
-          <Switch
-            checked={enabled}
-            disabled={pending}
-            aria-label="Take bookings on your website"
-            onCheckedChange={(next) => {
-              // On is harmless and immediate. Off unpublishes a live page and
-              // takes it out of the menu, so it asks first — this is the one
-              // control on the screen a merchant can regret.
-              if (next) toggleEnabled(true);
-              else setConfirmingOff(true);
-            }}
-          />
+          {isOwner ? (
+            <Switch
+              checked={enabled}
+              disabled={pending}
+              aria-label="Take bookings on your website"
+              onCheckedChange={(next) => {
+                // On is harmless and immediate. Off unpublishes a live page and
+                // takes it out of the menu, so it asks first — this is the one
+                // control on the screen a merchant can regret.
+                if (next) toggleEnabled(true);
+                else setConfirmingOff(true);
+              }}
+            />
+          ) : (
+            // View only for non-owners: show the state without a control.
+            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              {enabled ? "On" : "Off"}
+            </span>
+          )}
         </header>
 
-        {confirmingOff && (
+        {isOwner && confirmingOff && (
           <div className="border-t p-4">
             <p className="text-sm font-medium">Stop taking bookings?</p>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -390,53 +405,63 @@ export default function ReservationsScreen({
         {enabled && !confirmingOff && (
           <div className="border-t p-4">
             <h3 className="text-sm font-semibold">When a guest books</h3>
-            <div
-              role="radiogroup"
-              aria-label="When a guest books"
-              className="mt-3 grid gap-2 sm:grid-cols-2"
-            >
-              {APPROVAL_CHOICES.map((choice) => {
-                const selected = approval === choice.value;
-                return (
-                  <button
-                    key={choice.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    disabled={pending}
-                    onClick={() => chooseApproval(choice.value)}
-                    className={cn(
-                      "rounded-lg border p-3 text-left transition-colors",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      "disabled:cursor-not-allowed disabled:opacity-60",
-                      selected
-                        ? "border-primary bg-primary/5 ring-1 ring-primary"
-                        : "hover:bg-accent",
-                    )}
-                  >
-                    <span className="flex items-center gap-2">
-                      <span
-                        aria-hidden
+            {isOwner ? (
+              <>
+                <div
+                  role="radiogroup"
+                  aria-label="When a guest books"
+                  className="mt-3 grid gap-2 sm:grid-cols-2"
+                >
+                  {APPROVAL_CHOICES.map((choice) => {
+                    const selected = approval === choice.value;
+                    return (
+                      <button
+                        key={choice.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        disabled={pending}
+                        onClick={() => chooseApproval(choice.value)}
                         className={cn(
-                          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-                          selected ? "border-primary" : "border-muted-foreground/40",
+                          "rounded-lg border p-3 text-left transition-colors",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          "disabled:cursor-not-allowed disabled:opacity-60",
+                          selected
+                            ? "border-primary bg-primary/5 ring-1 ring-primary"
+                            : "hover:bg-accent",
                         )}
                       >
-                        {selected && <span className="h-2 w-2 rounded-full bg-primary" />}
-                      </span>
-                      <span className="text-sm font-medium">{choice.title}</span>
-                    </span>
-                    <span className="mt-1.5 block text-xs text-muted-foreground">
-                      {choice.description}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Changing this only affects new bookings. Anything already booked stays exactly as it
-              is.
-            </p>
+                        <span className="flex items-center gap-2">
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+                              selected ? "border-primary" : "border-muted-foreground/40",
+                            )}
+                          >
+                            {selected && <span className="h-2 w-2 rounded-full bg-primary" />}
+                          </span>
+                          <span className="text-sm font-medium">{choice.title}</span>
+                        </span>
+                        <span className="mt-1.5 block text-xs text-muted-foreground">
+                          {choice.description}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Changing this only affects new bookings. Anything already booked stays exactly as
+                  it is.
+                </p>
+              </>
+            ) : (
+              // View only for non-owners: describe the current mode without the
+              // radio controls.
+              <p className="mt-2 text-sm text-muted-foreground">
+                {APPROVAL_CHOICES.find((choice) => choice.value === approval)?.description}
+              </p>
+            )}
           </div>
         )}
       </section>
@@ -507,6 +532,10 @@ export default function ReservationsScreen({
                   )}
                 </span>
               </button>
+              {/*
+                Operational, not website content: whether a branch accepts
+                bookings writes reservation_settings, which managers may edit.
+              */}
               <Switch
                 checked={location.acceptsReservations}
                 disabled={pending}

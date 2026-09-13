@@ -3,8 +3,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { loadMenuCatalog } from "@/app/dashboard/website/pages/menu-catalog";
+import { OwnerOnlyPage } from "@/components/site-builder/dashboard/OwnerOnlyPage";
 import StyleOverlay from "@/components/site-builder/dashboard/StyleOverlay";
 import { Button } from "@/components/ui/button";
+import { isMerchantOwnerForOrg } from "@/lib/site-builder/owner";
 import type { MerchantSiteRow } from "@/lib/site-builder/db-types";
 import { parseNavItems } from "@/lib/site-builder/nav";
 import { loadSiteContext } from "@/lib/site-builder/site-context";
@@ -30,6 +32,18 @@ export default async function StyleRoute({
   const params = await searchParams;
   const storefront = await loadSiteContext(orgId, params.location);
   if (!storefront) redirect("/dashboard/website/pages");
+
+  // Website editing is owner-only. Colours, fonts and style are a pure editing
+  // surface, so a non-owner sees the read-only notice rather than the overlay.
+  if (!(await isMerchantOwnerForOrg(orgId))) {
+    return (
+      <OwnerOnlyPage
+        locationId={storefront.locationId}
+        title="Style is view only"
+        description="Only the store owner can change your website's colours, fonts, and style."
+      />
+    );
+  }
 
   const supabase = createServerSupabaseClient();
   const { data: website } = await supabase

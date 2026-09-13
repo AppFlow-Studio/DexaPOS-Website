@@ -7,6 +7,11 @@ import { LoadDraft } from "@/app/dashboard/website/actions/draft";
 import { GetPublishedDocument } from "@/app/dashboard/website/actions/publish";
 import { EnsureNavSeeded, GetOrCreateSite } from "@/app/dashboard/website/actions/site";
 import BuilderShell from "@/components/site-builder/builder/BuilderShell";
+import { OwnerOnlyBanner } from "@/components/site-builder/dashboard/OwnerOnlyBanner";
+import { Button } from "@/components/ui/button";
+import { isMerchantOwnerForOrg } from "@/lib/site-builder/owner";
+import { sitePublicUrl } from "@/lib/site-builder/public-url";
+import { websiteRoutes } from "@/components/site-builder/routes";
 import type { SitePageSummary } from "@/lib/site-builder/db-types";
 import { getResolverSources } from "@/lib/site-builder/request-scope";
 import {
@@ -83,6 +88,28 @@ export default async function EditorRoute({
 
   const pagesResult = await ListPages(orgId, websiteResult.data.id);
   let pages: SitePageSummary[] = pagesResult.data ?? [];
+
+  // Editing is owner-only. A non-owner (manager/admin) may reach this URL by
+  // clicking a page title to "view" it — but the builder mutates on nearly every
+  // interaction and every write is RLS-blocked for them, so render a read-only
+  // notice instead of the interactive canvas. Placed before CreateHomePage /
+  // EnsureNavSeeded below so a non-owner never triggers a blocked bootstrap write.
+  const isOwner = await isMerchantOwnerForOrg(orgId);
+  if (!isOwner) {
+    const requested = pageId === "home" ? undefined : pages.find((p) => p.id === pageId);
+    const viewing = requested ?? pages.find((p) => p.is_home) ?? pages[0];
+    return (
+      <ReadOnlyEditorNotice
+        locationId={site.locationId}
+        pageTitle={viewing?.title ?? null}
+        liveUrl={
+          viewing?.published_version_id && websiteResult.data.subdomain
+            ? sitePublicUrl(websiteResult.data.subdomain, viewing.path)
+            : null
+        }
+      />
+    );
+  }
 
   // No page at all: create the merchant's home page from the starter document
   // rather than showing a blank canvas. Seeded with real menu ids so the
@@ -199,6 +226,43 @@ export default async function EditorRoute({
       publishedDoc={published.data?.document ?? null}
       publishedAt={published.data?.publishedAt ?? null}
     />
+  );
+}
+
+function ReadOnlyEditorNotice({
+  locationId,
+  pageTitle,
+  liveUrl,
+}: {
+  locationId: string;
+  pageTitle: string | null;
+  liveUrl: string | null;
+}) {
+  return (
+    <div className="mx-auto w-full max-w-xl space-y-4 p-4 sm:p-6 lg:p-8">
+      <OwnerOnlyBanner />
+      <div className="rounded-2xl border bg-card p-6">
+        <h1 className="text-lg font-semibold">
+          {pageTitle ? `“${pageTitle}” is view only` : "This website is view only"}
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Only the store owner can edit pages. You can still view the published
+          website, but the editor is locked.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {liveUrl && (
+            <Button asChild variant="outline">
+              <a href={liveUrl} target="_blank" rel="noopener noreferrer">
+                View live page
+              </a>
+            </Button>
+          )}
+          <Button asChild>
+            <Link href={websiteRoutes.pages(locationId)}>Back to pages</Link>
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

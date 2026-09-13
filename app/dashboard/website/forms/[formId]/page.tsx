@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { GetForm } from "@/app/dashboard/website/actions/forms";
 import FormBuilder from "@/components/site-builder/builder/FormBuilder";
+import { OwnerOnlyPage } from "@/components/site-builder/dashboard/OwnerOnlyPage";
+import { isMerchantOwnerForOrg } from "@/lib/site-builder/owner";
 import { buildRenderContext, loadSiteContext } from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -25,6 +27,18 @@ export default async function FormEditorRoute({
 
   const storefront = await loadSiteContext(orgId, location);
   if (!storefront) redirect("/dashboard/website/pages");
+
+  // Editing forms is owner-only. Managers manage submissions (a separate route),
+  // but the form builder mutates, so a non-owner sees the read-only notice.
+  if (!(await isMerchantOwnerForOrg(orgId))) {
+    return (
+      <OwnerOnlyPage
+        locationId={storefront.locationId}
+        title="Editing forms is view only"
+        description="Only the store owner can edit forms."
+      />
+    );
+  }
 
   const result = await GetForm(orgId, formId);
   if (!result.data) notFound();
