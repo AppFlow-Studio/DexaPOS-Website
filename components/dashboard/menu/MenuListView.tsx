@@ -95,12 +95,12 @@ interface MenuListViewProps {
   /** Menu ids linked+active on OrderOut for the location (eligible to become primary) */
   linkedMenuIds?: string[];
   onSetOnlineMenu?: (menuId: string) => void;
+  /** Returns false when the write failed, so the switch can roll back. */
   onChannelVisibilityChange?: (
     menuId: string,
     visibility: MenuChannelVisibility,
-  ) => void;
+  ) => void | Promise<boolean | void>;
   channelVisibilityDisabled?: boolean;
-  savingVisibilityMenuId?: string | null;
   /** Show effective menu availability across locations in the table view. */
   showLocations?: boolean;
 }
@@ -123,7 +123,6 @@ function SortableGridCard({
   linkedMenuIds,
   onChannelVisibilityChange,
   channelVisibilityDisabled,
-  isSavingVisibility,
 }: {
   menu: MenuWithLocation;
   handleRowClick: (id: string) => void;
@@ -133,7 +132,6 @@ function SortableGridCard({
   linkedMenuIds?: string[];
   onChannelVisibilityChange?: MenuListViewProps["onChannelVisibilityChange"];
   channelVisibilityDisabled?: boolean;
-  isSavingVisibility?: boolean;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
   const visibility = normalizeMenuChannelVisibility(menu);
@@ -201,7 +199,10 @@ function SortableGridCard({
           <MenuChannelVisibilityControls
             compact
             value={visibility}
-            disabled={channelVisibilityDisabled || isSavingVisibility}
+            // Only "no location selected" disables these. The control is
+            // optimistic and rolls back on failure, so there is nothing to
+            // wait for — see MenuChannelVisibilityControls.
+            disabled={channelVisibilityDisabled}
             onChange={(next) => onChannelVisibilityChange?.(menu.id, next)}
           />
         </div>
@@ -252,7 +253,6 @@ function SortableTableRow({
   linkedMenuIds,
   onChannelVisibilityChange,
   channelVisibilityDisabled,
-  isSavingVisibility,
   showLocations,
 }: {
   menu: MenuWithLocation;
@@ -263,7 +263,6 @@ function SortableTableRow({
   linkedMenuIds?: string[];
   onChannelVisibilityChange?: MenuListViewProps["onChannelVisibilityChange"];
   channelVisibilityDisabled?: boolean;
-  isSavingVisibility?: boolean;
   showLocations: boolean;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
@@ -374,7 +373,8 @@ function SortableTableRow({
         <MenuChannelVisibilityControls
           compact
           value={visibility}
-          disabled={channelVisibilityDisabled || isSavingVisibility}
+          // Only "no location selected" disables these — see the grid card above.
+          disabled={channelVisibilityDisabled}
           onChange={(next) => onChannelVisibilityChange?.(menu.id, next)}
         />
       </TableCell>
@@ -415,7 +415,6 @@ export function MenuListView({
   onSetOnlineMenu,
   onChannelVisibilityChange,
   channelVisibilityDisabled = false,
-  savingVisibilityMenuId,
   showLocations = false,
 }: MenuListViewProps) {
   const router = useRouter();
@@ -510,7 +509,6 @@ export function MenuListView({
                 linkedMenuIds={linkedMenuIds}
                 onChannelVisibilityChange={onChannelVisibilityChange}
                 channelVisibilityDisabled={channelVisibilityDisabled}
-                isSavingVisibility={savingVisibilityMenuId === menu.id}
               />
             ))}
           </div>
@@ -559,7 +557,6 @@ export function MenuListView({
                     linkedMenuIds={linkedMenuIds}
                     onChannelVisibilityChange={onChannelVisibilityChange}
                     channelVisibilityDisabled={channelVisibilityDisabled}
-                    isSavingVisibility={savingVisibilityMenuId === menu.id}
                     showLocations={showLocations}
                   />
                 ))}
