@@ -1303,15 +1303,15 @@ export function HqSubscriptionsWorkspace({
       }))
       .filter((service) => service.enabled && service.quantity > 0)
 
-    const fallbackActiveStatus =
-      selectedLocationSubscription?.status && selectedLocationSubscription.status !== 'canceled'
-        ? selectedLocationSubscription.status
-        : 'active'
-
+    // "Save & Charge" on a lapsed subscription (past_due/suspended/canceled) is a
+    // reactivation: target 'active' so the server actually generates + charges an
+    // invoice. Passing the stale lapsed status through makes the server take its
+    // non-active branch, which saves the config WITHOUT charging — yet the UI used
+    // to still report "automatic payment approved". Only 'active'/'trial' pass
+    // through unchanged (trials are intentionally not charged).
+    const lapsedStatuses: SubscriptionStatus[] = ['past_due', 'suspended', 'canceled']
     const effectiveStatus: SubscriptionStatus =
-      status === 'canceled' && enabledServices.length > 0
-        ? fallbackActiveStatus
-        : status
+      enabledServices.length > 0 && lapsedStatuses.includes(status) ? 'active' : status
 
     if (effectiveStatus !== 'canceled' && enabledServices.length === 0) {
       toast.error('Enable at least one billable service for this location.')
@@ -1363,18 +1363,23 @@ export function HqSubscriptionsWorkspace({
         return
       }
 
+      // Only claim "automatic payment approved" when the server actually ran and
+      // approved a charge (it returns an invoiceId only on the active charge path).
+      // Otherwise the save skipped billing (trial, exemption, or a no-charge edit)
+      // and we must not imply money moved.
+      const paymentApproved = Boolean(subscriptionResult.invoiceId)
       toast.success(
         effectiveStatus === 'canceled'
           ? 'Subscription canceled.'
-          : status === 'canceled'
-            ? 'Selected services removed. Subscription remains active.'
-            : billingExemption.active
+          : billingExemption.active
+            ? selectedLocationSubscription
+              ? 'Complimentary services updated without a charge.'
+              : 'Complimentary services activated without a charge.'
+            : paymentApproved
               ? selectedLocationSubscription
-                ? 'Complimentary services updated without a charge.'
-                : 'Complimentary services activated without a charge.'
-              : selectedLocationSubscription
                 ? 'Subscription updated and automatic payment approved.'
                 : 'Subscription created and automatic payment approved.'
+              : 'Subscription saved. No payment was charged.'
       )
 
       refresh()
@@ -1482,7 +1487,7 @@ export function HqSubscriptionsWorkspace({
       toast.success(
         billingExemption.active
           ? 'Merchant tier updated under the billing exemption.'
-          : result.invoiceId
+          : result.charged
           ? 'Merchant tier updated and automatic payment approved.'
           : 'Merchant tier updated.',
       )

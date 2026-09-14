@@ -2455,6 +2455,7 @@ export async function upsertMerchantTierSubscription(
   success: boolean
   subscriptionId?: string
   invoiceId?: string | null
+  charged?: boolean
   anchorLocationId?: string
   notificationWarning?: string
   error?: string
@@ -2739,6 +2740,10 @@ export async function upsertMerchantTierSubscription(
     success: true,
     subscriptionId: result.data.id as string,
     invoiceId: synced.invoiceId,
+    // A charge only ran (and, since we got here, was approved) when the tier is
+    // being activated and an invoice existed to charge. Non-active saves generate
+    // an invoice but never touch the card — the UI must not claim "approved".
+    charged: params.status === 'active' && Boolean(synced.invoiceId),
     anchorLocationId: synced.anchorLocationId ?? undefined,
     notificationWarning,
   }

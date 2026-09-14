@@ -17,6 +17,7 @@ import {
     SidebarProvider,
     SidebarTrigger,
 } from '@/components/ui/sidebar'
+import DexaLogoLight from '@/public/dexalogolight.png'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -326,7 +327,7 @@ function AppSidebar() {
                     ) : (
                         <>
                             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                                <Image src="/dexalogolight.png" alt={hqOrg?.name || 'Dexa POS HQ'} width={32} height={32} className='rounded-lg' />
+                                <Image src={DexaLogoLight} alt={hqOrg?.name || 'Dexa POS HQ'} width={32} height={32} className=''  />
                             </div>
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-semibold">{hqOrg?.name || 'Dexa POS HQ'}</span>
