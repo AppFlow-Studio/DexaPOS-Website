@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { BrandedQrOptions } from "@/lib/qr/render";
 
-import { BrandedQrPreview } from "./BrandedQrPreview";
+import { BrandedQrPreview } from "@/components/dashboard/qr/BrandedQrPreview";
 
 export const MARKETING_QR_NAME_MAX_LENGTH = 80;
 
