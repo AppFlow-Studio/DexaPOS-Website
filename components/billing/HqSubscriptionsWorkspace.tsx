@@ -986,7 +986,9 @@ export function HqSubscriptionsWorkspace({
       setQuoteError(null)
 
       const result = await calculateSubscriptionTotal({
-        planId: selectedServicePlan?.id ?? null,
+        // Location subscriptions bill devices only (explicit per-device services) —
+        // no base/per-station plan. Keep planId null so the preview matches the invoice.
+        planId: null,
         stationCount: Math.max(0, parsePositiveInteger(quoteStationCount)),
         billingMethod: quoteBillingMethod,
         services: selectedServiceRows
@@ -1321,7 +1323,9 @@ export function HqSubscriptionsWorkspace({
         subscriptionId: selectedLocationSubscription?.id,
         merchantId: merchant.id,
         locationId: selectedLocation.id,
-        planId: selectedServicePlan?.id ?? selectedLocationSubscription?.plan_id ?? null,
+        // Location subscriptions are devices-only — no base/per-station plan attached
+        // (the server also forces this for location scope).
+        planId: null,
         currentPeriodStart,
         currentPeriodEnd,
         nextBillingDate,
@@ -2129,25 +2133,16 @@ export function HqSubscriptionsWorkspace({
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">Synced from deployed devices.</p>
 
-                      {/* Stations = deployed POS tablets. Auto-counted, read-only — this is
-                          exactly what the server bills, so it's never set by hand. */}
-                      <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border bg-muted/40 p-2.5">
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <span className="min-w-0">
-                            <span className="block text-sm font-medium">POS Stations</span>
-                            <span className="block text-xs text-muted-foreground">
-                              {activeStationCount === null
-                                ? 'Counting deployed POS tablets…'
-                                : `${activeStationCount} deployed POS tablet${activeStationCount === 1 ? '' : 's'}${
-                                    selectedServicePlan
-                                      ? ` · first ${formatMoney(selectedServicePlan.base_price_monthly)}, then ${formatMoney(selectedServicePlan.per_extra_station_price)} each`
-                                      : ''
-                                  }`}
-                            </span>
-                          </span>
-                          <InfoHint label="A station is a POS tablet, so this is counted automatically from deployed devices and can't be set by hand. It's the same figure billed for the base plan and per-station charge." />
+                      {/* Deployed-device count, for reference only. Devices are billed
+                          per-device via the explicit hardware services below — there is no
+                          automatic per-station charge. */}
+                      <div className="mt-3 flex items-start gap-1.5 rounded-lg border border-dashed bg-muted/30 p-2.5 text-xs text-muted-foreground">
+                        <span className="min-w-0">
+                          {activeStationCount === null
+                            ? 'Counting deployed POS tablets…'
+                            : `${activeStationCount} POS tablet${activeStationCount === 1 ? '' : 's'} deployed. Add per-device charges below — nothing is billed automatically.`}
                         </span>
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Auto</span>
+                        <InfoHint label="Deployed device count, for reference only. Device charges are set explicitly below (e.g. POS Tablet, KDS); there is no automatic base or per-station charge." />
                       </div>
 
                       <div className="mt-3 space-y-2">

@@ -13,7 +13,7 @@ import {
   sanitizeCustomerName,
 } from '@/lib/payments/valor/customerProfileApi'
 import { getClientToken } from '@/lib/payments/valor/saleApi'
-import { updateSubscription } from '@/lib/payments/valor/subscriptionApi'
+import { deactivateSubscription, updateSubscription } from '@/lib/payments/valor/subscriptionApi'
 import { shouldRebindSubscriptionCard } from '@/supabase/functions/_shared/subscription-billing-scope'
 
 const DEXA_HQ_ORG_ID = process.env.DEXA_POS_INTERNAL_TEAM_ID!
@@ -354,35 +354,35 @@ export async function provisionSubscriptionBillingRail(
   const scopedLocationId = normalizeText(locationId)
   const serviceRole = createServiceRoleClient() as any
 
-  // Find the active online-order Valor account for this scope to clone from.
-  // Prefer the primary row, then the most recently provisioned one.
-  let sourceQuery = serviceRole
-    .from('merchant_processor_accounts')
-    .select('valor_epi, valor_appid, valor_appkey_encrypted')
-    .eq('merchant_id', trimmedMerchantId)
-    .eq('processor', 'valor')
-    .eq('purpose', 'online_order')
-    .eq('is_active', true)
-    .order('is_primary', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(1)
-  sourceQuery = scopedLocationId
-    ? sourceQuery.eq('location_id', scopedLocationId)
-    : sourceQuery.is('location_id', null)
-
-  const { data: source, error: sourceError } = await sourceQuery.maybeSingle()
+  // SaaS fees settle to Dexa's bank, so every merchant's subscription rail is
+  // charged through the single central Dexa-owned merchant-of-record (the
+  // "DEXA POS AI" Valor merchant), NOT the merchant's own EPI. Clone the central
+  // credentials — epi/appid plus the app-key vault secret *reference* (shared
+  // across all subscription rows; get_valor_account_credentials decrypts it) —
+  // onto this scope's subscription account.
+  const { data: sourceRows, error: sourceError } = await serviceRole.rpc(
+    'get_platform_valor_saas_source',
+  )
+  const source = (Array.isArray(sourceRows) ? sourceRows[0] : sourceRows) as
+    | {
+        config_id: string
+        valor_epi: string | null
+        valor_appid: string | null
+        valor_appkey_secret_id: string | null
+        is_active: boolean
+      }
+    | null
 
   if (sourceError) {
-    console.error('[provisionSubscriptionBillingRail] Source lookup error:', sourceError)
-    return { success: false, error: 'Failed to look up the location’s Valor account.' }
+    console.error('[provisionSubscriptionBillingRail] Central config lookup error:', sourceError)
+    return { success: false, error: 'Failed to look up the central Dexa SaaS billing credentials.' }
   }
 
-  if (!source?.valor_epi || !source?.valor_appkey_encrypted) {
+  if (!source?.valor_epi || !source?.valor_appkey_secret_id) {
     return {
       success: false,
-      error: scopedLocationId
-        ? 'Board this location on Valor (the online-order rail) before setting up subscription billing.'
-        : 'Board this merchant on Valor before setting up subscription billing.',
+      error:
+        'Central Dexa SaaS billing (DEXA POS AI) is not configured yet. Set the central Valor credentials in HQ billing settings before enabling subscription billing.',
     }
   }
 
@@ -409,7 +409,7 @@ export async function provisionSubscriptionBillingRail(
   const credentials = {
     valor_epi: source.valor_epi,
     valor_appid: source.valor_appid,
-    valor_appkey_encrypted: source.valor_appkey_encrypted,
+    valor_appkey_encrypted: source.valor_appkey_secret_id,
     pricing_owner: 'dexa' as const,
     is_primary: true,
     is_active: true,
@@ -457,6 +457,284 @@ export async function provisionSubscriptionBillingRail(
   revalidatePath('/dashboard/settings/billing')
   revalidatePath(`/manage/merchants/${trimmedMerchantId}/billing`)
   return { success: true }
+}
+
+/**
+ * HQ-only: set or rotate the central Dexa SaaS billing credentials (the
+ * "DEXA POS AI" Valor merchant that every merchant's subscription rail clones
+ * from). The app key is vaulted; only its secret reference is persisted. Pass
+ * `appkeySecretId` instead of `appkey` to point at an already-vaulted key
+ * (used on staging, where the sandbox demo EPI's key is already in vault).
+ */
+export async function setPlatformValorSaasBillingCredentials(params: {
+  epi: string
+  appid: string
+  appkey?: string
+  appkeySecretId?: string
+  label?: string
+  isActive?: boolean
+}): Promise<{ success: boolean; configId?: string; error?: string }> {
+  await assertHQPermission('system.config.manage')
+
+  const epi = params.epi?.trim()
+  const appid = params.appid?.trim()
+  if (!epi || !/^2\d{9}$/.test(epi)) {
+    return { success: false, error: 'A valid 10-digit Valor EPI (beginning with 2) is required.' }
+  }
+  if (!appid) {
+    return { success: false, error: 'Valor app id is required.' }
+  }
+  // App key is optional on update — the RPC reuses the existing vaulted key when
+  // none is provided, and raises if there is no existing key for a first-time config.
+  const appkey = params.appkey?.trim() || null
+  const appkeySecretId = params.appkeySecretId?.trim() || null
+
+  const serviceRole = createServiceRoleClient() as any
+  const { data, error } = await serviceRole.rpc('upsert_platform_valor_saas_config', {
+    p_epi: epi,
+    p_appid: appid,
+    p_appkey: appkey,
+    p_appkey_secret_id: appkeySecretId,
+    p_label: params.label?.trim() || 'Dexa SaaS Billing (Valor)',
+    p_is_active: params.isActive ?? true,
+  })
+  if (error) {
+    console.error('[setPlatformValorSaasBillingCredentials] error:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/manage/settings/billing-catalog')
+  return { success: true, configId: data as string }
+}
+
+/**
+ * HQ-only: re-provision every active subscription rail onto the current central
+ * Dexa SaaS credentials. Idempotent — overwrites epi/appid/app-key reference on
+ * each active purpose='subscription' account row. Does NOT re-vault cards or tear
+ * down native Valor schedules created on old EPIs; those are handled separately.
+ */
+export async function reprovisionAllSubscriptionRails(): Promise<{
+  success: boolean
+  updated?: number
+  error?: string
+}> {
+  await assertHQPermission('system.config.manage')
+
+  const serviceRole = createServiceRoleClient() as any
+  const { data: sourceRows, error: sourceError } = await serviceRole.rpc(
+    'get_platform_valor_saas_source',
+  )
+  const source = (Array.isArray(sourceRows) ? sourceRows[0] : sourceRows) as
+    | { valor_epi: string | null; valor_appid: string | null; valor_appkey_secret_id: string | null }
+    | null
+  if (sourceError) {
+    console.error('[reprovisionAllSubscriptionRails] Central config lookup error:', sourceError)
+    return { success: false, error: 'Failed to look up the central Dexa SaaS billing credentials.' }
+  }
+  if (!source?.valor_epi || !source?.valor_appkey_secret_id) {
+    return {
+      success: false,
+      error: 'Central Dexa SaaS billing (DEXA POS AI) is not configured yet.',
+    }
+  }
+
+  const { data: rows, error: updateError } = await serviceRole
+    .from('merchant_processor_accounts')
+    .update({
+      valor_epi: source.valor_epi,
+      valor_appid: source.valor_appid,
+      valor_appkey_encrypted: source.valor_appkey_secret_id,
+      pricing_owner: 'dexa',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('processor', 'valor')
+    .eq('purpose', 'subscription')
+    .eq('is_active', true)
+    .select('id')
+  if (updateError) {
+    console.error('[reprovisionAllSubscriptionRails] Update error:', updateError)
+    return { success: false, error: updateError.message }
+  }
+
+  return { success: true, updated: rows?.length ?? 0 }
+}
+
+interface CutoverDetail {
+  merchantId: string
+  locationId: string | null
+  action: string
+}
+
+/**
+ * HQ-only: migrate every SaaS billing rail to the central Dexa (DEXA POS AI)
+ * credentials, in the safe order that real money movement requires:
+ *
+ *   1. Tear down native Valor recurring schedules that live on an OLD EPI
+ *      (using the rail's still-old creds, BEFORE they are overwritten) so the
+ *      merchant is not double-charged; clear processor_subscription_id so the
+ *      next cycle recreates the schedule on the central EPI.
+ *   2. Reprovision the rail's creds to central.
+ *   3. Invalidate cards vaulted under a non-central EPI (they can't be charged
+ *      by the central EPI) so the merchant is prompted to re-add — idempotent
+ *      via vaulted_under_epi.
+ *
+ * Rails already on the central EPI are left untouched (protects proven, working
+ * central schedules). Pass `dryRun` to preview counts + a per-item plan without
+ * mutating anything or calling Valor.
+ */
+export async function cutoverSubscriptionRailsToCentral(options?: {
+  dryRun?: boolean
+}): Promise<{
+  success: boolean
+  dryRun: boolean
+  railsMigrated: number
+  schedulesTornDown: number
+  cardsInvalidated: number
+  details: CutoverDetail[]
+  error?: string
+}> {
+  const dryRun = options?.dryRun ?? false
+  const empty = { railsMigrated: 0, schedulesTornDown: 0, cardsInvalidated: 0, details: [] as CutoverDetail[] }
+
+  await assertHQPermission('system.config.manage')
+
+  const serviceRole = createServiceRoleClient() as any
+
+  const { data: sourceRows, error: sourceError } = await serviceRole.rpc('get_platform_valor_saas_source')
+  const source = (Array.isArray(sourceRows) ? sourceRows[0] : sourceRows) as
+    | { valor_epi: string | null; valor_appid: string | null; valor_appkey_secret_id: string | null }
+    | null
+  if (sourceError) {
+    console.error('[cutoverSubscriptionRailsToCentral] Central config lookup error:', sourceError)
+    return { success: false, dryRun, ...empty, error: 'Failed to look up the central Dexa SaaS billing credentials.' }
+  }
+  if (!source?.valor_epi || !source?.valor_appkey_secret_id) {
+    return { success: false, dryRun, ...empty, error: 'Central Dexa SaaS billing (DEXA POS AI) is not configured yet.' }
+  }
+  const centralEpi = source.valor_epi
+  const now = new Date().toISOString()
+
+  const details: CutoverDetail[] = []
+  let railsMigrated = 0
+  let schedulesTornDown = 0
+  let cardsInvalidated = 0
+
+  // --- Rails needing migration (their current EPI is not the central EPI) ---
+  const { data: rails, error: railsError } = await serviceRole
+    .from('merchant_processor_accounts')
+    .select('id, merchant_id, location_id, valor_epi')
+    .eq('processor', 'valor')
+    .eq('purpose', 'subscription')
+    .eq('is_active', true)
+  if (railsError) {
+    console.error('[cutoverSubscriptionRailsToCentral] Rail lookup error:', railsError)
+    return { success: false, dryRun, ...empty, error: railsError.message }
+  }
+
+  for (const rail of (rails ?? []) as Array<{
+    id: string
+    merchant_id: string
+    location_id: string | null
+    valor_epi: string | null
+  }>) {
+    if ((rail.valor_epi ?? '') === centralEpi) continue // already central — leave it alone
+
+    // 1) Tear down native schedules on the OLD EPI (creds are still old here).
+    const { data: subs } = await serviceRole
+      .from('merchant_subscriptions')
+      .select('id, processor_subscription_id')
+      .eq('processor_account_id', rail.id)
+      .not('processor_subscription_id', 'is', null)
+
+    for (const sub of (subs ?? []) as Array<{ id: string; processor_subscription_id: string }>) {
+      if (dryRun) {
+        schedulesTornDown++
+        details.push({ merchantId: rail.merchant_id, locationId: rail.location_id, action: `would deactivate + clear native schedule ${sub.processor_subscription_id}` })
+        continue
+      }
+      try {
+        const oldCreds = await getValorCredentials(rail.id)
+        if (oldCreds) {
+          await deactivateSubscription({ credentials: oldCreds }, String(sub.processor_subscription_id))
+        }
+      } catch (error) {
+        // Best-effort: a schedule that no longer exists on Valor still gets cleared locally.
+        console.error('[cutoverSubscriptionRailsToCentral] Schedule teardown failed (continuing):', error)
+      }
+      await serviceRole
+        .from('merchant_subscriptions')
+        .update({
+          processor_subscription_id: null,
+          processor_subscription_status: null,
+          processor_schedule_created_at: null,
+          processor_next_payment_at: null,
+          updated_at: now,
+        })
+        .eq('id', sub.id)
+      schedulesTornDown++
+      details.push({ merchantId: rail.merchant_id, locationId: rail.location_id, action: `deactivated + cleared native schedule ${sub.processor_subscription_id}` })
+    }
+
+    // 2) Reprovision the rail's creds to central.
+    if (!dryRun) {
+      const { error: reprovisionError } = await serviceRole
+        .from('merchant_processor_accounts')
+        .update({
+          valor_epi: source.valor_epi,
+          valor_appid: source.valor_appid,
+          valor_appkey_encrypted: source.valor_appkey_secret_id,
+          pricing_owner: 'dexa',
+          updated_at: now,
+        })
+        .eq('id', rail.id)
+      if (reprovisionError) {
+        console.error('[cutoverSubscriptionRailsToCentral] Reprovision error:', reprovisionError)
+        return { success: false, dryRun, railsMigrated, schedulesTornDown, cardsInvalidated, details, error: reprovisionError.message }
+      }
+    }
+    railsMigrated++
+    details.push({ merchantId: rail.merchant_id, locationId: rail.location_id, action: dryRun ? 'would migrate rail to central EPI' : 'migrated rail to central EPI' })
+  }
+
+  // 3) Invalidate cards vaulted under a non-central EPI (idempotent via vaulted_under_epi).
+  const { data: profiles, error: profilesError } = await serviceRole
+    .from('merchant_billing_profiles')
+    .select('id, merchant_id, location_id, vaulted_under_epi')
+    .eq('processor', 'valor')
+    .eq('is_active', true)
+  if (profilesError) {
+    console.error('[cutoverSubscriptionRailsToCentral] Profile lookup error:', profilesError)
+    return { success: false, dryRun, railsMigrated, schedulesTornDown, cardsInvalidated, details, error: profilesError.message }
+  }
+
+  for (const profile of (profiles ?? []) as Array<{
+    id: string
+    merchant_id: string
+    location_id: string | null
+    vaulted_under_epi: string | null
+  }>) {
+    if ((profile.vaulted_under_epi ?? '') === centralEpi) continue // already on central — card is chargeable
+
+    if (!dryRun) {
+      const { error: invalidateError } = await serviceRole
+        .from('merchant_billing_profiles')
+        .update({ is_active: false, is_verified: false, is_primary: false, updated_at: now })
+        .eq('id', profile.id)
+      if (invalidateError) {
+        console.error('[cutoverSubscriptionRailsToCentral] Card invalidation error:', invalidateError)
+        return { success: false, dryRun, railsMigrated, schedulesTornDown, cardsInvalidated, details, error: invalidateError.message }
+      }
+    }
+    cardsInvalidated++
+    details.push({ merchantId: profile.merchant_id, locationId: profile.location_id, action: dryRun ? 'would invalidate stale card (re-add required)' : 'invalidated stale card (re-add required)' })
+  }
+
+  if (!dryRun) {
+    revalidatePath('/manage/settings/billing-catalog')
+    revalidatePath('/dashboard/settings/billing')
+  }
+
+  return { success: true, dryRun, railsMigrated, schedulesTornDown, cardsInvalidated, details }
 }
 
 export async function saveMerchantBilling(
@@ -730,6 +1008,7 @@ export async function saveMerchantBillingCardWithVault(
         processor: 'valor',
         processor_account_id: subscriptionProcessorAccount.id,
         payment_profile_id: paymentProfile.paymentProfileId,
+        vaulted_under_epi: credentials.epi,
         is_primary: false,
         is_verified: false,
         is_active: false,

@@ -55,6 +55,44 @@ export async function getPlatformNmiBillingConfigSummary(): Promise<PlatformNmiB
   }
 }
 
+export interface PlatformValorSaasConfigSummary {
+  provider: 'valor'
+  epi: string | null
+  appid: string | null
+  appKeyConfigured: boolean
+  isActive: boolean
+  configured: boolean
+  updatedAt: string | null
+}
+
+export async function getPlatformValorSaasBillingConfigSummary(): Promise<PlatformValorSaasConfigSummary> {
+  await assertHQPermission('system.config.manage')
+
+  const supabase = createServerSupabaseClient() as any
+  const { data, error } = await supabase
+    .from('platform_billing_provider_configs')
+    .select('valor_epi, valor_appid, private_api_key_secret_id, is_active, updated_at')
+    .eq('provider', 'valor')
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[getPlatformValorSaasBillingConfigSummary] Error:', error)
+    throw new Error('Failed to load the central Dexa SaaS billing configuration.')
+  }
+
+  const epi = normalizeText(data?.valor_epi)
+  return {
+    provider: 'valor',
+    epi,
+    appid: normalizeText(data?.valor_appid),
+    appKeyConfigured: Boolean(data?.private_api_key_secret_id),
+    isActive: data?.is_active ?? false,
+    configured: Boolean(epi && data?.private_api_key_secret_id),
+    updatedAt: data?.updated_at ?? null,
+  }
+}
+
 export async function savePlatformNmiBillingConfig(params: {
   label?: string
   tokenizationKey: string

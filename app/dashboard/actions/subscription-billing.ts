@@ -1459,6 +1459,7 @@ export async function PurchaseMerchantServiceAddOn(
           processor_account_id: processorAccount.id,
           customer_vault_id: vault.customerProfileId,
           payment_profile_id: vault.paymentProfileId,
+          vaulted_under_epi: credentials.epi,
           is_primary: true,
           is_verified: true,
           is_active: true,
