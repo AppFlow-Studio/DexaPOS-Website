@@ -361,7 +361,7 @@ export default function DeviceCatalogPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6 overflow-x-hidden">
       <DeviceRegistryPageHeader
         title="Device catalog"
         description="Supported hardware models, pricing defaults, and reusable specs for future inventory rows."
@@ -381,7 +381,7 @@ export default function DeviceCatalogPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0">
         {[
           {
             label: 'Total models',
@@ -430,7 +430,7 @@ export default function DeviceCatalogPage() {
       </Card>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[220px] flex-1 md:min-w-[280px] xl:max-w-sm">
+        <div className="relative min-w-0 basis-full flex-1 sm:min-w-[220px] md:min-w-[280px] xl:max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search models..."
@@ -440,7 +440,7 @@ export default function DeviceCatalogPage() {
           />
         </div>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-[170px] h-9">
+          <SelectTrigger className="h-9 min-w-0 flex-1 sm:w-[170px] sm:flex-none">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
@@ -453,7 +453,7 @@ export default function DeviceCatalogPage() {
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[140px] h-9">
+          <SelectTrigger className="h-9 min-w-0 flex-1 sm:w-[140px] sm:flex-none">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -527,7 +527,7 @@ export default function DeviceCatalogPage() {
                         const specsSummary = renderSpecsSummary(device.specs, device.device_category as DeviceCategory)
                         return (
                           <div key={device.id}>
-                            {di > 0 && <Separator className="mx-5" />}
+                            {di > 0 && <Separator className="mx-5 w-auto" />}
                             <div className="flex items-center gap-4 px-5 py-4 hover:bg-muted/30 transition-colors">
                               {/* Thumbnail */}
                               <div className="shrink-0">
@@ -558,7 +558,7 @@ export default function DeviceCatalogPage() {
                                     </Badge>
                                   )}
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-0.5">
+                                <p className="truncate text-xs text-muted-foreground mt-0.5">
                                   {device.manufacturer}
                                   {device.model_sku && (
                                     <span className="ml-2 font-mono text-muted-foreground/60">{device.model_sku}</span>
@@ -976,7 +976,7 @@ function DeviceFormDialog({
                     value={imageUrl}
                     onChange={(e) => setImageUrl(e.target.value)}
                     placeholder="https://example.com/device.jpg"
-                    className="h-9 flex-1"
+                    className="h-9 min-w-0 flex-1"
                   />
                 </div>
               </div>

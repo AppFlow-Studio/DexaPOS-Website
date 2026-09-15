@@ -231,24 +231,27 @@ function HealthGridSkeleton() {
     return (
         <div className="flex flex-col gap-3">
             {[...Array(5)].map((_, i) => (
-                <Card key={i}>
+                <Card key={i} className="min-w-0 overflow-hidden">
                     <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-start gap-4 flex-1">
-                                <Skeleton className="w-14 h-14 rounded-full" />
-                                <div className="flex-1">
-                                    <Skeleton className="h-5 w-40 mb-2" />
-                                    <Skeleton className="h-4 w-32 mb-3" />
-                                    <div className="flex gap-2">
-                                        <Skeleton className="h-4 w-24" />
-                                        <Skeleton className="h-4 w-24" />
-                                    </div>
+                        <div className="flex flex-col gap-4">
+                            {/* Top Row: Score + Merchant Info */}
+                            <div className="flex items-start gap-4">
+                                <Skeleton className="w-16 h-16 rounded-full shrink-0" />
+                                <div className="min-w-0 flex-1 space-y-2">
+                                    <Skeleton className="h-5 w-40 max-w-[60%]" />
+                                    <Skeleton className="h-4 w-32 max-w-[50%]" />
+                                    <Skeleton className="h-2 w-full rounded-full" />
+                                    <Skeleton className="h-3 w-48 max-w-[70%]" />
                                 </div>
                             </div>
-                            <div className="text-right">
-                                <Skeleton className="h-4 w-32 mb-2" />
-                                <Skeleton className="h-4 w-32 mb-2" />
-                                <Skeleton className="h-4 w-32" />
+                            {/* Bottom Row: Stats */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t">
+                                {[...Array(4)].map((_, j) => (
+                                    <div key={j} className="space-y-1">
+                                        <Skeleton className="h-3 w-16 max-w-full" />
+                                        <Skeleton className="h-4 w-12 max-w-full" />
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </CardContent>

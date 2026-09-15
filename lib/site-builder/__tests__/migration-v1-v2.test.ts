@@ -211,8 +211,17 @@ describe("through normalizePage, as a stored document is read", () => {
     expect(twice).toEqual(once);
   });
 
-  it("runs through runMigrations from any older version", () => {
+  /**
+   * Every step from 1 to current, with no gaps — the assertion that catches a
+   * `CURRENT_SCHEMA_VERSION` bumped without a migration registered for the
+   * version it left behind, which would strand v1 documents part-way.
+   *
+   * Written against `CURRENT_SCHEMA_VERSION` rather than a literal so that the
+   * next bump has to add a migration, not edit this line.
+   */
+  it("runs every step from v1 through to the current version", () => {
     const { applied } = runMigrations(V1_DOCUMENT, 1, CURRENT_SCHEMA_VERSION);
-    expect(applied).toEqual([1]);
+    const everyStep = Array.from({ length: CURRENT_SCHEMA_VERSION - 1 }, (_, i) => i + 1);
+    expect(applied).toEqual(everyStep);
   });
 });

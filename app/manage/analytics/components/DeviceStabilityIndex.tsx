@@ -83,17 +83,17 @@ export default function DeviceStabilityIndex() {
 
             {/* Rollout Warning Banner */}
             {!isLoading && stabilityData?.rolloutWarning && (
-                <Card className="border-red-200 bg-linear-to-r from-red-50 to-orange-50">
+                <Card className="min-w-0 overflow-hidden border-red-200 bg-linear-to-r from-red-50 to-orange-50">
                     <CardContent className="py-4">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-red-100">
+                        <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center">
+                            <div className="shrink-0 p-2 rounded-lg bg-red-100">
                                 <AlertTriangle className="h-5 w-5 text-red-600" />
                             </div>
-                            <div>
+                            <div className="min-w-0 break-words">
                                 <p className="font-semibold text-red-900">Rollout Hold Recommended</p>
                                 <p className="text-sm text-red-700">{stabilityData.rolloutWarning}</p>
                             </div>
-                            <Badge variant="destructive" className="ml-auto">
+                            <Badge variant="destructive" className="max-w-full whitespace-normal text-left sm:ml-auto sm:shrink-0">
                                 &gt;{INSTABILITY_THRESHOLD}% Threshold Breached
                             </Badge>
                         </div>
@@ -126,9 +126,9 @@ export default function DeviceStabilityIndex() {
             {isLoading ? (
                 <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                     {Array.from({ length: 4 }).map((_, i) => (
-                        <Card key={i}>
-                            <CardHeader className="pb-2"><Skeleton className="h-4 w-24" /></CardHeader>
-                            <CardContent><Skeleton className="h-8 w-20" /></CardContent>
+                        <Card key={i} className="min-w-0 overflow-hidden">
+                            <CardHeader className="pb-2"><Skeleton className="h-4 w-24 max-w-full" /></CardHeader>
+                            <CardContent><Skeleton className="h-8 w-20 max-w-full" /></CardContent>
                         </Card>
                     ))}
                 </div>
@@ -191,17 +191,17 @@ export default function DeviceStabilityIndex() {
             ) : null}
 
             {/* Main Chart + Drill-down */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+            <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-7">
 
                 {/* Stacked Bar Chart by Version */}
-                <Card className="col-span-4">
+                <Card className="min-w-0 overflow-hidden lg:col-span-4">
                     <CardHeader>
                         <CardTitle>Stability by App Version</CardTitle>
                         <CardDescription>
                             Click a version bar to drill down by hardware model
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="min-w-0 px-2 sm:px-6">
                         {isLoading ? (
                             <Skeleton className="h-87.5 w-full" />
                         ) : stabilityData && stabilityData.versionBars.length > 0 ? (
@@ -334,7 +334,7 @@ export default function DeviceStabilityIndex() {
                 </Card>
 
                 {/* Drill-down Panel */}
-                <Card className="col-span-3">
+                <Card className="min-w-0 overflow-hidden lg:col-span-3">
                     <CardHeader>
                         {selectedVersion ? (
                             <>
@@ -366,7 +366,7 @@ export default function DeviceStabilityIndex() {
                             </>
                         )}
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="min-w-0 px-2 sm:px-6">
                         {!selectedVersion ? (
                             // Show version summary table when no version selected
                             isLoading ? (
@@ -376,7 +376,7 @@ export default function DeviceStabilityIndex() {
                                     ))}
                                 </div>
                             ) : stabilityData && stabilityData.versionBars.length > 0 ? (
-                                <div className="max-h-95 overflow-auto">
+                                <div className="max-h-95 max-w-full overflow-auto">
                                     <Table>
                                         <TableHeader>
                                             <TableRow>

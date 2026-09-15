@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { PageLoader } from '@/components/ui/page-loader'
+import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -154,7 +154,14 @@ export default function MerchantDetailsPage() {
         }
     }, [requestedTab])
 
-    if (isLoading) return <PageLoader message="Loading merchant details..." />
+    if (isLoading)
+        return (
+            <DataPageSkeleton
+                variant="detail"
+                shell="plain"
+                label="Loading merchant details"
+            />
+        )
 
     if (isError || !merchantDetails) {
         return (

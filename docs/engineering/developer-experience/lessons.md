@@ -102,3 +102,15 @@ inverse: a true cash base of $10 stores card $10.40, and `10.40 ÷ 1.04 = 9.9999
 $10.00, not $9.99 — keep `Math.floor(raw*100 + 1e-6)/100`. Meta-lesson: a "more correct" convention
 is never the spec; the number/direction the user states is. This is the second flip of the same
 math — pin the model in one helper + one migration and confirm the direction before touching prices.
+
+## Browser QA: an ambiguous `getByRole` name can fire a destructive button (2026-09-08)
+Context: verifying the QR-manager redesign, `page.getByRole('button', { name: /Missing/ })` was meant
+to click the new "Missing" **stat tile**. It matched the header's **"Generate Missing"** button first
+(earlier in the DOM) and generated 113 QR codes on the dev merchant — Missing 113→0, Active 118→231.
+Additive and idempotent, on a throwaway account, so no harm; but the dev data no longer matched the
+before-screenshots, and the same selector against a "Delete all" would not have been recoverable.
+Rules: (1) a substring/regex `name` in a dashboard matches *any* button containing it — a page action,
+a menu item, a toast — so target something structural instead (`button[aria-pressed]`, a `data-testid`,
+a scoped `locator('table').getByRole(...)`); (2) before a click that could mutate, assert you matched
+what you think — `count()` should be 1, or read back `innerText()`; (3) prefer read-only assertions
+for verification and reserve clicks for the specific interaction under test.

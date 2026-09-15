@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { useOrderOverview, useOrdersPage } from "../hooks/useOrder";
 import { isOrderReportable } from "@/lib/reporting/recognized-order";
+import { useClerkOrgId } from "../hooks/useLocationScoped";
+import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { DataPageSkeleton } from "@/components/dashboard/loading/DataPageSkeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ShoppingBag,
@@ -47,6 +50,12 @@ import { useDebounce } from "@/lib/hooks/useDebounce";
 export default function OrdersPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  // Both order queries are gated on this; see the loading guard below.
+  // `useUserInfo` is the same shared query `useClerkOrgId` reads from (fixed
+  // key, 5-minute staleTime), so reading it here costs no extra request — it
+  // just exposes whether the org id is *unknown* or *known to be absent*.
+  const clerkOrgId = useClerkOrgId();
+  const { isLoading: isUserInfoLoading } = useUserInfo();
   const requestedPage = Number(searchParams.get("page"));
   const page = Number.isFinite(requestedPage)
     ? Math.max(1, Math.floor(requestedPage))
@@ -433,6 +442,36 @@ export default function OrdersPage() {
     setIsDetailOpen(false);
     setTimeout(() => setSelectedOrder(null), 200);
   };
+
+  // First paint only: `isLoading` is true solely when no cached page exists,
+  // so filter, sort, and pagination changes keep the current rows visible and
+  // fall through to the per-section `isFetching` affordances below.
+  //
+  // Three states have to stay distinct here:
+  //
+  //   identity still resolving  -> skeleton (the org id is simply not known
+  //                                yet; both queries are disabled and their
+  //                                data is empty, so rendering now would show
+  //                                an empty table and 0 stats for a moment
+  //                                before the real values arrive)
+  //   identity resolved, absent -> fall through to the page's own empty and
+  //                                error states. Both queries are
+  //                                `enabled: !!clerkOrgId`, and a disabled
+  //                                query reports isLoading: true forever in
+  //                                React Query v5, so gating on it alone
+  //                                would pin the skeleton on screen with no
+  //                                way out.
+  //   identity resolved, present -> skeleton only while the data is genuinely
+  //                                in flight.
+  if (isUserInfoLoading || (clerkOrgId && (isLoadingOrders || isLoadingStats))) {
+    return (
+      <DataPageSkeleton
+        variant="orders"
+        shell="plain"
+        label="Loading orders"
+      />
+    );
+  }
 
   return (
     <main className="space-y-6 animate-in fade-in duration-500">

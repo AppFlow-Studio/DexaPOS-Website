@@ -14,6 +14,7 @@ export interface CreateAppNotificationInput {
   href?: string | null
   actorUserId?: string | null
   subscriptionPlanRequestId?: string | null
+  subscriptionServiceRequestId?: string | null
   metadata?: Record<string, unknown>
 }
 
@@ -33,6 +34,7 @@ export async function createAppNotification(
       href: input.href ?? null,
       actor_user_id: input.actorUserId ?? null,
       subscription_plan_request_id: input.subscriptionPlanRequestId ?? null,
+      subscription_service_request_id: input.subscriptionServiceRequestId ?? null,
       metadata: input.metadata ?? {},
     })
     .select('id')

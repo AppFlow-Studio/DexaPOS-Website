@@ -16,6 +16,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PASSAGE_JS_V2_URL } from "./config";
+import {
+  normalizePassageError,
+  type PassageErrorResult,
+} from "./passageErrors";
+
+export type { PassageErrorResult } from "./passageErrors";
 
 /** DEXA brand blue, per the arch parent's storefront requirement. */
 export const DEXA_BRAND_BLUE = "#0C4FD1";
@@ -25,12 +31,6 @@ export type PassageVariant = "inline" | "lightbox";
 export interface PassageTokenResult {
   token: string;
   method?: string;
-}
-
-export interface PassageErrorResult {
-  message?: string;
-  code?: string;
-  [key: string]: unknown;
 }
 
 /** Options accepted by the Passage.js v2 constructor. */
@@ -45,11 +45,14 @@ interface PassageOptions {
   variant?: PassageVariant;
   isDemo?: boolean;
   enableACH?: boolean;
+  showBillingAddress?: boolean;
   submitText?: string;
   sessionExpiryMinutes?: number;
   customData?: Record<string, string>;
   onSuccess?: (result: unknown) => void;
-  onError?: (error: PassageErrorResult) => void;
+  // Passage.js v2 currently passes a string here, although gateway responses
+  // themselves are structured objects.
+  onError?: (error: unknown) => void;
   onValidationChange?: (isValid: boolean, validation: unknown) => void;
   onTokenReceived?: (token: string, method?: string) => void;
   onFormSubmit?: (formData: unknown, action: string) => void;
@@ -118,9 +121,12 @@ export interface PassageCheckoutProps {
   submitText?: string;
   /** ACH is feature-flagged off for this ticket. */
   enableACH?: boolean;
+  /** Ask Passage.js to collect AVS street address and postal code. */
+  showBillingAddress?: boolean;
   sessionExpiryMinutes?: number;
   customData?: Record<string, string>;
   onTokenReceived?: (result: PassageTokenResult) => void;
+  onFormSubmit?: (formData: FormData, action: string) => void;
   onSuccess?: (result: unknown) => void;
   onError?: (error: PassageErrorResult) => void;
   onValidationChange?: (isValid: boolean) => void;
@@ -145,9 +151,11 @@ export function PassageCheckout({
   variant = "inline",
   submitText = "Pay Now",
   enableACH = false,
+  showBillingAddress = false,
   sessionExpiryMinutes,
   customData,
   onTokenReceived,
+  onFormSubmit,
   onSuccess,
   onError,
   onValidationChange,
@@ -170,16 +178,21 @@ export function PassageCheckout({
   // does not tear down and re-mount the card form mid-entry.
   const handlersRef = useRef({
     onTokenReceived,
+    onFormSubmit,
     onSuccess,
     onError,
     onValidationChange,
   });
-  handlersRef.current = {
-    onTokenReceived,
-    onSuccess,
-    onError,
-    onValidationChange,
-  };
+
+  useEffect(() => {
+    handlersRef.current = {
+      onTokenReceived,
+      onFormSubmit,
+      onSuccess,
+      onError,
+      onValidationChange,
+    };
+  }, [onTokenReceived, onFormSubmit, onSuccess, onError, onValidationChange]);
 
   const teardown = useCallback(() => {
     instanceRef.current?.destroy?.();
@@ -209,14 +222,21 @@ export function PassageCheckout({
           variant,
           isDemo,
           enableACH,
+          showBillingAddress,
           submitText,
           submitBg: DEXA_BRAND_BLUE,
           ...(sessionExpiryMinutes !== undefined ? { sessionExpiryMinutes } : {}),
           ...(customData ? { customData } : {}),
           onTokenReceived: (token, method) =>
             handlersRef.current.onTokenReceived?.({ token, method }),
+          onFormSubmit: (formData, action) => {
+            if (formData instanceof FormData) {
+              handlersRef.current.onFormSubmit?.(formData, action);
+            }
+          },
           onSuccess: (result) => handlersRef.current.onSuccess?.(result),
-          onError: (error) => handlersRef.current.onError?.(error),
+          onError: (error) =>
+            handlersRef.current.onError?.(normalizePassageError(error)),
           onValidationChange: (isValid) =>
             handlersRef.current.onValidationChange?.(isValid),
         });
@@ -240,6 +260,7 @@ export function PassageCheckout({
     variant,
     isDemo,
     enableACH,
+    showBillingAddress,
     submitText,
     sessionExpiryMinutes,
     customData,

@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PageLoader } from "@/components/ui/page-loader";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -231,9 +231,54 @@ export function CustomerList({
   onViewProfile,
 }: CustomerListProps) {
   if (isLoading) {
+    // Section-level, not a full-page skeleton: the page header, the panel, the
+    // count badge and the search field all paint immediately, so only the list
+    // body is actually waiting. Mirrors the two layouts below — a table on
+    // desktop, cards under md — so the rows land without a layout jump.
     return (
-      <div className="h-64 w-full">
-        <PageLoader variant="fill" />
+      <div
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+        className="min-w-0"
+      >
+        <span className="sr-only">Loading the customer directory</span>
+
+        <div className="hidden overflow-hidden rounded-2xl bg-muted/20 md:block">
+          <div className="space-y-px">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-4 px-4 py-3.5">
+                <Skeleton className="h-9 w-9 shrink-0 rounded-full bg-muted/70 motion-reduce:animate-none" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-4 w-40 max-w-full rounded-full bg-muted/70 motion-reduce:animate-none" />
+                  <Skeleton className="h-3 w-28 max-w-full rounded-full bg-muted/70 motion-reduce:animate-none" />
+                </div>
+                <Skeleton className="hidden h-4 w-16 shrink-0 rounded-full bg-muted/70 motion-reduce:animate-none lg:block" />
+                <Skeleton className="hidden h-4 w-10 shrink-0 rounded-full bg-muted/70 motion-reduce:animate-none lg:block" />
+                <Skeleton className="hidden h-4 w-20 shrink-0 rounded-full bg-muted/70 motion-reduce:animate-none lg:block" />
+                <Skeleton className="h-4 w-14 shrink-0 rounded-full bg-muted/70 motion-reduce:animate-none" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="min-w-0 rounded-2xl bg-muted/45 p-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <Skeleton className="h-9 w-9 shrink-0 rounded-full bg-muted/70 motion-reduce:animate-none" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-4 w-32 max-w-full rounded-full bg-muted/70 motion-reduce:animate-none" />
+                  <Skeleton className="h-3 w-24 max-w-full rounded-full bg-muted/70 motion-reduce:animate-none" />
+                </div>
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <Skeleton className="h-4 w-20 rounded-full bg-muted/70 motion-reduce:animate-none" />
+                <Skeleton className="h-4 w-14 rounded-full bg-muted/70 motion-reduce:animate-none" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

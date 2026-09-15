@@ -35,6 +35,7 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StationsBodySkeleton } from "@/components/dashboard/loading/DataPageSkeleton";
 import {
   Plus,
   Search,
@@ -319,11 +320,7 @@ export default function StationsPage() {
             />
           }
         />
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-2xl" />
-          ))}
-        </div>
+        <StationsBodySkeleton />
       </PageShell>
     );
   }
@@ -367,16 +364,7 @@ export default function StationsPage() {
           }
           actions={<Skeleton className="h-9 w-32 rounded-full" />}
         />
-        <div className="flex min-w-0 flex-wrap gap-4">
-          <Skeleton className="h-10 w-[300px] max-w-full rounded-full" />
-          <Skeleton className="h-9 w-[180px] max-w-full rounded-full" />
-          <Skeleton className="h-9 w-[140px] max-w-full rounded-full" />
-        </div>
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-2xl" />
-          ))}
-        </div>
+        <StationsBodySkeleton />
       </PageShell>
     );
   }

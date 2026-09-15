@@ -16,7 +16,6 @@ import { CheckoutHeader } from "./CheckoutHeader";
 import { ContactSection } from "./ContactSection";
 import { OrderTypeSection } from "./OrderTypeSection";
 import { OrderDetailsSection } from "./OrderDetailsSection";
-import { Switch } from "@/components/ui/switch";
 import { TipSection } from "./TipSection";
 import { OrderSummarySection } from "./OrderSummarySection";
 import { PromoCodeSection } from "./PromoCodeSection";
@@ -26,6 +25,10 @@ import { PlaceOrderButton } from "./PlaceOrderButton";
 import { OrderConfirmation } from "./OrderConfirmation";
 import { PaymentCardForm, type PaymentCardFormHandle } from "./PaymentCardForm";
 import { PassageCheckout } from "@/lib/payments/valor/passageClient";
+import {
+  readPassageBillingDetails,
+  type PassageBillingDetails,
+} from "@/lib/payments/valor/passageBilling";
 import { ConfirmDialog } from "../ConfirmDialog";
 import {
   type PlaceOrderItem,
@@ -35,6 +38,7 @@ import {
 import type { AppliedPromo } from "./PromoCodeSection";
 import { isStoreOpenNow } from "../StoreInfoBar";
 import { getSavedAddresses, addSavedAddress, type SavedAddress } from "../../customer-actions";
+import { getQrOrderStatus } from "../../qr-actions";
 import type { Site, OnlineOrderingConfig } from "@/types/site";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -122,6 +126,36 @@ export function CheckoutPage({
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
 
+  // A refresh clears the in-memory confirmation state but preserves the QR
+  // session. Recover its active order from the server instead of showing an
+  // empty checkout after a successful payment.
+  const recoveredOrderRef = useRef(false);
+  useEffect(() => {
+    if (!hydrated || !isQrTableMode || recoveredOrderRef.current) return;
+    if (useCart.getState().items.length !== 0) return;
+
+    const session = useSession.getState();
+    if (!session.sessionToken) return;
+    recoveredOrderRef.current = true;
+
+    let cancelled = false;
+    void (async () => {
+      if (session.activeOrderId) {
+        if (!cancelled) router.replace(storePath(`/order/${session.activeOrderId}`));
+        return;
+      }
+
+      const status = await getQrOrderStatus(session.sessionToken!);
+      if (!cancelled && status.success && status.hasOrder && status.orderId) {
+        router.replace(storePath(`/order/${status.orderId}`));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, isQrTableMode, router, storePath]);
+
   // Step
   const [step, setStep] = useState<"checkout" | "confirmation">("checkout");
   const [orderResult, setOrderResult] = useState<{
@@ -166,9 +200,6 @@ export function CheckoutPage({
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(new Date());
   const [scheduledTime, setScheduledTime] = useState("");
 
-  // Curbside
-  const [curbside, setCurbside] = useState(false);
-
   // Delivery
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<string>("new");
@@ -212,6 +243,8 @@ export function CheckoutPage({
   } | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [payCashInStore, setPayCashInStore] = useState(false);
+  const valorPaymentTokenRef = useRef<string | null>(null);
+  const valorSubmissionRef = useRef(false);
 
   useEffect(() => {
     if (!isQrTableMode) return;
@@ -394,7 +427,10 @@ export function CheckoutPage({
     handlePlaceOrder();
   };
 
-  const handlePlaceOrder = async (valorToken?: string) => {
+  const handlePlaceOrder = async (
+    valorToken?: string,
+    valorBilling?: PassageBillingDetails
+  ) => {
     const { sessionToken } = useSession.getState();
 
     setLoading(true);
@@ -494,14 +530,6 @@ export function CheckoutPage({
       requestedTime = new Date(utcCandidate.getTime() + offsetMs).toISOString();
     }
 
-    // Build special instructions with curbside
-    let instructions = specialInstructions;
-    if (curbside && orderType === "pickup") {
-      instructions = instructions
-        ? `CURBSIDE PICKUP: Bring order to my car. ${instructions}`
-        : "CURBSIDE PICKUP: Bring order to my car";
-    }
-
     const orderItems: PlaceOrderItem[] = items.map((item) => ({
       id: item.id,
       name: item.name,
@@ -527,7 +555,7 @@ export function CheckoutPage({
       }).catch(() => {});
     }
 
-    // Step 2: Call create-online-order edge function with the NMI payment token
+    // Step 2: Call create-online-order with the processor token returned by Passage.
     try {
       const res = await fetch(
         `${SUPABASE_URL}/functions/v1/create-online-order`,
@@ -546,11 +574,15 @@ export function CheckoutPage({
             delivery_address: deliveryAddress,
             requested_time: requestedTime,
             tip: tipAmount,
-            special_instructions: instructions || undefined,
+            special_instructions: specialInstructions || undefined,
             pay_cash_in_store: payCashInStore,
             ...(paymentToken ? { payment_token: paymentToken } : {}),
             ...(paymentCardType ? { payment_card_type: paymentCardType } : {}),
             ...(paymentCardLastFour ? { payment_card_last_four: paymentCardLastFour } : {}),
+            ...(valorBilling?.address1
+              ? { billing_address1: valorBilling.address1 }
+              : {}),
+            ...(valorBilling?.zip ? { billing_zip: valorBilling.zip } : {}),
             // Contact info (always sent — edge function uses session data if available)
             customer_name: `${firstName} ${lastName}`.trim() || undefined,
             customer_phone: customer?.phone || normalizePhone(phone) || phone.trim() || undefined,
@@ -852,8 +884,6 @@ export function CheckoutPage({
                 maxFutureDays={config?.futureOrderMaxDays || 30}
                 prepTime={prepTimeMins}
                 operatingHours={config?.operatingHours}
-                curbside={curbside}
-                onCurbsideChange={setCurbside}
                 storeAddress={storeAddress}
                 storeLat={storeLat}
                 storeLng={storeLng}
@@ -874,29 +904,10 @@ export function CheckoutPage({
 
             {config?.acceptOnlinePayments && (
               <>
-                {orderType === "pickup" && !isQrTableMode && (
-                  <div
-                    className="flex items-center justify-between px-4 py-3 rounded-lg"
-                    style={{
-                      border: "1px solid var(--border)",
-                      backgroundColor: "var(--card)",
-                      borderRadius: "var(--radius)",
-                    }}
-                  >
-                    <div>
-                      <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-                        Pay cash in store
-                      </p>
-                      <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                        Pay at the counter when you pick up
-                      </p>
-                    </div>
-                    <Switch
-                      checked={payCashInStore}
-                      onCheckedChange={setPayCashInStore}
-                    />
-                  </div>
-                )}
+                {/* TEMP: "Pay cash in store" toggle removed while online ordering
+                    is live with card only. `payCashInStore` stays false so the
+                    card payment form always renders. Restore the toggle here to
+                    re-enable paying with cash at pickup. */}
                 {!payCashInStore && valorBootstrap && (
                   <PassageCheckout
                     clientToken={valorBootstrap.clientToken}
@@ -904,16 +915,41 @@ export function CheckoutPage({
                     isDemo={valorBootstrap.isDemo}
                     formAction="/api/valor/passage-callback"
                     submitText={`Pay $${total.toFixed(2)}`}
+                    showBillingAddress
                     onTokenReceived={({ token }) => {
-                      // Passage owns the Pay button, so it can fire before the rest
-                      // of the form is valid — guard, then charge with the token.
+                      // Passage invokes onFormSubmit immediately after this callback;
+                      // hold the token in a ref so it can be paired with AVS data.
+                      valorPaymentTokenRef.current = token;
+                    }}
+                    onFormSubmit={(formData) => {
+                      const token = valorPaymentTokenRef.current;
+                      valorPaymentTokenRef.current = null;
+
                       if (!canPlaceOrder) {
                         setPaymentError(
                           "Please complete your contact and order details above, then tap Pay again."
                         );
                         return;
                       }
-                      void handlePlaceOrder(token);
+                      const billing = readPassageBillingDetails(formData);
+                      if (!billing.address1 || !billing.zip) {
+                        setPaymentError(
+                          "Enter the billing street address and ZIP code for this card."
+                        );
+                        return;
+                      }
+                      if (!token) {
+                        setPaymentError(
+                          "Card tokenization did not complete. Please try again."
+                        );
+                        return;
+                      }
+                      if (valorSubmissionRef.current) return;
+
+                      valorSubmissionRef.current = true;
+                      void handlePlaceOrder(token, billing).finally(() => {
+                        valorSubmissionRef.current = false;
+                      });
                     }}
                     onError={(e) =>
                       setPaymentError(e.message ?? "Payment error. Please try again.")

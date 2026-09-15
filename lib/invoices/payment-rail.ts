@@ -1,8 +1,11 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { resolveProcessorAccount } from "@/lib/payments/resolver";
+import type { ProcessorName } from "@/lib/payments/types";
 
 export type InvoicePaymentRailKind =
   | "location_payment_device"
-  | "platform_billing_config";
+  | "platform_billing_config"
+  | "merchant_processor_account";
 
 export interface InvoiceRailInvoiceRef {
   id: string;
@@ -16,6 +19,7 @@ export interface InvoiceRailInvoiceRef {
 
 export interface ResolvedInvoicePaymentRail {
   kind: InvoicePaymentRailKind;
+  provider: ProcessorName;
   merchantId: string;
   locationId: string | null;
   billType: string;
@@ -24,6 +28,12 @@ export interface ResolvedInvoicePaymentRail {
   webhookSecret: string | null;
   paymentDeviceId: string | null;
   platformBillingConfigId: string | null;
+  processorAccountId: string | null;
+  valorCredentials: {
+    appId: string;
+    appKey: string;
+    epi: string;
+  } | null;
 }
 
 interface ResolveInvoicePaymentRailOptions {
@@ -61,6 +71,12 @@ interface PlatformSecretRow {
   decrypted_private_api_key: string | null;
   decrypted_webhook_secret: string | null;
   is_active: boolean;
+}
+
+interface ValorCredentialRow {
+  valor_appid: string | null;
+  valor_epi: string | null;
+  decrypted_appkey: string | null;
 }
 
 function normalizeInvoiceBillType(value: string | null | undefined) {
@@ -190,6 +206,33 @@ async function getPlatformBillingSecrets(supabase: any): Promise<PlatformSecretR
   return row?.config_id ? (row as PlatformSecretRow) : null;
 }
 
+async function getValorAccountCredentials(
+  supabase: any,
+  accountId: string,
+): Promise<ResolvedInvoicePaymentRail["valorCredentials"]> {
+  const { data, error } = await (supabase as any).rpc(
+    "get_valor_account_credentials",
+    { p_account_id: accountId },
+  );
+
+  if (error) {
+    console.error(
+      "[resolveInvoicePaymentRail:getValorAccountCredentials] RPC error:",
+      error,
+    );
+    return null;
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | ValorCredentialRow
+    | null;
+  const appId = row?.valor_appid?.trim();
+  const appKey = row?.decrypted_appkey?.trim();
+  const epi = row?.valor_epi?.trim();
+
+  return appId && appKey && epi ? { appId, appKey, epi } : null;
+}
+
 export async function resolveInvoicePaymentRail(
   invoice: InvoiceRailInvoiceRef,
   options: ResolveInvoicePaymentRailOptions = {},
@@ -203,6 +246,7 @@ export async function resolveInvoicePaymentRail(
       if (!secretRow) {
         return {
           kind: "platform_billing_config",
+          provider: "nmi",
           merchantId: invoice.merchant_id,
           locationId: invoice.location_id,
           billType,
@@ -211,11 +255,14 @@ export async function resolveInvoicePaymentRail(
           webhookSecret: null,
           paymentDeviceId: null,
           platformBillingConfigId: null,
+          processorAccountId: null,
+          valorCredentials: null,
         };
       }
 
       return {
         kind: "platform_billing_config",
+        provider: "nmi",
         merchantId: invoice.merchant_id,
         locationId: invoice.location_id,
         billType,
@@ -224,6 +271,8 @@ export async function resolveInvoicePaymentRail(
         webhookSecret: secretRow.decrypted_webhook_secret?.trim() || null,
         paymentDeviceId: null,
         platformBillingConfigId: secretRow.config_id,
+        processorAccountId: null,
+        valorCredentials: null,
       };
     }
 
@@ -234,6 +283,7 @@ export async function resolveInvoicePaymentRail(
 
     return {
       kind: "platform_billing_config",
+      provider: "nmi",
       merchantId: invoice.merchant_id,
       locationId: invoice.location_id,
       billType,
@@ -242,6 +292,35 @@ export async function resolveInvoicePaymentRail(
       webhookSecret: null,
       paymentDeviceId: null,
       platformBillingConfigId: publicConfig?.id ?? null,
+      processorAccountId: null,
+      valorCredentials: null,
+    };
+  }
+
+  const processorAccount = await resolveProcessorAccount(
+    invoice.merchant_id,
+    "invoice",
+    { locationId: invoice.location_id },
+  );
+
+  if (processorAccount?.processor === "valor") {
+    const valorCredentials = options.includeSecrets
+      ? await getValorAccountCredentials(supabase, processorAccount.id)
+      : null;
+
+    return {
+      kind: "merchant_processor_account",
+      provider: "valor",
+      merchantId: invoice.merchant_id,
+      locationId: invoice.location_id,
+      billType,
+      tokenizationKey: null,
+      apiKey: null,
+      webhookSecret: null,
+      paymentDeviceId: null,
+      platformBillingConfigId: null,
+      processorAccountId: processorAccount.id,
+      valorCredentials,
     };
   }
 
@@ -255,6 +334,7 @@ export async function resolveInvoicePaymentRail(
   if (!device) {
     return {
       kind: "location_payment_device",
+      provider: "nmi",
       merchantId: invoice.merchant_id,
       locationId: invoice.location_id,
       billType,
@@ -263,12 +343,15 @@ export async function resolveInvoicePaymentRail(
       webhookSecret: null,
       paymentDeviceId: null,
       platformBillingConfigId: null,
+      processorAccountId: processorAccount?.id ?? null,
+      valorCredentials: null,
     };
   }
 
   if (!options.includeSecrets) {
     return {
       kind: "location_payment_device",
+      provider: "nmi",
       merchantId: invoice.merchant_id,
       locationId: invoice.location_id,
       billType,
@@ -277,6 +360,8 @@ export async function resolveInvoicePaymentRail(
       webhookSecret: null,
       paymentDeviceId: device.id,
       platformBillingConfigId: null,
+      processorAccountId: processorAccount?.id ?? null,
+      valorCredentials: null,
     };
   }
 
@@ -284,6 +369,7 @@ export async function resolveInvoicePaymentRail(
 
   return {
     kind: "location_payment_device",
+    provider: "nmi",
     merchantId: invoice.merchant_id,
     locationId: invoice.location_id,
     billType,
@@ -293,6 +379,8 @@ export async function resolveInvoicePaymentRail(
     webhookSecret: secretRow?.decrypted_webhook_secret?.trim() || null,
     paymentDeviceId: device.id,
     platformBillingConfigId: null,
+    processorAccountId: processorAccount?.id ?? null,
+    valorCredentials: null,
   };
 }
 

@@ -7,6 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -47,6 +57,7 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
   const [receiptSms, setReceiptSms] = useState(false);
   const [receiptEmail, setReceiptEmail] = useState(false);
   const [language, setLanguage] = useState("en");
+  const [unsubscribeDialogOpen, setUnsubscribeDialogOpen] = useState(false);
 
   // Queries
   const { data: campaignHistory } = useCustomerMarketingHistory(customerId || null);
@@ -109,15 +120,10 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
   };
 
   const handleUnsubscribe = async () => {
-    if (
-      window.confirm(
-        "Are you sure? This will unsubscribe the customer from all marketing communications."
-      )
-    ) {
-      await unsubscribeMutation.mutateAsync({ customerId: customerId!, merchantId: merchantId! });
-      setSmsOptIn(false);
-      setEmailOptIn(false);
-    }
+    await unsubscribeMutation.mutateAsync({ customerId: customerId!, merchantId: merchantId! });
+    setSmsOptIn(false);
+    setEmailOptIn(false);
+    setUnsubscribeDialogOpen(false);
   };
 
   if (!customer) return null;
@@ -150,7 +156,7 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
             </Button>
             {!isUnsubscribed && (
               <Button
-                onClick={handleUnsubscribe}
+                onClick={() => setUnsubscribeDialogOpen(true)}
                 disabled={unsubscribeMutation.isPending}
                 variant="outline"
                 size="sm"
@@ -427,6 +433,40 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={unsubscribeDialogOpen} onOpenChange={setUnsubscribeDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsubscribe from marketing?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will unsubscribe {customer.name || "this customer"} from all marketing communications.
+              They will no longer receive marketing emails or text messages.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={unsubscribeMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={unsubscribeMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleUnsubscribe();
+              }}
+            >
+              {unsubscribeMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Unsubscribing...
+                </>
+              ) : (
+                "Unsubscribe"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

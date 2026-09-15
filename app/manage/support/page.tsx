@@ -58,23 +58,30 @@ function StatCard({
   value,
   icon: Icon,
   suffix,
+  isLoading = false,
 }: {
   label: string;
   value: number | string;
   icon: React.ElementType;
   suffix?: string;
+  /** Draws a figure-sized skeleton in place of the value. */
+  isLoading?: boolean;
 }) {
   return (
     <div className="rounded-xl border bg-card p-4 shadow-sm min-w-0 overflow-hidden">
       <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center mb-3">
         <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
-      <p className="text-2xl font-bold leading-none tabular-nums">
-        {value}
-        {suffix && (
-          <span className="text-sm font-normal text-muted-foreground ml-1">{suffix}</span>
+      <div className="flex items-end gap-1 text-2xl font-bold leading-none tabular-nums">
+        {isLoading ? (
+          <Skeleton className="h-6 w-12" />
+        ) : (
+          <span>{value}</span>
         )}
-      </p>
+        {suffix && (
+          <span className="text-sm font-normal text-muted-foreground">{suffix}</span>
+        )}
+      </div>
       <p className="text-xs text-muted-foreground mt-1.5 leading-tight">{label}</p>
     </div>
   );
@@ -105,14 +112,14 @@ function TicketRow({
     <div
       onClick={onOpen}
       className={cn(
-        "flex items-center gap-3 px-4 py-3.5 border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors",
+        "flex min-w-0 items-center gap-3 px-4 py-3.5 border-b last:border-0 cursor-pointer hover:bg-muted/40 transition-colors",
         isUrgent && !["resolved", "closed"].includes(ticket.status)
           ? "border-l-4 border-l-red-400"
           : "border-l-4 border-l-transparent"
       )}
     >
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 mb-1">
           <span className="text-xs font-mono text-muted-foreground">{ticket.ticket_number}</span>
           {unreadCount > 0 && (
             <Badge className="rounded-full border-0 bg-red-600 text-xs font-semibold text-white hover:bg-red-600">
@@ -142,7 +149,7 @@ function TicketRow({
           )}
         </div>
         <p className="font-medium text-sm truncate">{ticket.subject}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
+        <p className="truncate text-xs text-muted-foreground mt-0.5">
           {isHQInternal
             ? "DEXA HQ"
             : ticket.merchant?.name || "Unknown Merchant"}
@@ -152,7 +159,7 @@ function TicketRow({
         </p>
       </div>
 
-      <div className="text-right shrink-0 space-y-1">
+      <div className="hidden shrink-0 space-y-1 text-right sm:block">
         <p className="text-xs text-muted-foreground">
           {formatDistanceToNow(new Date(ticket.last_message_at), { addSuffix: true })}
         </p>
@@ -193,7 +200,7 @@ export default function AdminSupportPage() {
     queryFn: () => GetAllTickets(effectiveFilters, 50, 0),
   });
 
-  const { data: statsResult } = useQuery({
+  const { data: statsResult, isLoading: statsLoading } = useQuery({
     queryKey: ["admin-support-stats"],
     queryFn: () => GetSupportStats(),
     refetchInterval: 60_000,
@@ -229,11 +236,10 @@ export default function AdminSupportPage() {
             Manage merchant support requests and internal developer tickets
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            className="flex-shrink-0"
             onClick={() =>
               queryClient.invalidateQueries({ queryKey: ["admin-support-tickets"] })
             }
@@ -242,7 +248,7 @@ export default function AdminSupportPage() {
             Refresh
           </Button>
           {canCreateTicket && (
-            <Button size="sm" className="flex-shrink-0" asChild>
+            <Button size="sm" asChild>
               <Link href="/manage/support/new">
                 <MessageSquarePlus className="mr-1.5 h-3.5 w-3.5" />
                 New Developer Ticket
@@ -257,22 +263,26 @@ export default function AdminSupportPage() {
         <StatCard
           label="Open Tickets"
           value={stats?.open_count ?? "—"}
+          isLoading={statsLoading}
           icon={MessageSquare}
         />
         <StatCard
           label="Unassigned"
           value={stats?.unassigned_count ?? "—"}
+          isLoading={statsLoading}
           icon={Users}
         />
         <StatCard
           label="Avg First Response"
           value={stats?.avg_first_response_hours ?? "—"}
+          isLoading={statsLoading}
           suffix="hrs"
           icon={Clock}
         />
         <StatCard
           label="Avg Resolution"
           value={stats?.avg_resolution_hours ?? "—"}
+          isLoading={statsLoading}
           suffix="hrs"
           icon={TrendingUp}
         />
@@ -298,7 +308,7 @@ export default function AdminSupportPage() {
 
       {/* Secondary Filters */}
       <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-0 max-w-sm">
+        <div className="relative w-full min-w-0 flex-1 sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by subject, submitter, or ticket #..."
@@ -312,7 +322,7 @@ export default function AdminSupportPage() {
           value={(filters.ticket_scope as string) || "all"}
           onValueChange={(v) => setFilter("ticket_scope", v as any)}
         >
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-full min-w-0 sm:w-40">
             <SelectValue placeholder="Ticket Scope" />
           </SelectTrigger>
           <SelectContent>
@@ -326,7 +336,7 @@ export default function AdminSupportPage() {
           value={(filters.category as string) || "all"}
           onValueChange={(v) => setFilter("category", v as any)}
         >
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-full min-w-0 sm:w-40">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
@@ -341,7 +351,7 @@ export default function AdminSupportPage() {
           value={(filters.priority as string) || "all"}
           onValueChange={(v) => setFilter("priority", v as any)}
         >
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-full min-w-0 sm:w-36">
             <SelectValue placeholder="Priority" />
           </SelectTrigger>
           <SelectContent>
@@ -357,7 +367,7 @@ export default function AdminSupportPage() {
           value={(filters.assigned_to as string) || "all"}
           onValueChange={(v) => setFilter("assigned_to", v as any)}
         >
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-full min-w-0 sm:w-40">
             <SelectValue placeholder="Assigned To" />
           </SelectTrigger>
           <SelectContent>

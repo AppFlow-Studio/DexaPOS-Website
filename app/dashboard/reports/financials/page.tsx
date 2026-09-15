@@ -499,7 +499,6 @@ export default function FinancialsPage() {
                 isLoading={isLoadingOrders}
                 onOrderClick={handleOrderClick}
                 hideOrderStatus
-                hideOrderTypeBadge
               />
             </PanelSection>
           </Panel>

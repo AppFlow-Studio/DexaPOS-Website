@@ -242,13 +242,13 @@ export default function AnalyticsPage() {
           PERSISTENT KPI HEADER — always visible above tabs
       ══════════════════════════════════════════════════════════════════════ */}
             <div className="grid gap-4 grid-cols-2 lg:grid-cols-6">
-                <Card>
+                <Card className="min-w-0 overflow-hidden">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total GPV (30d)</CardTitle>
                         <DollarSign className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28" /> : (
+                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
                             <>
                                 <div className="text-2xl font-bold">{kpiData ? fmtGPV(kpiData.totalGPV30d) : '—'}</div>
                                 {fmtTrend(kpiData?.gpvChange)}
@@ -256,13 +256,13 @@ export default function AnalyticsPage() {
                         )}
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="min-w-0 overflow-hidden">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Active Merchants (7d)</CardTitle>
                         <Users className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28" /> : (
+                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
                             <>
                                 <div className="text-2xl font-bold">{kpiData?.activeMerchants7d.toLocaleString() ?? '—'}</div>
                                 <p className="text-xs text-muted-foreground">{kpiData?.totalMerchants.toLocaleString()} total</p>
@@ -270,13 +270,13 @@ export default function AnalyticsPage() {
                         )}
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="min-w-0 overflow-hidden">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Orders (30d)</CardTitle>
                         <CreditCard className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28" /> : (
+                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
                             <>
                                 <div className="text-2xl font-bold">{kpiData?.totalOrders30d.toLocaleString() ?? '—'}</div>
                                 {fmtTrend(kpiData?.ordersChange)}
@@ -284,13 +284,13 @@ export default function AnalyticsPage() {
                         )}
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="min-w-0 overflow-hidden">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Avg Order Value</CardTitle>
                         <Activity className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28" /> : (
+                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
                             <>
                                 <div className="text-2xl font-bold">{kpiData?.avgOrderValue ? `$${kpiData.avgOrderValue.toFixed(2)}` : '—'}</div>
                                 <p className="text-xs text-muted-foreground">
@@ -301,13 +301,13 @@ export default function AnalyticsPage() {
                         )}
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="min-w-0 overflow-hidden">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Active Devices</CardTitle>
                         <Cpu className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28" /> : (
+                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
                             <>
                                 <div className="text-2xl font-bold">{kpiData?.activeDevices?.toLocaleString() ?? '—'}</div>
                                 <p className="text-xs text-muted-foreground">Online now</p>
@@ -315,13 +315,13 @@ export default function AnalyticsPage() {
                         )}
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="min-w-0 overflow-hidden">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Total Locations</CardTitle>
                         <MapPin className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28" /> : (
+                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
                             <>
                                 <div className="text-2xl font-bold">{kpiData?.totalLocations?.toLocaleString() ?? '—'}</div>
                                 <p className="text-xs text-muted-foreground">Active locations</p>

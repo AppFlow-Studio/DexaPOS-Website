@@ -74,22 +74,22 @@ export function createDemoPage(options: DemoPageOptions = {}): PageDocument {
           heading: "Why order direct",
           items: [
             {
-              icon: "Truck",
               title: "Free delivery over $30",
               description: "Straight from our kitchen, no third-party markup.",
+              icon: "Truck",
             },
             {
-              icon: "Clock",
               title: "Open until 11pm",
               description: "Kitchen runs late, seven nights a week.",
+              icon: "Clock",
             },
             {
-              icon: "Leaf",
               title: "Local ingredients",
               description: "Produce from the Union Square greenmarket.",
+              icon: "Leaf",
             },
           ],
-          columns: 3,
+          iconTone: "brand",
         },
       },
       {

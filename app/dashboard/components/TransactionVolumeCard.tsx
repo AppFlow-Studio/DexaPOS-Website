@@ -94,23 +94,26 @@ function ensureCoreRows(rows: TransactionVolumeRow[]): TransactionVolumeRow[] {
 
 function TransactionVolumeSkeleton() {
   return (
-    <Card className="border shadow-sm">
+    <Card className="min-w-0 overflow-hidden border shadow-sm">
       <CardHeader className="pb-4">
-        <Skeleton className="h-5 w-48" />
-        <Skeleton className="h-3 w-64" />
+        <Skeleton className="h-5 w-48 max-w-full" />
+        <Skeleton className="h-3 w-64 max-w-full" />
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-full rounded-full" />
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex justify-between items-center py-3">
-                <Skeleton className="h-4 w-32" />
-                <div className="flex gap-8">
-                  <Skeleton className="h-4 w-14" />
-                  <Skeleton className="h-4 w-14" />
-                  <Skeleton className="h-4 w-20" />
-                </div>
+      <CardContent className="min-w-0">
+        <div className="min-w-0 space-y-4 overflow-hidden">
+          <Skeleton className="h-8 w-full max-w-full rounded-full" />
+          {/* Mirrors the real table's responsive tracks — 3 columns on
+              phones, 4 from sm — so the rows land in place. */}
+          <div className="divide-y">
+            {Array.from({ length: 3 }).map((_, rowIndex) => (
+              <div
+                key={rowIndex}
+                className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] items-center gap-x-2 py-3 sm:grid-cols-[minmax(130px,1fr)_90px_90px_100px] sm:gap-x-3"
+              >
+                <Skeleton className="h-4 w-full max-w-full" />
+                <Skeleton className="h-4 w-full max-w-full" />
+                <Skeleton className="h-4 w-full max-w-full" />
+                <Skeleton className="hidden h-4 w-full sm:block" />
               </div>
             ))}
           </div>
@@ -359,9 +362,10 @@ export function TransactionVolumeCard({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-3 border-t">
-          <div className="flex items-center gap-3">
+        {/* Footer. Stacks under sm: side by side, the count text is squeezed
+            into a narrow column at 360px and the link crowds it. */}
+        <div className="flex flex-col gap-3 pt-3 border-t sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
             <span className="text-xs text-muted-foreground">
               Showing {pagedRows.length} payment method{pagedRows.length !== 1 ? "s" : ""}
             </span>

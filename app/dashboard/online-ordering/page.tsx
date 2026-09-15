@@ -7,14 +7,14 @@ import {
   type OnlineOrderingSettings,
   type OnlineStoreSetupStatus,
 } from "./hooks/useOnlineOrderingSettings";
-import { useGatedLocationId, useGatedLocation } from "@/stores/location-store";
+import { useGatedLocationId, useGatedLocation, useHasLocations } from "@/stores/location-store";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { InfoIcon } from "@/components/ui/info-icon";
-import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, Check, Bell } from "lucide-react";
+import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, Check, Bell, QrCode } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -40,12 +40,11 @@ import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { NotificationsTab } from "./components/NotificationsTab";
 import { HoursConfigModal } from "./components/HoursConfigModal";
 import { WeeklySchedule } from "./hooks/useOnlineOrderingSettings";
-import { QrTableManager } from "./components/QrTableManager";
-import { QrAnalyticsPanel } from "./components/QrAnalyticsPanel";
-import { QrGuestAlertsPanel } from "./components/QrGuestAlertsPanel";
+import { MarketingQrManager } from "./components/MarketingQrManager";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
 import { buildStoreUrl } from "@/app/sites/lib/store-url";
+import { validateQrBrandingColors } from "@/lib/qr/branding-rules";
 import {
   LocationIndicator,
   PageHeader,
@@ -57,6 +56,14 @@ import {
   getOnlineStoreRequestRequirements,
   saveOnlineStoreRequestRequirements,
 } from "./actions";
+import { OnlineOrderingSkeleton } from "./OnlineOrderingSkeleton";
+
+// TEMP: online ordering is live with pickup + card only. The storefront hard-
+// disables delivery site-wide (see app/sites/actions.ts mapStoreConfigToSite),
+// so the merchant-facing delivery controls below are disabled to avoid offering
+// a setting that has no effect. Flip to false to restore delivery configuration
+// once the delivery flow goes live. Saved `accepts_delivery` values are preserved.
+const DELIVERY_TEMPORARILY_DISABLED = true;
 
 function SettingsToggleRow({
   title,
@@ -299,6 +306,30 @@ function CompletedSetupPanel({
   });
   const qrGate = settings.qrBillingGate;
   const qrControlsLocked = isSaving || !qrGate.entitled;
+
+  /**
+   * Reject unscannable colours *as the merchant picks them*.
+   *
+   * `resolveQrBranding` degrades at render time so an old row still prints,
+   * but that is the wrong moment to learn about it: the merchant finds out via
+   * a toast on the QR screen, long after leaving this form. These are the same
+   * three values the QR renderer reads — `primaryColor` draws the modules,
+   * `backgroundColor` the ground, `secondaryColor` the optional gradient.
+   *
+   * Deliberately not a hard save block: these colours also drive the whole
+   * storefront, so refusing to save a valid website because its palette would
+   * make a poor QR code would be the wrong trade. The requirement is that the
+   * merchant is told at the point of choice, with the reason — which this does.
+   */
+  const qrColorIssues = useMemo(
+    () =>
+      validateQrBrandingColors({
+        moduleColor: settings.primaryColor,
+        backgroundColor: settings.backgroundColor,
+        secondaryColor: settings.secondaryColor,
+      }),
+    [settings.primaryColor, settings.backgroundColor, settings.secondaryColor]
+  );
   const qrEnableSwitchDisabled =
     isSaving || (!qrGate.entitled && !settings.acceptsDineIn);
   const { orgSlug } = useAuth();
@@ -447,6 +478,7 @@ function CompletedSetupPanel({
                 { value: "store", label: "Store Info", Icon: Store },
                 { value: "branding", label: "Branding", Icon: Palette },
                 { value: "ordering", label: "Ordering", Icon: Truck },
+                { value: "marketing-qr", label: "Marketing QR", Icon: QrCode },
                 { value: "orderout", label: "OrderOut", Icon: Plug },
                 { value: "notifications", label: "Notifications", Icon: Bell },
               ] as const
@@ -880,6 +912,33 @@ function CompletedSetupPanel({
                 />
               </div>
 
+              {/* The reason, at the point of choice. `message` already says why
+                  and is written for merchants, so it is rendered verbatim. */}
+              {qrColorIssues.length > 0 ? (
+                <div
+                  className="rounded-2xl border-0 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-none dark:bg-amber-900/20 dark:text-amber-200"
+                  role="status"
+                >
+                  <p className="font-medium">
+                    {qrColorIssues.some((issue) => issue.scope === "primary")
+                      ? "These colours will not scan as a QR code"
+                      : "The QR gradient will be skipped"}
+                  </p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {qrColorIssues.map((issue) => (
+                      <li key={`${issue.code}-${issue.scope}`}>
+                        {issue.message}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2">
+                    {qrColorIssues.some((issue) => issue.scope === "primary")
+                      ? "Your storefront can still use them. Table QR codes will fall back to black on white until this is fixed."
+                      : "Your storefront can still use it. Table QR codes will print in the primary colour alone."}
+                  </p>
+                </div>
+              ) : null}
+
               {/* Row 1: Logo, Favicon, OG Image — uniform 80×80 */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {(
@@ -957,10 +1016,14 @@ function CompletedSetupPanel({
                 />
                 <SettingsToggleRow
                   title="Delivery"
-                  description="Allow customers to place delivery orders."
-                  checked={settings.deliveryEnabled}
+                  description={
+                    DELIVERY_TEMPORARILY_DISABLED
+                      ? "Delivery is temporarily unavailable. Online ordering currently supports pickup only — this will be re-enabled soon."
+                      : "Allow customers to place delivery orders."
+                  }
+                  checked={DELIVERY_TEMPORARILY_DISABLED ? false : settings.deliveryEnabled}
                   onCheckedChange={(checked) => onUpdate({ deliveryEnabled: checked })}
-                  disabled={isSaving}
+                  disabled={isSaving || DELIVERY_TEMPORARILY_DISABLED}
                 />
               </div>
 
@@ -1012,6 +1075,7 @@ function CompletedSetupPanel({
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
+                {/* Delivery-only fields — disabled while delivery is off (see DELIVERY_TEMPORARILY_DISABLED). */}
                 <div className="space-y-2">
                   <Label>Delivery Fee ($)</Label>
                   <Input
@@ -1020,6 +1084,7 @@ function CompletedSetupPanel({
                     min={0}
                     step="0.01"
                     onChange={(e) => onUpdate({ baseDeliveryFee: Number(e.target.value) })}
+                    disabled={DELIVERY_TEMPORARILY_DISABLED}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1030,6 +1095,7 @@ function CompletedSetupPanel({
                     min={0}
                     step="0.01"
                     onChange={(e) => onUpdate({ freeDeliveryThreshold: Number(e.target.value) })}
+                    disabled={DELIVERY_TEMPORARILY_DISABLED}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1044,6 +1110,7 @@ function CompletedSetupPanel({
                         deliveryRadiusMiles: e.target.value === "" ? null : Number(e.target.value),
                       })
                     }
+                    disabled={DELIVERY_TEMPORARILY_DISABLED}
                   />
                 </div>
               </div>
@@ -1053,7 +1120,15 @@ function CompletedSetupPanel({
                   <div>
                     <h3 className="text-base font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">QR Table Ordering</h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Scan-to-order settings for dine-in QR. These controls stay on the existing online-ordering surface; QR codes, analytics, and deeper billing gates remain separate work.
+                      Scan-to-order policy for dine-in QR: whether guests may order from a
+                      table, and on what terms. The codes themselves are printed from{" "}
+                      <Link
+                        href="/dashboard/tables/qr-codes"
+                        className="font-medium text-[#0C4FD1] underline-offset-4 hover:underline dark:text-[#6CA0FF]"
+                      >
+                        Tables › QR Codes
+                      </Link>
+                      , where the tables live.
                     </p>
                   </div>
 
@@ -1146,23 +1221,6 @@ function CompletedSetupPanel({
             </PanelSection>
           </Panel>
 
-              <QrTableManager
-                locationId={selectedLocationId}
-                locationName={locationName}
-                storefrontEnabled={settings.enabled}
-                acceptsDineIn={settings.acceptsDineIn}
-                qrKillSwitch={settings.qrKillSwitch}
-                qrEntitled={qrGate.entitled}
-                qrGateMessage={qrGate.reason}
-              />
-
-              <QrAnalyticsPanel
-                locationId={selectedLocationId}
-                qrEnabled={settings.acceptsDineIn}
-              />
-
-              <QrGuestAlertsPanel locationId={selectedLocationId} />
-
           <Panel>
             <PanelSection
               icon={Clock3}
@@ -1191,6 +1249,28 @@ function CompletedSetupPanel({
               onUpdate({ operatingHours: schedule });
               setHoursModalOpen(false);
             }}
+          />
+        </TabsContent>
+
+        {/* Its own tab, not a slab at the bottom of Ordering. A marketing code
+            is a thing you make and print, not a setting you save, so it does
+            not belong under a dirty-state settings form.
+
+            Deliberately NOT behind `qrGate.entitled`, the gate the QR policy
+            block on the Ordering tab is subject to. Table QR ordering is a
+            billable multi-location dine-in feature; a flyer is not. Gating this
+            would lock out exactly the single-location merchants who print
+            flyers. Passing the flag forced-true would not be equivalent — a
+            later refactor of the gate would silently swallow this.
+
+            Table QR codes are elsewhere again, under Tables › QR Codes, because
+            those are keyed to floor-plan objects. A marketing code has no table
+            behind it, only the storefront — which is why it stayed here. */}
+        <TabsContent value="marketing-qr" className="space-y-6">
+          <MarketingQrManager
+            locationId={selectedLocationId}
+            locationName={locationName}
+            storefrontEnabled={settings.enabled}
           />
         </TabsContent>
 
@@ -1252,6 +1332,9 @@ export default function OnlineOrderingPage() {
   const selectedLocationId = gatedLocationId ?? "all";
   const selectedLocation = useGatedLocation();
   const isAllLocations = !gatedLocationId;
+  // Distinguishes "the store has not populated yet" from "this account really
+  // has no location to show" — see the guard further down.
+  const hasLocations = useHasLocations();
 
   const [requirementsOpen, setRequirementsOpen] = useState(false);
   const [requirementsMissing, setRequirementsMissing] = useState<Record<string, boolean> | null>(null);
@@ -1287,6 +1370,15 @@ export default function OnlineOrderingPage() {
   }
 
   if (!selectedLocationId || !selectedLocation) {
+    // The location list lives in a persisted Zustand store that starts as `[]`,
+    // so `selectedLocation` is null on first paint for a perfectly healthy
+    // account. Rendering "Location unavailable" there turns a pending state
+    // into a dead end, so wait until the store actually has locations before
+    // concluding one is missing.
+    if (!hasLocations) {
+      return <OnlineOrderingSkeleton />;
+    }
+
     return (
       <PageShell>
         <PageHeader title="Online Ordering" />
@@ -1304,17 +1396,7 @@ export default function OnlineOrderingPage() {
   const currentSettings = settings.find((entry) => entry.locationId === selectedLocationId);
 
   if (isLoading && !currentSettings) {
-    return (
-      <PageShell>
-        <PageHeader
-          title="Online Ordering"
-          indicator={<LocationIndicator isAllLocations={false} locationName={selectedLocation.name} />}
-        />
-        <Panel className="flex h-56 items-center justify-center" aria-label="Loading online ordering settings">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </Panel>
-      </PageShell>
-    );
+    return <OnlineOrderingSkeleton />;
   }
 
   if (!currentSettings) {

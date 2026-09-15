@@ -1,7 +1,7 @@
 ﻿'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { AlertCircle, Building2, CreditCard, MapPin, Shield } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -28,11 +28,8 @@ import {
   type MerchantBillingMethod,
   type MerchantBillingProfileRecord,
 } from '@/app/manage/actions/merchant-billing'
-import {
-  PaymentCardForm,
-  type PaymentCardFormHandle,
-} from '@/app/sites/components/checkout/PaymentCardForm'
 import { PageHeader } from '@/components/dashboard/shell'
+import { PassageCheckout } from '@/lib/payments/valor/passageClient'
 
 interface BillingLocationOption {
   id: string
@@ -77,8 +74,11 @@ export function MerchantBillingSetupCard({
   const [profiles, setProfiles] = useState<MerchantBillingProfileRecord[]>([])
   const [cardSetup, setCardSetup] = useState<MerchantBillingCardSetupRecord>({
     configured: false,
+    provider: 'valor',
     label: null,
-    tokenizationKey: null,
+    clientToken: null,
+    epi: null,
+    isDemo: false,
   })
   const [selectedScope, setSelectedScope] = useState<string>(locations[0]?.id || MERCHANT_WIDE_VALUE)
   const [method, setMethod] = useState<MerchantBillingMethod>('ach')
@@ -92,7 +92,6 @@ export function MerchantBillingSetupCard({
   const [cardholderName, setCardholderName] = useState('')
   const [billingEmail, setBillingEmail] = useState('')
   const [cardFormError, setCardFormError] = useState('')
-  const cardFormRef = useRef<PaymentCardFormHandle | null>(null)
 
   const scopedPrimaryProfile = useMemo(() => {
     return (
@@ -115,7 +114,10 @@ export function MerchantBillingSetupCard({
       try {
         const [nextProfiles, nextCardSetup] = await Promise.all([
           getMerchantBillingProfiles(merchantId),
-          getMerchantBillingCardSetup(merchantId),
+          getMerchantBillingCardSetup(
+            merchantId,
+            selectedScope === MERCHANT_WIDE_VALUE ? null : selectedScope,
+          ),
         ])
         setProfiles(nextProfiles)
         setCardSetup(nextCardSetup)
@@ -130,7 +132,7 @@ export function MerchantBillingSetupCard({
   useEffect(() => {
     refreshProfiles()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [merchantId])
+  }, [merchantId, selectedScope])
 
   useEffect(() => {
     const requestedScope = searchParams.get('billingScope')
@@ -172,46 +174,47 @@ export function MerchantBillingSetupCard({
     setBillingEmail('')
   }, [scopedPrimaryProfile])
 
+  const saveValorCard = (paymentToken: string, paymentMethod?: string) => {
+    const scopedLocationId = selectedScope === MERCHANT_WIDE_VALUE ? null : selectedScope
+
+    startTransition(async () => {
+      if (!cardholderName.trim() || !billingEmail.trim()) {
+        const message = 'Enter the cardholder name and billing email before saving the card.'
+        setCardFormError(message)
+        toast.error(message)
+        return
+      }
+
+      const result = await saveMerchantBillingCardWithVault({
+        merchantId,
+        locationId: scopedLocationId,
+        paymentToken,
+        cardholderName,
+        billingEmail,
+        cardBrand: paymentMethod ?? null,
+        cardLastFour: null,
+      })
+
+      if (!result.success) {
+        setCardFormError(result.error || 'Failed to save the Valor billing profile.')
+        toast.error(result.error || 'Failed to save billing profile.')
+        return
+      }
+
+      toast.success(
+        scopedLocationId
+          ? 'Location billing card saved securely with Valor.'
+          : 'Merchant-wide billing card saved securely with Valor.',
+      )
+      setCardFormError('')
+      refreshProfiles()
+    })
+  }
+
   const handleSave = () => {
     const scopedLocationId = selectedScope === MERCHANT_WIDE_VALUE ? null : selectedScope
 
     startTransition(async () => {
-      if (method === 'card') {
-        const validation = cardFormRef.current?.validateCardInput()
-        if (!validation?.valid) {
-          toast.error(validation?.error || 'Please complete your card details.')
-          return
-        }
-
-        let tokenizedCard: { tokenId: string; cardType: string | null; cardLastFour: string | null }
-        try {
-          tokenizedCard = await cardFormRef.current!.tokenize()
-        } catch (error: any) {
-          toast.error(error?.message || 'Failed to tokenize card.')
-          return
-        }
-
-        const result = await saveMerchantBillingCardWithVault({
-          merchantId,
-          locationId: scopedLocationId,
-          paymentToken: tokenizedCard.tokenId,
-          cardholderName,
-          billingEmail,
-          cardBrand: tokenizedCard.cardType,
-          cardLastFour: tokenizedCard.cardLastFour,
-        })
-
-        if (!result.success) {
-          toast.error(result.error || 'Failed to save billing profile.')
-          return
-        }
-
-        toast.success(scopedLocationId ? 'Location billing card saved to NMI vault.' : 'Merchant-wide billing card saved to NMI vault.')
-        setCardFormError('')
-        refreshProfiles()
-        return
-      }
-
       const result = await saveMerchantBilling({
         merchantId,
         locationId: scopedLocationId,
@@ -250,7 +253,7 @@ export function MerchantBillingSetupCard({
         <Shield className="h-4 w-4" />
         <AlertTitle>Security Notice</AlertTitle>
         <AlertDescription>
-          Billing profiles can be saved merchant-wide or per location. Subscription billing should use the location-specific profile, while legacy or non-subscription flows can still rely on merchant-wide ACH/card records.
+          The merchant card pays the merchant tier. Each location needs its own card for its devices, integrations, and add-ons. Updating one location&apos;s card does not change other locations.
         </AlertDescription>
       </Alert>
 
@@ -258,7 +261,7 @@ export function MerchantBillingSetupCard({
         <CardHeader>
           <CardTitle>Billing Profile Scope</CardTitle>
           <CardDescription>
-            Choose which location owns the billing method. Per-location billing profiles are recommended for subscriptions.
+            Choose Merchant-wide for the tier card, or a location for that location&apos;s subscription card. Before a merchant-wide card is configured, the tier uses the first location&apos;s card.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -344,7 +347,7 @@ export function MerchantBillingSetupCard({
                 <RadioGroupItem value="card" id="billing-card" />
                 <div>
                   <div className="font-medium">Credit / Debit Card</div>
-                  <div className="text-xs text-muted-foreground">Stored in the Dexa Billing NMI vault</div>
+                  <div className="text-xs text-muted-foreground">Tokenized and stored in the Valor vault</div>
                 </div>
               </label>
             </RadioGroup>
@@ -418,7 +421,7 @@ export function MerchantBillingSetupCard({
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    Dexa Billing NMI is not configured yet. Ask HQ to add the platform billing keys first.
+                    Valor SaaS billing is not configured for this scope. HQ must provision an active primary Valor subscription account first.
                   </AlertDescription>
                 </Alert>
               ) : null}
@@ -454,15 +457,27 @@ export function MerchantBillingSetupCard({
                 </div>
               </div>
 
-              {cardSetup.tokenizationKey ? (
-                <PaymentCardForm
-                  ref={cardFormRef}
-                  tokenizationKey={cardSetup.tokenizationKey}
-                  onError={setCardFormError}
-                  disabled={!canEdit || !cardSetup.configured}
-                  country="US"
-                  currency="USD"
-                  price="0.00"
+              {cardSetup.clientToken && cardSetup.epi && canEdit ? (
+                <PassageCheckout
+                  clientToken={cardSetup.clientToken}
+                  epi={cardSetup.epi}
+                  isDemo={cardSetup.isDemo}
+                  formAction="/api/valor/passage-callback"
+                  submitText={isPending ? 'Saving...' : 'Save Valor Payment Method'}
+                  onTokenReceived={({ token, method: paymentMethod }) =>
+                    saveValorCard(token, paymentMethod)
+                  }
+                  onError={(error) =>
+                    setCardFormError(error.message || 'Valor card tokenization failed.')
+                  }
+                  unavailableFallback={
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Valor payment fields are temporarily unavailable. Refresh and try again.
+                      </AlertDescription>
+                    </Alert>
+                  }
                 />
               ) : null}
 
@@ -484,19 +499,16 @@ export function MerchantBillingSetupCard({
             </Alert>
           )}
 
-          <div className="flex justify-end">
-            <Button
-              onClick={handleSave}
-              disabled={
-                isLoading ||
-                isPending ||
-                !canEdit ||
-                (method === 'card' && !cardSetup.configured)
-              }
-            >
-              {isPending ? 'Saving...' : 'Save Payment Method'}
-            </Button>
-          </div>
+          {method === 'ach' ? (
+            <div className="flex justify-end">
+              <Button
+                onClick={handleSave}
+                disabled={isLoading || isPending || !canEdit}
+              >
+                {isPending ? 'Saving...' : 'Save Payment Method'}
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

@@ -14,7 +14,10 @@ import {
     Store,
     Edit,
     Loader2,
-    DollarSign
+    DollarSign,
+    User,
+    Mail,
+    Phone
 } from 'lucide-react'
 import { MerchantDetails } from '@/types/merchant'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -110,6 +113,26 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
     const pricingStrategyLabel = pricingStrategy === 'dual'
         ? `Dual Pricing (${dualPricingPercentage}% cash discount)`
         : 'No Surcharge (Manual Pricing)'
+
+    // Owner / contact + address, read from the canonical merchants columns (the
+    // same fields Valor boarding consumes) — not the legacy Clerk public_metadata.
+    const ownerName = [merchantInfo?.owner_first_name, merchantInfo?.owner_last_name]
+        .filter(Boolean)
+        .join(' ') || 'Not provided'
+    const ownerEmail = merchantInfo?.owner_email || 'Not provided'
+    const ownerPhone = merchantInfo?.owner_phone
+        ? (formatPhoneForDisplay(merchantInfo.owner_phone) || merchantInfo.owner_phone)
+        : 'Not provided'
+    const merchantCategory = (merchantInfo?.public_metadata as any)?.merchant_type || 'Not specified'
+    const businessCountry = merchantInfo?.business_country || 'US'
+    const cityStateZip = [
+        merchantInfo?.business_city,
+        merchantInfo?.business_state,
+        merchantInfo?.business_postal_code,
+    ]
+        .filter(Boolean)
+        .join(', ')
+    const hasBusinessAddress = Boolean(merchantInfo?.business_address_line1 || cityStateZip)
 
     const formatAddress = (loc: any) => {
         return [loc.address_line1, loc.city, loc.state].filter(Boolean).join(', ')
@@ -218,6 +241,13 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                     business_city: formData.business_city.trim() || null,
                     business_state: formData.business_state.trim().toUpperCase() || null,
                     business_postal_code: formData.business_postal_code.trim() || null,
+                    // Category + license have no dedicated columns; they live in
+                    // public_metadata (merged server-side). Previously these two form
+                    // fields were silently dropped on save.
+                    public_metadata: {
+                        merchant_type: formData.merchant_type.trim() || null,
+                        business_license_number: formData.business_license_number.trim() || null,
+                    },
                 }
             })
 
@@ -389,18 +419,79 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                         </CardContent>
                     </Card>
 
-                    {/* Additional Information Card */}
+                    {/* Owner & Contact Card — canonical merchants columns (used by Valor boarding) */}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-lg">Additional Information</CardTitle>
-                            <CardDescription>Additional business details and metadata</CardDescription>
+                            <CardTitle className="text-lg">Owner &amp; Contact</CardTitle>
+                            <CardDescription>Primary contact used for payments boarding and account notices</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid gap-6 md:grid-cols-2 [&>*]:min-w-0">
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                        <User className="h-4 w-4" />
+                                        Owner Name
+                                    </div>
+                                    <div className="text-base font-medium">{ownerName}</div>
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                        <Store className="h-4 w-4" />
+                                        Merchant Category
+                                    </div>
+                                    <div className="text-base font-medium">{merchantCategory}</div>
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                        <Mail className="h-4 w-4" />
+                                        Owner Email
+                                    </div>
+                                    <div className="text-base font-medium break-words">{ownerEmail}</div>
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                        <Phone className="h-4 w-4" />
+                                        Owner Phone
+                                    </div>
+                                    <div className="text-base font-medium">{ownerPhone}</div>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Business Address Card — canonical merchants columns (used by Valor boarding) */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg">Business Address</CardTitle>
+                            <CardDescription>Legal business address used for payments boarding</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {hasBusinessAddress ? (
+                                <div className="flex items-start gap-3">
+                                    <MapPin className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
+                                    <div className="text-base font-medium leading-relaxed">
+                                        {merchantInfo?.business_address_line1 && <div>{merchantInfo.business_address_line1}</div>}
+                                        {merchantInfo?.business_address_line2 && <div>{merchantInfo.business_address_line2}</div>}
+                                        {cityStateZip && <div>{cityStateZip}</div>}
+                                        <div className="text-sm text-muted-foreground">{businessCountry}</div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-sm text-muted-foreground">
+                                    No business address on file. Add one via Edit to enable payments boarding.
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Account Card — identifiers + status (read-only) */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg">Account</CardTitle>
+                            <CardDescription>Account status and identifiers</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="grid gap-4 md:grid-cols-2 [&>*]:min-w-0">
-                                {/* <div className="space-y-2">
-                                    <div className="text-sm font-medium text-muted-foreground">Merchant ID</div>
-                                    <div className="text-sm font-mono">{merchantInfo?.id || 'N/A'}</div>
-                                </div> */}
                                 <div className="space-y-2 min-w-0">
                                     <div className="text-sm font-medium text-muted-foreground">Clerk Organization ID</div>
                                     <div className="text-sm font-mono break-all">{merchantInfo?.clerk_org_id || 'N/A'}</div>
@@ -409,12 +500,6 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     <div className="text-sm font-medium text-muted-foreground">Status</div>
                                     <Badge variant={merchantInfo?.onboarding_status === 'active' ? 'default' : 'secondary'}>
                                         {merchantInfo?.onboarding_status || 'Unknown'}
-                                    </Badge>
-                                </div>
-                                <div className="space-y-2">
-                                    <div className="text-sm font-medium text-muted-foreground">Business Type (Category)</div>
-                                    <Badge variant="outline">
-                                        {merchantInfo?.business_type || 'Not specified'}
                                     </Badge>
                                 </div>
                             </div>

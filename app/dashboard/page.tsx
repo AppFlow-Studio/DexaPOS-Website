@@ -717,7 +717,7 @@ export default function MerchantDashboardPage() {
             />
           </div>
 
-          <div className="[&>*]:border-t [&>*]:border-border/60 [&>*:first-child]:border-t-0 [&>*]:px-6">
+          <div className="min-w-0 [&>*]:min-w-0 [&>*]:border-t [&>*]:border-border/60 [&>*:first-child]:border-t-0 [&>*]:px-6">
 
       {/* Net Revenue by Category Tree Map */}
       <NetRevenueByCategoryCard

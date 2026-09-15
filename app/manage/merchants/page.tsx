@@ -352,31 +352,31 @@ function MerchantGridSkeleton() {
     return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
-                <Card key={i}>
+                <Card key={i} className="min-w-0 overflow-hidden">
                     <CardContent className="p-5">
-                        <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                                <Skeleton className="w-10 h-10 rounded-lg" />
-                                <div>
-                                    <Skeleton className="h-5 w-32 mb-1" />
-                                    <Skeleton className="h-4 w-20" />
+                        <div className="flex items-start justify-between gap-2 mb-4">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <Skeleton className="w-10 h-10 rounded-lg shrink-0" />
+                                <div className="min-w-0">
+                                    <Skeleton className="h-5 w-32 max-w-[60%] mb-1" />
+                                    <Skeleton className="h-4 w-20 max-w-[40%]" />
                                 </div>
                             </div>
-                            <Skeleton className="h-6 w-16" />
+                            <Skeleton className="h-6 w-16 shrink-0" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             {[...Array(4)].map((_, j) => (
                                 <div key={j} className="flex items-center gap-2">
-                                    <Skeleton className="h-4 w-4" />
-                                    <div>
-                                        <Skeleton className="h-3 w-16 mb-1" />
-                                        <Skeleton className="h-4 w-12" />
+                                    <Skeleton className="h-4 w-4 shrink-0" />
+                                    <div className="min-w-0">
+                                        <Skeleton className="h-3 w-16 max-w-full mb-1" />
+                                        <Skeleton className="h-4 w-12 max-w-full" />
                                     </div>
                                 </div>
                             ))}
                         </div>
                         <div className="mt-4 pt-3 border-t">
-                            <Skeleton className="h-3 w-32" />
+                            <Skeleton className="h-3 w-32 max-w-[50%]" />
                         </div>
                     </CardContent>
                 </Card>

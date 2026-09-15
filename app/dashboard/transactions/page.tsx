@@ -192,7 +192,7 @@ export default function TransactionsPage() {
   if (isInitialPageLoading) {
     return (
       <DataPageSkeleton
-        variant="analytics"
+        variant="financials"
         label="Loading financial information"
       />
     );

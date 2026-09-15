@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import {
   useBoardMerchantOnValor,
   useMerchantValorBoardingStatus,
+  useSetValorAccountPrimary,
 } from '@/lib/queries/use-admin-valor-boarding'
 import { EmptySection } from './EmptySection'
 import { SectionHead } from './SectionHead'
@@ -20,6 +21,7 @@ function statusVariant(boarded: boolean): 'default' | 'secondary' {
 export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
   const { data, isLoading, error: queryError } = useMerchantValorBoardingStatus(merchantId)
   const boarding = useBoardMerchantOnValor(merchantId)
+  const setPrimary = useSetValorAccountPrimary(merchantId)
   const error = queryError
     ? queryError instanceof Error
       ? queryError.message
@@ -52,6 +54,26 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
       },
       onError: (e) =>
         toast.error('Boarding error', {
+          description: e instanceof Error ? e.message : 'Unknown error.',
+        }),
+    })
+  }
+
+  const handleSetLive = (locationId: string, locationName: string) => {
+    setPrimary.mutate(locationId, {
+      onSuccess: (result) => {
+        if (result.ok) {
+          toast.success(`${locationName} is live`, {
+            description: 'Its storefront can now take card payments online.',
+          })
+        } else {
+          toast.error('Could not set live', {
+            description: result.error ?? 'Unknown error.',
+          })
+        }
+      },
+      onError: (e) =>
+        toast.error('Could not set live', {
           description: e instanceof Error ? e.message : 'Unknown error.',
         }),
     })
@@ -166,9 +188,31 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
                     {row.boarded
                       ? row.isPrimary
                         ? 'Active · primary online-order rail'
-                        : 'Active (not primary)'
+                        : 'Boarded but not live — the storefront can’t take card online until you set it live.'
                       : 'Awaiting boarding'}
                   </div>
+                  {row.boarded &&
+                    (row.isPrimary ? (
+                      <Badge variant="outline" className="shrink-0 border-green-300 bg-green-50 text-green-700">
+                        Live
+                      </Badge>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0"
+                        disabled={
+                          !row.hasApiKeys ||
+                          (setPrimary.isPending && setPrimary.variables === row.locationId)
+                        }
+                        onClick={() => handleSetLive(row.locationId, row.locationName)}
+                        title={row.hasApiKeys ? undefined : 'Missing API keys — re-provision this location first'}
+                      >
+                        {setPrimary.isPending && setPrimary.variables === row.locationId
+                          ? 'Setting live…'
+                          : 'Set live'}
+                      </Button>
+                    ))}
                 </div>
               </div>
             ))}

@@ -10,7 +10,7 @@ function parseEmails(value: string | undefined): string[] {
     .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
 }
 
-async function runDelivery(params: {
+export async function runSubscriptionNotificationDelivery(params: {
   supabase: BillingSupabaseClient
   invoiceId: string
   eventKey: string
@@ -177,7 +177,7 @@ export async function notifySubscriptionPaymentFailure(params: {
 
   const deliveries: Array<Promise<void>> = []
   deliveries.push(
-    runDelivery({
+    runSubscriptionNotificationDelivery({
       supabase: params.supabase,
       invoiceId: invoice.id,
       eventKey,
@@ -201,7 +201,7 @@ export async function notifySubscriptionPaymentFailure(params: {
         if (error) throw new Error(error.message)
       },
     }),
-    runDelivery({
+    runSubscriptionNotificationDelivery({
       supabase: params.supabase,
       invoiceId: invoice.id,
       eventKey,
@@ -233,7 +233,7 @@ export async function notifySubscriptionPaymentFailure(params: {
   ]
   for (const recipient of [...new Set(emailRecipients)]) {
     deliveries.push(
-      runDelivery({
+      runSubscriptionNotificationDelivery({
         supabase: params.supabase,
         invoiceId: invoice.id,
         eventKey,

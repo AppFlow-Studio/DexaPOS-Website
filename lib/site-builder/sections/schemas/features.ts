@@ -1,28 +1,42 @@
 import { z } from "zod";
-import { titleSchema, subtitleSchema } from "../primitives";
+import { hexColorSchema, TEXT_TONES, titleSchema } from "../primitives";
+import { FEATURE_ICON_NAMES } from "../feature-icon";
 
 /**
- * Short value propositions — "Free delivery over $30", "Open late", "Family
- * owned since 1998".
+ * Short selling points — "Catering", "Gluten-Free Options", "Easy Parking".
+ *
+ * An amenity strip, not a feature grid: an icon over a short label, centred and
+ * wrapping. Owner's equivalent is one title, then a reorderable list of items
+ * that each open a small editor of title, description and icon.
  *
  * Items are literals, not bindings: nothing here mirrors a platform record, so
- * there is nothing to resolve live. `icon` is a lucide icon name resolved by the
- * renderer against an allowlist, so an unknown name degrades to no icon rather
- * than a crash.
+ * there is nothing to resolve live.
+ *
+ * There is no `columns` field. The strip centres and wraps on its own, which is
+ * why five items sit three-then-two rather than needing a layout decision from
+ * the merchant — the one kind of decision this product does not delegate.
  */
 export const featuresSchema = z.object({
   heading: titleSchema.optional(),
-  subheading: subtitleSchema.optional(),
   items: z
     .array(
       z.object({
-        icon: z.string().max(40).optional(),
-        title: z.string().max(80),
+        title: z.string().max(50),
         description: z.string().max(300).optional(),
+        icon: z.enum(FEATURE_ICON_NAMES),
       }),
     )
     .max(12),
-  columns: z.union([z.literal(2), z.literal(3), z.literal(4)]),
+  /**
+   * The icon colour, as the same four tones section text already offers, so a
+   * merchant meets one colour vocabulary rather than two. `brand` is the
+   * default because it is what these icons have always rendered as.
+   *
+   * `custom` carries a hex in `iconColor`; the renderer resolves both against
+   * the band the section sits on, exactly as `textToneColor` does for copy.
+   */
+  iconTone: z.enum(TEXT_TONES).optional(),
+  iconColor: hexColorSchema.optional(),
 });
 
 export type FeaturesProps = z.infer<typeof featuresSchema>;
@@ -30,6 +44,6 @@ export type FeaturesProps = z.infer<typeof featuresSchema>;
 export function featuresDefaults(): FeaturesProps {
   return {
     items: [],
-    columns: 3,
+    iconTone: "brand",
   };
 }

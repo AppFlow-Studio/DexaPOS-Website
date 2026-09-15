@@ -1,6 +1,10 @@
 // tests/order-breakdown.test.ts
 import { describe, it, expect } from "vitest";
-import { getOrderBreakdown, type BreakdownOrderInput } from "@/lib/orders/order-breakdown";
+import {
+  getOrderBreakdown,
+  getOrderDisplayTotal,
+  type BreakdownOrderInput,
+} from "@/lib/orders/order-breakdown";
 import type { OrderPayment } from "@/types/order-management";
 
 /** Build a captured payment of a given tender for lane resolution. */
@@ -106,6 +110,19 @@ const NO_DUAL_ORDER: BreakdownOrderInput = {
   cash_total: "21.65",
 };
 
+const ONLINE_ORDER_WITH_TIP: BreakdownOrderInput = {
+  payment_pricing_mode: "card",
+  subtotal: "30.00",
+  tax_amount: "2.66",
+  service_charge: "0.00",
+  tip_amount: "5.40",
+  total_amount: "32.66",
+  card_total: "32.66",
+  cash_total: "32.66",
+  amount_paid: "38.06",
+  amount_due: "0.00",
+};
+
 describe("getOrderBreakdown", () => {
   it("cash-charged order renders the cash lane and foots to cash_total", () => {
     const b = getOrderBreakdown(CASH_ORDER, [payment("cash")]);
@@ -181,6 +198,20 @@ describe("getOrderBreakdown", () => {
   it("service_charge = 0 yields a zero service-charge line (caller hides it)", () => {
     const b = getOrderBreakdown(NO_DUAL_ORDER, []);
     expect(b.primary.serviceCharge).toBe(0);
+  });
+
+  it("adds a separately stored tip exactly once to the customer-facing total", () => {
+    const b = getOrderBreakdown(ONLINE_ORDER_WITH_TIP, [payment("external")]);
+
+    expect(b.primary.total).toBeCloseTo(32.66, 2);
+    expect(b.primary.tip).toBeCloseTo(5.40, 2);
+    expect(getOrderDisplayTotal(b)).toBeCloseTo(38.06, 2);
+  });
+
+  it("uses the collected amount for mixed-tender display totals", () => {
+    const b = getOrderBreakdown(MIXED_ORDER, [payment("cash"), payment("card_spinapi")]);
+
+    expect(getOrderDisplayTotal(b)).toBeCloseTo(16.57, 2);
   });
 
   it("falls back to bare columns (card track) when per-lane columns are absent", () => {

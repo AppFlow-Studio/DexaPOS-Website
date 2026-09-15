@@ -64,7 +64,13 @@ These are the parts that are genuinely implemented in repo or already reported a
   - `supabase/functions/storefront-payment-domain-whitelist/index.ts`
   - `app/manage/actions/admin-merchant/online-ordering.ts`
   - `app/dashboard/online-ordering/actions.ts`
-  - active storefront/QR payment rail is NMI-only; the live whitelist path no longer consumes a Dejavoo-named env fallback
+  - legacy NMI origin-whitelist support remains available behind the storefront
+    kill switch; Valor is now the default storefront/QR rail and does not use the
+    NMI domain-whitelist contract
+- [x] Valor QR payment lifecycle code is tracked in
+  `docs/features/qr-dine-in/PLAN-2026-08-29-QR-VALOR-PAYMENT-LIFECYCLE.md`:
+  sale was already connected, and cancellation now supports Valor void/refund
+  while preserving the NMI fallback
 - [x] QR funnel event tracking is now authored locally in:
   - `app/sites/funnel-actions.ts`
   - `app/sites/hooks/useQrFunnelTracking.ts`

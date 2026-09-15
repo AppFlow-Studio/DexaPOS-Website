@@ -5,7 +5,7 @@
  *
  *  - `getClientToken` mints the short-lived token Passage.js needs to render
  *    the card form. It is the only value of the three credentials that may
- *    reach the browser — the APP key must never leave the server.
+ *    reach the browser - the APP key must never leave the server.
  *  - `createSale` charges the card token Passage.js hands back.
  *
  * Sources re-fetched 2026-08-09: [V-DST] direct-sale-token-api,
@@ -26,9 +26,11 @@ import {
 } from "./client";
 import {
   isValidEpi,
+  resolveValorSurchargeIndicator,
   VALOR_MAX_AMOUNT_MINOR,
   ValorConfigError,
   type ValorMerchantCredentials,
+  type ValorSurchargeIndicator,
 } from "./config";
 
 export { isValorSuccess } from "./client";
@@ -37,22 +39,9 @@ export { isValorSuccess } from "./client";
 export type ValorApiOptions = ValorRequestOptions;
 
 /**
- * Web checkout is card-only, so every sale runs on the traditional MID with no
- * added fee — `"0"` per [V-DST]:
- *
- *   "The value '0' represents a transaction being ran on the traditional MID
- *    with no custom fee added, while '1' represents a transaction being ran on
- *    the cash discounting MID with the custom fee added"
- *
- * Merchants are boarded surcharge-enabled, so the boarding config and this
- * value deliberately disagree. Sending "1" here would add an unauthorized
- * surcharge to a customer's card. It is a constant, not a parameter, so no
- * call site can pass the wrong one.
- *
- * Note it is the *string* "0" — the arch parent's excerpt shows a numeric 0.
+ * Valor uses "0" for a traditional MID and "1" for a surcharge MID. Builders
+ * default to "0"; only the sandbox QA EPI resolver may select "1" at runtime.
  */
-const SURCHARGE_INDICATOR_CARD_ONLY = "0" as const;
-
 export interface ValorClientTokenResponse {
   error_no: string;
   error_code: string;
@@ -83,11 +72,11 @@ export interface ValorSaleRequestBody {
   amount: string;
   token: string;
   invoicenumber: string;
-  surchargeIndicator: typeof SURCHARGE_INDICATOR_CARD_ONLY;
+  ecomm_channel: "passagejs";
+  surchargeIndicator: ValorSurchargeIndicator;
   shipping_country: string;
-  productIds: ValorProductLine[];
+  productIds?: ValorProductLine[];
   tax_amount?: string;
-  cardholdername?: string;
   orderdescription?: string;
   phone?: string;
   address1?: string;
@@ -96,7 +85,6 @@ export interface ValorSaleRequestBody {
   customer_name?: string;
   duplicate_transaction_check?: string;
   avs?: string;
-  tip?: string;
   shouldVaultCard?: string;
 }
 
@@ -108,11 +96,15 @@ export interface ValorSaleResponseBody {
   error_no?: string;
   error_code?: string;
   txn_id?: string;
+  txnid?: string;
   transaction_id?: string;
   approval_code?: string;
   auth_code?: string;
   response_text?: string;
   error_message?: string;
+  msg?: string;
+  mesg?: string;
+  desc?: string;
   rrn?: string;
   [key: string]: unknown;
 }
@@ -125,8 +117,8 @@ export interface ValorSaleParams {
   invoiceNumber: string;
   productLines: ValorProductLine[];
   taxMinor?: number;
+  /** Included in `money.amountMinor`; Valor's Passage.js Sale API has no tip field. */
   tipMinor?: number;
-  cardholderName?: string;
   orderDescription?: string;
   email?: string;
   phone?: string;
@@ -149,6 +141,49 @@ function assertChargeable(money: Money): void {
   }
 }
 
+function normalizeOptionalText(
+  value: string | undefined,
+  maxLength: number
+): string | undefined {
+  const normalized = value?.trim().replace(/\s+/g, " ").slice(0, maxLength);
+  return normalized || undefined;
+}
+
+function normalizeAlphanumericText(
+  value: string | undefined,
+  maxLength: number
+): string | undefined {
+  return normalizeOptionalText(value?.replace(/[^A-Za-z0-9 ]/g, " "), maxLength);
+}
+
+function normalizePhone(value: string | undefined): string | undefined {
+  const digits = value?.replace(/\D/g, "") ?? "";
+  const domestic =
+    digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  return domestic.length === 10 ? domestic : undefined;
+}
+
+function normalizeZip(value: string | undefined): string | undefined {
+  const digits = value?.replace(/\D/g, "") ?? "";
+  return digits.length >= 5 ? digits.slice(0, 5) : undefined;
+}
+
+function normalizeEmail(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized && normalized.length <= 50 ? normalized : undefined;
+}
+
+/** Valor accepts a maximum of 12 alphanumeric characters for invoice IDs. */
+export function normalizeValorInvoiceNumber(value: string): string {
+  const normalized = value.replace(/[^A-Za-z0-9]/g, "");
+  if (!normalized) {
+    throw new RangeError(
+      "Valor invoice number must contain an alphanumeric character"
+    );
+  }
+  return normalized.slice(-12);
+}
+
 /**
  * Mint a client token for Passage.js.
  *
@@ -166,7 +201,7 @@ export async function getClientToken(
 
   // GetClientToken is POST /?gptoken on the :443 transaction host with
   // txn_type "clientToken" ([V-create-page-token]). Confirmed live against
-  // sandbox — the prior /?saleapi= + txn_type "sale" guess on the :4430 host
+  // sandbox - the prior /?saleapi= + txn_type "sale" guess on the :4430 host
   // was rejected with error_no D07.
   const result = await postWithBodyCredentials<
     ValorEnvelopeWithClientToken
@@ -184,12 +219,22 @@ export async function getClientToken(
   return result.body as ValorClientTokenResponse;
 }
 
-/** Build the Direct Sale Token request body. Pure — exported for testing. */
+/** Build the Direct Sale Token request body. Pure - exported for testing. */
 export function buildSaleRequestBody(
   credentials: ValorMerchantCredentials,
-  params: ValorSaleParams
+  params: ValorSaleParams,
+  surchargeIndicator: ValorSurchargeIndicator = "0"
 ): ValorSaleRequestBody {
   assertChargeable(params.money);
+
+  const orderDescription = normalizeAlphanumericText(
+    params.orderDescription,
+    50
+  );
+  const email = normalizeEmail(params.email);
+  const phone = normalizePhone(params.phone);
+  const address1 = normalizeAlphanumericText(params.address1, 100);
+  const zip = normalizeZip(params.zip);
 
   return {
     appid: credentials.appId,
@@ -198,24 +243,19 @@ export function buildSaleRequestBody(
     txn_type: "sale",
     amount: formatMinorUnits(params.money.amountMinor),
     token: params.token,
-    invoicenumber: params.invoiceNumber,
-    surchargeIndicator: SURCHARGE_INDICATOR_CARD_ONLY,
+    invoicenumber: normalizeValorInvoiceNumber(params.invoiceNumber),
+    ecomm_channel: "passagejs",
+    surchargeIndicator,
     shipping_country: params.shippingCountry ?? "US",
-    productIds: params.productLines,
+    ...(params.productLines.length > 0 ? { productIds: params.productLines } : {}),
     ...(params.taxMinor !== undefined
       ? { tax_amount: formatMinorUnits(params.taxMinor) }
       : {}),
-    ...(params.tipMinor !== undefined
-      ? { tip: formatMinorUnits(params.tipMinor) }
-      : {}),
-    ...(params.cardholderName ? { cardholdername: params.cardholderName } : {}),
-    ...(params.orderDescription
-      ? { orderdescription: params.orderDescription }
-      : {}),
-    ...(params.email ? { email: params.email } : {}),
-    ...(params.phone ? { phone: params.phone } : {}),
-    ...(params.address1 ? { address1: params.address1 } : {}),
-    ...(params.zip ? { zip: params.zip } : {}),
+    ...(orderDescription ? { orderdescription: orderDescription } : {}),
+    ...(email ? { email } : {}),
+    ...(phone ? { phone } : {}),
+    ...(address1 ? { address1 } : {}),
+    ...(zip ? { zip } : {}),
   };
 }
 
@@ -225,17 +265,30 @@ export function toProcessorTransaction(result: {
   body: ValorSaleResponseBody;
 }): ProcessorTransaction {
   const approved = isValorSuccess(result.body);
-  const transportFailed = result.status >= 500 || result.status === 0;
-
-  return {
-    outcome: approved ? "approved" : transportFailed ? "error" : "declined",
-    transactionId: result.body.txn_id ?? result.body.transaction_id ?? null,
-    authCode: result.body.approval_code ?? result.body.auth_code ?? null,
-    responseCode: result.body.error_code ?? null,
-    responseText:
+  const declined =
+    result.body.error_no === "E98" || result.body.error_code === "E98";
+  const gatewayFailed = !approved && !declined;
+  const responseText = gatewayFailed
+    ? result.body.desc ??
+      result.body.error_message ??
+      result.body.response_text ??
+      result.body.msg ??
+      result.body.mesg
+    : result.body.msg ??
+      result.body.mesg ??
       result.body.response_text ??
       result.body.error_message ??
-      (transportFailed
+      result.body.desc;
+
+  return {
+    outcome: approved ? "approved" : gatewayFailed ? "error" : "declined",
+    transactionId:
+      result.body.txn_id ?? result.body.txnid ?? result.body.transaction_id ?? null,
+    authCode: result.body.approval_code ?? result.body.auth_code ?? null,
+    responseCode: result.body.error_code ?? result.body.error_no ?? null,
+    responseText:
+      responseText ??
+      (gatewayFailed
         ? "Payment service is temporarily unavailable. Please try again."
         : "Your card was declined. Please try another card."),
     processor: "valor",
@@ -248,10 +301,14 @@ export async function createSale(
   options: ValorRequestOptions,
   params: ValorSaleParams
 ): Promise<ProcessorTransaction> {
-  const body = buildSaleRequestBody(options.credentials, params);
+  const body = buildSaleRequestBody(
+    options.credentials,
+    params,
+    resolveValorSurchargeIndicator(options.credentials.epi)
+  );
 
   const result = await postWithBodyCredentials<ValorSaleResponseBody>(
-    "/?saleToken",
+    "/?sale",
     body,
     options
   );

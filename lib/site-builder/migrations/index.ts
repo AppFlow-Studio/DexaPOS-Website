@@ -16,6 +16,8 @@
  * unchanged apart from its version number.
  */
 
+import { featureIconFor, FEATURE_ICON_NAMES } from "../sections/feature-icon";
+
 export type RawDocument = Record<string, unknown>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -107,6 +109,51 @@ export const v1ToV2: DocumentMigration = (doc) => {
   };
 };
 
+/**
+ * v2 → v3 gives every highlight an icon the picker can show.
+ *
+ * `features.items[].icon` went from an optional free-text lucide name, to
+ * absent, to a required enum of the twenty in the picker — so stored documents
+ * arrive in three shapes, two of which the schema now rejects. Rejection is not
+ * cosmetic here: `normalizeSection` falls back to the kind's defaults when props
+ * fail to parse, and this kind's default is an empty list, so an unrepaired
+ * document would cost the merchant every highlight they had written.
+ *
+ * The repair is the same in all three cases — keep an icon that is still
+ * offered, and otherwise derive one from the title the merchant typed, which is
+ * exactly what the editor does when they add a highlight.
+ *
+ * `columns` and `subheading` are not handled here because they need no repair:
+ * they are simply absent from the new schema, and a plain `safeParse` strips
+ * unknown keys. A merchant who wrote a subheading loses it — the strip has one
+ * title, and there is nowhere for a second line of copy to go.
+ */
+const v2ToV3: DocumentMigration = (raw) => {
+  if (!Array.isArray(raw.sections)) return raw;
+
+  const offered = new Set<string>(FEATURE_ICON_NAMES);
+
+  return {
+    ...raw,
+    sections: raw.sections.map((section) => {
+      if (!isRecord(section) || section.kind !== "features") return section;
+      if (!isRecord(section.props) || !Array.isArray(section.props.items)) return section;
+
+      const items = section.props.items.map((item) => {
+        if (!isRecord(item)) return item;
+        const title = typeof item.title === "string" ? item.title : "";
+        const icon =
+          typeof item.icon === "string" && offered.has(item.icon)
+            ? item.icon
+            : featureIconFor(title);
+        return { ...item, icon };
+      });
+
+      return { ...section, props: { ...section.props, items } };
+    }),
+  };
+};
+
 /** Migrates a document from version N to version N+1. */
 export type DocumentMigration = (doc: RawDocument) => RawDocument;
 
@@ -116,6 +163,7 @@ export type DocumentMigration = (doc: RawDocument) => RawDocument;
  */
 export const MIGRATIONS: Record<number, DocumentMigration> = {
   1: v1ToV2,
+  2: v2ToV3,
 };
 
 export interface MigrationResult {

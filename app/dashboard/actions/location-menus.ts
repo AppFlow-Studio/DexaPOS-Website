@@ -3,6 +3,11 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { MenusModel } from '@/types/db-modles'
+import { revalidatePath } from 'next/cache'
+import {
+  MenuChannelVisibility,
+  normalizeMenuChannelVisibility
+} from '@/lib/menu/menu-channel-visibility'
 
 // ============================================================================
 // TYPES
@@ -14,6 +19,9 @@ export interface LocationMenu {
   menu_id: string
   is_active: boolean
   display_order: number | null
+  is_visible_on_pos: boolean
+  is_visible_on_kiosk: boolean
+  is_visible_online: boolean
   created_at: string
   updated_at: string
 }
@@ -26,6 +34,9 @@ export interface MenuWithLocationStatus extends MenusModel {
   location_menu_id?: string
   is_active_at_location: boolean
   display_order_at_location?: number
+  is_visible_on_pos: boolean
+  is_visible_on_kiosk: boolean
+  is_visible_online: boolean
 }
 
 // ============================================================================
@@ -97,7 +108,8 @@ export async function GetLocationMenus (
       is_active_at_location: locationMenu
         ? locationMenu.is_active
         : location.uses_global_menu, // Default to global menu setting
-      display_order_at_location: locationMenu?.display_order
+      display_order_at_location: locationMenu?.display_order,
+      ...normalizeMenuChannelVisibility(locationMenu)
     }
   })
 
@@ -132,7 +144,10 @@ export async function GetLocationMenu (
     return null
   }
 
-  return data as LocationMenu
+  return {
+    ...data,
+    ...normalizeMenuChannelVisibility(data as Partial<MenuChannelVisibility>)
+  } as LocationMenu
 }
 
 // ============================================================================
@@ -313,6 +328,83 @@ export async function SyncMenuToAllLocations (menuId: string) {
 // ============================================================================
 // UPDATE OPERATIONS
 // ============================================================================
+
+/**
+ * Update the selected location's platform visibility without changing active
+ * status, display order, or any other location-menu setting.
+ */
+export async function SetLocationMenuChannelVisibility (
+  locationId: string,
+  menuId: string,
+  visibility: MenuChannelVisibility
+) {
+  if (!locationId || locationId === 'all' || !menuId) {
+    return { error: 'Select a location before changing menu visibility.' }
+  }
+
+  const normalized = normalizeMenuChannelVisibility(visibility)
+  const supabase = createServerSupabaseClient()
+
+  const [{ data: location, error: locationError }, { data: menu, error: menuError }] =
+    await Promise.all([
+      supabase
+        .from('locations')
+        .select('merchant_id')
+        .eq('id', locationId)
+        .single(),
+      supabase
+        .from('menus')
+        .select('merchant_id')
+        .eq('id', menuId)
+        .single()
+    ])
+
+  if (locationError || menuError || !location || !menu) {
+    return { error: 'Menu or location not found.' }
+  }
+
+  if (location.merchant_id !== menu.merchant_id) {
+    return { error: 'This menu does not belong to the selected location.' }
+  }
+
+  // Generated database types are updated only after the shared migration is
+  // deployed. Keep this cast local so the runtime contract remains explicit.
+  const { data, error } = await (supabase as any)
+    .from('location_menus')
+    .upsert(
+      {
+        location_id: locationId,
+        menu_id: menuId,
+        ...normalized
+      },
+      { onConflict: 'location_id,menu_id' }
+    )
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating menu channel visibility:', error)
+    const migrationMissing = error.code === 'PGRST204' || error.code === '42703'
+    return {
+      error: migrationMissing
+        ? 'Menu channel visibility is not deployed to this environment yet.'
+        : error.message
+    }
+  }
+
+  revalidatePath('/dashboard/menu')
+  revalidatePath(`/dashboard/menu/${menuId}`)
+  revalidatePath('/dashboard/online-ordering')
+  revalidatePath('/sites/[slug]', 'page')
+
+  return {
+    data: {
+      ...data,
+      ...normalizeMenuChannelVisibility(data)
+    } as LocationMenu,
+    error: null
+  }
+}
 
 /**
  * Set whether a menu is active at a specific location

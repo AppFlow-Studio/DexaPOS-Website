@@ -37,7 +37,11 @@ export function DashboardGreeting({
           </p>
 
           {isLoading ? (
-            <Skeleton className="mt-3 h-10 w-80" />
+            // w-80 is 320px, wider than a 360px viewport minus the card's
+            // px-6 padding, so a fixed width here overflowed the card on
+            // phones. Fill the column instead and cap it at the headline's
+            // width on larger screens.
+            <Skeleton className="mt-3 h-10 w-full max-w-xs sm:max-w-sm" />
           ) : (
             <h2 className="mt-2 max-w-xl text-[1.75rem] font-medium leading-[1.3] tracking-[-0.02em] md:text-[2rem]">
               Your last 7 days brought in{" "}

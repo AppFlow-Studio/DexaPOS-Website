@@ -21,6 +21,9 @@ import {
     TrendingDown,
 } from 'lucide-react'
 import { MerchantDetails } from '@/types/merchant'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { formatPhoneForDisplay } from '@/lib/phone'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { Area, AreaChart, Pie, PieChart, Cell, XAxis, YAxis, CartesianGrid } from 'recharts'
 import {
@@ -53,6 +56,18 @@ const chartConfig = {
 
 export function OverviewTab({ merchantInfo }: OverviewTabProps) {
     const merchantId = merchantInfo.id
+
+    // Business summary sourced from the canonical merchants columns (single source
+    // of truth) — full details + editing live on the Business Info tab.
+    const ownerName = [merchantInfo?.owner_first_name, merchantInfo?.owner_last_name]
+        .filter(Boolean)
+        .join(' ')
+    const ownerPhone = merchantInfo?.owner_phone
+        ? (formatPhoneForDisplay(merchantInfo.owner_phone) || merchantInfo.owner_phone)
+        : 'Not provided'
+    const locationSummary = [merchantInfo?.business_city, merchantInfo?.business_state]
+        .filter(Boolean)
+        .join(', ')
 
     // Fetch Analytics Data (Defaulting to last 30 days via hook defaults)
     const { data: orderAnalytics, isLoading: analyticsLoading } = useAdminOrderAnalytics(merchantId)
@@ -273,48 +288,59 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
 
             {/* Bottom Section: Business Info and Recent Activity */}
             <div className="grid gap-4 md:grid-cols-2">
-                {/* Business Information */}
+                {/* Business Information — compact summary; full details + editing on the Business Info tab */}
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-lg">Business Information</CardTitle>
-                        <CardDescription>Merchant business details and contact information</CardDescription>
+                        <div className="flex items-start justify-between gap-2">
+                            <div>
+                                <CardTitle className="text-lg">Business Information</CardTitle>
+                                <CardDescription>Merchant business details and contact</CardDescription>
+                            </div>
+                            <Button variant="ghost" size="sm" asChild className="shrink-0">
+                                <Link href={`/manage/merchants/${merchantId}?tab=business-info`}>
+                                    Manage
+                                    <ArrowUpRight className="h-4 w-4 ml-1" />
+                                </Link>
+                            </Button>
+                        </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="flex items-center gap-3">
                             <Store className="h-4 w-4 text-muted-foreground" />
-                            <div>
-                                <div className="font-medium">Business Type</div>
-                                <div className="text-sm text-muted-foreground">
-                                    {(merchantInfo?.public_metadata as any)?.merchant_type || 'Not specified'}
+                            <div className="min-w-0">
+                                <div className="font-medium">Business</div>
+                                <div className="text-sm text-muted-foreground truncate">
+                                    {merchantInfo?.business_legal_name || merchantInfo?.dba_name || merchantInfo?.name || 'Not provided'}
+                                    {merchantInfo?.business_type ? ` · ${merchantInfo.business_type}` : ''}
                                 </div>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                            <MapPin className="h-4 w-4 text-muted-foreground" />
-                            <div>
-                                <div className="font-medium">Address</div>
-                                <div className="text-sm text-muted-foreground">{(merchantInfo?.public_metadata?.business_address as string) || 'Not specified'}</div>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3">
                             <User className="h-4 w-4 text-muted-foreground" />
-                            <div>
+                            <div className="min-w-0">
                                 <div className="font-medium">Owner</div>
-                                <div className="text-sm text-muted-foreground">{(merchantInfo?.public_metadata?.owner_name as string) || 'Not specified'}</div>
+                                <div className="text-sm text-muted-foreground">{ownerName || 'Not provided'}</div>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
                             <Mail className="h-4 w-4 text-muted-foreground" />
-                            <div>
+                            <div className="min-w-0">
                                 <div className="font-medium">Email</div>
-                                <div className="text-sm text-muted-foreground">{(merchantInfo?.public_metadata?.owner_email as string) || 'Not specified'}</div>
+                                <div className="text-sm text-muted-foreground break-all">{merchantInfo?.owner_email || 'Not provided'}</div>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
                             <Phone className="h-4 w-4 text-muted-foreground" />
-                            <div>
+                            <div className="min-w-0">
                                 <div className="font-medium">Phone</div>
-                                <div className="text-sm text-muted-foreground">{(merchantInfo?.public_metadata?.owner_phone as string) || 'Not specified'}</div>
+                                <div className="text-sm text-muted-foreground">{ownerPhone}</div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                            <div className="min-w-0">
+                                <div className="font-medium">Location</div>
+                                <div className="text-sm text-muted-foreground">{locationSummary || 'Not provided'}</div>
                             </div>
                         </div>
                     </CardContent>

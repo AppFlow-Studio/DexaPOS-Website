@@ -36,7 +36,7 @@ export function DeviceRegistrySectionNav() {
   const pathname = usePathname()
 
   return (
-    <div className="inline-flex w-fit flex-wrap items-center gap-2 rounded-2xl border bg-muted/20 p-1.5">
+    <div className="inline-flex w-full max-w-full flex-wrap items-center gap-2 rounded-2xl border bg-muted/20 p-1.5 sm:w-fit">
       {LINKS.map((link) => {
         const isActive = link.match(pathname)
         return (

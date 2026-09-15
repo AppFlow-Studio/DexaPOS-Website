@@ -26764,6 +26764,7 @@ export type Database = {
         Returns: Json
       }
       get_kds_display_truth_window: {
+        Args: { p_from: string; p_kds_display_id: string; p_to: string }
         Args: {
           p_from: string
           p_kds_display_id: string

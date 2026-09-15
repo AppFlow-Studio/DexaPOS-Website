@@ -92,7 +92,8 @@ describe('subscription request and read-only notification contract', () => {
     expect(hqActions).toContain(
       "pendingRequestQuery.eq('id', params.requestId)",
     )
-    expect(hqActions).toContain('if (!subscriptionChanged && params.requestId)')
+    expect(hqActions).toContain("if (!subscriptionChanged && params.requestId && tierBillingReadiness?.status === 'active')")
+    expect(hqActions).toContain('isSubscriptionBillingHeld(tierBillingReadiness.metadata)')
     expect(hqActions).toContain(
       'appliedMerchantPlanSubscriptionId: result.data.id as string',
     )

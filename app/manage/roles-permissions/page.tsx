@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { PageLoader } from '@/components/ui/page-loader'
+import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -176,7 +176,14 @@ export default function RolesPermissionsPage() {
     //     setSelectedRole(filteredRoles[0])
     // }
 
-    if (isLoading) return <PageLoader />
+    if (isLoading)
+        return (
+            <DataPageSkeleton
+                variant="table"
+                shell="plain"
+                label="Loading roles and permissions"
+            />
+        )
 
     return (
         <div className="h-screen flex flex-col">

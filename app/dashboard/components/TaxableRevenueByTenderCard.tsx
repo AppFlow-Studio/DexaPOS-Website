@@ -44,22 +44,34 @@ function TaxableRevenueSkeleton() {
   return (
     <Card>
       <CardHeader>
-        <Skeleton className="h-5 w-56" />
-        <Skeleton className="h-3 w-72" />
+        <Skeleton className="h-5 w-56 max-w-full" />
+        <Skeleton className="h-3 w-72 max-w-full" />
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {[1, 2].map((i) => (
-            <div key={i} className="flex justify-between items-center py-2">
-              <Skeleton className="h-4 w-28" />
-              <div className="flex gap-4">
-                <Skeleton className="h-4 w-16" />
-                <Skeleton className="h-4 w-16" />
-                <Skeleton className="h-4 w-16" />
-                <Skeleton className="h-4 w-16" />
-              </div>
+        {/* Mirrors the real table below: the same overflow-x-auto +
+            min-w-[640px] + 6-column grid. The previous free-form flex row
+            was ~416px wide with no scroll container, so it clipped at the
+            card edge on phones and did not match the layout it stood in for. */}
+        <div className="-mx-6 overflow-x-auto px-6">
+          <div className="min-w-[640px]">
+            <div className="grid grid-cols-6 gap-3 pb-2 border-b">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <Skeleton key={index} className="h-3 w-full" />
+              ))}
             </div>
-          ))}
+            <div className="divide-y">
+              {Array.from({ length: 3 }).map((_, rowIndex) => (
+                <div
+                  key={rowIndex}
+                  className="grid grid-cols-6 gap-3 py-3 items-center"
+                >
+                  {Array.from({ length: 6 }).map((__, colIndex) => (
+                    <Skeleton key={colIndex} className="h-4 w-full" />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -106,7 +118,7 @@ export function TaxableRevenueByTenderCard({
         ) : (
           <>
             {/* Table Header */}
-            <div className="overflow-x-auto">
+            <div className="-mx-6 overflow-x-auto px-6">
               <div className="min-w-[640px]">
                 <div className="grid grid-cols-6 gap-3 pb-2 border-b text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <span>Tax Name</span>

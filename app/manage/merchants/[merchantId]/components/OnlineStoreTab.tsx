@@ -64,8 +64,8 @@ import { MissingDataForm } from '@/components/online-store/MissingDataForm'
 import { HoursConfigModal } from '@/app/dashboard/online-ordering/components/HoursConfigModal'
 import { FONT_GOOGLE_URLS } from '@/app/sites/lib/theme-utils'
 import { buildStoreUrl } from '@/app/sites/lib/store-url'
-import { useAdminNmiMerchantStatus } from '@/lib/queries/use-admin-online-ordering'
-import { NmiCreateMerchantDialog } from './NmiCreateMerchantDialog'
+import Link from 'next/link'
+import { useMerchantValorBoardingStatus } from '@/lib/queries/use-admin-valor-boarding'
 
 function getRequestStatusLabel(status: LocationOnlineStoreOverview['setupRequestStatus']) {
     switch (status) {
@@ -168,12 +168,8 @@ export function OnlineStoreTab({
     locationsLoading,
 }: OnlineStoreTabProps) {
     const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
-    const [isNmiDialogOpen, setIsNmiDialogOpen] = useState(false)
-    const { data: nmiStatusResult } = useAdminNmiMerchantStatus(merchantId)
-    const nmiStatus = nmiStatusResult?.success ? nmiStatusResult.data : null
-    const NMI_PARTNER_PORTAL_URL =
-        'https://mtech.transactiongateway.com/partners/accounts?tid=0d06b140eb69b1d4ac8a02efe71ceab0'
-    const nmiPortalUrl = nmiStatus?.partnerPortalUrl || NMI_PARTNER_PORTAL_URL
+    // Valor is the online card-payment rail; per-location boarding/live status.
+    const { data: valorBoardingData } = useMerchantValorBoardingStatus(merchantId)
 
     // Fetch overview of all locations
     const { data: overviewData, isLoading: overviewLoading } = useAdminOnlineOrderingOverview(merchantId)
@@ -491,8 +487,10 @@ export function OnlineStoreTab({
     const requestStatus = localSettings?.setupRequestStatus ?? 'not_requested'
     const canEditStoreSetup =
         requestStatus === 'approved' || requestStatus === 'setup_completed'
-    const hasNmiTokenizationKey = Boolean(localSettings?.nmiTokenizationKey?.trim())
-    const hasNmiPrivateApiKey = Boolean(localSettings?.nmiConfigured)
+    const valorRow = valorBoardingData?.locations.find((l) => l.locationId === selectedLocationId) ?? null
+    const valorBoarded = Boolean(valorRow?.boarded)
+    const valorLive = Boolean(valorRow?.isPrimary)
+    const valorReady = valorBoarded && valorLive && Boolean(valorRow?.hasApiKeys)
 
     // Render store configuration
     return (
@@ -838,9 +836,10 @@ export function OnlineStoreTab({
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Storefront Readiness</CardTitle>
+                            <CardTitle>Online Card Payments</CardTitle>
                             <CardDescription>
-                                Operational checks for the active NMI-based online payment flow.
+                                This location&apos;s storefront takes card payments through Valor. Board the
+                                location, then set it live to accept cards online.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -855,95 +854,73 @@ export function OnlineStoreTab({
                                     {localSettings.enabled ? 'Enabled' : 'Disabled'}
                                 </Badge>
                             </div>
-                            <div className="flex items-center justify-between rounded-md border p-3">
-                                <div>
+
+                            <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+                                <div className="min-w-0">
                                     <p className="text-sm font-medium">Card Payment Readiness</p>
                                     <p className="text-xs text-muted-foreground">
-                                        {hasNmiTokenizationKey && hasNmiPrivateApiKey
-                                            ? 'NMI tokenization and private API keys are configured for this location.'
-                                            : 'Online card payments require both the NMI tokenization key and private API key.'}
+                                        {valorReady
+                                            ? 'Boarded on Valor and live — the storefront can take card payments online.'
+                                            : valorBoarded
+                                                ? 'Boarded on Valor, but not live yet — set it live to accept online card payments.'
+                                                : 'This location is not boarded on Valor yet. Board it to enable online card payments.'}
                                     </p>
                                 </div>
-                                <Badge variant={hasNmiTokenizationKey && hasNmiPrivateApiKey ? 'default' : 'destructive'}>
-                                    {hasNmiTokenizationKey && hasNmiPrivateApiKey ? 'Ready' : 'Incomplete'}
-                                </Badge>
-                            </div>
-                            {(!hasNmiTokenizationKey || !hasNmiPrivateApiKey) && (
-                                <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900">
-                                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                                    <p className="text-xs">
-                                        Add the location&apos;s NMI tokenization key and private API key in the Payment &amp; Tips tab before enabling online card checkout.
-                                    </p>
-                                </div>
-                            )}
-                            <div className="rounded-md border p-3">
-                                <p className="text-sm font-medium">Provider</p>
-                                <p className="text-xs text-muted-foreground">
-                                    Storefront card checkout now uses NMI through the active location payment device.
-                                </p>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>NMI Merchant Account</CardTitle>
-                            <CardDescription>
-                                Create the merchant&apos;s NMI gateway account, then finish onboarding in the
-                                partner portal.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex items-center justify-between rounded-md border p-3">
-                                <div className="min-w-0">
-                                    <p className="text-sm font-medium">Account Status</p>
-                                    {nmiStatus ? (
-                                        <p className="text-xs text-muted-foreground">
-                                            Created {nmiStatus.createdAt ? new Date(nmiStatus.createdAt).toLocaleDateString() : ''} · NMI ID{' '}
-                                            <span className="font-mono">{nmiStatus.nmiMerchantId}</span>
-                                            {nmiStatus.status ? ` · ${nmiStatus.status}` : ''}
-                                        </p>
-                                    ) : (
-                                        <p className="text-xs text-muted-foreground">
-                                            No NMI account on file. Pre-fill from the merchant&apos;s review packet, then confirm to create one.
-                                        </p>
-                                    )}
-                                </div>
-                                <Badge variant={nmiStatus ? 'default' : 'secondary'}>
-                                    {nmiStatus ? 'Created' : 'Not created'}
-                                </Badge>
-                            </div>
-                            <div className="flex flex-col gap-2 sm:flex-row">
-                                <Button
-                                    onClick={() => setIsNmiDialogOpen(true)}
-                                    disabled={Boolean(nmiStatus) || !selectedLocationId}
-                                    className="gap-2"
+                                <Badge
+                                    variant={valorReady ? 'default' : valorBoarded ? 'secondary' : 'destructive'}
+                                    className={cn('shrink-0', valorReady && 'bg-green-600')}
                                 >
-                                    <Plus className="h-4 w-4" />
-                                    {nmiStatus ? 'NMI account exists' : 'Create NMI merchant'}
-                                </Button>
-                                <Button variant="outline" asChild className="gap-2">
-                                    <a href={nmiPortalUrl} target="_blank" rel="noopener noreferrer">
-                                        <ExternalLink className="h-4 w-4" />
-                                        Open NMI partner portal
-                                    </a>
-                                </Button>
+                                    {valorReady ? 'Ready' : valorBoarded ? 'Not live' : 'Not boarded'}
+                                </Badge>
+                            </div>
+
+                            {valorBoarded ? (
+                                <div className="grid grid-cols-2 gap-3 rounded-md border p-3 text-sm sm:grid-cols-4">
+                                    <div className="min-w-0">
+                                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Valor Merchant</p>
+                                        <p className="truncate font-mono text-xs">{valorRow?.valorMerchantId ?? '-'}</p>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Store</p>
+                                        <p className="truncate font-mono text-xs">{valorRow?.valorStoreId ?? '-'}</p>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">EPI</p>
+                                        <p className="truncate font-mono text-xs">{valorRow?.valorEpi ?? '-'}</p>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">API Keys</p>
+                                        <p className="text-xs">{valorRow?.hasApiKeys ? 'Present' : 'Missing'}</p>
+                                    </div>
+                                </div>
+                            ) : null}
+
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                                {!valorBoarded ? (
+                                    <Button asChild className="gap-2">
+                                        <Link href={`/manage/merchants/${merchantId}?tab=valor-boarding`}>
+                                            <CreditCard className="h-4 w-4" />
+                                            Board on Valor
+                                        </Link>
+                                    </Button>
+                                ) : !valorLive ? (
+                                    <Button asChild className="gap-2">
+                                        <Link href={`/manage/merchants/${merchantId}?tab=valor-boarding`}>
+                                            <Zap className="h-4 w-4" />
+                                            Set live in Valor Boarding
+                                        </Link>
+                                    </Button>
+                                ) : (
+                                    <Button asChild variant="outline" className="gap-2">
+                                        <Link href={`/manage/merchants/${merchantId}?tab=valor-boarding`}>
+                                            <CreditCard className="h-4 w-4" />
+                                            Manage Valor Boarding
+                                        </Link>
+                                    </Button>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
-
-                    {selectedLocationId ? (
-                        <NmiCreateMerchantDialog
-                            open={isNmiDialogOpen}
-                            onOpenChange={setIsNmiDialogOpen}
-                            merchantId={merchantId}
-                            merchantName={merchantName}
-                            locationId={selectedLocationId}
-                            location={selectedLocation}
-                            settings={localSettings || undefined}
-                            partnerPortalUrl={nmiPortalUrl}
-                        />
-                    ) : null}
 
                     {/* Settings Tabs */}
                     <Tabs defaultValue="store" className="space-y-6">

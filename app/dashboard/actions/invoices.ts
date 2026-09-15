@@ -8,6 +8,11 @@ import {
   emptyPaginatedResult,
   normalizePagination,
 } from "@/lib/pagination";
+import {
+  isOverdue,
+  OVERDUE_CANDIDATE_STATUSES,
+  SENT_FILTER_STATUSES,
+} from "@/lib/invoices/lifecycle";
 
 // =============================================================================
 // Types
@@ -191,6 +196,8 @@ export async function GetInvoices(
       tax_rate,
       tax_amount,
       total_amount,
+      amount_paid,
+      sent_at,
       note,
       created_at,
       updated_at,
@@ -207,17 +214,55 @@ export async function GetInvoices(
     query = query.eq("location_id", locationId);
   }
 
-  if (status) {
+  // "Overdue" is derived, not stored — nothing ever writes status='overdue'
+  // (migration 20260614120000), so a literal .eq() matched zero rows and the
+  // tab hung on its skeleton forever. The date test needs per-row interval
+  // arithmetic PostgREST cannot express, so overdue is filtered in memory
+  // below; the DB narrows to the candidate statuses first.
+  const isDerivedOverdue = status === "overdue";
+
+  if (isDerivedOverdue) {
+    query = query.in("status", [...OVERDUE_CANDIDATE_STATUSES]);
+  } else if (status === "sent") {
+    // A sent invoice becomes 'viewed' the moment the customer opens it, and
+    // 'payment_failed' on a decline. All three are still sent invoices.
+    query = query.in("status", [...SENT_FILTER_STATUSES]);
+  } else if (status) {
     query = query.eq("status", status);
   }
 
-  const { data, error, count } = await query
+  const ordered = query
     .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
-    .range(
-      normalizedPagination.offset,
-      normalizedPagination.offset + normalizedPagination.pageSize - 1,
+    .order("id", { ascending: false });
+
+  // Overdue must be filtered before it can be paginated: the predicate runs
+  // in memory, so slicing first would page over rows that then disappear and
+  // report a total counting invoices that are not overdue at all.
+  if (isDerivedOverdue) {
+    const { data, error } = await ordered;
+
+    if (error) {
+      console.error("[GetInvoices] error:", error);
+      return emptyPaginatedResult(pagination);
+    }
+
+    const overdue = ((data as unknown as Invoice[]) || []).filter((invoice) =>
+      isOverdue(invoice),
     );
+
+    return {
+      data: overdue.slice(
+        normalizedPagination.offset,
+        normalizedPagination.offset + normalizedPagination.pageSize,
+      ),
+      pagination: buildPaginationMeta(overdue.length, pagination),
+    };
+  }
+
+  const { data, error, count } = await ordered.range(
+    normalizedPagination.offset,
+    normalizedPagination.offset + normalizedPagination.pageSize - 1,
+  );
 
   if (error) {
     console.error("[GetInvoices] error:", error);

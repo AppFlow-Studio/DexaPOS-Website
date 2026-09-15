@@ -773,7 +773,13 @@ export default function CategoriesPage() {
             <Tag className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{categoriesList.length}</div>
+            {/* A hard 0 while the query is still in flight reads as a real
+                empty catalog rather than a pending one. */}
+            {isLoading ? (
+              <Skeleton className="h-8 w-16 motion-reduce:animate-none" />
+            ) : (
+              <div className="text-2xl font-bold">{categoriesList.length}</div>
+            )}
             <p className="text-xs text-muted-foreground">All categories</p>
           </CardContent>
         </Card>
@@ -783,7 +789,11 @@ export default function CategoriesPage() {
             <Utensils className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalItems}</div>
+            {isLoading ? (
+              <Skeleton className="h-8 w-16 motion-reduce:animate-none" />
+            ) : (
+              <div className="text-2xl font-bold">{totalItems}</div>
+            )}
             <p className="text-xs text-muted-foreground">
               Items across categories
             </p>
@@ -795,7 +805,11 @@ export default function CategoriesPage() {
             <Eye className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeCategories}</div>
+            {isLoading ? (
+              <Skeleton className="h-8 w-16 motion-reduce:animate-none" />
+            ) : (
+              <div className="text-2xl font-bold">{activeCategories}</div>
+            )}
             <p className="text-xs text-muted-foreground">
               {isAllLocations ? "Globally active" : "Active at location"}
             </p>
@@ -809,14 +823,18 @@ export default function CategoriesPage() {
             <Settings2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {isAllLocations
-                ? categoriesList.reduce(
-                    (acc, c) => acc + (c.menu_count || 0),
-                    0,
-                  )
-                : categoriesWithOverrides}
-            </div>
+            {isLoading ? (
+              <Skeleton className="h-8 w-16 motion-reduce:animate-none" />
+            ) : (
+              <div className="text-2xl font-bold">
+                {isAllLocations
+                  ? categoriesList.reduce(
+                      (acc, c) => acc + (c.menu_count || 0),
+                      0,
+                    )
+                  : categoriesWithOverrides}
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
               {isAllLocations ? "Used in menus" : "Location-specific settings"}
             </p>

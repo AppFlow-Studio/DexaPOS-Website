@@ -98,6 +98,20 @@ describe("Valor refund/void request bodies", () => {
     expect(body.surchargeindicator).toBe("0");
     expect(body.amount).toBeUndefined();
   });
+
+  it("keeps refund and void on the sale's resolved surcharge mode", () => {
+    const refund = buildRefundRequestBody(
+      CREDS,
+      {
+        transactionId: "txn_1",
+        money: { amountMinor: 500, currency: "USD" },
+      },
+      "1"
+    );
+    const voidBody = buildVoidRequestBody(CREDS, { transactionId: "txn_1" }, "1");
+    expect(refund.surchargeIndicator).toBe("1");
+    expect(voidBody.surchargeindicator).toBe("1");
+  });
 });
 
 describe("Valor reversal outcome classification", () => {

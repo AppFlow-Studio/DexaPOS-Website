@@ -10,6 +10,7 @@ import { MenuWithCategories, MenuForLocation } from '@/types/menu'
 import { LogAuditEvent } from './audit-logs'
 import { getCurrentUserMerchantRole } from './role-check'
 import { assertNameAvailable } from './_name-uniqueness'
+import { normalizeMenuChannelVisibility } from '@/lib/menu/menu-channel-visibility'
 
 // ============================================================================
 // TYPES
@@ -20,6 +21,9 @@ export interface MenuWithLocationStatus extends MenusModel {
   is_active_at_location: boolean
   display_order_at_location?: number
   is_inherited: boolean // true for global menus when viewing a location
+  is_visible_on_pos: boolean
+  is_visible_on_kiosk: boolean
+  is_visible_online: boolean
 }
 
 export interface MenuItemWithPricing {
@@ -248,7 +252,6 @@ export async function GetMenus (clerkOrgId: string, locationId?: string | null) 
       console.error('Error getting menus:', error)
       return []
     }
-
     const menuRows = (data || []) as MenusModel[]
     if (menuRows.length === 0) {
       return menuRows
@@ -281,6 +284,7 @@ export async function GetMenus (clerkOrgId: string, locationId?: string | null) 
 
       return menuRows.map(menu => ({
         ...menu,
+        ...normalizeMenuChannelVisibility(),
         available_locations: null
       }))
     }
@@ -316,6 +320,7 @@ export async function GetMenus (clerkOrgId: string, locationId?: string | null) 
 
       return {
         ...menu,
+        ...normalizeMenuChannelVisibility(),
         available_locations: availableLocations.map(location => ({
           id: location.id,
           name: location.name
@@ -351,13 +356,26 @@ export async function GetMenus (clerkOrgId: string, locationId?: string | null) 
   }
 
   // Get location_menus records to see which are active at this location
-  const { data: locationMenus } = await supabase
-    .from('menus')
+  const { data: locationMenus, error: locationMenusError } = await (supabase as any)
+    .from('location_menus')
     .select('*')
     .eq('location_id', locationId)
 
-  const locationMenuMap = new Map(
-    (locationMenus || []).map(lm => [lm.menu_id, lm])
+  if (locationMenusError) {
+    console.error('Error getting location menu visibility:', locationMenusError)
+  }
+
+  type LocationMenuRow = {
+    id: string
+    menu_id: string
+    is_active: boolean
+    display_order: number | null
+    is_visible_on_pos?: boolean | null
+    is_visible_on_kiosk?: boolean | null
+    is_visible_online?: boolean | null
+  }
+  const locationMenuMap = new Map<string, LocationMenuRow>(
+    ((locationMenus || []) as LocationMenuRow[]).map(lm => [lm.menu_id, lm])
   )
 
   // Build result with location status
@@ -367,9 +385,12 @@ export async function GetMenus (clerkOrgId: string, locationId?: string | null) 
     return {
       ...menu,
       location_menu_id: locationMenu?.id,
-      is_active_at_location: locationMenu,
+      is_active_at_location: locationMenu
+        ? locationMenu.is_active
+        : menu.is_active,
       display_order_at_location: locationMenu?.display_order,
-      is_inherited: true
+      is_inherited: true,
+      ...normalizeMenuChannelVisibility(locationMenu)
     }
   })
 
@@ -393,7 +414,8 @@ export async function GetMenus (clerkOrgId: string, locationId?: string | null) 
       result.push({
         ...menu,
         is_active_at_location: menu.is_active,
-        is_inherited: false
+        is_inherited: false,
+        ...normalizeMenuChannelVisibility(locationMenuMap.get(menu.id))
       })
     }
   }

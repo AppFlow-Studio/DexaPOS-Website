@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -189,14 +190,98 @@ function ruleToFormValues(rule: ServiceChargeRule | null): FormValues {
   };
 }
 
+/**
+ * Shaped like the rule form below rather than a centred spinner, so the real
+ * fields land in place instead of replacing a blank panel. Mirrors the same
+ * order: section header, label, the rate/party two-up, calculation base, the
+ * divided auto-apply row, then the save action.
+ */
+function ServiceChargeFormSkeleton() {
+  const block = "bg-muted/70 motion-reduce:animate-none";
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className="min-w-0 space-y-6"
+    >
+      <span className="sr-only">Loading the service charge rule</span>
+
+      <Panel>
+        <div className="min-w-0 space-y-6 px-4 py-6 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <Skeleton className={cn("h-9 w-9 shrink-0 rounded-xl", block)} />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className={cn("h-4 w-64 max-w-full rounded-full", block)} />
+              <Skeleton className={cn("h-3 w-80 max-w-full rounded-full", block)} />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Skeleton className={cn("h-4 w-16 rounded-full", block)} />
+            <Skeleton className={cn("h-10 w-full rounded-xl", block)} />
+            <Skeleton className={cn("h-3 w-72 max-w-full rounded-full", block)} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            {Array.from({ length: 2 }).map((_, index) => (
+              <div key={index} className="min-w-0 space-y-2">
+                <Skeleton className={cn("h-4 w-28 rounded-full", block)} />
+                <Skeleton className={cn("h-10 w-full rounded-xl", block)} />
+                <Skeleton
+                  className={cn("h-3 w-48 max-w-full rounded-full", block)}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            <Skeleton className={cn("h-4 w-32 rounded-full", block)} />
+            <Skeleton className={cn("h-10 w-full rounded-xl", block)} />
+            <Skeleton className={cn("h-3 w-56 max-w-full rounded-full", block)} />
+          </div>
+
+          <div className="border-t border-border/60 pt-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className={cn("h-4 w-36 rounded-full", block)} />
+                <Skeleton
+                  className={cn("h-3 w-full max-w-sm rounded-full", block)}
+                />
+              </div>
+              <Skeleton className={cn("h-6 w-11 shrink-0 rounded-full", block)} />
+            </div>
+          </div>
+
+          <Skeleton className={cn("h-3 w-64 max-w-full rounded-full", block)} />
+        </div>
+      </Panel>
+
+      <div className="flex justify-end">
+        <Skeleton className={cn("h-9 w-32 rounded-full", block)} />
+      </div>
+    </div>
+  );
+}
+
 export default function ServiceChargePage() {
   const clerkOrgId = useClerkOrgId();
   const isAllLocations = useIsAllLocations();
   const selectedLocation = useSelectedLocation();
   const scopeLocationId = isAllLocations ? null : selectedLocation?.id ?? null;
 
-  const { data: rules = [], isLoading } = useServiceChargeRules(clerkOrgId);
+  const { data: rules = [], isLoading: isRulesLoading } =
+    useServiceChargeRules(clerkOrgId);
   const upsert = useUpsertServiceChargeRule();
+
+  // The rules query is `enabled: !!clerkOrgId`, so before the org id resolves
+  // there is no request in flight and `rules` is still the `[]` default. That
+  // default is indistinguishable from "this merchant genuinely has no rules",
+  // which made the page derive `isInheriting` and flash the "Add location
+  // override" panel before the spinner and then again before the real form.
+  // Waiting on the org id too collapses that to a single loading state.
+  const isLoading = !clerkOrgId || isRulesLoading;
 
   // One row per scope (enforced by uq_service_charge_scope). `is_active` is a
   // flag on that row — don't filter by it here or toggling off would orphan
@@ -326,11 +411,7 @@ export default function ServiceChargePage() {
       )}
 
       {isLoading ? (
-        <Panel>
-          <div className="flex items-center justify-center px-6 py-16">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        </Panel>
+        <ServiceChargeFormSkeleton />
       ) : (
         <>
           {isInheriting && !overrideMode && (

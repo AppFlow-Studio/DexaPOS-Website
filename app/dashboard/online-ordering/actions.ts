@@ -72,13 +72,41 @@ export interface QrTableManagerRow {
   generatedAt: string | null;
 }
 
+/**
+ * Branding pulled from `online_store_config` so QR codes can be rendered in the
+ * merchant's identity instead of plain black on white. Null when the store has
+ * no config row yet — the renderer degrades to an unbranded code.
+ */
+export interface QrBrandingSource {
+  logoUrl: string | null;
+  primaryColor: string | null;
+  secondaryColor: string | null;
+  backgroundColor: string | null;
+}
+
+/**
+ * Everything the QR Codes screen needs, in one round trip.
+ *
+ * `locationName`, `storefrontEnabled` and `billingGate` used to reach the
+ * manager as props fed from the online-ordering settings store, while the rows
+ * came from here — two fetches that could disagree about whether the feature
+ * was gated. The screen now lives under Tables, where that store does not
+ * exist, so the gate travels with the rows it gates.
+ *
+ * `billingGate` is for rendering only. Generation and revocation re-check it
+ * server-side in their own actions; do not let this become the sole check.
+ */
 export interface QrTableManagerSnapshot {
   success: boolean;
+  locationName: string | null;
   storeName: string | null;
   storeSlug: string | null;
   customDomain: string | null;
+  branding: QrBrandingSource | null;
+  storefrontEnabled: boolean;
   acceptsDineIn: boolean;
   qrKillSwitch: boolean;
+  billingGate: QrBillingGateStatus;
   tables: QrTableManagerRow[];
   generatedCount: number;
   activeCount: number;
@@ -202,6 +230,53 @@ interface QrAnalyticsSessionOrderRow {
 const QR_BILLING_SERVICE_CODE = "qr_table_ordering";
 const QR_DEFAULT_REQUIRED_PLAN_CODE = "multi_location";
 
+/**
+ * The gate to show when the real one could not be computed — no config row, an
+ * access failure, an unseeded service catalog. Locked, never open: a caller
+ * that cannot establish entitlement must not render an entitled UI.
+ */
+function unknownQrBillingGate(reason?: string): QrBillingGateStatus {
+  return {
+    entitled: false,
+    requiredPlanCode: QR_DEFAULT_REQUIRED_PLAN_CODE,
+    requiredPlanName: "Multi-Location",
+    currentPlanCode: null,
+    currentPlanName: null,
+    subscriptionStatus: null,
+    hasServiceOverride: false,
+    serviceCode: QR_BILLING_SERVICE_CODE,
+    reason:
+      reason ??
+      "QR billing gate is not configured yet. Ask Dexa HQ to seed QR Table Ordering in the service catalog.",
+  };
+}
+
+/**
+ * `getQrTableManagerSnapshot` bails in six places. Written out by hand, each
+ * bail is a chance to forget a field the UI dereferences — `billingGate` most
+ * of all, since the banners read straight through it.
+ */
+function emptyQrSnapshot(
+  overrides: Partial<QrTableManagerSnapshot> = {}
+): QrTableManagerSnapshot {
+  return {
+    success: false,
+    locationName: null,
+    storeName: null,
+    storeSlug: null,
+    customDomain: null,
+    branding: null,
+    storefrontEnabled: false,
+    acceptsDineIn: false,
+    qrKillSwitch: false,
+    billingGate: unknownQrBillingGate(),
+    tables: [],
+    generatedCount: 0,
+    activeCount: 0,
+    ...overrides,
+  };
+}
+
 function emptyMissing(): RequestPacketMissing {
   return {
     legalBusinessName: false,
@@ -319,144 +394,43 @@ async function getQrBillingGateStatus(
   locationId: string,
   merchantId: string
 ): Promise<QrBillingGateStatus> {
-  const serviceRole = createServiceRoleClient();
+  const serviceRole = createServiceRoleClient() as any;
+  const { data, error } = await serviceRole.rpc("get_subscription_entitlement", {
+    p_merchant_id: merchantId,
+    p_location_id: locationId,
+    p_service_code: QR_BILLING_SERVICE_CODE,
+  });
 
-  const [
-    serviceResult,
-    merchantPlanStatusResult,
-    merchantPlansResult,
-    locationSubscriptionResult,
-  ] = await Promise.all([
-    serviceRole
-      .from("billable_services")
-      .select("id, service_code, display_name, metadata, is_active")
-      .eq("service_code", QR_BILLING_SERVICE_CODE)
-      .maybeSingle(),
-    serviceRole.rpc("get_merchant_subscription_status", {
-      p_merchant_id: merchantId,
-    }),
-    serviceRole
-      .from("subscription_plans")
-      .select("plan_code, display_name, display_order")
-      .eq("plan_scope", "merchant_tier")
-      .eq("is_active", true)
-      .order("display_order", { ascending: true }),
-    serviceRole
-      .from("merchant_subscriptions")
-      .select("id")
-      .eq("merchant_id", merchantId)
-      .eq("location_id", locationId)
-      .maybeSingle(),
-  ]);
-
-  const service = serviceResult.data as
-    | {
-        id: string;
-        service_code: string;
-        display_name: string;
-        metadata: Record<string, unknown> | null;
-        is_active: boolean;
-      }
-    | null;
-  const serviceMetadata =
-    (service?.metadata as Record<string, unknown> | null) ?? null;
-  const requiredPlanCode =
-    readString(serviceMetadata?.required_plan_code) ??
-    QR_DEFAULT_REQUIRED_PLAN_CODE;
-
-  const planRows =
-    (merchantPlansResult.data as
-      | Array<{
-          plan_code: string;
-          display_name: string;
-          display_order: number | null;
-        }>
-      | null) ?? [];
-  const planOrderMap = new Map(
-    planRows.map((plan) => [plan.plan_code, Number(plan.display_order ?? 0)])
-  );
-  const planLabelMap = new Map(
-    planRows.map((plan) => [plan.plan_code, plan.display_name])
-  );
-
-  const merchantPlanStatus =
-    (merchantPlanStatusResult.data as
-      | {
-          plan?: { code?: string | null; name?: string | null } | null;
-          subscription_status?: string | null;
-        }
-      | null) ?? null;
-
-  let hasServiceOverride = false;
-  if (locationSubscriptionResult.data?.id) {
-    const assignmentResult = await serviceRole.rpc(
-      "list_subscription_service_assignments",
-      {
-        p_subscription_id: locationSubscriptionResult.data.id,
-      }
-    );
-
-    const assignments =
-      (assignmentResult.data as
-        | Array<{
-            service_code: string;
-            is_enabled: boolean;
-          }>
-        | null) ?? [];
-    hasServiceOverride = assignments.some(
-      (assignment) =>
-        assignment.service_code === QR_BILLING_SERVICE_CODE &&
-        assignment.is_enabled
-    );
+  if (error) {
+    console.error("[getQrBillingGateStatus] entitlement lookup failed:", error);
+    return {
+      entitled: false,
+      requiredPlanCode: QR_DEFAULT_REQUIRED_PLAN_CODE,
+      requiredPlanName: "Multi-Location",
+      currentPlanCode: null,
+      currentPlanName: null,
+      subscriptionStatus: null,
+      hasServiceOverride: false,
+      serviceCode: QR_BILLING_SERVICE_CODE,
+      reason: "QR billing access could not be verified. Try again or contact DEXA support.",
+    };
   }
 
-  const currentPlanCode = readString(merchantPlanStatus?.plan?.code) ?? null;
-  const currentPlanName = readString(merchantPlanStatus?.plan?.name) ?? null;
-  const subscriptionStatus =
-    readString(merchantPlanStatus?.subscription_status) ?? null;
-  const requiredPlanName =
-    planLabelMap.get(requiredPlanCode) ??
-    (requiredPlanCode === QR_DEFAULT_REQUIRED_PLAN_CODE
-      ? "Multi-Location"
-      : null);
-
-  const currentPlanOrder =
-    currentPlanCode !== null ? planOrderMap.get(currentPlanCode) ?? -1 : -1;
-  const requiredPlanOrder = planOrderMap.get(requiredPlanCode) ?? 9999;
-  const planStatusAllowsAccess =
-    subscriptionStatus === "active" || subscriptionStatus === "past_due";
-  const entitledByPlan =
-    service?.is_active !== false &&
-    planStatusAllowsAccess &&
-    currentPlanOrder >= requiredPlanOrder;
-
-  let reason: string | null = null;
-  if (!service) {
-    reason =
-      "QR billing gate is not configured yet. Ask Dexa HQ to seed QR Table Ordering in the service catalog.";
-  } else if (hasServiceOverride) {
-    reason =
-      "HQ override is active for this location through the QR Table Ordering service assignment.";
-  } else if (entitledByPlan) {
-    reason = null;
-  } else if (!currentPlanCode) {
-    reason = `QR Table Ordering requires the ${requiredPlanName ?? requiredPlanCode} tier or an HQ override.`;
-  } else if (!planStatusAllowsAccess) {
-    reason = `QR Table Ordering is unavailable while the merchant subscription is ${subscriptionStatus ?? "inactive"}.`;
-  } else {
-    reason = `QR Table Ordering requires the ${requiredPlanName ?? requiredPlanCode} tier or an HQ override. Current tier: ${currentPlanName ?? currentPlanCode}.`;
-  }
-
+  const entitlement = (data ?? {}) as Record<string, any>;
+  const access = (entitlement.access ?? {}) as Record<string, any>;
+  const requiredPlanCode = readString(entitlement.required_plan_code) ?? QR_DEFAULT_REQUIRED_PLAN_CODE;
+  const currentPlanCode = readString(entitlement.current_plan_code) ?? null;
   return {
-    entitled: Boolean(hasServiceOverride || entitledByPlan),
+    entitled: Boolean(entitlement.entitled),
     requiredPlanCode,
-    requiredPlanName,
+    requiredPlanName: readString(entitlement.required_plan_name) ??
+      (requiredPlanCode === QR_DEFAULT_REQUIRED_PLAN_CODE ? "Multi-Location" : requiredPlanCode),
     currentPlanCode,
-    currentPlanName,
-    subscriptionStatus,
-    hasServiceOverride,
+    currentPlanName: readString(entitlement.current_plan_name) ?? currentPlanCode,
+    subscriptionStatus: readString(access.location_subscription_status) ?? readString(access.merchant_tier_status) ?? null,
+    hasServiceOverride: Boolean(entitlement.direct_assignment),
     serviceCode: QR_BILLING_SERVICE_CODE,
-    reason,
+    reason: readString(entitlement.reason) ?? null,
   };
 }
 
@@ -859,19 +833,7 @@ function mapConfigToSettings(
     qrGeofenceEnabled: config.qr_geofence_enabled ?? false,
     qrServiceFeePct: Number(config.qr_service_fee_pct ?? 0),
     qrKillSwitch: config.qr_kill_switch ?? false,
-    qrBillingGate:
-      qrBillingGate ?? {
-        entitled: false,
-        requiredPlanCode: QR_DEFAULT_REQUIRED_PLAN_CODE,
-        requiredPlanName: "Multi-Location",
-        currentPlanCode: null,
-        currentPlanName: null,
-        subscriptionStatus: null,
-        hasServiceOverride: false,
-        serviceCode: QR_BILLING_SERVICE_CODE,
-        reason:
-          "QR billing gate is not configured yet. Ask Dexa HQ to seed QR Table Ordering in the service catalog.",
-      },
+    qrBillingGate: qrBillingGate ?? unknownQrBillingGate(),
 
     baseDeliveryFee: Number(config.delivery_fee ?? 0),
     freeDeliveryThreshold: Number(config.free_delivery_threshold ?? 0),
@@ -1394,22 +1356,20 @@ function compareQrManagerRows(a: QrTableManagerRow, b: QrTableManagerRow) {
   });
 }
 
+function readQrBranding(config: Record<string, unknown>): QrBrandingSource {
+  return {
+    logoUrl: (config.logo_url as string | null) ?? null,
+    primaryColor: (config.primary_color as string | null) ?? null,
+    secondaryColor: (config.secondary_color as string | null) ?? null,
+    backgroundColor: (config.background_color as string | null) ?? null,
+  };
+}
+
 export async function getQrTableManagerSnapshot(
   locationId: string
 ): Promise<QrTableManagerSnapshot> {
   if (!locationId) {
-    return {
-      success: false,
-      storeName: null,
-      storeSlug: null,
-      customDomain: null,
-      acceptsDineIn: false,
-      qrKillSwitch: false,
-      tables: [],
-      generatedCount: 0,
-      activeCount: 0,
-      error: "Missing location",
-    };
+    return emptyQrSnapshot({ error: "Missing location" });
   }
 
   const supabase = createServerSupabaseClient();
@@ -1424,57 +1384,66 @@ export async function getQrTableManagerSnapshot(
     p_location_id: locationId,
   });
   if (accessError) {
-    return {
-      success: false,
-      storeName: null,
-      storeSlug: null,
-      customDomain: null,
-      acceptsDineIn: false,
-      qrKillSwitch: false,
-      tables: [],
-      generatedCount: 0,
-      activeCount: 0,
-      error: accessError.message,
-    };
+    return emptyQrSnapshot({ error: accessError.message });
   }
+
+  // Read from `locations` rather than lifting `merchant_id` off the first
+  // floor-plan row: a location with no tables yet still has to resolve a name
+  // and an entitlement, and that row may not exist.
+  const { data: location, error: locationError } = await supabase
+    .from("locations")
+    .select("merchant_id, name")
+    .eq("id", locationId)
+    .single();
+
+  if (locationError || !location) {
+    return emptyQrSnapshot({
+      error: locationError?.message || "Location not found",
+    });
+  }
+
+  const locationName = (location.name as string | null) ?? null;
+  const billingGate = await getQrBillingGateStatus(
+    locationId,
+    location.merchant_id as string
+  );
 
   const { data: config, error: configError } = await supabase
     .from("online_store_config")
     .select(
-      "id, store_name, slug, custom_domain, setup_request_status, accepts_dine_in, qr_kill_switch"
+      "id, store_name, slug, custom_domain, setup_request_status, is_active, accepts_dine_in, qr_kill_switch, logo_url, primary_color, secondary_color, background_color"
     )
     .eq("location_id", locationId)
     .maybeSingle();
 
   if (configError) {
-    return {
-      success: false,
-      storeName: null,
-      storeSlug: null,
-      customDomain: null,
-      acceptsDineIn: false,
-      qrKillSwitch: false,
-      tables: [],
-      generatedCount: 0,
-      activeCount: 0,
+    return emptyQrSnapshot({
+      locationName,
+      billingGate,
       error: configError.message,
-    };
+    });
   }
 
   if (!config) {
-    return {
-      success: false,
-      storeName: null,
-      storeSlug: null,
-      customDomain: null,
-      acceptsDineIn: false,
-      qrKillSwitch: false,
-      tables: [],
-      generatedCount: 0,
-      activeCount: 0,
+    return emptyQrSnapshot({
+      locationName,
+      billingGate,
       error: "Online ordering is not configured for this location yet.",
-    };
+    });
   }
+
+  // Every remaining exit reports the same store state; only the rows differ.
+  const storeState = {
+    locationName,
+    storeName: (config.store_name as string | null) ?? null,
+    storeSlug: (config.slug as string | null) ?? null,
+    customDomain: (config.custom_domain as string | null) ?? null,
+    branding: readQrBranding(config),
+    storefrontEnabled: Boolean(config.is_active),
+    acceptsDineIn: Boolean(config.accepts_dine_in),
+    qrKillSwitch: Boolean(config.qr_kill_switch),
+    billingGate,
+  };
 
   const { data: tables, error: tablesError } = await supabase
     .from("floor_plan_objects")
@@ -1488,11 +1457,7 @@ export async function getQrTableManagerSnapshot(
   if (tablesError) {
     return {
       success: false,
-      storeName: (config.store_name as string | null) ?? null,
-      storeSlug: (config.slug as string | null) ?? null,
-      customDomain: (config.custom_domain as string | null) ?? null,
-      acceptsDineIn: Boolean(config.accepts_dine_in),
-      qrKillSwitch: Boolean(config.qr_kill_switch),
+      ...storeState,
       tables: [],
       generatedCount: 0,
       activeCount: 0,
@@ -1504,11 +1469,7 @@ export async function getQrTableManagerSnapshot(
   if (floorPlanObjectIds.length === 0) {
     return {
       success: true,
-      storeName: (config.store_name as string | null) ?? null,
-      storeSlug: (config.slug as string | null) ?? null,
-      customDomain: (config.custom_domain as string | null) ?? null,
-      acceptsDineIn: Boolean(config.accepts_dine_in),
-      qrKillSwitch: Boolean(config.qr_kill_switch),
+      ...storeState,
       tables: [],
       generatedCount: 0,
       activeCount: 0,
@@ -1538,11 +1499,7 @@ export async function getQrTableManagerSnapshot(
   if (qrCodesError) {
     return {
       success: false,
-      storeName: (config.store_name as string | null) ?? null,
-      storeSlug: (config.slug as string | null) ?? null,
-      customDomain: (config.custom_domain as string | null) ?? null,
-      acceptsDineIn: Boolean(config.accepts_dine_in),
-      qrKillSwitch: Boolean(config.qr_kill_switch),
+      ...storeState,
       tables: [],
       generatedCount: 0,
       activeCount: 0,
@@ -1553,11 +1510,7 @@ export async function getQrTableManagerSnapshot(
   if (scanEventsError) {
     return {
       success: false,
-      storeName: (config.store_name as string | null) ?? null,
-      storeSlug: (config.slug as string | null) ?? null,
-      customDomain: (config.custom_domain as string | null) ?? null,
-      acceptsDineIn: Boolean(config.accepts_dine_in),
-      qrKillSwitch: Boolean(config.qr_kill_switch),
+      ...storeState,
       tables: [],
       generatedCount: 0,
       activeCount: 0,
@@ -1630,11 +1583,7 @@ export async function getQrTableManagerSnapshot(
 
   return {
     success: true,
-    storeName: (config.store_name as string | null) ?? null,
-    storeSlug: (config.slug as string | null) ?? null,
-    customDomain: (config.custom_domain as string | null) ?? null,
-    acceptsDineIn: Boolean(config.accepts_dine_in),
-    qrKillSwitch: Boolean(config.qr_kill_switch),
+    ...storeState,
     generatedCount: rows.filter((row) => row.qrStatus !== "not_generated").length,
     activeCount: rows.filter((row) => row.qrStatus === "active").length,
     tables: rows,
@@ -1692,6 +1641,15 @@ export async function getQrAnalyticsSnapshot(
       .from("qr_scan_events")
       .select("stage, table_qr_code_id, occurred_at")
       .eq("location_id", locationId)
+      // Table scans only. `resolve_marketing_qr` writes flyer scans into this
+      // same table as `stage = 'scanned'`, and that is the only stage a
+      // marketing code can ever reach — it opens the storefront, it never
+      // becomes a dine-in table order. Counting them here inflated the top of
+      // the funnel with traffic that can never reach the bottom of it, so the
+      // more flyers a merchant printed the worse their conversion looked. They
+      // also landed in Top tables as "Unknown table". Marketing scans are
+      // reported on the Marketing QR tab instead.
+      .is("marketing_qr_code_id", null)
       .gte("occurred_at", sinceIso),
     db
       .from("online_store_config")

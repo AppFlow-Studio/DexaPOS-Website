@@ -135,16 +135,18 @@ export function MetricCard({
   isLoading?: boolean;
 }) {
   return (
-    <Card className={cn("flex flex-col justify-between p-5 h-auto min-h-32 hover:shadow-md transition-shadow", className)}>
-      <div>
+    <Card className={cn("flex min-w-0 flex-col justify-between p-4 h-auto min-h-32 hover:shadow-md transition-shadow sm:p-5", className)}>
+      <div className="min-w-0">
         <span className="text-xs font-semibold text-muted-foreground tracking-normal uppercase">
           {title}
         </span>
       </div>
       {isLoading ? (
-        <div className="space-y-2 mt-3">
-          <div className="h-8 w-32 bg-muted animate-pulse rounded" />
-          <div className="h-3 w-20 bg-muted animate-pulse rounded" />
+        // Widths are relative: a fixed w-32 plus the card padding exceeded a
+        // grid-cols-2 track at 360px, so the blocks spilled past the card.
+        <div className="mt-3 min-w-0 space-y-2">
+          <div className="h-8 w-3/4 max-w-32 bg-muted animate-pulse rounded motion-reduce:animate-none" />
+          <div className="h-3 w-1/2 max-w-20 bg-muted animate-pulse rounded motion-reduce:animate-none" />
         </div>
       ) : (
         <>
