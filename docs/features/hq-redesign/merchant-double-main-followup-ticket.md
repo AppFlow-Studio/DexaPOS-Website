@@ -113,3 +113,40 @@ should keep `<main>` or become a `div` depending on nesting.
 - HQ `/manage` pages — already correct; they pass `as="div"` as they convert.
 - Any visual or behavioural change to merchant pages. This is landmark
   semantics only.
+
+---
+
+# Appendix — other defects found during the HQ rollout
+
+Recorded here rather than fixed, per the redesign ticket's behaviour freeze
+(§7: "If a functional defect is discovered, create or link a separate ticket.
+Do not hide behaviour changes inside a redesign PR."). Each needs its own
+ticket.
+
+## A. `AlertsPanel` — React purity / cascading-render lint errors
+
+`app/manage/components/AlertsPanel.tsx` fails three `react-hooks` rules, all
+pre-existing (verified by linting the pre-conversion file from git, which
+reports the same three):
+
+| Line | Rule | Issue |
+|---|---|---|
+| ~67 | `react-hooks/set-state-in-effect` | `setState` called synchronously in an effect |
+| ~77 | `react-hooks/set-state-in-effect` | same, in the filter/sort effect |
+| ~99 | `react-hooks/purity` | `Date.now()` called during render |
+
+The alert list is derived state (`allAlerts` filtered by `dismissedAlerts`,
+then sorted) held in `useState` and synced by an effect. It should be computed
+with `useMemo` during render instead, which removes the cascading render and
+both effects.
+
+Not fixed in the HQ rollout because it changes render behaviour and dismissal
+timing — exactly what the freeze excludes. The conversion preserved the logic
+verbatim.
+
+## B. Chart colours may be falling back to Recharts defaults
+
+The GPV chart on `/manage/analytics` renders grey rather than brand-blue. That
+is the signature of constraint C2 — a theme token wrapped in `hsl(...)` yields
+invalid CSS and Recharts silently falls back to its own defaults. Worth
+confirming across HQ charts and fixing at the source.

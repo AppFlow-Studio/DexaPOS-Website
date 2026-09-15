@@ -1,13 +1,51 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import Link from 'next/link'
+import { X, AlertCircle, AlertTriangle, Info, ChevronDown, ChevronRight } from 'lucide-react'
+
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePlatformAlerts } from '@/lib/queries/use-platform-dashboard'
-import Link from 'next/link'
 import { PlatformAlert } from '@/app/manage/actions/hq-platform/dashboard'
-import { X, CheckCircle, AlertCircle, AlertTriangle, Info, ChevronDown, ChevronRight } from 'lucide-react'
+
+/**
+ * Alert severity keeps its colour — one of the two documented HQ exceptions
+ * (`UI-DESIGN-SYSTEM.md` §14.3 HQ-2). A platform alert IS an operational alarm,
+ * which is exactly the case the no-status-colour rule carves out.
+ *
+ * It is applied to the icon only, not as a filled badge: the glyph reads as a
+ * signal, while five filled pills per row read as noise and drown the one
+ * `high` row that matters.
+ */
+const SEVERITY_ICON = {
+  high: { Icon: AlertCircle, className: 'text-red-600 dark:text-red-400' },
+  medium: { Icon: AlertTriangle, className: 'text-amber-600 dark:text-amber-400' },
+  low: { Icon: Info, className: 'text-muted-foreground' },
+} as const
+
+const SEVERITY_LABEL: Record<string, string> = {
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+}
+
+/** `DS-CTL-09` — one neutral pill; the word carries the meaning. */
+const BADGE_SHELL =
+  'inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium'
+
+function SeverityIcon({ severity }: { severity: string }) {
+  const { Icon, className } =
+    SEVERITY_ICON[severity as keyof typeof SEVERITY_ICON] ?? SEVERITY_ICON.low
+
+  return (
+    <>
+      <Icon className={`h-4 w-4 shrink-0 ${className}`} aria-hidden="true" />
+      <span className="sr-only">{SEVERITY_LABEL[severity] ?? severity} severity</span>
+    </>
+  )
+}
 
 export function AlertsPanel() {
   const { data: allAlerts, isLoading, error } = usePlatformAlerts()
@@ -62,119 +100,71 @@ export function AlertsPanel() {
     localStorage.setItem('dismissedAlerts', JSON.stringify(parsed))
   }
 
-  const getSeverityIcon = (severity: string) => {
-    switch (severity) {
-      case 'high':
-        return <AlertCircle className="h-4 w-4 text-red-500" />
-      case 'medium':
-        return <AlertTriangle className="h-4 w-4 text-yellow-500" />
-      case 'low':
-        return <Info className="h-4 w-4 text-blue-500" />
-      default:
-        return <Info className="h-4 w-4 text-gray-500" />
-    }
-  }
-
-  const getSeverityBadge = (severity: string) => {
-    switch (severity) {
-      case 'high':
-        return <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950/70">High</Badge>
-      case 'medium':
-        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200 border-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-400 dark:border-yellow-900 dark:hover:bg-yellow-950/70">Medium</Badge>
-      case 'low':
-        return <Badge variant="outline" className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900 dark:hover:bg-blue-950/70">Low</Badge>
-      default:
-        return <Badge variant="outline">{severity}</Badge>
-    }
-  }
-
-  if (isLoading) {
-    return (
-      <Card className="border border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Alerts & Actions</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-0">
+  return (
+    <Panel className="h-full">
+      <PanelSection
+        icon={AlertCircle}
+        label="Alerts & Actions"
+        action={
+          !isLoading && !error && alerts.length > 0 ? (
+            <span className={BADGE_SHELL}>{alerts.length} active</span>
+          ) : undefined
+        }
+      >
+        {isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full rounded-lg" />
+              <Skeleton key={i} className="h-16 w-full rounded-2xl" />
             ))}
           </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (error) {
-    return (
-      <Card className="border border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Alerts & Actions</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-0">
-          <div className="flex items-center justify-center h-32 bg-red-50/50 rounded-lg border border-red-100">
-            <div className="text-sm text-center">
-              <p className="font-semibold text-red-700 mb-1">Error loading alerts</p>
-              <p className="text-xs text-red-600">{(error as Error).message}</p>
-            </div>
+        ) : error ? (
+          <div className="py-8 text-center">
+            <p className="text-sm font-medium text-red-600 dark:text-red-400">
+              Error loading alerts
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {(error as Error).message}
+            </p>
           </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <Card className="border border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
-      <CardHeader className="pb-2 border-b border-blue-100/50 dark:border-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Alerts & Actions</CardTitle>
-          </div>
-          {alerts.length > 0 && (
-            <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900">
-              {alerts.length} active
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="max-h-[500px] overflow-y-auto p-4 pt-3 scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-transparent">
-        {alerts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 bg-green-50/50 dark:bg-green-950/20 rounded-lg border border-green-100 dark:border-green-900">
-            <CheckCircle className="h-8 w-8 text-green-500 dark:text-green-400 mb-2" />
-            <p className="text-sm text-green-700 dark:text-green-400 font-medium">All clear! No active alerts</p>
-            <p className="text-xs text-green-600 dark:text-green-500 mt-1">You're up to date</p>
+        ) : alerts.length === 0 ? (
+          <div className="py-10 text-center">
+            <p className="text-sm font-medium">All clear — no active alerts</p>
+            <p className="mt-1 text-xs text-muted-foreground">You&apos;re up to date</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="max-h-[500px] min-w-0 space-y-2 overflow-y-auto">
             {alerts.map((alert) => {
               const isGrouped = (alert.groupedDevices?.length ?? 0) > 0
               const isExpanded = expandedGroups.has(alert.id)
               return (
                 <div
                   key={alert.id}
-                  className="group flex flex-col gap-2 p-3 rounded-lg border border-blue-100/50 dark:border-border bg-white/50 dark:bg-card/40 hover:bg-white/80 dark:hover:bg-card/70 transition-all duration-200 hover:shadow-sm"
+                  className="flex min-w-0 flex-col gap-2 rounded-2xl bg-muted/40 p-3 transition-colors hover:bg-muted/60"
                 >
-                  <div className="flex gap-3">
-                    <div className="shrink-0 mt-0.5">{getSeverityIcon(alert.severity)}</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        {getSeverityBadge(alert.severity)}
+                  <div className="flex min-w-0 gap-3">
+                    <div className="mt-0.5 shrink-0">
+                      <SeverityIcon severity={alert.severity} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <span className={BADGE_SHELL}>
+                          {SEVERITY_LABEL[alert.severity] ?? alert.severity}
+                        </span>
                         {isGrouped && (
-                          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-muted dark:text-muted-foreground dark:border-border">
+                          <span className={BADGE_SHELL}>
                             {alert.groupedDevices!.length} devices
-                          </Badge>
+                          </span>
                         )}
                       </div>
                       {alert.link ? (
                         <Link
                           href={alert.link}
-                          className="text-sm text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:underline transition-colors"
+                          className="text-sm hover:underline"
                         >
                           {alert.message}
                         </Link>
                       ) : (
-                        <p className="text-sm text-slate-700 dark:text-slate-300">{alert.message}</p>
+                        <p className="text-sm">{alert.message}</p>
                       )}
                       {isGrouped && (
                         <button
@@ -186,7 +176,7 @@ export function AlertsPanel() {
                               return next
                             })
                           }
-                          className="mt-1 inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                          className="mt-1 inline-flex items-center gap-1 text-xs text-[#0C4FD1] hover:underline dark:text-[#6CA0FF]"
                         >
                           {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                           {isExpanded ? 'Hide devices' : 'Show devices'}
@@ -195,18 +185,20 @@ export function AlertsPanel() {
                     </div>
                     <button
                       onClick={() => dismissAlert(alert.id)}
-                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors hover:bg-blue-100/50 p-1 rounded-md self-start"
+                      className="inline-flex size-8 shrink-0 items-center justify-center self-start rounded-full border-0 bg-transparent text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground"
                       aria-label="Dismiss alert"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
                   {isGrouped && isExpanded && (
-                    <ul className="ml-7 border-l border-slate-200 dark:border-border pl-3 text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                    <ul className="ml-7 space-y-1 border-l border-border/60 pl-3 text-xs text-muted-foreground">
                       {alert.groupedDevices!.map((d) => (
                         <li key={d.stationId} className="flex flex-wrap justify-between gap-x-3 gap-y-0.5">
-                          <span className="font-medium text-slate-700 dark:text-slate-300 min-w-0 truncate">{d.stationName}</span>
-                          <span className="text-slate-500 shrink-0">
+                          <span className="min-w-0 truncate font-medium text-foreground">
+                            {d.stationName}
+                          </span>
+                          <span className="shrink-0">
                             {d.lastHeartbeatAt
                               ? `last seen ${new Date(d.lastHeartbeatAt).toLocaleTimeString()}`
                               : 'no heartbeat'}
@@ -220,7 +212,7 @@ export function AlertsPanel() {
             })}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   )
 }

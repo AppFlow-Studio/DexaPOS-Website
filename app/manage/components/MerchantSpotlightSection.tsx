@@ -1,9 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Building2, ArrowRight } from 'lucide-react'
+
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { Button } from '@/components/ui/button'
-import { Building2, ArrowRight, AlertTriangle } from 'lucide-react'
 import { useMerchantSpotlight } from '../hooks/useMerchantSpotlight'
 import {
   MerchantSpotlightCard,
@@ -20,75 +22,65 @@ export function MerchantSpotlightSection() {
   const hasMore = total > merchants.length
 
   return (
-    <Card className="border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm">
-      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-4">
-        <div className="space-y-0.5">
-          <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            Merchant Spotlight
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Top merchants by today&apos;s revenue · {total} total
-          </p>
-        </div>
-        <Button asChild variant="ghost" size="sm" className="text-xs self-start sm:self-auto shrink-0">
-          <Link href="/manage/merchants">
-            View all
-            <ArrowRight className="h-3.5 w-3.5 ml-1" />
-          </Link>
-        </Button>
-      </CardHeader>
-
-      <CardContent className="overflow-hidden">
+    <Panel>
+      <PanelSection
+        icon={Building2}
+        label="Merchant Spotlight"
+        caption={`Top merchants by today's revenue · ${total} total`}
+        action={
+          <Button asChild variant="ghost" size="sm" className="rounded-full">
+            <Link href="/manage/merchants">
+              View all
+              <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        }
+      >
         {isLoading ? (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <MerchantSpotlightCardSkeleton key={i} />
             ))}
           </div>
         ) : error || data?.error ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="h-12 w-12 rounded-xl bg-red-50 dark:bg-red-950/40 flex items-center justify-center mb-3">
-              <AlertTriangle className="h-6 w-6 text-red-500 dark:text-red-400" />
-            </div>
+          // Text-led rather than a tinted icon plate: a failed fetch is a
+          // message, not an alarm state that needs its own coloured surface.
+          <div className="py-10 text-center">
             <p className="text-sm font-medium">Unable to load merchants</p>
-            <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+            <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
               {data?.error ?? 'An unexpected error occurred. Try refreshing the page.'}
             </p>
           </div>
         ) : merchants.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="h-12 w-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center mb-3">
-              <Building2 className="h-6 w-6 text-blue-500 dark:text-blue-400" />
-            </div>
+          <div className="py-10 text-center">
             <p className="text-sm font-medium">No merchants yet</p>
-            <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+            <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
               Onboard a merchant to see their daily activity here.
             </p>
           </div>
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 min-w-0">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {merchants.map((m) => (
                 <MerchantSpotlightCard key={m.id} merchant={m} />
               ))}
             </div>
             {hasMore && (
-              <div className="mt-4 pt-4 border-t flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-muted-foreground">
                   Showing {merchants.length} of {total} merchants
                 </p>
                 <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
                   <Link href="/manage/merchants">
                     Browse all merchants
-                    <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                    <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                   </Link>
                 </Button>
               </div>
             )}
           </>
         )}
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   )
 }

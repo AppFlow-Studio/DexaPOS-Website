@@ -1,102 +1,80 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 import Link from 'next/link'
-import { usePlatformActivityFeed } from '@/lib/queries/use-platform-dashboard'
 import { formatDistanceToNow } from 'date-fns'
 import { Activity } from 'lucide-react'
+
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { Skeleton } from '@/components/ui/skeleton'
+import { usePlatformActivityFeed } from '@/lib/queries/use-platform-dashboard'
+
+/** The live/loading indicator on the section heading row. */
+function FeedStatus({ isLoading }: { isLoading?: boolean }) {
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75 motion-reduce:animate-none" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+      </span>
+      {isLoading ? 'Loading' : 'Live'}
+    </span>
+  )
+}
 
 export function LiveActivityFeed() {
   const { data: events, isLoading, error } = usePlatformActivityFeed()
 
-  if (isLoading) {
-    return (
-      <Card className="border border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Live Activity Feed</CardTitle>
-            <div className="flex items-center gap-1.5">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-              </span>
-              <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Loading</span>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="max-h-[500px] overflow-y-auto p-4 pt-0">
+  // One panel and one heading for every state, so the three branches differ
+  // only in their body. Previously each state re-declared the card chrome and
+  // they had drifted apart.
+  return (
+    <Panel className="h-full">
+      <PanelSection
+        icon={Activity}
+        label="Live Activity Feed"
+        action={!error && <FeedStatus isLoading={isLoading} />}
+      >
+        {isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full rounded-lg" />
+              <Skeleton key={i} className="h-16 w-full rounded-2xl" />
             ))}
           </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  if (error) {
-    return (
-      <Card className="border border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Live Activity Feed</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 pt-0">
-          <div className="flex items-center justify-center h-32 bg-red-50/50 rounded-lg border border-red-100">
-            <div className="text-sm text-center">
-              <p className="font-semibold text-red-700 mb-1">Error loading activity feed</p>
-              <p className="text-xs text-red-600">{(error as Error).message}</p>
-            </div>
+        ) : error ? (
+          <div className="py-8 text-center">
+            <p className="text-sm font-medium text-red-600 dark:text-red-400">
+              Error loading activity feed
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {(error as Error).message}
+            </p>
           </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <Card className="border border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
-      <CardHeader className="pb-2 border-b border-blue-100/50 dark:border-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <CardTitle className="text-base font-semibold text-slate-900 dark:text-slate-100">Live Activity Feed</CardTitle>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-            </span>
-            <span className="text-xs text-green-600 font-medium">Live</span>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="max-h-[500px] overflow-y-auto p-4 pt-3 scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-transparent">
-        {!events || events.length === 0 ? (
-          <div className="flex items-center justify-center h-32 text-muted-foreground bg-blue-50/30 dark:bg-blue-950/20 rounded-lg border border-dashed border-blue-200 dark:border-border">
-            <span className="text-sm">Waiting for activity...</span>
+        ) : !events || events.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            Waiting for activity…
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="max-h-[500px] min-w-0 space-y-1 overflow-y-auto">
             {events.map((event) => (
               <div
                 key={event.id}
-                className="group flex gap-3 p-2 rounded-lg hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors duration-150"
+                className="flex min-w-0 gap-3 rounded-2xl p-2 transition-colors hover:bg-muted/60"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-950/40 text-lg">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-muted/60 text-lg">
                   {event.emoji}
                 </div>
-                <div className="flex-1 min-w-0 space-y-1">
+                <div className="min-w-0 flex-1 space-y-0.5">
                   {event.link ? (
                     <Link
                       href={event.link}
-                      className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline transition-colors"
+                      className="text-sm font-medium text-[#0C4FD1] hover:underline dark:text-[#6CA0FF]"
                     >
                       <span dangerouslySetInnerHTML={{ __html: event.message }} />
                     </Link>
                   ) : (
                     <p
-                      className="text-sm text-slate-700 dark:text-slate-300"
+                      className="text-sm"
                       dangerouslySetInnerHTML={{ __html: event.message }}
                     />
                   )}
@@ -108,7 +86,7 @@ export function LiveActivityFeed() {
             ))}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   )
 }
