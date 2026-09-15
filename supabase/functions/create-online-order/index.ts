@@ -28,6 +28,7 @@ import {
 } from '../_shared/nmi.ts'
 import { createSale as valorCreateSale } from '../_shared/valor.ts'
 import { sendOnlineOrderPaymentEmail } from '../_shared/payment-emails.ts'
+import { getAppBaseUrl } from '../_shared/app-url.ts'
 // ============================================================================
 // ENV
 // ============================================================================
@@ -187,20 +188,6 @@ function logEvent(tag: string, message: string, data?: unknown): void {
 
 function logError(tag: string, message: string, error: unknown): void {
   console.error(`[${new Date().toISOString()}] [${tag}] ERROR: ${message}`, error)
-}
-
-function getAppBaseUrl(): string | null {
-  const explicitUrl = Deno.env.get('NEXT_PUBLIC_APP_URL')?.trim()
-  if (explicitUrl) {
-    return explicitUrl.replace(/\/+$/, '')
-  }
-
-  const vercelUrl = Deno.env.get('VERCEL_URL')?.trim()
-  if (vercelUrl) {
-    return `https://${vercelUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')}`
-  }
-
-  return null
 }
 
 // ============================================================================

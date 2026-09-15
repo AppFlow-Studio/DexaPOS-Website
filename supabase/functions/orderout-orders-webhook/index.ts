@@ -10,6 +10,7 @@ import {
   buildDeliveryAddress,
   sanitizeItems,
 } from './online-order-types.ts'
+import { getAppBaseUrl } from '../_shared/app-url.ts'
 
 // ============================================================================
 // OrderOut Webhook Translator
@@ -410,7 +411,7 @@ async function handleCancellation(
   })
 
   // Fire-and-forget customer notification (email + SMS per merchant prefs).
-  const appUrl = Deno.env.get('NEXT_PUBLIC_APP_URL')
+  const appUrl = getAppBaseUrl()
   const internalSecret = Deno.env.get('INTERNAL_NOTIFICATION_SECRET')
   if (appUrl && internalSecret) {
     fetch(`${appUrl}/api/internal/order-status-notify`, {
