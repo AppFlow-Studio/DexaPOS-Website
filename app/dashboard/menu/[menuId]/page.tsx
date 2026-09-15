@@ -32,7 +32,7 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { DeleteMenu, UpdateMenu, ToggleMenuActive } from "../../actions/menus";
+import { DeleteMenu, SetMenuActive, UpdateMenu } from "../../actions/menus";
 import {
   ToggleCategoryInMenu,
   RemoveLocationMenuCategoryOverride,
@@ -63,7 +63,7 @@ import {
   useIsSingleLocation,
   useLocationStore,
 } from "@/stores/location-store";
-import { MenuCategory, MenuCategoryItem } from "@/types/menu";
+import { MenuCategory, MenuCategoryItem, MenuWithCategories } from "@/types/menu";
 import { useCategoriesWithItems } from "../../hooks/useCategories";
 import { useLocations } from "../../hooks/useLocations";
 import { useModifierGroups } from "../../hooks/useModifierGroups";
@@ -114,6 +114,7 @@ import {
 } from "@/lib/menu/menu-channel-visibility";
 import { PageShell } from "@/components/dashboard/shell";
 import { cn } from "@/lib/utils";
+import { applySingleMenuActiveState } from "@/lib/menu/menu-active-state";
 
 /**
  * Pill-rail tab trigger. Written out literally here rather than imported from
@@ -634,27 +635,50 @@ export default function MenuDetailPage() {
   };
 
   const handleToggleMenuActive = async () => {
+    if (!menu) return;
+
+    const nextIsActive = !menu.is_active;
+    const menuQueryFilter = {
+      queryKey: ["menu-with-categories", menuId],
+    } as const;
+    const previousMenus = queryClient.getQueriesData<MenuWithCategories | null>(
+      menuQueryFilter,
+    );
+    const restorePreviousMenus = () => {
+      for (const [queryKey, value] of previousMenus) {
+        queryClient.setQueryData(queryKey, value);
+      }
+    };
+
     setIsTogglingActive(true);
+    queryClient.setQueriesData<MenuWithCategories | null>(
+      menuQueryFilter,
+      (current) =>
+        applySingleMenuActiveState(current, menuId, nextIsActive) ?? null,
+    );
+
     try {
-      const result = await ToggleMenuActive(
+      const result = await SetMenuActive(
         menuId,
+        nextIsActive,
         selectedLocationId || undefined,
       );
       if (result.error) {
+        restorePreviousMenus();
         toast.error("Update Failed", { description: result.error });
         return;
       }
-      toast.success(menu?.is_active ? "Menu Deactivated" : "Menu Activated", {
-        description: menu?.is_active
-          ? "This menu is now hidden from customers."
-          : "This menu is now visible to customers.",
+      toast.success(nextIsActive ? "Menu Activated" : "Menu Deactivated", {
+        description: nextIsActive
+          ? "This menu is now visible to customers."
+          : "This menu is now hidden from customers.",
       });
-      queryClient.invalidateQueries({
+      void queryClient.invalidateQueries({
         queryKey: ["menu-with-categories", menuId],
       });
       invalidateOrderOutSync(queryClient);
-      refetchMenu();
     } catch {
+      restorePreviousMenus();
       toast.error("Update Failed", {
         description: "Unable to update menu status. Please try again.",
       });

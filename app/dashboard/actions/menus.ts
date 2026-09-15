@@ -1,5 +1,6 @@
 'use server'
 
+import { after } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { MenusModel } from '@/types/db-modles'
 import {
@@ -612,7 +613,6 @@ export async function UpdateMenu (
   if (!menuId) {
     return { error: 'Menu ID is required' }
   }
-
   const supabase = createServerSupabaseClient()
 
   // Fetch current state before update for audit logging
@@ -808,32 +808,23 @@ export async function UpdateMenusOrder (
   return { success: true }
 }
 
-export async function ToggleMenuActive (
+export async function SetMenuActive (
   menuId: string,
+  isActive: boolean,
   locationId?: string | null
 ) {
   if (!menuId) {
     return { error: 'Menu ID is required' }
   }
+  if (typeof isActive !== 'boolean') {
+    return { error: 'Menu status is required' }
+  }
 
   const supabase = createServerSupabaseClient()
 
-  // First get current status
-  const { data: menu, error: fetchError } = await supabase
-    .from('menus')
-    .select('is_active')
-    .eq('id', menuId)
-    .single()
-
-  if (fetchError || !menu) {
-    console.error('Error fetching menu:', fetchError)
-    return { error: 'Menu not found' }
-  }
-
-  // Toggle the status
   const { data: updatedMenu, error } = await supabase
     .from('menus')
-    .update({ is_active: !menu.is_active })
+    .update({ is_active: isActive })
     .eq('id', menuId)
     .select()
     .single()
@@ -843,21 +834,22 @@ export async function ToggleMenuActive (
     return { error: error.message }
   }
 
-  // Log audit event
   const newStatus = updatedMenu.is_active ? 'activated' : 'deactivated'
-  await LogAuditEvent({
-    merchantId: updatedMenu.merchant_id,
-    action: `Menu ${newStatus}: ${updatedMenu.name}`,
-    actionCategory: 'menu',
-    resourceType: 'menu',
-    resourceId: menuId,
-    resourceName: updatedMenu.name,
-    locationId: locationId,
-    changes: {
-      before: { is_active: menu.is_active },
-      after: { is_active: updatedMenu.is_active }
-    }
-  })
+  after(() =>
+    LogAuditEvent({
+      merchantId: updatedMenu.merchant_id,
+      action: `Menu ${newStatus}: ${updatedMenu.name}`,
+      actionCategory: 'menu',
+      resourceType: 'menu',
+      resourceId: menuId,
+      resourceName: updatedMenu.name,
+      locationId: locationId,
+      changes: {
+        before: { is_active: !updatedMenu.is_active },
+        after: { is_active: updatedMenu.is_active }
+      }
+    })
+  )
 
   return { data: updatedMenu as MenusModel }
 }

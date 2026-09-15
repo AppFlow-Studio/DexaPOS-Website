@@ -19,7 +19,7 @@ interface MenuActionsDropdownProps {
     isActive: boolean
     /** The location_id of the menu itself (null = global menu) */
     menuLocationId: string | null
-    onToggleActive: (menuId: string) => void
+    onToggleActive: (menuId: string, isActive: boolean) => void
     onDelete: (menuId: string) => void
     /** Duplicate menu - passes menuId and target locationId (null = global) */
     onDuplicate?: (menuId: string, targetLocationId: string | null) => void
@@ -29,6 +29,7 @@ interface MenuActionsDropdownProps {
     /** True when this menu is linked to OrderOut for the location (eligible to become primary) */
     canSetOnlineMenu?: boolean
     onSetOnlineMenu?: (menuId: string) => void
+    isTogglingActive?: boolean
     align?: 'start' | 'end' | 'center'
     triggerClassName?: string
 }
@@ -45,6 +46,7 @@ export function MenuActionsDropdown({
     isOnlineMenu,
     canSetOnlineMenu,
     onSetOnlineMenu,
+    isTogglingActive = false,
     align = 'end',
     triggerClassName,
 }: MenuActionsDropdownProps) {
@@ -74,7 +76,7 @@ export function MenuActionsDropdown({
 
     const handleToggleActive = (e: React.MouseEvent) => {
         e.stopPropagation()
-        onToggleActive(menuId)
+        onToggleActive(menuId, !isActive)
     }
 
     const handleDelete = (e: React.MouseEvent) => {
@@ -164,9 +166,16 @@ export function MenuActionsDropdown({
 
                 {/* Toggle Active Status - Only if can edit */}
                 {canEditOrDelete ? (
-                    <DropdownMenuItem onClick={handleToggleActive}>
+                    <DropdownMenuItem
+                        onClick={handleToggleActive}
+                        disabled={isTogglingActive}
+                    >
                         <Power className="mr-2 h-4 w-4" />
-                        {isActive ? 'Deactivate Menu' : 'Activate Menu'}
+                        {isTogglingActive
+                            ? 'Updating...'
+                            : isActive
+                              ? 'Deactivate Menu'
+                              : 'Activate Menu'}
                     </DropdownMenuItem>
                 ) : (
                     <DropdownMenuItem disabled className="opacity-50">
@@ -221,7 +230,7 @@ export function MenuActionsDropdown({
                     <>
                         <DropdownMenuSeparator />
                         <div className="px-2 py-1.5 text-xs text-muted-foreground">
-                            Global menus can only be modified from "All Locations" view.
+                            Global menus can only be modified from &quot;All Locations&quot; view.
                             Duplicate to edit locally.
                         </div>
                     </>

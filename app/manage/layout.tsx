@@ -25,7 +25,6 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-    Shield,
     LayoutDashboard,
     Users,
     BarChart3,
@@ -65,9 +64,9 @@ import { resetClientSession } from '@/lib/auth/session-reset'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
-import Image from 'next/image'
 import type { PermissionCode } from '@/lib/admin/permission-codes'
 import { selectHqOrganization } from '@/lib/admin/hq-identity'
+import { HqBrandMark } from '@/components/admin/HqBrandMark'
 import { DeviceRegistryCommandPaletteProvider } from '@/app/manage/devices/components/DeviceRegistryCommandPalette'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { ReadOnlyNotificationBell } from '@/components/notifications/ReadOnlyNotificationBell'
@@ -327,13 +326,10 @@ function AppSidebar() {
                         <Skeleton className="h-8 w-8" />
                     ) : (
                         <>
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                                {hqOrg?.imageURL ? (
-                                    <Image src={hqOrg.imageURL} alt={hqOrg.name || 'Dexa POS HQ'} width={32} height={32} className='rounded-lg' />
-                                ) : (
-                                    <Shield className="h-4 w-4 text-primary-foreground" />
-                                )}
-                            </div>
+                            <HqBrandMark
+                                imageUrl={hqOrg?.imageURL}
+                                organizationName={hqOrg?.name}
+                            />
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-semibold">{hqOrg?.name || 'Dexa POS HQ'}</span>
                                 <span className="truncate text-xs text-muted-foreground">Admin Dashboard</span>

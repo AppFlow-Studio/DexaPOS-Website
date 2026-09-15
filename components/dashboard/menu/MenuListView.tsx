@@ -79,7 +79,7 @@ interface MenuListViewProps {
   menus: MenuWithLocation[];
   isLoading?: boolean;
   viewMode: "grid" | "list";
-  onToggleActive: (menuId: string) => void;
+  onToggleActive: (menuId: string, isActive: boolean) => void;
   onDelete: (menuId: string) => void;
   onCreateNew?: () => void;
   /** Duplicate menu handler - receives menuId and target locationId (null = global) */
@@ -101,13 +101,14 @@ interface MenuListViewProps {
   ) => void;
   channelVisibilityDisabled?: boolean;
   savingVisibilityMenuId?: string | null;
+  savingActiveMenuIds?: ReadonlySet<string>;
   /** Show effective menu availability across locations in the table view. */
   showLocations?: boolean;
 }
 
 // Internal Helper Interface for Actions
 interface MenuActions {
-  onToggleActive: (menuId: string) => void;
+  onToggleActive: (menuId: string, isActive: boolean) => void;
   onDelete: (menuId: string) => void;
   onDuplicate?: (menuId: string, targetLocationId: string | null) => void;
   onSettings?: (menuId: string) => void;
@@ -124,6 +125,7 @@ function SortableGridCard({
   onChannelVisibilityChange,
   channelVisibilityDisabled,
   isSavingVisibility,
+  isSavingActive,
 }: {
   menu: MenuWithLocation;
   handleRowClick: (id: string) => void;
@@ -134,6 +136,7 @@ function SortableGridCard({
   onChannelVisibilityChange?: MenuListViewProps["onChannelVisibilityChange"];
   channelVisibilityDisabled?: boolean;
   isSavingVisibility?: boolean;
+  isSavingActive?: boolean;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
   const visibility = normalizeMenuChannelVisibility(menu);
@@ -192,6 +195,7 @@ function SortableGridCard({
               menuLocationId={menu.location_id}
               isOnlineMenu={isOnlineMenu}
               canSetOnlineMenu={canSetOnlineMenu}
+              isTogglingActive={isSavingActive}
               {...actions}
             />
           </div>
@@ -253,6 +257,7 @@ function SortableTableRow({
   onChannelVisibilityChange,
   channelVisibilityDisabled,
   isSavingVisibility,
+  isSavingActive,
   showLocations,
 }: {
   menu: MenuWithLocation;
@@ -264,6 +269,7 @@ function SortableTableRow({
   onChannelVisibilityChange?: MenuListViewProps["onChannelVisibilityChange"];
   channelVisibilityDisabled?: boolean;
   isSavingVisibility?: boolean;
+  isSavingActive?: boolean;
   showLocations: boolean;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
@@ -346,7 +352,10 @@ function SortableTableRow({
           <div className="flex items-center gap-1.5 sm:gap-2">
             <Switch
               checked={menu.is_active}
-              onCheckedChange={() => actions.onToggleActive(menu.id)}
+              disabled={isSavingActive}
+              onCheckedChange={(checked) =>
+                actions.onToggleActive(menu.id, checked)
+              }
               aria-label={`${menu.is_active ? "Deactivate" : "Activate"} ${menu.name}`}
             />
             <span
@@ -389,6 +398,7 @@ function SortableTableRow({
           menuLocationId={menu.location_id}
           isOnlineMenu={isOnlineMenu}
           canSetOnlineMenu={canSetOnlineMenu}
+          isTogglingActive={isSavingActive}
           {...actions}
         />
       </TableCell>
@@ -416,6 +426,7 @@ export function MenuListView({
   onChannelVisibilityChange,
   channelVisibilityDisabled = false,
   savingVisibilityMenuId,
+  savingActiveMenuIds,
   showLocations = false,
 }: MenuListViewProps) {
   const router = useRouter();
@@ -511,6 +522,7 @@ export function MenuListView({
                 onChannelVisibilityChange={onChannelVisibilityChange}
                 channelVisibilityDisabled={channelVisibilityDisabled}
                 isSavingVisibility={savingVisibilityMenuId === menu.id}
+                isSavingActive={savingActiveMenuIds?.has(menu.id)}
               />
             ))}
           </div>
@@ -560,6 +572,7 @@ export function MenuListView({
                     onChannelVisibilityChange={onChannelVisibilityChange}
                     channelVisibilityDisabled={channelVisibilityDisabled}
                     isSavingVisibility={savingVisibilityMenuId === menu.id}
+                    isSavingActive={savingActiveMenuIds?.has(menu.id)}
                     showLocations={showLocations}
                   />
                 ))}
