@@ -368,7 +368,9 @@ fixed inside a redesign PR.
 
 ## §8 Known issue, explicitly out of scope
 
-Roughly 30 merchant pages nest a second `<main>`: `app/dashboard/layout.tsx`
+**58** merchant pages nest a second `<main>` (counted precisely during PR 0 —
+an earlier estimate of ~30 came from import counts and was low):
+`app/dashboard/layout.tsx`
 renders one, and each page's `PageShell` renders another
 (e.g. `app/dashboard/audit-logs/page.tsx:626`).
 
@@ -377,8 +379,10 @@ retrofit merchant pages.** That surface is already signed off, and changing it
 here would violate the one-route-family-per-PR rule and put merchant regressions
 in an HQ diff.
 
-**Action:** file a separate follow-up ticket. Fix is mechanical once the prop
-exists (`as="div"` on merchant pages, since their layout also owns a `<main>`).
+**Action:** filed as
+[`docs/features/hq-redesign/merchant-double-main-followup-ticket.md`](../../features/hq-redesign/merchant-double-main-followup-ticket.md).
+Fix is mechanical once the prop exists (`as="div"` on merchant pages, since
+their layout also owns a `<main>`).
 
 ---
 

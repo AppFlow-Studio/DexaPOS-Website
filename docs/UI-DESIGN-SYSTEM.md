@@ -888,3 +888,121 @@ Two shared modules came out of this slice — prefer them over new inline colour
 > to either, grep the `.tsx` files for it — an unmatched class reaches the DOM with no rule
 > behind it and the element silently falls back to inherited styling.
 - **`lib/messaging/notification-shared.ts` `COLORS`** — email-template palette, deliberately different from the UI accent. Do not unify.
+
+---
+
+## §14 HQ admin portal (`/manage/*`) — adoption and exceptions
+
+The HQ portal converts onto **this** document. It is not a second design system,
+and there is no HQ copy of these rules — where HQ genuinely needs to differ, the
+difference is recorded in §14.3 with a reason.
+
+Design spec for the rollout:
+[`docs/superpowers/specs/2026-09-15-hq-portal-design-system-rollout-design.md`](superpowers/specs/2026-09-15-hq-portal-design-system-rollout-design.md).
+
+### 14.1 The one structural difference — `PageShell as="div"`
+
+**HQ pages must pass `as="div"`.**
+
+```tsx
+<PageShell as="div">
+  <PageHeader title="Merchants" subtitle="Manage and monitor merchant accounts" />
+  …
+</PageShell>
+```
+
+`app/manage/layout.tsx` already renders the surface's `<main>` (line 546).
+`PageShell` defaults to `<main>`, so importing it bare would nest two landmarks
+and confuse assistive navigation. Verified in a live browser: a `/manage` route
+contains exactly one `<main>` today, and it must stay that way.
+
+This mirrors the rule HQ loading states have followed since the loader ticket —
+`DataPageSkeleton` takes `shell="plain"` for the same reason. A converted route
+and its skeleton now follow one rule instead of two.
+
+> The prop is a closed `'main' | 'div'` union, not `React.ElementType`. HQ has
+> exactly one need, and a closed set keeps the invariant greppable:
+> `grep -rn "PageShell" app/manage --include=*.tsx | grep -v 'as="div"'` must
+> return nothing.
+
+**Merchant pages are unaffected.** `as` defaults to `'main'`, and the rendered
+HTML is byte-identical to the pre-prop component — asserted directly in
+`components/dashboard/shell/__tests__/PageShell.test.tsx`.
+
+> ⚠️ Merchant pages currently nest a second `<main>` themselves (the layout has
+> one, and each page's `PageShell` adds another). That is a pre-existing issue
+> on an already-signed-off surface, out of scope for the HQ rollout, and tracked
+> separately. Do not "fix" it inside an HQ PR.
+
+### 14.2 What HQ reuses unchanged
+
+Everything else. `PageHeader`, `Panel`, `PanelGrid`, `PanelSection`, `PanelRow`,
+`StatRow`, `StatTile`, `InsetTile`, table `variant="data"`, the §4 control
+recipes, the §12 centred pop-up rules and the §13 mobile rules all apply to HQ
+as written.
+
+`LocationIndicator` is already HQ-safe: it reads no store of its own, so it can
+be driven by whatever scoping a `/manage` page has.
+
+The starting move on every HQ page is the same substitution. HQ has **17
+distinct hand-rolled `<h1>` class strings**; all of them become `PageHeader`:
+
+```tsx
+// before — one of seventeen variants
+<div className="space-y-6">
+  <div className="space-y-1">
+    <h1 className="text-3xl font-bold tracking-tight">NMI Integration</h1>
+    <p className="text-sm text-muted-foreground">Configure the …</p>
+  </div>
+
+// after
+<PageShell as="div">
+  <PageHeader title="NMI Integration" subtitle="Configure the …" />
+```
+
+### 14.3 HQ exceptions
+
+| # | Exception | Rationale |
+|---|---|---|
+| HQ-1 | Operational density — HQ tables may run tighter than the merchant recipe | HQ is a command centre; operators scan far more rows per session than a merchant does. Density is the feature. |
+| HQ-2 | Severity colour is retained on `/manage/health` and the DLQ | §0 bans status *colour-coding* as decoration. These encode a real alarm state — the health-score legend is Healthy / Needs Attention / Critical — so colour is semantic, not ornamental. Everywhere else in HQ, status stays text-led. |
+| HQ-3 | `/manage` keeps its command-centre tab composition | Preserving the Admin HQ Dashboard Overhaul's information hierarchy. Only the canvas, header and card nesting change. |
+
+Anything not on this table follows the merchant rules. A new exception is added
+here **before** the PR that relies on it merges.
+
+### 14.4 Skeletons convert with their pages
+
+Six of the nine HQ `loading.tsx` files use `DataPageSkeleton` with
+`shell="plain"`. Three are hand-rolled and deliberately mirror the *legacy*
+card layout:
+
+- `app/manage/support/loading.tsx`
+- `app/manage/support/[ticketId]/loading.tsx` (via `SupportTicketSkeleton`)
+- `app/manage/users/loading.tsx` (it imports `Card` itself)
+
+`support/loading.tsx` says so in its own docblock: the page "is built from raw
+cards and a bordered tab strip rather than the dashboard shell primitives, so a
+shared variant would promise panel chrome that never arrives."
+
+**So converting `/manage/support` or `/manage/users` without rewriting its
+skeleton in the same PR reintroduces the layout shift the loader ticket
+removed.** Once the page uses panel chrome, the precondition those docblocks
+describe is satisfied and the skeleton should move onto `DataPageSkeleton` with
+`shell="plain"`.
+
+### 14.5 Adoption table
+
+Updated as each route family lands. `—` means not yet converted.
+
+| Route family | Routes | Layout components | Status |
+|---|---|---|---|
+| HQ home / analytics / health | `/manage`, `/manage/analytics`, `/manage/health` | — | pending PR 1 |
+| Merchant + org operations | `/manage/merchants`, `…/new`, `/manage/create-merchant`, `/manage/organizations`, `…/[organizationId]`, `…/create-organization` | — | pending PR 2 |
+| Merchant detail workspace | `/manage/merchants/[merchantId]/**` (99 files) | — | pending PR 3, split by tab |
+| Money movement | `/manage/transactions`, `/manage/disputes`, `/manage/platform-fees`, `/manage/subscriptions`, `/manage/cash-drawers`, `/manage/reports/tax` | — | pending PR 4 |
+| Internal operations | `/manage/users`, `/manage/roles-permissions`, `/manage/audit-logs`, `…/impersonation`, `/manage/support`, `/manage/dlq`, `/manage/profile` | — | pending PR 5 |
+| Devices + configuration | `/manage/devices`, `…/overview`, `/manage/device-catalog`, `/manage/nmi-integration`, `/manage/settings/integrations` | — | pending PR 6 |
+
+`/manage/settings` is a bare `redirect()` and `/manage/unauthorized` is a
+minimal error surface — **no change** for both.
