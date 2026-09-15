@@ -2,7 +2,7 @@
 
 import { useClerk, useSession } from '@clerk/nextjs'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Suspense, useEffect, useMemo } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import {
     Sidebar,
     SidebarContent,
@@ -235,7 +235,26 @@ const navFooter = [
 ]
 
 const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID ?? ''
-
+function HqOrgLogo({ imageURL, name }: { imageURL?: string | null; name?: string | null }) {
+    const [errored, setErrored] = useState(false)
+    const showImage = Boolean(imageURL) && !errored
+    return (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary">
+            {showImage ? (
+                <Image
+                    src={imageURL as string}
+                    alt={name || 'Dexa POS HQ'}
+                    width={32}
+                    height={32}
+                    className="h-full w-full rounded-lg object-cover"
+                    onError={() => setErrored(true)}
+                />
+            ) : (
+                <Shield className="h-4 w-4 text-primary-foreground" />
+            )}
+        </div>
+    )
+}
 function AppSidebar() {
     const { data: userInfo, isLoading: userInfoLoading } = useUserInfo()
     const { role, hasPermission, hasAnyPermission, isAtLeast, isLoading: authLoading } = useAdminPermissions()
@@ -327,13 +346,11 @@ function AppSidebar() {
                         <Skeleton className="h-8 w-8" />
                     ) : (
                         <>
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                                {hqOrg?.imageURL ? (
-                                    <Image src={hqOrg.imageURL} alt={hqOrg.name || 'Dexa POS HQ'} width={32} height={32} className='rounded-lg' />
-                                ) : (
-                                    <Shield className="h-4 w-4 text-primary-foreground" />
-                                )}
-                            </div>
+                            <HqOrgLogo
+    key={hqOrg?.imageURL ?? 'fallback'}
+    imageURL={hqOrg?.imageURL}
+    name={hqOrg?.name}
+/>
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-semibold">{hqOrg?.name || 'Dexa POS HQ'}</span>
                                 <span className="truncate text-xs text-muted-foreground">Admin Dashboard</span>
