@@ -4,9 +4,9 @@
 
 - Reported directly by the user on 2026-09-15 with screenshots of the kiosk
   asset editor, the HQ sidebar, and the merchant menu list.
-- Notion title: pending connector reconnection
-- Notion page ID: pending connector reconnection
-- Notion URL: pending connector reconnection
+- Notion title: `[WEB-BUG] Kiosk logo upload fails and DEXA HQ brand mark renders broken`
+- Notion page ID: `3dc8280c-1b1d-8177-89a0-dfef3f9214a6`
+- Notion URL: https://app.notion.com/p/3dc8280c1b1d817789a0dfef3f9214a6?pvs=204
 
 ## Problem
 
