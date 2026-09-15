@@ -14,7 +14,7 @@
  * self-authorising — rate limited, honeypotted, and scoped by a `siteId` in the
  * body rather than by anything in the path or the Host header.
  *
- * **Deliberately these two prefixes and not `/api`.** Exempting the whole
+ * **Deliberately these specific prefixes and not `/api`.** Exempting the whole
  * namespace would make every gated app endpoint reachable on a customer-facing
  * host — including a merchant's own domain, where a signed-in staff session's
  * cookie may still travel. Those stay rewritten, and so stay a 404 on a
@@ -25,6 +25,13 @@
 export const PUBLIC_STOREFRONT_API_PREFIXES = [
   "/api/site-reservations",
   "/api/site-forms",
+  // Valor Passage.js `formAction` sink. After emitting onTokenReceived, Passage
+  // submits a hidden native form to this path; on a storefront host it must
+  // reach the route (which returns 204 so the browser stays on checkout while
+  // the explicit create-online-order charge completes). Without the exemption
+  // it is rewritten to /sites/{slug}/api/... → a 404, and a 404 navigates the
+  // checkout document away mid-charge. The route is a no-op, anonymous sink.
+  "/api/valor/passage-callback",
 ] as const;
 
 /**
