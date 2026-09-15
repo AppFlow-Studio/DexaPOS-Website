@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
 import { ShoppingBag } from "lucide-react";
 import { useCart, resolveCartUnitPrice } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
@@ -68,21 +67,9 @@ interface CheckoutPageProps {
 
 function formatCheckoutSummaryLine(
   orderType: "pickup" | "delivery",
-  pickupTime: "asap" | "scheduled",
-  scheduledDate: Date | undefined,
-  scheduledTime: string,
   prepTime: number,
   storeAddress: string
 ): string {
-  if (pickupTime === "scheduled" && scheduledDate && scheduledTime) {
-    const parts = scheduledTime.split(":").map(Number);
-    const h = parts[0] ?? 0;
-    const m = parts[1] ?? 0;
-    const dt = new Date(scheduledDate);
-    dt.setHours(h, m, 0, 0);
-    const label = orderType === "pickup" ? "Pickup" : "Delivery";
-    return `${label} · ${format(dt, "EEE, MMM d · h:mm a")}`;
-  }
   if (orderType === "pickup") {
     return `Pickup · ASAP (~${prepTime} min) · ${storeAddress}`;
   }
@@ -194,11 +181,6 @@ export function CheckoutPage({
   const deliveryEnabled = config?.deliveryEnabled ?? false;
   const defaultOrderType = pickupEnabled ? "pickup" : "delivery";
   const [orderType, setOrderType] = useState<"pickup" | "delivery">(defaultOrderType);
-
-  // Scheduling
-  const [pickupTime, setPickupTime] = useState<"asap" | "scheduled">("asap");
-  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(new Date());
-  const [scheduledTime, setScheduledTime] = useState("");
 
   // Delivery
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
@@ -502,33 +484,9 @@ export function CheckoutPage({
       }
     }
 
-    // Build requested time — encode in the location's timezone so "6:30 PM"
-    // means 6:30 PM at the store, not 6:30 PM in the customer's browser locale.
-    let requestedTime: string | null = null;
-    if (pickupTime === "scheduled" && scheduledDate && scheduledTime) {
-      const [hours, minutes] = scheduledTime.split(":").map(Number);
-      const locationTz = location.timezone ?? "America/New_York";
-      // Step 1: resolve the calendar date (year/month/day) in the store's timezone,
-      //         because the customer might be in a different day boundary.
-      const calParts = new Intl.DateTimeFormat("en-US", {
-        timeZone: locationTz,
-        year: "numeric", month: "numeric", day: "numeric",
-      }).formatToParts(scheduledDate).reduce<Record<string, number>>((acc, p) => {
-        if (p.type !== "literal") acc[p.type] = Number(p.value);
-        return acc;
-      }, {});
-      // Step 2: naive UTC Date with those wall-clock values
-      const utcCandidate = new Date(Date.UTC(calParts.year, calParts.month - 1, calParts.day, hours, minutes, 0));
-      // Step 3: see what clock that UTC moment maps to in the store's TZ
-      const tzParts = new Intl.DateTimeFormat("en-US", {
-        timeZone: locationTz, hour: "numeric", minute: "numeric", hour12: false,
-      }).formatToParts(utcCandidate);
-      const tzH = Number(tzParts.find(p => p.type === "hour")?.value ?? hours);
-      const tzM = Number(tzParts.find(p => p.type === "minute")?.value ?? minutes);
-      // Step 4: shift by the difference to land on the correct UTC moment
-      const offsetMs = (hours * 60 + minutes - (tzH * 60 + tzM)) * 60000;
-      requestedTime = new Date(utcCandidate.getTime() + offsetMs).toISOString();
-    }
+    // Scheduled ordering is disabled on the storefront — all orders are ASAP,
+    // so no requested_time is sent to the edge function.
+    const requestedTime: string | null = null;
 
     const orderItems: PlaceOrderItem[] = items.map((item) => ({
       id: item.id,
@@ -785,14 +743,7 @@ export function CheckoutPage({
   const prepTimeMins = config?.preparationLeadTime ?? 20;
   const summaryLine = isQrTableMode
     ? `Runner delivery · Table ${qrTableLabel}`
-    : formatCheckoutSummaryLine(
-        orderType,
-        pickupTime,
-        scheduledDate,
-        scheduledTime,
-        prepTimeMins,
-        storeAddress
-      );
+    : formatCheckoutSummaryLine(orderType, prepTimeMins, storeAddress);
   const displayStoreName = site?.title || location.name;
 
   return (
@@ -875,15 +826,6 @@ export function CheckoutPage({
                 onOrderTypeChange={(type) => { setOrderType(type); if (type === "delivery") setPayCashInStore(false); }}
                 pickupEnabled={pickupEnabled}
                 deliveryEnabled={deliveryEnabled}
-                pickupTime={pickupTime}
-                onPickupTimeChange={setPickupTime}
-                scheduledDate={scheduledDate}
-                onScheduledDateChange={setScheduledDate}
-                scheduledTime={scheduledTime}
-                onScheduledTimeChange={setScheduledTime}
-                maxFutureDays={config?.futureOrderMaxDays || 30}
-                prepTime={prepTimeMins}
-                operatingHours={config?.operatingHours}
                 storeAddress={storeAddress}
                 storeLat={storeLat}
                 storeLng={storeLng}
