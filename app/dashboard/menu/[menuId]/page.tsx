@@ -142,7 +142,6 @@ export default function MenuDetailPage() {
   // menu/item core scope) still get a real location id for OrderOut sync —
   // without changing the 'all'/core scope used by menu/item editing below.
   const orderOutLocationId = useGatedLocationId() ?? "";
-  const [isSavingChannelVisibility, setIsSavingChannelVisibility] = useState(false);
   const { data: locationMenu } = useQuery({
     queryKey: ["location-menu", orderOutLocationId, menuId],
     queryFn: () => GetLocationMenu(orderOutLocationId, menuId),
@@ -157,32 +156,29 @@ export default function MenuDetailPage() {
       toast.error("Select a location", {
         description: "Platform visibility is configured separately for each location.",
       });
-      return;
+      return false;
     }
 
-    setIsSavingChannelVisibility(true);
-    try {
-      const result = await SetLocationMenuChannelVisibility(
-        orderOutLocationId,
-        menuId,
-        visibility,
-      );
-      if (result.error) {
-        toast.error("Visibility update failed", { description: result.error });
-        return;
-      }
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: ["location-menu", orderOutLocationId, menuId],
-        }),
-        queryClient.invalidateQueries({ queryKey: ["menus"] }),
-        queryClient.invalidateQueries({ queryKey: ["location-online-menu"] }),
-        queryClient.invalidateQueries({ queryKey: ["orderout"] }),
-      ]);
-      toast.success("Platform visibility updated");
-    } finally {
-      setIsSavingChannelVisibility(false);
+    const result = await SetLocationMenuChannelVisibility(
+      orderOutLocationId,
+      menuId,
+      visibility,
+    );
+    if (result.error) {
+      toast.error("Visibility update failed", { description: result.error });
+      // Reported so the optimistic switch rolls itself back.
+      return false;
     }
+
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ["location-menu", orderOutLocationId, menuId],
+      }),
+      queryClient.invalidateQueries({ queryKey: ["menus"] }),
+      queryClient.invalidateQueries({ queryKey: ["location-online-menu"] }),
+      queryClient.invalidateQueries({ queryKey: ["orderout"] }),
+    ]);
+    return true;
   };
   const { data: userInfo } = useUserInfo();
   const merchantId =
@@ -1561,7 +1557,6 @@ export default function MenuDetailPage() {
             selectedLocationId={selectedLocationId}
             channelVisibilityLocationId={orderOutLocationId || null}
             channelVisibility={channelVisibility}
-            isSavingChannelVisibility={isSavingChannelVisibility}
             locations={locations ?? []}
             onNameChange={setEditedName}
             onDescriptionChange={setEditedDescription}

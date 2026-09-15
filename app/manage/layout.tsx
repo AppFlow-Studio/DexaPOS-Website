@@ -17,6 +17,7 @@ import {
     SidebarProvider,
     SidebarTrigger,
 } from '@/components/ui/sidebar'
+import DexaLogoLight from '@/public/dexalogolight.png'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -25,7 +26,6 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-    Shield,
     LayoutDashboard,
     Users,
     BarChart3,
@@ -51,7 +51,6 @@ import {
     MonitorPlay,
     AlertOctagon,
     Receipt,
-    CircleDollarSign,
     Globe,
     LucideIcon,
 } from 'lucide-react'
@@ -139,12 +138,6 @@ const navMain: NavGroup[] = [
                 icon: Receipt,
                 requiredPermission: 'hq.merchant.transactions' as PermissionCode,
             },
-            {
-                title: 'Subscriptions',
-                url: '/manage/subscriptions',
-                icon: CircleDollarSign,
-                requiredPermission: 'system.billing.manage' as PermissionCode,
-            },
         ]
     },
     {
@@ -215,6 +208,12 @@ const navMain: NavGroup[] = [
                 url: '/admin',
                 icon: Globe,
                 requiredPermission: 'system.config.manage' as PermissionCode,
+            },
+            {
+                title: 'Billing Catalog',
+                url: '/manage/settings/billing-catalog',
+                icon: Receipt,
+                requiredPermission: 'system.billing.manage' as PermissionCode,
             },
         ]
     }
@@ -328,11 +327,7 @@ function AppSidebar() {
                     ) : (
                         <>
                             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                                {hqOrg?.imageURL ? (
-                                    <Image src={hqOrg.imageURL} alt={hqOrg.name || 'Dexa POS HQ'} width={32} height={32} className='rounded-lg' />
-                                ) : (
-                                    <Shield className="h-4 w-4 text-primary-foreground" />
-                                )}
+                                <Image src={DexaLogoLight} alt={hqOrg?.name || 'Dexa POS HQ'} width={32} height={32} className=''  />
                             </div>
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-semibold">{hqOrg?.name || 'Dexa POS HQ'}</span>
@@ -516,7 +511,6 @@ export default function ManageLayout({
         { title: 'Analytics', url: '/manage/analytics', icon: BarChart3 },
         { title: 'TSYS Disputes', url: '/manage/disputes', icon: ShieldAlert },
         { title: 'Platform Fees', url: '/manage/platform-fees', icon: Receipt },
-        { title: 'Subscriptions', url: '/manage/subscriptions', icon: CircleDollarSign },
         { title: 'Roles & Permissions', url: '/manage/roles-permissions', icon: ShieldCheck },
         { title: 'Audit Logs', url: '/manage/audit-logs', icon: History },
         { title: 'Support', url: '/manage/support', icon: MessageSquare },

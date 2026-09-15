@@ -1,9 +1,8 @@
 "use client";
 
 // ============================================================================
-// AdminPushChannelsSection — thin HQ-admin wrapper around the merchant-mode
-// PushChannelsCard + PushChannelsHistoryCard. Uses admin hooks and a
-// merchant-by-id scope instead of clerk-org-scoped hooks.
+// AdminPushChannelsSection — HQ-admin push-to-channels UI + PushChannelsHistoryCard.
+// Uses admin hooks and a merchant-by-id scope instead of clerk-org-scoped hooks.
 // ============================================================================
 
 import { Fragment, useMemo, useState } from "react";

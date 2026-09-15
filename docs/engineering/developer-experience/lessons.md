@@ -189,3 +189,34 @@ Rules:
 - Check the deployed function version against local source before diagnosing. Here a stack trace
   cited line numbers that did not match the version previously read, and the user's reported error
   string predated the current code — both signs the running build differs from the working tree.
+## Billing "automatic payment approved" toast lied while the invoice showed Failed (2026-09-14)
+Symptom: HQ operator clicked "Save & Charge Subscription" for a location (Downtown Hamra), got
+"Subscription updated and automatic payment approved", but the invoice in Billing history showed
+**Failed**. Not a reconciliation gap — the charge genuinely failed and nothing new was charged.
+Two stacked bugs:
+1. **Silent no-charge + lying toast.** Prior charge attempts had failed, leaving the location sub in
+   `past_due`. The editor loads `status = past_due` from the sub, and `effectiveStatus` passed it
+   straight through. `saveAndChargeMerchantSubscription` then took its `if (targetStatus !== 'active')
+   return { success: true }` branch — saving the config but **generating no invoice and charging
+   nothing** — yet the client toast was keyed only on "does a subscription exist", so it said
+   "automatic payment approved". Audit log was the tell: `subscription_created`/`recalculated`/
+   `plan_changed` with NO `invoice_generated` and NO charge on the last two saves.
+   Fix: (a) "Save & Charge" on a lapsed sub (`past_due`/`suspended`/`canceled`) with services enabled
+   now targets `active` (reactivation → real charge); (b) the toast only claims "approved" when the
+   server returns proof of a real charge (`invoiceId` for location saves; a new `charged` flag for
+   merchant-tier). Same fix applied to `HqSubscriptionsWorkspace`, `SubscriptionBillingAdminCard`,
+   and `handleSaveMerchantTier`. Meta-lesson: never key a success message on the existence of a row;
+   key it on the outcome the message claims.
+2. **Opaque Valor failure.** The real charges failed with the generic "Valor recurring request
+   failed" and `processor_response: {}`, because `_shared/valor.ts:postWithBodyCredentials` discarded
+   the raw response text. Valor's `/?addSub` was returning **HTTP 200 with an empty body**, which
+   `isValorSuccess` (needs `error_no:'S00'`+`error_code:'00'`) correctly treats as non-success — but
+   we couldn't tell an empty body from a differently-shaped success or a real decline. Setup was
+   otherwise correct (card + charge on the same central EPI, valid vault IDs, correct
+   `CustomerProfileID`/`PaymentProfileID` keys), so the leading suspect is a central EPI not
+   provisioned for native recurring.
+   Fix: capture raw response text + content-type + HTTP status; persist a `_valor_diagnostic` object
+   into `processor_response` instead of `{}`; emit a specific message ("Valor returned HTTP 200 with
+   an empty response body — recurring not confirmed; this EPI may not be provisioned for native
+   recurring"). Meta-lesson: a payment integration must persist the raw processor response on failure
+   — a generic fallback string with an empty body is undebuggable and hides double-charge risk.

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { useIsMerchantOwner } from "@/app/dashboard/hooks/useMerchantRole";
 import { ArchiveEvent, CreateEvent, UpdateEvent } from "@/app/dashboard/website/actions/events";
 import {
   AlertDialog,
@@ -54,6 +55,7 @@ import { cn } from "@/lib/utils";
 import AssetPicker from "../builder/AssetPicker";
 import DataCard from "../shell/DataCard";
 import ListHeader from "../shell/ListHeader";
+import { OwnerOnlyBanner } from "./OwnerOnlyBanner";
 
 /**
  * The events list, and the modal that creates one.
@@ -74,6 +76,9 @@ export default function EventsScreen({
   const router = useRouter();
   const [editing, setEditing] = useState<RenderEvent | "new" | null>(null);
   const [pending, startTransition] = useTransition();
+  // Website editing is owner-only. Managers still see the events list, but
+  // creating, editing and removing events are hidden for them.
+  const isOwner = useIsMerchantOwner(clerkOrgId);
 
   const archive = (event: RenderEvent) => {
     startTransition(async () => {
@@ -89,14 +94,17 @@ export default function EventsScreen({
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
+      {!isOwner && <OwnerOnlyBanner className="mb-4" />}
       <ListHeader
         title="Events"
         subtitle="Manage the events shown on your website."
         actions={
-          <Button onClick={() => setEditing("new")}>
-            <Plus className="size-4" />
-            New Event
-          </Button>
+          isOwner ? (
+            <Button onClick={() => setEditing("new")}>
+              <Plus className="size-4" />
+              New Event
+            </Button>
+          ) : undefined
         }
       />
 
@@ -112,21 +120,37 @@ export default function EventsScreen({
           const occursOn = nextOccurrence(event);
           return (
             <>
-              <button
-                type="button"
-                onClick={() => setEditing(event)}
-                className="flex min-w-0 items-center gap-2 text-left text-sm font-medium hover:underline"
-              >
-                {event.photoUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element -- merchant CDN host
-                  <img
-                    src={event.photoUrl}
-                    alt=""
-                    className="size-8 shrink-0 rounded object-cover"
-                  />
-                )}
-                <span className="truncate">{event.name}</span>
-              </button>
+              {isOwner ? (
+                <button
+                  type="button"
+                  onClick={() => setEditing(event)}
+                  className="flex min-w-0 items-center gap-2 text-left text-sm font-medium hover:underline"
+                >
+                  {event.photoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element -- merchant CDN host
+                    <img
+                      src={event.photoUrl}
+                      alt=""
+                      className="size-8 shrink-0 rounded object-cover"
+                    />
+                  )}
+                  <span className="truncate">{event.name}</span>
+                </button>
+              ) : (
+                // View only for non-owners: the name is a plain label, not an
+                // edit affordance.
+                <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                  {event.photoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element -- merchant CDN host
+                    <img
+                      src={event.photoUrl}
+                      alt=""
+                      className="size-8 shrink-0 rounded object-cover"
+                    />
+                  )}
+                  <span className="truncate">{event.name}</span>
+                </span>
+              )}
 
               <span
                 className={cn(
@@ -151,35 +175,40 @@ export default function EventsScreen({
                 Confirmed, unlike a section delete — which has an Undo toast to
                 fall back on. Removing an event here has no undo at all, and
                 the control is a bare icon at the end of a row that is otherwise
-                entirely clickable.
+                entirely clickable. Owner-only: managers view the list but do not
+                remove events. An empty cell keeps the grid columns aligned.
               */}
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={`Remove ${event.name}`}
-                    disabled={pending}
-                    className="rounded p-1 text-muted-foreground transition-colors hover:text-destructive disabled:opacity-40"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Remove “{event.name}”?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      It comes off your website straight away, and any Events section showing it
-                      moves on to the next one. This cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Keep it</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => archive(event)}>
-                      Remove the event
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              {isOwner ? (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${event.name}`}
+                      disabled={pending}
+                      className="rounded p-1 text-muted-foreground transition-colors hover:text-destructive disabled:opacity-40"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Remove “{event.name}”?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        It comes off your website straight away, and any Events section showing it
+                        moves on to the next one. This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep it</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => archive(event)}>
+                        Remove the event
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              ) : (
+                <span aria-hidden />
+              )}
             </>
           );
         }}

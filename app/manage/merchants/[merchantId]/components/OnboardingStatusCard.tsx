@@ -1,10 +1,13 @@
 'use client'
 
 import { useMemo } from 'react'
-import { CheckCircle2, Circle } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowUpRight, CheckCircle2, Circle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { MerchantDetails, MerchantOnboardingChecklist, MerchantOnboardingStatus } from '@/types/merchant'
+import { MerchantSubscriptionSummary } from './MerchantSubscriptionSummary'
 
 interface OnboardingStatusCardProps {
   merchant: MerchantDetails
@@ -73,12 +76,20 @@ export function OnboardingStatusCard({ merchant }: OnboardingStatusCardProps) {
   return (
     <Card>
       <CardHeader className="pb-4">
-        <div>
-          <CardTitle className="text-lg">Merchant Status</CardTitle>
-          <div className="mt-2 flex items-center gap-2">
-            <Badge className={statusMeta.badgeClass}>{statusMeta.label}</Badge>
-            <span className="text-sm text-muted-foreground">{statusMeta.description}</span>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle className="text-lg">Merchant Status</CardTitle>
+            <div className="mt-2 flex items-center gap-2">
+              <Badge className={statusMeta.badgeClass}>{statusMeta.label}</Badge>
+              <span className="text-sm text-muted-foreground">{statusMeta.description}</span>
+            </div>
           </div>
+          <Button variant="ghost" size="sm" asChild className="shrink-0">
+            <Link href={`/manage/merchants/${merchant.clerk_org_id}?tab=subscriptions`}>
+              Manage
+              <ArrowUpRight className="ml-1 h-4 w-4" />
+            </Link>
+          </Button>
         </div>
       </CardHeader>
 
@@ -94,6 +105,8 @@ export function OnboardingStatusCard({ merchant }: OnboardingStatusCardProps) {
             Activated: {new Date(merchant.activated_at).toLocaleString()}
           </div>
         )}
+
+        <MerchantSubscriptionSummary merchantId={merchant.id} />
       </CardContent>
     </Card>
   )

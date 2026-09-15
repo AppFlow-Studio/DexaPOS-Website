@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { useIsMerchantOwner } from "@/app/dashboard/hooks/useMerchantRole";
 import { CreateForm, type FormSummary } from "@/app/dashboard/website/actions/forms";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { websiteRoutes } from "../routes";
 import DataCard from "../shell/DataCard";
 import ListHeader from "../shell/ListHeader";
+import { OwnerOnlyBanner } from "./OwnerOnlyBanner";
 
 /**
  * The forms list.
@@ -46,17 +48,23 @@ export default function FormsScreen({
 }) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
+  // Website editing is owner-only. Managers still view the list and open a
+  // form's submissions inbox, but creating a form is hidden for them.
+  const isOwner = useIsMerchantOwner(clerkOrgId);
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
+      {!isOwner && <OwnerOnlyBanner className="mb-4" />}
       <ListHeader
         title="Forms"
         subtitle="Add and manage forms you can put on your website pages."
         actions={
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="size-4" />
-            New Form
-          </Button>
+          isOwner ? (
+            <Button onClick={() => setCreating(true)}>
+              <Plus className="size-4" />
+              New Form
+            </Button>
+          ) : undefined
         }
       />
 

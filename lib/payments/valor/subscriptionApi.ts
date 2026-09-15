@@ -42,9 +42,15 @@ export const VALIDATE_ONLY = "1" as const;
 export const CHARGE_IMMEDIATELY = "0" as const;
 
 export interface ValorSubscriptionPaymentInfo {
-  /** Vault references, preferred over raw card details. */
-  vault_id?: string;
-  payment_id?: string;
+  /**
+   * Vault references, preferred over raw card details. Valor's add_subscription
+   * contract names these `CustomerProfileID` / `PaymentProfileID` (NOT the
+   * `vault_id` / `payment_id` used elsewhere in Valor's surface); sending the
+   * wrong keys makes the gateway see no vault reference and return
+   * `A44 INVALID PAYMENT INFO`. [V-SUB] add-subscriptions.
+   */
+  CustomerProfileID?: string;
+  PaymentProfileID?: string;
   token?: string;
 }
 
@@ -180,9 +186,9 @@ export function buildAddSubscriptionBody(
     surchargeAmount: "0.00",
     txn_type: "add_subscription",
     payment_info: {
-      vault_id: params.vaultCustomerId,
+      CustomerProfileID: params.vaultCustomerId,
       ...(params.paymentProfileId
-        ? { payment_id: params.paymentProfileId }
+        ? { PaymentProfileID: params.paymentProfileId }
         : {}),
     },
     surchargeIndicator,

@@ -32,13 +32,15 @@ interface MenuSettingsTabProps {
     selectedLocationId: string | null
     channelVisibilityLocationId: string | null
     channelVisibility: MenuChannelVisibility
-    isSavingChannelVisibility: boolean
     locations: LocationsModel[]
     onNameChange: (name: string) => void
     onDescriptionChange: (description: string) => void
     onLocationChange: (locationId: string | null) => void
     onToggleActive: () => void
-    onChannelVisibilityChange: (visibility: MenuChannelVisibility) => void
+    /** Returns false when the write failed, so the switch can roll back. */
+    onChannelVisibilityChange: (
+        visibility: MenuChannelVisibility
+    ) => void | Promise<boolean | void>
     onSaveSettings: () => void
     onCancelSettings: () => void
     onDeleteMenu: () => void
@@ -57,7 +59,6 @@ export function MenuSettingsTab({
     selectedLocationId,
     channelVisibilityLocationId,
     channelVisibility,
-    isSavingChannelVisibility,
     locations,
     onNameChange,
     onDescriptionChange,
@@ -122,7 +123,11 @@ export function MenuSettingsTab({
             >
                 <MenuChannelVisibilityControls
                     value={channelVisibility}
-                    disabled={!channelVisibilityLocationId || isSavingChannelVisibility}
+                    // Disabled only when there is no location to write against.
+                    // Deliberately NOT disabled while a save is in flight: the
+                    // control is optimistic and rolls itself back on failure,
+                    // and blocking it mid-write is the lag we removed.
+                    disabled={!channelVisibilityLocationId}
                     onChange={onChannelVisibilityChange}
                 />
                 {!channelVisibilityLocationId && (

@@ -6,12 +6,13 @@ import {
   type ValorCredentials,
   type ValorRecurringResult,
 } from '../_shared/valor.ts'
-import { sendSubscriptionInvoicePaymentEmail } from '../_shared/payment-emails.ts'
+import { sendSubscriptionInvoicePaymentEmail, type EmailAttachment } from '../_shared/payment-emails.ts'
 import { isAuthorizedInternalBillingRequest } from '../_shared/internal-billing-auth.ts'
 import { notifySubscriptionPaymentFailure } from '../_shared/subscription-failure-notifications.ts'
 import { notifySubscriptionRestored } from '../_shared/subscription-restoration-notifications.ts'
 import { billingProfileMatchesSubscription, isSubscriptionBillingHeld } from '../_shared/subscription-billing-scope.ts'
 import { loadMerchantBillingExemption } from '../_shared/merchant-billing-exemption.ts'
+import { buildSubscriptionInvoiceLinks, fetchSubscriptionInvoicePdfAttachment } from '../_shared/subscription-invoice-links.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -110,6 +111,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         billing_method,
         status,
         created_at,
+        public_token,
         payment_attempt_count,
         merchant_subscriptions (
           id,
@@ -588,6 +590,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     try {
       const recipientEmail = billingProfile.billing_email?.trim() || merchant?.owner_email?.trim()
       if (recipientEmail) {
+        const { viewUrl, pdfUrl } = buildSubscriptionInvoiceLinks(invoice.public_token)
+        const pdfAttachment = await fetchSubscriptionInvoicePdfAttachment(
+          invoice.id,
+          invoice.invoice_number || 'dexa-invoice',
+        )
         await sendSubscriptionInvoicePaymentEmail({
           to: recipientEmail,
           merchantName: merchant?.name || 'Dexa POS',
@@ -603,6 +610,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
           totalAmount: toAmount(invoice.total_amount),
           dueDate: invoice.due_date,
           transactionId,
+          viewUrl,
+          pdfUrl,
+          attachments: pdfAttachment ? [pdfAttachment] : undefined,
         })
       }
     } catch (emailError) {

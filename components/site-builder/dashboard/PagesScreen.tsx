@@ -8,7 +8,10 @@ import { toast } from "sonner";
 
 import { DeletePage } from "@/app/dashboard/website/actions/pages";
 import { PublishPage, UnpublishPage } from "@/app/dashboard/website/actions/publish";
+import { useIsMerchantOwner } from "@/app/dashboard/hooks/useMerchantRole";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { OwnerOnlyBanner } from "./OwnerOnlyBanner";
 import type { MerchantSiteRow, SitePageSummary } from "@/lib/site-builder/db-types";
 import { sitePublicUrl } from "@/lib/site-builder/public-url";
 import { websiteRoutes } from "../routes";
@@ -43,15 +46,23 @@ export default function PagesScreen({
   website,
   storeName,
   pages,
+  locations = [],
 }: {
   clerkOrgId: string;
   locationId: string;
   website: MerchantSiteRow | null;
   storeName: string;
   pages: SitePageSummary[];
+  /** The merchant's branches, for labelling which location each page belongs to. */
+  locations?: { id: string; name: string }[];
 }) {
   const router = useRouter();
+  const isOwner = useIsMerchantOwner(clerkOrgId);
   const [pending, startTransition] = useTransition();
+  // Only a multi-location merchant has brand-vs-location pages worth labelling.
+  const showScope = locations.length > 1;
+  const locationName = (id: string | null | undefined) =>
+    id ? locations.find((location) => location.id === id)?.name ?? "Location" : "Brand";
   /** The page the delete dialog is asking about, or null when it is closed. */
   const [deleting, setDeleting] = useState<SitePageSummary | null>(null);
 
@@ -137,7 +148,8 @@ export default function PagesScreen({
         });
       }
 
-      if (!page.is_home) {
+      // Publishing state is owner-only; non-owners get "View" and nothing that mutates.
+      if (isOwner && !page.is_home) {
         actions.push({
           label: "Unpublish",
           icon: <CloudOff />,
@@ -145,11 +157,11 @@ export default function PagesScreen({
           onSelect: () => unpublish(page),
         });
       }
-    } else {
+    } else if (isOwner) {
       actions.push({ label: "Publish", icon: <Rocket />, onSelect: () => publish(page) });
     }
 
-    if (!page.is_home) {
+    if (isOwner && !page.is_home) {
       actions.push({
         label: "Delete",
         icon: <Trash2 />,
@@ -166,24 +178,28 @@ export default function PagesScreen({
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
+      {!isOwner && <OwnerOnlyBanner />}
+
       <ListHeader
         title="Pages"
         subtitle="Manage pages in your website."
         actions={
-          <>
-            <Button variant="outline" asChild>
-              <Link href={websiteRoutes.style(locationId)}>
-                <Palette className="size-4" />
-                Change Style
-              </Link>
-            </Button>
-            <Button asChild>
-              <Link href={websiteRoutes.newPage(locationId)}>
-                <Plus className="size-4" />
-                New Page
-              </Link>
-            </Button>
-          </>
+          isOwner ? (
+            <>
+              <Button variant="outline" asChild>
+                <Link href={websiteRoutes.style(locationId)}>
+                  <Palette className="size-4" />
+                  Change Style
+                </Link>
+              </Button>
+              <Button asChild>
+                <Link href={websiteRoutes.newPage(locationId)}>
+                  <Plus className="size-4" />
+                  New Page
+                </Link>
+              </Button>
+            </>
+          ) : undefined
         }
       />
 
@@ -197,12 +213,22 @@ export default function PagesScreen({
         emptyIcon={FileText}
         renderRow={(page) => (
           <>
-            <Link
-              href={websiteRoutes.editor(locationId, page.id)}
-              className="min-w-0 truncate text-sm font-medium hover:underline"
-            >
-              {page.title}
-            </Link>
+            <div className="flex min-w-0 items-center gap-2">
+              <Link
+                href={websiteRoutes.editor(locationId, page.id)}
+                className="min-w-0 truncate text-sm font-medium hover:underline"
+              >
+                {page.title}
+              </Link>
+              {showScope && (
+                <Badge
+                  variant="outline"
+                  className="shrink-0 text-[10px] font-normal text-muted-foreground"
+                >
+                  {locationName(page.location_id)}
+                </Badge>
+              )}
+            </div>
 
             <span className="truncate text-xs text-muted-foreground">
               {formatUpdated(page.updated_at)}

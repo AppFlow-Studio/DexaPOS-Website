@@ -77,6 +77,8 @@ export interface OnlineOrderingSettings {
   deliveryEnabled: boolean;
   deliveryPricingEnabled: boolean;
   autoAcceptOrders: boolean;
+  /** Minutes a pending order waits for acceptance before the storefront auto-cancels it. */
+  pendingAcceptWindowMinutes: number;
   preparationLeadTime: number;
   futureOrderMaxDays: number;
   minimumOrderAmount: number;
@@ -219,6 +221,7 @@ const createDefaultSettings = (
   deliveryEnabled: false,
   deliveryPricingEnabled: true,
   autoAcceptOrders: false,
+  pendingAcceptWindowMinutes: 5,
   preparationLeadTime: 20,
   futureOrderMaxDays: 0,
   minimumOrderAmount: 0,
@@ -391,6 +394,7 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
           deliveryEnabled: currentSettings.deliveryEnabled,
           deliveryPricingEnabled: currentSettings.deliveryPricingEnabled,
           autoAcceptOrders: currentSettings.autoAcceptOrders,
+          pendingAcceptWindowMinutes: currentSettings.pendingAcceptWindowMinutes,
           preparationLeadTime: currentSettings.preparationLeadTime,
           futureOrderMaxDays: currentSettings.futureOrderMaxDays,
           minimumOrderAmount: currentSettings.minimumOrderAmount,

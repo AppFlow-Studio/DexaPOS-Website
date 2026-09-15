@@ -149,6 +149,9 @@ const MERCHANT_CATEGORIES = new Set<string>([
   "menus",
   "documents",
   "website",
+  // Kiosk idle-screen media (logos, idle images, order-banner images). Videos
+  // take the binary path, which skips this allowlist, so its absence only broke
+  // the JSON (image/logo) uploads with a 400 "Invalid category".
   "kiosk",
   "support",
 ]);

@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { ClaimSubdomain } from "@/app/dashboard/website/actions/site";
+import { useIsMerchantOwner } from "@/app/dashboard/hooks/useMerchantRole";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,9 +53,12 @@ export default function WebAddressCard({
   subdomain: string | null;
   isPublished: boolean;
 }) {
+  const isOwner = useIsMerchantOwner(clerkOrgId);
   const [value, setValue] = useState(subdomain ?? "");
   const [claimed, setClaimed] = useState(subdomain);
-  const [editing, setEditing] = useState(!subdomain);
+  // Non-owners never edit: they see the claimed address read-only (or a "not set
+  // yet" note), so the input form is never entered for them.
+  const [editing, setEditing] = useState(isOwner && !subdomain);
   const [confirming, setConfirming] = useState(false);
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -120,7 +124,11 @@ export default function WebAddressCard({
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {!editing && claimed ? (
+        {!isOwner && !claimed ? (
+          <p className="text-sm text-muted-foreground">
+            No web address has been set yet. Ask the store owner to choose one.
+          </p>
+        ) : !editing && claimed ? (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3.5 py-3">
             {/*
               A real link, because this was a <span> — a merchant wanting to look
@@ -151,10 +159,12 @@ export default function WebAddressCard({
                 {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                 {copied ? "Copied" : "Copy"}
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-                <PencilLine className="size-3.5" />
-                Change
-              </Button>
+              {isOwner && (
+                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                  <PencilLine className="size-3.5" />
+                  Change
+                </Button>
+              )}
             </span>
           </div>
         ) : (
@@ -225,7 +235,7 @@ export default function WebAddressCard({
           </AlertDialogContent>
         </AlertDialog>
 
-        {isPublished && !claimed && (
+        {isOwner && isPublished && !claimed && (
           <p className="rounded-lg border border-amber-300/60 bg-amber-50 px-3.5 py-3 text-xs leading-5 text-amber-900">
             You have published a page, but your website has no address yet — so guests still cannot
             reach it. Claim one above and it goes live immediately; there is nothing more to

@@ -20,7 +20,7 @@ import {
 } from "@/components/dashboard/shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getQrAnalyticsSnapshot, type QrAnalyticsSnapshot } from "../actions";
+import { getQrAnalyticsSnapshot, type QrAnalyticsSnapshot } from "@/app/dashboard/online-ordering/actions";
 import { cn } from "@/lib/utils";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -125,7 +125,7 @@ export function QrAnalyticsPanel({
       <PanelSection
         icon={BarChart3}
         label="QR analytics"
-        caption={`Merchant-level QR funnel and table-order performance for the last ${rangeDays} days.`}
+        caption={`Table QR funnel and dine-in order performance for the last ${rangeDays} days. Marketing QR scans are counted on the Marketing QR tab, not here.`}
         action={
           <div className="flex items-center gap-2" aria-label="QR analytics range">
             {[7, 30].map((days) => (
