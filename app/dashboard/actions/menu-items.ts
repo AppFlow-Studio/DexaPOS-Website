@@ -23,7 +23,12 @@ import { assertNameAvailable } from "./_name-uniqueness";
 
 export type EffectivePriceSource = 1 | 2 | 3 | 4 | 5;
 
-const DEFAULT_ITEM_CHANNELS: AvailableChannel[] = ["pos", "online"];
+// Every channel, because this is the fallback for an item that has never had a
+// channel set — and the POS/kiosk now HIDE items that omit their channel. A
+// narrower default silently makes items unsellable on the omitted surface,
+// which is exactly the kiosk bug that
+// 20260914120000_menu_item_sales_channels_pos_kiosk.sql had to backfill away.
+const DEFAULT_ITEM_CHANNELS: AvailableChannel[] = ["pos", "online", "kiosk"];
 
 function normalizeTaxCategory(
   value: unknown,
