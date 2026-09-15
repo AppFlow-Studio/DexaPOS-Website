@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -13,7 +12,9 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Search, RefreshCw, AlertTriangle, CheckCircle2, Activity } from 'lucide-react'
+import { Search, RefreshCw, AlertTriangle, CheckCircle2, Activity, Info } from 'lucide-react'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection, PanelRow } from '@/components/dashboard/shell/PanelSection'
 import { useMerchantHealthGrid } from '@/lib/queries/use-merchants'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
@@ -21,6 +22,42 @@ import { useAdminMerchantAccess } from '@/app/manage/hooks/useAdminMerchantAcces
 import { useAuth } from '@clerk/nextjs'
 import { formatDistanceToNow } from 'date-fns'
 import type { MerchantHealthSummary } from '@/types/merchant'
+
+/**
+ * Health tier colour — HQ exception 2 (`UI-DESIGN-SYSTEM.md` §14.3 HQ-2).
+ * A health score IS the operational alarm this dashboard exists to surface, so
+ * the green/amber/red encoding is kept.
+ *
+ * What changed is the redundancy: the tier previously drove the card border,
+ * the card fill, the score circle, a corner badge AND the progress bar — five
+ * signals for one fact, which turned a list of 20 merchants into a wall of
+ * colour where nothing stood out. The score and its bar now carry it, on a
+ * neutral card.
+ */
+const HEALTH_TONE = {
+    green: { text: 'text-green-600 dark:text-green-400', bar: 'bg-green-500', label: 'Optimal' },
+    yellow: { text: 'text-yellow-600 dark:text-yellow-400', bar: 'bg-yellow-500', label: 'Monitor' },
+    red: { text: 'text-red-600 dark:text-red-400', bar: 'bg-red-500', label: 'Critical' },
+} as const
+
+/** `DS-CTL-09` — one neutral pill; the word carries the meaning. */
+const BADGE_SHELL =
+    'inline-flex shrink-0 items-center gap-1.5 rounded-full border-0 bg-muted/60 px-2.5 py-0.5 text-xs font-medium'
+
+const SCORE_LEGEND = [
+    { range: '80+', label: 'Healthy', caption: 'All systems running smoothly', tone: HEALTH_TONE.green },
+    { range: '60-79', label: 'Needs Attention', caption: 'Some issues detected', tone: HEALTH_TONE.yellow },
+    { range: '<60', label: 'Critical', caption: 'Urgent action required', tone: HEALTH_TONE.red },
+]
+
+const SCORE_FACTORS = [
+    { title: 'Device Connectivity', caption: 'POS systems offline or stale heartbeat' },
+    { title: 'Transaction Success Rate', caption: 'Failed or declined payment processing' },
+    { title: 'Activity Level', caption: 'Low order volume or extended inactivity' },
+    { title: 'System Health', caption: 'Battery issues, app version outdated, or errors' },
+    { title: 'Staff Management', caption: 'Insufficient staff or high turnover' },
+    { title: 'Location Coverage', caption: 'Inactive or underperforming locations' },
+]
 
 export function HealthDashboard() {
     const router = useRouter()
@@ -44,141 +81,69 @@ export function HealthDashboard() {
     )
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                        <Activity className="h-6 w-6" />
-                        Health Monitor
-                    </h2>
-                    <p className="text-muted-foreground">
-                        Monitor merchant performance and operational health across your platform
-                    </p>
-                </div>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="self-start sm:self-auto shrink-0"
-                    onClick={() => refetch()}
-                    disabled={healthLoading}
+        <div className="min-w-0 space-y-6">
+            <Panel>
+                <PanelSection
+                    icon={Activity}
+                    label="Health Monitor"
+                    caption="Monitor merchant performance and operational health across your platform"
+                    action={
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 rounded-full px-4 text-[0.8125rem] font-medium"
+                            onClick={() => refetch()}
+                            disabled={healthLoading}
+                        >
+                            <RefreshCw className={`mr-2 h-4 w-4 ${healthLoading ? 'animate-spin motion-reduce:animate-none' : ''}`} />
+                            Refresh
+                        </Button>
+                    }
                 >
-                    <RefreshCw className={`h-4 w-4 mr-2 ${healthLoading ? 'animate-spin' : ''}`} />
-                    Refresh
-                </Button>
-            </div>
-
-            {/* Legend */}
-            <Card className="bg-muted/30 border-dashed">
-                <CardContent className="p-4">
-                    <div className="flex flex-col gap-3">
-                        <h4 className="text-sm font-semibold text-foreground">Health Score Legend</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="flex items-center gap-3">
-                                <div className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 text-sm">
-                                    80+
-                                </div>
-                                <div className="text-sm">
-                                    <p className="font-medium text-foreground">Healthy</p>
-                                    <p className="text-xs text-muted-foreground">All systems running smoothly</p>
+                    <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-3">
+                        {SCORE_LEGEND.map(({ range, label, caption, tone }) => (
+                            <div key={label} className="flex min-w-0 items-center gap-3">
+                                <span
+                                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/60 text-sm font-semibold tabular-nums ${tone.text}`}
+                                >
+                                    {range}
+                                </span>
+                                <div className="min-w-0 text-sm">
+                                    <p className="font-medium">{label}</p>
+                                    <p className="text-xs text-muted-foreground">{caption}</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <div className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-600 dark:text-yellow-400 text-sm">
-                                    60-79
-                                </div>
-                                <div className="text-sm">
-                                    <p className="font-medium text-foreground">Needs Attention</p>
-                                    <p className="text-xs text-muted-foreground">Some issues detected</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-sm">
-                                    &lt;60
-                                </div>
-                                <div className="text-sm">
-                                    <p className="font-medium text-foreground">Critical</p>
-                                    <p className="text-xs text-muted-foreground">Urgent action required</p>
-                                </div>
-                            </div>
-                        </div>
+                        ))}
                     </div>
-                </CardContent>
-            </Card>
+                </PanelSection>
 
-            {/* Health Factors */}
-            <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-                <CardContent className="p-4">
-                    <div className="flex flex-col gap-3">
-                        <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                            <span className="text-lg">ℹ️</span> Health Score Factors
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                            <div className="flex gap-2">
-                                <span className="text-muted-foreground">•</span>
-                                <div>
-                                    <p className="font-medium text-foreground">Device Connectivity</p>
-                                    <p className="text-xs text-muted-foreground">POS systems offline or stale heartbeat</p>
-                                </div>
+                <PanelSection icon={Info} label="Health Score Factors">
+                    <div className="grid min-w-0 grid-cols-1 gap-3 text-sm md:grid-cols-2">
+                        {SCORE_FACTORS.map(({ title, caption }) => (
+                            <div key={title} className="min-w-0">
+                                <p className="font-medium">{title}</p>
+                                <p className="text-xs text-muted-foreground">{caption}</p>
                             </div>
-                            <div className="flex gap-2">
-                                <span className="text-muted-foreground">•</span>
-                                <div>
-                                    <p className="font-medium text-foreground">Transaction Success Rate</p>
-                                    <p className="text-xs text-muted-foreground">Failed or declined payment processing</p>
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <span className="text-muted-foreground">•</span>
-                                <div>
-                                    <p className="font-medium text-foreground">Activity Level</p>
-                                    <p className="text-xs text-muted-foreground">Low order volume or extended inactivity</p>
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <span className="text-muted-foreground">•</span>
-                                <div>
-                                    <p className="font-medium text-foreground">System Health</p>
-                                    <p className="text-xs text-muted-foreground">Battery issues, app version outdated, or errors</p>
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <span className="text-muted-foreground">•</span>
-                                <div>
-                                    <p className="font-medium text-foreground">Staff Management</p>
-                                    <p className="text-xs text-muted-foreground">Insufficient staff or high turnover</p>
-                                </div>
-                            </div>
-                            <div className="flex gap-2">
-                                <span className="text-muted-foreground">•</span>
-                                <div>
-                                    <p className="font-medium text-foreground">Location Coverage</p>
-                                    <p className="text-xs text-muted-foreground">Inactive or underperforming locations</p>
-                                </div>
-                            </div>
-                        </div>
+                        ))}
                     </div>
-                </CardContent>
-            </Card>
+                </PanelSection>
 
-            {/* Filters */}
-            <Card>
-                <CardContent className="p-4">
-                    <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-                        {/* Search */}
-                        <div className="relative flex-1 min-w-[200px] max-w-sm">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                {/* Filters sit in the same panel as the list they filter, rather
+                    than in a card of their own. */}
+                <PanelRow className="pb-6">
+                    <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center">
+                        <div className="relative min-w-0 max-w-sm flex-1">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                             <Input
                                 placeholder="Search merchants..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="pl-10"
+                                className="h-9 pl-9 text-[0.8125rem]"
                             />
                         </div>
 
-                        {/* Health Filter */}
                         <Select value={healthFilter} onValueChange={(value) => setHealthFilter(value as typeof healthFilter)}>
-                            <SelectTrigger className="w-40">
+                            <SelectTrigger className="h-9 w-full text-[0.8125rem] md:w-44">
                                 <SelectValue placeholder="Health Filter" />
                             </SelectTrigger>
                             <SelectContent>
@@ -188,9 +153,8 @@ export function HealthDashboard() {
                             </SelectContent>
                         </Select>
 
-                        {/* Sort By */}
                         <Select value={healthSort} onValueChange={(value) => setHealthSort(value as typeof healthSort)}>
-                            <SelectTrigger className="w-40">
+                            <SelectTrigger className="h-9 w-full text-[0.8125rem] md:w-44">
                                 <SelectValue placeholder="Sort by" />
                             </SelectTrigger>
                             <SelectContent>
@@ -202,8 +166,8 @@ export function HealthDashboard() {
                             </SelectContent>
                         </Select>
                     </div>
-                </CardContent>
-            </Card>
+                </PanelRow>
+            </Panel>
 
             {/* Content */}
             {authLoading || (!isSuperAdmin && accessLoading) ? (
@@ -219,7 +183,7 @@ export function HealthDashboard() {
                     onMerchantClick={(clerkOrgId) => router.push(`/manage/merchants/${clerkOrgId}`)}
                 />
             ) : (
-                <div className="text-center py-12">
+                <div className="py-12 text-center">
                     <p className="text-muted-foreground">No merchants found.</p>
                 </div>
             )}
@@ -229,33 +193,29 @@ export function HealthDashboard() {
 
 function HealthGridSkeleton() {
     return (
-        <div className="flex flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
             {[...Array(5)].map((_, i) => (
-                <Card key={i} className="min-w-0 overflow-hidden">
-                    <CardContent className="p-5">
-                        <div className="flex flex-col gap-4">
-                            {/* Top Row: Score + Merchant Info */}
-                            <div className="flex items-start gap-4">
-                                <Skeleton className="w-16 h-16 rounded-full shrink-0" />
-                                <div className="min-w-0 flex-1 space-y-2">
-                                    <Skeleton className="h-5 w-40 max-w-[60%]" />
-                                    <Skeleton className="h-4 w-32 max-w-[50%]" />
-                                    <Skeleton className="h-2 w-full rounded-full" />
-                                    <Skeleton className="h-3 w-48 max-w-[70%]" />
-                                </div>
-                            </div>
-                            {/* Bottom Row: Stats */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t">
-                                {[...Array(4)].map((_, j) => (
-                                    <div key={j} className="space-y-1">
-                                        <Skeleton className="h-3 w-16 max-w-full" />
-                                        <Skeleton className="h-4 w-12 max-w-full" />
-                                    </div>
-                                ))}
+                <Panel key={i} padded>
+                    <div className="flex min-w-0 flex-col gap-4">
+                        <div className="flex min-w-0 items-start gap-4">
+                            <Skeleton className="h-16 w-16 shrink-0 rounded-full" />
+                            <div className="min-w-0 flex-1 space-y-2">
+                                <Skeleton className="h-5 w-40 max-w-[60%]" />
+                                <Skeleton className="h-4 w-32 max-w-[50%]" />
+                                <Skeleton className="h-2 w-full rounded-full" />
+                                <Skeleton className="h-3 w-48 max-w-[70%]" />
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
+                        <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
+                            {[...Array(4)].map((_, j) => (
+                                <div key={j} className="space-y-1">
+                                    <Skeleton className="h-3 w-16 max-w-full" />
+                                    <Skeleton className="h-4 w-12 max-w-full" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </Panel>
             ))}
         </div>
     )
@@ -314,14 +274,14 @@ function HealthGrid({
 
     if (filtered.length === 0) {
         return (
-            <div className="text-center py-12">
+            <div className="py-12 text-center">
                 <p className="text-muted-foreground">No merchants match the selected filters.</p>
             </div>
         )
     }
 
     return (
-        <div className="flex flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
             {filtered.map((merchant) => (
                 <HealthRow
                     key={merchant.id}
@@ -331,27 +291,6 @@ function HealthGrid({
             ))}
         </div>
     )
-}
-
-const healthColors = {
-    green: {
-        bg: 'bg-green-50 dark:bg-green-950/20',
-        text: 'text-green-600 dark:text-green-400',
-        border: 'border-green-200 dark:border-green-800',
-        scoreBg: 'bg-green-100 dark:bg-green-900/40',
-    },
-    yellow: {
-        bg: 'bg-yellow-50 dark:bg-yellow-950/20',
-        text: 'text-yellow-600 dark:text-yellow-400',
-        border: 'border-yellow-200 dark:border-yellow-800',
-        scoreBg: 'bg-yellow-100 dark:bg-yellow-900/40',
-    },
-    red: {
-        bg: 'bg-red-50 dark:bg-red-950/20',
-        text: 'text-red-600 dark:text-red-400',
-        border: 'border-red-200 dark:border-red-800',
-        scoreBg: 'bg-red-100 dark:bg-red-900/40',
-    },
 }
 
 function HealthRow({
@@ -369,162 +308,113 @@ function HealthRow({
         }).format(amount)
     }
 
-    const colors = healthColors[merchant.healthTier]
+    const tone = HEALTH_TONE[merchant.healthTier] ?? HEALTH_TONE.red
 
     // Calculate health score percentage for visual bar
     const healthPercentage = Math.min(100, (merchant.healthScore / 100) * 100)
 
-    // Determine the health tier visual
-    const getTierEmoji = (tier: string) => {
-        switch (tier) {
-            case 'green':
-                return '✓'
-            case 'yellow':
-                return '⚠'
-            case 'red':
-                return '!'
-            default:
-                return '○'
-        }
-    }
-
     return (
-        <Card
-            className={`cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 border ${colors.border}`}
+        // A real button: the row was a click-only Card, so the whole health
+        // grid was unreachable by keyboard.
+        <button
+            type="button"
             onClick={onClick}
+            className="block w-full min-w-0 rounded-3xl border bg-card p-5 text-left transition-colors hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-            <CardContent className={`p-5 ${colors.bg}`}>
-                <div className="flex flex-col gap-4">
-                    {/* Top Row: Score, Name, Alerts */}
-                    <div className="flex items-start gap-4">
-                        {/* Health Score Circle with Tier Indicator */}
-                        <div className="shrink-0 relative">
-                            <div
-                                className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-2xl ${colors.scoreBg} ${colors.text} shadow-md`}
-                            >
-                                {merchant.healthScore}
-                            </div>
-                            {/* Tier Badge */}
-                            <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold ${
-                                merchant.healthTier === 'green' ? 'bg-green-500' :
-                                merchant.healthTier === 'yellow' ? 'bg-yellow-500' :
-                                'bg-red-500'
-                            }`}>
-                                {getTierEmoji(merchant.healthTier)}
-                            </div>
-                        </div>
-
-                        {/* Merchant Info */}
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-semibold text-foreground truncate">
-                                    {merchant.name}
-                                </h3>
-                                {merchant.healthTier === 'green' && (
-                                    <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-green-200 dark:bg-green-900/50 text-green-700 dark:text-green-300 shrink-0">
-                                        Optimal
-                                    </span>
-                                )}
-                                {merchant.healthTier === 'yellow' && (
-                                    <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-yellow-200 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 shrink-0">
-                                        Monitor
-                                    </span>
-                                )}
-                                {merchant.healthTier === 'red' && (
-                                    <span className="inline-block px-2 py-1 rounded-full text-xs font-medium bg-red-200 dark:bg-red-900/50 text-red-700 dark:text-red-300 shrink-0">
-                                        Critical
-                                    </span>
-                                )}
-                            </div>
-
-                            {merchant.type && (
-                                <p className="text-sm text-muted-foreground capitalize mb-2">
-                                    {merchant.type}
-                                </p>
-                            )}
-
-                            {/* Health Score Bar */}
-                            <div className="mb-3">
-                                <div className="h-2 rounded-full bg-muted overflow-hidden">
-                                    <div
-                                        className={`h-full rounded-full transition-all duration-300 ${
-                                            merchant.healthTier === 'green' ? 'bg-green-500' :
-                                            merchant.healthTier === 'yellow' ? 'bg-yellow-500' :
-                                            'bg-red-500'
-                                        }`}
-                                        style={{ width: `${healthPercentage}%` }}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Alerts or All Systems Go */}
-                            {merchant.alerts.length > 0 ? (
-                                <div className="flex flex-col gap-1">
-                                    {merchant.alerts.slice(0, 2).map((alert, idx) => (
-                                        <div key={idx} className="flex items-center gap-2 text-sm">
-                                            <AlertTriangle className={`h-4 w-4 shrink-0 ${colors.text}`} />
-                                            <span className="text-muted-foreground">{alert}</span>
-                                        </div>
-                                    ))}
-                                    {merchant.alerts.length > 2 && (
-                                        <p className="text-xs text-muted-foreground ml-6">
-                                            +{merchant.alerts.length - 2} more issue{merchant.alerts.length - 2 !== 1 ? 's' : ''}
-                                        </p>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 font-medium">
-                                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                    <span>All systems optimal</span>
-                                </div>
-                            )}
-                        </div>
+            <div className="flex min-w-0 flex-col gap-4">
+                {/* Top Row: Score, Name, Alerts */}
+                <div className="flex min-w-0 items-start gap-4">
+                    <div
+                        className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-muted/60 text-2xl font-bold tabular-nums ${tone.text}`}
+                    >
+                        {merchant.healthScore}
                     </div>
 
-                    {/* Bottom Row: Stats Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-current border-opacity-10">
-                        {/* Locations */}
-                        <div className="text-sm">
-                            <p className="text-muted-foreground text-xs mb-0.5">Locations</p>
-                            <p className="font-semibold text-foreground">
-                                {merchant.total_locations}
-                                <span className="text-muted-foreground font-normal ml-1">
-                                    {merchant.active_staff_count > 0 && `(${Math.round((merchant.total_locations / (merchant.total_locations || 1)) * 100)}%)`}
-                                </span>
-                            </p>
+                    <div className="min-w-0 flex-1">
+                        <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
+                            <h3 className="min-w-0 truncate font-semibold">{merchant.name}</h3>
+                            <span className={BADGE_SHELL}>{tone.label}</span>
                         </div>
 
-                        {/* Stations */}
-                        <div className="text-sm">
-                            <p className="text-muted-foreground text-xs mb-0.5">Devices</p>
-                            <p className="font-semibold text-foreground">{merchant.totalStations}</p>
+                        {merchant.type && (
+                            <p className="mb-2 text-sm capitalize text-muted-foreground">
+                                {merchant.type}
+                            </p>
+                        )}
+
+                        {/* Health Score Bar */}
+                        <div className="mb-3">
+                            <div
+                                className="h-2 overflow-hidden rounded-full bg-muted"
+                                role="meter"
+                                aria-valuenow={merchant.healthScore}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-label={`Health score ${merchant.healthScore} of 100 — ${tone.label}`}
+                            >
+                                <div
+                                    className={`h-full rounded-full transition-all duration-300 motion-reduce:transition-none ${tone.bar}`}
+                                    style={{ width: `${healthPercentage}%` }}
+                                />
+                            </div>
                         </div>
 
-                        {/* Revenue */}
-                        <div className="text-sm">
-                            <p className="text-muted-foreground text-xs mb-0.5">Revenue Today</p>
-                            <p className="font-semibold text-foreground">
-                                {formatCurrency(merchant.revenue_today)}
-                            </p>
-                        </div>
-
-                        {/* Orders & Last Activity */}
-                        <div className="text-sm">
-                            <p className="text-muted-foreground text-xs mb-0.5">Orders Today</p>
-                            <p className="font-semibold text-foreground mb-1">
-                                {merchant.orders_today}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                                {merchant.last_order_at
-                                    ? formatDistanceToNow(new Date(merchant.last_order_at), {
-                                        addSuffix: true,
-                                    })
-                                    : 'No orders'}
-                            </p>
-                        </div>
+                        {/* Alerts or All Systems Go */}
+                        {merchant.alerts.length > 0 ? (
+                            <div className="flex flex-col gap-1">
+                                {merchant.alerts.slice(0, 2).map((alert, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 text-sm">
+                                        <AlertTriangle className={`h-4 w-4 shrink-0 ${tone.text}`} />
+                                        <span className="text-muted-foreground">{alert}</span>
+                                    </div>
+                                ))}
+                                {merchant.alerts.length > 2 && (
+                                    <p className="ml-6 text-xs text-muted-foreground">
+                                        +{merchant.alerts.length - 2} more issue{merchant.alerts.length - 2 !== 1 ? 's' : ''}
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                <span>All systems optimal</span>
+                            </div>
+                        )}
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+
+                {/* Bottom Row: Stats Grid */}
+                <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
+                    <div className="min-w-0 text-sm">
+                        <p className="mb-0.5 text-xs text-muted-foreground">Locations</p>
+                        <p className="font-semibold tabular-nums">{merchant.total_locations}</p>
+                    </div>
+
+                    <div className="min-w-0 text-sm">
+                        <p className="mb-0.5 text-xs text-muted-foreground">Devices</p>
+                        <p className="font-semibold tabular-nums">{merchant.totalStations}</p>
+                    </div>
+
+                    <div className="min-w-0 text-sm">
+                        <p className="mb-0.5 text-xs text-muted-foreground">Revenue Today</p>
+                        <p className="font-semibold tabular-nums">
+                            {formatCurrency(merchant.revenue_today)}
+                        </p>
+                    </div>
+
+                    <div className="min-w-0 text-sm">
+                        <p className="mb-0.5 text-xs text-muted-foreground">Orders Today</p>
+                        <p className="mb-1 font-semibold tabular-nums">{merchant.orders_today}</p>
+                        <p className="text-xs text-muted-foreground">
+                            {merchant.last_order_at
+                                ? formatDistanceToNow(new Date(merchant.last_order_at), {
+                                    addSuffix: true,
+                                })
+                                : 'No orders'}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </button>
     )
 }
