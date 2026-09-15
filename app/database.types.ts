@@ -27858,6 +27858,10 @@ export type Database = {
           terminal_type: string
         }[]
       }
+      get_timesheet_summary: {
+        Args: { p_end: string; p_location_id: string; p_start: string }
+        Returns: Json
+      }
       get_tip_rate_by_day: {
         Args: { p_from: string; p_to: string }
         Returns: {
@@ -29793,6 +29797,10 @@ export type Database = {
       sync_location_device_billing: {
         Args: { p_location_id: string }
         Returns: Json
+      }
+      timesheet_shift_minutes: {
+        Args: { p_break_logs: Json; p_clock_in: string; p_clock_out: string }
+        Returns: Record<string, unknown>
       }
       toggle_priority_order_items: {
         Args: { p_is_prioritized: boolean; p_order_item_ids: string[] }
