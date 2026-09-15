@@ -1,5 +1,6 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js'
 import { sendSubscriptionPaymentFailedEmail } from './payment-emails.ts'
+import { buildSubscriptionInvoiceLinks } from './subscription-invoice-links.ts'
 
 type BillingSupabaseClient = SupabaseClient<any, any, any>
 
@@ -115,7 +116,7 @@ export async function notifySubscriptionPaymentFailure(params: {
   const { data: invoice, error: invoiceError } = await params.supabase
     .from('subscription_invoices')
     .select(
-      'id, subscription_id, merchant_id, location_id, invoice_number, total_amount, due_date',
+      'id, subscription_id, merchant_id, location_id, invoice_number, total_amount, due_date, public_token',
     )
     .eq('id', params.invoiceId)
     .single()
@@ -248,6 +249,7 @@ export async function notifySubscriptionPaymentFailure(params: {
             totalAmount: Number(invoice.total_amount ?? 0),
             dueDate: invoice.due_date,
             failureMessage: params.failureMessage,
+            viewUrl: buildSubscriptionInvoiceLinks(invoice.public_token).viewUrl,
           }),
       }),
     )

@@ -1,55 +1,33 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import Link from 'next/link'
-import { useParams } from 'next/navigation'
-import { AlertTriangle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
-import { HqSubscriptionsWorkspace } from '@/components/billing/HqSubscriptionsWorkspace'
-import { useAdminMerchantDetails } from '@/lib/queries/use-admin-merchant'
-import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
+/**
+ * The subscription workspace now lives inline as a tab on the merchant detail
+ * page. This route is kept only so existing deep-links (e.g. subscription
+ * notification emails / in-app links carrying ?serviceRequest / ?request /
+ * ?hardwareRequest) continue to resolve — it forwards to the merchant's
+ * Subscriptions tab, preserving any incoming query string.
+ */
+export default async function ManageMerchantSubscriptionsRedirect({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ merchantId: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const { merchantId } = await params
+  const incoming = await searchParams
 
-export default function ManageMerchantSubscriptionsPage() {
-  const { merchantId } = useParams()
-  const { data: merchantDetails, isLoading, isError } = useAdminMerchantDetails(merchantId as string)
-  const { hasPermission } = useAdminPermissions()
+  const query = new URLSearchParams()
+  query.set('tab', 'subscriptions')
 
-  if (isLoading) {
-    return (
-      <DataPageSkeleton
-        variant="detail"
-        shell="plain"
-        label="Loading the subscription workspace"
-      />
-    )
+  for (const [key, value] of Object.entries(incoming)) {
+    if (key === 'tab') continue
+    if (Array.isArray(value)) {
+      value.forEach((entry) => query.append(key, entry))
+    } else if (value != null) {
+      query.set(key, value)
+    }
   }
 
-  if (isError || !merchantDetails) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <AlertTriangle className="mb-2 h-8 w-8 text-destructive" />
-        <div className="mb-1 font-semibold text-destructive">Unable to load subscription workspace</div>
-        <Button variant="outline" asChild className="mt-4">
-          <Link href="/manage/subscriptions">Back to Subscriptions</Link>
-        </Button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
-        <Link href="/manage/subscriptions" className="hover:underline">
-          Subscriptions
-        </Link>
-        <span>/</span>
-        <span className="text-foreground">{merchantDetails.name}</span>
-      </div>
-
-      <HqSubscriptionsWorkspace
-        merchant={merchantDetails}
-        canManageBilling={hasPermission('system.billing.manage')}
-      />
-    </div>
-  )
+  redirect(`/manage/merchants/${merchantId}?${query.toString()}`)
 }

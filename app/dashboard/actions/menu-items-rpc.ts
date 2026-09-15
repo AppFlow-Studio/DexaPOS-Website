@@ -412,7 +412,10 @@ export async function getItemsForLocationFlat(
     // Tax & Inventory Control (L1)
     tax_category: item.tax_category || "standard",
     is_tax_exempt: item.is_tax_exempt || false,
-    available_channels: item.available_channels || ["pos", "online"],
+    // All channels when unset — see DEFAULT_ITEM_CHANNELS in menu-items.ts.
+    // The POS and kiosk hide items that omit their channel, so a narrower
+    // fallback here makes an untouched item vanish from a surface.
+    available_channels: item.available_channels || ["pos", "online", "kiosk"],
 
     // Effective Tax & Inventory (L2 > L1)
     effective_tax_category: item.effective_tax_category || "standard",
@@ -420,6 +423,7 @@ export async function getItemsForLocationFlat(
     effective_available_channels: item.effective_available_channels || [
       "pos",
       "online",
+      "kiosk",
     ],
 
     // Location override details (L2)

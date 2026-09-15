@@ -13,7 +13,9 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  CreditCard,
   Download,
+  ExternalLink,
   Eye,
   FileText,
   Loader2,
@@ -71,6 +73,7 @@ import {
   reviewMerchantServiceRequest,
   chargeSubscriptionInvoiceManually,
   calculateSubscriptionTotal,
+  getActiveStationCount,
   generateSubscriptionInvoiceManually,
   getBillableServices,
   getDeviceBillingServiceMappings,
@@ -111,9 +114,18 @@ import {
 import { downloadSubscriptionInvoicePdf } from '@/lib/subscription-billing/invoice-pdf'
 import { getMerchantTierPresentation } from '@/lib/subscription-billing/merchant-tier-presentation'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
+import { MerchantBillingSection } from '@/app/manage/merchants/[merchantId]/components/subscription/MerchantBillingSection'
+import { LocationBillingList } from '@/app/manage/merchants/[merchantId]/components/subscription/LocationBillingList'
+import { LocationsWithoutSubscription } from '@/app/manage/merchants/[merchantId]/components/subscription/LocationsWithoutSubscription'
+import { ReviewChangesSection } from '@/app/manage/merchants/[merchantId]/components/subscription/ReviewChangesSection'
+import { BillingHistorySection } from '@/app/manage/merchants/[merchantId]/components/subscription/BillingHistorySection'
+import { BillingInsightsSection } from '@/app/manage/merchants/[merchantId]/components/subscription/BillingInsightsSection'
+import { SubscriptionEditSummary } from '@/app/manage/merchants/[merchantId]/components/subscription/SubscriptionEditSummary'
+import { InfoHint } from '@/app/manage/merchants/[merchantId]/components/subscription/InfoHint'
+import { Pencil } from 'lucide-react'
 
 type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'suspended' | 'canceled'
-type ServiceFormState = Record<string, { enabled: boolean; quantity: string }>
+type ServiceFormState = Record<string, { enabled: boolean; quantity: string; comped?: boolean }>
 type BillingMethod = 'ach' | 'card'
 
 const BILLABLE_DEVICE_CATEGORIES = [
@@ -214,12 +226,38 @@ function startOfMonthIso(date = new Date()): string {
   return new Date(date.getFullYear(), date.getMonth(), 1).toISOString().slice(0, 10)
 }
 
-function endOfMonthIso(date = new Date()): string {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().slice(0, 10)
+/** Local YYYY-MM-DD (avoids the UTC day-shift `toISOString` can introduce). */
+function isoDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function firstDayNextMonthIso(date = new Date()): string {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 1).toISOString().slice(0, 10)
+function todayIso(): string {
+  return isoDate(new Date())
+}
+
+/** Add whole months to a YYYY-MM-DD date, clamping to the last valid day (Jan 31 + 1mo → Feb 28/29). */
+function addMonthsIso(baseIso: string, months: number): string {
+  const [y, m, d] = baseIso.split('-').map(Number)
+  const anchor = new Date(y, m - 1 + months, 1)
+  const lastDay = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate()
+  anchor.setDate(Math.min(d, lastDay))
+  return isoDate(anchor)
+}
+
+function addDaysIso(baseIso: string, days: number): string {
+  const [y, m, d] = baseIso.split('-').map(Number)
+  return isoDate(new Date(y, m - 1, d + days))
+}
+
+/**
+ * A monthly billing cycle anchored to the charge date rather than the calendar
+ * month: the period runs from `from` to the day before the same date next month,
+ * and the next bill lands exactly one month out. Buy on the 12th → next bill the
+ * 12th, not a hardcoded month-end.
+ */
+function freshBillingCycle(from = todayIso()): { start: string; end: string; nextBilling: string } {
+  const nextBilling = addMonthsIso(from, 1)
+  return { start: from, end: addDaysIso(nextBilling, -1), nextBilling }
 }
 
 function formatMoney(amount: number): string {
@@ -404,6 +442,7 @@ function buildInitialServiceFormState(
         {
           enabled: Boolean(assignment),
           quantity: String(assignment?.quantity ?? 1),
+          comped: String((assignment?.metadata as any)?.comped ?? '') === 'true' || (assignment?.metadata as any)?.comped === true,
         },
       ]
     })
@@ -536,10 +575,9 @@ interface HqSubscriptionsWorkspaceProps {
 }
 
 const SUBSCRIPTION_STEPS = [
-  { id: 'tier', title: 'Merchant Tier', description: 'Review or change the plan for this merchant.' },
-  { id: 'catalog', title: 'Pricing & Device Mapping', description: 'Review shared pricing and device mappings. Continue if the existing setup is correct.' },
-  { id: 'locations', title: 'Location Add-ons', description: 'Choose a location, configure its services, and review the amount before saving.' },
-  { id: 'billing', title: 'Billing Review', description: 'Review invoices and payment results for the selected location.' },
+  { id: 'tier', title: 'Confirm the plan', description: 'The merchant-wide tier is set automatically by active locations.' },
+  { id: 'locations', title: 'Set up the location', description: 'Choose a location, then set its stations, devices, and features.' },
+  { id: 'review', title: 'Review & charge', description: 'Confirm the amount and the card, then charge.' },
 ] as const
 
 function SubscriptionStepNavigation({
@@ -574,6 +612,7 @@ export function HqSubscriptionsWorkspace({
   merchant,
   canManageBilling,
 }: HqSubscriptionsWorkspaceProps) {
+  const [mode, setMode] = useState<'overview' | 'edit'>('overview')
   const [currentStep, setCurrentStep] = useState(0)
   const stepHeadingRef = useRef<HTMLHeadingElement>(null)
   const activeStep = SUBSCRIPTION_STEPS[currentStep]
@@ -604,6 +643,7 @@ export function HqSubscriptionsWorkspace({
   const [invoices, setInvoices] = useState<SubscriptionInvoiceRecord[]>([])
   const [subscriptionServiceMap, setSubscriptionServiceMap] = useState<Record<string, SubscriptionServiceAssignmentRecord[]>>({})
   const [billingProfilesByLocation, setBillingProfilesByLocation] = useState<Record<string, MerchantBillingProfileRecord>>({})
+  const [allBillingProfiles, setAllBillingProfiles] = useState<MerchantBillingProfileRecord[]>([])
   const [serviceFormState, setServiceFormState] = useState<ServiceFormState>({})
   const [selectedServicePlanId, setSelectedServicePlanId] = useState('')
   const [servicePlanForm, setServicePlanForm] = useState<ServicePlanFormState>(() => planToFormState(null))
@@ -612,15 +652,19 @@ export function HqSubscriptionsWorkspace({
   const [selectedDeviceMappingCategory, setSelectedDeviceMappingCategory] = useState('pos_tablet')
   const [deviceMappingForm, setDeviceMappingForm] = useState<DeviceBillingMappingFormState>(() => mappingToFormState(null))
   const [quoteBillingMethod, setQuoteBillingMethod] = useState<BillingMethod>('card')
+  // Station count is auto-derived from deployed POS tablet devices, never set by hand:
+  // `quoteStationCount` mirrors `activeStationCount` so the preview matches what the
+  // server actually bills. `null` means "still counting".
   const [quoteStationCount, setQuoteStationCount] = useState('1')
+  const [activeStationCount, setActiveStationCount] = useState<number | null>(null)
   const [quote, setQuote] = useState<SubscriptionQuoteResult | null>(null)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [isQuoteLoading, setIsQuoteLoading] = useState(false)
   const [selectedLocationId, setSelectedLocationId] = useState('')
   const [status, setStatus] = useState<SubscriptionStatus>('active')
-  const [currentPeriodStart, setCurrentPeriodStart] = useState(startOfMonthIso())
-  const [currentPeriodEnd, setCurrentPeriodEnd] = useState(endOfMonthIso())
-  const [nextBillingDate, setNextBillingDate] = useState(firstDayNextMonthIso())
+  const [currentPeriodStart, setCurrentPeriodStart] = useState(() => freshBillingCycle().start)
+  const [currentPeriodEnd, setCurrentPeriodEnd] = useState(() => freshBillingCycle().end)
+  const [nextBillingDate, setNextBillingDate] = useState(() => freshBillingCycle().nextBilling)
   const [trialEndsAt, setTrialEndsAt] = useState('')
   const [gracePeriodEndsAt, setGracePeriodEndsAt] = useState('')
   const [graceReason, setGraceReason] = useState('')
@@ -772,6 +816,48 @@ export function HqSubscriptionsWorkspace({
     }
   }, [sortedLocations.length, subscriptions])
 
+  // Overview-mode derivations (read-only): location-scoped subscriptions, the
+  // locations that still need one, and the merchant-level billing card.
+  const locationSubscriptions = useMemo(
+    () =>
+      subscriptions
+        .filter(
+          (subscription) =>
+            subscriptionBillingScope(subscription.metadata) === 'location' &&
+            subscription.status !== 'canceled',
+        )
+        .sort((a, b) => (a.location_name || '').localeCompare(b.location_name || '')),
+    [subscriptions],
+  )
+
+  const locationsWithoutSub = useMemo(() => {
+    const withSub = new Set(locationSubscriptions.map((subscription) => subscription.location_id))
+    return sortedLocations
+      .filter((location) => !withSub.has(location.id))
+      .map((location) => ({ id: location.id, name: location.name }))
+  }, [locationSubscriptions, sortedLocations])
+
+  const merchantCardProfile = useMemo(() => {
+    const cards = allBillingProfiles.filter(
+      (profile) => profile.billing_method === 'card' && profile.is_active,
+    )
+    return (
+      cards.find((profile) => profile.location_id === null && profile.is_primary) ??
+      cards.find((profile) => profile.is_primary) ??
+      cards[0] ??
+      null
+    )
+  }, [allBillingProfiles])
+
+  const startEdit = (locationId?: string) => {
+    if (locationId) {
+      setSelectedLocationId(locationId)
+      const locationsStep = SUBSCRIPTION_STEPS.findIndex((step) => step.id === 'locations')
+      if (locationsStep >= 0) setCurrentStep(locationsStep)
+    }
+    setMode('edit')
+  }
+
   const filteredInvoices = useMemo(
     () => invoices.filter((invoice) => !selectedLocation || invoice.location_id === selectedLocation.id),
     [invoices, selectedLocation]
@@ -876,13 +962,16 @@ export function HqSubscriptionsWorkspace({
     () =>
       services.map((service) => {
         const current = serviceFormState[service.id] ?? { enabled: false, quantity: '1' }
+        const comped = Boolean(current.comped)
         const quantity = service.pricing_model === 'flat' ? 1 : parsePositiveInteger(current.quantity)
         const effectiveQuantity = current.enabled ? Math.max(service.pricing_model === 'flat' ? 1 : 0, quantity) : 0
-        const subtotal = current.enabled ? calculateServiceSubtotal(service, effectiveQuantity) : 0
+        // Comped (HQ-granted free) services stay enabled but never bill.
+        const subtotal = current.enabled && !comped ? calculateServiceSubtotal(service, effectiveQuantity) : 0
 
         return {
           service,
           enabled: current.enabled,
+          comped,
           quantity: effectiveQuantity,
           subtotal,
         }
@@ -897,11 +986,13 @@ export function HqSubscriptionsWorkspace({
       setQuoteError(null)
 
       const result = await calculateSubscriptionTotal({
-        planId: selectedServicePlan?.id ?? null,
+        // Location subscriptions bill devices only (explicit per-device services) —
+        // no base/per-station plan. Keep planId null so the preview matches the invoice.
+        planId: null,
         stationCount: Math.max(0, parsePositiveInteger(quoteStationCount)),
         billingMethod: quoteBillingMethod,
         services: selectedServiceRows
-          .filter((row) => row.enabled && row.quantity > 0)
+          .filter((row) => row.enabled && row.quantity > 0 && !row.comped)
           .map((row) => ({
             serviceId: row.service.id,
             serviceCode: row.service.service_code,
@@ -990,6 +1081,7 @@ export function HqSubscriptionsWorkspace({
         setInvoices(nextInvoices)
         setSubscriptionServiceMap(nextAssignmentMap)
         setBillingProfilesByLocation(nextBillingProfilesByLocation)
+        setAllBillingProfiles(billingProfiles)
         setMerchantTierPlans(nextMerchantTierPlans)
         setMerchantTierStatus(nextMerchantTierStatus)
         setMerchantTierSubscription(nextMerchantTierSubscription)
@@ -1049,10 +1141,11 @@ export function HqSubscriptionsWorkspace({
               buildInitialServiceFormState(nextServices, nextAssignmentMap[defaultSubscription.id] ?? [])
             )
           } else {
+            const cycle = freshBillingCycle()
             setStatus('active')
-            setCurrentPeriodStart(startOfMonthIso())
-            setCurrentPeriodEnd(endOfMonthIso())
-            setNextBillingDate(firstDayNextMonthIso())
+            setCurrentPeriodStart(cycle.start)
+            setCurrentPeriodEnd(cycle.end)
+            setNextBillingDate(cycle.nextBilling)
             setTrialEndsAt('')
             setGracePeriodEndsAt('')
             setGraceReason('')
@@ -1117,10 +1210,11 @@ export function HqSubscriptionsWorkspace({
       return
     }
 
+    const cycle = freshBillingCycle()
     setStatus('active')
-    setCurrentPeriodStart(startOfMonthIso())
-    setCurrentPeriodEnd(endOfMonthIso())
-    setNextBillingDate(firstDayNextMonthIso())
+    setCurrentPeriodStart(cycle.start)
+    setCurrentPeriodEnd(cycle.end)
+    setNextBillingDate(cycle.nextBilling)
     setTrialEndsAt('')
     setGracePeriodEndsAt('')
     setGraceReason('')
@@ -1151,21 +1245,46 @@ export function HqSubscriptionsWorkspace({
     setQuoteBillingMethod(selectedBillingProfile?.billing_method === 'ach' ? 'ach' : 'card')
   }, [selectedBillingProfile?.billing_method])
 
+  // Stations = deployed POS tablets. Pull the live count for the selected location so
+  // the preview reflects exactly what the server will bill (it recomputes station_count
+  // from deployed devices on every save and invoice, ignoring any client value).
   useEffect(() => {
-    setQuoteStationCount(String(Math.max(1, selectedLocationSubscription?.station_count ?? 1)))
-  }, [selectedLocationSubscription?.id, selectedLocationSubscription?.station_count])
+    const locationId = selectedLocation?.id
+    if (!locationId) {
+      setActiveStationCount(null)
+      return
+    }
 
-  const updateServiceState = (serviceId: string, patch: Partial<{ enabled: boolean; quantity: string }>) => {
+    let cancelled = false
+    setActiveStationCount(null)
+
+    getActiveStationCount(locationId).then((result) => {
+      if (cancelled) return
+      const count = result.success
+        ? result.count ?? 0
+        : selectedLocationSubscription?.station_count ?? 0
+      setActiveStationCount(count)
+      setQuoteStationCount(String(count))
+    })
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLocation?.id])
+
+  const updateServiceState = (serviceId: string, patch: Partial<{ enabled: boolean; quantity: string; comped: boolean }>) => {
     setServiceFormState((current) => ({
       ...current,
       [serviceId]: {
         enabled: patch.enabled ?? current[serviceId]?.enabled ?? false,
         quantity: patch.quantity ?? current[serviceId]?.quantity ?? '1',
+        comped: patch.comped ?? current[serviceId]?.comped ?? false,
       },
     }))
   }
 
-  const handleSave = () => {
+  const handleSave = (onSaved?: () => void) => {
     if (!selectedLocation) {
       toast.error('Select a location first.')
       return
@@ -1176,6 +1295,7 @@ export function HqSubscriptionsWorkspace({
         serviceId: service.id,
         serviceCode: service.service_code,
         enabled: serviceFormState[service.id]?.enabled ?? false,
+        comped: Boolean(serviceFormState[service.id]?.comped),
         quantity:
           service.pricing_model === 'flat'
             ? 1
@@ -1183,15 +1303,15 @@ export function HqSubscriptionsWorkspace({
       }))
       .filter((service) => service.enabled && service.quantity > 0)
 
-    const fallbackActiveStatus =
-      selectedLocationSubscription?.status && selectedLocationSubscription.status !== 'canceled'
-        ? selectedLocationSubscription.status
-        : 'active'
-
+    // "Save & Charge" on a lapsed subscription (past_due/suspended/canceled) is a
+    // reactivation: target 'active' so the server actually generates + charges an
+    // invoice. Passing the stale lapsed status through makes the server take its
+    // non-active branch, which saves the config WITHOUT charging — yet the UI used
+    // to still report "automatic payment approved". Only 'active'/'trial' pass
+    // through unchanged (trials are intentionally not charged).
+    const lapsedStatuses: SubscriptionStatus[] = ['past_due', 'suspended', 'canceled']
     const effectiveStatus: SubscriptionStatus =
-      status === 'canceled' && enabledServices.length > 0
-        ? fallbackActiveStatus
-        : status
+      enabledServices.length > 0 && lapsedStatuses.includes(status) ? 'active' : status
 
     if (effectiveStatus !== 'canceled' && enabledServices.length === 0) {
       toast.error('Enable at least one billable service for this location.')
@@ -1203,7 +1323,9 @@ export function HqSubscriptionsWorkspace({
         subscriptionId: selectedLocationSubscription?.id,
         merchantId: merchant.id,
         locationId: selectedLocation.id,
-        planId: selectedServicePlan?.id ?? selectedLocationSubscription?.plan_id ?? null,
+        // Location subscriptions are devices-only — no base/per-station plan attached
+        // (the server also forces this for location scope).
+        planId: null,
         currentPeriodStart,
         currentPeriodEnd,
         nextBillingDate,
@@ -1220,6 +1342,8 @@ export function HqSubscriptionsWorkspace({
           metadata: {
             source: 'hq_subscriptions_workspace',
             serviceCode: service.serviceCode,
+            // HQ-granted free feature: entitled but excluded from billing.
+            ...(service.comped ? { comped: true } : {}),
           },
         })),
       })
@@ -1229,21 +1353,37 @@ export function HqSubscriptionsWorkspace({
         return
       }
 
+      if (subscriptionResult.queuedForNextCycle) {
+        toast.success(
+          subscriptionResult.message ||
+            'This period is already paid — the change is saved and bills on the next cycle. No charge was made today.'
+        )
+        refresh()
+        onSaved?.()
+        return
+      }
+
+      // Only claim "automatic payment approved" when the server actually ran and
+      // approved a charge (it returns an invoiceId only on the active charge path).
+      // Otherwise the save skipped billing (trial, exemption, or a no-charge edit)
+      // and we must not imply money moved.
+      const paymentApproved = Boolean(subscriptionResult.invoiceId)
       toast.success(
         effectiveStatus === 'canceled'
           ? 'Subscription canceled.'
-          : status === 'canceled'
-            ? 'Selected services removed. Subscription remains active.'
-            : billingExemption.active
+          : billingExemption.active
+            ? selectedLocationSubscription
+              ? 'Complimentary services updated without a charge.'
+              : 'Complimentary services activated without a charge.'
+            : paymentApproved
               ? selectedLocationSubscription
-                ? 'Complimentary services updated without a charge.'
-                : 'Complimentary services activated without a charge.'
-              : selectedLocationSubscription
                 ? 'Subscription updated and automatic payment approved.'
                 : 'Subscription created and automatic payment approved.'
+              : 'Subscription saved. No payment was charged.'
       )
 
       refresh()
+      onSaved?.()
     })
   }
 
@@ -1347,7 +1487,7 @@ export function HqSubscriptionsWorkspace({
       toast.success(
         billingExemption.active
           ? 'Merchant tier updated under the billing exemption.'
-          : result.invoiceId
+          : result.charged
           ? 'Merchant tier updated and automatic payment approved.'
           : 'Merchant tier updated.',
       )
@@ -1646,763 +1786,621 @@ export function HqSubscriptionsWorkspace({
         </Card>
       </div>
 
-      <div className="space-y-6">
-        <div className="space-y-5 rounded-2xl border bg-card p-4 sm:p-6">
-          <ol aria-label="Subscription setup progress" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {SUBSCRIPTION_STEPS.map((step, index) => (
-              <li
-                key={step.id}
-                aria-current={index === currentStep ? 'step' : undefined}
-                className={`flex min-w-0 items-center gap-3 rounded-xl border p-3 text-sm ${
-                  index === currentStep ? 'border-primary/40 bg-primary/5 text-primary' : 'border-transparent text-muted-foreground'
-                }`}
-              >
-                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-semibold ${
-                  index === currentStep ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                }`}>
-                  {index + 1}
-                </span>
-                <span className="min-w-0 font-medium">{step.title}</span>
-              </li>
-            ))}
-          </ol>
-          <div className="space-y-1">
-            <h2 id="subscription-step-heading" ref={stepHeadingRef} tabIndex={-1} className="scroll-mt-24 text-xl font-semibold focus:outline-none">
-              {activeStep.title}
-            </h2>
-            <p className="text-sm text-muted-foreground">{activeStep.description}</p>
-            {activeStep.id === 'locations' && pendingHardwareRequests.length + pendingServiceRequests.length > 0 ? (
-              <p className="text-sm font-medium text-primary">
-                {pendingHardwareRequests.length + pendingServiceRequests.length} pending location request{pendingHardwareRequests.length + pendingServiceRequests.length === 1 ? '' : 's'} to review.
-              </p>
-            ) : null}
+      {mode === 'overview' && (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Read-only overview. Use{' '}
+              <span className="font-medium text-foreground">Edit billing</span> to change the tier,
+              location add-ons, or run a charge.
+            </p>
+            <Button onClick={() => startEdit()}>
+              <Pencil className="mr-1.5 h-4 w-4" />
+              Edit billing
+            </Button>
           </div>
-          <SubscriptionStepNavigation step={currentStep} disabled={isPending || isLoading} onChange={changeStep} />
-          <p className="text-xs text-muted-foreground">
-            Next and Back keep your entries while you navigate. Use the Save or Charge action within a step to apply changes.
-          </p>
+
+          <MerchantBillingSection
+            tierStatus={merchantTierStatus}
+            tierSubscription={merchantTierSubscription}
+            cardProfile={merchantCardProfile}
+          />
+
+          {locationSubscriptions.length > 0 && (
+            <LocationBillingList
+              subscriptions={locationSubscriptions}
+              assignmentsBySubscription={subscriptionServiceMap}
+              billingProfilesByLocation={billingProfilesByLocation}
+            />
+          )}
+
+          <LocationsWithoutSubscription locations={locationsWithoutSub} onSetup={startEdit} />
+
+          <ReviewChangesSection
+            pendingTierRequest={pendingMerchantTierRequest}
+            onApproveTier={() =>
+              pendingMerchantTierRequest &&
+              handleSaveMerchantTier(
+                pendingMerchantTierRequest.requested_plan_id,
+                'active',
+                pendingMerchantTierRequest.id,
+              )
+            }
+            onDenyTier={handleDenyMerchantTierRequest}
+            tierNote={merchantTierDecisionNote}
+            onTierNoteChange={setMerchantTierDecisionNote}
+            pendingServiceRequests={pendingServiceRequests}
+            onServiceDecision={handleServiceRequestDecision}
+            serviceNotes={serviceDecisionNotes}
+            onServiceNoteChange={(id, value) =>
+              setServiceDecisionNotes((current) => ({ ...current, [id]: value }))
+            }
+            pendingHardwareRequests={pendingHardwareRequests}
+            onHardwareDecision={handleHardwareRequestDecision}
+            hardwareNotes={hardwareDecisionNotes}
+            onHardwareNoteChange={(id, value) =>
+              setHardwareDecisionNotes((current) => ({ ...current, [id]: value }))
+            }
+            isBusy={isPending}
+          />
+
+          <BillingInsightsSection
+            invoices={invoices}
+            locations={sortedLocations.map((location) => ({ id: location.id, name: location.name }))}
+            invoiceActionId={invoiceActionId}
+            isBusy={isPending}
+            onPreview={handlePreviewInvoice}
+            onDownload={handleDownloadInvoice}
+            onCharge={handleChargeInvoice}
+          />
         </div>
+      )}
 
-        {activeStep.id === 'tier' && (
-        <section aria-labelledby="subscription-step-heading" className="space-y-6">
-          <Card>
-        <CardHeader>
-          <CardTitle>Merchant Tier</CardTitle>
-          <CardDescription>
-            One subscription for the whole merchant, charged to the designated merchant card or the first location&apos;s card. Location add-ons are billed separately.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {pendingMerchantTierRequest ? (
-            <div className="border-b pb-6">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge>{pendingMerchantTierRequest.request_number}</Badge>
-                    <Badge variant="outline">Pending review</Badge>
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold">
-                      Merchant requested {pendingMerchantTierRequest.requested_plan_name}
-                    </p>
+      {mode === 'edit' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="ghost" size="sm" onClick={() => setMode('overview')}>
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Back to overview
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/manage/settings/billing-catalog">Manage global pricing</Link>
+            </Button>
+          </div>
+
+          {/* Display-only progress stepper (completed steps clickable) */}
+          <ol aria-label="Subscription setup progress" className="grid grid-cols-3 gap-3">
+            {SUBSCRIPTION_STEPS.map((step, index) => {
+              const isCurrent = index === currentStep
+              const isDone = index < currentStep
+              return (
+                <li key={step.id}>
+                  <button
+                    type="button"
+                    disabled={index > currentStep || isPending}
+                    onClick={() => {
+                      if (index <= currentStep) changeStep(index)
+                    }}
+                    className={`flex w-full min-w-0 items-center gap-3 rounded-xl border p-3 text-sm transition-colors ${
+                      isCurrent
+                        ? 'border-primary/40 bg-primary/5 text-primary'
+                        : isDone
+                          ? 'border-transparent text-foreground hover:bg-muted'
+                          : 'border-transparent text-muted-foreground'
+                    }`}
+                  >
+                    <span
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                        isCurrent || isDone ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 truncate font-medium">{step.title}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ol>
+
+          {/* Two-column: content + sticky summary */}
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="min-w-0 space-y-5">
+              <div className="space-y-1">
+                <h2
+                  id="subscription-step-heading"
+                  ref={stepHeadingRef}
+                  tabIndex={-1}
+                  className="scroll-mt-24 text-xl font-semibold focus:outline-none"
+                >
+                  {activeStep.title}
+                </h2>
+                <p className="text-sm text-muted-foreground">{activeStep.description}</p>
+              </div>
+
+              {/* Screen 1 — Confirm the plan */}
+              {activeStep.id === 'tier' && (
+                <Card>
+                  <CardContent className="space-y-4 pt-6">
+                    <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-muted/40 p-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-semibold">
+                            {merchantTierStatus.plan?.name || 'No tier assigned'}
+                          </span>
+                          <Badge variant={merchantTierStatusVariant(merchantTierStatus.subscription_status)}>
+                            {merchantTierStatus.subscription_status || 'unassigned'}
+                          </Badge>
+                        </div>
+                        <div className="mt-1 text-sm text-muted-foreground">
+                          {merchantTierStatus.plan?.max_locations == null || !merchantTierStatus.plan
+                            ? `${merchantTierStatus.active_location_count} active locations`
+                            : `${merchantTierStatus.active_location_count} of ${merchantTierStatus.plan.max_locations} locations`}
+                          {merchantTierStatus.is_over_limit && (
+                            <span className="ml-2 font-medium text-destructive">Over limit</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-semibold">
+                          {merchantTierStatus.plan
+                            ? merchantTierStatus.plan.monthly_price_cents > 0
+                              ? formatTierPrice(merchantTierStatus.plan.monthly_price_cents)
+                              : 'Free'
+                            : '—'}
+                        </div>
+                        {merchantTierStatus.current_period_end && (
+                          <div className="text-xs text-muted-foreground">
+                            Renews {formatDate(merchantTierStatus.current_period_end)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                     <p className="text-sm text-muted-foreground">
-                      {formatTierPrice(pendingMerchantTierRequest.requested_monthly_price_cents)}
-                      {' · '}
-                      Requested {formatDate(pendingMerchantTierRequest.requested_at)}
+                      The merchant-wide fee is set automatically by active locations. Locations pay separately
+                      for their stations, devices, and features. Usually you can just continue.
                     </p>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Current plan: {pendingMerchantTierRequest.current_plan_name || 'No active plan'}
-                  </p>
-                  <AuthorizationEvidence
-                    reference={pendingMerchantTierRequest.authorization_reference}
-                    acceptedAt={pendingMerchantTierRequest.authorization_accepted_at}
-                    termsVersion={pendingMerchantTierRequest.authorization_terms_version}
-                    text={pendingMerchantTierRequest.authorization_text}
-                    price={formatTierPrice(pendingMerchantTierRequest.authorized_price_cents ?? pendingMerchantTierRequest.requested_monthly_price_cents)}
-                    cadence={pendingMerchantTierRequest.authorized_billing_cadence}
-                    requestedBy={pendingMerchantTierRequest.requested_by}
-                    ipAddress={pendingMerchantTierRequest.authorization_ip_address}
-                    userAgent={pendingMerchantTierRequest.authorization_user_agent}
-                  />
-                </div>
 
-                <div className="w-full space-y-3 lg:max-w-md">
-                  <div className="space-y-2">
-                    <Label htmlFor="merchant-tier-decision-note">Decision note (optional)</Label>
-                    <Textarea
-                      id="merchant-tier-decision-note"
-                      value={merchantTierDecisionNote}
-                      onChange={(event) => setMerchantTierDecisionNote(event.target.value)}
-                      placeholder="Add context for the merchant when denying the request."
-                      rows={3}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Button
-                      type="button"
-                      className="sm:flex-1"
-                      disabled={isPending}
-                      onClick={() => {
-                        setSelectedMerchantTierPlanId(pendingMerchantTierRequest.requested_plan_id)
-                        setMerchantTierSubscriptionStatus('active')
-                        handleSaveMerchantTier(
-                          pendingMerchantTierRequest.requested_plan_id,
-                          'active',
-                          pendingMerchantTierRequest.id,
-                        )
-                      }}
-                    >
-                      {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      {billingExemption.active
-                        ? 'Approve complimentary tier'
-                        : 'Approve, charge & activate'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="sm:flex-1"
-                      disabled={isPending}
-                      onClick={handleDenyMerchantTierRequest}
-                    >
-                      Deny request
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
-          <div className="grid gap-4">
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="text-lg font-semibold">
-                  {merchantTierStatus.plan?.name || 'No active plan'}
-                </div>
-                <Badge variant={merchantTierStatusVariant(merchantTierStatus.subscription_status)}>
-                  {merchantTierStatus.subscription_status || 'unassigned'}
-                </Badge>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <Badge variant="outline">{merchantTierStatus.active_location_count} active locations</Badge>
-                {merchantTierStatus.plan?.max_locations !== null && merchantTierStatus.plan ? (
-                  <Badge
-                    variant="outline"
-                    className={
-                      merchantTierStatus.is_over_limit
-                        ? 'border-red-200 bg-red-50 text-red-700'
-                        : merchantTierStatus.active_location_count === merchantTierStatus.plan.max_locations
-                          ? 'border-amber-200 bg-amber-50 text-amber-700'
-                          : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                    }
-                  >
-                    {merchantTierStatus.active_location_count} of {merchantTierStatus.plan.max_locations} used
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
-                    Unlimited location cap
-                  </Badge>
-                )}
-              </div>
-              <div className="grid gap-3 text-sm sm:grid-cols-2">
-                <div>
-                  <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Price</div>
-                  <div className="mt-1 font-medium">
-                    {merchantTierStatus.plan
-                      ? formatTierPrice(merchantTierStatus.plan.monthly_price_cents)
-                      : 'Contact for pricing'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Current Period End</div>
-                  <div className="mt-1 font-medium">{formatDate(merchantTierStatus.current_period_end)}</div>
-                </div>
-              </div>
-              {merchantTierStatus.is_over_limit ? (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                  Over plan limit. Merchant has {merchantTierStatus.active_location_count} active locations.
-                  {recommendedMerchantTier ? ` Move them to ${recommendedMerchantTier.display_name}.` : ''}
-                </div>
-              ) : null}
-              {!merchantTierStatus.plan ? (
-                <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-                  No merchant-wide tier is assigned yet. Pick one on the right so merchant-side plan visibility has real data.
-                </div>
-              ) : null}
-            </div>
+                    {merchantTierStatus.is_over_limit && recommendedMerchantTier && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                        Recommended tier by location count:{' '}
+                        <span className="font-medium">{recommendedMerchantTier.display_name}</span>.
+                      </div>
+                    )}
 
-            <div className="space-y-4 border-t pt-6">
-              <div className="space-y-3">
-                <Label>Assign Tier</Label>
-                <div className="grid gap-4 xl:grid-cols-3">
-                  {merchantTierPlans.map((plan) => {
-                    const isSelected = selectedMerchantTierPlanId === plan.id
+                    <details className="rounded-xl border p-3">
+                      <summary className="cursor-pointer list-none text-sm font-medium text-muted-foreground hover:text-foreground">
+                        Advanced — change plan
+                      </summary>
+                      <div className="mt-4 space-y-4">
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                          {merchantTierPlans.map((plan) => {
+                            const isSelected = selectedMerchantTierPlanId === plan.id
+                            return (
+                              <button
+                                key={plan.id}
+                                type="button"
+                                onClick={() => setSelectedMerchantTierPlanId(plan.id)}
+                                className={`flex flex-col rounded-xl border p-4 text-left transition-colors ${
+                                  isSelected
+                                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                    : 'hover:border-primary/40'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-medium">{plan.display_name}</span>
+                                  {isSelected && <Badge>Selected</Badge>}
+                                </div>
+                                <span className="mt-1 text-lg font-semibold">
+                                  {formatTierPrice(plan.monthly_price_cents)}
+                                </span>
+                                <span className="mt-1 text-xs text-muted-foreground">
+                                  {formatMerchantTierBillingUnit(plan)}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>Status</Label>
+                            <Select
+                              value={merchantTierSubscriptionStatus}
+                              onValueChange={(value) =>
+                                setMerchantTierSubscriptionStatus(
+                                  value as 'active' | 'past_due' | 'suspended' | 'cancelled',
+                                )
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="past_due">Past Due</SelectItem>
+                                <SelectItem value="suspended">Suspended</SelectItem>
+                                <SelectItem value="cancelled">Cancelled</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Current Period Start</Label>
+                            <Input
+                              type="date"
+                              value={merchantTierPeriodStart}
+                              onChange={(event) => setMerchantTierPeriodStart(event.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => handleSaveMerchantTier()}
+                          disabled={isPending || !selectedMerchantTierPlanId}
+                        >
+                          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          {merchantTierSubscriptionStatus === 'active'
+                            ? billingExemption.active
+                              ? 'Update complimentary tier'
+                              : 'Update tier & charge'
+                            : 'Update tier'}
+                        </Button>
+                      </div>
+                    </details>
+                  </CardContent>
+                </Card>
+              )}
 
-                    return (
-                      <button
-                        key={plan.id}
-                        type="button"
-                        onClick={() => setSelectedMerchantTierPlanId(plan.id)}
-                        className={`flex min-h-[250px] flex-col rounded-2xl border p-5 text-left transition-colors ${
-                          isSelected
-                            ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                            : 'border-slate-200 bg-white hover:border-primary/40'
-                        }`}
-                      >
-                        <div className="mt-1 flex items-center justify-between gap-2">
-                          <div className="text-lg font-semibold">{plan.display_name}</div>
-                          {isSelected ? <Badge>Selected</Badge> : null}
-                        </div>
-                        <div className="mt-2 text-2xl font-semibold tracking-tight">
-                          {formatTierPrice(plan.monthly_price_cents)}
-                        </div>
-                        <div className="mt-3 text-sm text-muted-foreground">
-                          {plan.description || formatMerchantTierBillingUnit(plan)}
-                        </div>
-                        <div className="mt-4 border-t pt-3 text-xs font-medium text-muted-foreground">
-                          {formatMerchantTierBillingUnit(plan)}
-                        </div>
-                        <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-                          {merchantTierHighlights(plan).map((line) => (
-                            <div key={`${plan.id}-${line}`} className="flex items-start gap-2">
-                              <div className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                              <span>{line}</span>
-                            </div>
+              {/* Screen 2 — Set up the location */}
+              {activeStep.id === 'locations' && (
+                <Card>
+                  <CardContent className="space-y-5 pt-6">
+                    <div className="space-y-2">
+                      <Label>Location</Label>
+                      <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select location" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sortedLocations.map((location) => (
+                            <SelectItem key={location.id} value={location.id}>
+                              {location.name}
+                            </SelectItem>
                           ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedLocationSubscription
+                          ? `Current: ${selectedLocationSubscription.status} · ${formatMoney(selectedLocationSubscription.monthly_amount)}/mo`
+                          : 'No subscription yet for this location.'}
+                        {selectedBillingProfile ? ' · Card ready' : ' · No card on file'}
+                      </p>
+                    </div>
+
+                    {/* Features */}
+                    <div className="rounded-xl border p-4">
+                      <div className="flex items-center gap-1 text-sm font-medium">
+                        Features
+                        <InfoHint label="Optional software add-ons this location uses (loyalty, online ordering, …). Each is billed monthly to the location card." />
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {selectedServiceRows.filter((row) => row.service.service_category !== 'hardware').length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No features available. Add them in the billing catalog.</p>
+                        ) : (
+                          selectedServiceRows
+                            .filter((row) => row.service.service_category !== 'hardware')
+                            .map(({ service, enabled, comped, subtotal }) => (
+                              <div key={service.id} className="flex items-center justify-between gap-3 rounded-lg border p-2.5">
+                                <label className="flex min-w-0 items-start gap-2.5">
+                                  <Checkbox
+                                    checked={enabled}
+                                    onCheckedChange={(checked) => updateServiceState(service.id, { enabled: Boolean(checked) })}
+                                    className="mt-0.5"
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="block text-sm font-medium">{service.display_name}</span>
+                                    <span className="block text-xs text-muted-foreground">{summarizePricing(service)}</span>
+                                  </span>
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  {service.pricing_model !== 'flat' && enabled && !comped ? (
+                                    <div className="flex items-center gap-1">
+                                      <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateServiceState(service.id, { quantity: String(Math.max(0, parsePositiveInteger(serviceFormState[service.id]?.quantity) - 1)) })}>−</Button>
+                                      <Input inputMode="numeric" className="h-7 w-12 text-center" value={serviceFormState[service.id]?.quantity ?? '1'} onChange={(event) => updateServiceState(service.id, { quantity: event.target.value })} />
+                                      <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateServiceState(service.id, { quantity: String(parsePositiveInteger(serviceFormState[service.id]?.quantity) + 1) })}>+</Button>
+                                    </div>
+                                  ) : null}
+                                  {enabled ? (
+                                    <Button
+                                      type="button"
+                                      variant={comped ? 'default' : 'outline'}
+                                      size="sm"
+                                      className="h-7 px-2 text-xs"
+                                      title="Grant this feature for free (entitled, not billed)"
+                                      onClick={() => updateServiceState(service.id, { comped: !comped })}
+                                    >
+                                      Free
+                                    </Button>
+                                  ) : null}
+                                  <span className="w-16 text-right text-sm font-medium">{enabled ? (comped ? 'Free' : formatMoney(subtotal)) : '—'}</span>
+                                </div>
+                              </div>
+                            ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Devices */}
+                    <div className="rounded-xl border p-4">
+                      <div className="flex items-center gap-1 text-sm font-medium">
+                        Devices
+                        <InfoHint label="Hardware-linked charges. These sync from the location's deployed devices." />
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">Synced from deployed devices.</p>
+
+                      {/* Deployed-device count, for reference only. Devices are billed
+                          per-device via the explicit hardware services below — there is no
+                          automatic per-station charge. */}
+                      <div className="mt-3 flex items-start gap-1.5 rounded-lg border border-dashed bg-muted/30 p-2.5 text-xs text-muted-foreground">
+                        <span className="min-w-0">
+                          {activeStationCount === null
+                            ? 'Counting deployed POS tablets…'
+                            : `${activeStationCount} POS tablet${activeStationCount === 1 ? '' : 's'} deployed. Add per-device charges below — nothing is billed automatically.`}
+                        </span>
+                        <InfoHint label="Deployed device count, for reference only. Device charges are set explicitly below (e.g. POS Tablet, KDS); there is no automatic base or per-station charge." />
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        {selectedServiceRows.filter((row) => row.service.service_category === 'hardware').length === 0 ? (
+                          <p className="text-xs text-muted-foreground">No additional device charges.</p>
+                        ) : (
+                          selectedServiceRows
+                            .filter((row) => row.service.service_category === 'hardware')
+                            .map(({ service, enabled, comped, subtotal }) => (
+                              <div key={service.id} className="flex items-center justify-between gap-3 rounded-lg border p-2.5">
+                                <label className="flex min-w-0 items-start gap-2.5">
+                                  <Checkbox
+                                    checked={enabled}
+                                    onCheckedChange={(checked) => updateServiceState(service.id, { enabled: Boolean(checked) })}
+                                    className="mt-0.5"
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="block text-sm font-medium">{service.display_name}</span>
+                                    <span className="block text-xs text-muted-foreground">{summarizePricing(service)}</span>
+                                  </span>
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  {service.pricing_model !== 'flat' && enabled && !comped ? (
+                                    <div className="flex items-center gap-1">
+                                      <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateServiceState(service.id, { quantity: String(Math.max(0, parsePositiveInteger(serviceFormState[service.id]?.quantity) - 1)) })}>−</Button>
+                                      <Input inputMode="numeric" className="h-7 w-12 text-center" value={serviceFormState[service.id]?.quantity ?? '1'} onChange={(event) => updateServiceState(service.id, { quantity: event.target.value })} />
+                                      <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => updateServiceState(service.id, { quantity: String(parsePositiveInteger(serviceFormState[service.id]?.quantity) + 1) })}>+</Button>
+                                    </div>
+                                  ) : null}
+                                  {enabled ? (
+                                    <Button
+                                      type="button"
+                                      variant={comped ? 'default' : 'outline'}
+                                      size="sm"
+                                      className="h-7 px-2 text-xs"
+                                      title="Grant this feature for free (entitled, not billed)"
+                                      onClick={() => updateServiceState(service.id, { comped: !comped })}
+                                    >
+                                      Free
+                                    </Button>
+                                  ) : null}
+                                  <span className="w-16 text-right text-sm font-medium">{enabled ? (comped ? 'Free' : formatMoney(subtotal)) : '—'}</span>
+                                </div>
+                              </div>
+                            ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Advanced */}
+                    <details className="rounded-xl border p-3">
+                      <summary className="cursor-pointer list-none text-sm font-medium text-muted-foreground hover:text-foreground">
+                        Advanced — status, periods &amp; grace
+                      </summary>
+                      <div className="mt-4 space-y-4">
+                        <div className="grid gap-3 sm:grid-cols-3">
+                          <div className="space-y-2">
+                            <Label>Status</Label>
+                            <Select value={status} onValueChange={(value) => setStatus(value as SubscriptionStatus)}>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="trial">Trial</SelectItem>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="past_due">Past Due</SelectItem>
+                                <SelectItem value="suspended">Suspended</SelectItem>
+                                <SelectItem value="canceled">Canceled</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Current Period Start</Label>
+                            <Input type="date" value={currentPeriodStart} onChange={(event) => setCurrentPeriodStart(event.target.value)} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Next Billing Date</Label>
+                            <Input type="date" value={nextBillingDate} onChange={(event) => setNextBillingDate(event.target.value)} />
+                          </div>
                         </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
+                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] sm:items-end">
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-grace-until">Grace period until</Label>
+                            <Input id="edit-grace-until" type="datetime-local" value={gracePeriodEndsAt} onChange={(event) => setGracePeriodEndsAt(event.target.value)} disabled={!selectedLocationSubscription} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-grace-reason">Reason</Label>
+                            <Input id="edit-grace-reason" value={graceReason} onChange={(event) => setGraceReason(event.target.value)} placeholder="Approved extension or billing exception" disabled={!selectedLocationSubscription} />
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" onClick={() => saveGracePeriod(false)} disabled={isPending || !selectedLocationSubscription || !gracePeriodEndsAt}>
+                              Extend grace
+                            </Button>
+                            {selectedLocationSubscription?.grace_period_ends_at ? (
+                              <Button type="button" variant="ghost" onClick={() => saveGracePeriod(true)} disabled={isPending}>
+                                Clear
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    </details>
+                  </CardContent>
+                </Card>
+              )}
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select
-                    value={merchantTierSubscriptionStatus}
-                    onValueChange={(value) =>
-                      setMerchantTierSubscriptionStatus(
-                        value as 'active' | 'past_due' | 'suspended' | 'cancelled',
-                      )
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="past_due">Past Due</SelectItem>
-                      <SelectItem value="suspended">Suspended</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+              {/* Screen 3 — Review & charge */}
+              {activeStep.id === 'review' && (
+                <div className="space-y-5">
+                  <Card>
+                    <CardContent className="space-y-4 pt-6">
+                      {!selectedBillingProfile && status === 'active' && !billingExemption.active && (
+                        <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 sm:flex-row sm:items-start sm:justify-between">
+                          <span className="flex items-start gap-2">
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                            <span>
+                              No card on file for {selectedLocation?.name ?? 'this location'}. Add one before charging.
+                            </span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2 sm:pl-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-8 bg-amber-600 text-white hover:bg-amber-700"
+                              asChild
+                            >
+                              <Link
+                                href={`/manage/merchants/${merchant.id}/billing${selectedLocation ? `?billingScope=${selectedLocation.id}` : ''}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <CreditCard className="mr-1.5 h-4 w-4" />
+                                Add a card
+                                <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
+                              </Link>
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 text-amber-800 hover:bg-amber-100 hover:text-amber-900"
+                              onClick={() => refresh()}
+                              disabled={isPending}
+                            >
+                              <RefreshCcw className={`mr-1.5 h-4 w-4${isPending ? ' animate-spin' : ''}`} />
+                              Refresh
+                            </Button>
+                          </span>
+                        </div>
+                      )}
+                      {billingExemption.active && (
+                        <div className="flex items-start gap-2 rounded-lg border border-amber-300/70 bg-amber-50/60 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
+                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                          This merchant is billing exempt. Services activate without an invoice or charge.
+                        </div>
+                      )}
+                      <div className="overflow-hidden rounded-xl border">
+                        <table className="w-full text-sm">
+                          <tbody>
+                            {(quote?.line_items ?? []).map((item, index) => (
+                              <tr key={index} className="border-b last:border-0">
+                                <td className="px-3 py-2 text-muted-foreground">
+                                  {readQuoteLineString(item, ['description', 'label', 'name'], 'Item')}
+                                </td>
+                                <td className="px-3 py-2 text-right font-medium">
+                                  {formatMoney(readQuoteLineNumber(item, ['amount', 'total', 'line_total', 'subtotal']))}
+                                </td>
+                              </tr>
+                            ))}
+                            <tr className="border-b">
+                              <td className="px-3 py-2 text-muted-foreground">Subtotal</td>
+                              <td className="px-3 py-2 text-right">{formatMoney(quote?.subtotal ?? 0)}</td>
+                            </tr>
+                            <tr className="border-b">
+                              <td className="px-3 py-2 text-muted-foreground">Card surcharge</td>
+                              <td className="px-3 py-2 text-right">{formatMoney(quote?.card_surcharge ?? 0)}</td>
+                            </tr>
+                            <tr>
+                              <td className="px-3 py-2 font-semibold">Total</td>
+                              <td className="px-3 py-2 text-right text-base font-semibold">{formatMoney(quote?.total_amount ?? 0)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      {billingExemption.active ? (
+                        <p className="text-sm text-muted-foreground">
+                          No charge is made while the exemption is active. Services are saved and
+                          activated immediately.
+                        </p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          We&apos;ll charge{' '}
+                          <span className="font-medium text-foreground">{buildPaymentMethodLabel(selectedBillingProfile)}</span>{' '}
+                          {formatMoney(quote?.total_amount ?? 0)} today for the first month, then the same amount
+                          every month starting{' '}
+                          <span className="font-medium text-foreground">{formatDate(nextBillingDate)}</span> (one month
+                          from today).
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
 
-              <div className="grid gap-4 md:grid-cols-2 md:items-end">
-                <div className="space-y-2">
-                  <Label>Current Period Start</Label>
-                  <Input
-                    type="date"
-                    value={merchantTierPeriodStart}
-                    onChange={(event) => setMerchantTierPeriodStart(event.target.value)}
+                  <BillingHistorySection
+                    invoices={filteredInvoices}
+                    invoiceActionId={invoiceActionId}
+                    isBusy={isPending}
+                    onPreview={handlePreviewInvoice}
+                    onDownload={handleDownloadInvoice}
+                    onCharge={handleChargeInvoice}
+                    limit={3}
                   />
                 </div>
-                <div className="space-y-1 text-sm">
-                  <p className="font-medium text-foreground">Monthly auto-renewal</p>
-                  <p className="text-muted-foreground">
-                    The period end is calculated automatically. Active subscriptions renew monthly until their status is set to Cancelled.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                {merchantTierSubscription ? (
-                  <span>Last updated {formatDate(merchantTierSubscription.updated_at)}</span>
-                ) : null}
-                {recommendedMerchantTier ? (
-                  <span>Recommended tier by active location count: {recommendedMerchantTier.display_name}</span>
-                ) : (
-                  <span>Recommended tier will appear once locations exist.</span>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Button onClick={() => handleSaveMerchantTier()} disabled={isPending || !selectedMerchantTierPlanId}>
-                  {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {merchantTierSubscriptionStatus === 'active'
-                    ? billingExemption.active
-                      ? 'Save Complimentary Tier'
-                      : 'Save Tier & Charge'
-                    : 'Save Merchant Tier'}
-                </Button>
-                {merchantTierSubscriptionStatus === 'active' ? (
-                  <span className="text-xs text-muted-foreground">
-                    {billingExemption.active
-                      ? 'The tier is assigned without an invoice or Valor charge while the exemption is active.'
-                      : 'The prior tier remains unchanged unless Valor approves the automatic charge.'}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-          </Card>
-        </section>
-        )}
-
-        {activeStep.id === 'catalog' && (
-        <section aria-labelledby="subscription-step-heading" className="space-y-6">
-          <Card>
-        <CardHeader>
-          <CardTitle>Billing Catalog Controls</CardTitle>
-          <CardDescription>
-            Configure reusable plan prices, billable services, and device-to-service mappings. Changes affect future
-            calculations; existing invoice snapshots remain unchanged.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-6 xl:grid-cols-2">
-          <div className="min-w-0 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="font-medium">Service Billing Plan</div>
-                <p className="text-xs text-muted-foreground">
-                  Base station price, included stations, extra-station price, and card surcharge.
-                </p>
-              </div>
-              <Badge variant={servicePlanForm.isActive ? 'default' : 'secondary'}>
-                {servicePlanForm.isActive ? 'Active' : 'Inactive'}
-              </Badge>
+              )}
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Plan</Label>
-                <Select value={selectedServicePlanId} onValueChange={setSelectedServicePlanId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select plan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {servicePlans.map((plan) => (
-                      <SelectItem key={plan.id} value={plan.id}>
-                        {plan.display_name} ({plan.plan_code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Plan Code</Label>
-                <Input
-                  value={servicePlanForm.planCode}
-                  onChange={(event) => setServicePlanForm((current) => ({ ...current, planCode: event.target.value }))}
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>Display Name</Label>
-                <Input
-                  value={servicePlanForm.displayName}
-                  onChange={(event) => setServicePlanForm((current) => ({ ...current, displayName: event.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>First Station Price</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={servicePlanForm.basePriceMonthly}
-                  onChange={(event) =>
-                    setServicePlanForm((current) => ({ ...current, basePriceMonthly: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Included Stations</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="1"
-                  value={servicePlanForm.includedStations}
-                  onChange={(event) =>
-                    setServicePlanForm((current) => ({ ...current, includedStations: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Additional Station Price</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={servicePlanForm.perExtraStationPrice}
-                  onChange={(event) =>
-                    setServicePlanForm((current) => ({ ...current, perExtraStationPrice: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Card Surcharge %</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.01"
-                  value={servicePlanForm.cardSurchargePct}
-                  onChange={(event) =>
-                    setServicePlanForm((current) => ({ ...current, cardSurchargePct: event.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={servicePlanForm.isActive}
-                onCheckedChange={(checked) =>
-                  setServicePlanForm((current) => ({ ...current, isActive: Boolean(checked) }))
+            {/* Sticky summary */}
+            <div>
+              <SubscriptionEditSummary
+                tierName={merchantTierStatus.plan?.name || 'No tier'}
+                tierPriceLabel={
+                  merchantTierStatus.plan
+                    ? merchantTierStatus.plan.monthly_price_cents > 0
+                      ? formatTierPrice(merchantTierStatus.plan.monthly_price_cents)
+                      : 'Free'
+                    : '—'
                 }
+                locationName={selectedLocation?.name ?? null}
+                quote={quote}
+                isQuoteLoading={isQuoteLoading}
+                cardLabel={buildPaymentMethodLabel(selectedBillingProfile)}
+                nextBillingDateLabel={formatDate(nextBillingDate)}
               />
-              Active plan
-            </label>
-
-            <Button onClick={handleSaveServicePlan} disabled={isPending}>
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Plan Pricing
-            </Button>
+            </div>
           </div>
 
-          <div className="min-w-0 space-y-4 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="font-medium">Billable Services & Add-ons</div>
-                <p className="text-xs text-muted-foreground">
-                  Edit POS tablet, KDS, online ordering, loyalty, delivery integration, franchise, and future services.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSelectedCatalogServiceId('')
-                  setBillableServiceForm(serviceToFormState(null))
-                }}
-              >
-                New Service
+          {/* Single sticky action bar — the only navigation */}
+          <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-between gap-3 border-t bg-background/95 px-1 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+            {currentStep > 0 ? (
+              <Button variant="outline" onClick={() => changeStep(currentStep - 1)} disabled={isPending}>
+                <ChevronLeft className="mr-1 h-4 w-4" />
+                Back
               </Button>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Service</Label>
-                <Select value={selectedCatalogServiceId} onValueChange={setSelectedCatalogServiceId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {services.map((service) => (
-                      <SelectItem key={service.id} value={service.id}>
-                        {service.display_name} ({service.service_code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Service Code</Label>
-                <Input
-                  value={billableServiceForm.serviceCode}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, serviceCode: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>Display Name</Label>
-                <Input
-                  value={billableServiceForm.displayName}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, displayName: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select
-                  value={billableServiceForm.serviceCategory}
-                  onValueChange={(value) =>
-                    setBillableServiceForm((current) => ({
-                      ...current,
-                      serviceCategory: value as BillableServiceRecord['service_category'],
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hardware">Hardware</SelectItem>
-                    <SelectItem value="software">Software</SelectItem>
-                    <SelectItem value="service">Service</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Pricing Model</Label>
-                <Select
-                  value={billableServiceForm.pricingModel}
-                  onValueChange={(value) =>
-                    setBillableServiceForm((current) => ({
-                      ...current,
-                      pricingModel: value as BillableServiceRecord['pricing_model'],
-                    }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="flat">Flat</SelectItem>
-                    <SelectItem value="per_unit">Per unit</SelectItem>
-                    <SelectItem value="tiered">Tiered</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Base Monthly Price</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={billableServiceForm.basePriceMonthly}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, basePriceMonthly: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Additional Unit Price</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={billableServiceForm.additionalUnitPrice}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, additionalUnitPrice: event.target.value }))
-                  }
-                  placeholder="Only for tiered pricing"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Included Quantity</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step="1"
-                  value={billableServiceForm.includedQuantity}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, includedQuantity: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Unit Label</Label>
-                <Input
-                  value={billableServiceForm.unitLabel}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, unitLabel: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Card Surcharge %</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.01"
-                  value={billableServiceForm.cardSurchargePct}
-                  onChange={(event) =>
-                    setBillableServiceForm((current) => ({ ...current, cardSurchargePct: event.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={billableServiceForm.isActive}
-                onCheckedChange={(checked) =>
-                  setBillableServiceForm((current) => ({ ...current, isActive: Boolean(checked) }))
-                }
-              />
-              Active service
-            </label>
-
-            <Button onClick={handleSaveBillableService} disabled={isPending}>
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Service Pricing
-            </Button>
-          </div>
-
-          <div className="space-y-4 border-t pt-6 xl:col-span-2">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="font-medium">Device Billing Mappings</div>
-                <p className="text-xs text-muted-foreground">
-                  Controls which deployed device categories automatically adjust billable service quantities.
-                </p>
-              </div>
-              <Badge variant={deviceMappingForm.isActive ? 'default' : 'secondary'}>
-                {deviceMappingForm.isActive ? 'Active mapping' : 'Inactive mapping'}
-              </Badge>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Device Category</Label>
-                <Select
-                  value={deviceMappingForm.deviceCategory}
-                  onValueChange={(value) => {
-                    setSelectedDeviceMappingCategory(value)
-                    setDeviceMappingForm((current) => ({ ...current, deviceCategory: value }))
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BILLABLE_DEVICE_CATEGORIES.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category.replace(/_/g, ' ')}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>Billable Service</Label>
-                <Select
-                  value={deviceMappingForm.serviceCode}
-                  onValueChange={(value) =>
-                    setDeviceMappingForm((current) => ({ ...current, serviceCode: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select billable service" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {services.map((service) => (
-                      <SelectItem key={service.id} value={service.service_code}>
-                        {service.display_name} ({service.service_code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <label className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={deviceMappingForm.isActive}
-                  onCheckedChange={(checked) =>
-                    setDeviceMappingForm((current) => ({ ...current, isActive: Boolean(checked) }))
-                  }
-                />
-                Active mapping
-              </label>
-              <div className="text-xs text-muted-foreground">
-                Device assignment sync recalculates subscription quantities after deployed device changes.
-              </div>
-            </div>
-
-            <Button
-              onClick={handleSaveDeviceBillingMapping}
-              disabled={isPending || !deviceMappingForm.serviceCode}
-            >
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save Device Mapping
-            </Button>
-          </div>
-        </CardContent>
-          </Card>
-        </section>
-        )}
-
-        {activeStep.id === 'locations' && (
-        <section aria-labelledby="subscription-step-heading" className="space-y-6">
-          <Card>
-        <CardHeader className="gap-4">
-          <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-5">
-              <div className="space-y-2 2xl:col-span-2">
-                <Label>Location</Label>
-                <Select value={selectedLocation?.id || ''} onValueChange={setSelectedLocationId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select location" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sortedLocations.map((location) => (
-                      <SelectItem key={location.id} value={location.id}>
-                        {location.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {billingExemption.active ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant="default">Complimentary</Badge>
-                    <span>No card or charge is required while the exemption is active.</span>
-                  </div>
-                ) : selectedBillingProfile ? (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant="default">Valor ready</Badge>
-                    <span>An active vaulted Valor billing card is available.</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Badge variant="secondary">Not ready</Badge>
-                    <span>Save a merchant-wide or location Valor billing card before charging.</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>Status</Label>
-                <Select value={status} onValueChange={(value) => setStatus(value as SubscriptionStatus)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="trial">Trial</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="past_due">Past Due</SelectItem>
-                    <SelectItem value="suspended">Suspended</SelectItem>
-                    <SelectItem value="canceled">Canceled</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Current Period Start</Label>
-                <Input type="date" value={currentPeriodStart} onChange={(event) => setCurrentPeriodStart(event.target.value)} />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Next Billing Date</Label>
-                <Input type="date" value={nextBillingDate} onChange={(event) => setNextBillingDate(event.target.value)} />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" onClick={refresh} disabled={isPending}>
-                <RefreshCcw className="mr-2 h-4 w-4" />
-                Refresh
+            ) : (
+              <span />
+            )}
+            {activeStep.id !== 'review' ? (
+              <Button onClick={() => changeStep(currentStep + 1)} disabled={isPending}>
+                Continue
+                <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
+            ) : (
               <Button
-                onClick={handleSave}
+                onClick={() => handleSave(() => setMode('overview'))}
                 disabled={
                   isPending ||
                   !selectedLocation ||
@@ -2410,905 +2408,14 @@ export function HqSubscriptionsWorkspace({
                 }
               >
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {status === 'active'
-                  ? billingExemption.active
-                    ? selectedLocationSubscription
-                      ? 'Save Complimentary Services'
-                      : 'Create Complimentary Services'
-                    : selectedLocationSubscription
-                      ? 'Save & Charge'
-                      : 'Create & Charge'
-                  : selectedLocationSubscription
-                    ? 'Save Changes'
-                    : 'Create Subscription'}
+                {billingExemption.active
+                  ? 'Save complimentary services'
+                  : `Save & charge ${formatMoney(quote?.total_amount ?? 0)}`}
               </Button>
-              {status === 'active' ? (
-                <span className="text-xs text-muted-foreground">
-                  {billingExemption.active
-                    ? 'Services activate without an invoice or payment while the exemption is active.'
-                    : 'Valor must approve the automatic charge before these services become active.'}
-                </span>
-              ) : null}
-            </div>
-
-            <div className="grid gap-4 border-t pt-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_auto] md:items-end">
-              <div className="space-y-2">
-                <Label htmlFor="billing-grace-until">Grace period until</Label>
-                <Input
-                  id="billing-grace-until"
-                  type="datetime-local"
-                  value={gracePeriodEndsAt}
-                  onChange={(event) => setGracePeriodEndsAt(event.target.value)}
-                  disabled={!selectedLocationSubscription}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="billing-grace-reason">Reason</Label>
-                <Input
-                  id="billing-grace-reason"
-                  value={graceReason}
-                  onChange={(event) => setGraceReason(event.target.value)}
-                  placeholder="Approved extension or temporary billing exception"
-                  disabled={!selectedLocationSubscription}
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => saveGracePeriod(false)}
-                  disabled={isPending || !selectedLocationSubscription || !gracePeriodEndsAt}
-                >
-                  Extend grace
-                </Button>
-                {selectedLocationSubscription?.grace_period_ends_at ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => saveGracePeriod(true)}
-                    disabled={isPending}
-                  >
-                    Clear
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-          <CardDescription>
-            The first available location is loaded automatically. Services below show both currently subscribed items
-            and available additions for the selected location.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {pendingServiceRequests.length > 0 ? (
-            <div className="space-y-4 border-b pb-6">
-              <div>
-                <h3 className="font-semibold">Pending paid add-on requests</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Approval charges the location&apos;s Valor card. The feature remains inactive if payment fails.
-                </p>
-              </div>
-              <div className="grid gap-4 xl:grid-cols-2">
-                {pendingServiceRequests.map((request) => (
-                  <div key={request.id} className="space-y-4 border-t pt-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">{request.request_number}</Badge>
-                          <Badge variant={request.status === 'processing' ? 'default' : 'secondary'}>{request.status}</Badge>
-                        </div>
-                        <p className="mt-2 font-medium">{request.service_name} · {request.location_name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Quantity {request.requested_quantity} · {formatMoney(request.authorized_total)}/month · Requested {formatDate(request.requested_at)}
-                        </p>
-                      </div>
-                    </div>
-                    <AuthorizationEvidence
-                      reference={request.authorization_reference}
-                      acceptedAt={request.authorization_accepted_at}
-                      termsVersion={request.authorization_terms_version}
-                      text={request.authorization_text}
-                      price={`${formatMoney(request.authorized_total)}/month`}
-                      cadence={request.authorized_billing_cadence}
-                      requestedBy={request.requested_by_email || request.requested_by}
-                      ipAddress={request.authorization_ip_address}
-                      userAgent={request.authorization_user_agent}
-                      merchantName={request.merchant_name_snapshot}
-                      locationName={request.location_name_snapshot}
-                      featureName={request.service_name_snapshot}
-                    />
-                    <div className="space-y-2">
-                      <Label htmlFor={`service-decision-note-${request.id}`}>Decision note (optional)</Label>
-                      <Textarea
-                        id={`service-decision-note-${request.id}`}
-                        value={serviceDecisionNotes[request.id] ?? ''}
-                        onChange={(event) => setServiceDecisionNotes((current) => ({ ...current, [request.id]: event.target.value }))}
-                        placeholder="Add activation details or explain the decision."
-                        rows={2}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Button type="button" className="sm:flex-1" disabled={isPending || request.status === 'processing'} onClick={() => handleServiceRequestDecision(request, 'approved')}>
-                        {billingExemption.active
-                          ? 'Approve complimentary service'
-                          : 'Approve, charge & activate'}
-                      </Button>
-                      <Button type="button" variant="outline" className="sm:flex-1" disabled={isPending || request.status === 'processing'} onClick={() => handleServiceRequestDecision(request, 'denied')}>
-                        Deny request
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-          {pendingHardwareRequests.length > 0 ? (
-            <div className="space-y-4 border-b pb-6">
-              <div>
-                <h3 className="font-semibold">Pending hardware requests</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Review each location independently. Approval starts fulfillment and does not assign inventory automatically.
-                </p>
-              </div>
-              <div className="grid gap-4 xl:grid-cols-2">
-                {pendingHardwareRequests.map((request) => (
-                  <div key={request.id} className="min-w-0 space-y-4 border-t pt-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">{request.request_number}</Badge>
-                          <Badge variant="secondary">
-                            {request.requested_quantity} device{request.requested_quantity === 1 ? '' : 's'}
-                          </Badge>
-                        </div>
-                        <p className="mt-2 font-medium">{request.location_name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Requested {formatDate(request.requested_at)}
-                        </p>
-                      </div>
-                    </div>
-                    {request.request_note ? (
-                      <p className="border-l-2 pl-3 text-sm text-muted-foreground">{request.request_note}</p>
-                    ) : null}
-                    <div className="space-y-2">
-                      <Label htmlFor={`hardware-decision-note-${request.id}`}>
-                        Decision note (optional)
-                      </Label>
-                      <Textarea
-                        id={`hardware-decision-note-${request.id}`}
-                        value={hardwareDecisionNotes[request.id] ?? ''}
-                        onChange={(event) =>
-                          setHardwareDecisionNotes((current) => ({
-                            ...current,
-                            [request.id]: event.target.value,
-                          }))
-                        }
-                        placeholder="Add fulfillment details or explain the decision."
-                        rows={2}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Button
-                        type="button"
-                        className="sm:flex-1"
-                        disabled={isPending}
-                        onClick={() => handleHardwareRequestDecision(request, 'approved')}
-                      >
-                        Approve request
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="sm:flex-1"
-                        disabled={isPending}
-                        onClick={() => handleHardwareRequestDecision(request, 'denied')}
-                      >
-                        Deny request
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-          {serviceRequestHistory.some((request) => !['pending', 'processing'].includes(request.status)) ? (
-            <div className="space-y-4 border-b pb-6">
-              <div>
-                <h3 className="font-semibold">Add-on authorization history</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Permanent approved, denied, and cancelled authorization records remain available for review and export.
-                </p>
-              </div>
-              <div className="divide-y divide-border/60">
-                {serviceRequestHistory
-                  .filter((request) => !['pending', 'processing'].includes(request.status))
-                  .map((request) => (
-                    <details key={`history-${request.id}`} className="py-4">
-                      <summary className="cursor-pointer list-none">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="font-medium">{request.request_number} · {request.service_name}</p>
-                            <p className="text-sm text-muted-foreground">{request.location_name} · {formatMoney(request.authorized_total)}/month</p>
-                          </div>
-                          <Badge variant={request.status === 'approved' ? 'default' : 'secondary'}>{request.status}</Badge>
-                        </div>
-                      </summary>
-                      <div className="mt-4">
-                        <AuthorizationEvidence
-                          reference={request.authorization_reference}
-                          acceptedAt={request.authorization_accepted_at}
-                          termsVersion={request.authorization_terms_version}
-                          text={request.authorization_text}
-                          price={`${formatMoney(request.authorized_total)}/month`}
-                          cadence={request.authorized_billing_cadence}
-                          requestedBy={request.requested_by_email || request.requested_by}
-                          ipAddress={request.authorization_ip_address}
-                          userAgent={request.authorization_user_agent}
-                          merchantName={request.merchant_name_snapshot}
-                          locationName={request.location_name_snapshot}
-                          featureName={request.service_name_snapshot}
-                        />
-                      </div>
-                    </details>
-                  ))}
-              </div>
-            </div>
-          ) : null}
-          {selectedLocationSubscription?.status === 'suspended' ? (
-            <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
-              <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
-              <div className="space-y-1">
-                <div className="font-medium text-destructive">Subscription access is suspended for this location.</div>
-                <p className="text-muted-foreground">
-                  The backend access gate disables stations and payment terminals while the subscription is suspended.
-                  Change status back to Active or Trial after payment is restored.
-                </p>
-              </div>
-            </div>
-          ) : selectedLocationSubscription?.status === 'past_due' ? (
-            <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
-              <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-600" />
-              <div className="space-y-1">
-                <div className="font-medium">Subscription payment is past due.</div>
-                <p className="text-amber-800">
-                  Review billing before moving this subscription to Suspended. Suspension triggers station and terminal
-                  deactivation through the backend access gate.
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="overflow-x-auto border-y">
-            <table className="w-full min-w-[860px] text-sm">
-              <thead className="bg-muted/35 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Service</th>
-                  <th className="px-4 py-3 font-medium">Category</th>
-                  <th className="px-4 py-3 font-medium">Quantity</th>
-                  <th className="px-4 py-3 font-medium">Unit</th>
-                  <th className="px-4 py-3 font-medium">Subtotal</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedServiceRows.map(({ service, enabled, quantity, subtotal }) => {
-                  const quantityDisabled = !enabled || service.pricing_model === 'flat'
-                  const currentQuantity = serviceFormState[service.id]?.quantity ?? '1'
-
-                  return (
-                    <tr key={service.id} className="border-t align-top">
-                      <td className="px-4 py-4">
-                        <div className="flex items-start gap-3">
-                          <Checkbox
-                            checked={enabled}
-                            onCheckedChange={(checked) => updateServiceState(service.id, { enabled: Boolean(checked) })}
-                            className="mt-0.5"
-                          />
-                          <div className="space-y-1">
-                            <div className="font-medium">{service.display_name}</div>
-                            <div className="text-xs text-muted-foreground">{service.service_code}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <Badge variant="outline">{service.service_category}</Badge>
-                      </td>
-                      <td className="px-4 py-4">
-                        {service.pricing_model === 'flat' ? (
-                          <span className="text-sm">{enabled ? 'Included' : '-'}</span>
-                        ) : (
-                          <div className="flex w-[122px] items-center gap-2 rounded-md border px-2 py-1">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              disabled={quantityDisabled}
-                              onClick={() =>
-                                updateServiceState(service.id, {
-                                  quantity: String(Math.max(0, parsePositiveInteger(currentQuantity) - 1)),
-                                })
-                              }
-                            >
-                              -
-                            </Button>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={currentQuantity}
-                              disabled={quantityDisabled}
-                              onChange={(event) =>
-                                updateServiceState(service.id, {
-                                  quantity: event.target.value,
-                                })
-                              }
-                              className="h-8 border-0 px-0 text-center shadow-none focus-visible:ring-0"
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              disabled={!enabled}
-                              onClick={() =>
-                                updateServiceState(service.id, {
-                                  quantity: String(parsePositiveInteger(currentQuantity) + 1),
-                                })
-                              }
-                            >
-                              +
-                            </Button>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-muted-foreground">{summarizePricing(service)}</td>
-                      <td className="px-4 py-4 font-medium">{enabled ? formatMoney(subtotal) : '-'}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="grid gap-6 border-t pt-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="font-medium">Live Calculator Quote</div>
-                  <p className="text-xs text-muted-foreground">
-                    Authoritative preview from `calculate_subscription_total`; invoice generation uses the same pricing path.
-                  </p>
-                </div>
-                {isQuoteLoading ? (
-                  <Badge variant="outline" className="gap-1">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Calculating
-                  </Badge>
-                ) : quoteError ? (
-                  <Badge variant="destructive">Quote error</Badge>
-                ) : (
-                  <Badge variant="default">Live</Badge>
-                )}
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-2">
-                  <Label>Base Plan</Label>
-                  <Select value={selectedServicePlanId} onValueChange={setSelectedServicePlanId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select base plan" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {servicePlans.map((plan) => (
-                        <SelectItem key={plan.id} value={plan.id}>
-                          {plan.display_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Station Count</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="1"
-                    value={quoteStationCount}
-                    onChange={(event) => setQuoteStationCount(event.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Billing Method</Label>
-                  <Select value={quoteBillingMethod} onValueChange={(value) => setQuoteBillingMethod(value as BillingMethod)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ach">ACH</SelectItem>
-                      <SelectItem value="card">Card</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {quoteError ? (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                  {quoteError}
-                </div>
-              ) : quote?.line_items?.length ? (
-                <div className="overflow-x-auto border-y">
-                  <table className="w-full min-w-[620px] text-sm">
-                    <thead className="bg-muted/35 text-left text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                      <tr>
-                        <th className="px-3 py-2 font-medium">Line</th>
-                        <th className="px-3 py-2 font-medium">Qty</th>
-                        <th className="px-3 py-2 font-medium">Unit</th>
-                        <th className="px-3 py-2 text-right font-medium">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {quote.line_items.map((item, index) => {
-                        const description = readQuoteLineString(item, ['description', 'display_name', 'code'], `Line ${index + 1}`)
-                        const code = readQuoteLineString(item, ['code', 'service_code'])
-                        const quantity = readQuoteLineNumber(item, ['quantity'], 1)
-                        const unitPrice = readQuoteLineNumber(item, ['unit_price'], 0)
-                        const amount = readQuoteLineNumber(item, ['amount', 'subtotal', 'total_amount'], 0)
-
-                        return (
-                          <tr key={`${code || description}-${index}`} className="border-t">
-                            <td className="px-3 py-2">
-                              <div className="font-medium">{description}</div>
-                              {code ? <div className="text-xs text-muted-foreground">{code}</div> : null}
-                            </td>
-                            <td className="px-3 py-2">{quantity}</td>
-                            <td className="px-3 py-2">{unitPrice ? formatMoney(unitPrice) : '-'}</td>
-                            <td className="px-3 py-2 text-right font-medium">{formatMoney(amount)}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-                  Select a base plan or service to calculate a quote.
-                </div>
-              )}
-            </div>
-
-            <div className="min-w-0 space-y-3 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
-              <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Quote Total</div>
-              <div className="text-3xl font-semibold">{formatMoney(quote?.total_amount ?? 0)}</div>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span>{formatMoney(quote?.subtotal ?? 0)}</span>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Card surcharge</span>
-                  <span>{formatMoney(quote?.card_surcharge ?? 0)}</span>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Method</span>
-                  <span className="uppercase">{quote?.billing_method ?? quoteBillingMethod}</span>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span className="text-muted-foreground">Stations</span>
-                  <span>{quote?.station_count ?? parsePositiveInteger(quoteStationCount)}</span>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Saving the subscription persists the selected base plan and services. Active station count is recalculated by the backend from deployed stations.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 border-t pt-6 md:grid-cols-3">
-            <div className="space-y-1">
-              <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Payment Method</div>
-              <div className="font-medium">{buildPaymentMethodLabel(selectedBillingProfile)}</div>
-              <p className="text-xs text-muted-foreground">
-                {selectedBillingProfile
-                  ? 'Only this location\u0027s card pays for these services. The merchant tier is billed separately.'
-                  : 'Add a Valor card for this location before activation. The merchant card is not used as a fallback.'}
-              </p>
-              <div className="text-xs text-muted-foreground">
-                {selectedBillingProfile?.billing_email || 'No billing email on file'}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Billing Cycle</div>
-              <div className="font-medium">Monthly</div>
-              <div className="text-xs text-muted-foreground">
-                {formatDate(currentPeriodStart)} to {formatDate(currentPeriodEnd)}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <div className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Next Charge</div>
-              <div className="font-medium">
-                {selectedLocationSubscription ? formatMoney(selectedLocationSubscription.monthly_amount) : formatMoney(0)}
-              </div>
-              <div className="text-xs text-muted-foreground">{formatDate(nextBillingDate)}</div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Trial Ends At</Label>
-              <Input
-                type="date"
-                value={trialEndsAt}
-                onChange={(event) => setTrialEndsAt(event.target.value)}
-                disabled={status !== 'trial'}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Current Period End</Label>
-              <Input
-                type="date"
-                value={currentPeriodEnd}
-                onChange={(event) => setCurrentPeriodEnd(event.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Quick Actions</Label>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  disabled={!selectedLocationSubscription || isPending || billingExemption.active}
-                  onClick={() => selectedLocationSubscription && handleGenerateInvoice(selectedLocationSubscription.id)}
-                >
-                  Generate Invoice
-                </Button>
-                {selectedLocation ? (
-                  <Button variant="ghost" asChild>
-                    <Link href={`/manage/merchants/${merchant.clerk_org_id || merchant.id}?tab=billing&billingScope=${selectedLocation.id}`}>
-                      Open Billing
-                    </Link>
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-          </Card>
-        </section>
-        )}
-
-        {activeStep.id === 'billing' && (
-        <section aria-labelledby="subscription-step-heading" className="space-y-6">
-          <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 sm:flex-row sm:items-end sm:justify-between">
-            <div className="w-full space-y-2 sm:max-w-sm">
-              <Label>Billing Location</Label>
-              <Select value={selectedLocation?.id || ''} onValueChange={setSelectedLocationId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select location" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sortedLocations.map((location) => (
-                    <SelectItem key={location.id} value={location.id}>
-                      {location.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Transactions and invoices below are filtered to the selected location.
-            </p>
-          </div>
-
-          <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Transactions
-          </CardTitle>
-          <CardDescription>
-            Subscription payment activity for {selectedLocation?.name || 'the selected location'}. This section reflects charge events from subscription invoices.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1.25fr)_minmax(0,0.9fr)]">
-            <div className="min-w-0">
-              <div className="space-y-5">
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">Net collected</div>
-                  <div className="text-3xl font-semibold">{formatMoney(transactionSummary.paid)}</div>
-                  <div className="text-xs text-muted-foreground">
-                    For {selectedLocation?.name || 'this location'}
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <ArrowUpRight className="h-4 w-4 text-emerald-500" />
-                      Money in
-                    </div>
-                    <span className="font-medium">{formatMoney(transactionSummary.paid)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Wallet className="h-4 w-4 text-amber-500" />
-                      Pending
-                    </div>
-                    <span className="font-medium">{formatMoney(transactionSummary.pending)}</span>
-                  </div>
-                  {transactionSummary.pending > 0 ? (
-                    <div className="pl-6 text-xs text-muted-foreground">
-                      Base {formatMoney(transactionSummary.pendingSubtotal)} + surcharge {formatMoney(transactionSummary.pendingSurcharge)}
-                    </div>
-                  ) : null}
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <ArrowDownRight className="h-4 w-4 text-rose-500" />
-                      Failed charges
-                    </div>
-                    <span className="font-medium">{transactionSummary.failedCount}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="min-w-0 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
-              <div>
-                {transactionTrendData.length === 0 ? (
-                  <div className="flex h-[220px] items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
-                    No charge activity yet.
-                  </div>
-                ) : (
-                  <ChartContainer config={transactionTrendChartConfig} className="h-[220px] w-full">
-                    <AreaChart data={transactionTrendData}>
-                      <CartesianGrid vertical={false} />
-                      <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={24} />
-                      <YAxis tickLine={false} axisLine={false} tickFormatter={(value) => `$${Number(value).toFixed(0)}`} />
-                      <ChartTooltip
-                        content={
-                          <ChartTooltipContent
-                            formatter={(value, name) => [
-                              formatMoney(Number(value) || 0),
-                              name,
-                            ]}
-                          />
-                        }
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="paid"
-                        stroke="var(--color-paid)"
-                        fill="var(--color-paid)"
-                        fillOpacity={0.18}
-                        strokeWidth={2}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="failed"
-                        stroke="var(--color-failed)"
-                        fill="var(--color-failed)"
-                        fillOpacity={0.1}
-                        strokeWidth={2}
-                      />
-                    </AreaChart>
-                  </ChartContainer>
-                )}
-              </div>
-            </div>
-
-            <div className="min-w-0 border-t pt-6 xl:border-t-0 xl:border-l xl:pt-0 xl:pl-6">
-              <div>
-                {transactionStatusData.length === 0 ? (
-                  <div className="flex h-[220px] items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
-                    No status distribution yet.
-                  </div>
-                ) : (
-                  <ChartContainer config={transactionStatusChartConfig} className="h-[220px] w-full">
-                    <BarChart data={transactionStatusData} margin={{ left: 12, right: 12 }}>
-                      <CartesianGrid vertical={false} />
-                      <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                      <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
-                      <ChartTooltip
-                        content={
-                          <ChartTooltipContent
-                            formatter={(_, __, item) => {
-                              const payload = item?.payload as { count?: number; total?: number } | undefined
-                              return [
-                                `${payload?.count ?? 0} invoice${(payload?.count ?? 0) === 1 ? '' : 's'} • ${formatMoney(Number(payload?.total) || 0)}`,
-                                'Status',
-                              ]
-                            }}
-                          />
-                        }
-                      />
-                      <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                        {transactionStatusData.map((entry) => (
-                          <Cell key={`status-cell-${entry.status}`} fill={entry.color} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ChartContainer>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium">Transaction Table</div>
-                <div className="text-xs text-muted-foreground">
-                  Charge-side view of subscription invoice activity.
-                </div>
-              </div>
-            </div>
-
-            {filteredInvoices.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                No transactions yet for this location.
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Reference</TableHead>
-                    <TableHead>Method</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Invoice</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredInvoices.map((invoice) => {
-                    const activityDate = invoice.paid_at || invoice.last_payment_attempt_at || invoice.created_at
-                    const reference =
-                      invoice.processor_transaction_id ||
-                      invoice.nmi_transaction_id ||
-                      invoice.last_payment_error ||
-                      '-'
-
-                    return (
-                      <TableRow key={`txn-${invoice.id}`}>
-                        <TableCell>{formatDate(activityDate)}</TableCell>
-                        <TableCell className="max-w-[280px] truncate text-muted-foreground">{reference}</TableCell>
-                        <TableCell className="uppercase">{invoice.billing_method}</TableCell>
-                        <TableCell>
-                          <Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">{invoice.invoice_number}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="font-medium">{formatMoney(invoice.total_amount)}</div>
-                          {Number(invoice.card_surcharge || 0) > 0 ? (
-                            <div className="text-xs text-muted-foreground">
-                              {formatMoney(invoice.subtotal)} + {formatMoney(invoice.card_surcharge)}
-                            </div>
-                          ) : null}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
             )}
           </div>
-        </CardContent>
-          </Card>
-
-          <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Subscription Invoices
-          </CardTitle>
-          <CardDescription>
-            View, download, and manage invoices for the selected location.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-sm text-muted-foreground">Loading invoices...</div>
-          ) : filteredInvoices.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              No subscription invoices have been generated for this location yet.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="py-2 pr-4 font-medium">Invoice</th>
-                    <th className="py-2 pr-4 font-medium">Location</th>
-                    <th className="py-2 pr-4 font-medium">Period</th>
-                    <th className="py-2 pr-4 font-medium">Method</th>
-                    <th className="py-2 pr-4 font-medium">Total</th>
-                    <th className="py-2 pr-4 font-medium">Status</th>
-                    <th className="py-2 pr-4 font-medium">Due</th>
-                    <th className="py-2 pr-4 font-medium">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredInvoices.map((invoice) => (
-                    <tr key={invoice.id} className="border-b last:border-0">
-                      <td className="py-3 pr-4 font-medium">{invoice.invoice_number}</td>
-                      <td className="py-3 pr-4">{subscriptionBillingScope(invoice.metadata) === 'merchant_tier' ? 'Merchant tier' : invoice.location_name}</td>
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-2">
-                          <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>
-                            {invoice.billing_period_start} to {invoice.billing_period_end}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4 uppercase">{invoice.billing_method}</td>
-                      <td className="py-3 pr-4">
-                        <div>{formatMoney(invoice.total_amount)}</div>
-                        {Number(invoice.card_surcharge || 0) > 0 ? (
-                          <div className="text-xs text-muted-foreground">
-                            {formatMoney(invoice.subtotal)} + {formatMoney(invoice.card_surcharge)}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <Badge variant={statusVariant(invoice.status)}>{invoice.status}</Badge>
-                      </td>
-                      <td className="py-3 pr-4">{invoice.due_date}</td>
-                      <td className="py-3 pr-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handlePreviewInvoice(invoice.id)}
-                            disabled={isPending || isInvoicePreviewLoading}
-                          >
-                            {isInvoicePreviewLoading && invoiceActionId === invoice.id ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <Eye className="mr-2 h-4 w-4" />
-                            )}
-                            View
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDownloadInvoice(invoice.id)}
-                            disabled={isPending}
-                          >
-                            {invoiceActionId === invoice.id && !isInvoicePreviewLoading ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <Download className="mr-2 h-4 w-4" />
-                            )}
-                            Download
-                          </Button>
-                          {invoice.billing_method === 'card' && ['open', 'failed'].includes(invoice.status) ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleChargeInvoice(invoice.id)}
-                              disabled={isPending || billingExemption.active}
-                            >
-                              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                              Charge
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              {invoice.billing_method === 'ach' ? 'ACH pending' : '-'}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-          </Card>
-        </section>
-        )}
-        <div className="rounded-xl border bg-card p-4 sm:p-6">
-          <SubscriptionStepNavigation step={currentStep} disabled={isPending || isLoading} onChange={changeStep} />
         </div>
-      </div>
+      )}
 
       <Dialog open={isInvoicePreviewOpen} onOpenChange={setIsInvoicePreviewOpen}>
         <DialogContent className="max-w-5xl">

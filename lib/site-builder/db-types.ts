@@ -176,6 +176,7 @@ export interface ActionResult<T> {
 
 export type ActionErrorCode =
   | "unauthenticated"
+  | "forbidden"
   | "merchant_not_found"
   | "no_online_store"
   | "site_not_found"

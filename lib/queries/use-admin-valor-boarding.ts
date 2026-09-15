@@ -7,6 +7,11 @@ import {
   boardMerchantOnValor,
   setValorAccountPrimary,
 } from '@/app/manage/actions/admin-merchant/valor-board'
+import {
+  getMerchantAcquirerProfile,
+  saveMerchantAcquirerProfile,
+  type SaveAcquirerProfileInput,
+} from '@/app/manage/actions/admin-merchant/valor-acquirer'
 
 /** Per-location Valor boarding status for a merchant (HQ admin view). */
 export function useMerchantValorBoardingStatus(merchantId: string) {
@@ -30,6 +35,38 @@ export function useBoardMerchantOnValor(merchantId: string) {
       boardMerchantOnValor(merchantId, opts),
     onSuccess: (result) => {
       if (result.ok) {
+        queryClient.invalidateQueries({
+          queryKey: adminKeys.merchantValorBoarding(merchantId),
+        })
+      }
+    },
+  })
+}
+
+/** Masked acquirer-profile state (per-merchant MID entry) for the boarding section. */
+export function useMerchantAcquirerProfile(merchantId: string) {
+  return useQuery({
+    queryKey: adminKeys.merchantValorAcquirer(merchantId),
+    queryFn: () => getMerchantAcquirerProfile(merchantId),
+    enabled: !!merchantId,
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * Save a merchant's acquirer profile(s). Refreshes both the acquirer state and
+ * the boarding status (the Board button's gate depends on it).
+ */
+export function useSaveMerchantAcquirerProfile(merchantId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: SaveAcquirerProfileInput) =>
+      saveMerchantAcquirerProfile(merchantId, input),
+    onSuccess: (result) => {
+      if (result.ok) {
+        queryClient.invalidateQueries({
+          queryKey: adminKeys.merchantValorAcquirer(merchantId),
+        })
         queryClient.invalidateQueries({
           queryKey: adminKeys.merchantValorBoarding(merchantId),
         })

@@ -27,11 +27,14 @@ export default function AttachmentList({ attachments }: AttachmentListProps) {
   if (!attachments || attachments.length === 0) return null;
 
   const images = attachments.filter((a) => a.file_type.startsWith("image/"));
+  const videos = attachments.filter((a) => a.file_type.startsWith("video/"));
   const pdfs = attachments.filter((a) => a.file_type === "application/pdf");
 
   return (
     <>
-      <div className="mt-2 flex flex-wrap gap-2">
+      {/* `items-start` keeps a short image tile aligned to the top of a row it
+          shares with a taller card, rather than centring it against one. */}
+      <div className="mt-2 flex flex-wrap items-start gap-2">
         {/* Image thumbnails */}
         {images.map((att) => (
           <button
@@ -41,23 +44,68 @@ export default function AttachmentList({ attachments }: AttachmentListProps) {
               setLightboxId(att.id);
               setLightboxName(att.file_name);
             }}
-            className="group relative rounded-md overflow-hidden border border-border/50 hover:border-primary/40 transition-colors"
+            className="group relative overflow-hidden rounded-lg bg-background ring-1 ring-black/[0.07] transition-shadow hover:shadow-md dark:bg-background/60 dark:ring-white/10"
             title={att.file_name}
           >
+            {/* `object-contain` on an opaque tile, not `object-cover`: logos and
+                screenshots are often not square, and cropping them to a square
+                cut the subject out. The tile also gives non-square images a
+                neutral ground instead of letting the message bubble show
+                through behind them. */}
             <img
               src={attachmentUrl(att.id)}
               alt={att.file_name}
-              className="h-20 w-20 object-cover"
+              className="h-20 w-20 object-contain p-1.5"
             />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+            <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/5" />
           </button>
+        ))}
+
+        {/* Inline video players. `preload="metadata"` fetches only the header
+            for duration/dimensions; seeking then pulls ranges on demand, which
+            the attachment proxy serves as 206 responses. */}
+        {videos.map((att) => (
+          <div
+            key={att.id}
+            className="flex w-full max-w-sm flex-col overflow-hidden rounded-lg bg-background ring-1 ring-black/[0.07] dark:bg-background/60 dark:ring-white/10"
+          >
+            {/* No rounding on the player itself — the card clips it, so the
+                video meets the card edge instead of leaving a seam of card
+                colour around a second rounded rectangle. */}
+            <video
+              src={attachmentUrl(att.id)}
+              controls
+              preload="metadata"
+              playsInline
+              className="w-full bg-black"
+            />
+            <div className="flex items-center gap-2 px-2.5 py-1.5 text-xs">
+              <span
+                className="truncate text-foreground"
+                title={att.file_name}
+              >
+                {att.file_name}
+              </span>
+              <span className="ml-auto shrink-0 text-muted-foreground">
+                {formatBytes(att.file_size)}
+              </span>
+              <a
+                href={attachmentUrl(att.id, { download: true })}
+                download={att.file_name}
+                className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                title="Download"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </a>
+            </div>
+          </div>
         ))}
 
         {/* PDF file cards */}
         {pdfs.map((att) => (
           <div
             key={att.id}
-            className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-xs"
+            className="flex items-center gap-2 rounded-lg bg-background px-3 py-2 text-xs ring-1 ring-black/[0.07] dark:bg-background/60 dark:ring-white/10"
           >
             <FileText className="h-4 w-4 text-red-500 shrink-0" />
             <a

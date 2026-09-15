@@ -1075,7 +1075,7 @@ export function NewEditItemFormSheet({
       // Tax & Inventory Control (migration 014)
       tax_category: "standard",
       is_tax_exempt: false,
-      available_channels: ["pos", "online"],
+      available_channels: ["pos", "online", "kiosk"],
       // Prep Station (migration 022)
       prep_station_id: null,
     },
@@ -1114,6 +1114,7 @@ export function NewEditItemFormSheet({
         available_channels: ((editItem as any).available_channels || [
           "pos",
           "online",
+          "kiosk",
         ]) as any,
         // Prep Station (migration 022)
         prep_station_id: editItem.prep_station_id ?? null,
@@ -1206,7 +1207,7 @@ export function NewEditItemFormSheet({
         stock_tracking_mode: "in_stock",
         tax_category: "standard",
         is_tax_exempt: false,
-        available_channels: ["pos", "online"],
+        available_channels: ["pos", "online", "kiosk"],
         prep_station_id: null,
         ...draft.values,
       });

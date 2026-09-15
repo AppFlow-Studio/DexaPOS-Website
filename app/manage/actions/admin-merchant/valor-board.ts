@@ -19,6 +19,7 @@ import {
   type OnboardResult,
 } from '@/lib/payments/valor/boarding'
 import {
+  applyAcquirerIdentifiers,
   mapLocationToStore,
   mapMerchantToBoardingDetails,
   missingLocationFields,
@@ -119,14 +120,52 @@ export async function boardMerchantOnValor(
     })
   }
 
-  let acquirer: ReturnType<typeof readValorAcquirerConfig> | null = null
+  // The ISO-level template (BIN/agent/agentBank/program type/…) still comes from
+  // env; only the per-merchant identifiers (MID/V#/store/term) are entered per
+  // merchant and overlaid onto it at boarding time.
+  let acquirerTemplate: ReturnType<typeof readValorAcquirerConfig> | null = null
   try {
-    acquirer = readValorAcquirerConfig()
+    acquirerTemplate = readValorAcquirerConfig()
   } catch (e) {
     blockers.push({
-      code: 'acquirer',
-      label: e instanceof ValorConfigError ? e.message : 'Valor acquirer profile not configured.',
+      code: 'acquirer_template',
+      label:
+        e instanceof ValorConfigError
+          ? e.message
+          : 'Valor ISO acquirer template not configured.',
     })
+  }
+
+  // Per-merchant acquirer identifiers must be entered from underwriting. A NULL
+  // location_id row ("same MID for all locations") covers every location; else
+  // every active location needs its own row.
+  const { data: profileRows } = await supabase
+    .from('valor_acquirer_profiles')
+    .select('location_id')
+    .eq('merchant_id', merchantId)
+
+  const pRows = (profileRows ?? []) as { location_id: string | null }[]
+  const hasSharedProfile = pRows.some((r) => r.location_id === null)
+  const coveredLocationIds = new Set(
+    pRows.filter((r) => r.location_id !== null).map((r) => r.location_id),
+  )
+
+  if (pRows.length === 0) {
+    blockers.push({
+      code: 'acquirer_profile',
+      label:
+        'No processing credentials entered. Add the merchant’s MID/V-Number from ' +
+        'underwriting before boarding.',
+    })
+  } else if (!hasSharedProfile) {
+    for (const location of locations) {
+      if (!coveredLocationIds.has(location.id)) {
+        blockers.push({
+          code: `acquirer_profile:${location.id}`,
+          label: `Location "${location.name ?? location.id}" has no MID entered.`,
+        })
+      }
+    }
   }
 
   const merchantGaps = missingMerchantFields(merchant)
@@ -154,22 +193,48 @@ export async function boardMerchantOnValor(
     }
   }
 
-  if (blockers.length > 0 || !fees || !acquirer) {
+  if (blockers.length > 0 || !fees || !acquirerTemplate) {
     return { ok: false, blockers }
   }
 
   // ── Live boarding — irreversible Valor state from here ───────────────────────
   const mcc = readBoardingMcc()
   const merchantDetails = mapMerchantToBoardingDetails(merchant, mcc)
-  const locationInputs: LocationInput[] = locations.map((location) => ({
-    store: mapLocationToStore(location, merchant),
-    dexaLocationId: location.id,
-    epiLabel: 'VT',
-  }))
+
+  // Overlay each location's own MID onto the ISO template. get_valor_acquirer_secrets
+  // returns the per-location row, falling back to the shared (NULL location) row —
+  // so the "same MID for all locations" default yields the same MID everywhere.
+  const locationInputs: LocationInput[] = await Promise.all(
+    locations.map(async (location) => {
+      const { data: secrets } = await supabase.rpc('get_valor_acquirer_secrets', {
+        p_merchant_id: merchantId,
+        p_location_id: location.id,
+      })
+      const s = (secrets as
+        | { mid: string | null; vnumber: string | null; store_no: string; term_no: string }[]
+        | null)?.[0]
+      const acquirer =
+        s && s.mid && s.vnumber
+          ? applyAcquirerIdentifiers(acquirerTemplate!, {
+              mid: s.mid,
+              vNumber: s.vnumber,
+              storeNo: s.store_no,
+              termNo: s.term_no,
+            })
+          : undefined
+      return {
+        store: mapLocationToStore(location, merchant),
+        dexaLocationId: location.id,
+        epiLabel: 'VT',
+        ...(acquirer ? { acquirer } : {}),
+      }
+    }),
+  )
 
   const boardingOptions: ValorBoardingOptions = {
     credentials: readIsoCredentials(),
-    acquirer,
+    // Fallback only; each location above overlays its own MID.
+    acquirer: acquirerTemplate,
   }
 
   const persist: BoardingPersist = async (account: BoardedAccount) => {
