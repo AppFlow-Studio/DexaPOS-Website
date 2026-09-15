@@ -24,7 +24,7 @@ const STATUS: Record<FleetStatus, { dot: string; icon: string; Icon: typeof Wifi
   green: { dot: 'bg-green-500', icon: 'text-green-600 dark:text-green-400', Icon: Wifi, label: 'Online' },
   yellow: { dot: 'bg-yellow-500', icon: 'text-yellow-600 dark:text-yellow-400', Icon: BatteryWarning, label: 'Warning' },
   red: { dot: 'bg-red-500', icon: 'text-red-600 dark:text-red-400', Icon: WifiOff, label: 'Offline' },
-  grey: { dot: 'bg-gray-400', icon: 'text-muted-foreground', Icon: AlertCircle, label: 'Inactive' },
+  grey: { dot: 'bg-muted-foreground/50', icon: 'text-muted-foreground', Icon: AlertCircle, label: 'Inactive' },
 }
 
 const LEGEND = (Object.keys(STATUS) as FleetStatus[]).map((k) => ({

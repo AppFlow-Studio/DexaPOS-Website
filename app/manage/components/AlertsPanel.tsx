@@ -192,7 +192,9 @@ export function AlertsPanel() {
                     </button>
                   </div>
                   {isGrouped && isExpanded && (
-                    <ul className="ml-7 space-y-1 border-l border-border/60 pl-3 text-xs text-muted-foreground">
+                    // Indented rather than ruled: §5.5 takes no dividing lines,
+                    // and the indent already reads as "belongs to the alert above".
+                    <ul className="ml-7 space-y-1 text-xs text-muted-foreground">
                       {alert.groupedDevices!.map((d) => (
                         <li key={d.stationId} className="flex flex-wrap justify-between gap-x-3 gap-y-0.5">
                           <span className="min-w-0 truncate font-medium text-foreground">
