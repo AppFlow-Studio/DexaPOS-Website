@@ -14,6 +14,7 @@ import { AuthDialog } from "../AuthDialog";
 import { CheckoutHeader } from "./CheckoutHeader";
 import { ContactSection } from "./ContactSection";
 import { OrderTypeSection } from "./OrderTypeSection";
+import { PaymentProcessingOverlay } from "./PaymentProcessingOverlay";
 import { OrderDetailsSection } from "./OrderDetailsSection";
 import { TipSection } from "./TipSection";
 import { OrderSummarySection } from "./OrderSummarySection";
@@ -748,6 +749,7 @@ export function CheckoutPage({
 
   return (
     <>
+      {loading && <PaymentProcessingOverlay total={total} />}
       <CheckoutHeader slug={slug} storeName={displayStoreName} logoUrl={site?.logo_url} />
 
       <main className="max-w-6xl mx-auto p-4 pb-32 lg:pb-10">

@@ -14,6 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { InfoIcon } from "@/components/ui/info-icon";
 import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, Check, Bell } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -1045,6 +1052,33 @@ function CompletedSetupPanel({
                 onCheckedChange={(checked) => onUpdate({ autoAcceptOrders: checked })}
                 disabled={isSaving}
               />
+
+              {/* Window to accept orders — only meaningful when auto-accept is off,
+                  since auto-accepted orders never sit in "pending". */}
+              <div className="space-y-2">
+                <Label>Accept window</Label>
+                <Select
+                  value={String(settings.pendingAcceptWindowMinutes ?? 5)}
+                  onValueChange={(v) => onUpdate({ pendingAcceptWindowMinutes: Number(v) })}
+                  disabled={isSaving || settings.autoAcceptOrders}
+                >
+                  <SelectTrigger className="w-full sm:w-56">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 minute</SelectItem>
+                    <SelectItem value="2">2 minutes</SelectItem>
+                    <SelectItem value="3">3 minutes</SelectItem>
+                    <SelectItem value="5">5 minutes</SelectItem>
+                    <SelectItem value="10">10 minutes</SelectItem>
+                    <SelectItem value="15">15 minutes</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  How long a new order waits for staff to accept it before the customer&apos;s order
+                  auto-cancels. Only applies when auto-accept is off.
+                </p>
+              </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">

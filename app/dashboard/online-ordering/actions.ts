@@ -762,6 +762,7 @@ function mapConfigToSettings(
     deliveryEnabled: config.accepts_delivery ?? false,
     deliveryPricingEnabled: config.delivery_pricing_enabled ?? true,
     autoAcceptOrders: config.auto_accept_orders ?? false,
+    pendingAcceptWindowMinutes: config.pending_accept_window_minutes ?? 5,
     minimumOrderAmount: Number(config.min_order ?? 0),
     preparationLeadTime: config.estimated_prep_minutes ?? 20,
     futureOrderMaxDays: config.max_future_order_days ?? 0,
@@ -1126,6 +1127,9 @@ export async function saveOnlineOrderingSettings(
   if (settings.deliveryEnabled !== undefined) configData.accepts_delivery = Boolean(settings.deliveryEnabled);
   if (settings.deliveryPricingEnabled !== undefined) configData.delivery_pricing_enabled = Boolean(settings.deliveryPricingEnabled);
   if (settings.autoAcceptOrders !== undefined) configData.auto_accept_orders = Boolean(settings.autoAcceptOrders);
+  if (settings.pendingAcceptWindowMinutes !== undefined) {
+    configData.pending_accept_window_minutes = Math.max(1, Math.round(Number(settings.pendingAcceptWindowMinutes) || 5));
+  }
   if (settings.preparationLeadTime !== undefined) configData.estimated_prep_minutes = Number(settings.preparationLeadTime) || 0;
   if (settings.futureOrderMaxDays !== undefined) configData.max_future_order_days = Number(settings.futureOrderMaxDays) || 0;
   if (settings.acceptsDineIn !== undefined) configData.accepts_dine_in = Boolean(settings.acceptsDineIn);
