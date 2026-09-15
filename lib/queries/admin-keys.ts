@@ -593,4 +593,7 @@ export const adminKeys = {
 
   merchantValorBoarding: (merchantId: string) =>
     [...adminKeys.merchants(), merchantId, 'valor-boarding'] as const,
+
+  merchantValorAcquirer: (merchantId: string) =>
+    [...adminKeys.merchants(), merchantId, 'valor-acquirer'] as const,
 }

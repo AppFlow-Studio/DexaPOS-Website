@@ -129,9 +129,10 @@ const SUBSCRIPTION_SECTIONS: Array<{
   },
 ]
 const PLAN_NAME_BY_CODE: Record<string, string> = {
-  basic: 'Basic',
+  basic: 'Single Location',
   multi_location: 'Multi-Location',
-  franchise: 'Franchise',
+  // franchise tier is retired and folds into Multi-Location.
+  franchise: 'Multi-Location',
 }
 
 function formatMoney(amount: number): string {

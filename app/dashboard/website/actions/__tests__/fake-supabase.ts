@@ -335,5 +335,17 @@ export function createFakeSupabase(tables: FakeTables, options: FakeSupabaseOpti
     return builder;
   }
 
-  return { client: { from } as never, calls, tables };
+  /**
+   * The website actions call `is_merchant_owner_strict` through the owner guard
+   * before every write. Authorization is the database's job (RLS) and is verified
+   * against the live database separately — mirroring the "tenancy is NOT modelled"
+   * stance above — so here the caller is assumed to be the owner and the guard
+   * passes. An unknown rpc resolves to null rather than throwing.
+   */
+  async function rpc(fn: string, _args?: Record<string, unknown>): Promise<QueryResult> {
+    if (fn === "is_merchant_owner_strict") return { data: true, error: null };
+    return { data: null, error: null };
+  }
+
+  return { client: { from, rpc } as never, calls, tables };
 }

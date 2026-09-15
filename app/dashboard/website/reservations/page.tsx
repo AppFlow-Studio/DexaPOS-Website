@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 
 import { GetReservationConfig } from "@/app/dashboard/website/actions/reservations-settings";
 import ReservationsScreen from "@/components/site-builder/dashboard/ReservationsScreen";
+import { WebsiteLocationPicker } from "@/components/site-builder/dashboard/WebsiteLocationPicker";
 import { Button } from "@/components/ui/button";
 import type { MerchantSiteRow } from "@/lib/site-builder/db-types";
-import { loadSiteContext } from "@/lib/site-builder/site-context";
+import { loadSiteContext, resolveWebsiteLocation } from "@/lib/site-builder/site-context";
 import {
   readSiteSettings,
   resolveReservationApproval,
@@ -40,7 +41,12 @@ export default async function WebsiteReservationsRoute({
   if (!orgId) redirect("/sign-in");
 
   const params = await searchParams;
-  const storefront = await loadSiteContext(orgId, params.location);
+
+  const scope = await resolveWebsiteLocation(orgId, params.location);
+  if (!scope || scope.kind === "no-storefront") redirect("/dashboard/website/pages");
+  if (scope.kind === "pick") return <WebsiteLocationPicker locations={scope.locations} />;
+
+  const storefront = await loadSiteContext(orgId, scope.locationId);
   if (!storefront) redirect("/dashboard/website/pages");
 
   const supabase = createServerSupabaseClient();

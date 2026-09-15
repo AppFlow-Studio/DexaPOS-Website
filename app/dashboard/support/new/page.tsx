@@ -19,7 +19,11 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { PageShell, PageHeader, Panel } from "@/components/dashboard/shell";
-import { useCreateTicket, GetSupportUploadUrl } from "../../hooks/useSupport";
+import {
+  useCreateTicket,
+  GetSupportUploadUrl,
+  DiscardSupportUpload,
+} from "../../hooks/useSupport";
 import { useClerkOrgId } from "../../hooks/useLocationScoped";
 import { useSelectedLocation, useLocationStore } from "@/stores/location-store";
 import { TicketCategory, TICKET_CATEGORY_LABELS, AttachmentInput } from "@/types/support-ticket";
@@ -76,9 +80,25 @@ export default function NewTicketPage() {
 
   const selectedCategory = watch("category");
 
-  const handleGetUploadUrl = async (fileName: string, fileId: string, sessionId: string) => {
+  const handleGetUploadUrl = async (
+    fileName: string,
+    fileId: string,
+    sessionId: string,
+    contentType: string,
+  ) => {
     if (!clerkOrgId) return { error: "Not authenticated" };
-    return GetSupportUploadUrl(clerkOrgId, fileName, fileId, sessionId);
+    return GetSupportUploadUrl(
+      clerkOrgId,
+      fileName,
+      fileId,
+      sessionId,
+      contentType,
+    );
+  };
+
+  const handleDiscardUpload = async (filePath: string) => {
+    if (!clerkOrgId) return;
+    return DiscardSupportUpload(clerkOrgId, filePath);
   };
 
   const onSubmit = async (values: FormValues) => {
@@ -176,11 +196,13 @@ export default function NewTicketPage() {
           <div className="space-y-2">
             <Label>Screenshots / Files (optional)</Label>
             <p className="text-xs text-muted-foreground">
-              Images (PNG, JPG, WebP) or PDFs. Max 3 files, 5MB each.
+              Images/PDFs up to 5 MB; video (MP4, MOV, WebM) up to 100 MB. Max
+              3 files.
             </p>
             <FileUploadInput
               onUploadsChange={setAttachments}
               getUploadUrl={handleGetUploadUrl}
+              onDiscardUpload={handleDiscardUpload}
               sessionId={uploadSessionId}
               disabled={isPending}
             />

@@ -16,7 +16,14 @@ export function buildSubscriptionInvoiceFilename(document: SubscriptionInvoiceDo
   return `${fileSafe(base)}.${extension}`
 }
 
-export async function downloadSubscriptionInvoicePdf(document: SubscriptionInvoiceDocumentData): Promise<void> {
+/**
+ * Build the jsPDF document. Shared by the client download
+ * (`downloadSubscriptionInvoicePdf`) and the server buffer builder
+ * (`renderSubscriptionInvoicePdfBuffer` in ./invoice-pdf-buffer) so the layout
+ * never drifts between the "Download PDF" button and the emailed attachment.
+ * Returns the jsPDF instance; the caller chooses `.save()` vs `.output()`.
+ */
+export async function buildSubscriptionInvoicePdfDoc(document: SubscriptionInvoiceDocumentData) {
   const [{ jsPDF }, autoTableModule] = await Promise.all([
     import('jspdf'),
     import('jspdf-autotable'),
@@ -155,6 +162,12 @@ export async function downloadSubscriptionInvoicePdf(document: SubscriptionInvoi
     pdf.text(noteLines, marginX, cursorY)
   }
 
+  return pdf
+}
+
+/** Client-side: build the PDF and trigger a browser download. */
+export async function downloadSubscriptionInvoicePdf(document: SubscriptionInvoiceDocumentData): Promise<void> {
+  const pdf = await buildSubscriptionInvoicePdfDoc(document)
   pdf.save(buildSubscriptionInvoiceFilename(document, 'pdf'))
 }
 

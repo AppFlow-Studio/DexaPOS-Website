@@ -48,12 +48,16 @@ export function formatUsd(amount: number): string {
 
 export function formatLongDate(value: string | null | undefined): string {
   if (!value) return '-'
+  // Billing dates are calendar dates; format in UTC so a date-only string like
+  // "2026-09-10" (parsed as UTC midnight) never renders a day early in a
+  // negative-offset timezone.
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return new Intl.DateTimeFormat('en-US', {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
+    timeZone: 'UTC',
   }).format(date)
 }
 
@@ -65,21 +69,21 @@ export function formatShortDateRange(start: string | null | undefined, end: stri
     return `${start} - ${end}`
   }
 
-  const startMonth = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(startDate)
-  const endMonth = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(endDate)
-  const startDay = startDate.getDate()
-  const endDay = endDate.getDate()
-  const endYear = endDate.getFullYear()
+  const startMonth = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(startDate)
+  const endMonth = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(endDate)
+  const startDay = startDate.getUTCDate()
+  const endDay = endDate.getUTCDate()
+  const endYear = endDate.getUTCFullYear()
 
-  if (startDate.getFullYear() === endDate.getFullYear() && startDate.getMonth() === endDate.getMonth()) {
+  if (startDate.getUTCFullYear() === endDate.getUTCFullYear() && startDate.getUTCMonth() === endDate.getUTCMonth()) {
     return `${startMonth} ${startDay}-${endDay}, ${endYear}`
   }
 
-  if (startDate.getFullYear() === endDate.getFullYear()) {
+  if (startDate.getUTCFullYear() === endDate.getUTCFullYear()) {
     return `${startMonth} ${startDay}-${endMonth} ${endDay}, ${endYear}`
   }
 
-  return `${startMonth} ${startDay}, ${startDate.getFullYear()} - ${endMonth} ${endDay}, ${endYear}`
+  return `${startMonth} ${startDay}, ${startDate.getUTCFullYear()} - ${endMonth} ${endDay}, ${endYear}`
 }
 
 export function renderSubscriptionInvoiceHtml(document: SubscriptionInvoiceDocumentData): string {

@@ -147,7 +147,9 @@ function paymentLabel(method?: string | null): string {
 /** "{Brand} ····1234" for cards, or just the method label for cash etc. */
 function paymentDisplay(p: ReceiptPayment, opts: { dotChar: string }): string {
   const brand = cardBrandLabel(p.card_type);
-  const isCard = (p.payment_method ?? "").toLowerCase().startsWith("card_");
+  const method = (p.payment_method ?? "").toLowerCase();
+  // Online-order card rows arrive as exactly "card"; in-store as "card_present".
+  const isCard = method === "card" || method.startsWith("card_");
   const head = isCard ? brand ?? "Card" : paymentLabel(p.payment_method);
   return p.card_last_four ? `${head} ${opts.dotChar}${p.card_last_four}` : head;
 }
@@ -159,6 +161,9 @@ const TERMINAL_LABELS: Record<string, string | null> = {
   castles: "Castles",
   manual: "Manual Entry",
   cash_drawer: "Cash Drawer",
+  // Online-order processors — internal noise on a customer receipt, so hide them.
+  valor: null,
+  nmi: null,
   none: null,
 };
 

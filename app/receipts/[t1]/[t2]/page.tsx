@@ -76,16 +76,21 @@ function paymentBrand(p: ReceiptContractPayment): string {
 
 function fmtTerminalType(t: string | null): string | null {
   if (!t) return null;
-  const map: Record<string, string> = {
+  const map: Record<string, string | null> = {
     dejavoo_spinapi: "Dejavoo SpinAPI",
     dejavoo_p18:     "Dejavoo P18",
     dejavoo:         "Dejavoo",
     castles:         "Castles",
     manual:          "Manual Entry",
     cash_drawer:     "Cash Drawer",
-    none:            null as unknown as string,
+    // Online-order processors — internal noise on a customer receipt, so hide them.
+    valor:           null,
+    nmi:             null,
+    none:            null,
   };
-  return map[t] ?? t;
+  // `in` check (not `?? t`) so an explicit null hides the row instead of falling
+  // through to the raw type.
+  return t in map ? map[t] : t;
 }
 
 function txnType(status: string | null): string {
