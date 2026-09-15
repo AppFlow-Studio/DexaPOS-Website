@@ -64,6 +64,9 @@ const isPublicApiRoute = createRouteMatcher([
   '/api/site-reservations(.*)',
   '/api/site-forms(.*)',
   '/api/marketing/unsubscribe(.*)',
+  // Valor Passage.js formAction sink — posted anonymously by the storefront
+  // card form; a no-op 204 (see PUBLIC_STOREFRONT_API_PREFIXES).
+  '/api/valor/passage-callback(.*)',
 ])
 // The set of gated / app-owned route prefixes. Anything NOT in this set (and not
 // already handled as public above) is treated as public marketing so the
