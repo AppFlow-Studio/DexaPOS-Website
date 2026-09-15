@@ -1,7 +1,5 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   DollarSign,
   ShoppingCart,
@@ -14,9 +12,14 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from 'lucide-react'
+
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
+import { cn } from '@/lib/utils'
 import { usePlatformDashboardKPIs } from '@/lib/queries/use-platform-dashboard'
 
-interface KPICardProps {
+interface KPIProps {
   title: string
   value: string | number
   change: number
@@ -29,7 +32,28 @@ interface KPICardProps {
   hideChange?: boolean
 }
 
-function KPICard({
+/**
+ * A period-over-period delta.
+ *
+ * Deliberately text-led rather than a green/red filled pill: a revenue
+ * comparison is information, not an operational alarm, and reserving colour for
+ * real severity is what keeps the alarms legible (see `UI-DESIGN-SYSTEM.md`
+ * §14.3 HQ-2). Direction is carried by the arrow glyph, which survives both
+ * colour-blindness and a greyscale print.
+ */
+function Delta({ change }: { change: number }) {
+  const Arrow = change >= 0 ? ArrowUpRight : ArrowDownRight
+
+  return (
+    <span className="inline-flex items-center gap-0.5 tabular-nums">
+      <Arrow className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      {Math.abs(change).toFixed(1)}%
+      <span className="sr-only">{change >= 0 ? 'increase' : 'decrease'}</span>
+    </span>
+  )
+}
+
+function KPI({
   title,
   value,
   change,
@@ -38,47 +62,31 @@ function KPICard({
   isLoading,
   warningThreshold,
   hideChange,
-}: KPICardProps) {
-  const isWarning = warningThreshold && typeof value === 'number' && value < warningThreshold
+}: KPIProps) {
+  // A metric below its threshold IS an operational alarm, so this one keeps its
+  // colour where the period deltas above give theirs up.
+  const isWarning =
+    warningThreshold !== undefined &&
+    typeof value === 'number' &&
+    value < warningThreshold
 
   return (
-    <Card className="overflow-hidden border border-blue-100/50 dark:border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm shadow-sm hover:shadow-lg transition-all duration-200 rounded-xl">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
-        <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</CardTitle>
-        <div className="p-1.5 bg-blue-50 dark:bg-blue-950/40 rounded-lg">
-          <Icon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-        </div>
-      </CardHeader>
-      <CardContent className="px-4 pb-4">
-        {isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-9 w-28" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-        ) : (
-          <>
-            <div className={`text-3xl font-bold tracking-tight ${isWarning ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-slate-100'}`}>
-              {value}
-            </div>
-            <div className="flex items-center gap-2 mt-1">
-              {!hideChange && (
-                <div className={`flex items-center text-xs font-medium px-1.5 py-0.5 rounded-full ${
-                  change >= 0 ? 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400'
-                }`}>
-                  {change >= 0 ? (
-                    <ArrowUpRight className="h-3 w-3 mr-0.5" />
-                  ) : (
-                    <ArrowDownRight className="h-3 w-3 mr-0.5" />
-                  )}
-                  {Math.abs(change).toFixed(1)}%
-                </div>
-              )}
-              <span className="text-xs text-muted-foreground">{description}</span>
-            </div>
-          </>
-        )}
-      </CardContent>
-    </Card>
+    <StatTile
+      label={title}
+      icon={<Icon />}
+      isLoading={isLoading}
+      value={
+        <span className={cn(isWarning && 'text-red-600 dark:text-red-400')}>
+          {value}
+        </span>
+      }
+      meta={
+        <span className="inline-flex items-center gap-1.5">
+          {!hideChange && <Delta change={change} />}
+          <span>{description}</span>
+        </span>
+      }
+    />
   )
 }
 
@@ -95,100 +103,100 @@ export function PlatformPulseSection() {
     : 0
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-semibold tracking-tight bg-gradient-to-br from-slate-900 to-blue-900 dark:from-slate-100 dark:to-blue-300 bg-clip-text text-transparent">
-            Platform Pulse
-          </h2>
-          <p className="text-sm text-muted-foreground/80 flex items-center gap-2">
+    <Panel>
+      <PanelSection
+        label="Platform Pulse"
+        caption={
+          <span className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75 motion-reduce:animate-none" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
             </span>
             Real-time platform metrics
-          </p>
-        </div>
-        <div className="self-start sm:self-auto text-xs text-muted-foreground bg-white/60 dark:bg-card/60 px-3 py-1.5 rounded-full border border-blue-100 dark:border-border">
-          Updated just now
-        </div>
-      </div>
+          </span>
+        }
+        action={
+          <span className="text-xs text-muted-foreground">Updated just now</span>
+        }
+      >
+        <div className="space-y-8">
+          {/* Row 1: Revenue & Volume */}
+          <StatRow columns={4}>
+            <KPI
+              title="Revenue Today"
+              value={`$${kpis?.revenueToday.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '0'}`}
+              change={revenueChange}
+              description="vs last week"
+              icon={DollarSign}
+              isLoading={isLoading}
+            />
+            <KPI
+              title="Orders Today"
+              value={kpis?.ordersToday.toLocaleString() || '0'}
+              change={ordersChange}
+              description="vs last week"
+              icon={ShoppingCart}
+              isLoading={isLoading}
+            />
+            <KPI
+              title="Avg. Order Value"
+              value={`$${kpis?.avgOrderValue.toFixed(2) || '0.00'}`}
+              change={0}
+              description="Today"
+              icon={TrendingUp}
+              isLoading={isLoading}
+            />
+            <KPI
+              title="Active Orders"
+              value={kpis?.activeOrdersNow || '0'}
+              change={0}
+              description="In progress"
+              icon={Zap}
+              isLoading={isLoading}
+            />
+          </StatRow>
 
-      {/* Row 1: Revenue & Volume */}
-      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard
-          title="Revenue Today"
-          value={`$${kpis?.revenueToday.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '0'}`}
-          change={revenueChange}
-          description="vs last week"
-          icon={DollarSign}
-          isLoading={isLoading}
-        />
-        <KPICard
-          title="Orders Today"
-          value={kpis?.ordersToday.toLocaleString() || '0'}
-          change={ordersChange}
-          description="vs last week"
-          icon={ShoppingCart}
-          isLoading={isLoading}
-        />
-        <KPICard
-          title="Avg. Order Value"
-          value={`$${kpis?.avgOrderValue.toFixed(2) || '0.00'}`}
-          change={0}
-          description="Today"
-          icon={TrendingUp}
-          isLoading={isLoading}
-        />
-        <KPICard
-          title="Active Orders"
-          value={kpis?.activeOrdersNow || '0'}
-          change={0}
-          description="In progress"
-          icon={Zap}
-          isLoading={isLoading}
-        />
-      </div>
-
-      {/* Row 2: Platform Health */}
-      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard
-          title="Stations Online"
-          value={
-            kpis ? `${kpis.stationsOnline} of ${kpis.stationsTotalCount}` : '0 of 0'
-          }
-          change={0}
-          description="Active"
-          icon={Radio}
-          isLoading={isLoading}
-        />
-        <KPICard
-          title="Staff Clocked In"
-          value={kpis?.staffClockedIn || '0'}
-          change={0}
-          description="Current shifts"
-          icon={Users}
-          isLoading={isLoading}
-        />
-        <KPICard
-          title="Payment Success Rate"
-          value={`${kpis?.paymentSuccessRate.toFixed(1) || '0.0'}%`}
-          change={0}
-          description="Today"
-          icon={CreditCard}
-          isLoading={isLoading}
-          warningThreshold={95}
-        />
-        <KPICard
-          title="Support Tickets"
-          value={kpis?.openSupportTickets ?? 0}
-          change={0}
-          hideChange
-          description="Open"
-          icon={Ticket}
-          isLoading={isLoading}
-        />
-      </div>
-    </div>
+          {/* Row 2: Platform Health */}
+          <StatRow columns={4}>
+            <KPI
+              title="Stations Online"
+              value={
+                kpis ? `${kpis.stationsOnline} of ${kpis.stationsTotalCount}` : '0 of 0'
+              }
+              change={0}
+              description="Active"
+              icon={Radio}
+              isLoading={isLoading}
+            />
+            <KPI
+              title="Staff Clocked In"
+              value={kpis?.staffClockedIn || '0'}
+              change={0}
+              description="Current shifts"
+              icon={Users}
+              isLoading={isLoading}
+            />
+            <KPI
+              title="Payment Success Rate"
+              value={`${kpis?.paymentSuccessRate.toFixed(1) || '0.0'}%`}
+              change={0}
+              description="Today"
+              icon={CreditCard}
+              isLoading={isLoading}
+              warningThreshold={95}
+            />
+            <KPI
+              title="Support Tickets"
+              value={kpis?.openSupportTickets ?? 0}
+              change={0}
+              hideChange
+              description="Open"
+              icon={Ticket}
+              isLoading={isLoading}
+            />
+          </StatRow>
+        </div>
+      </PanelSection>
+    </Panel>
   )
 }
