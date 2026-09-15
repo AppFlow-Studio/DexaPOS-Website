@@ -1,94 +1,67 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Progress } from '@/components/ui/progress'
-import { usePlatformPaymentMetrics } from '@/lib/queries/use-platform-analytics-layer2'
 import {
-  AreaChart,
+  ComposedChart,
   Area,
+  Line,
   BarChart,
   Bar,
-  LineChart,
-  Line,
   PieChart,
   Pie,
   Cell,
+  Legend,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
-  ComposedChart,
 } from 'recharts'
-import { CreditCard, AlertTriangle, TrendingDown } from 'lucide-react'
+import { CreditCard, TrendingDown, AlertTriangle } from 'lucide-react'
+
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile, InsetTile } from '@/components/dashboard/shell/StatTile'
+import {
+  CHART_GRID,
+  CHART_TICK,
+  CHART_CURSOR_FILL,
+} from '@/components/dashboard/orders/analytics/AnalyticsPrimitives'
+import { Progress } from '@/components/ui/progress'
+import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
+import { usePlatformPaymentMetrics } from '@/lib/queries/use-platform-analytics-layer2'
+import { AnalyticsPanel, AnalyticsTooltip, SERIES } from './analytics-primitives'
 
 interface PaymentsSectionProps {
   from: string
   to: string
 }
 
-// Color palette for charts
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+const CURSOR_LINE = { stroke: 'var(--border)', strokeWidth: 1 }
+const count = (v: number) => v.toLocaleString()
 
-// Custom tooltip component for consistent styling
-const CustomTooltip = ({ active, payload, label, formatter }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-white/90 backdrop-blur-sm border border-blue-100 rounded-lg p-2 shadow-lg text-xs">
-        <p className="font-semibold text-slate-900 mb-1">{label}</p>
-        {payload.map((entry: any, index: number) => (
-          <p key={index} style={{ color: entry.color }} className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-            {entry.name}: {formatter ? formatter(entry.value) : entry.value.toLocaleString()}
-          </p>
-        ))}
-      </div>
-    )
-  }
-  return null
-}
+const legendLabel = (value: string) => (
+  <span className="text-xs text-muted-foreground">{value}</span>
+)
 
 export function PaymentsSection({ from, to }: PaymentsSectionProps) {
   const { data, isLoading } = usePlatformPaymentMetrics(from, to)
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-64 w-full rounded-xl" />
+          <Skeleton key={i} className="h-64 w-full rounded-3xl" />
         ))}
       </div>
     )
   }
 
-  const kpiCards = [
-    {
-      title: 'Total Transactions',
-      value: data?.summaryStats.total_transactions.toLocaleString() || '0',
-      icon: CreditCard,
-      color: 'text-blue-600',
-    },
-    {
-      title: 'Failure Rate',
-      value: `${data?.summaryStats.overall_failure_rate.toFixed(1) || 0}%`,
-      icon: TrendingDown,
-      color: data?.summaryStats.overall_failure_rate! > 5 ? 'text-red-600' : 'text-green-600',
-    },
-    {
-      title: 'Chargebacks',
-      value: data?.summaryStats.total_chargebacks.toLocaleString() || '0',
-      icon: AlertTriangle,
-      color: 'text-red-600',
-    },
-    {
-      title: 'Chargeback Amount',
-      value: `$${Number(data?.summaryStats.total_chargeback_amount || 0).toLocaleString()}`,
-      icon: CreditCard,
-      color: 'text-orange-600',
-    },
-  ]
+  const failureRate = data?.summaryStats.overall_failure_rate ?? 0
+  // A failure rate over the 5% threshold is a real operational alarm, so it
+  // keeps its colour (§14.3 HQ-2). The other three figures had decorative
+  // blue/red/orange that encoded nothing, and are now neutral.
+  const failureIsAlarming = failureRate > 5
 
   // Merge transaction volume and failure rate data
   const combinedData = (data?.transactionVolumeByDay || []).map((day) => {
@@ -101,220 +74,173 @@ export function PaymentsSection({ from, to }: PaymentsSectionProps) {
     }
   })
 
+  const adopted = data?.dualPricingAdoption.adopted_merchants || 0
+  const totalMerchants = data?.dualPricingAdoption.total_merchants || 0
+
   return (
-    <div className="space-y-6">
-      {/* KPI Cards - modernized */}
-      <div className="grid gap-5 md:grid-cols-4">
-        {kpiCards.map((card, idx) => {
-          const Icon = card.icon
-          return (
-            <Card
-              key={idx}
-              className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200"
-            >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-4">
-                <CardTitle className="text-sm font-medium text-blue-700/70">{card.title}</CardTitle>
-                <div className="p-1.5 bg-blue-50 rounded-lg">
-                  <Icon className={`h-4 w-4 ${card.color}`} />
-                </div>
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                <div className={`text-3xl font-bold tracking-tight ${card.color}`}>{card.value}</div>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
+    <div className="min-w-0 space-y-6">
+      <Panel>
+        <PanelSection label="Payments Overview">
+          <StatRow columns={4}>
+            <StatTile
+              label="Total Transactions"
+              icon={<CreditCard />}
+              value={data?.summaryStats.total_transactions.toLocaleString() || '0'}
+            />
+            <StatTile
+              label="Failure Rate"
+              icon={<TrendingDown />}
+              value={
+                <span className={cn(failureIsAlarming && 'text-red-600 dark:text-red-400')}>
+                  {`${failureRate.toFixed(1)}%`}
+                </span>
+              }
+              meta={failureIsAlarming ? 'Above 5% threshold' : undefined}
+            />
+            <StatTile
+              label="Chargebacks"
+              icon={<AlertTriangle />}
+              value={data?.summaryStats.total_chargebacks.toLocaleString() || '0'}
+            />
+            <StatTile
+              label="Chargeback Amount"
+              icon={<CreditCard />}
+              value={`$${Number(data?.summaryStats.total_chargeback_amount || 0).toLocaleString()}`}
+            />
+          </StatRow>
+        </PanelSection>
+      </Panel>
 
-      {/* Transaction Volume + Failure Rate */}
-      <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
-        <CardHeader className="pb-2 border-b border-blue-100/50">
-          <CardTitle className="text-base font-semibold text-slate-900">Transaction Volume & Failure Rate</CardTitle>
-          <CardDescription className="text-xs text-muted-foreground/80">
-            Daily transactions and failure rate trend
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 pt-3">
-          <ResponsiveContainer width="100%" height={350}>
-            <ComposedChart data={combinedData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
-              <XAxis
-                dataKey="date"
-                tickFormatter={(v) => v.slice(5)}
-                tick={{ fontSize: 12, fill: '#64748b' }}
-                tickLine={false}
-                axisLine={false}
-              />
+      <AnalyticsPanel
+        title="Transaction Volume & Failure Rate"
+        caption="Daily transactions and failure rate trend"
+      >
+        <ResponsiveContainer width="100%" height={350}>
+          <ComposedChart data={combinedData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            <CartesianGrid {...CHART_GRID} />
+            <XAxis
+              dataKey="date"
+              tickFormatter={(v) => v.slice(5)}
+              tick={CHART_TICK}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              yAxisId="left"
+              tick={CHART_TICK}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={count}
+            />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              domain={[0, 100]}
+              tick={CHART_TICK}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(v) => `${v}%`}
+            />
+            <Tooltip content={<AnalyticsTooltip formatter={count} />} cursor={CURSOR_LINE} />
+            <Legend verticalAlign="bottom" height={36} iconType="circle" formatter={legendLabel} />
+            <Area
+              yAxisId="left"
+              type="monotone"
+              dataKey="txn_count"
+              fill={SERIES[0]}
+              stroke={SERIES[0]}
+              fillOpacity={0.2}
+              name="Transactions"
+            />
+            <Line
+              yAxisId="right"
+              type="monotone"
+              dataKey="failure_rate_pct"
+              stroke={SERIES[4]}
+              strokeWidth={2}
+              name="Failure Rate %"
+              dot={false}
+            />
+            {/* Reference line — neutral, it is not itself a data series. */}
+            <Line
+              yAxisId="right"
+              type="monotone"
+              dataKey={() => 5}
+              stroke="var(--muted-foreground)"
+              strokeDasharray="5 5"
+              strokeWidth={1}
+              dot={false}
+              name="5% Threshold"
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </AnalyticsPanel>
+
+      <div className="grid min-w-0 gap-6 md:grid-cols-2">
+        <AnalyticsPanel title="Chargeback Volume" caption="By month">
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data?.chargebacksByMonth || []} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid {...CHART_GRID} />
+              <XAxis dataKey="month" tick={CHART_TICK} tickLine={false} axisLine={false} />
               <YAxis
-                yAxisId="left"
-                tick={{ fontSize: 12, fill: '#64748b' }}
+                tick={CHART_TICK}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={(v) => v.toLocaleString()}
+                tickFormatter={count}
               />
-              <YAxis
-                yAxisId="right"
-                orientation="right"
-                domain={[0, 100]}
-                tick={{ fontSize: 12, fill: '#64748b' }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(v) => `${v}%`}
-              />
-              <Tooltip
-                content={<CustomTooltip formatter={(v: number) => v.toLocaleString()} />}
-                cursor={{ stroke: '#94a3b8', strokeWidth: 1 }}
-              />
-              <Legend
-                verticalAlign="bottom"
-                height={36}
-                iconType="circle"
-                formatter={(value) => <span className="text-xs text-slate-700">{value}</span>}
-              />
-              <Area
-                yAxisId="left"
-                type="monotone"
-                dataKey="txn_count"
-                fill="#3b82f6"
-                stroke="#3b82f6"
-                fillOpacity={0.2}
-                name="Transactions"
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="failure_rate_pct"
-                stroke="#ef4444"
-                strokeWidth={2}
-                name="Failure Rate %"
-                dot={false}
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey={() => 5}
-                stroke="#94a3b8"
-                strokeDasharray="5 5"
-                strokeWidth={1}
-                dot={false}
-                name="5% Threshold"
-              />
-            </ComposedChart>
+              <Tooltip content={<AnalyticsTooltip formatter={count} />} cursor={{ fill: CHART_CURSOR_FILL }} />
+              <Bar dataKey="chargeback_count" fill={SERIES[4]} radius={[4, 4, 0, 0]} name="Chargebacks" />
+            </BarChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
+        </AnalyticsPanel>
 
-      {/* Chargebacks + Terminals */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
-          <CardHeader className="pb-2 border-b border-blue-100/50">
-            <CardTitle className="text-base font-semibold text-slate-900">Chargeback Volume</CardTitle>
-            <CardDescription className="text-xs text-muted-foreground/80">
-              By month
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 pt-3">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data?.chargebacksByMonth || []} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 12, fill: '#64748b' }}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 12, fill: '#64748b' }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => v.toLocaleString()}
-                />
-                <Tooltip
-                  content={<CustomTooltip formatter={(v: number) => v.toLocaleString()} />}
-                  cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }}
-                />
-                <Bar dataKey="chargeback_count" fill="#ef4444" radius={[4, 4, 0, 0]} name="Chargebacks" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
-          <CardHeader className="pb-2 border-b border-blue-100/50">
-            <CardTitle className="text-base font-semibold text-slate-900">Terminal Distribution</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-3">
-            <ResponsiveContainer width="100%" height={350}>
-              <PieChart>
-                <Pie
-                  data={data?.terminalDistribution || []}
-                  cx="50%"
-                  cy="45%"
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="terminal_count"
-                  nameKey="terminal_type"
-                >
-                  {(data?.terminalDistribution || []).map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  content={<CustomTooltip formatter={(v: number) => v.toLocaleString()} />}
-                />
-                <Legend
-                  verticalAlign="bottom"
-                  height={36}
-                  iconType="circle"
-                  formatter={(value) => <span className="text-xs text-slate-700">{value}</span>}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        <AnalyticsPanel title="Terminal Distribution">
+          <ResponsiveContainer width="100%" height={350}>
+            <PieChart>
+              <Pie
+                data={data?.terminalDistribution || []}
+                cx="50%"
+                cy="45%"
+                outerRadius={100}
+                dataKey="terminal_count"
+                nameKey="terminal_type"
+              >
+                {(data?.terminalDistribution || []).map((_, index) => (
+                  <Cell key={`cell-${index}`} fill={SERIES[index % SERIES.length]} />
+                ))}
+              </Pie>
+              <Tooltip content={<AnalyticsTooltip formatter={count} />} />
+              <Legend verticalAlign="bottom" height={36} iconType="circle" formatter={legendLabel} />
+            </PieChart>
+          </ResponsiveContainer>
+        </AnalyticsPanel>
       </div>
 
-      {/* Dual Pricing Adoption */}
-      <Card className="border border-blue-100/50 bg-white/80 backdrop-blur-sm shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-all duration-200">
-        <CardHeader className="pb-2 border-b border-blue-100/50">
-          <CardTitle className="text-base font-semibold text-slate-900">Dual Pricing (Cash Discount) Adoption</CardTitle>
-          <CardDescription className="text-xs text-muted-foreground/80">
-            Merchants using cash discounts
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 pt-3">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-slate-700">
-                  {data?.dualPricingAdoption.adopted_merchants || 0} of{' '}
-                  {data?.dualPricingAdoption.total_merchants || 0} merchants
-                </span>
-                <span className="font-bold text-blue-600">
-                  {data?.dualPricingAdoption.adoption_pct.toFixed(1) || 0}%
-                </span>
-              </div>
-              <Progress
-                value={data?.dualPricingAdoption.adoption_pct || 0}
-                className="h-3 bg-blue-100 [&>div]:bg-blue-600"
-              />
+      <AnalyticsPanel
+        title="Dual Pricing (Cash Discount) Adoption"
+        caption="Merchants using cash discounts"
+      >
+        <div className="min-w-0 space-y-4">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span className="font-medium tabular-nums">
+                {adopted} of {totalMerchants} merchants
+              </span>
+              <span className="font-semibold tabular-nums">
+                {data?.dualPricingAdoption.adoption_pct.toFixed(1) || 0}%
+              </span>
             </div>
-            {/* Optional mini bar chart for distribution */}
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <div className="p-3 rounded-lg bg-blue-50/50 border border-blue-100">
-                <p className="text-xs text-muted-foreground">Adopted</p>
-                <p className="text-xl font-bold text-blue-600">{data?.dualPricingAdoption.adopted_merchants || 0}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-gray-50/50 border border-gray-200">
-                <p className="text-xs text-muted-foreground">Not Adopted</p>
-                <p className="text-xl font-bold text-gray-600">
-                  {(data?.dualPricingAdoption.total_merchants || 0) - (data?.dualPricingAdoption.adopted_merchants || 0)}
-                </p>
-              </div>
-            </div>
+            <Progress
+              value={data?.dualPricingAdoption.adoption_pct || 0}
+              className="h-3"
+            />
           </div>
-        </CardContent>
-      </Card>
+          <div className="grid min-w-0 grid-cols-2 gap-3">
+            <InsetTile label="Adopted" value={adopted} />
+            <InsetTile label="Not Adopted" value={totalMerchants - adopted} />
+          </div>
+        </div>
+      </AnalyticsPanel>
     </div>
   )
 }
