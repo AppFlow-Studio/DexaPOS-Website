@@ -386,7 +386,7 @@ exists (`as="div"` on merchant pages, since their layout also owns a `<main>`).
 
 | PR | Scope | Gate |
 |---|---|---|
-| **0** | `as` prop + test; audit + matrix; `UI-DESIGN-SYSTEM.md` HQ section; before-screenshots | Merchant HTML unchanged; matrix covers all 44 routes |
+| **0** | `as` prop + test; audit + matrix; `UI-DESIGN-SYSTEM.md` HQ section | Merchant HTML unchanged; matrix covers all 44 routes |
 | **1** | Family 1 — `app/manage/components/*` + 3 routes | Tabs, health severity, analytics ranges intact |
 | **2** | Family 2 — merchants/organizations lists + creation forms | Filters, sort, pagination, creation flows intact |
 | **3a…n** | Family 3 — merchant detail, sub-PR per tab | IA unchanged; deep links intact |
@@ -396,6 +396,13 @@ exists (`as="div"` on merchant pages, since their layout also owns a `<main>`).
 
 PR 0 ships no visible change by design: it is the prop, the audit and the
 documentation, so every later PR has a contract to conform to.
+
+**Screenshot cadence.** Before-screenshots are captured **per PR, for that PR's
+routes**, not all up front. Family 1's are already captured (§10.4.1). Capturing
+all ~30 routes now would mean Family 6's evidence is weeks stale by the time its
+PR is reviewed; per-PR capture keeps every reviewer's evidence current and
+matches the one-family-per-PR rule. Light mode is the audit default; dark is
+reviewed per PR against the theme acceptance criterion.
 
 ---
 
@@ -436,18 +443,71 @@ Live-DOM assertion on each converted route: `document.querySelectorAll('main').l
 
 ### 10.4 Evidence pipeline (proven)
 
-Chrome DevTools MCP against local dev on port 3000:
+Chrome DevTools MCP against local dev on port 3000. Executed end-to-end for
+Family 1; the steps below are the working recipe, not a proposal.
 
 1. `emulate` with viewport `1440x900x1`, `768x1024x1`, `375x812x2,mobile,touch`
    — **`emulate`, never `resize_page`**.
 2. Assert `window.visualViewport.scale === 1` before trusting any capture.
-3. Screenshot per route per width, light and dark.
-4. Overflow check per width:
-   `document.documentElement.scrollWidth <= window.innerWidth`.
+3. **Settle-wait before every screenshot** (see below).
+4. Screenshot per route per width.
+5. Overflow check per width:
+   `document.documentElement.scrollWidth <= window.innerWidth`, and the same on
+   `#main-content`.
 
-Cold Turbopack compiles can exceed a 10s navigation timeout; use 120s on first
-hit of a route. Restart the dev server before debugging "inert" pages, and check
-`.next/BUILD_ID` freshness before trusting a "still broken" report.
+Three gotchas found while proving this, each of which silently corrupts
+evidence:
+
+- **Theme is not `prefers-color-scheme`.** It is driven by `localStorage.theme`
+  plus a `dark` class on `<html>` (the anti-FOUC bootstrap in
+  `app/layout.tsx`). `emulate colorScheme` does **not** switch it — verified: the
+  page rendered dark while `prefers-color-scheme` was light. Switch with
+  `localStorage.setItem('theme', …)` and toggle the class.
+
+- **Screenshots catch the loading state.** A capture taken straight after
+  `emulate` or `navigate` can land mid-fetch and silently record the skeleton.
+  `/manage` resolves progressively (14 → 9 → 5 → 0 busy nodes over ~16s). Poll
+  `document.querySelectorAll('[aria-busy="true"],.animate-pulse').length === 0`
+  with a 25-30s budget before shooting.
+
+- **Spurious navigation timeouts.** `emulate` can report a 10s navigation
+  timeout while the page is fine. Re-assert page state before concluding
+  anything failed.
+
+Cold Turbopack compiles exceed the 10s default navigation timeout; use 120s on
+first hit of a route. Restart the dev server before debugging "inert" pages, and
+check `.next/BUILD_ID` freshness before trusting a "still broken" report.
+
+### 10.4.1 Captured baseline — Family 1
+
+Light mode, `scale: 1`, settled, at `scratchpad/before/`:
+
+| Route | 1440 | 768 | 375 | Overflow |
+|---|---|---|---|---|
+| `/manage` | ✅ | ✅ | ✅ | none at any width |
+| `/manage/health` | ✅ | ✅ | ✅ | none at any width |
+| `/manage/analytics` | ✅ | ✅ | ✅ | none at any width |
+
+**No page-body horizontal overflow at any width on any Family 1 route.** The
+responsiveness sweep already holds here, so the rollout must *preserve* this
+result, not fix it — any overflow appearing after conversion is a regression
+introduced by this ticket.
+
+What the baseline confirms about the work:
+
+- `/manage` carries the gradient `bg-clip-text` title, a bordered tab strip,
+  8 bordered stat cards with saturated red/green delta pills, and an outer card
+  wrapping the whole canvas.
+- `/manage/health` nests tinted boxes inside cards and uses a gradient-tinted
+  panel. Its green/amber/red is a **health-score legend** — semantic, and
+  retained under §6 exception 2.
+- `/manage/analytics` shows 6 stat cards, a 6-tab strip, 4 tinted tiles and the
+  GPV chart.
+
+Pre-existing observation, **not** in scope: the GPV chart renders grey rather
+than brand-blue, which is the signature of constraint C2 (a token wrapped in
+`hsl()` makes Recharts fall back to its defaults). Confirm during PR 1; if real,
+it is a separate ticket per §7, not a redesign fix.
 
 ### 10.5 Manual, per route
 
