@@ -15,6 +15,16 @@ import { PassageCheckout } from '@/lib/payments/valor/passageClient'
 import { PurchaseMerchantServiceAddOn } from '@/app/dashboard/actions/subscription-billing'
 import { useMerchantServiceEntitlement } from '@/lib/queries/use-dashboard-subscription-billing'
 
+/**
+ * PHASED ROLLOUT — Phase 1 ships the SaaS billing infrastructure with the paywall
+ * DARK: every gated feature (Tables/Fine Dining, Website Builder, Online Ordering,
+ * OrderOut, QR) stays open to everyone, so introducing billing blocks no current
+ * merchant. Phase 2 enforces the paywall — flip this to `true` AND first run the
+ * grandfather comp backfill (docs/features/subscriptions/grandfather-comp-backfill.sql)
+ * so all existing merchants are entitled at $0 before any gate goes live.
+ */
+const PAYWALL_ENABLED = false
+
 function formatUsd(amount: number): string {
   return `$${(Number.isFinite(amount) ? amount : 0).toFixed(2)}`
 }
@@ -53,6 +63,12 @@ export function FeaturePaywall({
   const [accepted, setAccepted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Phase 1: paywall dark — never gate. (Hooks above still run so enabling later
+  // is a one-line flip with no rules-of-hooks change.)
+  if (!PAYWALL_ENABLED) {
+    return <>{children}</>
+  }
 
   // Already using the feature (grandfathered) or entitled → show the feature.
   if (grandfathered || entitlement?.entitled) {
