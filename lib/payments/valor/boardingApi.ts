@@ -582,19 +582,23 @@ export async function onboardValorMerchant(
     dexaMerchantId,
     dexaLocationId: location.dexaLocationId,
     ...(location.epiLabel ? { epiLabel: location.epiLabel } : {}),
+    ...(location.acquirer ? { acquirer: location.acquirer } : {}),
   });
 
   // ── First location: /create (merchant + store + EPI) ─────────────────────────
   const first = locations[0];
   const firstParams = paramsFor(first);
   const epiLabel0 = first.epiLabel ?? "VT";
+  // The first location may carry its own MID (per-location boarding); fall back to
+  // the shared acquirer for the "same MID for all locations" default.
+  const firstAcquirer = first.acquirer ?? acquirer;
 
-  const createEndpoint = `/api/valor/create?${acquirer.createVariant}`;
+  const createEndpoint = `/api/valor/create?${firstAcquirer.createVariant}`;
   let createRes: { status: number; body: ValorEnvelope };
   try {
     createRes = await http.post(
       createEndpoint,
-      buildCreateMerchantBody(merchant, first.store, acquirer, fees, epiLabel0)
+      buildCreateMerchantBody(merchant, first.store, firstAcquirer, fees, epiLabel0)
     );
   } catch (error) {
     throw new BoardingError(
@@ -766,6 +770,7 @@ export async function provisionValorLocations(
       dexaMerchantId,
       dexaLocationId: location.dexaLocationId,
       ...(location.epiLabel ? { epiLabel: location.epiLabel } : {}),
+      ...(location.acquirer ? { acquirer: location.acquirer } : {}),
     };
     try {
       accounts.push(
@@ -793,7 +798,9 @@ export async function provisionValorLocation(
   params: BoardingParams,
   persist: BoardingPersist
 ): Promise<BoardedAccount> {
-  const { acquirer } = options;
+  // Per-location acquirer override (different MID per location) falls back to the
+  // shared acquirer for the "same MID for all locations" default.
+  const acquirer = params.acquirer ?? options.acquirer;
   const epiLabel = params.epiLabel ?? "VT";
   let createdStoreId: string | null = null;
 

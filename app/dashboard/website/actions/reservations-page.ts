@@ -15,6 +15,7 @@ import {
 } from "@/lib/site-builder/site-settings";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+import { assertMerchantOwner } from "./owner-guard";
 import { PublishPage, UnpublishPage } from "./publish";
 import { UpdateSiteBrand, UpdateSiteFeatures } from "./site";
 
@@ -87,6 +88,9 @@ export async function SetReservationsEnabled(
 
   const supabase = createServerSupabaseClient();
 
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const { data, error } = await supabase
     .from("merchant_sites")
     .select("features, brand")
@@ -151,6 +155,9 @@ export async function SetReservationApproval(
 
   const supabase = createServerSupabaseClient();
 
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const { data, error } = await supabase
     .from("merchant_sites")
     .select("features, brand")
@@ -175,6 +182,9 @@ export async function SyncReservationsPage(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const { data, error } = await supabase
     .from("merchant_sites")
@@ -218,6 +228,9 @@ export async function EnsureReservationsPage(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const { data: siteData, error: siteError } = await supabase
     .from("merchant_sites")
@@ -371,6 +384,9 @@ export async function RetireReservationsPage(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const { data: siteData, error: siteError } = await supabase
     .from("merchant_sites")

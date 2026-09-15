@@ -67,6 +67,9 @@ function headingOf(doc: PageDocument): string | undefined {
 
 function seed(document: PageDocument = documentWith("Welcome")) {
   tables = {
+    // Seeded so the owner guard's merchant lookup resolves; owner-ness itself is
+    // answered by the faked is_merchant_owner_strict rpc (see fake-supabase.ts).
+    merchants: [{ id: MERCHANT, clerk_org_id: ORG }],
     merchant_sites: [
       {
         id: "site_1",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyAcquirerIdentifiers,
   mapLocationToStore,
   mapMerchantToBoardingDetails,
   missingLocationFields,
@@ -101,6 +102,46 @@ describe("readValorAcquirerConfig", () => {
     expect(cfg.programType).toBe("2");
     expect(cfg.device).toBe("139");
     expect(cfg.processorData).toEqual({ midFDCard: "123" });
+  });
+});
+
+describe("applyAcquirerIdentifiers", () => {
+  const base = readValorAcquirerConfig({
+    VALOR_BOARDING_CREATE_VARIANT: "traditionaltsys",
+    VALOR_BOARDING_PROCESSOR: "1",
+    // ISO template: per-merchant twins blank, ISO-level twins populated.
+    VALOR_BOARDING_PROCESSOR_DATA:
+      '{"mid1":"","vNumber1":"","storeNo1":"","termNo1":"","binnumber1":"686868","agent1":"0001","agentBank1":"000000","industry1":"Retail"}',
+  });
+
+  it("overlays the merchant's identifiers onto the ISO twins, leaving the rest intact", () => {
+    const cfg = applyAcquirerIdentifiers(base, {
+      mid: "887000003193",
+      vNumber: "75021674",
+      storeNo: "5999",
+      termNo: "1515",
+    });
+    expect(cfg.processorData).toMatchObject({
+      mid1: "887000003193",
+      vNumber1: "75021674",
+      storeNo1: "5999",
+      termNo1: "1515",
+      // ISO-level fields untouched
+      binnumber1: "686868",
+      agent1: "0001",
+      agentBank1: "000000",
+      industry1: "Retail",
+    });
+  });
+
+  it("does not mutate the base config", () => {
+    applyAcquirerIdentifiers(base, {
+      mid: "999",
+      vNumber: "888",
+      storeNo: "7",
+      termNo: "6",
+    });
+    expect(base.processorData.mid1).toBe("");
   });
 });
 

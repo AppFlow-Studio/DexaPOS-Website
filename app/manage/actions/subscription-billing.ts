@@ -5,6 +5,7 @@ import { assertHQPermission } from '@/lib/admin/auth'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { buildEmailTemplate, sendEmail } from '@/lib/messaging/resend'
+import { sendSubscriptionPlanDecisionEmail } from '@/lib/email/subscription-emails'
 import { createAppNotification } from '@/lib/notifications/app-notifications'
 import {
   formatLongDate,
@@ -487,15 +488,12 @@ async function notifyMerchantOfTierAssignment(params: {
   let emailError: string | undefined
 
   if (recipient) {
-    const emailResult = await sendEmail(
-      recipient,
-      `DEXA subscription updated - ${plan.display_name}`,
-      buildEmailTemplate(
-        'DEXA POS',
-        'Subscription updated',
-        `${escapeEmailText(merchant.name)},\n\n${escapeEmailText(message)}\n\nYou can review the update on the Subscriptions page in your DEXA dashboard.`,
-      ),
-    )
+    const emailResult = await sendSubscriptionPlanDecisionEmail({
+      to: recipient,
+      merchantName: merchant.name,
+      decision: 'approved',
+      requestLabel: plan.display_name,
+    })
 
     if ('error' in emailResult) {
       emailError = emailResult.error
@@ -1200,6 +1198,63 @@ function toNumber(value: unknown): number {
   return Number.isFinite(amount) ? amount : 0
 }
 
+// --- Purchase-anchored billing cycle helpers -------------------------------
+// Date-only math built from components (TZ-independent). A subscription's first
+// cycle runs from the charge date to the day before the same date next month,
+// so the next bill lands exactly one month out — never a hardcoded month-end.
+function isoDateParts(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function todayServerIso(): string {
+  return isoDateParts(new Date())
+}
+
+function normalizeDateIso(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (!match) return null
+  const [, y, m, d] = match
+  return `${y}-${m}-${d}`
+}
+
+function addMonthsIso(baseIso: string, months: number): string {
+  const [y, m, d] = baseIso.split('-').map(Number)
+  const anchor = new Date(y, m - 1 + months, 1)
+  const lastDay = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate()
+  anchor.setDate(Math.min(d, lastDay))
+  return isoDateParts(anchor)
+}
+
+function addDaysIso(baseIso: string, days: number): string {
+  const [y, m, d] = baseIso.split('-').map(Number)
+  return isoDateParts(new Date(y, m - 1, d + days))
+}
+
+/**
+ * Derive a fresh monthly cycle anchored to the charge date. Honors the caller's
+ * requested start only when it's today-or-future (a new activation sends "today";
+ * an admin may intentionally schedule ahead), and falls back to today for stale
+ * values (e.g. reactivating a canceled sub, whose loaded period is in the past).
+ * The period end and next-billing date are always recomputed as start + 1 month,
+ * so a manually-picked next-billing date can never drift out of sync.
+ */
+function freshBillingCycle(requestedStart?: unknown): {
+  currentPeriodStart: string
+  currentPeriodEnd: string
+  nextBillingDate: string
+} {
+  const today = todayServerIso()
+  const requested = normalizeDateIso(requestedStart)
+  const start = requested && requested >= today ? requested : today
+  const nextBillingDate = addMonthsIso(start, 1)
+  return {
+    currentPeriodStart: start,
+    currentPeriodEnd: addDaysIso(nextBillingDate, -1),
+    nextBillingDate,
+  }
+}
+
 function dexaBillingParty() {
   const sender = process.env.RESEND_FROM_EMAIL || 'support@dexaposai.com'
 
@@ -1842,15 +1897,12 @@ export async function denyMerchantTierPlanRequest(
     ''
   let emailError: string | undefined
   if (recipient) {
-    const emailResult = await sendEmail(
-      recipient,
-      `DEXA subscription request update - ${planResult.data.display_name}`,
-      buildEmailTemplate(
-        'DEXA POS',
-        'Subscription request update',
-        `${escapeEmailText(merchantResult.data.name)},\n\n${escapeEmailText(body)}\n\nYou can review your current plan on the Subscriptions page in your DEXA dashboard.`,
-      ),
-    )
+    const emailResult = await sendSubscriptionPlanDecisionEmail({
+      to: recipient,
+      merchantName: merchantResult.data.name,
+      decision: 'denied',
+      requestLabel: planResult.data.display_name,
+    })
     if ('error' in emailResult) emailError = emailResult.error
   }
 
@@ -2129,8 +2181,14 @@ export async function reviewMerchantServiceRequest(params: {
   const recipient = billingProfileResult.data?.billing_email?.trim() || merchantResult.data?.owner_email?.trim() || ''
   let emailFailed = false
   if (recipient) {
-    const email = await sendEmail(recipient, `DEXA add-on request ${params.decision}`,
-      buildEmailTemplate('DEXA POS', 'Paid add-on request update', body))
+    const email = await sendSubscriptionPlanDecisionEmail({
+      to: recipient,
+      merchantName: merchantResult.data?.name ?? 'Dexa POS',
+      decision: params.decision === 'approved' ? 'approved' : 'denied',
+      requestLabel: service?.display_name ?? 'a paid add-on',
+      locationName: location?.name ?? null,
+      reason: note ?? null,
+    })
     emailFailed = 'error' in email
   }
 
@@ -2322,11 +2380,14 @@ async function reviewMerchantHardwareRequest(params: {
     ''
   let emailError: string | undefined
   if (recipient) {
-    const emailResult = await sendEmail(
-      recipient,
-      `DEXA hardware request update - ${request.request_number}`,
-      buildEmailTemplate('DEXA POS', 'Hardware request update', body),
-    )
+    const emailResult = await sendSubscriptionPlanDecisionEmail({
+      to: recipient,
+      merchantName: merchantResult.data.name,
+      decision: approved ? 'approved' : 'denied',
+      requestLabel: `${request.requested_quantity} device${request.requested_quantity === 1 ? '' : 's'} (${request.request_number})`,
+      locationName: locationResult.data.name,
+      reason: note ?? null,
+    })
     if ('error' in emailResult) emailError = emailResult.error
   }
 
@@ -2394,6 +2455,7 @@ export async function upsertMerchantTierSubscription(
   success: boolean
   subscriptionId?: string
   invoiceId?: string | null
+  charged?: boolean
   anchorLocationId?: string
   notificationWarning?: string
   error?: string
@@ -2678,6 +2740,10 @@ export async function upsertMerchantTierSubscription(
     success: true,
     subscriptionId: result.data.id as string,
     invoiceId: synced.invoiceId,
+    // A charge only ran (and, since we got here, was approved) when the tier is
+    // being activated and an invoice existed to charge. Non-active saves generate
+    // an invoice but never touch the card — the UI must not claim "approved".
+    charged: params.status === 'active' && Boolean(synced.invoiceId),
     anchorLocationId: synced.anchorLocationId ?? undefined,
     notificationWarning,
   }
@@ -2856,6 +2922,38 @@ export async function calculateSubscriptionTotal(
       total_amount: Number(row.total_amount || 0),
     },
   }
+}
+
+/**
+ * Live count of billable POS stations for a location.
+ *
+ * A "station" is a deployed POS tablet device, so this always matches the
+ * location's deployed devices (falling back to active physical stations for
+ * locations not yet represented in Device Inventory). This is the SAME value
+ * the server persists as `station_count` on save and on every invoice, so the
+ * HQ workspace uses it to render an honest preview instead of letting HQ set a
+ * station count that would just be overridden.
+ */
+export async function getActiveStationCount(
+  locationId: string,
+): Promise<{ success: boolean; count?: number; error?: string }> {
+  await assertHQPermission('system.billing.manage')
+
+  if (!locationId) {
+    return { success: false, error: 'locationId is required.' }
+  }
+
+  const supabase = createServerSupabaseClient() as any
+  const { data, error } = await supabase.rpc('get_active_station_count', {
+    p_location_id: locationId,
+  })
+
+  if (error) {
+    console.error('[getActiveStationCount] Error:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, count: Number(data ?? 0) }
 }
 
 export async function recalculateMerchantSubscription(
@@ -3397,6 +3495,8 @@ export async function saveAndChargeMerchantSubscription(
   subscriptionId?: string
   invoiceId?: string
   transactionId?: string | null
+  queuedForNextCycle?: boolean
+  message?: string
   error?: string
 }> {
   await assertHQPermission('system.billing.manage')
@@ -3461,9 +3561,22 @@ export async function saveAndChargeMerchantSubscription(
     billingProfileId = valorProfile.id
   }
 
+  // Anchor the billing cycle to the charge date for any activation that isn't a
+  // mid-cycle edit of an already-active subscription. This keeps monthly billing
+  // dynamic (purchase date + 1 month) rather than depending on a manually-picked
+  // date: a mid-cycle service change on an active sub preserves the running
+  // period (so it isn't re-charged early), while a brand-new activation or a
+  // reactivation from trial/past_due/suspended/canceled starts a fresh month now.
+  const isMidCycleActiveEdit =
+    previousSubscription?.status === 'active' && !!previousSubscription?.current_period_start
+  const anchoredParams =
+    targetStatus === 'active' && !isMidCycleActiveEdit
+      ? { ...params, ...freshBillingCycle(params.currentPeriodStart) }
+      : params
+
   // Active configurations remain non-entitled until Valor approves the charge.
   const subscriptionResult = await upsertMerchantSubscription({
-    ...params,
+    ...anchoredParams,
     billingProfileId,
     status: targetStatus === 'active' && !billingExemption.active ? 'past_due' : targetStatus,
   })
@@ -3527,6 +3640,10 @@ export async function saveAndChargeMerchantSubscription(
             status: 'past_due',
             metadata: {
               ...(params.metadata ?? {}),
+              // billing_scope is immutable (guard trigger) + required (CHECK):
+              // the upsert set it to 'location', so the rollback must keep it or
+              // the cleanup update is rejected ("Subscription billing scope is immutable").
+              billing_scope: (params.metadata as any)?.billing_scope ?? 'location',
               activation_failed: true,
             },
             updated_at: new Date().toISOString(),
@@ -3576,6 +3693,8 @@ export async function saveAndChargeMerchantSubscription(
     return { success: true, subscriptionId }
   }
 
+  // Billing-exempt merchants are never charged: save the updated config as
+  // active and skip invoice generation entirely.
   if (billingExemption.active) {
     await serviceRole.rpc('log_subscription_billing_event', {
       p_action: 'subscription_saved_billing_exempt',
@@ -3591,6 +3710,50 @@ export async function saveAndChargeMerchantSubscription(
     revalidatePath(`/manage/subscriptions/${params.merchantId}`)
     revalidatePath('/dashboard/subscriptions')
     return { success: true, subscriptionId }
+  }
+
+  // Don't double-charge a period that's already been paid. If the current
+  // billing period already has a paid invoice, save the updated configuration
+  // and let the change bill on the next cycle (next month's recurring invoice
+  // reads the current assignments) instead of charging the card again now.
+  const { data: currentPeriodRow } = await serviceRole
+    .from('merchant_subscriptions')
+    .select('current_period_start')
+    .eq('id', subscriptionId)
+    .maybeSingle()
+  const currentPeriodStart =
+    currentPeriodRow?.current_period_start ??
+    previousSubscription?.current_period_start ??
+    null
+  if (currentPeriodStart) {
+    const { data: paidThisPeriod } = await serviceRole
+      .from('subscription_invoices')
+      .select('id')
+      .eq('subscription_id', subscriptionId)
+      .eq('billing_period_start', currentPeriodStart)
+      .eq('status', 'paid')
+      .limit(1)
+      .maybeSingle()
+    if (paidThisPeriod?.id) {
+      // Already paid this period — activate the saved config now and defer the
+      // charge to the next billing cycle (no card charge today).
+      await serviceRole
+        .from('merchant_subscriptions')
+        .update({ status: 'active', updated_at: new Date().toISOString() })
+        .eq('id', subscriptionId)
+
+      revalidatePath('/manage/subscriptions')
+      revalidatePath(`/manage/subscriptions/${params.merchantId}`)
+      revalidatePath('/dashboard/subscriptions')
+
+      return {
+        success: true,
+        subscriptionId,
+        queuedForNextCycle: true,
+        message:
+          'This period is already paid — the updated services are saved and will be billed on the next cycle. No charge was made today.',
+      }
+    }
   }
 
   const invoiceResult = await generateSubscriptionInvoiceManually(

@@ -9,6 +9,7 @@ import type {
   SitePage,
   SitePageRow,
 } from "@/lib/site-builder/db-types";
+import { assertMerchantOwner } from "./owner-guard";
 
 /**
  * Draft load and autosave.
@@ -92,6 +93,9 @@ export async function SaveDraft(
 
   const supabase = createServerSupabaseClient();
 
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const { data, error } = await supabase
     .from("site_pages")
     .update({ draft_content: normalized })
@@ -143,6 +147,9 @@ export async function OverwriteDraft(
 
   const { doc: normalized } = normalizePageWithReport(document);
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const { data, error } = await supabase
     .from("site_pages")

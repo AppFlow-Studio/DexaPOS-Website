@@ -7,6 +7,7 @@ import type { ActionResult } from "@/lib/site-builder/db-types";
 import { eventInputSchema, eventSlug, type EventInput } from "@/lib/site-builder/events/event";
 import { loadEvents, type RenderEvent } from "@/lib/site-builder/events/event-map";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { assertMerchantOwner } from "./owner-guard";
 
 /**
  * Events — first-class records, brand-scoped, optionally about one location.
@@ -67,6 +68,10 @@ export async function CreateEvent(
   }
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const { siteId } = await resolveSite(supabase, clerkOrgId);
   if (!siteId) return { error: "Create your website first", code: "site_not_found" };
 
@@ -111,6 +116,9 @@ export async function UpdateEvent(
 
   const supabase = createServerSupabaseClient();
 
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   // The slug is deliberately NOT recomputed on rename. Its address may already
   // be on a poster, in an email, or shared to a hundred people — quietly moving
   // it because the merchant fixed a typo in the title would break every one of
@@ -151,6 +159,10 @@ export async function ArchiveEvent(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const { error } = await supabase
     .from("site_events")
     .update({ archived_at: new Date().toISOString() })

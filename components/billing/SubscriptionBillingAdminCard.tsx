@@ -309,15 +309,13 @@ export function SubscriptionBillingAdminCard({
       }))
       .filter((service) => service.enabled && service.quantity > 0)
 
-    const fallbackActiveStatus =
-      selectedLocationSubscription?.status && selectedLocationSubscription.status !== 'canceled'
-        ? selectedLocationSubscription.status
-        : 'active'
-
+    // "Save & Charge" on a lapsed subscription (past_due/suspended/canceled) is a
+    // reactivation: target 'active' so the server actually charges instead of
+    // taking its non-active branch (which saves the config without charging while
+    // still reporting success). 'active'/'trial' pass through unchanged.
+    const lapsedStatuses: SubscriptionStatus[] = ['past_due', 'suspended', 'canceled']
     const effectiveStatus: SubscriptionStatus =
-      status === 'canceled' && enabledServices.length > 0
-        ? fallbackActiveStatus
-        : status
+      enabledServices.length > 0 && lapsedStatuses.includes(status) ? 'active' : status
 
     if (effectiveStatus !== 'canceled' && enabledServices.length === 0) {
       toast.error('Enable at least one billable service for this location.')
@@ -355,14 +353,17 @@ export function SubscriptionBillingAdminCard({
         return
       }
 
+      // Only claim "automatic payment approved" when the server actually ran and
+      // approved a charge (it returns an invoiceId only on the active charge path).
+      const paymentApproved = Boolean(subscriptionResult.invoiceId)
       toast.success(
         effectiveStatus === 'canceled'
           ? 'Subscription canceled.'
-          : status === 'canceled'
-            ? 'Selected services removed. Subscription remains active.'
-          : selectedLocationSubscription
-            ? 'Subscription services updated and automatic payment approved.'
-            : 'Subscription created and automatic payment approved.'
+          : paymentApproved
+            ? selectedLocationSubscription
+              ? 'Subscription services updated and automatic payment approved.'
+              : 'Subscription created and automatic payment approved.'
+            : 'Subscription saved. No payment was charged.'
       )
       refresh()
     })

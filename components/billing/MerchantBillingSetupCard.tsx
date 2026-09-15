@@ -3,14 +3,13 @@
 import { useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
-import { AlertCircle, Building2, CreditCard, MapPin, Shield } from 'lucide-react'
+import { AlertCircle, Building2, CheckCircle2, CreditCard, Loader2, MapPin, Plus, Shield } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Select,
   SelectContent,
@@ -21,11 +20,9 @@ import {
 import {
   getMerchantBillingCardSetup,
   getMerchantBillingProfiles,
-  saveMerchantBilling,
+  provisionSubscriptionBillingRail,
   saveMerchantBillingCardWithVault,
-  type MerchantBankAccountType,
   type MerchantBillingCardSetupRecord,
-  type MerchantBillingMethod,
   type MerchantBillingProfileRecord,
 } from '@/app/manage/actions/merchant-billing'
 import { PageHeader } from '@/components/dashboard/shell'
@@ -42,23 +39,21 @@ interface MerchantBillingSetupCardProps {
   context: 'merchant' | 'admin'
   canEdit?: boolean
   locations: BillingLocationOption[]
+  /** Renders a ghost "Back to X" pill above the title (e.g. back to the merchant). */
+  backHref?: string
+  backLabel?: string
 }
 
 const MERCHANT_WIDE_VALUE = '__merchant_wide__'
 
 function maskLastFour(lastFour?: string | null): string {
-  if (!lastFour) return 'Not available'
-  return `****${lastFour}`
+  if (!lastFour) return '•••• ••••'
+  return `•••• ${lastFour}`
 }
 
-function formatCardExpiry(month?: number | null, year?: number | null): string {
-  if (!month || !year) return 'Unknown'
-  return `${String(month).padStart(2, '0')}/${year}`
-}
-
-function scopeLabel(profile: MerchantBillingProfileRecord | null, locations: BillingLocationOption[]): string {
-  if (!profile?.location_id) return 'Merchant-wide'
-  return locations.find((location) => location.id === profile.location_id)?.name || profile.location_name || 'Location'
+function formatCardExpiry(month?: number | null, year?: number | null): string | null {
+  if (!month || !year) return null
+  return `${String(month).padStart(2, '0')}/${String(year).slice(-2)}`
 }
 
 export function MerchantBillingSetupCard({
@@ -67,10 +62,12 @@ export function MerchantBillingSetupCard({
   context,
   canEdit = true,
   locations,
+  backHref,
+  backLabel,
 }: MerchantBillingSetupCardProps) {
   const searchParams = useSearchParams()
-  const [isLoading, setIsLoading] = useState(true)
   const [isPending, startTransition] = useTransition()
+  const [formOpen, setFormOpen] = useState(false)
   const [profiles, setProfiles] = useState<MerchantBillingProfileRecord[]>([])
   const [cardSetup, setCardSetup] = useState<MerchantBillingCardSetupRecord>({
     configured: false,
@@ -81,13 +78,6 @@ export function MerchantBillingSetupCard({
     isDemo: false,
   })
   const [selectedScope, setSelectedScope] = useState<string>(locations[0]?.id || MERCHANT_WIDE_VALUE)
-  const [method, setMethod] = useState<MerchantBillingMethod>('ach')
-
-  const [bankName, setBankName] = useState('')
-  const [accountHolderName, setAccountHolderName] = useState('')
-  const [routingNumber, setRoutingNumber] = useState('')
-  const [accountNumber, setAccountNumber] = useState('')
-  const [accountType, setAccountType] = useState<MerchantBankAccountType>('checking')
 
   const [cardholderName, setCardholderName] = useState('')
   const [billingEmail, setBillingEmail] = useState('')
@@ -109,6 +99,23 @@ export function MerchantBillingSetupCard({
     )
   }, [profiles, selectedScope])
 
+  // Every saved billing method for the selected scope — primary first, then most
+  // recent. Drives the payment-methods list.
+  const scopedProfiles = useMemo(() => {
+    return profiles
+      .filter((profile) =>
+        selectedScope === MERCHANT_WIDE_VALUE
+          ? profile.location_id === null
+          : profile.location_id === selectedScope,
+      )
+      .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
+  }, [profiles, selectedScope])
+
+  const currentScopeLabel =
+    selectedScope === MERCHANT_WIDE_VALUE
+      ? 'the merchant tier'
+      : locations.find((location) => location.id === selectedScope)?.name || 'this location'
+
   const refreshProfiles = () => {
     startTransition(async () => {
       try {
@@ -123,13 +130,14 @@ export function MerchantBillingSetupCard({
         setCardSetup(nextCardSetup)
       } catch (error: any) {
         toast.error(error?.message || 'Failed to load billing profiles.')
-      } finally {
-        setIsLoading(false)
       }
     })
   }
 
   useEffect(() => {
+    // Switching scope returns to the saved-methods list for that scope.
+    setFormOpen(false)
+    setCardFormError('')
     refreshProfiles()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [merchantId, selectedScope])
@@ -149,27 +157,12 @@ export function MerchantBillingSetupCard({
   }, [locations, searchParams])
 
   useEffect(() => {
-    if (scopedPrimaryProfile) {
-      setMethod(scopedPrimaryProfile.billing_method)
-      if (scopedPrimaryProfile.billing_method === 'ach') {
-        setBankName(scopedPrimaryProfile.bank_name || '')
-        setAccountHolderName(scopedPrimaryProfile.account_holder_name || '')
-        setAccountType((scopedPrimaryProfile.account_type as MerchantBankAccountType | null) || 'checking')
-        setRoutingNumber('')
-        setAccountNumber('')
-      } else {
-        setCardholderName(scopedPrimaryProfile.account_holder_name || '')
-        setBillingEmail(scopedPrimaryProfile.billing_email || '')
-      }
+    if (scopedPrimaryProfile && scopedPrimaryProfile.billing_method === 'card') {
+      setCardholderName(scopedPrimaryProfile.account_holder_name || '')
+      setBillingEmail(scopedPrimaryProfile.billing_email || '')
       return
     }
 
-    setMethod('ach')
-    setBankName('')
-    setAccountHolderName('')
-    setRoutingNumber('')
-    setAccountNumber('')
-    setAccountType('checking')
     setCardholderName('')
     setBillingEmail('')
   }, [scopedPrimaryProfile])
@@ -207,33 +200,26 @@ export function MerchantBillingSetupCard({
           : 'Merchant-wide billing card saved securely with Valor.',
       )
       setCardFormError('')
+      setCardholderName('')
+      setBillingEmail('')
+      setFormOpen(false)
       refreshProfiles()
     })
   }
 
-  const handleSave = () => {
+  const handleProvisionSubscriptionRail = () => {
     const scopedLocationId = selectedScope === MERCHANT_WIDE_VALUE ? null : selectedScope
 
     startTransition(async () => {
-      const result = await saveMerchantBilling({
-        merchantId,
-        locationId: scopedLocationId,
-        billingMethod: method,
-        bankName,
-        accountHolderName,
-        routingNumber,
-        accountNumber,
-        accountType,
-      })
+      const result = await provisionSubscriptionBillingRail(merchantId, scopedLocationId)
 
       if (!result.success) {
-        toast.error(result.error || 'Failed to save billing profile.')
+        toast.error(result.error || 'Failed to set up subscription billing.')
         return
       }
 
-      toast.success('Billing profile saved.')
-      setRoutingNumber('')
-      setAccountNumber('')
+      toast.success('Subscription billing is ready — you can add a card now.')
+      setCardFormError('')
       refreshProfiles()
     })
   }
@@ -242,6 +228,8 @@ export function MerchantBillingSetupCard({
     <div className="space-y-6">
       <PageHeader
         title="Billing & payment method"
+        backHref={backHref}
+        backLabel={backLabel}
         subtitle={
           context === 'admin'
             ? `Manage subscription billing details for ${merchantName || 'this merchant'}.`
@@ -286,142 +274,121 @@ export function MerchantBillingSetupCard({
         </CardContent>
       </Card>
 
-      {scopedPrimaryProfile && (
-        <Card className="rounded-3xl">
-          <CardHeader>
-            <CardTitle className="text-base">Current Primary Billing Method</CardTitle>
-            <CardDescription>
-              Scope: <span className="font-medium text-foreground">{scopeLabel(scopedPrimaryProfile, locations)}</span>{' '}
-              - Verification status:{' '}
-              <Badge variant={scopedPrimaryProfile.is_verified ? 'default' : 'secondary'}>
-                {scopedPrimaryProfile.is_verified ? 'Verified' : 'Pending Verification'}
-              </Badge>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            {scopedPrimaryProfile.billing_method === 'ach' ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-muted-foreground" />
-                  <span>{scopedPrimaryProfile.bank_name || 'Bank not set'}</span>
-                </div>
-                <div>Account: {maskLastFour(scopedPrimaryProfile.account_number_last_four)}</div>
-                <div>Routing: {maskLastFour(scopedPrimaryProfile.routing_number_last_four)}</div>
-                <div>Type: {scopedPrimaryProfile.account_type || 'Unknown'}</div>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-muted-foreground" />
-                  <span className="capitalize">{scopedPrimaryProfile.card_brand || 'Card'}</span>
-                </div>
-                <div>Card: {maskLastFour(scopedPrimaryProfile.card_last_four)}</div>
-                <div>Expires: {formatCardExpiry(scopedPrimaryProfile.card_exp_month, scopedPrimaryProfile.card_exp_year)}</div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       <Card className="rounded-3xl">
-        <CardHeader>
-          <CardTitle>Update Billing Method</CardTitle>
-          <CardDescription>Save a primary billing profile for the selected scope.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="space-y-2">
-            <Label>Billing Method</Label>
-            <RadioGroup
-              className="grid gap-3 md:grid-cols-2"
-              value={method}
-              onValueChange={(value) => setMethod(value as MerchantBillingMethod)}
-            >
-              <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-border/70 bg-muted/20 p-3">
-                <RadioGroupItem value="ach" id="billing-ach" />
-                <div>
-                  <div className="font-medium">ACH / Bank Account</div>
-                  <div className="text-xs text-muted-foreground">Can be location-specific or merchant-wide</div>
-                </div>
-              </label>
-              <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-border/70 bg-muted/20 p-3">
-                <RadioGroupItem value="card" id="billing-card" />
-                <div>
-                  <div className="font-medium">Credit / Debit Card</div>
-                  <div className="text-xs text-muted-foreground">Tokenized and stored in the Valor vault</div>
-                </div>
-              </label>
-            </RadioGroup>
+        <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+          <div className="space-y-1.5">
+            <CardTitle>Payment methods</CardTitle>
+            <CardDescription>
+              Cards used for subscription billing on{' '}
+              <span className="font-medium text-foreground">{currentScopeLabel}</span>.
+            </CardDescription>
           </div>
-
-          {method === 'ach' ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="bank-name">Bank Name</Label>
-                <Input
-                  id="bank-name"
-                  value={bankName}
-                  onChange={(event) => setBankName(event.target.value)}
-                  placeholder="Chase Bank"
-                  disabled={!canEdit}
-                />
+          {!formOpen && canEdit ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setCardFormError('')
+                setFormOpen(true)
+              }}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              {scopedProfiles.length ? 'Add card' : 'Add a card'}
+            </Button>
+          ) : null}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!formOpen ? (
+            scopedProfiles.length === 0 ? (
+              <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                No payment method on file for this scope yet.
+                {canEdit ? ' Add a card to start subscription billing.' : ''}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="account-holder-name">Account Holder Name</Label>
-                <Input
-                  id="account-holder-name"
-                  value={accountHolderName}
-                  onChange={(event) => setAccountHolderName(event.target.value)}
-                  placeholder="Joe's Coffee LLC"
-                  disabled={!canEdit}
-                />
+            ) : (
+              <div className="space-y-2.5">
+                {scopedProfiles.map((profile) => {
+                  const expiry = formatCardExpiry(profile.card_exp_month, profile.card_exp_year)
+                  return (
+                    <div
+                      key={profile.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl border p-3.5"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                          {profile.billing_method === 'ach' ? (
+                            <Building2 className="h-4 w-4" />
+                          ) : (
+                            <CreditCard className="h-4 w-4" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          {profile.billing_method === 'ach' ? (
+                            <>
+                              <div className="truncate text-sm font-medium">
+                                {profile.bank_name || 'Bank account'}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {maskLastFour(profile.account_number_last_four)} ·{' '}
+                                {profile.account_type || 'account'}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="truncate text-sm font-medium capitalize">
+                                {profile.card_brand || 'Card'} {maskLastFour(profile.card_last_four)}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {expiry ? `Expires ${expiry}` : 'Card on file'}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {profile.is_primary ? <Badge>Primary</Badge> : null}
+                        <Badge variant={profile.is_verified ? 'secondary' : 'outline'} className="gap-1">
+                          {profile.is_verified ? <CheckCircle2 className="h-3 w-3" /> : null}
+                          {profile.is_verified ? 'Verified' : 'Pending'}
+                        </Badge>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="routing-number">Routing Number</Label>
-                <Input
-                  id="routing-number"
-                  value={routingNumber}
-                  onChange={(event) => setRoutingNumber(event.target.value)}
-                  placeholder="9 digits"
-                  inputMode="numeric"
-                  disabled={!canEdit}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="account-number">Account Number</Label>
-                <Input
-                  id="account-number"
-                  value={accountNumber}
-                  onChange={(event) => setAccountNumber(event.target.value)}
-                  placeholder="Account number"
-                  inputMode="numeric"
-                  disabled={!canEdit}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Account Type</Label>
-                <RadioGroup
-                  className="flex gap-4"
-                  value={accountType}
-                  onValueChange={(value) => setAccountType(value as MerchantBankAccountType)}
-                >
-                  <label className="flex items-center gap-2 text-sm">
-                    <RadioGroupItem value="checking" id="acct-checking" />
-                    Checking
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <RadioGroupItem value="savings" id="acct-savings" />
-                    Savings
-                  </label>
-                </RadioGroup>
-              </div>
-            </div>
+            )
           ) : (
-            <div className="space-y-4">
+            <div className="relative space-y-4">
+              {isPending ? (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-2xl bg-background/70 backdrop-blur-sm">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <p className="text-sm font-medium">Saving your card…</p>
+                </div>
+              ) : null}
+
               {!cardSetup.configured ? (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    Valor SaaS billing is not configured for this scope. HQ must provision an active primary Valor subscription account first.
+                  <AlertTitle>Subscription billing isn’t set up for this scope</AlertTitle>
+                  <AlertDescription className="space-y-3">
+                    <p>
+                      Set up the Valor SaaS rail to reuse this{' '}
+                      {selectedScope === MERCHANT_WIDE_VALUE ? 'merchant' : 'location'}’s boarded
+                      Valor credentials, then you can store a subscription card.
+                    </p>
+                    {canEdit && context === 'admin' ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleProvisionSubscriptionRail}
+                        disabled={isPending}
+                      >
+                        {isPending ? 'Setting up…' : 'Set up subscription billing'}
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Ask an HQ admin to set up subscription billing for this scope.
+                      </p>
+                    )}
                   </AlertDescription>
                 </Alert>
               ) : null}
@@ -463,7 +430,7 @@ export function MerchantBillingSetupCard({
                   epi={cardSetup.epi}
                   isDemo={cardSetup.isDemo}
                   formAction="/api/valor/passage-callback"
-                  submitText={isPending ? 'Saving...' : 'Save Valor Payment Method'}
+                  submitText={isPending ? 'Saving...' : 'Save Card'}
                   onTokenReceived={({ token, method: paymentMethod }) =>
                     saveValorCard(token, paymentMethod)
                   }
@@ -487,6 +454,21 @@ export function MerchantBillingSetupCard({
                   <AlertDescription>{cardFormError}</AlertDescription>
                 </Alert>
               ) : null}
+
+              {scopedProfiles.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setFormOpen(false)
+                    setCardFormError('')
+                  }}
+                  disabled={isPending}
+                >
+                  Cancel
+                </Button>
+              ) : null}
             </div>
           )}
 
@@ -498,17 +480,6 @@ export function MerchantBillingSetupCard({
               </AlertDescription>
             </Alert>
           )}
-
-          {method === 'ach' ? (
-            <div className="flex justify-end">
-              <Button
-                onClick={handleSave}
-                disabled={isLoading || isPending || !canEdit}
-              >
-                {isPending ? 'Saving...' : 'Save Payment Method'}
-              </Button>
-            </div>
-          ) : null}
         </CardContent>
       </Card>
     </div>

@@ -12,6 +12,7 @@ import {
 } from "@/lib/site-builder/nav";
 import { checkPagePath, slugifyPagePath } from "@/lib/site-builder/reserved-paths";
 import { createStarterHomePage } from "@/lib/site-builder/starter-page";
+import { assertMerchantOwner } from "./owner-guard";
 import type {
   ActionResult,
   MerchantSiteRow,
@@ -92,6 +93,9 @@ export async function CreatePage(
 
   const supabase = createServerSupabaseClient();
 
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const { data: site } = await supabase
     .from("merchant_sites")
     .select("id, merchant_id, max_pages")
@@ -165,6 +169,9 @@ export async function RenamePage(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const { data: existing } = await supabase
     .from("site_pages")
@@ -301,6 +308,9 @@ export async function DeletePage(
 
   const supabase = createServerSupabaseClient();
 
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const { data: existing } = await supabase
     .from("site_pages")
     .select(PAGE_SUMMARY_COLUMNS)
@@ -359,6 +369,9 @@ export async function CreateHomePage(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const { data: existing } = await supabase
     .from("site_pages")

@@ -5,18 +5,18 @@ import {
 } from '../merchant-tier-presentation'
 
 describe('merchant tier presentation', () => {
-  it('uses the requested customer-facing tier names', () => {
-    expect(getMerchantTierFallbackName('basic')).toBe('Quick-Service (First Station)')
-    expect(getMerchantTierFallbackName('multi_location')).toBe('Fine Dining (First Station)')
-    expect(getMerchantTierFallbackName('franchise')).toBe('Additional Station')
+  it('uses the location-count tier names', () => {
+    expect(getMerchantTierFallbackName('basic')).toBe('Single Location')
+    expect(getMerchantTierFallbackName('multi_location')).toBe('Multi-Location')
+    // franchise is retired and folds into Multi-Location.
+    expect(getMerchantTierFallbackName('franchise')).toBe('Multi-Location')
   })
 
-  it('does not expose the legacy franchise presentation', () => {
-    const additionalStation = getMerchantTierPresentation('franchise')
+  it('folds the retired franchise tier into Multi-Location', () => {
+    const franchise = getMerchantTierPresentation('franchise')
 
-    expect(additionalStation?.displayName).toBe('Additional Station')
-    expect(additionalStation?.billingUnit).toBe('Each station after the first')
-    expect(JSON.stringify(additionalStation)).not.toContain('Franchise')
+    expect(franchise?.displayName).toBe('Multi-Location')
+    expect(JSON.stringify(franchise)).not.toContain('Franchise')
   })
 
   it('leaves unknown plan codes available as a safe fallback', () => {

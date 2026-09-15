@@ -1,105 +1,19 @@
 "use client";
 
-import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { AddressAutocomplete } from "@/components/ui/address-autocomplete";
-import { Calendar } from "@/components/ui/calendar";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { CalendarIcon, MapPin, Plus, CheckCircle2, XCircle, Loader2 } from "lucide-react";
-import { format } from "date-fns";
+import { MapPin, Plus, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StoreMapEmbed } from "./StoreMapEmbed";
 import type { SavedAddress } from "../../customer-actions";
-import type { WeeklySchedule } from "@/types/site";
-
-const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const;
-
-/** Returns true if the store is closed on the weekday of the given date. */
-function isClosedDay(date: Date, operatingHours: WeeklySchedule | undefined): boolean {
-  if (!operatingHours) return false;
-  const daySchedule = operatingHours[DAY_NAMES[date.getDay()]];
-  return !!daySchedule && !daySchedule.enabled;
-}
-
-// Generates 30-min time slots within the store's operating hours for the selected day.
-// Falls back to 8 AM–9 PM if no hours configured.
-// Filters out past slots when the selected date is today.
-function getTimeSlots(
-  scheduledDate: Date | undefined,
-  operatingHours: WeeklySchedule | undefined,
-  prepTime: number
-): string[] {
-  const date = scheduledDate ?? new Date();
-  const dayName = DAY_NAMES[date.getDay()];
-  const daySchedule = operatingHours?.[dayName];
-
-  let startHour = 8, startMin = 0;
-  let endHour = 21, endMin = 0;
-
-  if (daySchedule) {
-    if (!daySchedule.enabled) return []; // store closed this day
-    if (daySchedule.is24Hours) {
-      startHour = 0; startMin = 0; endHour = 23; endMin = 30;
-    } else {
-      const [fH, fM] = daySchedule.from.split(":").map(Number);
-      const [tH, tM] = daySchedule.to.split(":").map(Number);
-      startHour = fH; startMin = fM; endHour = tH; endMin = tM;
-    }
-  }
-
-  const endTotalMins = endHour * 60 + endMin;
-  const startTotalMins = startHour * 60 + startMin + prepTime;
-
-  // Filter past slots if the chosen date is today
-  const now = new Date();
-  const isToday = scheduledDate
-    ? scheduledDate.toDateString() === now.toDateString()
-    : true;
-  const nowMinsPlusPrepTime = isToday ? now.getHours() * 60 + now.getMinutes() + prepTime : 0;
-
-  const slots: string[] = [];
-  // Round up to the next 30-min boundary from open+prep
-  let cursor = Math.ceil(startTotalMins / 30) * 30;
-  while (cursor < endTotalMins) {
-    if (!isToday || cursor > nowMinsPlusPrepTime) {
-      const h = Math.floor(cursor / 60);
-      const m = cursor % 60;
-      slots.push(`${h}:${m.toString().padStart(2, "0")}`);
-    }
-    cursor += 30;
-  }
-  return slots;
-}
 
 interface OrderTypeSectionProps {
   orderType: "pickup" | "delivery";
   onOrderTypeChange: (v: "pickup" | "delivery") => void;
   pickupEnabled: boolean;
   deliveryEnabled: boolean;
-  pickupTime: "asap" | "scheduled";
-  onPickupTimeChange: (v: "asap" | "scheduled") => void;
-  scheduledDate: Date | undefined;
-  onScheduledDateChange: (d: Date | undefined) => void;
-  scheduledTime: string;
-  onScheduledTimeChange: (v: string) => void;
-  maxFutureDays: number;
-  prepTime: number;
-  operatingHours?: WeeklySchedule;
   // Store info
   storeAddress: string;
   storeLat?: number | null;
@@ -123,15 +37,6 @@ export function OrderTypeSection({
   onOrderTypeChange,
   pickupEnabled,
   deliveryEnabled,
-  pickupTime,
-  onPickupTimeChange,
-  scheduledDate,
-  onScheduledDateChange,
-  scheduledTime,
-  onScheduledTimeChange,
-  maxFutureDays,
-  prepTime,
-  operatingHours,
   storeAddress,
   storeLat,
   storeLng,
@@ -146,8 +51,6 @@ export function OrderTypeSection({
   zoneCheckState = "idle",
   zoneCheckMessage,
 }: OrderTypeSectionProps) {
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
-
   return (
     <section className="space-y-4">
       <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)", color: "var(--text)" }}>
@@ -345,111 +248,6 @@ export function OrderTypeSection({
           )}
         </div>
       )}
-
-      {/* Scheduling */}
-      <div style={{ borderTop: "1px solid var(--border)", paddingTop: "16px" }}>
-        <h3 className="font-semibold mb-3" style={{ color: "var(--text)" }}>
-          {orderType === "pickup" ? "Pickup Time" : "Delivery Time"}
-        </h3>
-        <div className="flex gap-3">
-          <Button
-            variant={pickupTime === "asap" ? "default" : "outline"}
-            className="flex-1 hover:bg-transparent active:bg-transparent"
-            onClick={() => onPickupTimeChange("asap")}
-            style={
-              pickupTime === "asap"
-                ? { backgroundColor: "var(--primary)", color: "#fff", borderRadius: "var(--radius)" }
-                : { borderColor: "#E5E7EB", color: "#6B7280", borderRadius: "var(--radius)", backgroundColor: "#FFFFFF" }
-            }
-          >
-            ASAP
-            {pickupTime === "asap" && prepTime > 0 && (
-              <span className="ml-1 opacity-75">~{prepTime} min</span>
-            )}
-          </Button>
-          <Button
-            variant={pickupTime === "scheduled" ? "default" : "outline"}
-            className="flex-1 hover:bg-transparent active:bg-transparent"
-            onClick={() => onPickupTimeChange("scheduled")}
-            style={
-              pickupTime === "scheduled"
-                ? { backgroundColor: "var(--primary)", color: "#fff", borderRadius: "var(--radius)" }
-                : { borderColor: "#E5E7EB", color: "#6B7280", borderRadius: "var(--radius)", backgroundColor: "#FFFFFF" }
-            }
-          >
-            Schedule
-          </Button>
-        </div>
-
-        {pickupTime === "scheduled" && (
-          <div className="grid grid-cols-2 gap-3 mt-3 animate-in fade-in slide-in-from-top-2">
-            <div className="space-y-1.5">
-              <Label className="text-sm">Date</Label>
-              <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn("w-full justify-start text-left font-normal hover:bg-transparent active:bg-transparent")}
-                    style={{ borderColor: "#E5E7EB", color: "#111827" }}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {scheduledDate ? format(scheduledDate, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto min-w-[280px] p-0">
-                  <Calendar
-                    mode="single"
-                    selected={scheduledDate}
-                    onSelect={(date) => {
-                      onScheduledDateChange(date);
-                      setDatePickerOpen(false);
-                    }}
-                    initialFocus
-                    disabled={(date) => {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      const maxDate = new Date(today);
-                      maxDate.setDate(maxDate.getDate() + maxFutureDays);
-                      if (date < today || date > maxDate) return true;
-                      return isClosedDay(date, operatingHours);
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm">Time</Label>
-              <Select value={scheduledTime} onValueChange={onScheduledTimeChange}>
-                <SelectTrigger style={{ borderColor: "var(--border)" }}>
-                  <SelectValue placeholder="Select time" />
-                </SelectTrigger>
-                <SelectContent position="popper" side="bottom" sideOffset={4} className="max-h-[280px]">
-                  {(() => {
-                    const slots = getTimeSlots(scheduledDate, operatingHours, prepTime);
-                    if (slots.length === 0) {
-                      return (
-                        <div className="p-3 text-sm text-center" style={{ color: "var(--text-secondary)" }}>
-                          Store is closed on this day
-                        </div>
-                      );
-                    }
-                    return slots.map((slot) => {
-                      const [h, m] = slot.split(":").map(Number);
-                      const ampm = h >= 12 ? "PM" : "AM";
-                      const displayHour = h % 12 || 12;
-                      return (
-                        <SelectItem key={slot} value={slot} className="focus:bg-transparent hover:bg-transparent data-[highlighted]:bg-gray-50">
-                          {displayHour}:{m.toString().padStart(2, "0")} {ampm}
-                        </SelectItem>
-                      );
-                    });
-                  })()}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        )}
-      </div>
     </section>
   );
 }
