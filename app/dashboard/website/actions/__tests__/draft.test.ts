@@ -47,6 +47,9 @@ function page() {
 beforeEach(() => {
   resetFakeIds();
   tables = {
+    // Seeded so the owner guard's merchant lookup resolves; owner-ness itself is
+    // answered by the faked is_merchant_owner_strict rpc (see fake-supabase.ts).
+    merchants: [{ id: MERCHANT, clerk_org_id: ORG }],
     site_pages: [
       {
         id: "page_1",

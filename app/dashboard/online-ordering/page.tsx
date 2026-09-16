@@ -9,12 +9,13 @@ import {
 } from "./hooks/useOnlineOrderingSettings";
 import { useGatedLocationId, useGatedLocation, useHasLocations } from "@/stores/location-store";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import { FeaturePaywall } from "@/components/billing/FeaturePaywall";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { InfoIcon } from "@/components/ui/info-icon";
-import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, Check, Bell } from "lucide-react";
+import { Loader2, Globe, Clock3, CheckCircle2, AlertTriangle, Ban, ExternalLink, Building2, Store, Palette, Truck, Plug, LayoutTemplate, Check, Bell, QrCode } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -40,10 +41,7 @@ import { OrderOutTab } from "@/components/dashboard/orderout/OrderOutTab";
 import { NotificationsTab } from "./components/NotificationsTab";
 import { HoursConfigModal } from "./components/HoursConfigModal";
 import { WeeklySchedule } from "./hooks/useOnlineOrderingSettings";
-import { QrTableManager } from "./components/QrTableManager";
 import { MarketingQrManager } from "./components/MarketingQrManager";
-import { QrAnalyticsPanel } from "./components/QrAnalyticsPanel";
-import { QrGuestAlertsPanel } from "./components/QrGuestAlertsPanel";
 import { useOrderOutStatus, useOnboardOrderOut } from "./hooks/useOrderOutStatus";
 import { FONT_GOOGLE_URLS } from "@/app/sites/lib/theme-utils";
 import { buildStoreUrl } from "@/app/sites/lib/store-url";
@@ -481,6 +479,7 @@ function CompletedSetupPanel({
                 { value: "store", label: "Store Info", Icon: Store },
                 { value: "branding", label: "Branding", Icon: Palette },
                 { value: "ordering", label: "Ordering", Icon: Truck },
+                { value: "marketing-qr", label: "Marketing QR", Icon: QrCode },
                 { value: "orderout", label: "OrderOut", Icon: Plug },
                 { value: "notifications", label: "Notifications", Icon: Bell },
               ] as const
@@ -1045,6 +1044,33 @@ function CompletedSetupPanel({
                 disabled={isSaving}
               />
 
+              {/* Window to accept orders — only meaningful when auto-accept is off,
+                  since auto-accepted orders never sit in "pending". */}
+              <div className="space-y-2">
+                <Label>Accept window</Label>
+                <Select
+                  value={String(settings.pendingAcceptWindowMinutes ?? 5)}
+                  onValueChange={(v) => onUpdate({ pendingAcceptWindowMinutes: Number(v) })}
+                  disabled={isSaving || settings.autoAcceptOrders}
+                >
+                  <SelectTrigger className="w-full sm:w-56">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 minute</SelectItem>
+                    <SelectItem value="2">2 minutes</SelectItem>
+                    <SelectItem value="3">3 minutes</SelectItem>
+                    <SelectItem value="5">5 minutes</SelectItem>
+                    <SelectItem value="10">10 minutes</SelectItem>
+                    <SelectItem value="15">15 minutes</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  How long a new order waits for staff to accept it before the customer&apos;s order
+                  auto-cancels. Only applies when auto-accept is off.
+                </p>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
                   <Label>Prep Time (minutes)</Label>
@@ -1122,7 +1148,15 @@ function CompletedSetupPanel({
                   <div>
                     <h3 className="text-base font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">QR Table Ordering</h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Scan-to-order settings for dine-in QR. These controls stay on the existing online-ordering surface; QR codes, analytics, and deeper billing gates remain separate work.
+                      Scan-to-order policy for dine-in QR: whether guests may order from a
+                      table, and on what terms. The codes themselves are printed from{" "}
+                      <Link
+                        href="/dashboard/tables/qr-codes"
+                        className="font-medium text-[#0C4FD1] underline-offset-4 hover:underline dark:text-[#6CA0FF]"
+                      >
+                        Tables › QR Codes
+                      </Link>
+                      , where the tables live.
                     </p>
                   </div>
 
@@ -1215,35 +1249,6 @@ function CompletedSetupPanel({
             </PanelSection>
           </Panel>
 
-              <QrTableManager
-                locationId={selectedLocationId}
-                locationName={locationName}
-                storefrontEnabled={settings.enabled}
-                acceptsDineIn={settings.acceptsDineIn}
-                qrKillSwitch={settings.qrKillSwitch}
-                qrEntitled={qrGate.entitled}
-                qrGateMessage={qrGate.reason}
-              />
-
-              {/* Deliberately OUTSIDE the qrEntitled gate above. Table QR
-                  ordering is a billable multi-location dine-in feature; a
-                  flyer is not. Gating this would lock out exactly the
-                  single-location merchants who print flyers. Passing the flag
-                  forced-true would not be equivalent — a later refactor of the
-                  gate would silently swallow this. */}
-              <MarketingQrManager
-                locationId={selectedLocationId}
-                locationName={locationName}
-                storefrontEnabled={settings.enabled}
-              />
-
-              <QrAnalyticsPanel
-                locationId={selectedLocationId}
-                qrEnabled={settings.acceptsDineIn}
-              />
-
-              <QrGuestAlertsPanel locationId={selectedLocationId} />
-
           <Panel>
             <PanelSection
               icon={Clock3}
@@ -1275,6 +1280,28 @@ function CompletedSetupPanel({
           />
         </TabsContent>
 
+        {/* Its own tab, not a slab at the bottom of Ordering. A marketing code
+            is a thing you make and print, not a setting you save, so it does
+            not belong under a dirty-state settings form.
+
+            Deliberately NOT behind `qrGate.entitled`, the gate the QR policy
+            block on the Ordering tab is subject to. Table QR ordering is a
+            billable multi-location dine-in feature; a flyer is not. Gating this
+            would lock out exactly the single-location merchants who print
+            flyers. Passing the flag forced-true would not be equivalent — a
+            later refactor of the gate would silently swallow this.
+
+            Table QR codes are elsewhere again, under Tables › QR Codes, because
+            those are keyed to floor-plan objects. A marketing code has no table
+            behind it, only the storefront — which is why it stayed here. */}
+        <TabsContent value="marketing-qr" className="space-y-6">
+          <MarketingQrManager
+            locationId={selectedLocationId}
+            locationName={locationName}
+            storefrontEnabled={settings.enabled}
+          />
+        </TabsContent>
+
         <TabsContent value="orderout" className="space-y-6">
           <div>
               {!orgId ? (
@@ -1288,17 +1315,29 @@ function CompletedSetupPanel({
                   </PanelSection>
                 </Panel>
               ) : (
-                <OrderOutTab
-                  clerkOrgId={orgId}
+                <FeaturePaywall
+                  serviceCode="orderout"
                   locationId={selectedLocationId}
-                  orderOutStatus={(orderOutStatusResult as any)?.data ?? null}
-                  showOnboardingForm={showOrderOutForm}
-                  onShowOnboardingForm={setShowOrderOutForm}
-                  onboardMutation={onboardMutation}
-                  merchantName={orgSlug || "Merchant"}
-                  locationName={locationName}
-                  locationDefaults={locationDefaults as any}
-                />
+                  clerkOrgId={orgId}
+                  title="Orderout"
+                  description="Connect delivery channels such as Uber Eats, DoorDash, and Grubhub, with menu sync and consolidated orders."
+                  grandfathered={Boolean(
+                    (orderOutStatusResult as any)?.data?.hasAccount ||
+                    (orderOutStatusResult as any)?.data?.hasRestaurant
+                  )}
+                >
+                  <OrderOutTab
+                    clerkOrgId={orgId}
+                    locationId={selectedLocationId}
+                    orderOutStatus={(orderOutStatusResult as any)?.data ?? null}
+                    showOnboardingForm={showOrderOutForm}
+                    onShowOnboardingForm={setShowOrderOutForm}
+                    onboardMutation={onboardMutation}
+                    merchantName={orgSlug || "Merchant"}
+                    locationName={locationName}
+                    locationDefaults={locationDefaults as any}
+                  />
+                </FeaturePaywall>
               )}
           </div>
         </TabsContent>
@@ -1333,6 +1372,7 @@ export default function OnlineOrderingPage() {
   const selectedLocationId = gatedLocationId ?? "all";
   const selectedLocation = useGatedLocation();
   const isAllLocations = !gatedLocationId;
+  const paywallOrgId = useClerkOrgId();
   // Distinguishes "the store has not populated yet" from "this account really
   // has no location to show" — see the guard further down.
   const hasLocations = useHasLocations();
@@ -1510,13 +1550,22 @@ export default function OnlineOrderingPage() {
             </div>
           }
         />
-        <StatusCard
-          status={status}
-          settings={currentSettings}
-          locationName={selectedLocation.name}
-          onRequestSetup={() => handleRequestSetup(selectedLocationId)}
-          isLoading={isSaving || requirementsSaving}
-        />
+        <FeaturePaywall
+          serviceCode="online_ordering"
+          locationId={selectedLocationId}
+          clerkOrgId={paywallOrgId}
+          title="Online Ordering"
+          description="Launch a branded online-ordering website for this location so guests can order directly for pickup and delivery."
+          grandfathered={status !== "not_requested"}
+        >
+          <StatusCard
+            status={status}
+            settings={currentSettings}
+            locationName={selectedLocation.name}
+            onRequestSetup={() => handleRequestSetup(selectedLocationId)}
+            isLoading={isSaving || requirementsSaving}
+          />
+        </FeaturePaywall>
 
         <Dialog open={requirementsOpen} onOpenChange={setRequirementsOpen}>
           <DialogContent className="max-w-2xl">

@@ -121,6 +121,21 @@ function formatTime(isoString: string | null): string {
   return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+/** Human label for the accept window, e.g. "5 minutes", "1 minute", "90 seconds". */
+function formatAcceptWindow(totalSeconds: number): string {
+  if (totalSeconds % 60 === 0) {
+    const mins = totalSeconds / 60;
+    return `${mins} minute${mins === 1 ? "" : "s"}`;
+  }
+  return `${totalSeconds} seconds`;
+}
+
+/** Countdown display: "m:ss" once the window is a minute or more, else "Ns". */
+function formatCountdown(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 function getEstimatedReadyTime(order: OrderTrackingData): { label: string; wallClock: string } | null {
   if (order.readyAt || order.completedAt || order.cancelledAt || order.declinedAt) return null;
 
@@ -185,25 +200,27 @@ export function OrderTrackingPage({
   // This is recalculated on mount and on status change — refresh-safe.
   useEffect(() => {
     if (order.status === "pending") {
+      const windowSeconds = order.pendingAcceptWindowSeconds || 300;
       const secondsSincePlaced = Math.floor(
         (Date.now() - new Date(order.createdAt).getTime()) / 1000
       );
-      const remaining = Math.max(0, 60 - secondsSincePlaced);
+      const remaining = Math.max(0, windowSeconds - secondsSincePlaced);
       setPendingCountdown(remaining);
     } else {
       setPendingCountdown(null);
     }
-  }, [order.status, order.createdAt]);
+  }, [order.status, order.createdAt, order.pendingAcceptWindowSeconds]);
 
   // Tick countdown and auto-cancel when it hits 0
   useEffect(() => {
     if (pendingCountdown === null) return;
     if (pendingCountdown === 0) {
       if (sessionToken) {
-        cancelOnlineOrder(orderId, sessionToken, "No response from restaurant within 1 minute", "timeout").then(async (result) => {
+        const windowLabel = formatAcceptWindow(order.pendingAcceptWindowSeconds || 300);
+        cancelOnlineOrder(orderId, sessionToken, `No response from restaurant within ${windowLabel}`, "timeout").then(async (result) => {
           if (result.success) {
             toast.error("Order Cancelled", {
-              description: "No response from the restaurant within 1 minute. Your order has been cancelled.",
+              description: `No response from the restaurant within ${windowLabel}. Your order has been cancelled.`,
               duration: 8000,
             });
           }
@@ -215,7 +232,7 @@ export function OrderTrackingPage({
     }
     const timer = setTimeout(() => setPendingCountdown((c) => (c !== null ? c - 1 : null)), 1000);
     return () => clearTimeout(timer);
-  }, [pendingCountdown, orderId, sessionToken]);
+  }, [pendingCountdown, orderId, sessionToken, order.pendingAcceptWindowSeconds]);
 
   // Poll for updates every 60s
   useEffect(() => {
@@ -471,7 +488,7 @@ export function OrderTrackingPage({
                 </div>
                 <div className="text-right">
                   <p className="text-xl font-bold tabular-nums" style={{ color: "#f59e0b" }}>
-                    {pendingCountdown}s
+                    {formatCountdown(pendingCountdown)}
                   </p>
                   <p className="text-xs" style={{ color: "#92400e", opacity: 0.75 }}>remaining</p>
                 </div>

@@ -2,7 +2,7 @@
 
 import { useClerk, useSession } from '@clerk/nextjs'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo } from 'react'
 import {
     Sidebar,
     SidebarContent,
@@ -17,6 +17,7 @@ import {
     SidebarProvider,
     SidebarTrigger,
 } from '@/components/ui/sidebar'
+import DexaLogoLight from '@/public/dexalogolight.png'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -25,7 +26,6 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-    Shield,
     LayoutDashboard,
     Users,
     BarChart3,
@@ -51,7 +51,6 @@ import {
     MonitorPlay,
     AlertOctagon,
     Receipt,
-    CircleDollarSign,
     Globe,
     LucideIcon,
 } from 'lucide-react'
@@ -139,12 +138,6 @@ const navMain: NavGroup[] = [
                 icon: Receipt,
                 requiredPermission: 'hq.merchant.transactions' as PermissionCode,
             },
-            {
-                title: 'Subscriptions',
-                url: '/manage/subscriptions',
-                icon: CircleDollarSign,
-                requiredPermission: 'system.billing.manage' as PermissionCode,
-            },
         ]
     },
     {
@@ -216,6 +209,12 @@ const navMain: NavGroup[] = [
                 icon: Globe,
                 requiredPermission: 'system.config.manage' as PermissionCode,
             },
+            {
+                title: 'Billing Catalog',
+                url: '/manage/settings/billing-catalog',
+                icon: Receipt,
+                requiredPermission: 'system.billing.manage' as PermissionCode,
+            },
         ]
     }
 ]
@@ -235,36 +234,6 @@ const navFooter = [
 ]
 
 const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID ?? ''
-
-/**
- * HQ org avatar for the sidebar header.
- *
- * The org's `imageURL` points at an external CDN and can 404 (deleted asset,
- * rotated Clerk upload). A bare <Image> leaves the browser's broken-image glyph
- * sitting on top of the brand square, so failures fall back to the Shield mark
- * instead. `fill` + object-cover is also what keeps a non-square source from
- * distorting inside the 32px box — a fixed width/height pair does not.
- */
-function HqOrgLogo({ imageURL, name }: { imageURL?: string | null; name: string }) {
-    const [failed, setFailed] = useState(false)
-
-    return (
-        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary">
-            {imageURL && !failed ? (
-                <Image
-                    src={imageURL}
-                    alt={name}
-                    fill
-                    sizes="32px"
-                    className="rounded-lg object-cover"
-                    onError={() => setFailed(true)}
-                />
-            ) : (
-                <Shield className="h-4 w-4 text-primary-foreground" />
-            )}
-        </div>
-    )
-}
 
 function AppSidebar() {
     const { data: userInfo, isLoading: userInfoLoading } = useUserInfo()
@@ -357,10 +326,20 @@ function AppSidebar() {
                         <Skeleton className="h-8 w-8" />
                     ) : (
                         <>
-                            <HqOrgLogo
-                                imageURL={hqOrg?.imageURL}
-                                name={hqOrg?.name || 'Dexa POS HQ'}
-                            />
+                            {/* HQ always shows the bundled Dexa mark rather than
+                                the org's remote imageURL: it is a fixed brand,
+                                and a static import cannot 404 the way the CDN
+                                URL did. object-contain inside a fixed 32px box
+                                keeps a non-square source from distorting. */}
+                            <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary">
+                                <Image
+                                    src={DexaLogoLight}
+                                    alt={hqOrg?.name || 'Dexa POS HQ'}
+                                    fill
+                                    sizes="32px"
+                                    className="object-contain p-1"
+                                />
+                            </div>
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-semibold">{hqOrg?.name || 'Dexa POS HQ'}</span>
                                 <span className="truncate text-xs text-muted-foreground">Admin Dashboard</span>
@@ -543,7 +522,6 @@ export default function ManageLayout({
         { title: 'Analytics', url: '/manage/analytics', icon: BarChart3 },
         { title: 'TSYS Disputes', url: '/manage/disputes', icon: ShieldAlert },
         { title: 'Platform Fees', url: '/manage/platform-fees', icon: Receipt },
-        { title: 'Subscriptions', url: '/manage/subscriptions', icon: CircleDollarSign },
         { title: 'Roles & Permissions', url: '/manage/roles-permissions', icon: ShieldCheck },
         { title: 'Audit Logs', url: '/manage/audit-logs', icon: History },
         { title: 'Support', url: '/manage/support', icon: MessageSquare },

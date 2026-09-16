@@ -25,6 +25,7 @@ import {
     FileSpreadsheet,
     Download,
     ChevronDown,
+    CircleDollarSign,
     type LucideIcon,
 } from 'lucide-react'
 import {
@@ -45,6 +46,7 @@ import { AuditLogsTab } from './components/AuditLogsTab'
 import { DevicesTab } from './components/DevicesTab'
 import { BillingTab } from './components/BillingTab'
 import { PlatformBillingTab } from './components/PlatformBillingTab'
+import { HqSubscriptionsWorkspace } from '@/components/billing/HqSubscriptionsWorkspace'
 import { OnlineStoreTab } from './components/OnlineStoreTab'
 import { OnboardingStatusCard } from './components/OnboardingStatusCard'
 import { MerchantHeaderBar } from './components/MerchantHeaderBar'
@@ -69,6 +71,7 @@ type SectionKey =
     | 'disputes'
     | 'billing'
     | 'platform-billing'
+    | 'subscriptions'
     | 'online-store'
     | 'support'
     | 'devices'
@@ -85,6 +88,7 @@ const VALID_SECTIONS: SectionKey[] = [
     'disputes',
     'billing',
     'platform-billing',
+    'subscriptions',
     'online-store',
     'support',
     'devices',
@@ -140,19 +144,27 @@ export default function MerchantDetailsPage() {
     const canManageDevices = hasPermission('users.manage')
     const canManageMerchantStatus = hasPermission('hq.merchant.update')
     const canImportMenu = hasPermission('hq.merchant.menu.import')
+    const canManageBilling = hasPermission('system.billing.manage')
 
     const [cloverImportOpen, setCloverImportOpen] = useState(false)
 
     const requestedTab = searchParams.get('tab') as SectionKey | null
-    const initial: SectionKey =
-        requestedTab && VALID_SECTIONS.includes(requestedTab) ? requestedTab : 'overview'
-    const [activeTab, setActiveTab] = useState<SectionKey>(initial)
+    // Deep-links (e.g. from subscription notifications) may request the
+    // subscriptions tab; fall back to overview when the viewer lacks billing
+    // access so they never land on an empty pane.
+    const resolveTab = (tab: SectionKey | null): SectionKey => {
+        if (!tab || !VALID_SECTIONS.includes(tab)) return 'overview'
+        if (tab === 'subscriptions' && !canManageBilling) return 'overview'
+        return tab
+    }
+    const [activeTab, setActiveTab] = useState<SectionKey>(resolveTab(requestedTab))
 
     useEffect(() => {
         if (requestedTab && VALID_SECTIONS.includes(requestedTab)) {
-            setActiveTab(requestedTab)
+            setActiveTab(resolveTab(requestedTab))
         }
-    }, [requestedTab])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [requestedTab, canManageBilling])
 
     if (isLoading)
         return (
@@ -232,6 +244,7 @@ export default function MerchantDetailsPage() {
                                 { value: 'disputes', icon: ShieldCheck, label: 'Disputes' },
                                 { value: 'billing', icon: Receipt, label: 'Billing' },
                                 { value: 'platform-billing', icon: FileText, label: 'Platform Billing' },
+                                ...(canManageBilling ? [{ value: 'subscriptions', icon: CircleDollarSign, label: 'Subscriptions' }] : []),
                                 { value: 'online-store', icon: Globe, label: 'Online Store' },
                                 { value: 'support', icon: LifeBuoy, label: 'Support' },
                                 ...(canManageDevices ? [{ value: 'devices', icon: Monitor, label: 'Devices' }] : []),
@@ -291,6 +304,11 @@ export default function MerchantDetailsPage() {
                                 <NavItem value="platform-billing" icon={FileText} active={activeTab === 'platform-billing'} onClick={setActiveTab}>
                                     Platform Billing
                                 </NavItem>
+                                {canManageBilling && (
+                                    <NavItem value="subscriptions" icon={CircleDollarSign} active={activeTab === 'subscriptions'} onClick={setActiveTab}>
+                                        Subscriptions
+                                    </NavItem>
+                                )}
                             </NavGroup>
 
                             <NavGroup label="Operations">
@@ -354,6 +372,13 @@ export default function MerchantDetailsPage() {
                                 <PlatformBillingTab
                                     merchantId={merchantDetails.id}
                                     locations={merchantDetails.locations}
+                                />
+                            )}
+
+                            {activeTab === 'subscriptions' && canManageBilling && (
+                                <HqSubscriptionsWorkspace
+                                    merchant={merchantDetails}
+                                    canManageBilling={canManageBilling}
                                 />
                             )}
 

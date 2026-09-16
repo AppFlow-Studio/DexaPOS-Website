@@ -1,6 +1,7 @@
 import type { SupabaseClient } from 'npm:@supabase/supabase-js'
 import { sendSubscriptionRestoredEmail } from './payment-emails.ts'
 import { runSubscriptionNotificationDelivery } from './subscription-failure-notifications.ts'
+import { buildSubscriptionInvoiceLinks } from './subscription-invoice-links.ts'
 
 type BillingSupabaseClient = SupabaseClient<any, any, any>
 
@@ -15,7 +16,7 @@ export async function notifySubscriptionRestored(params: {
 }): Promise<void> {
   const { data: invoice, error } = await params.supabase
     .from('subscription_invoices')
-    .select('id, subscription_id, merchant_id, location_id, invoice_number, total_amount')
+    .select('id, subscription_id, merchant_id, location_id, invoice_number, total_amount, public_token')
     .eq('id', params.invoiceId)
     .single()
   if (error || !invoice) throw new Error(error?.message || 'Restored invoice not found')
@@ -76,6 +77,7 @@ export async function notifySubscriptionRestored(params: {
       deliver: () => sendSubscriptionRestoredEmail({
         to: recipient, merchantName, locationName, invoiceNumber: invoice.invoice_number,
         totalAmount: Number(invoice.total_amount ?? 0),
+        viewUrl: buildSubscriptionInvoiceLinks(invoice.public_token).viewUrl,
       }),
     }))
   }

@@ -18,6 +18,7 @@ import type {
 } from "@/lib/site-builder/db-types";
 import { fetchMerchantId } from "@/lib/site-builder/site-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { assertMerchantOwner } from "./owner-guard";
 
 /**
  * The website asset library.
@@ -102,6 +103,9 @@ export async function UploadSiteAsset(
   if (!check.ok) return { error: check.message, code: check.code };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const quota = await checkQuota(supabase, merchantId, buffer.byteLength);
   if (quota) return quota;
@@ -232,6 +236,10 @@ export async function UpdateSiteAssetAlt(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const { data, error } = await supabase
     .from("site_assets")
     .update({ alt_text: altText.trim().slice(0, 300) || null })
@@ -263,6 +271,9 @@ export async function DeleteSiteAsset(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const { data: existing } = await supabase
     .from("site_assets")

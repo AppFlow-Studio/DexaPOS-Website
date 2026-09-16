@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { cookies } from "next/headers";
 
 import type { MerchantSiteRow } from "./db-types";
 import type { ResolverContext, ResolverSources } from "./bindings/resolve";
@@ -322,6 +323,57 @@ export async function loadSiteContext(
     brand: website.brand,
     nav: website.nav,
   };
+}
+
+export type WebsiteLocationResolution =
+  | { kind: "resolved"; locationId: string }
+  | { kind: "pick"; locations: { id: string; name: string }[] }
+  | { kind: "no-storefront" };
+
+/**
+ * Which location the website builder should act on, following the dashboard's
+ * standard single / global / location flow — so the builder tracks the same
+ * location switcher every other surface does, instead of silently defaulting to
+ * the first storefront.
+ *
+ *   1. an explicit `?location=` (internal website links always carry it)
+ *   2. the switcher's `x-location-id` cookie (what the rest of the dashboard reads)
+ *   3. a single-location merchant gates to its one storefront
+ *   4. otherwise — "All locations" with several storefronts — `pick`, so the
+ *      route can show a location picker (the website is brand-level, but its
+ *      pages, prices and preview are per-branch, so editing needs one chosen).
+ *
+ * Returns `null` only when the merchant itself cannot be resolved. Inactive
+ * storefronts are excluded to match the switcher, except when *every* storefront
+ * is switched off — then they are still offered so a paused store stays editable
+ * (same intent as `loadSiteContext`).
+ */
+export async function resolveWebsiteLocation(
+  clerkOrgId: string,
+  paramLocation: string | undefined,
+): Promise<WebsiteLocationResolution | null> {
+  const merchant = await fetchMerchant(clerkOrgId);
+  if (!merchant) return null;
+
+  const configs = await fetchStoreConfigs(merchant.id);
+  if (configs.length === 0) return { kind: "no-storefront" };
+
+  const active = configs.filter((c) => c.is_active !== false);
+  const usable = active.length > 0 ? active : configs;
+  const locations = usable.map((c) => ({
+    id: String(c.location_id),
+    name: String((c.store_name as string | null) ?? "Untitled location"),
+  }));
+  const isValid = (id?: string | null) => !!id && locations.some((l) => l.id === id);
+
+  if (isValid(paramLocation)) return { kind: "resolved", locationId: paramLocation as string };
+
+  const cookieLocation = (await cookies()).get("x-location-id")?.value;
+  if (isValid(cookieLocation)) return { kind: "resolved", locationId: cookieLocation as string };
+
+  if (locations.length === 1) return { kind: "resolved", locationId: locations[0].id };
+
+  return { kind: "pick", locations };
 }
 
 /**

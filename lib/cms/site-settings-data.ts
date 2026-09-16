@@ -74,9 +74,9 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   ],
   footer_copyright: "Copyright 2026 DEXA. All rights reserved.",
   footer_legal: [
-    { href: "#", label: "Privacy" },
-    { href: "#", label: "Terms" },
-    { href: "#", label: "Security" },
+    { href: "/terms", label: "Terms" },
+    { href: "/privacy", label: "Privacy" },
+    { href: "/refund-policy", label: "Refunds" },
   ],
   social_links: [
     { platform: "twitter", url: "https://x.com/dexapos", label: "X (Twitter)" },

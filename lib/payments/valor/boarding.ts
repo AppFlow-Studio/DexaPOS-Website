@@ -20,6 +20,7 @@
 
 import { isValidEpi } from "./config";
 import type { ValorEnvelope } from "./client";
+import type { ValorAcquirerConfig } from "./boardingApi";
 import {
   readAppId,
   readAppKey,
@@ -87,6 +88,8 @@ export interface BoardingParams {
   dexaMerchantId: string;
   dexaLocationId: string | null;
   epiLabel?: string;
+  /** Per-location acquirer override; falls back to `options.acquirer` when unset. */
+  acquirer?: ValorAcquirerConfig;
 }
 
 /**
@@ -345,6 +348,12 @@ export interface LocationInput {
   /** Null provisions a merchant-global account (single-location merchants). */
   dexaLocationId: string | null;
   epiLabel?: string;
+  /**
+   * Per-location acquirer override (dynamic boarding). When set, this location's
+   * store + EPI board with these identifiers instead of `options.acquirer` — the
+   * "different MID per location" case. Omit for the shared-MID default.
+   */
+  acquirer?: ValorAcquirerConfig;
 }
 
 export interface LocationFailure {

@@ -153,7 +153,7 @@ async function postWithBodyCredentials(
   credentials: ValorCredentials,
   endpoints: ValorEndpoints,
   timeoutMs = DEFAULT_TIMEOUT_MS,
-): Promise<{ status: number; body: JsonRecord }> {
+): Promise<{ status: number; body: JsonRecord; rawText: string; contentType: string }> {
   const response = await fetch(`${endpoints.transactionBaseUrl}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -168,13 +168,17 @@ async function postWithBodyCredentials(
   })
 
   const text = await response.text()
+  const contentType = response.headers.get('content-type') ?? ''
   let body: JsonRecord = {}
   try {
     if (text) body = JSON.parse(text) as JsonRecord
   } catch {
     body = {}
   }
-  return { status: response.status, body }
+  // Keep the raw payload so callers can persist/diagnose responses Valor returns
+  // without a recognizable JSON body (e.g. an HTTP 200 with an empty body, which
+  // add_subscription can return when an EPI is not provisioned for recurring).
+  return { status: response.status, body, rawText: text ?? '', contentType }
 }
 
 // ---------------------------------------------------------------------------
@@ -490,9 +494,12 @@ function buildValorRecurringBody(
   return {
     amount: formatMinorUnits(params.amountMinor),
     surchargeAmount: '0.00',
+    // Valor's add_subscription contract names the vault reference
+    // `CustomerProfileID` / `PaymentProfileID` (NOT `vault_id` / `payment_id`);
+    // wrong keys => no vault reference seen => `A44 INVALID PAYMENT INFO`.
     payment_info: {
-      vault_id: params.vaultCustomerId,
-      ...(params.paymentProfileId ? { payment_id: params.paymentProfileId } : {}),
+      CustomerProfileID: params.vaultCustomerId,
+      ...(params.paymentProfileId ? { PaymentProfileID: params.paymentProfileId } : {}),
     },
     surchargeIndicator,
     recurring_type: '2',
@@ -514,17 +521,48 @@ function buildValorRecurringBody(
   }
 }
 
-function toRecurringResult(status: number, body: JsonRecord): ValorRecurringResult {
+function toRecurringResult(
+  status: number,
+  body: JsonRecord,
+  rawText = '',
+  contentType = '',
+): ValorRecurringResult {
+  const isEmptyBody = !body || Object.keys(body).length === 0
+  const explicitError =
+    firstString(body, ['response_text', 'error_message', 'display_message', 'message']) ||
+    extractValorError(body)
+
+  // A 2xx with no recognizable JSON body is NOT a silent success: Valor returns
+  // this for add_subscription when the EPI is not provisioned for native
+  // recurring. Surface an actionable message and keep the raw response so the
+  // failure is diagnosable instead of a generic "request failed".
+  const emptyBodyMessage =
+    status < 400
+      ? `Valor returned HTTP ${status} with ${rawText.trim() ? 'an unrecognized' : 'an empty'} response body — the recurring charge was not confirmed. This EPI may not be provisioned for native recurring.${
+          rawText.trim() ? ` Raw response: ${rawText.trim().slice(0, 500)}` : ''
+        }`
+      : `Valor recurring request failed with HTTP ${status}.${
+          rawText.trim() ? ` Raw response: ${rawText.trim().slice(0, 500)}` : ''
+        }`
+
   return {
     success: status < 400 && isValorSuccess(body),
     status,
     subscriptionId: firstString(body, ['subscription_id', 'subscriptionid']),
     transactionId: firstString(body, ['txn_id', 'transaction_id']),
-    responseText:
-      firstString(body, ['response_text', 'error_message', 'display_message', 'message']) ||
-      extractValorError(body) ||
-      'Valor recurring request failed',
-    body,
+    responseText: explicitError || (isEmptyBody ? emptyBodyMessage : 'Valor recurring request failed'),
+    // Never persist a bare {} for an empty/unparseable response — capture the
+    // HTTP status, content-type, and raw text so we can tell an empty body from
+    // a differently-shaped success after the fact.
+    body: isEmptyBody
+      ? {
+          _valor_diagnostic: {
+            http_status: status,
+            content_type: contentType,
+            raw_response: rawText.slice(0, 2000),
+          },
+        }
+      : body,
   }
 }
 
@@ -545,7 +583,7 @@ export async function createRecurringSubscription(
     endpoints,
     options.timeoutMs,
   )
-  return toRecurringResult(response.status, response.body)
+  return toRecurringResult(response.status, response.body, response.rawText, response.contentType)
 }
 
 export async function updateRecurringSubscription(
@@ -575,7 +613,7 @@ export async function updateRecurringSubscription(
     endpoints,
     options.timeoutMs,
   )
-  return toRecurringResult(response.status, response.body)
+  return toRecurringResult(response.status, response.body, response.rawText, response.contentType)
 }
 
 export type ValorRecurringLifecycleAction = 'activate' | 'deactivate' | 'delete'
@@ -607,7 +645,7 @@ export async function changeRecurringSubscriptionLifecycle(
     endpoints,
     options.timeoutMs,
   )
-  const result = toRecurringResult(response.status, response.body)
+  const result = toRecurringResult(response.status, response.body, response.rawText, response.contentType)
   return {
     ...result,
     subscriptionId: result.subscriptionId || normalizedSubscriptionId,

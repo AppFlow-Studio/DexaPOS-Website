@@ -10,7 +10,7 @@ import {
   getQrGuestAlertsSnapshot,
   resolveQrGuestAlertAction,
   type QrGuestAlertsSnapshot,
-} from "../actions";
+} from "@/app/dashboard/online-ordering/actions";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase/client";
 

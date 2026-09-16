@@ -328,6 +328,8 @@ export interface OrderTrackingData {
   declinedAt: string | null;
   declinedReason: string | null;
   estimatedPrepMinutes: number;
+  /** Seconds a pending order waits for merchant acceptance before storefront auto-cancels. */
+  pendingAcceptWindowSeconds: number;
   requestedTime: string | null;
   locationTimezone: string;
   subtotal: number;
@@ -372,10 +374,10 @@ export async function getOrderTracking(
     return { data: null };
   }
 
-  // Get estimated prep minutes from online_store_config
+  // Get estimated prep minutes + accept window from online_store_config
   const { data: config } = await supabase
     .from("online_store_config")
-    .select("estimated_prep_minutes")
+    .select("estimated_prep_minutes, pending_accept_window_minutes")
     .eq("location_id", (order as any).location_id)
     .limit(1)
     .single();
@@ -418,6 +420,7 @@ export async function getOrderTracking(
       declinedAt: o.declined_at ?? null,
       declinedReason: o.declined_reason ?? null,
       estimatedPrepMinutes: config?.estimated_prep_minutes ?? 20,
+      pendingAcceptWindowSeconds: (config?.pending_accept_window_minutes ?? 5) * 60,
       requestedTime: o.estimated_delivery_time ?? null,
       locationTimezone: locationRow?.timezone ?? "America/New_York",
       subtotal: Number(o.subtotal) || 0,

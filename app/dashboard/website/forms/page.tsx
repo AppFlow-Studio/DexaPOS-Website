@@ -4,8 +4,9 @@ import { redirect } from "next/navigation";
 
 import { ListForms } from "@/app/dashboard/website/actions/forms";
 import FormsScreen from "@/components/site-builder/dashboard/FormsScreen";
+import { WebsiteLocationPicker } from "@/components/site-builder/dashboard/WebsiteLocationPicker";
 import { Button } from "@/components/ui/button";
-import { loadSiteContext } from "@/lib/site-builder/site-context";
+import { loadSiteContext, resolveWebsiteLocation } from "@/lib/site-builder/site-context";
 
 /**
  * The forms list.
@@ -25,7 +26,12 @@ export default async function WebsiteFormsRoute({
   if (!orgId) redirect("/sign-in");
 
   const params = await searchParams;
-  const storefront = await loadSiteContext(orgId, params.location);
+
+  const scope = await resolveWebsiteLocation(orgId, params.location);
+  if (!scope || scope.kind === "no-storefront") redirect("/dashboard/website/pages");
+  if (scope.kind === "pick") return <WebsiteLocationPicker locations={scope.locations} />;
+
+  const storefront = await loadSiteContext(orgId, scope.locationId);
   if (!storefront) redirect("/dashboard/website/pages");
 
   const result = await ListForms(orgId);

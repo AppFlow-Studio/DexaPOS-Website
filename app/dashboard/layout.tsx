@@ -52,6 +52,7 @@ import {
   Utensils,
   CircleSlash,
   Armchair,
+  QrCode,
   Receipt,
   Calendar,
   MapPin,
@@ -139,6 +140,11 @@ const navMain = [
         icon: Armchair,
         items: [
           { title: "Tables", url: "/dashboard/tables", icon: Armchair },
+          {
+            title: "QR Codes",
+            url: "/dashboard/tables/qr-codes",
+            icon: QrCode,
+          },
           {
             title: "Service Charge",
             url: "/dashboard/tables/service-charge",
@@ -270,6 +276,11 @@ const navMain = [
         title: "Subscriptions",
         url: "/dashboard/subscriptions",
         icon: FileText,
+      },
+      {
+        title: "Billing & Payments",
+        url: "/dashboard/subscriptions/billing",
+        icon: CreditCard,
       },
       {
         title: "Devices",
@@ -1553,6 +1564,7 @@ export default function MerchantDashboardLayout({
       icon: MapPin,
     },
     { title: "Tables", url: "/dashboard/tables", icon: Armchair },
+    { title: "QR Codes", url: "/dashboard/tables/qr-codes", icon: QrCode },
     { title: "Service Charge", url: "/dashboard/tables/service-charge", icon: Percent },
     { title: "Reservations", url: "/dashboard/reservations", icon: CalendarClock },
 

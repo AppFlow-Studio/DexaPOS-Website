@@ -18,6 +18,7 @@ import {
 } from "@/lib/site-builder/forms/notification";
 import { submissionColumns } from "@/lib/site-builder/forms/submission";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { assertMerchantOwner } from "./owner-guard";
 
 /**
  * Forms — brand-level reusable objects with one inbox each.
@@ -159,6 +160,10 @@ export async function CreateForm(
   if (!trimmed) return { error: "Give the form a name", code: "invalid_document" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const { siteId } = await resolveSite(supabase, clerkOrgId);
   if (!siteId) return { error: "Create your website first", code: "site_not_found" };
 
@@ -229,6 +234,9 @@ export async function SaveFormDraft(
 
   const supabase = createServerSupabaseClient();
 
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   // Never trust the posted document — it came from a browser.
   const clean = normalizeForm(doc);
 
@@ -267,6 +275,9 @@ export async function PublishForm(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const { data: form } = await supabase
     .from("site_forms")
@@ -318,6 +329,10 @@ export async function ArchiveForm(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const { error } = await supabase
     .from("site_forms")
     .update({ archived_at: new Date().toISOString() })

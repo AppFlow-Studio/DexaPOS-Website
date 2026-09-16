@@ -127,7 +127,6 @@ export default function MenuPage () {
   const [reorderedMenus, setReorderedMenus] = useState<MenuWithLocation[]>([])
   const [hasOrderChanges, setHasOrderChanges] = useState(false)
   const [isSavingOrder, setIsSavingOrder] = useState(false)
-  const [savingVisibilityMenuId, setSavingVisibilityMenuId] = useState<string | null>(null)
 
   const handleChannelVisibilityChange = async (
     menuId: string,
@@ -137,31 +136,27 @@ export default function MenuPage () {
       toast.error('Select a location', {
         description: 'Platform visibility is configured separately for each location.'
       })
-      return
+      return false
     }
 
-    setSavingVisibilityMenuId(menuId)
-    try {
-      const result = await SetLocationMenuChannelVisibility(
-        gatedLocationId,
-        menuId,
-        visibility
-      )
-      if (result.error) {
-        toast.error('Visibility update failed', { description: result.error })
-        return
-      }
-
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['menus'] }),
-        queryClient.invalidateQueries({ queryKey: ['location-online-menu'] }),
-        queryClient.invalidateQueries({ queryKey: ['orderout'] }),
-        queryClient.invalidateQueries({ queryKey: ['online-ordering'] })
-      ])
-      toast.success('Platform visibility updated')
-    } finally {
-      setSavingVisibilityMenuId(null)
+    const result = await SetLocationMenuChannelVisibility(
+      gatedLocationId,
+      menuId,
+      visibility
+    )
+    if (result.error) {
+      toast.error('Visibility update failed', { description: result.error })
+      // Reported so the optimistic switch rolls itself back.
+      return false
     }
+
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['menus'] }),
+      queryClient.invalidateQueries({ queryKey: ['location-online-menu'] }),
+      queryClient.invalidateQueries({ queryKey: ['orderout'] }),
+      queryClient.invalidateQueries({ queryKey: ['online-ordering'] })
+    ])
+    return true
   }
 
   // Cast menus to include location info
@@ -801,7 +796,6 @@ export default function MenuPage () {
             onSetOnlineMenu={handleSetOnlineMenu}
             onChannelVisibilityChange={handleChannelVisibilityChange}
             channelVisibilityDisabled={!gatedLocationId}
-            savingVisibilityMenuId={savingVisibilityMenuId}
             showLocations={isAllLocations && !isSingleLocation}
           />
           {filteredMenus.length > 0 && (

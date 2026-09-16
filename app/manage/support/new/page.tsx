@@ -25,6 +25,7 @@ import {
   CreateHQSupportTicket,
   GetConfiguredSupportAssignees,
   GetHQSupportDraftUploadUrl,
+  DiscardAdminSupportUpload,
   type CreateHQSupportTicketInput,
 } from "../../actions/support";
 import {
@@ -246,12 +247,14 @@ export default function NewHQSupportTicketPage() {
         <div className="space-y-2">
           <Label>Screenshots or files (optional)</Label>
           <p className="text-xs text-muted-foreground">
-            PNG, JPG, WebP, or PDF. Maximum 3 files and 5 MB per file.
+            Images/PDFs up to 5 MB; video (MP4, MOV, WebM) up to 100 MB. Maximum
+            3 files.
           </p>
           <FileUploadInput
             onUploadsChange={setAttachments}
             onUploadStateChange={setIsUploading}
             getUploadUrl={GetHQSupportDraftUploadUrl}
+            onDiscardUpload={DiscardAdminSupportUpload}
             sessionId={uploadSessionId}
             disabled={isSubmitting}
           />

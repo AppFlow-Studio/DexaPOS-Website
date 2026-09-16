@@ -21,6 +21,8 @@ export function StatTile({
   icon,
   isLoading,
   className,
+  onClick,
+  isActive,
 }: {
   label: React.ReactNode
   value: React.ReactNode
@@ -29,10 +31,25 @@ export function StatTile({
   icon?: React.ReactNode
   isLoading?: boolean
   className?: string
+  /**
+   * Makes the tile a control. A figure that states a count is the most direct
+   * way to ask for the rows behind it, so a tile may double as the filter that
+   * selects them.
+   */
+  onClick?: () => void
+  /** Whether this tile's filter is the one currently applied. */
+  isActive?: boolean
 }) {
-  return (
-    <div className={cn('min-w-0', className)}>
-      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+  const body = (
+    <>
+      <div
+        className={cn(
+          'flex items-center gap-1.5 text-sm',
+          // Emphasis, not colour: the accent marks section headings (D-03), and
+          // status is never colour-coded, so an applied filter reads as weight.
+          isActive ? 'font-medium text-foreground' : 'text-muted-foreground'
+        )}
+      >
         {icon && (
           <span className="shrink-0 [&_svg]:h-4 [&_svg]:w-4">{icon}</span>
         )}
@@ -52,7 +69,27 @@ export function StatTile({
           {meta}
         </p>
       )}
-    </div>
+    </>
+  )
+
+  if (!onClick) {
+    return <div className={cn('min-w-0', className)}>{body}</div>
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={isActive}
+      className={cn(
+        'min-w-0 rounded-2xl text-left transition-opacity hover:opacity-80',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        !isActive && 'opacity-70',
+        className
+      )}
+    >
+      {body}
+    </button>
   )
 }
 

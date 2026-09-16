@@ -1,8 +1,12 @@
 import { requireAdminAuth } from '@/lib/admin/auth'
 import { getOrderOutPushMenuWebhookStatus } from '@/app/manage/actions/orderout-webhooks'
-import { getPlatformNmiBillingConfigSummary } from '@/app/manage/actions/platform-billing-config'
+import {
+  getPlatformNmiBillingConfigSummary,
+  getPlatformValorSaasBillingConfigSummary,
+} from '@/app/manage/actions/platform-billing-config'
 import { OrderOutPushMenuIntegrationCard } from './OrderOutPushMenuIntegrationCard'
 import { DexaBillingNmiRailCard } from './DexaBillingNmiRailCard'
+import { DexaSaasBillingValorRailCard } from './DexaSaasBillingValorRailCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,9 +15,10 @@ export default async function IntegrationsPage() {
   const canManageConfig = auth.hasPermission('system.config.manage')
   const canRegisterOrderOut = auth.hasPermission('hq.merchant.update')
 
-  const [{ data: status }, billingConfig] = await Promise.all([
+  const [{ data: status }, billingConfig, valorSaasConfig] = await Promise.all([
     getOrderOutPushMenuWebhookStatus(),
     getPlatformNmiBillingConfigSummary(),
+    getPlatformValorSaasBillingConfigSummary(),
   ])
 
   return (
@@ -24,6 +29,8 @@ export default async function IntegrationsPage() {
           Platform-wide integrations and payment rails configured by Dexa HQ.
         </p>
       </div>
+
+      <DexaSaasBillingValorRailCard config={valorSaasConfig} canEdit={canManageConfig} />
 
       <DexaBillingNmiRailCard config={billingConfig} canEdit={canManageConfig} />
 

@@ -28,6 +28,7 @@ import {
 } from '../_shared/nmi.ts'
 import { createSale as valorCreateSale } from '../_shared/valor.ts'
 import { sendOnlineOrderPaymentEmail } from '../_shared/payment-emails.ts'
+import { getAppBaseUrl } from '../_shared/app-url.ts'
 // ============================================================================
 // ENV
 // ============================================================================
@@ -187,20 +188,6 @@ function logEvent(tag: string, message: string, data?: unknown): void {
 
 function logError(tag: string, message: string, error: unknown): void {
   console.error(`[${new Date().toISOString()}] [${tag}] ERROR: ${message}`, error)
-}
-
-function getAppBaseUrl(): string | null {
-  const explicitUrl = Deno.env.get('NEXT_PUBLIC_APP_URL')?.trim()
-  if (explicitUrl) {
-    return explicitUrl.replace(/\/+$/, '')
-  }
-
-  const vercelUrl = Deno.env.get('VERCEL_URL')?.trim()
-  if (vercelUrl) {
-    return `https://${vercelUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')}`
-  }
-
-  return null
 }
 
 // ============================================================================
@@ -1227,14 +1214,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     chargedViaValor = true
+    // Passage tokenizes the card in its own iframe, so the storefront never sees
+    // the PAN/brand. Valor's sale response does: `pan` is masked (e.g. "XXXX3438")
+    // and `card_brand` carries the network. Capture both so the receipt can show
+    // "Visa ····3438" instead of a bare "card".
+    const valorPan = typeof chargeResult.body.pan === 'string' ? chargeResult.body.pan : ''
+    const valorLast4 = valorPan.replace(/\D/g, '').slice(-4)
+    const valorBrand = typeof chargeResult.body.card_brand === 'string' ? chargeResult.body.card_brand : ''
     chargeDetails = {
       transactionId: chargeResult.details.transactionId,
       responseCode: chargeResult.details.responseCode || '00',
       responseMessage: chargeResult.details.responseText || 'Approved',
       authCode: chargeResult.details.authCode,
       rrn: chargeResult.details.rrn || null,
-      cardType: body.payment_card_type || '',
-      cardLastFour: body.payment_card_last_four || '',
+      cardType: valorBrand || body.payment_card_type || '',
+      cardLastFour: valorLast4 || body.payment_card_last_four || '',
       gatewayFee: null,
       rawResponse: chargeResult.body,
     }

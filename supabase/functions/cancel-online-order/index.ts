@@ -11,10 +11,13 @@ import {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+// Server-side sweeps (the stale-pending auto-cancel cron) authenticate with this
+// shared secret instead of a customer session token.
+const INTERNAL_NOTIFICATION_SECRET = Deno.env.get('INTERNAL_NOTIFICATION_SECRET')
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-internal-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -35,14 +38,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
       return jsonResponse({ success: false, error: 'Method not allowed' }, 405)
     }
 
+    // System sweep (stale-pending auto-cancel cron): authenticates with the
+    // internal secret instead of a session token, because the customer's session
+    // may have expired by the time the accept window elapses.
+    const internalSecret = req.headers.get('x-internal-secret')
+    const isSystemCall = Boolean(INTERNAL_NOTIFICATION_SECRET) && internalSecret === INTERNAL_NOTIFICATION_SECRET
+
     const body = await req.json() as {
       order_id?: string
       session_token?: string
       reason?: string
-      trigger?: 'customer' | 'timeout'
+      trigger?: 'customer' | 'timeout' | 'system'
     }
 
-    if (!body.order_id || !body.session_token) {
+    if (!body.order_id || (!isSystemCall && !body.session_token)) {
       return jsonResponse(
         { success: false, error: 'order_id and session_token are required' },
         400,
@@ -52,21 +61,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     const now = new Date().toISOString()
     const reason = body.reason?.trim() || 'Order cancelled'
-    const cancelledBy = body.trigger === 'timeout' ? 'system' : 'customer'
+    const cancelledBy =
+      isSystemCall || body.trigger === 'timeout' || body.trigger === 'system'
+        ? 'system'
+        : 'customer'
 
-    const { data: session, error: sessionError } = await supabase
-      .from('online_order_sessions')
-      .select('id, order_id, expires_at, store_config_id')
-      .eq('session_token', body.session_token)
-      .gt('expires_at', now)
-      .single()
+    // Customer-initiated cancels must present a valid, unexpired session that owns
+    // the order. System sweeps skip this — they're already service-role trusted.
+    if (!isSystemCall) {
+      const { data: session, error: sessionError } = await supabase
+        .from('online_order_sessions')
+        .select('id, order_id, expires_at, store_config_id')
+        .eq('session_token', body.session_token)
+        .gt('expires_at', now)
+        .single()
 
-    if (sessionError || !session) {
-      return jsonResponse({ success: false, error: 'Invalid or expired session' }, 401)
-    }
+      if (sessionError || !session) {
+        return jsonResponse({ success: false, error: 'Invalid or expired session' }, 401)
+      }
 
-    if (session.order_id !== body.order_id) {
-      return jsonResponse({ success: false, error: 'Order does not belong to this session' }, 403)
+      if (session.order_id !== body.order_id) {
+        return jsonResponse({ success: false, error: 'Order does not belong to this session' }, 403)
+      }
     }
 
     const { data: order, error: orderError } = await supabase

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -8,11 +9,13 @@ import { AlertTriangle, ArrowRight, CreditCard, Store } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   useBoardMerchantOnValor,
+  useMerchantAcquirerProfile,
   useMerchantValorBoardingStatus,
   useSetValorAccountPrimary,
 } from '@/lib/queries/use-admin-valor-boarding'
 import { EmptySection } from './EmptySection'
 import { SectionHead } from './SectionHead'
+import { AcquirerProfileSheet } from './AcquirerProfileSheet'
 
 function statusVariant(boarded: boolean): 'default' | 'secondary' {
   return boarded ? 'default' : 'secondary'
@@ -20,8 +23,31 @@ function statusVariant(boarded: boolean): 'default' | 'secondary' {
 
 export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
   const { data, isLoading, error: queryError } = useMerchantValorBoardingStatus(merchantId)
+  const { data: acquirer } = useMerchantAcquirerProfile(merchantId)
   const boarding = useBoardMerchantOnValor(merchantId)
   const setPrimary = useSetValorAccountPrimary(merchantId)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const acquirerReady = Boolean(acquirer?.ready)
+
+  const acquirerSummary = (): string | null => {
+    if (!acquirer) return null
+    if (acquirer.mode === 'shared' && acquirer.shared) {
+      const s = acquirer.shared
+      const vn = s.vnumberLast4 ? `····${s.vnumberLast4}` : '—'
+      return `MID ····${s.midLast4} · V# ${vn} · Store ${s.storeNo} · Term ${s.termNo}`
+    }
+    if (acquirer.mode === 'per_location') {
+      return `Per-location MIDs · ${acquirer.perLocation.length}/${acquirer.locations.length} location(s)`
+    }
+    return null
+  }
+
+  const missingLocationMids =
+    acquirer && acquirer.mode === 'per_location'
+      ? acquirer.locations.filter(
+          (l) => !acquirer.perLocation.some((p) => p.locationId === l.locationId),
+        ).length
+      : 0
   const error = queryError
     ? queryError instanceof Error
       ? queryError.message
@@ -102,6 +128,15 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
         sub="Boards this merchant on Valor once, then provisions a Valor store + EPI per location for online-order checkout. Boarding runs under the DEXAPOS ISV / Mtech ISO."
       />
 
+      {acquirer && (
+        <AcquirerProfileSheet
+          merchantId={merchantId}
+          profile={acquirer}
+          open={sheetOpen}
+          onOpenChange={setSheetOpen}
+        />
+      )}
+
       {isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-24 w-full" />
@@ -117,16 +152,73 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
         />
       ) : (
         <>
+          {/* Step 1 — processing credentials (gates boarding) */}
+          {acquirer && (
+            <div
+              className={`mb-3 rounded-lg border p-4 ${
+                acquirerReady ? 'bg-card' : 'border-amber-300 bg-amber-50 text-amber-900'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 font-medium">
+                    <span className="text-muted-foreground">1 ·</span> Processing credentials
+                    {acquirerReady ? (
+                      <Badge
+                        variant="outline"
+                        className="border-green-300 bg-green-50 text-green-700"
+                      >
+                        Ready
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">
+                        {acquirer.mode === 'per_location'
+                          ? `${missingLocationMids} location(s) need a MID`
+                          : 'Not set'}
+                      </Badge>
+                    )}
+                  </div>
+                  <div
+                    className={`text-xs ${acquirerReady ? 'text-muted-foreground' : 'text-amber-900'}`}
+                  >
+                    {acquirerReady
+                      ? acquirerSummary()
+                      : 'Required before boarding — enter the MID / V-Number from underwriting. Each MID routes settlement to the merchant’s own bank account.'}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant={acquirerReady ? 'outline' : 'default'}
+                  className="shrink-0"
+                  onClick={() => setSheetOpen(true)}
+                >
+                  {acquirerReady ? 'Edit' : 'Add processing credentials'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 2 — board on Valor */}
           <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border bg-card p-4">
             <div className="space-y-1">
-              <div className="font-medium">Valor merchant</div>
+              <div className="font-medium">
+                <span className="text-muted-foreground">2 ·</span> Board on Valor
+              </div>
               <div className="text-xs text-muted-foreground">
                 {data.valorMerchantId
                   ? `Boarded — Valor merchant ${data.valorMerchantId}. ${data.boardedCount}/${data.locations.length} location(s) provisioned.`
-                  : 'Not boarded yet. Boarding creates one Valor merchant, then a store + EPI per location.'}
+                  : acquirerReady
+                    ? 'Creates one Valor merchant, then a store + EPI per location.'
+                    : 'Add processing credentials above first.'}
               </div>
             </div>
-            <Button size="sm" onClick={handleBoard} disabled={boarding.isPending}>
+            <Button
+              size="sm"
+              className="shrink-0"
+              onClick={handleBoard}
+              disabled={boarding.isPending || !acquirerReady}
+              title={acquirerReady ? undefined : 'Add processing credentials first'}
+            >
               {boarding.isPending
                 ? 'Boarding…'
                 : data.valorMerchantId
