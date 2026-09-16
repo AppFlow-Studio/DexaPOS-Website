@@ -59,15 +59,25 @@ export function AnalyticsContent() {
     const active = list.querySelector<HTMLElement>('[data-state="active"]')
     if (!active) return
 
-    // Centre the active pill within the strip rather than using
-    // scrollIntoView, which would also scroll the page vertically to reach it.
     // Measured with rects rather than offsetLeft: the list is not a positioned
     // ancestor, so offsetLeft would be relative to some outer element and the
-    // centring maths would be off by that element's offset.
+    // maths would be off by that element's offset.
     const listRect = list.getBoundingClientRect()
     const activeRect = active.getBoundingClientRect()
-    const delta =
-      activeRect.left - listRect.left - (listRect.width - activeRect.width) / 2
+
+    // Only scroll when the pill is actually out of view. Unconditionally
+    // centring clipped the *first* tab: centring "Growth" scrolls the strip
+    // right, pushing its own left edge past the container. `pad` keeps a sliver
+    // of the neighbouring pill visible so the strip still reads as scrollable.
+    const pad = 12
+    const overflowLeft = listRect.left + pad - activeRect.left
+    const overflowRight = activeRect.right - (listRect.right - pad)
+
+    let delta = 0
+    if (overflowLeft > 0) delta = -overflowLeft
+    else if (overflowRight > 0) delta = overflowRight
+    else return
+
     const target = list.scrollLeft + delta
     const max = list.scrollWidth - list.clientWidth
 
