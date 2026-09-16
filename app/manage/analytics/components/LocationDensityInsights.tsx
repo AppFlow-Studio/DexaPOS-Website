@@ -1,8 +1,10 @@
 'use client'
 
 import { MapPin, Globe, TrendingUp, AlertTriangle } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
+import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
@@ -285,112 +287,85 @@ export function LocationDensityInsights() {
   return (
     <div className="space-y-6">
 
-      {/* ── KPI Cards ────────────────────────────────────────────────────── */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Locations</CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.totalLocations.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">Active across the platform</p>
-          </CardContent>
-        </Card>
+      <Panel>
+        <PanelSection label="Location footprint" icon={MapPin}>
+          <StatRow columns={4}>
+            <StatTile
+              label="Total Locations"
+              icon={<MapPin />}
+              value={data.totalLocations.toLocaleString()}
+              meta="Active across the platform"
+            />
+            <StatTile
+              label="States Covered"
+              icon={<Globe />}
+              value={
+                <>
+                  {data.totalStates}{' '}
+                  <span className="text-base font-normal text-muted-foreground">/ 51</span>
+                </>
+              }
+              meta="Including D.C."
+            />
+            <StatTile
+              label="Whitespace States"
+              icon={<AlertTriangle />}
+              value={data.coverageGaps.length}
+              meta="States with no presence"
+            />
+            <StatTile
+              label="Top State"
+              icon={<TrendingUp />}
+              value={topStateEntry?.stateName || '—'}
+              meta={topStateEntry ? `${topStateEntry.locationCount} location${topStateEntry.locationCount !== 1 ? 's' : ''}` : undefined}
+            />
+          </StatRow>
+        </PanelSection>
+      </Panel>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">States Covered</CardTitle>
-            <Globe className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.totalStates} <span className="text-base font-normal text-muted-foreground">/ 51</span></div>
-            <p className="text-xs text-muted-foreground mt-1">Including D.C.</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Whitespace States</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${data.coverageGaps.length > 10 ? 'text-red-600' : data.coverageGaps.length > 5 ? 'text-yellow-600' : 'text-green-600'}`}>
-              {data.coverageGaps.length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">States with no presence</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Top State</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{topStateEntry?.stateName || '—'}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {topStateEntry ? `${topStateEntry.locationCount} location${topStateEntry.locationCount !== 1 ? 's' : ''}` : ''}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── US Choropleth Tile Map ────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Geographic Distribution</CardTitle>
-          <CardDescription>
-            Location density by state — hover for details · red = no presence (sales whitespace)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection
+          label="Geographic distribution"
+          caption="Location density by state — hover for details · red = no presence (sales whitespace)"
+        >
           <USChoropleth byState={data.byState} coverageGaps={data.coverageGaps} />
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
-      {/* ── Top States Bar Chart ──────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Top 10 States by Location Count</CardTitle>
-          <CardDescription>Active locations per state — highest concentration markets</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection
+          label="Top 10 states by location count"
+          caption="Active locations per state — highest concentration markets"
+        >
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={chartData} margin={{ bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="state" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <RechartsTooltip
-                formatter={(value: number, name: string) => [
-                  value.toLocaleString(),
-                  name === 'locations' ? 'Locations' : 'Merchants',
-                ]}
-              />
-              <Bar dataKey="locations" name="locations" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+              <RechartsTooltip content={<AnalyticsTooltip />} />
+              <Bar dataKey="locations" name="Locations" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
       {/* ── State Breakdown Table + Coverage Gaps ────────────────────────── */}
       <div className="grid gap-4 lg:grid-cols-3">
 
         {/* State table */}
-        <Card className="lg:col-span-2 min-w-0 overflow-hidden">
-          <CardHeader>
-            <CardTitle>State Breakdown</CardTitle>
-            <CardDescription>All represented states sorted by location count</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
+        <Panel className="lg:col-span-2">
+          <PanelSection
+            label="State breakdown"
+            caption="All represented states sorted by location count"
+          >
             <div className="max-h-80 overflow-auto">
-              <Table>
-                <TableHeader>
+              <Table variant="data" className="min-w-[620px]">
+                <TableHeader className="[&_tr]:border-0">
                   <TableRow>
                     <TableHead>State</TableHead>
                     <TableHead className="text-right">Locations</TableHead>
                     <TableHead className="text-right">Merchants</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">30d GPV</TableHead>
+                    <TableHead className="whitespace-nowrap text-right">30d GPV</TableHead>
                     <TableHead className="hidden lg:table-cell">Top Cities</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -398,68 +373,56 @@ export function LocationDensityInsights() {
                   {data.byState.map(row => (
                     <TableRow key={row.state}>
                       <TableCell>
-                        <div className="font-medium text-sm">{row.stateName}</div>
+                        <div className="font-medium">{row.stateName}</div>
                         <div className="text-xs text-muted-foreground">{row.state}</div>
                       </TableCell>
-                      <TableCell className="text-right font-medium">{row.locationCount}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{row.merchantCount}</TableCell>
-                      <TableCell className="text-right text-sm">{fmtGPV(row.gpv30d)}</TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <div className="flex flex-wrap gap-1">
-                          {row.topCities.slice(0, 2).map(city => (
-                            <Badge key={city} variant="secondary" className="text-xs font-normal">{city}</Badge>
-                          ))}
-                        </div>
+                      <TableCell className="text-right font-medium tabular-nums">{row.locationCount}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{row.merchantCount}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmtGPV(row.gpv30d)}</TableCell>
+                      <TableCell className="hidden text-muted-foreground lg:table-cell">
+                        {row.topCities.slice(0, 2).join(' · ')}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
 
         {/* Coverage gaps */}
-        <Card className="min-w-0 overflow-hidden">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 flex-wrap">
-              Coverage Gaps
-              <Badge variant={data.coverageGaps.length > 0 ? 'destructive' : 'default'} className="text-xs shrink-0">
-                {data.coverageGaps.length} state{data.coverageGaps.length !== 1 ? 's' : ''}
-              </Badge>
-            </CardTitle>
-            <CardDescription>States with zero active locations — sales targets</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <Panel>
+          <PanelSection
+            label={`Coverage gaps (${data.coverageGaps.length} state${data.coverageGaps.length !== 1 ? 's' : ''})`}
+            caption="States with zero active locations — sales targets"
+          >
             {data.coverageGaps.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
-                <Globe className="h-8 w-8 text-green-500 opacity-70" />
-                <p className="text-sm font-medium text-green-700">Full Coverage</p>
+              <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+                <Globe className="h-8 w-8 text-muted-foreground opacity-70" />
+                <p className="text-sm font-medium">Full Coverage</p>
                 <p className="text-xs text-muted-foreground">Locations in all 51 states</p>
               </div>
             ) : (
-              <div className="flex flex-wrap gap-1.5 max-h-64 overflow-auto">
+              <div className="flex max-h-64 flex-wrap gap-1.5 overflow-auto">
                 {data.coverageGaps.map(code => (
-                  <Badge key={code} variant="outline" className="text-xs text-muted-foreground border-dashed">
+                  <span
+                    key={code}
+                    className="rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+                  >
                     {code}
-                  </Badge>
+                  </span>
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       </div>
 
-      {/* ── Top Cities Table ─────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Top Cities</CardTitle>
-          <CardDescription>Highest concentration markets by city — top 20</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
+      <Panel>
+        <PanelSection label="Top cities" caption="Highest concentration markets by city — top 20">
           <div className="max-h-80 overflow-auto">
-            <Table>
-              <TableHeader>
+            <Table variant="data" className="min-w-[620px]">
+              <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead className="w-8">#</TableHead>
                   <TableHead>City</TableHead>
@@ -472,21 +435,19 @@ export function LocationDensityInsights() {
               <TableBody>
                 {data.byCity.map((row, i) => (
                   <TableRow key={`${row.city}-${row.state}`}>
-                    <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
-                    <TableCell className="font-medium text-sm">{row.city}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="text-xs font-normal">{row.state}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">{row.locationCount}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">{row.merchantCount}</TableCell>
-                    <TableCell className="text-right text-sm">{fmtGPV(row.gpv30d)}</TableCell>
+                    <TableCell className="tabular-nums text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell className="font-medium">{row.city}</TableCell>
+                    <TableCell className="text-muted-foreground">{row.state}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">{row.locationCount}</TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">{row.merchantCount}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmtGPV(row.gpv30d)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
     </div>
   )

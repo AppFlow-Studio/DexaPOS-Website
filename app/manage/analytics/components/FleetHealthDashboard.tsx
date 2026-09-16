@@ -1,8 +1,10 @@
 'use client'
 
 import { useFleetHealth } from '@/lib/queries/use-platform-analytics'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
+import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
@@ -22,16 +24,16 @@ const STATUS_LABELS: Record<string, string> = {
   offline: 'Offline',
 }
 
+/**
+ * Device state as text, not a coloured badge — §14.3 HQ-2 keeps severity colour
+ * to `/manage/health` and the DLQ. The status donut above still carries the
+ * colours, where they map a slice to its legend entry (§4.6b).
+ */
 function StatusBadge({ status }: { status: FleetDevice['healthStatus'] }) {
-  const variants: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-    online: 'default',
-    degraded: 'secondary',
-    offline: 'destructive',
-  }
   return (
-    <Badge variant={variants[status]} className="text-xs">
+    <span className={status === 'online' ? 'text-sm text-muted-foreground' : 'text-sm font-medium'}>
       {STATUS_LABELS[status]}
-    </Badge>
+    </span>
   )
 }
 
@@ -153,17 +155,17 @@ function DeviceRow({ device, indent = false }: { device: FleetDevice; indent?: b
 // ── Merchant Section ─────────────────────────────────────────────────────────
 
 function MerchantSection({ group }: { group: MerchantGroup }) {
+  // Groups with a degraded or offline device start open, so a problem is
+  // visible without hunting for it.
   const [expanded, setExpanded] = useState(
     group.offlineCount > 0 || group.degradedCount > 0
   )
-
-  const hasProblems = group.offlineCount > 0 || group.degradedCount > 0
 
   return (
     <>
       {/* Merchant header row */}
       <TableRow
-        className={`cursor-pointer select-none ${hasProblems ? 'bg-red-50/20 hover:bg-red-50/40' : 'bg-muted/30 hover:bg-muted/50'}`}
+        className="cursor-pointer select-none bg-muted/30 hover:bg-muted/50"
         onClick={() => setExpanded(e => !e)}
       >
         <TableCell colSpan={8} className="py-2">
@@ -172,16 +174,12 @@ function MerchantSection({ group }: { group: MerchantGroup }) {
             <Building2 className="h-4 w-4 text-muted-foreground" />
             <span className="font-semibold text-sm">{group.merchantName}</span>
             <span className="text-xs text-muted-foreground ml-1">({group.totalDevices} device{group.totalDevices !== 1 ? 's' : ''})</span>
-            <div className="flex items-center gap-1 ml-2">
-              {group.onlineCount > 0 && (
-                <Badge variant="default" className="text-xs px-1.5 py-0">{group.onlineCount} online</Badge>
-              )}
-              {group.degradedCount > 0 && (
-                <Badge variant="secondary" className="text-xs px-1.5 py-0 text-amber-700">{group.degradedCount} degraded</Badge>
-              )}
-              {group.offlineCount > 0 && (
-                <Badge variant="destructive" className="text-xs px-1.5 py-0">{group.offlineCount} offline</Badge>
-              )}
+            {/* Counts read as text: a row of tinted pills would colour-code
+                status, which §14.3 HQ-2 reserves for health and the DLQ. */}
+            <div className="ml-2 flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
+              {group.onlineCount > 0 && <span>{group.onlineCount} online</span>}
+              {group.degradedCount > 0 && <span className="font-medium">{group.degradedCount} degraded</span>}
+              {group.offlineCount > 0 && <span className="font-medium">{group.offlineCount} offline</span>}
             </div>
           </div>
         </TableCell>
@@ -216,13 +214,9 @@ function LocationSection({ loc }: { loc: LocationGroup }) {
               {loc.locationName ?? 'No Location'}
             </span>
             <span className="text-xs text-muted-foreground">({loc.devices.length} device{loc.devices.length !== 1 ? 's' : ''})</span>
-            <div className="flex items-center gap-1">
-              {loc.degradedCount > 0 && (
-                <Badge variant="secondary" className="text-xs px-1 py-0 text-amber-700">{loc.degradedCount} degraded</Badge>
-              )}
-              {loc.offlineCount > 0 && (
-                <Badge variant="destructive" className="text-xs px-1 py-0">{loc.offlineCount} offline</Badge>
-              )}
+            <div className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
+              {loc.degradedCount > 0 && <span className="font-medium">{loc.degradedCount} degraded</span>}
+              {loc.offlineCount > 0 && <span className="font-medium">{loc.offlineCount} offline</span>}
             </div>
           </div>
         </TableCell>
@@ -242,13 +236,9 @@ export function FleetHealthDashboard() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-4">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i}><CardContent className="pt-6"><Skeleton className="h-16 w-full" /></CardContent></Card>
-          ))}
-        </div>
-        <Skeleton className="h-75 w-full" />
+      <div className="space-y-6">
+        <Skeleton className="h-40 w-full rounded-3xl" />
+        <Skeleton className="h-75 w-full rounded-3xl" />
       </div>
     )
   }
@@ -271,59 +261,23 @@ export function FleetHealthDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Summary stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2">
-              <Wifi className="h-5 w-5 text-green-500" />
-              <div>
-                <p className="text-2xl font-bold text-green-600">{data.onlineCount}</p>
-                <p className="text-xs text-muted-foreground">Online</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
-              <div>
-                <p className="text-2xl font-bold text-amber-600">{data.degradedCount}</p>
-                <p className="text-xs text-muted-foreground">Degraded</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2">
-              <WifiOff className="h-5 w-5 text-red-500" />
-              <div>
-                <p className="text-2xl font-bold text-red-600">{data.offlineCount}</p>
-                <p className="text-xs text-muted-foreground">Offline</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold">{uptimePct}%</p>
-            <p className="text-xs text-muted-foreground">Fleet Uptime</p>
-          </CardContent>
-        </Card>
-      </div>
+      <Panel>
+        <PanelSection label="Fleet health" icon={Wifi}>
+          <StatRow columns={4}>
+            <StatTile label="Online" icon={<Wifi />} value={data.onlineCount} />
+            <StatTile label="Degraded" icon={<AlertTriangle />} value={data.degradedCount} />
+            <StatTile label="Offline" icon={<WifiOff />} value={data.offlineCount} />
+            <StatTile label="Fleet Uptime" value={`${uptimePct}%`} />
+          </StatRow>
+        </PanelSection>
+      </Panel>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Health donut */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Device Health Distribution</CardTitle>
-            <CardDescription className="text-xs flex items-center gap-1">
-              <RefreshCw className="h-3 w-3" /> Last sync: {lastUpdated}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2">
+        <Panel>
+          <PanelSection
+            label="Device health distribution"
+            caption={`Last sync: ${lastUpdated}`}
+          >
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={3} dataKey="value">
@@ -331,114 +285,87 @@ export function FleetHealthDashboard() {
                     <Cell key={i} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: number) => [v, 'Devices']} />
+                <Tooltip content={<AnalyticsTooltip formatter={(v: number) => `${v} devices`} />} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
 
-        {/* Hardware Census */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Hardware Census</CardTitle>
-            <CardDescription className="text-xs">Device models across fleet</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
+        <Panel>
+          <PanelSection label="Hardware census" caption="Device models across fleet">
+            <Table variant="data" className="min-w-[380px]">
+              <TableHeader className="[&_tr]:border-0">
                 <TableRow>
-                  <TableHead className="text-xs">Model</TableHead>
-                  <TableHead className="text-xs text-right">Count</TableHead>
-                  <TableHead className="text-xs text-right">% of Fleet</TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead className="text-right">Count</TableHead>
+                  <TableHead className="text-right">% of Fleet</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.hardwareCensus.slice(0, 10).map((item: HardwareCensusItem) => (
                   <TableRow key={item.model}>
-                    <TableCell className="text-sm py-2">{item.model}</TableCell>
-                    <TableCell className="text-sm py-2 text-right">{item.count}</TableCell>
-                    <TableCell className="text-sm py-2 text-right text-muted-foreground">
+                    <TableCell>{item.model}</TableCell>
+                    <TableCell className="text-right tabular-nums">{item.count}</TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
                       {data.totalDevices > 0 ? Math.round((item.count / data.totalDevices) * 1000) / 10 : 0}%
                     </TableCell>
                   </TableRow>
                 ))}
                 {data.hardwareCensus.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center text-muted-foreground text-sm py-4">No device data</TableCell>
+                    <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">No device data</TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
-            </div>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       </div>
 
-      {/* Alert Feed */}
       {data.alertFeed.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              Active Alerts ({data.alertFeed.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
+        <Panel>
+          <PanelSection label={`Active alerts (${data.alertFeed.length})`} icon={AlertTriangle}>
+            <Table variant="data" className="min-w-[620px]">
+              <TableHeader className="[&_tr]:border-0">
                 <TableRow>
-                  <TableHead className="text-xs">Device</TableHead>
-                  <TableHead className="text-xs">Merchant</TableHead>
-                  <TableHead className="text-xs">Issue</TableHead>
-                  <TableHead className="text-xs">Severity</TableHead>
+                  <TableHead>Device</TableHead>
+                  <TableHead>Merchant</TableHead>
+                  <TableHead>Issue</TableHead>
+                  <TableHead>Severity</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.alertFeed.map((alert: FleetAlertItem, i) => (
                   <TableRow key={i}>
-                    <TableCell className="text-sm py-2 font-medium">{alert.stationName}</TableCell>
-                    <TableCell className="text-sm py-2 text-muted-foreground">{alert.merchantName}</TableCell>
-                    <TableCell className="text-sm py-2">{alert.message}</TableCell>
-                    <TableCell className="py-2">
-                      <Badge variant={alert.severity === 'critical' ? 'destructive' : 'secondary'} className="text-xs">
-                        {alert.severity}
-                      </Badge>
-                    </TableCell>
+                    <TableCell className="font-medium">{alert.stationName}</TableCell>
+                    <TableCell className="text-muted-foreground">{alert.merchantName}</TableCell>
+                    <TableCell>{alert.message}</TableCell>
+                    <TableCell className="capitalize text-muted-foreground">{alert.severity}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-            </div>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       )}
 
-      {/* Hierarchical Device Grid: Merchant → Location → Device */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">
-            All Devices ({data.totalDevices}) — Merchant → Location → Device
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Click a merchant or location row to expand/collapse. Rows with issues are auto-expanded.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
+      <Panel>
+        <PanelSection
+          label={`All devices (${data.totalDevices}) — merchant → location → device`}
+          caption="Click a merchant or location row to expand/collapse. Rows with issues are auto-expanded."
+        >
+          <Table variant="data" className="min-w-[900px]">
+            <TableHeader className="[&_tr]:border-0">
               <TableRow>
-                <TableHead className="text-xs">Station / Location / Merchant</TableHead>
-                <TableHead className="text-xs">Model</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs text-right">Battery</TableHead>
-                <TableHead className="text-xs text-right">RAM Free</TableHead>
-                <TableHead className="text-xs text-right">Storage Free</TableHead>
-                <TableHead className="text-xs text-right">Last Seen</TableHead>
-                <TableHead className="text-xs">App</TableHead>
+                <TableHead>Station / Location / Merchant</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Battery</TableHead>
+                <TableHead className="text-right">RAM Free</TableHead>
+                <TableHead className="text-right">Storage Free</TableHead>
+                <TableHead className="text-right">Last Seen</TableHead>
+                <TableHead>App</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -447,16 +374,15 @@ export function FleetHealthDashboard() {
               ))}
               {hierarchy.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground text-sm py-6">
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                     No devices found
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
-          </div>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
     </div>
   )
 }

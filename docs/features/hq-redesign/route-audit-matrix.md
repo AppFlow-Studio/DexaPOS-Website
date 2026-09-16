@@ -57,7 +57,7 @@ Regenerate the raw numbers with `scripts/hq-audit.sh` (see below).
 | Family | Routes | PR | Notes |
 |---|---:|---|---|
 | 1 — HQ home, analytics, health | 3 | PR 1 | Plus the 14 shared files in `app/manage/components/` (13 import `Card`). One PR: the three routes compose from the same components. |
-| 2 — Merchant + org operations | 6 | PR 2 | Includes ★ `/manage/organizations/create-organization`. |
+| 2 — Merchant + org operations | 6 | PR 2 | Includes ★ `/manage/organizations/create-organization`. **5 of 6 converted** — see Family 2 status below. |
 | 3 — Merchant detail workspace | 7 | PR 3a…n | 99 files under `app/manage/merchants/[merchantId]/**`. **Split by tab** — a single diff is not reviewable. Includes ★ `…/locations/new`. |
 | 4 — Money movement + billing | 8 | PR 4 | `/manage/cash-drawers` is a 7-line wrapper; real work is in `components/CashDrawerAnalytics`. |
 | 5 — Internal operations | 12 | PR 5 | Includes ★ `/manage/profile` and ★ `/manage/audit-logs/impersonation`. **Also rewrite the hand-rolled skeletons** for `support` and `users` (see `UI-DESIGN-SYSTEM.md` §14.4). |
@@ -66,6 +66,26 @@ Regenerate the raw numbers with `scripts/hq-audit.sh` (see below).
 
 ★ = route absent from the original ticket's Workstream C, added per the DoD
 requirement that every discovered route has a disposition.
+
+### Family 2 status (PR 2, in progress)
+
+| Route | Status | Notes |
+|---|---|---|
+| `/manage/merchants` | ✅ converted | `PageShell as="div"` + `PageHeader`; 4 stat `Card`s → one `Panel` > `StatRow`; filter rail un-carded to a toolbar; list view → `Table variant="data"` **+ a new `<xl` card grid** (§5.3 — it previously had only a scrolling table); pagination `border-t` removed (§5.5) |
+| `components/admin/MerchantCard.tsx` | ✅ converted | Dependency of the above, imported nowhere else. `Card` → borderless `rounded-2xl bg-muted/45`; hover shadow → fill; footer rule removed; `statusColors` map **deleted** (D-03) |
+| `/manage/organizations` | ✅ converted | KPI `Card`s → `Panel` > `StatRow`; table → `variant="data"`; **new `<lg` card grid**; loading skeleton reshaped to the converted page (§2.3); error branch's spinning ring → static glyph; 97 lines of dead commented "Performance Summary" removed |
+| `/manage/organizations/create-organization` | ✅ converted | `width="narrow"`; form `Card` → `Panel` > `PanelSection`; zod/RHF gating untouched |
+| `/manage/merchants/new` | ✅ converted | `width="narrow"` replaces hand-rolled `mx-auto max-w-5xl`; `wizard.tsx` outer `Card` → `Panel` > `PanelSection`; step pills de-coloured (green "complete" → neutral fill, D-03) |
+| `/manage/create-merchant` | ✅ no change | **Re-dispositioned.** A bare `redirect('/manage/merchants/new')` — same case as `/manage/settings` in Family 6. The ticket listed it as "shell/header + form"; there is no shell to convert. |
+| `/manage/organizations/[organizationId]` | ⬜ not started | **Scope correction:** the ticket lists this as a single "detail conversion". It is 590 lines / 54 cards **plus 10 co-located files in `components/`** carrying ~46 more cards (`AdminInviteWizard` 41KB, `CreateMerchantsButtons` 40KB, `AddMerchantButtons` 27KB). A 7-tab workspace — closer to Family 3 in shape than to the two list pages, and should be split per tab the same way. |
+
+**Verification for the converted five:** `tsc --noEmit` reports zero errors in
+every changed file (project total fell 809 → 806 — the narrowing in
+`organizations/page.tsx` also cleared 3 pre-existing errors); `eslint` clean;
+live DOM at 1440/375 confirms `main` count 1, `visualViewport.scale === 1`, and
+**no horizontal overflow at either width** on `/manage/merchants`,
+`/manage/organizations`, `/manage/organizations/create-organization` and
+`/manage/merchants/new`.
 
 **Total: 44 routes.** Also in the tree: 9 `layout.tsx`, 9 `loading.tsx`
 (6 using `DataPageSkeleton` with `shell="plain"`, 3 hand-rolled).

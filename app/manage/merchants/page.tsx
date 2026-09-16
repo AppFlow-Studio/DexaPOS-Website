@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -28,6 +27,13 @@ import {
     ShieldAlert,
     MessageSquare,
 } from 'lucide-react'
+import {
+    PageHeader,
+    PageShell,
+    Panel,
+    StatRow,
+    StatTile,
+} from '@/components/dashboard/shell'
 import { useMerchants, useMerchantStats } from '@/lib/queries/use-merchants'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import { MerchantCard } from '@/components/admin/MerchantCard'
@@ -89,228 +95,248 @@ export default function MerchantsPage() {
         setPage(1) // Reset to first page on filter change
     }
 
+    const showNoAccess =
+        isManagerScoped && (!merchantAccess || merchantAccess.length === 0)
+
     return (
-        <div className="space-y-6 min-w-0 overflow-x-hidden">
-            {/* Header */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Merchants</h1>
-                    <p className="text-muted-foreground">
-                        Manage and monitor your merchant accounts
-                    </p>
+        /* `as="div"`: app/manage/layout.tsx already owns this surface's <main>. */
+        <PageShell as="div" className="overflow-x-hidden">
+            <PageHeader
+                title="Merchants"
+                subtitle="Manage and monitor your merchant accounts"
+                actions={
+                    <PermissionGate permission="hq.merchant.create">
+                        <Button asChild className="h-9 px-4">
+                            <Link href="/manage/merchants/new">Create Merchant</Link>
+                        </Button>
+                    </PermissionGate>
+                }
+            />
+
+            {/* Headline figures: one panel with hairline-separated tiles, not
+                four bordered boxes. Numerals stay neutral (D-03) — an inactive
+                count is not an alarm, so the old red/green/amber is dropped. */}
+            <Panel>
+                <div className="px-4 py-6 sm:px-6">
+                    <StatRow columns={4}>
+                        <StatTile
+                            label="Total Merchants"
+                            value={stats?.total ?? 0}
+                            icon={<Building2 />}
+                            isLoading={statsLoading}
+                        />
+                        <StatTile
+                            label="Active"
+                            value={stats?.active ?? 0}
+                            icon={<TrendingUp />}
+                            isLoading={statsLoading}
+                        />
+                        <StatTile
+                            label="Inactive"
+                            value={stats?.inactive ?? 0}
+                            icon={<TrendingDown />}
+                            isLoading={statsLoading}
+                        />
+                        <StatTile
+                            label="Onboarding"
+                            value={stats?.onboarding ?? 0}
+                            icon={<Clock />}
+                            isLoading={statsLoading}
+                        />
+                    </StatRow>
                 </div>
-                <PermissionGate permission="hq.merchant.create">
-                    <Link href="/manage/merchants/new" className="self-start sm:self-auto">
-                        <Button>Create Merchant</Button>
-                    </Link>
-                </PermissionGate>
+            </Panel>
+
+            {/* Toolbar — §5.2. Deliberately not wrapped in a Panel: the table
+                below brings its own tinted well, and wrapping both would nest a
+                box inside a box. */}
+            <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+                <div className="flex min-w-0 flex-wrap items-center gap-3">
+                    {/* Search */}
+                    <div className="relative min-w-[200px] max-w-sm flex-1">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+                        <Input
+                            placeholder="Search merchants..."
+                            value={filters.search}
+                            onChange={(e) => handleFilterChange('search', e.target.value)}
+                            className="h-9 w-full border-0 bg-muted/60 pl-9 text-[0.8125rem] shadow-none focus-visible:bg-background"
+                        />
+                    </div>
+
+                    {/* Status Filter */}
+                    <Select
+                        value={filters.status}
+                        onValueChange={(value) => handleFilterChange('status', value)}
+                    >
+                        <SelectTrigger className="h-9 w-36 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none">
+                            <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="created">Created</SelectItem>
+                            <SelectItem value="onboarding">Onboarding</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="suspended">Suspended</SelectItem>
+                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                            <SelectItem value="inactive">Inactive</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    {/* Sort By */}
+                    <Select
+                        value={filters.sortBy}
+                        onValueChange={(value) => handleFilterChange('sortBy', value)}
+                    >
+                        <SelectTrigger className="h-9 w-40 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none">
+                            <SelectValue placeholder="Sort by" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="name">Name</SelectItem>
+                            <SelectItem value="status">Status</SelectItem>
+                            <SelectItem value="created_at">Date Created</SelectItem>
+                            <SelectItem value="orders_today">Orders Today</SelectItem>
+                            <SelectItem value="revenue_today">Revenue Today</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    {/* Sort Order */}
+                    <Select
+                        value={filters.sortOrder}
+                        onValueChange={(value) => handleFilterChange('sortOrder', value)}
+                    >
+                        <SelectTrigger className="h-9 w-32 border-0 bg-muted/60 px-3 text-[0.8125rem] shadow-none">
+                            <SelectValue placeholder="Order" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="asc">Ascending</SelectItem>
+                            <SelectItem value="desc">Descending</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    {/* View Mode Toggle — a segmented pill on the same muted
+                        material as the filters, rather than a bordered group. */}
+                    <div className="flex items-center gap-0.5 rounded-full bg-muted/70 p-1">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Grid view"
+                            aria-pressed={viewMode === 'grid'}
+                            onClick={() => setViewMode('grid')}
+                            className={
+                                viewMode === 'grid'
+                                    ? 'h-7 w-7 bg-background text-foreground shadow-sm ring-1 ring-border'
+                                    : 'h-7 w-7 text-muted-foreground'
+                            }
+                        >
+                            <LayoutGrid className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="List view"
+                            aria-pressed={viewMode === 'list'}
+                            onClick={() => setViewMode('list')}
+                            className={
+                                viewMode === 'list'
+                                    ? 'h-7 w-7 bg-background text-foreground shadow-sm ring-1 ring-border'
+                                    : 'h-7 w-7 text-muted-foreground'
+                            }
+                        >
+                            <List className="h-4 w-4" />
+                        </Button>
+                    </div>
+
+                    {/* Refresh */}
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Refresh merchants"
+                        onClick={() => refetch()}
+                        disabled={isFetching}
+                        className="size-8 shrink-0 border-0 bg-muted/60 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
+                    >
+                        <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                    </Button>
+                </div>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-                <StatsCard
-                    title="Total Merchants"
-                    value={stats?.total ?? 0}
-                    icon={<Building2 className="h-4 w-4 text-muted-foreground" />}
-                    isLoading={statsLoading}
-                />
-                <StatsCard
-                    title="Active"
-                    value={stats?.active ?? 0}
-                    icon={<TrendingUp className="h-4 w-4 text-green-600" />}
-                    isLoading={statsLoading}
-                    className="text-green-600"
-                />
-                <StatsCard
-                    title="Inactive"
-                    value={stats?.inactive ?? 0}
-                    icon={<TrendingDown className="h-4 w-4 text-red-600" />}
-                    isLoading={statsLoading}
-                    className="text-red-600"
-                />
-                <StatsCard
-                    title="Onboarding"
-                    value={stats?.onboarding ?? 0}
-                    icon={<Clock className="h-4 w-4 text-yellow-600" />}
-                    isLoading={statsLoading}
-                    className="text-yellow-600"
-                />
-            </div>
+            <div className="min-w-0">
+                {/* Row count line (§5.2) */}
+                <div className="mb-4 text-xs text-muted-foreground sm:text-sm">
+                    {data?.total ?? 0} merchants found
+                    {isFetching && ' · Loading...'}
+                </div>
 
-            {/* Filters */}
-            <Card>
-                <CardHeader className="pb-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                        <div className="flex flex-wrap gap-3 items-center">
-                            {/* Search */}
-                            <div className="relative flex-1 min-w-[200px] max-w-sm">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search merchants..."
-                                    value={filters.search}
-                                    onChange={(e) => handleFilterChange('search', e.target.value)}
-                                    className="pl-10"
-                                />
+                {/* Content */}
+                {isLoading || authLoading || (isManagerScoped && accessLoading) ? (
+                    <MerchantGridSkeleton />
+                ) : data?.merchants.length === 0 ? (
+                    <div className="rounded-2xl bg-muted/30 px-4 py-12 text-center">
+                        {showNoAccess ? (
+                            <div className="flex flex-col items-center gap-3">
+                                <ShieldAlert className="h-12 w-12 text-muted-foreground" />
+                                <div>
+                                    <p className="text-lg font-medium">No Merchant Access</p>
+                                    <p className="text-muted-foreground">
+                                        You don&apos;t have access to any merchants yet. Contact a Super Admin to request access.
+                                    </p>
+                                </div>
                             </div>
+                        ) : (
+                            <p className="text-muted-foreground">
+                                No merchants found matching your filters.
+                            </p>
+                        )}
+                    </div>
+                ) : viewMode === 'grid' ? (
+                    <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {data?.merchants.map((merchant) => (
+                            <MerchantCard
+                                key={merchant.id}
+                                merchant={merchant}
+                                onClick={() => router.push(`/manage/merchants/${merchant.clerk_org_id}`)}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <MerchantListView
+                        merchants={data?.merchants || []}
+                        onMerchantClick={(clerkOrgId) => router.push(`/manage/merchants/${clerkOrgId}`)}
+                    />
+                )}
 
-                            {/* Status Filter */}
-                            <Select
-                                value={filters.status}
-                                onValueChange={(value) => handleFilterChange('status', value)}
-                            >
-                                <SelectTrigger className="w-36">
-                                    <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Status</SelectItem>
-                                    <SelectItem value="created">Created</SelectItem>
-                                    <SelectItem value="onboarding">Onboarding</SelectItem>
-                                    <SelectItem value="active">Active</SelectItem>
-                                    <SelectItem value="suspended">Suspended</SelectItem>
-                                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                                    <SelectItem value="inactive">Inactive</SelectItem>
-                                </SelectContent>
-                            </Select>
-
-                            {/* Sort By */}
-                            <Select
-                                value={filters.sortBy}
-                                onValueChange={(value) => handleFilterChange('sortBy', value)}
-                            >
-                                <SelectTrigger className="w-40">
-                                    <SelectValue placeholder="Sort by" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="name">Name</SelectItem>
-                                    <SelectItem value="status">Status</SelectItem>
-                                    <SelectItem value="created_at">Date Created</SelectItem>
-                                    <SelectItem value="orders_today">Orders Today</SelectItem>
-                                    <SelectItem value="revenue_today">Revenue Today</SelectItem>
-                                </SelectContent>
-                            </Select>
-
-                            {/* Sort Order */}
-                            <Select
-                                value={filters.sortOrder}
-                                onValueChange={(value) => handleFilterChange('sortOrder', value)}
-                            >
-                                <SelectTrigger className="w-32">
-                                    <SelectValue placeholder="Order" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="asc">Ascending</SelectItem>
-                                    <SelectItem value="desc">Descending</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            {/* View Mode Toggle */}
-                            <div className="flex border rounded-lg">
-                                <Button
-                                    variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-                                    size="icon"
-                                    onClick={() => setViewMode('grid')}
-                                >
-                                    <LayoutGrid className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                    variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                                    size="icon"
-                                    onClick={() => setViewMode('list')}
-                                >
-                                    <List className="h-4 w-4" />
-                                </Button>
-                            </div>
-
-                            {/* Refresh */}
+                {/* Pagination (D-08) — no rule above it (§5.5); hidden at one page. */}
+                {totalPages > 1 && (
+                    <div className="mt-6 flex items-center justify-between gap-3">
+                        <p className="text-sm tabular-nums text-muted-foreground">
+                            Page {page} of {totalPages}
+                        </p>
+                        <div className="flex gap-2">
                             <Button
                                 variant="outline"
-                                size="icon"
-                                onClick={() => refetch()}
-                                disabled={isFetching}
+                                size="sm"
+                                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                disabled={page === 1}
                             >
-                                <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+                                <ChevronLeft className="mr-1 h-4 w-4" />
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                            >
+                                Next
+                                <ChevronRight className="ml-1 h-4 w-4" />
                             </Button>
                         </div>
                     </div>
-                </CardHeader>
-                <CardContent>
-                    {/* Results count */}
-                    <div className="text-sm text-muted-foreground mb-4">
-                        {data?.total ?? 0} merchants found
-                        {isFetching && ' · Loading...'}
-                    </div>
-
-                    {/* Content */}
-                    {isLoading || authLoading || (isManagerScoped && accessLoading) ? (
-                        <MerchantGridSkeleton />
-                    ) : data?.merchants.length === 0 ? (
-                        <div className="text-center py-12">
-                            {isManagerScoped && (!merchantAccess || merchantAccess.length === 0) ? (
-                                <div className="flex flex-col items-center gap-3">
-                                    <ShieldAlert className="h-12 w-12 text-muted-foreground" />
-                                    <div>
-                                        <p className="font-medium text-lg">No Merchant Access</p>
-                                        <p className="text-muted-foreground">
-                                            You don&apos;t have access to any merchants yet. Contact a Super Admin to request access.
-                                        </p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <p className="text-muted-foreground">
-                                    No merchants found matching your filters.
-                                </p>
-                            )}
-                        </div>
-                    ) : viewMode === 'grid' ? (
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {data?.merchants.map((merchant) => (
-                                <MerchantCard
-                                    key={merchant.id}
-                                    merchant={merchant}
-                                    onClick={() => router.push(`/manage/merchants/${merchant.clerk_org_id}`)}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <MerchantListView
-                            merchants={data?.merchants || []}
-                            onMerchantClick={(clerkOrgId) => router.push(`/manage/merchants/${clerkOrgId}`)}
-                        />
-                    )}
-
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-between pt-6 border-t mt-6">
-                            <p className="text-sm text-muted-foreground">
-                                Page {page} of {totalPages}
-                            </p>
-                            <div className="flex gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                    disabled={page === 1}
-                                >
-                                    <ChevronLeft className="h-4 w-4 mr-1" />
-                                    Previous
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                    disabled={page === totalPages}
-                                >
-                                    Next
-                                    <ChevronRight className="h-4 w-4 ml-1" />
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-        </div>
+                )}
+            </div>
+        </PageShell>
     )
 }
 
@@ -318,68 +344,44 @@ export default function MerchantsPage() {
 // HELPER COMPONENTS
 // ============================================================================
 
-function StatsCard({
-    title,
-    value,
-    icon,
-    isLoading,
-    className,
-}: {
-    title: string
-    value: number
-    icon: React.ReactNode
-    isLoading?: boolean
-    className?: string
-}) {
-    return (
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{title}</CardTitle>
-                {icon}
-            </CardHeader>
-            <CardContent>
-                {isLoading ? (
-                    <Skeleton className="h-8 w-16" />
-                ) : (
-                    <div className={`text-2xl font-bold ${className || ''}`}>{value}</div>
-                )}
-            </CardContent>
-        </Card>
-    )
-}
-
+/**
+ * Mirrors the converted `MerchantCard` shell (§5.4): same `rounded-2xl
+ * bg-muted/45 p-4` surface and no footer rule, so the skeleton has the card's
+ * shape and the page does not shift when data lands.
+ */
 function MerchantGridSkeleton() {
     return (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {[...Array(6)].map((_, i) => (
-                <Card key={i} className="min-w-0 overflow-hidden">
-                    <CardContent className="p-5">
-                        <div className="flex items-start justify-between gap-2 mb-4">
-                            <div className="flex items-center gap-3 min-w-0">
-                                <Skeleton className="w-10 h-10 rounded-lg shrink-0" />
+                <div
+                    key={i}
+                    className="min-w-0 overflow-hidden rounded-2xl border-0 bg-muted/45 p-4"
+                >
+                    <div className="mb-4 flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-3">
+                            <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
+                            <div className="min-w-0">
+                                <Skeleton className="mb-1 h-5 w-32 max-w-[60%]" />
+                                <Skeleton className="h-4 w-20 max-w-[40%]" />
+                            </div>
+                        </div>
+                        <Skeleton className="h-6 w-16 shrink-0 rounded-full" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                        {[...Array(4)].map((_, j) => (
+                            <div key={j} className="flex items-center gap-2">
+                                <Skeleton className="h-4 w-4 shrink-0" />
                                 <div className="min-w-0">
-                                    <Skeleton className="h-5 w-32 max-w-[60%] mb-1" />
-                                    <Skeleton className="h-4 w-20 max-w-[40%]" />
+                                    <Skeleton className="mb-1 h-3 w-16 max-w-full" />
+                                    <Skeleton className="h-4 w-12 max-w-full" />
                                 </div>
                             </div>
-                            <Skeleton className="h-6 w-16 shrink-0" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            {[...Array(4)].map((_, j) => (
-                                <div key={j} className="flex items-center gap-2">
-                                    <Skeleton className="h-4 w-4 shrink-0" />
-                                    <div className="min-w-0">
-                                        <Skeleton className="h-3 w-16 max-w-full mb-1" />
-                                        <Skeleton className="h-4 w-12 max-w-full" />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="mt-4 pt-3 border-t">
-                            <Skeleton className="h-3 w-32 max-w-[50%]" />
-                        </div>
-                    </CardContent>
-                </Card>
+                        ))}
+                    </div>
+                    <div className="mt-4">
+                        <Skeleton className="h-3 w-32 max-w-[50%]" />
+                    </div>
+                </div>
             ))}
         </div>
     )
@@ -400,98 +402,160 @@ function MerchantListView({
         }).format(amount)
     }
 
-    const statusColors: Record<string, string> = {
-        created: 'bg-slate-100 text-slate-700 dark:bg-slate-900/50 dark:text-slate-300',
-        active: 'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400',
-        suspended: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400',
-        cancelled: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300',
-        inactive: 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400',
-        onboarding: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950/50 dark:text-yellow-400',
-    }
-
     return (
-        <div className="overflow-x-auto">
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Merchant</TableHead>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Locations</TableHead>
-                    <TableHead className="text-right">Staff</TableHead>
-                    <TableHead className="text-right">Orders Today</TableHead>
-                    <TableHead className="text-right">Revenue Today</TableHead>
-                    <TableHead className="text-right">Notes</TableHead>
-                    <TableHead>Created</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
+        <div className="min-w-0">
+            {/* §5.3: two trees off one dataset — the data table from `xl`, a card
+                grid below it. Never a horizontally scrolling table on a phone. */}
+            <Table
+                variant="data"
+                containerClassName="hidden xl:block"
+                className="min-w-[900px]"
+            >
+                <TableHeader className="[&_tr]:border-0">
+                    <TableRow>
+                        <TableHead>Merchant</TableHead>
+                        <TableHead>Owner</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Locations</TableHead>
+                        <TableHead className="text-right">Staff</TableHead>
+                        <TableHead className="text-right">Orders Today</TableHead>
+                        <TableHead className="text-right">Revenue Today</TableHead>
+                        <TableHead className="text-right">Notes</TableHead>
+                        <TableHead>Created</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {merchants.map((merchant) => {
+                        const merchantStatus = merchant.onboarding_status || merchant.derived_status
+                        return (
+                            <TableRow
+                                key={merchant.id}
+                                className="cursor-pointer"
+                                onClick={() => onMerchantClick(merchant.clerk_org_id)}
+                            >
+                                <TableCell>
+                                    <div className="flex items-center gap-2">
+                                        {merchant.logo_url && <Image src={merchant.logo_url} alt={merchant.name} width={40} height={40} className="rounded-md object-cover" />}
+                                        <div className="flex flex-col">
+                                            <div className="font-semibold">{merchant.name}</div>
+                                            {merchant.type && (
+                                                <div className="text-sm capitalize text-muted-foreground">
+                                                    {merchant.type}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    <div className="flex flex-col">
+                                        <span className="font-medium">
+                                            {`${merchant.owner_first_name || ''} ${merchant.owner_last_name || ''}`.trim() || '-'}
+                                        </span>
+                                        {merchant.owner_email && (
+                                            <span className="text-xs text-muted-foreground">{merchant.owner_email}</span>
+                                        )}
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+                                    {/* One neutral pill for every state (§5.2). */}
+                                    <Badge
+                                        variant="secondary"
+                                        className="w-fit rounded-full border-0 px-2.5 text-xs font-medium capitalize"
+                                    >
+                                        {merchantStatus.replace('_', ' ')}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums">
+                                    {merchant.active_locations} / {merchant.total_locations}
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums">
+                                    {merchant.active_staff_count}
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums">
+                                    {merchant.orders_today}
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums">
+                                    {formatCurrency(merchant.revenue_today)}
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums">
+                                    {(merchant.notes_count || 0) > 0 ? (
+                                        <span className="inline-flex items-center gap-1">
+                                            <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                                            {merchant.notes_count}
+                                        </span>
+                                    ) : (
+                                        <span className="text-muted-foreground">0</span>
+                                    )}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                    {new Date(merchant.created_at).toLocaleDateString()}
+                                </TableCell>
+                            </TableRow>
+                        )
+                    })}
+                </TableBody>
+            </Table>
+
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
                 {merchants.map((merchant) => {
                     const merchantStatus = merchant.onboarding_status || merchant.derived_status
+                    const ownerName = `${merchant.owner_first_name || ''} ${merchant.owner_last_name || ''}`.trim()
                     return (
-                    <TableRow
-                        key={merchant.id}
-                        className="cursor-pointer"
-                        onClick={() => onMerchantClick(merchant.clerk_org_id)}
-                    >
-                        <TableCell>
-                            <div className="flex items-center gap-2">
-                                {merchant.logo_url && <Image src={merchant.logo_url} alt={merchant.name} width={40} height={40} className="rounded-md object-cover" />}
-                                <div className='flex flex-col'>
-                                    <div className="font-semibold">{merchant.name}</div>
-                                    {merchant.type && (
-                                        <div className="text-sm text-muted-foreground capitalize">
-                                            {merchant.type}
-                                        </div>
+                        <div
+                            key={merchant.id}
+                            className="min-w-0 cursor-pointer rounded-2xl border-0 bg-muted/45 p-4 transition-colors hover:bg-muted"
+                            onClick={() => onMerchantClick(merchant.clerk_org_id)}
+                        >
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                    {merchant.logo_url && (
+                                        <Image
+                                            src={merchant.logo_url}
+                                            alt={merchant.name}
+                                            width={32}
+                                            height={32}
+                                            className="shrink-0 rounded-md object-cover"
+                                        />
                                     )}
+                                    <div className="min-w-0">
+                                        <p className="truncate font-semibold">{merchant.name}</p>
+                                        <p className="truncate text-xs text-muted-foreground">
+                                            {ownerName || merchant.owner_email || '—'}
+                                        </p>
+                                    </div>
                                 </div>
+                                <Badge
+                                    variant="secondary"
+                                    className="w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium capitalize"
+                                >
+                                    {merchantStatus.replace('_', ' ')}
+                                </Badge>
                             </div>
-                        </TableCell>
-                        <TableCell>
-                            <div className="flex flex-col">
-                                <span className="font-medium">
-                                    {`${merchant.owner_first_name || ''} ${merchant.owner_last_name || ''}`.trim() || '-'}
-                                </span>
-                                {merchant.owner_email && (
-                                    <span className="text-xs text-muted-foreground">{merchant.owner_email}</span>
-                                )}
+
+                            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                <Field label="Locations" value={`${merchant.active_locations} / ${merchant.total_locations}`} />
+                                <Field label="Staff" value={merchant.active_staff_count} />
+                                <Field label="Orders Today" value={merchant.orders_today} />
+                                <Field label="Revenue Today" value={formatCurrency(merchant.revenue_today)} />
                             </div>
-                        </TableCell>
-                        <TableCell>
-                            <Badge className={statusColors[merchantStatus] || statusColors.onboarding}>
-                                {merchantStatus.replace('_', ' ')}
-                            </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                            {merchant.active_locations} / {merchant.total_locations}
-                        </TableCell>
-                        <TableCell className="text-right">
-                            {merchant.active_staff_count}
-                        </TableCell>
-                        <TableCell className="text-right">
-                            {merchant.orders_today}
-                        </TableCell>
-                        <TableCell className="text-right">
-                            {formatCurrency(merchant.revenue_today)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                            {(merchant.notes_count || 0) > 0 ? (
-                                <span className="inline-flex items-center gap-1">
-                                    <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
-                                    {merchant.notes_count}
-                                </span>
-                            ) : (
-                                <span className="text-muted-foreground">0</span>
-                            )}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                            {new Date(merchant.created_at).toLocaleDateString()}
-                        </TableCell>
-                    </TableRow>
+
+                            <p className="mt-3 text-xs text-muted-foreground">
+                                Created {new Date(merchant.created_at).toLocaleDateString()}
+                            </p>
+                        </div>
                     )
                 })}
-            </TableBody>
-        </Table>
+            </div>
+        </div>
+    )
+}
+
+/** A label/value pair inside a mobile record card. */
+function Field({ label, value }: { label: string; value: string | number }) {
+    return (
+        <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="truncate font-medium tabular-nums">{value}</p>
         </div>
     )
 }

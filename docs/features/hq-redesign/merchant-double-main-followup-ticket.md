@@ -150,3 +150,58 @@ The GPV chart on `/manage/analytics` renders grey rather than brand-blue. That
 is the signature of constraint C2 — a theme token wrapped in `hsl(...)` yields
 invalid CSS and Recharts silently falls back to its own defaults. Worth
 confirming across HQ charts and fixing at the source.
+
+## C. Every HQ route renders two `<h1>`s — the second is in the layout chrome
+
+Found while verifying Family 2's converted routes in a browser. Measured on
+`/manage/merchants` at 1440px with a real HQ session:
+
+```json
+{ "mainCount": 1,
+  "h1Text": ["Dashboard", "Merchants"] }
+```
+
+The page's own `<h1>` is correct — it comes from `PageHeader`
+(`text-[1.75rem] font-semibold tracking-[-0.02em]`). The **other** one is the
+sticky header in `app/manage/layout.tsx`:
+
+```tsx
+<h1 className="text-base sm:text-lg font-semibold truncate">Dashboard</h1>
+```
+
+Both sit inside the layout's single `<main>`, so this is not a landmark bug —
+it is a heading-hierarchy bug. Two `<h1>`s per document means a screen reader
+announces two top-level headings, and the real page title is the second one.
+The chrome label ("Dashboard") is also wrong on every route except the home
+tab: it says "Dashboard" while the page is Merchants.
+
+This affects **all** of `/manage`, not just Family 2, and
+`app/manage/layout.tsx` chrome is explicitly frozen by the rollout ticket (§7),
+so it was not touched. The DoD check
+(`grep -rho '<h1 className=' app/manage`) still passes for converted pages
+because it counts page-level headers, and this one is in a layout.
+
+**Likely fix:** demote the chrome label to a `<p>` or `<span>` (it is a
+breadcrumb/wordmark, not a heading), leaving `PageHeader`'s as the document's
+only `<h1>`. Verify skip-to-content still lands correctly afterwards.
+
+## D. `PaymentsTab` renders a raw `<main>` inside the HQ layout's `<main>`
+
+`app/manage/merchants/[merchantId]/components/PaymentsTab.tsx:199` opens with:
+
+```tsx
+<main className="space-y-6">
+```
+
+`app/manage/layout.tsx:551` already renders the surface's `<main>`, so this
+nests landmarks — the same defect as the merchant-dashboard issue this ticket
+covers, but on the HQ side and hand-rolled rather than via `PageShell`.
+
+```bash
+grep -rn "<main" app/manage --include=*.tsx   # layout.tsx:551 + PaymentsTab.tsx:199
+```
+
+It is a Family 3 file (merchant detail workspace), so it was left alone by
+Family 2. Fix is one word — `<main>` → `<div>` — and it should be folded into
+whichever Family 3 sub-PR converts the Payments tab, where the change is in
+scope and reviewable alongside its page.

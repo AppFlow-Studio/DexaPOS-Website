@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel, PanelSection } from '@/components/dashboard/shell'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -400,13 +400,15 @@ export function CreateMerchantWizard() {
   return (
     <Form {...form}>
       <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Create New Merchant: Step {step} of {TOTAL_STEPS}</CardTitle>
-            <CardDescription>{STEP_TITLES[step - 1]}</CardDescription>
-
-            {/* Step progress indicator */}
-            <div className="flex gap-1 pt-2 overflow-x-auto pb-0.5">
+        <Panel>
+          <PanelSection
+            label={`Create New Merchant: Step ${step} of ${TOTAL_STEPS}`}
+            caption={STEP_TITLES[step - 1]}
+          >
+            {/* Step progress indicator — borderless pills on the inset
+                material. Progress is carried by fill and weight rather than
+                colour: green here marked "done", not a severity (D-03). */}
+            <div className="flex gap-1 overflow-x-auto pb-0.5">
               {STEP_TITLES.map((title, index) => {
                 const stepNumber = index + 1
                 const isActive = step === stepNumber
@@ -415,10 +417,10 @@ export function CreateMerchantWizard() {
                   <div
                     key={title}
                     className={cn(
-                      'flex-1 min-w-0 rounded border px-2 py-1.5 text-xs truncate',
-                      isActive && 'border-primary bg-primary/5 font-medium',
-                      isComplete && 'border-green-500 bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400',
-                      !isActive && !isComplete && 'border-muted-foreground/20 text-muted-foreground'
+                      'min-w-0 flex-1 truncate rounded-full px-2.5 py-1.5 text-xs',
+                      isActive && 'bg-background font-medium text-foreground ring-1 ring-border',
+                      isComplete && 'bg-muted font-medium text-foreground',
+                      !isActive && !isComplete && 'bg-muted/50 text-muted-foreground'
                     )}
                   >
                     {stepNumber}. {title}
@@ -426,9 +428,8 @@ export function CreateMerchantWizard() {
                 )
               })}
             </div>
-          </CardHeader>
 
-          <CardContent className="space-y-4">
+            <div className="mt-5 space-y-4">
 
             {/* ── Step 1: Business Identity ───────────────────────────────── */}
             {step === 1 && (
@@ -982,13 +983,14 @@ export function CreateMerchantWizard() {
                   </div>
                 )}
 
-                <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                <div className="rounded-2xl border-0 bg-muted/60 p-3 text-sm text-muted-foreground">
                   Owner will receive an organization invitation email after creation.
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+            </div>
+          </PanelSection>
+        </Panel>
 
         <div className="flex items-center justify-between">
           <Button

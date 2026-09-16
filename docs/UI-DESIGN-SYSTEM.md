@@ -1007,22 +1007,24 @@ Updated as each route family lands. `—` means not yet converted.
 `/manage/settings` is a bare `redirect()` and `/manage/unauthorized` is a
 minimal error surface — **no change** for both.
 
-> ⚠️ **`/manage/analytics` is partially converted.** The page shell is done —
-> `PageShell as="div"` + `PageHeader`, a `Panel`/`StatRow` KPI header and a
-> DS-CTL-05 tab rail — and it passes the DoD `<h1>` grep. Still outstanding:
-> **45 `<Card>` inline in the `overview` and `revenue` tab bodies**, and
-> **10 of the 15 files in `app/manage/analytics/components/`.**
+> ⚠️ **`/manage/analytics` is converted except for the page's own tab bodies.**
+> The page shell is done — `PageShell as="div"` + `PageHeader`, a
+> `Panel`/`StatRow` KPI header and a DS-CTL-05 tab rail — and it passes the DoD
+> `<h1>` grep. **All 15 files in `app/manage/analytics/components/` are converted:
+> 415 → 0 `<Card>`, zero hairline dividers.**
 >
-> Converted so far (0 cards, 0 hairlines, lint-clean in each):
-> `MerchantOnboardingFunnel`, `MerchantActivationTimeline`,
-> `VoidRefundIntelligence` (the whole **merchants** tab), plus
-> `PaymentMethodMix` and `DiscountAbuseDetection`. Component-directory cards are
-> down 415 → 296.
+> Still outstanding: **45 `<Card>` inline in `page.tsx`'s own `overview` and
+> `revenue` tab bodies** (the GPV trend chart, extended KPI mini-tiles, the whale
+> watch/GPV-concentration blocks and the churn table). Those are the last of
+> Family 1.
 >
-> Remaining: `StaffLaborAnalytics`, `KDSPerformance`, `AuditLogActivityMonitor`,
-> `OrderTypeIntelligence`, `MultiLocationComparison`, `LocationDensityInsights`,
-> `DeviceStabilityIndex`, `TerminalUtilizationHeatmap`, `FleetHealthDashboard`,
-> `PaymentTerminalHealthMonitor`.
+> Verified at that point: `tsc --noEmit` 822 → **809** (each `AnalyticsTooltip`
+> swap retires a pre-existing Recharts `Formatter` error); ESLint over the
+> component directory unchanged at 7 pre-existing
+> `react-hooks/preserve-manual-memoization` errors. The two surviving type errors
+> in that directory (`AuditLogActivityMonitor`'s `PlatformAuditLogRow[]` mismatch,
+> `DeviceStabilityIndex`'s `SetStateAction` argument) are pre-existing and
+> untouched — worth fixing separately.
 >
 > The conversion is mechanical — see the recipe below — but note two traps:
 > `StatRow` accepts only `columns={2|3|4}` (stack rows for 5–6 figures), and

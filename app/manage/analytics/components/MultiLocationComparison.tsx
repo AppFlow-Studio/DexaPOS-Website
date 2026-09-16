@@ -2,8 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import { useMultiLocationComparison } from '@/lib/queries/use-platform-analytics'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
+import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -133,23 +135,25 @@ export function MultiLocationComparison() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}
-        </div>
-        <Skeleton className="h-72" />
-        <Skeleton className="h-64" />
+      <div className="space-y-6">
+        <Skeleton className="h-40 w-full rounded-3xl" />
+        <Skeleton className="h-72 w-full rounded-3xl" />
+        <Skeleton className="h-64 w-full rounded-3xl" />
       </div>
     )
   }
 
   if (!data || data.locations.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-        <MapPin className="h-12 w-12 opacity-25" />
-        <p className="font-medium">No location data available</p>
-        <p className="text-sm">No locations with transaction activity in the selected period.</p>
-      </div>
+      <Panel>
+        <PanelSection label="Location comparison" icon={MapPin}>
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-muted-foreground">
+            <MapPin className="h-12 w-12 opacity-25" />
+            <p className="font-medium">No location data available</p>
+            <p className="text-sm">No locations with transaction activity in the selected period.</p>
+          </div>
+        </PanelSection>
+      </Panel>
     )
   }
 
@@ -166,49 +170,6 @@ export function MultiLocationComparison() {
 
   return (
     <div className="space-y-6">
-      {/* Controls */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Merchant picker — core of the T018 scope fix */}
-          <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-            <Select
-              value={selectedMerchantId}
-              onValueChange={v => { setSelectedMerchantId(v); setSearch('') }}
-            >
-              <SelectTrigger className="h-8 w-52 text-xs">
-                <SelectValue placeholder="Select merchant…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Merchants (platform-wide)</SelectItem>
-                {multiLocationMerchants.map(m => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.name} ({m.count} locations)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {selectedMerchantId === 'all'
-              ? <>Showing <span className="font-semibold text-foreground">{data.totalLocations}</span> locations across all merchants</>
-              : <>Showing <span className="font-semibold text-foreground">{filteredLocations.length}</span> locations for selected merchant</>
-            }
-          </p>
-        </div>
-        <Select value={String(days)} onValueChange={v => setDays(Number(v))}>
-          <SelectTrigger className="h-8 w-32 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Last 7 days</SelectItem>
-            <SelectItem value="30">Last 30 days</SelectItem>
-            <SelectItem value="90">Last 90 days</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Summary cards — reflect filtered view */}
       {(() => {
         const visibleGPVs = filteredLocations.map(l => l.totalGPV)
         const totalVisibleGPV = visibleGPVs.reduce((s, v) => s + v, 0)
@@ -219,48 +180,75 @@ export function MultiLocationComparison() {
           : 0
         const topVisible = filteredLocations[0]
         return (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="pt-5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Locations Shown</p>
-                <p className="text-2xl font-bold mt-1">{filteredLocations.length}</p>
-                {selectedMerchantId === 'all' && (
-                  <p className="text-xs text-muted-foreground">of {data.totalLocations} total</p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Avg GPV / Location</p>
-                <p className="text-2xl font-bold mt-1">{fmtGPV(avgVisible)}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-amber-200 bg-amber-50/40">
-              <CardContent className="pt-5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                  <Trophy className="h-3 w-3 text-amber-500" /> Top Location
-                </p>
-                <p className="text-lg font-bold mt-1 truncate">{topVisible?.locationName ?? '—'}</p>
-                <p className="text-xs text-muted-foreground">{fmtGPV(topVisible?.totalGPV ?? 0)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Median GPV</p>
-                <p className="text-2xl font-bold mt-1">{fmtGPV(medianVisible)}</p>
-              </CardContent>
-            </Card>
-          </div>
+          <Panel>
+            <PanelSection
+              label="Location comparison"
+              icon={MapPin}
+              caption={
+                selectedMerchantId === 'all'
+                  ? `Showing ${data.totalLocations} locations across all merchants`
+                  : `Showing ${filteredLocations.length} locations for selected merchant`
+              }
+              action={
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select
+                    value={selectedMerchantId}
+                    onValueChange={v => { setSelectedMerchantId(v); setSearch('') }}
+                  >
+                    <SelectTrigger className="h-9 w-52 rounded-full border-0 bg-muted/60 px-3 shadow-none">
+                      <SelectValue placeholder="Select merchant…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Merchants (platform-wide)</SelectItem>
+                      {multiLocationMerchants.map(m => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.name} ({m.count} locations)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={String(days)} onValueChange={v => setDays(Number(v))}>
+                    <SelectTrigger className="h-9 w-36 rounded-full border-0 bg-muted/60 px-3 shadow-none">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="7">Last 7 days</SelectItem>
+                      <SelectItem value="30">Last 30 days</SelectItem>
+                      <SelectItem value="90">Last 90 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              }
+            >
+              <StatRow columns={4}>
+                <StatTile
+                  label="Locations Shown"
+                  value={filteredLocations.length}
+                  meta={selectedMerchantId === 'all' ? `of ${data.totalLocations} total` : undefined}
+                />
+                <StatTile label="Avg GPV / Location" value={fmtGPV(avgVisible)} />
+                <StatTile
+                  label="Top Location"
+                  icon={<Trophy />}
+                  value={
+                    <span className="block truncate" title={topVisible?.locationName}>
+                      {topVisible?.locationName ?? '—'}
+                    </span>
+                  }
+                  meta={fmtGPV(topVisible?.totalGPV ?? 0)}
+                />
+                <StatTile label="Median GPV" value={fmtGPV(medianVisible)} />
+              </StatRow>
+            </PanelSection>
+          </Panel>
         )
       })()}
 
-      {/* Top 15 bar chart */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Top {Math.min(15, filteredLocations.length)} Locations by GPV</CardTitle>
-          <CardDescription className="text-xs">Last {days} days{selectedMerchantId !== 'all' ? ` · ${multiLocationMerchants.find(m => m.id === selectedMerchantId)?.name}` : ''}</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection
+          label={`Top ${Math.min(15, filteredLocations.length)} locations by GPV`}
+          caption={`Last ${days} days${selectedMerchantId !== 'all' ? ` · ${multiLocationMerchants.find(m => m.id === selectedMerchantId)?.name}` : ''}`}
+        >
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={chartData} margin={{ bottom: 32 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -273,7 +261,7 @@ export function MultiLocationComparison() {
                 height={60}
               />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={v => fmtGPV(v)} />
-              <Tooltip formatter={(v: number) => [fmtGPV(v), 'GPV']} />
+              <Tooltip content={<AnalyticsTooltip formatter={(v: number) => fmtGPV(v)} />} />
               <Bar dataKey="gpv" radius={[4, 4, 0, 0]}>
                 {chartData.map((entry, i) => (
                   <Cell key={i} fill={entry.fill} />
@@ -281,126 +269,111 @@ export function MultiLocationComparison() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
-      {/* Full location table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <CardTitle className="text-sm font-medium">All Locations</CardTitle>
-              <CardDescription className="text-xs mt-0.5">
-                Ranked by GPV — vs. prior {days}-day period
-              </CardDescription>
-            </div>
+      <Panel>
+        <PanelSection
+          label="All locations"
+          caption={`Ranked by GPV — vs. prior ${days}-day period`}
+          action={
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
               <Input
                 placeholder="Filter location or merchant…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="h-8 text-xs pl-8 w-52"
+                className="h-9 w-52 rounded-full pl-9"
               />
             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-auto max-h-96">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="text-xs w-10">#</TableHead>
-                  <TableHead className="text-xs">Location</TableHead>
-                  <TableHead className="text-xs">Merchant</TableHead>
-                  <TableHead className="text-xs text-right">GPV</TableHead>
-                  <TableHead className="text-xs">vs Avg</TableHead>
-                  <TableHead className="text-xs text-right">Orders</TableHead>
-                  <TableHead className="text-xs text-right">Avg Order</TableHead>
-                  <TableHead className="text-xs text-right">Void %</TableHead>
-                  <TableHead className="text-xs text-right">
+          }
+        >
+          <div className="max-h-96 overflow-auto">
+            <Table variant="data" className="min-w-[1120px]">
+              <TableHeader className="[&_tr]:border-0">
+                <TableRow>
+                  <TableHead className="w-10">#</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Merchant</TableHead>
+                  <TableHead className="text-right">GPV</TableHead>
+                  <TableHead>vs Avg</TableHead>
+                  <TableHead className="text-right">Orders</TableHead>
+                  <TableHead className="text-right">Avg Order</TableHead>
+                  <TableHead className="text-right">Void %</TableHead>
+                  <TableHead className="text-right">
                     <span className="flex items-center justify-end gap-1">
                       <Users className="h-3 w-3" /> Staff
                     </span>
                   </TableHead>
-                  <TableHead className="text-xs text-right">
+                  <TableHead className="text-right">
                     <span className="flex items-center justify-end gap-1">
                       <Monitor className="h-3 w-3" /> Devices
                     </span>
                   </TableHead>
-                  <TableHead className="text-xs text-right">vs Prev</TableHead>
-                  <TableHead className="text-xs text-right">7d Trend</TableHead>
+                  <TableHead className="text-right">vs Prev</TableHead>
+                  <TableHead className="text-right">7d Trend</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredLocations.map((loc: LocationMetrics) => (
-                  <TableRow key={loc.locationId}>
-                    <TableCell className="py-2 text-center">
-                      <RankBadge rank={loc.gpvRank} total={data.totalLocations} />
-                    </TableCell>
-                    <TableCell className="py-2 max-w-40">
-                      <div className="flex items-center gap-1.5">
-                        <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
-                        <span className="text-sm font-medium truncate" title={loc.locationName}>{loc.locationName}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm py-2 text-muted-foreground max-w-32">
-                      <span className="truncate block" title={loc.merchantName}>{loc.merchantName}</span>
-                    </TableCell>
-                    <TableCell className="py-2 text-right">
-                      <div>
-                        <p className="text-sm font-bold">{fmtGPV(loc.totalGPV)}</p>
+                {filteredLocations.map((loc: LocationMetrics) => {
+                  const diff = loc.totalGPV - data.avgGPVPerLocation
+                  const vsAvgPct = data.avgGPVPerLocation > 0
+                    ? Math.round((diff / data.avgGPVPerLocation) * 100)
+                    : 0
+                  return (
+                    <TableRow key={loc.locationId}>
+                      <TableCell className="text-center">
+                        <RankBadge rank={loc.gpvRank} total={data.totalLocations} />
+                      </TableCell>
+                      <TableCell className="max-w-40">
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          <span className="truncate font-medium" title={loc.locationName}>{loc.locationName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-32 text-muted-foreground">
+                        <span className="block truncate" title={loc.merchantName}>{loc.merchantName}</span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <p className="font-semibold tabular-nums">{fmtGPV(loc.totalGPV)}</p>
                         <PerformanceBar value={loc.totalGPV} max={topGPV} />
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-2">
-                      {(() => {
-                        const diff = loc.totalGPV - data.avgGPVPerLocation
-                        const pct = data.avgGPVPerLocation > 0
-                          ? Math.round((diff / data.avgGPVPerLocation) * 100)
-                          : 0
-                        return (
-                          <Badge
-                            variant={pct >= 0 ? 'default' : 'secondary'}
-                            className={`text-xs ${pct >= 0 ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}
-                          >
-                            {pct >= 0 ? '+' : ''}{pct}% avg
-                          </Badge>
-                        )
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-sm py-2 text-right">{loc.orderCount.toLocaleString()}</TableCell>
-                    <TableCell className="text-sm py-2 text-right">${loc.avgOrderValue.toFixed(2)}</TableCell>
-                    <TableCell className="py-2 text-right">
-                      {loc.voidRate > 0 ? (
-                        <span className={`text-xs font-medium ${loc.voidRate > 5 ? 'text-red-600' : 'text-muted-foreground'}`}>
-                          {loc.voidRate}%
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm py-2 text-right">
-                      {loc.staffCount > 0
-                        ? loc.staffCount
-                        : <span className="text-xs text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="text-sm py-2 text-right">
-                      {loc.deviceCount > 0
-                        ? loc.deviceCount
-                        : <span className="text-xs text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="py-2">
-                      <TrendChip pct={loc.trendVsPrev} />
-                    </TableCell>
-                    <TableCell className="py-2 text-right">
-                      <MiniSparkline data={loc.sparkline ?? []} />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell className="tabular-nums text-muted-foreground">
+                        {vsAvgPct >= 0 ? '+' : ''}{vsAvgPct}% avg
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{loc.orderCount.toLocaleString()}</TableCell>
+                      <TableCell className="text-right tabular-nums">${loc.avgOrderValue.toFixed(2)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {loc.voidRate > 0 ? (
+                          <span className={loc.voidRate > 5 ? 'font-medium' : 'text-muted-foreground'}>
+                            {loc.voidRate}%
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {loc.staffCount > 0
+                          ? loc.staffCount
+                          : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {loc.deviceCount > 0
+                          ? loc.deviceCount
+                          : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell>
+                        <TrendChip pct={loc.trendVsPrev} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <MiniSparkline data={loc.sparkline ?? []} />
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
                 {filteredLocations.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center text-muted-foreground text-sm py-8">
+                    <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
                       No locations match your search
                     </TableCell>
                   </TableRow>
@@ -408,8 +381,8 @@ export function MultiLocationComparison() {
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
     </div>
   )
 }
