@@ -3,17 +3,8 @@
 import * as React from "react";
 import { toast } from "sonner";
 import {
-  BottomSheet,
-  BottomSheetTrigger,
-  BottomSheetContent,
-  BottomSheetHeader,
-  BottomSheetBody,
-  BottomSheetFooter,
-  BottomSheetTitle,
-  BottomSheetDescription,
-} from "@/components/ui/bottom-sheet";
-import {
   Dialog,
+  DialogTrigger,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -368,12 +359,12 @@ export function AdminInviteWizard({
 
   return (
     <>
-      <BottomSheet open={open} onOpenChange={onOpenChange}>
-      {children && <BottomSheetTrigger asChild>{children}</BottomSheetTrigger>}
-      <BottomSheetContent className="w-full" height="95">
-        <div className="flex h-full">
+      <Dialog open={open} onOpenChange={onOpenChange}>
+      {children && <DialogTrigger asChild>{children}</DialogTrigger>}
+      <DialogContent className="flex w-[calc(100%-1rem)] flex-col sm:max-w-[900px] h-[min(92vh,760px)] max-sm:h-dvh overflow-hidden gap-0 p-0 rounded-3xl max-sm:rounded-none max-sm:overflow-hidden">
+        <div className="flex min-h-0 flex-1">
           {/* Left Sidebar - Steps (hidden on mobile, shown md+) */}
-          <div className="hidden md:flex w-64 border-r bg-muted/30 p-6 flex-col">
+          <div className="hidden md:flex w-64 shrink-0 bg-muted/40 p-6 flex-col">
             <div className="space-y-1">
               {flowSteps.map((step, index) => {
                 const isActive = step.key === currentStep;
@@ -413,7 +404,7 @@ export function AdminInviteWizard({
             </div>
 
             {/* Summary in sidebar */}
-            <div className="mt-auto pt-4 border-t space-y-2">
+            <div className="mt-auto space-y-2 border-t border-border/50 pt-4">
               {selectedRole && (
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Role</div>
@@ -431,20 +422,20 @@ export function AdminInviteWizard({
 
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            <BottomSheetHeader className="border-b">
-              <BottomSheetTitle>
+            <DialogHeader className="shrink-0 gap-1.5 px-6 pt-6 pb-4 text-left sm:text-left">
+              <DialogTitle className="text-xl font-semibold">
                 {currentStep === "details" && "Admin Details"}
                 {currentStep === "role" && "Select Role"}
                 {currentStep === "merchants" && "Assign Merchants"}
                 {currentStep === "review" &&
                   (inviteMode === "direct" ? "Review & Create Account" : "Review & Send Invite")}
-              </BottomSheetTitle>
-              <BottomSheetDescription>
+              </DialogTitle>
+              <DialogDescription className="pr-10">
                 {currentStep === "details" && "Choose invite flow and enter admin information."}
                 {currentStep === "role" && "Choose the role for this admin. The role determines their permissions."}
                 {currentStep === "merchants" && "Select which merchants this admin can access."}
                 {currentStep === "review" && "Review all details before completing this action."}
-              </BottomSheetDescription>
+              </DialogDescription>
 
               {/* Compact step indicator — mobile only (sidebar hidden below md) */}
               <div className="mt-3 flex items-center gap-1.5 overflow-x-auto md:hidden">
@@ -466,7 +457,7 @@ export function AdminInviteWizard({
                         !isAccessible && "opacity-50"
                       )}
                     >
-                      <span className="flex h-4 w-4 items-center justify-center rounded-full border text-[10px]">
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-background/60 text-[10px]">
                         {isCompleted && !isActive ? "✓" : index + 1}
                       </span>
                       {step.label}
@@ -474,9 +465,9 @@ export function AdminInviteWizard({
                   );
                 })}
               </div>
-            </BottomSheetHeader>
+            </DialogHeader>
 
-            <BottomSheetBody className="flex-1 overflow-y-auto max-h-[calc(98vh-200px)]">
+            <div className="min-h-0 flex-1 overflow-y-auto px-6">
               {isLoadingMerchants && currentStep === "merchants" ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center space-y-2">
@@ -499,8 +490,10 @@ export function AdminInviteWizard({
                           <label
                             htmlFor="invite-mode-single"
                             className={cn(
-                              "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
-                              inviteMode === "single" ? "border-primary bg-primary/5" : "border-muted"
+                              "flex cursor-pointer items-start gap-3 rounded-2xl p-3 transition-colors",
+                              inviteMode === "single"
+                                ? "bg-primary/5 ring-2 ring-primary"
+                                : "bg-muted/40 hover:bg-muted/70"
                             )}
                           >
                             <RadioGroupItem id="invite-mode-single" value="single" className="mt-1" />
@@ -512,8 +505,10 @@ export function AdminInviteWizard({
                           <label
                             htmlFor="invite-mode-direct"
                             className={cn(
-                              "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors",
-                              inviteMode === "direct" ? "border-primary bg-primary/5" : "border-muted"
+                              "flex cursor-pointer items-start gap-3 rounded-2xl p-3 transition-colors",
+                              inviteMode === "direct"
+                                ? "bg-primary/5 ring-2 ring-primary"
+                                : "bg-muted/40 hover:bg-muted/70"
                             )}
                           >
                             <RadioGroupItem id="invite-mode-direct" value="direct" className="mt-1" />
@@ -595,7 +590,7 @@ export function AdminInviteWizard({
                       </div>
 
                       {invitableRoles.length === 0 ? (
-                        <div className="rounded-lg border bg-yellow-50 dark:bg-yellow-950/20 p-4">
+                        <div className="rounded-2xl bg-yellow-50 dark:bg-yellow-950/20 p-4">
                           <div className="flex items-center gap-2 text-yellow-600 dark:text-yellow-500">
                             <AlertCircle className="h-4 w-4" />
                             <span className="text-sm font-medium">No roles available</span>
@@ -611,10 +606,10 @@ export function AdminInviteWizard({
                               <div
                                 key={role.code}
                                 className={cn(
-                                  "flex items-start gap-4 p-4 rounded-lg border-2 transition-all cursor-pointer",
+                                  "flex items-start gap-4 p-4 rounded-2xl transition-all cursor-pointer",
                                   selectedRoleCode === role.code
-                                    ? "border-primary bg-primary/5"
-                                    : "border-muted hover:border-primary/50"
+                                    ? "bg-primary/5 ring-2 ring-primary"
+                                    : "bg-muted/40 hover:bg-muted/70"
                                 )}
                                 onClick={() => setSelectedRoleCode(role.code)}
                               >
@@ -677,7 +672,7 @@ export function AdminInviteWizard({
                       </div>
 
                       {/* Role-based access notice */}
-                      <div className="rounded-lg border bg-muted/30 p-3">
+                      <div className="rounded-2xl bg-muted/40 p-3">
                         <p className="text-xs text-muted-foreground">
                           <strong>Note:</strong> {selectedRole?.code === 'hq.super_admin' 
                             ? "Super Admins have access to all merchants regardless of selection."
@@ -685,8 +680,10 @@ export function AdminInviteWizard({
                         </p>
                       </div>
 
-                      {/* Merchant list */}
-                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                      {/* Merchant list — negative margin + matching padding so the
+                          selected card's ring-2 isn't clipped by overflow-y-auto
+                          while the rows stay flush with the content above. */}
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto -mx-1 px-1 py-1">
                         {filteredMerchants.length === 0 ? (
                           <div className="text-center py-8 text-muted-foreground">
                             <Building2 className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -700,10 +697,10 @@ export function AdminInviteWizard({
                               <div
                                 key={merchant.id}
                                 className={cn(
-                                  "flex items-center gap-4 p-4 rounded-lg border-2 transition-all cursor-pointer",
+                                  "flex items-center gap-4 p-4 rounded-2xl transition-all cursor-pointer",
                                   isSelected
-                                    ? "border-primary bg-primary/5"
-                                    : "border-muted hover:border-primary/50"
+                                    ? "bg-primary/5 ring-2 ring-primary"
+                                    : "bg-muted/40 hover:bg-muted/70"
                                 )}
                                 onClick={() => toggleMerchant(merchant.id)}
                               >
@@ -734,7 +731,7 @@ export function AdminInviteWizard({
                   {currentStep === "review" && (
                     <div className="space-y-6">
                       {/* Admin Info */}
-                      <div className="p-4 rounded-lg border bg-muted/30">
+                      <div className="p-4 rounded-2xl bg-muted/40">
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                             <span className="text-lg font-semibold text-primary">
@@ -760,7 +757,7 @@ export function AdminInviteWizard({
                           <Shield className="h-4 w-4" />
                           Role
                         </div>
-                        <div className="p-3 rounded-lg border bg-muted/30">
+                        <div className="p-3 rounded-2xl bg-muted/40">
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{selectedRole?.name}</span>
                             <Badge variant="secondary" className="text-xs">
@@ -780,7 +777,7 @@ export function AdminInviteWizard({
                           Merchant Access ({selectedMerchantCount})
                         </div>
                         {selectedMerchantCount === 0 ? (
-                          <div className="p-3 rounded-lg border bg-muted/30 text-sm text-muted-foreground">
+                          <div className="p-3 rounded-2xl bg-muted/40 text-sm text-muted-foreground">
                             {selectedRole?.code === 'hq.super_admin'
                               ? "Super Admins have access to all merchants automatically."
                               : "No specific merchants assigned. Access can be granted later."}
@@ -790,7 +787,7 @@ export function AdminInviteWizard({
                             {merchantAccessArray.map((access) => (
                               <div
                                 key={access.merchantId}
-                                className="flex items-center justify-between p-3 rounded-lg border bg-muted/30"
+                                className="flex items-center justify-between p-3 rounded-2xl bg-muted/40"
                               >
                                 <div className="flex items-center gap-2">
                                   <Store className="h-4 w-4 text-muted-foreground" />
@@ -826,9 +823,9 @@ export function AdminInviteWizard({
                   )}
                 </div>
               )}
-            </BottomSheetBody>
+            </div>
 
-            <BottomSheetFooter className="border-t flex flex-col items-center justify-between pb-6 sm:pb-4">
+            <div className="flex shrink-0 flex-col items-center justify-between gap-3 bg-background px-6 pt-4 pb-6 sm:pb-4">
               <div className="flex items-center justify-between w-full">
                 <Button
                   variant="ghost"
@@ -865,11 +862,11 @@ export function AdminInviteWizard({
                   )}
                 </Button>
               </div>
-            </BottomSheetFooter>
+            </div>
           </div>
         </div>
-      </BottomSheetContent>
-      </BottomSheet>
+      </DialogContent>
+      </Dialog>
 
       <Dialog open={isCredentialDialogOpen} onOpenChange={setIsCredentialDialogOpen}>
         <DialogContent>
@@ -880,7 +877,7 @@ export function AdminInviteWizard({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="rounded-md border bg-muted/40 px-3 py-3 font-mono text-sm tracking-wide break-all">
+            <div className="rounded-2xl bg-muted/50 px-3 py-3 font-mono text-sm tracking-wide break-all">
               {directCreateCredentials?.tempPassword || "-"}
             </div>
             <div className="text-xs text-muted-foreground">

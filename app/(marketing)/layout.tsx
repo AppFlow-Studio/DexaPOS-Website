@@ -3,6 +3,7 @@ import "./marketing.css";
 import Nav from "@/components/marketing/Nav";
 import Footer from "@/components/marketing/Footer";
 import Analytics from "@/components/marketing/Analytics";
+import RevealBoot from "@/components/marketing/RevealBoot";
 import { getSiteSettings } from "@/lib/cms/site-settings";
 
 export const metadata: Metadata = {
@@ -48,15 +49,13 @@ export default async function MarketingLayout({
       className="mk-site"
       style={{ fontFamily: "var(--font)" }}
     >
-      {/* Reveal bootstrap. Runs before paint so scroll-reveal content is hidden
-          without a flash, and — critically — hiding is opt-in: marketing.css only
-          hides un-revealed .reveal elements under .reveal-ready. If this script
-          never runs, content stays visible instead of being stranded invisible. */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `try{document.documentElement.classList.add("reveal-ready")}catch(e){}`,
-        }}
-      />
+      {/* Arms scroll-reveal by adding .reveal-ready to <html>. Hiding is opt-in:
+          marketing.css only hides un-revealed .reveal elements under that class,
+          so if this never runs content stays visible instead of stranded
+          invisible. Must be a component, not an inline <script> — React does not
+          execute script tags it renders, so a script here was skipped entirely
+          on client-side navigation into a marketing route. */}
+      <RevealBoot />
       <Analytics />
       <Nav settings={siteSettings} />
       <main>{children}</main>

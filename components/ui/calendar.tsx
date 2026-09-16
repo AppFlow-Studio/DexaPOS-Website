@@ -51,23 +51,33 @@ function Calendar({
         day: "relative flex aspect-square min-h-9 items-center justify-center p-0 text-center text-sm",
         day_button: cn(
           buttonVariants({ variant: "ghost" }),
-          "size-full min-h-9 rounded-full p-0 font-normal tabular-nums aria-selected:opacity-100"
+          "size-full min-h-9 rounded-md p-0 font-normal tabular-nums aria-selected:opacity-100"
         ),
         selected:
           "[&>button]:bg-primary [&>button]:font-semibold [&>button]:text-primary-foreground [&>button:hover]:bg-primary [&>button:hover]:text-primary-foreground",
         today:
-          "[&>button]:bg-primary/10 [&>button]:font-semibold [&>button]:text-primary",
+          "[&>button]:bg-accent [&>button]:font-semibold [&>button]:text-accent-foreground",
         outside:
           "[&>button]:text-muted-foreground/50 [&>button:hover]:text-muted-foreground",
         disabled:
           "pointer-events-none opacity-35 [&>button]:text-muted-foreground",
         hidden: "invisible",
+        // The whole range is one solid primary band: every day in the span gets
+        // the same fill as the endpoints, so nothing inside reads as faded.
+        //
+        // The fill sits on the day *cell* and the inner buttons are forced
+        // transparent, which matters for more than looks: `selected` and
+        // `today` also set a button background, and on a day that is both
+        // (e.g. today falling inside the range) those equal-specificity rules
+        // would otherwise win by source order and paint one day a different
+        // colour mid-band. `!` pins the transparent button so the cell's fill
+        // is always what shows through.
         range_start:
-          "rounded-l-full bg-primary/15 [&>button]:bg-primary [&>button]:text-primary-foreground",
+          "rounded-l-md bg-primary [&>button]:!bg-transparent [&>button]:font-semibold [&>button]:!text-primary-foreground",
         range_middle:
-          "bg-primary/15 [&>button]:rounded-none [&>button]:bg-transparent [&>button]:text-foreground",
+          "bg-primary [&>button]:rounded-none [&>button]:!bg-transparent [&>button]:!text-primary-foreground",
         range_end:
-          "rounded-r-full bg-primary/15 [&>button]:bg-primary [&>button]:text-primary-foreground",
+          "rounded-r-md bg-primary [&>button]:!bg-transparent [&>button]:font-semibold [&>button]:!text-primary-foreground",
         ...classNames,
       }}
       components={{

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
+import type { DateRange } from 'react-day-picker'
 import { format, subDays } from 'date-fns'
 import { Calendar as CalendarIcon } from 'lucide-react'
 
@@ -13,10 +14,20 @@ interface DateRangePickerProps {
   onChange: (range: { from: string; to: string }) => void
 }
 
+// `activeLabel` matches what getPresetLabel() derives from the applied range,
+// which is what decides the selected button.
+const PRESETS = [
+  { days: 7, label: '7D', activeLabel: '7 Days' },
+  { days: 30, label: '30D', activeLabel: '30 Days' },
+  { days: 90, label: '90D', activeLabel: '90 Days' },
+] as const
+
 export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [tempFrom, setTempFrom] = useState<Date>(new Date(from))
-  const [tempTo, setTempTo] = useState<Date>(new Date(to))
+  const [tempRange, setTempRange] = useState<DateRange | undefined>({
+    from: new Date(from),
+    to: new Date(to),
+  })
 
   const handlePreset = (days: number) => {
     const toDate = new Date()
@@ -28,11 +39,21 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
   }
 
   const handleCustomApply = () => {
+    if (!tempRange?.from) return
+    // A single click in range mode selects only `from`. Treat that as a
+    // one-day range so Apply is never a dead end mid-selection.
     onChange({
-      from: tempFrom.toISOString(),
-      to: tempTo.toISOString(),
+      from: tempRange.from.toISOString(),
+      to: (tempRange.to ?? tempRange.from).toISOString(),
     })
     setIsOpen(false)
+  }
+
+  // Re-seed the draft from the applied range each time the popover opens, so a
+  // dismissed half-finished selection doesn't carry over to the next open.
+  const handleOpenChange = (open: boolean) => {
+    if (open) setTempRange({ from: new Date(from), to: new Date(to) })
+    setIsOpen(open)
   }
 
   const getPresetLabel = () => {
@@ -52,85 +73,59 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
 
       {/* Preset Buttons */}
       <div className="flex gap-2">
-        <Button
-          size="sm"
-          variant={getPresetLabel() === '7 Days' ? 'default' : 'outline'}
-          onClick={() => handlePreset(7)}
-          className={`transition-all duration-200 ${
-            getPresetLabel() === '7 Days' 
-              ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-              : 'border-blue-200 hover:border-blue-300 hover:bg-blue-50/50'
-          }`}
-        >
-          7D
-        </Button>
-        <Button
-          size="sm"
-          variant={getPresetLabel() === '30 Days' ? 'default' : 'outline'}
-          onClick={() => handlePreset(30)}
-          className={`transition-all duration-200 ${
-            getPresetLabel() === '30 Days' 
-              ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-              : 'border-blue-200 hover:border-blue-300 hover:bg-blue-50/50'
-          }`}
-        >
-          30D
-        </Button>
-        <Button
-          size="sm"
-          variant={getPresetLabel() === '90 Days' ? 'default' : 'outline'}
-          onClick={() => handlePreset(90)}
-          className={`transition-all duration-200 ${
-            getPresetLabel() === '90 Days' 
-              ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-              : 'border-blue-200 hover:border-blue-300 hover:bg-blue-50/50'
-          }`}
-        >
-          90D
-        </Button>
+        {PRESETS.map(({ days, label, activeLabel }) => (
+          <Button
+            key={days}
+            size="sm"
+            variant={getPresetLabel() === activeLabel ? 'default' : 'outline'}
+            onClick={() => handlePreset(days)}
+            className="transition-all duration-200"
+          >
+            {label}
+          </Button>
+        ))}
       </div>
 
       {/* Custom Popover */}
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <Popover open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button 
             size="sm" 
             variant="outline" 
-            className="gap-2 border-blue-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all duration-200"
+            className="gap-2 transition-all duration-200"
           >
-            <CalendarIcon className="h-4 w-4 text-blue-500" />
+            <CalendarIcon className="h-4 w-4 text-primary" />
             <span className="text-sm">
               {format(new Date(from), 'MMM d')} - {format(new Date(to), 'MMM d')}
             </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0 bg-white/95 backdrop-blur-sm border border-blue-100/50 shadow-lg rounded-xl" align="end">
-          <div className="p-4 space-y-4">
-            <div className="flex gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">From</label>
-                <Calendar
-                  mode="single"
-                  selected={tempFrom}
-                  onSelect={(date) => date && setTempFrom(date)}
-                  disabled={(date) => date > tempTo}
-                  className="rounded-lg border border-blue-100"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-700">To</label>
-                <Calendar
-                  mode="single"
-                  selected={tempTo}
-                  onSelect={(date) => date && setTempTo(date)}
-                  disabled={(date) => date < tempFrom}
-                  className="rounded-lg border border-blue-100"
-                />
-              </div>
+        <PopoverContent className="w-auto rounded-xl border p-0 shadow-lg" align="end">
+          <div className="w-[19rem] space-y-3 p-4">
+            <div className="flex items-baseline justify-between gap-2">
+              <label className="text-sm font-medium text-foreground">
+                Select range
+              </label>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {tempRange?.from
+                  ? `${format(tempRange.from, 'MMM d')} - ${
+                      tempRange.to ? format(tempRange.to, 'MMM d') : '…'
+                    }`
+                  : 'Pick a start date'}
+              </span>
             </div>
+            <Calendar
+              mode="range"
+              selected={tempRange}
+              onSelect={setTempRange}
+              defaultMonth={tempRange?.from}
+              numberOfMonths={1}
+              className="p-0"
+            />
             <Button
+              disabled={!tempRange?.from}
               onClick={handleCustomApply}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200"
+              className="w-full transition-all duration-200"
               size="sm"
             >
               Apply Range
