@@ -1,164 +1,156 @@
 'use client'
 
 import { useMerchantOnboardingFunnel } from '@/lib/queries/use-platform-analytics'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { AlertTriangle, TrendingUp } from 'lucide-react'
-import type { OnboardingFunnelStage, StuckMerchant, MonthlyOnboardingTrend } from '@/app/manage/actions/hq-platform/analytics'
+import { AlertTriangle, TrendingUp, Filter } from 'lucide-react'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
+import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
+import type { OnboardingFunnelStage, StuckMerchant } from '@/app/manage/actions/hq-platform/analytics'
+
+/**
+ * Stage colours are data encoding, not status decoration — each bar maps to its
+ * lifecycle stage the way a chart series maps to its legend entry (§4.6b's
+ * second exception).
+ */
+const STAGE_COLORS: Record<string, string> = {
+  created: '#94a3b8',
+  onboarding: '#f59e0b',
+  active: '#22c55e',
+  churned: '#ef4444',
+}
 
 export function MerchantOnboardingFunnel() {
   const { data, isLoading } = useMerchantOnboardingFunnel()
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-50 w-full" />
-        <Skeleton className="h-75 w-full" />
+      <div className="space-y-6">
+        <Skeleton className="h-50 w-full rounded-3xl" />
+        <Skeleton className="h-75 w-full rounded-3xl" />
       </div>
     )
   }
 
   if (!data) return null
 
-  const STAGE_COLORS: Record<string, string> = {
-    created: '#94a3b8',
-    onboarding: '#f59e0b',
-    active: '#22c55e',
-    churned: '#ef4444',
-  }
+  const maxCount = Math.max(...data.funnel.map(s => s.count), 1)
 
   return (
     <div className="space-y-6">
-      {/* KPI banner */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold text-green-600">{data.conversionRate}%</p>
-            <p className="text-xs text-muted-foreground">Overall Conversion Rate</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold text-amber-600">{data.stuckMerchants.length}</p>
-            <p className="text-xs text-muted-foreground">Stuck (&gt;14 days onboarding)</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold">
-              {data.funnel.find(f => f.stage === 'active')?.count ?? 0}
-            </p>
-            <p className="text-xs text-muted-foreground">Active Merchants</p>
-          </CardContent>
-        </Card>
-      </div>
+      <Panel>
+        <PanelSection label="Onboarding funnel" icon={Filter} caption="All merchants by lifecycle stage">
+          <div className="space-y-6">
+            <StatRow columns={3}>
+              <StatTile
+                label="Overall Conversion Rate"
+                value={`${data.conversionRate}%`}
+              />
+              <StatTile
+                label="Stuck (>14 days onboarding)"
+                value={data.stuckMerchants.length}
+              />
+              <StatTile
+                label="Active Merchants"
+                value={data.funnel.find(f => f.stage === 'active')?.count ?? 0}
+              />
+            </StatRow>
 
-      {/* Funnel visualisation */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Onboarding Funnel</CardTitle>
-          <CardDescription className="text-xs">All merchants by lifecycle stage</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {data.funnel.map((stage: OnboardingFunnelStage) => {
-              const maxCount = Math.max(...data.funnel.map(s => s.count), 1)
-              const pct = Math.round((stage.count / maxCount) * 100)
-              return (
-                <div key={stage.stage} className="flex items-center gap-3">
-                  <div className="w-24 text-xs text-right text-muted-foreground">{stage.label}</div>
-                  <div className="flex-1 h-8 bg-muted rounded overflow-hidden">
-                    <div
-                      className="h-full rounded flex items-center pl-3 text-white text-xs font-medium transition-all duration-500"
-                      style={{ width: `${Math.max(pct, 5)}%`, backgroundColor: STAGE_COLORS[stage.stage] || '#94a3b8' }}
-                    >
-                      {stage.count}
+            <div className="space-y-3">
+              {data.funnel.map((stage: OnboardingFunnelStage) => {
+                const pct = Math.round((stage.count / maxCount) * 100)
+                return (
+                  <div key={stage.stage} className="flex items-center gap-3">
+                    <div className="w-24 shrink-0 text-right text-xs text-muted-foreground">{stage.label}</div>
+                    <div className="h-8 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="flex h-full items-center rounded-full pl-3 text-xs font-medium text-white transition-all duration-500"
+                        style={{ width: `${Math.max(pct, 5)}%`, backgroundColor: STAGE_COLORS[stage.stage] || '#94a3b8' }}
+                      >
+                        {stage.count}
+                      </div>
                     </div>
+                    {stage.conversionFromPrev !== null && (
+                      <div className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                        {stage.conversionFromPrev}% conv.
+                      </div>
+                    )}
                   </div>
-                  {stage.conversionFromPrev !== null && (
-                    <div className="w-20 text-xs text-muted-foreground text-right">
-                      {stage.conversionFromPrev}% conv.
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
-      {/* Stuck Merchants Table */}
       {data.stuckMerchants.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              Stuck Merchants ({data.stuckMerchants.length})
-            </CardTitle>
-            <CardDescription className="text-xs">Merchants in onboarding for more than 14 days without progressing</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
+        <Panel>
+          <PanelSection
+            label={`Stuck merchants (${data.stuckMerchants.length})`}
+            icon={AlertTriangle}
+            caption="Merchants in onboarding for more than 14 days without progressing"
+          >
+            {/* The `variant="data"` well is the surface — §5.2: a table is not
+                wrapped in panel padding, or you get a box inside a box. */}
+            <Table variant="data">
+              <TableHeader className="[&_tr]:border-0">
                 <TableRow>
-                  <TableHead className="text-xs">Merchant</TableHead>
-                  <TableHead className="text-xs text-right">Days in Onboarding</TableHead>
-                  <TableHead className="text-xs">Last Activity</TableHead>
-                  <TableHead className="text-xs">Assigned Admin</TableHead>
-                  <TableHead className="text-xs">Risk</TableHead>
+                  <TableHead>Merchant</TableHead>
+                  <TableHead className="text-right">Days in Onboarding</TableHead>
+                  <TableHead>Last Activity</TableHead>
+                  <TableHead>Assigned Admin</TableHead>
+                  <TableHead>Risk</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.stuckMerchants.map((m: StuckMerchant) => (
                   <TableRow key={m.id}>
-                    <TableCell className="text-sm py-2 font-medium">{m.name}</TableCell>
-                    <TableCell className="text-sm py-2 text-right font-mono">{m.daysInOnboarding}d</TableCell>
-                    <TableCell className="text-sm py-2 text-muted-foreground">
+                    <TableCell className="font-medium">{m.name}</TableCell>
+                    <TableCell className="text-right tabular-nums">{m.daysInOnboarding}d</TableCell>
+                    <TableCell className="text-muted-foreground">
                       {m.lastActivity ? new Date(m.lastActivity).toLocaleDateString() : 'No activity'}
                     </TableCell>
-                    <TableCell className="text-sm py-2">
-                      {m.assignedAdmin ?? <span className="text-xs text-muted-foreground italic">Unassigned</span>}
+                    <TableCell>
+                      {m.assignedAdmin ?? <span className="text-xs italic text-muted-foreground">Unassigned</span>}
                     </TableCell>
-                    <TableCell className="py-2">
-                      {m.daysInOnboarding >= 30 ? (
-                        <Badge variant="destructive" className="text-xs">Critical</Badge>
-                      ) : (
-                        <Badge variant="secondary" className="text-xs">At Risk</Badge>
-                      )}
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className="w-fit rounded-full border-0 px-2.5 text-xs font-medium"
+                      >
+                        {m.daysInOnboarding >= 30 ? 'Critical' : 'At Risk'}
+                      </Badge>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       )}
 
-      {/* Monthly Trend */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            Monthly Onboarding Trend
-          </CardTitle>
-          <CardDescription className="text-xs">New vs Active merchants per month (last 12 months)</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection
+          label="Monthly onboarding trend"
+          icon={TrendingUp}
+          caption="New vs Active merchants per month (last 12 months)"
+        >
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={data.monthlyTrend}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="month" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip />
+              <Tooltip content={<AnalyticsTooltip />} />
               <Bar dataKey="newCount" name="New Merchants" fill="#94a3b8" radius={[3, 3, 0, 0]} />
               <Bar dataKey="activeCount" name="Activated" fill="#22c55e" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
     </div>
   )
 }

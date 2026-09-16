@@ -18,8 +18,13 @@ import { PaymentsSection } from './PaymentsSection'
  * clips. Written literally rather than pulled from `tokens.ts` — Tailwind does
  * not scan `.ts`, so a class sourced only from there gets no CSS rule (C7).
  */
+// `flex w-full justify-start` overrides the shadcn TabsList base, which ships
+// `inline-flex w-fit justify-center`. Those made the strip a content-width box
+// that centred its own overflow, so on a phone the first and last pills were
+// both clipped and no amount of scrolling revealed them. Full width + start
+// alignment lets the row fill the panel and scroll from its true left edge.
 const TAB_LIST =
-  'inline-flex h-auto max-w-full gap-1 overflow-x-auto rounded-full bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+  'flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-full bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
 const TAB_TRIGGER =
   'shrink-0 rounded-full px-4 py-2 text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm'
 
@@ -50,43 +55,55 @@ export function AnalyticsContent() {
   const tabListRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const list = tabListRef.current
-    if (!list) return
+    const syncScroll = (behavior: ScrollBehavior) => {
+      const list = tabListRef.current
+      if (!list) return
 
-    // Nothing to scroll when the strip fits, which is the desktop case.
-    if (list.scrollWidth <= list.clientWidth) return
+      // Nothing to scroll when the strip fits — the desktop case.
+      if (list.scrollWidth <= list.clientWidth) return
 
-    const active = list.querySelector<HTMLElement>('[data-state="active"]')
-    if (!active) return
+      const active = list.querySelector<HTMLElement>('[data-state="active"]')
+      if (!active) return
 
-    // Measured with rects rather than offsetLeft: the list is not a positioned
-    // ancestor, so offsetLeft would be relative to some outer element and the
-    // maths would be off by that element's offset.
-    const listRect = list.getBoundingClientRect()
-    const activeRect = active.getBoundingClientRect()
+      // Centre the active pill in the strip. Measured with rects rather than
+      // offsetLeft: the list is not a positioned ancestor, so offsetLeft would
+      // be relative to some outer element and the maths would be off by that
+      // element's offset. Clamping to [0, max] means the first and last tabs
+      // settle flush against their end instead of over-scrolling, so centring
+      // never pushes an edge pill out of view.
+      const listRect = list.getBoundingClientRect()
+      const activeRect = active.getBoundingClientRect()
+      const delta =
+        activeRect.left -
+        listRect.left -
+        (listRect.width - activeRect.width) / 2
+      const max = list.scrollWidth - list.clientWidth
+      const target = Math.max(0, Math.min(list.scrollLeft + delta, max))
 
-    // Only scroll when the pill is actually out of view. Unconditionally
-    // centring clipped the *first* tab: centring "Growth" scrolls the strip
-    // right, pushing its own left edge past the container. `pad` keeps a sliver
-    // of the neighbouring pill visible so the strip still reads as scrollable.
-    const pad = 12
-    const overflowLeft = listRect.left + pad - activeRect.left
-    const overflowRight = activeRect.right - (listRect.right - pad)
+      // Skip sub-pixel no-ops so an already-centred tab does not re-trigger a
+      // smooth scroll on every resize tick.
+      if (Math.abs(target - list.scrollLeft) < 1) return
 
-    let delta = 0
-    if (overflowLeft > 0) delta = -overflowLeft
-    else if (overflowRight > 0) delta = overflowRight
-    else return
+      list.scrollTo({ left: target, behavior })
+    }
 
-    const target = list.scrollLeft + delta
-    const max = list.scrollWidth - list.clientWidth
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-    list.scrollTo({
-      left: Math.max(0, Math.min(target, max)),
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? 'auto'
-        : 'smooth',
-    })
+    // rAF so the measurement happens after paint: on the first run the strip
+    // has just mounted and the rects are not final until layout settles.
+    const frame = requestAnimationFrame(() =>
+      syncScroll(reduced ? 'auto' : 'smooth')
+    )
+
+    // Keep the active pill in view when the strip's width changes — rotating
+    // the phone, or the sidebar collapsing on desktop.
+    const onResize = () => syncScroll('auto')
+    window.addEventListener('resize', onResize)
+
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('resize', onResize)
+    }
   }, [activeTab])
 
   return (

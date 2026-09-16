@@ -1007,12 +1007,29 @@ Updated as each route family lands. `—` means not yet converted.
 `/manage/settings` is a bare `redirect()` and `/manage/unauthorized` is a
 minimal error surface — **no change** for both.
 
-> ⚠️ **`/manage/analytics` is converted at the shell only.** The page now uses
+> ⚠️ **`/manage/analytics` is partially converted.** The page shell is done —
 > `PageShell as="div"` + `PageHeader`, a `Panel`/`StatRow` KPI header and a
-> DS-CTL-05 tab rail, and passes the DoD `<h1>` grep — but **45 `<Card>` remain
-> inline in its `overview` and `revenue` tab bodies, and all 15 files in
-> `app/manage/analytics/components/` (~6,200 lines, 415 `<Card>`) are untouched.**
-> Family 1 is not complete until those land.
+> DS-CTL-05 tab rail — and it passes the DoD `<h1>` grep. Still outstanding:
+> **45 `<Card>` inline in the `overview` and `revenue` tab bodies**, and
+> **10 of the 15 files in `app/manage/analytics/components/`.**
+>
+> Converted so far (0 cards, 0 hairlines, lint-clean in each):
+> `MerchantOnboardingFunnel`, `MerchantActivationTimeline`,
+> `VoidRefundIntelligence` (the whole **merchants** tab), plus
+> `PaymentMethodMix` and `DiscountAbuseDetection`. Component-directory cards are
+> down 415 → 296.
+>
+> Remaining: `StaffLaborAnalytics`, `KDSPerformance`, `AuditLogActivityMonitor`,
+> `OrderTypeIntelligence`, `MultiLocationComparison`, `LocationDensityInsights`,
+> `DeviceStabilityIndex`, `TerminalUtilizationHeatmap`, `FleetHealthDashboard`,
+> `PaymentTerminalHealthMonitor`.
+>
+> The conversion is mechanical — see the recipe below — but note two traps:
+> `StatRow` accepts only `columns={2|3|4}` (stack rows for 5–6 figures), and
+> `StatTile`'s `meta` already renders a `<p>`, so a `meta` value that returns one
+> is invalid nested HTML. Swapping a bare Recharts `<Tooltip />` for
+> `<Tooltip content={<AnalyticsTooltip />} />` also clears a pre-existing
+> `Formatter` type error each time (`tsc` total is down 822 → 818 so far).
 >
 > Two things to know before picking that up:
 >

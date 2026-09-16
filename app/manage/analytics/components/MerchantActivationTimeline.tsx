@@ -1,14 +1,17 @@
 'use client'
 
 import { useMerchantActivationTimeline } from '@/lib/queries/use-platform-analytics'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
-import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Minus, Timer, ListChecks } from 'lucide-react'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
+import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
 import type { NeverActivatedMerchant } from '@/app/manage/actions/hq-platform/analytics'
 
+/** Bucket fills encode the histogram's time bands — data, not decoration (§4.6b). */
 const BUCKET_COLORS = ['#22c55e', '#86efac', '#f59e0b', '#fb923c', '#ef4444', '#991b1b']
 
 export function MerchantActivationTimeline() {
@@ -16,13 +19,9 @@ export function MerchantActivationTimeline() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {[...Array(5)].map((_, i) => (
-            <Card key={i}><CardContent className="pt-6"><Skeleton className="h-12 w-full" /></CardContent></Card>
-          ))}
-        </div>
-        <Skeleton className="h-65 w-full" />
+      <div className="space-y-6">
+        <Skeleton className="h-40 w-full rounded-3xl" />
+        <Skeleton className="h-65 w-full rounded-3xl" />
       </div>
     )
   }
@@ -35,85 +34,66 @@ export function MerchantActivationTimeline() {
 
   return (
     <div className="space-y-6">
-      {/* KPI row — 5 cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold">{data.avgDaysToActivate ?? '—'}</p>
-            <p className="text-xs text-muted-foreground">Avg Days to Activation</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold">{data.medianDaysToActivate ?? '—'}</p>
-            <p className="text-xs text-muted-foreground">Median Days</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold text-green-600">{data.activatedThisMonth}</p>
-            <p className="text-xs text-muted-foreground">Activated This Month</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold text-red-600">{data.neverActivated.length}</p>
-            <p className="text-xs text-muted-foreground">Never Activated (&gt;30d)</p>
-          </CardContent>
-        </Card>
+      <Panel>
+        <PanelSection label="Activation speed" icon={Timer}>
+          {/* Five figures: 3-up then 2-up. `StatRow` tops out at four columns,
+              and five on one line are unreadably narrow below a wide desktop. */}
+          <div className="space-y-6">
+            <StatRow columns={3}>
+              <StatTile label="Avg Days to Activation" value={data.avgDaysToActivate ?? '—'} />
+              <StatTile label="Median Days" value={data.medianDaysToActivate ?? '—'} />
+              <StatTile label="Activated This Month" value={data.activatedThisMonth} />
+            </StatRow>
 
-        {/* MoM Improvement Metric */}
-        <Card className={momImproved ? 'border-green-200' : momWorse ? 'border-red-200' : undefined}>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-1">
-              <p className={`text-2xl font-bold ${momImproved ? 'text-green-600' : momWorse ? 'text-red-600' : 'text-muted-foreground'}`}>
-                {momImprovement.thisMonthAvgDays !== null ? `${momImprovement.thisMonthAvgDays}d` : '—'}
-              </p>
-              {momImprovement.delta !== null && (
-                <span className={`flex items-center text-xs font-medium ${momImproved ? 'text-green-600' : 'text-red-600'}`}>
-                  {momImproved
-                    ? <ArrowDownRight className="h-3.5 w-3.5" />
-                    : momWorse
-                      ? <ArrowUpRight className="h-3.5 w-3.5" />
-                      : <Minus className="h-3.5 w-3.5" />}
-                  {Math.abs(momImprovement.delta)}d
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">Avg Activation This Month</p>
-            {momImprovement.lastMonthAvgDays !== null && (
-              <p className="text-[10px] text-muted-foreground mt-1">
-                vs {momImprovement.lastMonthAvgDays}d last month
-                {momImprovement.delta !== null && (
-                  <Badge
-                    variant="secondary"
-                    className={`ml-1 text-[10px] px-1.5 py-0 ${momImproved ? 'text-green-700 bg-green-50' : momWorse ? 'text-red-700 bg-red-50' : ''}`}
-                  >
-                    {momImproved ? 'Faster' : momWorse ? 'Slower' : 'Same'}
-                  </Badge>
-                )}
-              </p>
-            )}
-            {momImprovement.lastMonthAvgDays === null && (
-              <p className="text-[10px] text-muted-foreground mt-1">No prior month data</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            <StatRow columns={2}>
+              <StatTile label="Never Activated (>30d)" value={data.neverActivated.length} />
+              <StatTile
+                label="Avg Activation This Month"
+                value={
+                  <span className="flex items-center gap-1.5">
+                    {momImprovement.thisMonthAvgDays !== null ? `${momImprovement.thisMonthAvgDays}d` : '—'}
+                    {momImprovement.delta !== null && (
+                      <span
+                        className={`flex items-center text-sm font-medium ${
+                          momImproved ? 'text-green-600' : momWorse ? 'text-red-600' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {momImproved ? (
+                          <ArrowDownRight className="h-3.5 w-3.5" />
+                        ) : momWorse ? (
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        ) : (
+                          <Minus className="h-3.5 w-3.5" />
+                        )}
+                        {Math.abs(momImprovement.delta)}d
+                      </span>
+                    )}
+                  </span>
+                }
+                meta={
+                  momImprovement.lastMonthAvgDays !== null
+                    ? `vs ${momImprovement.lastMonthAvgDays}d last month · ${
+                        momImproved ? 'Faster' : momWorse ? 'Slower' : 'Same'
+                      }`
+                    : 'No prior month data'
+                }
+              />
+            </StatRow>
+          </div>
+        </PanelSection>
+      </Panel>
 
-      {/* Histogram */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Days to First Transaction</CardTitle>
-          <CardDescription className="text-xs">How long merchants take to place their first order after sign-up</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection
+          label="Days to first transaction"
+          caption="How long merchants take to place their first order after sign-up"
+        >
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={data.histogram} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip formatter={(v: number) => [v, 'Merchants']} />
+              <Tooltip content={<AnalyticsTooltip />} />
               <Bar dataKey="count" name="Merchants" radius={[4, 4, 0, 0]}>
                 {data.histogram.map((_, i) => (
                   <Cell key={i} fill={BUCKET_COLORS[i % BUCKET_COLORS.length]} />
@@ -121,83 +101,69 @@ export function MerchantActivationTimeline() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
-      {/* Never Activated */}
       {data.neverActivated.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Never Activated Merchants</CardTitle>
-            <CardDescription className="text-xs">
-              Signed up 30+ days ago, no completed transactions. Onboarding checklist shows readiness (6 criteria).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
+        <Panel>
+          <PanelSection
+            label="Never activated merchants"
+            icon={ListChecks}
+            caption="Signed up 30+ days ago, no completed transactions. Onboarding checklist shows readiness (6 criteria)."
+          >
+            {/* `variant="data"` brings its own scrolling well — no extra wrapper. */}
+            <Table variant="data" className="min-w-[760px]">
+              <TableHeader className="[&_tr]:border-0">
                 <TableRow>
-                  <TableHead className="text-xs ">Merchant</TableHead>
-                  <TableHead className="text-xs text-right whitespace-nowrap">Days Since Sign-up</TableHead>
-                  <TableHead className="text-xs text-center">Logo</TableHead>
-                  <TableHead className="text-xs text-center">Location</TableHead>
-                  <TableHead className="text-xs text-center">Menu</TableHead>
-                  <TableHead className="text-xs text-center">Staff</TableHead>
-                  <TableHead className="text-xs text-center">Device</TableHead>
-                  <TableHead className="text-xs text-center">Order</TableHead>
-                  <TableHead className="text-xs text-center">Score</TableHead>
+                  <TableHead>Merchant</TableHead>
+                  <TableHead className="whitespace-nowrap text-right">Days Since Sign-up</TableHead>
+                  <TableHead className="text-center">Logo</TableHead>
+                  <TableHead className="text-center">Location</TableHead>
+                  <TableHead className="text-center">Menu</TableHead>
+                  <TableHead className="text-center">Staff</TableHead>
+                  <TableHead className="text-center">Device</TableHead>
+                  <TableHead className="text-center">Order</TableHead>
+                  <TableHead className="text-center">Score</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.neverActivated.map((m: NeverActivatedMerchant) => (
                   <TableRow key={m.id}>
-                    <TableCell className="text-sm py-2 font-medium ">
+                    <TableCell className="font-medium">
                       <span className="block truncate" title={m.name}>{m.name}</span>
                     </TableCell>
-                    <TableCell className="text-sm py-2 text-right font-mono">{m.daysSinceCreation}d</TableCell>
-                    <TableCell className="py-2 text-center"><CheckIcon ok={m.hasLogo} /></TableCell>
-                    <TableCell className="py-2 text-center"><CheckIcon ok={m.hasLocation} /></TableCell>
-                    <TableCell className="py-2 text-center"><CheckIcon ok={m.hasMenu} /></TableCell>
-                    <TableCell className="py-2 text-center"><CheckIcon ok={m.hasStaff} /></TableCell>
-                    <TableCell className="py-2 text-center"><CheckIcon ok={m.hasDevice} /></TableCell>
-                    <TableCell className="py-2 text-center"><CheckIcon ok={false} /></TableCell>
-                    <TableCell className="py-2 text-center">
-                      <ScoreBadge score={m.onboardingScore} />
+                    <TableCell className="text-right tabular-nums">{m.daysSinceCreation}d</TableCell>
+                    <TableCell className="text-center"><CheckIcon ok={m.hasLogo} /></TableCell>
+                    <TableCell className="text-center"><CheckIcon ok={m.hasLocation} /></TableCell>
+                    <TableCell className="text-center"><CheckIcon ok={m.hasMenu} /></TableCell>
+                    <TableCell className="text-center"><CheckIcon ok={m.hasStaff} /></TableCell>
+                    <TableCell className="text-center"><CheckIcon ok={m.hasDevice} /></TableCell>
+                    <TableCell className="text-center"><CheckIcon ok={false} /></TableCell>
+                    <TableCell className="text-center">
+                      <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                        {m.onboardingScore}/6
+                      </span>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-            </div>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       )}
     </div>
   )
 }
 
+/**
+ * A checklist mark. Text-led per §4.6b — the glyph carries the meaning, so the
+ * tint is reinforcement rather than the only signal, and it stays legible to a
+ * colour-blind reader.
+ */
 function CheckIcon({ ok }: { ok: boolean }) {
   return (
-    <span className={`text-base ${ok ? 'text-green-500' : 'text-red-400'}`}>
+    <span className={ok ? 'text-base text-green-600' : 'text-base text-muted-foreground'}>
       {ok ? '✓' : '✗'}
-    </span>
-  )
-}
-
-function ScoreBadge({ score }: { score: number }) {
-  const colorMap: Record<number, string> = {
-    5: 'text-green-600 bg-green-50',
-    4: 'text-blue-600 bg-blue-50',
-    3: 'text-amber-600 bg-amber-50',
-    2: 'text-orange-600 bg-orange-50',
-    1: 'text-red-600 bg-red-50',
-    0: 'text-red-700 bg-red-50',
-  }
-  const color = colorMap[score] ?? colorMap[0]
-  return (
-    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${color}`}>
-      {score}/6
     </span>
   )
 }
