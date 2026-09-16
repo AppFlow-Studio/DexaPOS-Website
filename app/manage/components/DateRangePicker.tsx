@@ -100,8 +100,19 @@ export function DateRangePicker({ from, to, onChange }: DateRangePickerProps) {
             </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto rounded-xl border p-0 shadow-lg" align="end">
-          <div className="w-[19rem] space-y-3 p-4">
+        {/* Radix anchors to the trigger, and the trigger sits at the left of
+            its row — so on a phone an `align="end"` panel lands hard against
+            one side rather than centred. `collisionPadding` keeps it off the
+            viewport edge, and the panel below is sized to the full space
+            between those gutters, which leaves Radix no room to favour a side:
+            the result is centred. At `sm` and up it returns to a 19rem panel
+            aligned to the trigger, which is the right behaviour on desktop. */}
+        <PopoverContent
+          className="w-auto rounded-xl border p-0 shadow-lg"
+          align="end"
+          collisionPadding={16}
+        >
+          <div className="w-[calc(100vw-2rem)] space-y-3 p-4 sm:w-[19rem]">
             <div className="flex items-baseline justify-between gap-2">
               <label className="text-sm font-medium text-foreground">
                 Select range

@@ -31,13 +31,30 @@ import type { MerchantHealthSummary } from '@/types/merchant'
  * What changed is the redundancy: the tier previously drove the card border,
  * the card fill, the score circle, a corner badge AND the progress bar — five
  * signals for one fact, which turned a list of 20 merchants into a wall of
- * colour where nothing stood out. The score and its bar now carry it, on a
- * neutral card.
+ * colour where nothing stood out. The score circle and severity badge now
+ * carry the tier, on a neutral card.
+ *
+ * The progress bar is kept from `sm` up, where it adds an at-a-glance scan of
+ * relative health across a list. It stays hidden on phones: there it only
+ * restated the score numeral while pushing the alerts — the part worth acting
+ * on — below the fold.
  */
 const HEALTH_TONE = {
-    green: { text: 'text-green-600 dark:text-green-400', bar: 'bg-green-500', label: 'Optimal' },
-    yellow: { text: 'text-yellow-600 dark:text-yellow-400', bar: 'bg-yellow-500', label: 'Monitor' },
-    red: { text: 'text-red-600 dark:text-red-400', bar: 'bg-red-500', label: 'Critical' },
+    green: {
+        text: 'text-green-600 dark:text-green-400',
+        bar: 'bg-green-600 dark:bg-green-400',
+        label: 'Optimal',
+    },
+    yellow: {
+        text: 'text-yellow-600 dark:text-yellow-400',
+        bar: 'bg-yellow-600 dark:bg-yellow-400',
+        label: 'Monitor',
+    },
+    red: {
+        text: 'text-red-600 dark:text-red-400',
+        bar: 'bg-red-600 dark:bg-red-400',
+        label: 'Critical',
+    },
 } as const
 
 /** `DS-CTL-09` — one neutral pill; the word carries the meaning. */
@@ -202,7 +219,10 @@ function HealthGridSkeleton() {
                             <div className="min-w-0 flex-1 space-y-2">
                                 <Skeleton className="h-5 w-40 max-w-[60%]" />
                                 <Skeleton className="h-4 w-32 max-w-[50%]" />
-                                <Skeleton className="h-2 w-full rounded-full" />
+                                {/* Mirrors the score bar's sm+ visibility so the
+                                    card does not change height on load. */}
+                                <Skeleton className="hidden h-2 w-full rounded-full sm:block" />
+                                <Skeleton className="h-4 w-52 max-w-[80%]" />
                                 <Skeleton className="h-3 w-48 max-w-[70%]" />
                             </div>
                         </div>
@@ -309,9 +329,9 @@ function HealthRow({
     }
 
     const tone = HEALTH_TONE[merchant.healthTier] ?? HEALTH_TONE.red
-
-    // Calculate health score percentage for visual bar
-    const healthPercentage = Math.min(100, (merchant.healthScore / 100) * 100)
+    // Clamped both ways: an out-of-range score would otherwise render a bar
+    // wider than its track or a negative width.
+    const healthPercentage = Math.max(0, Math.min(100, merchant.healthScore))
 
     return (
         // A real button: the row was a click-only Card, so the whole health
@@ -321,13 +341,15 @@ function HealthRow({
             onClick={onClick}
             className="block w-full min-w-0 rounded-3xl border bg-card p-5 text-left transition-colors hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-            <div className="flex min-w-0 flex-col gap-4">
-                {/* Top Row: Score, Name, Alerts */}
+            <div className="flex min-w-0 flex-col gap-3">
+                {/* Top Row: Score, Name, Type */}
                 <div className="flex min-w-0 items-start gap-4">
                     <div
                         className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-muted/60 text-2xl font-bold tabular-nums ${tone.text}`}
+                        role="img"
+                        aria-label={`Health score ${merchant.healthScore} of 100 — ${tone.label}`}
                     >
-                        {merchant.healthScore}
+                        <span aria-hidden="true">{merchant.healthScore}</span>
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -337,51 +359,59 @@ function HealthRow({
                         </div>
 
                         {merchant.type && (
-                            <p className="mb-2 text-sm capitalize text-muted-foreground">
+                            <p className="text-sm capitalize text-muted-foreground">
                                 {merchant.type}
                             </p>
                         )}
 
-                        {/* Health Score Bar */}
-                        <div className="mb-3">
+                        {/* Score bar: tablet and up only. On a phone it pushed
+                            the alerts — the actionable part — below the fold,
+                            which is why it was dropped; at sm+ there is room
+                            for it beside the stats. aria-hidden because the
+                            score numeral above already announces the same
+                            value and tier, and a second meter would just
+                            double-announce it. */}
+                        <div
+                            className="mt-2 hidden h-2 overflow-hidden rounded-full bg-muted sm:block"
+                            aria-hidden="true"
+                        >
                             <div
-                                className="h-2 overflow-hidden rounded-full bg-muted"
-                                role="meter"
-                                aria-valuenow={merchant.healthScore}
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                                aria-label={`Health score ${merchant.healthScore} of 100 — ${tone.label}`}
-                            >
-                                <div
-                                    className={`h-full rounded-full transition-all duration-300 motion-reduce:transition-none ${tone.bar}`}
-                                    style={{ width: `${healthPercentage}%` }}
-                                />
-                            </div>
+                                className={`h-full rounded-full transition-all duration-300 motion-reduce:transition-none ${tone.bar}`}
+                                style={{ width: `${healthPercentage}%` }}
+                            />
                         </div>
-
-                        {/* Alerts or All Systems Go */}
-                        {merchant.alerts.length > 0 ? (
-                            <div className="flex flex-col gap-1">
-                                {merchant.alerts.slice(0, 2).map((alert, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 text-sm">
-                                        <AlertTriangle className={`h-4 w-4 shrink-0 ${tone.text}`} />
-                                        <span className="text-muted-foreground">{alert}</span>
-                                    </div>
-                                ))}
-                                {merchant.alerts.length > 2 && (
-                                    <p className="ml-6 text-xs text-muted-foreground">
-                                        +{merchant.alerts.length - 2} more issue{merchant.alerts.length - 2 !== 1 ? 's' : ''}
-                                    </p>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                <span>All systems optimal</span>
-                            </div>
-                        )}
                     </div>
                 </div>
+
+                {/* Alerts or All Systems Go.
+                    Deliberately a sibling of the score row, not a child of its
+                    text column: nested there, every issue started 80px in —
+                    past the score circle and its gap — which on a phone reads
+                    as centred text and wraps the messages early. At the row's
+                    own level they start at the card's left edge and get the
+                    full width. From `sm` up they re-indent to line up under the
+                    merchant name — and under the score bar, which shares that
+                    same 80px column offset. */}
+                {merchant.alerts.length > 0 ? (
+                    <div className="flex min-w-0 flex-col gap-1 sm:pl-20">
+                        {merchant.alerts.slice(0, 2).map((alert, idx) => (
+                            <div key={idx} className="flex items-start gap-2 text-sm">
+                                <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${tone.text}`} />
+                                <span className="min-w-0 text-muted-foreground">{alert}</span>
+                            </div>
+                        ))}
+                        {merchant.alerts.length > 2 && (
+                            <p className="text-xs text-muted-foreground">
+                                +{merchant.alerts.length - 2} more issue{merchant.alerts.length - 2 !== 1 ? 's' : ''}
+                            </p>
+                        )}
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground sm:pl-20">
+                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                        <span>All systems optimal</span>
+                    </div>
+                )}
 
                 {/* Bottom Row: Stats Grid */}
                 <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4">

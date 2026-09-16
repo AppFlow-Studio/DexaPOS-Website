@@ -997,7 +997,7 @@ Updated as each route family lands. `—` means not yet converted.
 
 | Route family | Routes | Layout components | Status |
 |---|---|---|---|
-| HQ home / analytics / health | `/manage`, `/manage/analytics`, `/manage/health` | — | pending PR 1 |
+| HQ home / analytics / health | `/manage`, `/manage/analytics`, `/manage/health` | `app/manage/components/**` (14), `app/manage/analytics/components/**` (15, **not yet converted**) | `/manage` ✅, `/manage/health` ✅, `/manage/analytics` **shell only** — see note below |
 | Merchant + org operations | `/manage/merchants`, `…/new`, `/manage/create-merchant`, `/manage/organizations`, `…/[organizationId]`, `…/create-organization` | — | pending PR 2 |
 | Merchant detail workspace | `/manage/merchants/[merchantId]/**` (99 files) | — | pending PR 3, split by tab |
 | Money movement | `/manage/transactions`, `/manage/disputes`, `/manage/platform-fees`, `/manage/subscriptions`, `/manage/cash-drawers`, `/manage/reports/tax` | — | pending PR 4 |
@@ -1006,3 +1006,24 @@ Updated as each route family lands. `—` means not yet converted.
 
 `/manage/settings` is a bare `redirect()` and `/manage/unauthorized` is a
 minimal error surface — **no change** for both.
+
+> ⚠️ **`/manage/analytics` is converted at the shell only.** The page now uses
+> `PageShell as="div"` + `PageHeader`, a `Panel`/`StatRow` KPI header and a
+> DS-CTL-05 tab rail, and passes the DoD `<h1>` grep — but **45 `<Card>` remain
+> inline in its `overview` and `revenue` tab bodies, and all 15 files in
+> `app/manage/analytics/components/` (~6,200 lines, 415 `<Card>`) are untouched.**
+> Family 1 is not complete until those land.
+>
+> Two things to know before picking that up:
+>
+> 1. **The route audit matrix undercounts this route by ~7×.** It counts route
+>    `page.tsx` files only, so the co-located `analytics/components/` directory is
+>    invisible to it. Real scope is 16 files / 484 cards, not one file / 69.
+> 2. **`/manage/analytics` and the Analytics tab on `/manage` are not duplicates.**
+>    They share zero components and zero query hooks — `AnalyticsContent` reads
+>    `use-platform-analytics-layer2` (4 aggregate hooks), the route reads
+>    `use-platform-analytics` (31 granular hooks) plus its own 15 components. The
+>    three same-named tabs render different content. So the `/manage/health`
+>    de-dup move does **not** apply here: collapsing the route onto
+>    `AnalyticsContent` would delete live surfaces. Which metrics survive is a
+>    product decision, not a refactor.

@@ -14,7 +14,14 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { usePlatformGrowthMetrics } from '@/lib/queries/use-platform-analytics-layer2'
-import { AnalyticsPanel, AnalyticsTooltip, SERIES } from './analytics-primitives'
+import { useIsMobile } from '@/hooks/use-mobile'
+import {
+  AnalyticsPanel,
+  AnalyticsTooltip,
+  SERIES,
+  CategoryTick,
+  CATEGORY_AXIS_WIDTH,
+} from './analytics-primitives'
 
 interface GrowthSectionProps {
   from: string
@@ -23,6 +30,8 @@ interface GrowthSectionProps {
 
 export function GrowthSection({ from, to }: GrowthSectionProps) {
   const { data, isLoading } = usePlatformGrowthMetrics(from, to)
+  const isMobile = useIsMobile()
+  const axisWidth = isMobile ? CATEGORY_AXIS_WIDTH.mobile : CATEGORY_AXIS_WIDTH.desktop
 
   if (isLoading) {
     return (
@@ -108,8 +117,8 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
             <YAxis
               dataKey="stage"
               type="category"
-              width={120}
-              tick={CHART_TICK}
+              width={axisWidth}
+              tick={<CategoryTick width={axisWidth} />}
               tickLine={false}
               axisLine={false}
             />

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { subDays } from 'date-fns'
 import { BarChart3 } from 'lucide-react'
@@ -43,6 +43,42 @@ export function AnalyticsContent() {
     }
   )
 
+  // Controlled so the strip can scroll the active tab into view. On a phone the
+  // four pills overflow, so selecting one at the far end (or restoring a tab
+  // that is scrolled off) would otherwise leave it out of sight.
+  const [activeTab, setActiveTab] = useState(TABS[0].value)
+  const tabListRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const list = tabListRef.current
+    if (!list) return
+
+    // Nothing to scroll when the strip fits, which is the desktop case.
+    if (list.scrollWidth <= list.clientWidth) return
+
+    const active = list.querySelector<HTMLElement>('[data-state="active"]')
+    if (!active) return
+
+    // Centre the active pill within the strip rather than using
+    // scrollIntoView, which would also scroll the page vertically to reach it.
+    // Measured with rects rather than offsetLeft: the list is not a positioned
+    // ancestor, so offsetLeft would be relative to some outer element and the
+    // centring maths would be off by that element's offset.
+    const listRect = list.getBoundingClientRect()
+    const activeRect = active.getBoundingClientRect()
+    const delta =
+      activeRect.left - listRect.left - (listRect.width - activeRect.width) / 2
+    const target = list.scrollLeft + delta
+    const max = list.scrollWidth - list.clientWidth
+
+    list.scrollTo({
+      left: Math.max(0, Math.min(target, max)),
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'auto'
+        : 'smooth',
+    })
+  }, [activeTab])
+
   return (
     <div className="min-w-0 space-y-6">
       <Panel>
@@ -59,8 +95,12 @@ export function AnalyticsContent() {
         </PanelSection>
       </Panel>
 
-      <Tabs defaultValue="growth" className="min-w-0 space-y-4">
-        <TabsList className={TAB_LIST}>
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="min-w-0 space-y-4"
+      >
+        <TabsList ref={tabListRef} className={TAB_LIST}>
           {TABS.map(({ value, label }) => (
             <TabsTrigger key={value} value={value} className={TAB_TRIGGER}>
               {label}

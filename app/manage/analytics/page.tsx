@@ -5,6 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PageShell } from '@/components/dashboard/shell/PageShell'
+import { PageHeader } from '@/components/dashboard/shell/PageHeader'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
 import {
     BarChart3,
     TrendingDown,
@@ -91,6 +96,18 @@ function fmtGPV(n: number) {
     return `$${n.toFixed(2)}`
 }
 
+// ── Tab pill ──────────────────────────────────────────────────────────────────
+
+/**
+ * `TAB_PILL` (DS-CTL-05), written out as a literal.
+ *
+ * ⚠️ Deliberately not imported from `components/dashboard/shell/tokens.ts`:
+ * Tailwind does not scan `.ts` files, so a class reaching a `.tsx` element only
+ * via a `.ts` module gets no CSS rule and renders unstyled (C7).
+ */
+const TAB_PILL_CLASS =
+    'shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border'
+
 // ── Tab label helper ──────────────────────────────────────────────────────────
 
 function TabLabel({
@@ -162,15 +179,20 @@ export default function AnalyticsPage() {
     const { data: kpiData, isLoading: kpiLoading } = usePlatformKPIs()
     const { data: salesTrend, isLoading: salesTrendLoading } = usePlatformSalesTrend()
 
+    /**
+     * Returns inline content, not a block: `StatTile`'s `meta` already renders a
+     * `<p>`, and nesting one inside another is invalid HTML the browser silently
+     * unnests — which breaks the tile's layout.
+     */
     function fmtTrend(change: number | undefined) {
-        if (change === undefined || change === null) return null
+        if (change === undefined || change === null) return undefined
         const isPos = change >= 0
         return (
-            <p className="text-xs text-muted-foreground">
+            <>
                 <span className={isPos ? 'text-green-600' : 'text-red-600'}>
                     {isPos ? '+' : ''}{change.toFixed(1)}%
                 </span>{' '}from prior period
-            </p>
+            </>
         )
     }
 
@@ -203,7 +225,7 @@ export default function AnalyticsPage() {
     }
 
     return (
-        <div className="space-y-6 min-w-0 overflow-x-hidden">
+        <PageShell as="div">
             <style>{`
         @media print {
           /* Hide navigation, sidebar, header, and action buttons */
@@ -223,140 +245,108 @@ export default function AnalyticsPage() {
         }
       `}</style>
 
-            {/* ══════════════════════════════════════════════════════════════════════
-          PAGE HEADER
-      ══════════════════════════════════════════════════════════════════════ */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
-                    <p className="text-muted-foreground">
-                        Platform-wide intelligence across all merchants, devices, and channels
-                    </p>
-                </div>
-                <div className="flex items-center space-x-2 no-print flex-shrink-0">
-                    <Button variant="outline" onClick={handleExportPDF}>Export Report</Button>
-                </div>
-            </div>
+            <PageHeader
+                title="Analytics"
+                subtitle="Platform-wide intelligence across all merchants, devices, and channels"
+                actions={
+                    <div className="no-print">
+                        <Button variant="outline" size="sm" onClick={handleExportPDF}>
+                            Export Report
+                        </Button>
+                    </div>
+                }
+            />
 
             {/* ══════════════════════════════════════════════════════════════════════
           PERSISTENT KPI HEADER — always visible above tabs
       ══════════════════════════════════════════════════════════════════════ */}
-            <div className="grid gap-4 grid-cols-2 lg:grid-cols-6">
-                <Card className="min-w-0 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total GPV (30d)</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
-                            <>
-                                <div className="text-2xl font-bold">{kpiData ? fmtGPV(kpiData.totalGPV30d) : '—'}</div>
-                                {fmtTrend(kpiData?.gpvChange)}
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-                <Card className="min-w-0 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Merchants (7d)</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
-                            <>
-                                <div className="text-2xl font-bold">{kpiData?.activeMerchants7d.toLocaleString() ?? '—'}</div>
-                                <p className="text-xs text-muted-foreground">{kpiData?.totalMerchants.toLocaleString()} total</p>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-                <Card className="min-w-0 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Orders (30d)</CardTitle>
-                        <CreditCard className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
-                            <>
-                                <div className="text-2xl font-bold">{kpiData?.totalOrders30d.toLocaleString() ?? '—'}</div>
-                                {fmtTrend(kpiData?.ordersChange)}
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-                <Card className="min-w-0 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Avg Order Value</CardTitle>
-                        <Activity className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
-                            <>
-                                <div className="text-2xl font-bold">{kpiData?.avgOrderValue ? `$${kpiData.avgOrderValue.toFixed(2)}` : '—'}</div>
-                                <p className="text-xs text-muted-foreground">
-                                    <span className="text-green-600">{kpiData?.cashPercent ?? 0}%</span> cash ·{' '}
-                                    <span className="text-blue-600">{kpiData?.cardPercent ?? 0}%</span> card
-                                </p>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-                <Card className="min-w-0 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Devices</CardTitle>
-                        <Cpu className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
-                            <>
-                                <div className="text-2xl font-bold">{kpiData?.activeDevices?.toLocaleString() ?? '—'}</div>
-                                <p className="text-xs text-muted-foreground">Online now</p>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-                <Card className="min-w-0 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Locations</CardTitle>
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
-                            <>
-                                <div className="text-2xl font-bold">{kpiData?.totalLocations?.toLocaleString() ?? '—'}</div>
-                                <p className="text-xs text-muted-foreground">Active locations</p>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
+            {/* Six figures, so two 3-up `StatRow`s rather than one row: `StatRow`
+                tops out at four columns, and six tiles on one line are unreadably
+                narrow on anything short of a wide desktop. */}
+            <Panel>
+                <PanelSection label="Platform totals" icon={BarChart3}>
+                    <div className="space-y-6">
+                        <StatRow columns={3}>
+                            <StatTile
+                                label="Total GPV (30d)"
+                                icon={<DollarSign />}
+                                isLoading={kpiLoading}
+                                value={kpiData ? fmtGPV(kpiData.totalGPV30d) : '—'}
+                                meta={fmtTrend(kpiData?.gpvChange)}
+                            />
+                            <StatTile
+                                label="Active Merchants (7d)"
+                                icon={<Users />}
+                                isLoading={kpiLoading}
+                                value={kpiData?.activeMerchants7d.toLocaleString() ?? '—'}
+                                meta={kpiData ? `${kpiData.totalMerchants.toLocaleString()} total` : undefined}
+                            />
+                            <StatTile
+                                label="Total Orders (30d)"
+                                icon={<CreditCard />}
+                                isLoading={kpiLoading}
+                                value={kpiData?.totalOrders30d.toLocaleString() ?? '—'}
+                                meta={fmtTrend(kpiData?.ordersChange)}
+                            />
+                        </StatRow>
+
+                        <StatRow columns={3}>
+                            <StatTile
+                                label="Avg Order Value"
+                                icon={<Activity />}
+                                isLoading={kpiLoading}
+                                value={kpiData?.avgOrderValue ? `$${kpiData.avgOrderValue.toFixed(2)}` : '—'}
+                                meta={`${kpiData?.cashPercent ?? 0}% cash · ${kpiData?.cardPercent ?? 0}% card`}
+                            />
+                            <StatTile
+                                label="Active Devices"
+                                icon={<Cpu />}
+                                isLoading={kpiLoading}
+                                value={kpiData?.activeDevices?.toLocaleString() ?? '—'}
+                                meta="Online now"
+                            />
+                            <StatTile
+                                label="Total Locations"
+                                icon={<MapPin />}
+                                isLoading={kpiLoading}
+                                value={kpiData?.totalLocations?.toLocaleString() ?? '—'}
+                                meta="Active locations"
+                            />
+                        </StatRow>
+                    </div>
+                </PanelSection>
+            </Panel>
 
             {/* ══════════════════════════════════════════════════════════════════════
           6-TAB ANALYTICS SUITE
       ══════════════════════════════════════════════════════════════════════ */}
             <Tabs defaultValue="overview" className="space-y-4">
 
-                {/* Tab bar */}
-                <TabsList className="flex-wrap h-auto gap-1 p-1">
-                    <TabsTrigger value="overview" className="gap-1.5">
-                        <TabLabel icon={BarChart3} label="Overview" />
-                    </TabsTrigger>
-                    <TabsTrigger value="revenue" className="gap-1.5">
-                        <TabLabel icon={DollarSign} label="Revenue & Risk" badge={churnData?.totalAtRisk || undefined} />
-                    </TabsTrigger>
-                    <TabsTrigger value="merchants" className="gap-1.5">
-                        <TabLabel icon={Building2} label="Merchant Health" />
-                    </TabsTrigger>
-                    <TabsTrigger value="operations" className="gap-1.5">
-                        <TabLabel icon={Utensils} label="Operations" />
-                    </TabsTrigger>
-                    <TabsTrigger value="fleet" className="gap-1.5">
-                        <TabLabel icon={Cpu} label="Device Fleet" />
-                    </TabsTrigger>
-                    <TabsTrigger value="growth" className="gap-1.5">
-                        <TabLabel icon={Globe} label="Growth" />
-                    </TabsTrigger>
-                </TabsList>
+                {/* Tab bar — DS-CTL-05. Scrolls rather than wraps: six labelled
+                    triggers do not fit a phone, and a wrapped rail reads as two
+                    rows of unrelated controls. */}
+                <div className="w-full min-w-0 overflow-x-auto pb-1">
+                    <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                        <TabsTrigger value="overview" className={TAB_PILL_CLASS}>
+                            <TabLabel icon={BarChart3} label="Overview" />
+                        </TabsTrigger>
+                        <TabsTrigger value="revenue" className={TAB_PILL_CLASS}>
+                            <TabLabel icon={DollarSign} label="Revenue & Risk" badge={churnData?.totalAtRisk || undefined} />
+                        </TabsTrigger>
+                        <TabsTrigger value="merchants" className={TAB_PILL_CLASS}>
+                            <TabLabel icon={Building2} label="Merchant Health" />
+                        </TabsTrigger>
+                        <TabsTrigger value="operations" className={TAB_PILL_CLASS}>
+                            <TabLabel icon={Utensils} label="Operations" />
+                        </TabsTrigger>
+                        <TabsTrigger value="fleet" className={TAB_PILL_CLASS}>
+                            <TabLabel icon={Cpu} label="Device Fleet" />
+                        </TabsTrigger>
+                        <TabsTrigger value="growth" className={TAB_PILL_CLASS}>
+                            <TabLabel icon={Globe} label="Growth" />
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
 
                 {/* ══════════════════════════════════════════════════════════════════
             TAB 1 — OVERVIEW
@@ -393,7 +383,7 @@ export default function AnalyticsPage() {
                                     <CardTitle>GPV Trend (Last 30 Days)</CardTitle>
                                     <CardDescription>Daily Gross Payment Volume with prior period overlay</CardDescription>
                                 </div>
-                                <div className="flex gap-1 border rounded-md p-0.5 shrink-0">
+                                <div className="flex gap-1 p-0.5 shrink-0">
                                     <Button size="sm" variant={chartMetric === 'revenue' ? 'default' : 'ghost'} className="h-7 px-3 text-xs" onClick={() => setChartMetric('revenue')}>GPV</Button>
                                     <Button size="sm" variant={chartMetric === 'orders' ? 'default' : 'ghost'} className="h-7 px-3 text-xs" onClick={() => setChartMetric('orders')}>Order Count</Button>
                                 </div>
@@ -985,6 +975,6 @@ export default function AnalyticsPage() {
                 </TabsContent>
 
             </Tabs>
-        </div>
+        </PageShell>
     )
 }

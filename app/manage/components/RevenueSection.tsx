@@ -28,7 +28,14 @@ import {
 } from '@/components/dashboard/orders/analytics/AnalyticsPrimitives'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePlatformRevenueMetrics } from '@/lib/queries/use-platform-analytics-layer2'
-import { AnalyticsPanel, AnalyticsTooltip, SERIES } from './analytics-primitives'
+import {
+  AnalyticsPanel,
+  AnalyticsTooltip,
+  SERIES,
+  CategoryTick,
+  CATEGORY_AXIS_WIDTH,
+} from './analytics-primitives'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 interface RevenueSectionProps {
   from: string
@@ -45,6 +52,19 @@ const legendLabel = (value: string) => (
 
 export function RevenueSection({ from, to }: RevenueSectionProps) {
   const { data, isLoading } = usePlatformRevenueMetrics(from, to)
+  const isMobile = useIsMobile()
+  const axisWidth = isMobile ? CATEGORY_AXIS_WIDTH.mobile : CATEGORY_AXIS_WIDTH.desktop
+
+  // Height scales with the row count instead of a flat 300px. At 10 merchants
+  // that gave each row ~26px, which a wrapped two/three-line merchant name
+  // (11px per line) overflows — so adjacent labels collided. 44px a row on a
+  // phone leaves clear space between them; the chart just gets taller and the
+  // page scrolls, which is the right trade on mobile.
+  const merchantRows = (data?.revenueByMerchant || []).slice(0, 10)
+  const merchantChartHeight = Math.max(
+    300,
+    merchantRows.length * (isMobile ? 44 : 34) + 40
+  )
 
   if (isLoading) {
     return (
@@ -122,21 +142,24 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
 
       <div className="grid min-w-0 gap-6 md:grid-cols-2">
         <AnalyticsPanel title="Revenue by Merchant" caption="Top 10 merchants">
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={(data?.revenueByMerchant || []).slice(0, 10)} layout="vertical" margin={{ left: 80 }}>
+          <ResponsiveContainer width="100%" height={merchantChartHeight}>
+            {/* No `margin.left` here: the YAxis `width` already reserves the
+                label gutter, so an extra 80px margin indented the whole plot a
+                second time and left the bars a sliver of a phone screen. */}
+            <BarChart data={merchantRows} layout="vertical">
               <CartesianGrid {...CHART_GRID} horizontal={false} />
               <XAxis type="number" tick={CHART_TICK} tickLine={false} axisLine={false} />
               <YAxis
                 dataKey="merchant_name"
                 type="category"
-                tick={CHART_TICK}
+                tick={<CategoryTick width={axisWidth} />}
                 tickLine={false}
                 axisLine={false}
-                width={80}
+                width={axisWidth}
               />
               <Tooltip content={<AnalyticsTooltip formatter={usd} />} cursor={{ fill: CHART_CURSOR_FILL }} />
               <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
-                {(data?.revenueByMerchant || []).slice(0, 10).map((_, index) => (
+                {merchantRows.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={SERIES[index % SERIES.length]} />
                 ))}
               </Bar>

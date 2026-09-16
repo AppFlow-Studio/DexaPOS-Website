@@ -51,7 +51,15 @@ function Calendar({
         day: "relative flex aspect-square min-h-9 items-center justify-center p-0 text-center text-sm",
         day_button: cn(
           buttonVariants({ variant: "ghost" }),
-          "size-full min-h-9 rounded-md p-0 font-normal tabular-nums aria-selected:opacity-100"
+          "size-full min-h-9 rounded-md p-0 font-normal tabular-nums aria-selected:opacity-100",
+          // --ring is the same violet as --primary, so the inherited ring is
+          // invisible (1:1 contrast) on a selected day sitting in the
+          // primary-filled range band. A foreground-coloured outline is drawn
+          // instead: it contrasts against both the white popover (unselected
+          // days) and the violet band (selected days), so focus stays visible
+          // everywhere. z-10 keeps the outline above neighbouring cells.
+          // (WCAG 2.2 focus appearance: 3:1 against adjacent colours.)
+          "focus-visible:ring-foreground focus-visible:ring-2 focus-visible:z-10"
         ),
         selected:
           "[&>button]:bg-primary [&>button]:font-semibold [&>button]:text-primary-foreground [&>button:hover]:bg-primary [&>button:hover]:text-primary-foreground",

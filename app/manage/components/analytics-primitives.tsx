@@ -27,6 +27,118 @@ import { ChartTooltipPanel } from '@/components/dashboard/orders/analytics/Analy
 export const SERIES = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'] as const
 
 /**
+ * Y-axis gutter for horizontal (`layout="vertical"`) bar charts.
+ *
+ * These charts used a fixed 80-120px label gutter. That is fine at desktop
+ * width but on a 320-390px phone it ate a third to a half of the chart, so the
+ * bars were squeezed into what was left and the labels still wrapped. Mobile
+ * gets a narrow gutter and `CategoryTick` below wraps the label into it.
+ */
+export const CATEGORY_AXIS_WIDTH = { mobile: 88, desktop: 120 } as const
+
+/**
+ * Wrapping tick for a category axis.
+ *
+ * Recharts renders a tick as a single `<text>` that it will happily let
+ * overflow or clip — there is no wrapping. This splits the label on word
+ * boundaries into at most `maxLines` rows sized to the axis gutter, so a
+ * narrow gutter stays readable instead of truncating to "Merchant…".
+ */
+export function CategoryTick({
+  x,
+  y,
+  payload,
+  width = CATEGORY_AXIS_WIDTH.mobile,
+  // Two lines, not three: a 3-line stack is 22px tall and overflowed its row in
+  // a 10-bar chart, so neighbouring labels visually collided. Anything longer
+  // is ellipsised, and the full name is still in the tooltip.
+  maxLines = 2,
+}: {
+  x?: number
+  y?: number
+  payload?: { value?: string | number }
+  width?: number
+  maxLines?: number
+}) {
+  const label = String(payload?.value ?? '')
+  // ~7px per character at the 12px tick size, minus a 4px breathing gap before
+  // the plot. Erring wide matters more than packing tightly: underestimating
+  // overflows the gutter and the label gets clipped at the panel edge.
+  const perLine = Math.max(5, Math.floor((width - 4) / 7))
+
+  const words = label.split(/\s+/).filter(Boolean)
+  const lines: string[] = []
+  let current = ''
+  let truncated = false
+
+  for (let i = 0; i < words.length; i++) {
+    if (lines.length === maxLines) {
+      truncated = true
+      break
+    }
+    const word = words[i]
+    const candidate = current ? `${current} ${word}` : word
+    if (candidate.length <= perLine) {
+      current = candidate
+      continue
+    }
+    if (current) {
+      lines.push(current)
+      current = ''
+      if (lines.length === maxLines) {
+        truncated = true
+        break
+      }
+    }
+    // A single word wider than the gutter has no break point of its own, so
+    // split it hard rather than letting it bleed past the axis.
+    let rest = word
+    while (rest.length > perLine && lines.length < maxLines) {
+      lines.push(rest.slice(0, perLine))
+      rest = rest.slice(perLine)
+    }
+    if (lines.length === maxLines) {
+      if (rest) truncated = true
+      break
+    }
+    current = rest
+  }
+
+  if (current) {
+    if (lines.length < maxLines) lines.push(current)
+    else truncated = true
+  }
+
+  // Signal dropped text rather than losing it silently.
+  if (truncated && lines.length) {
+    const last = lines[lines.length - 1]
+    lines[lines.length - 1] =
+      last.length >= perLine ? `${last.slice(0, Math.max(1, perLine - 1))}…` : `${last}…`
+  }
+
+  // Centre the block on the tick: shift up by half the stack's extra height.
+  const lineHeight = 11
+  const dyStart = -(((lines.length - 1) * lineHeight) / 2)
+
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor="end"
+      fill="var(--muted-foreground)"
+      fontSize={12}
+      dominantBaseline="middle"
+    >
+      {lines.map((line, i) => (
+        <tspan key={i} x={x} dy={i === 0 ? dyStart : lineHeight}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  )
+}
+
+/**
  * One analytics block: a titled panel wrapping a chart or a table.
  *
  * `flush` drops the section's own padding for a table, which brings its own

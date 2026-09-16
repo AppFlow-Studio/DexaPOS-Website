@@ -179,6 +179,32 @@ export function AdminInviteWizard({
   }, [flowSteps, currentStep]);
 
   const currentStepIndex = flowSteps.findIndex((s) => s.key === currentStep);
+
+  // Mobile step strip scrolls horizontally with a hidden scrollbar, so the
+  // active chip can sit off-screen with nothing to hint at it. Pull it into
+  // view whenever the step changes.
+  const stepStripRef = React.useRef<HTMLDivElement>(null);
+  // The body keeps its scroll offset across steps, so a step entered after
+  // scrolling down would open part-way in — with the scrollbar hidden there is
+  // nothing to signal that. Reset to the top on each step.
+  const bodyScrollRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    bodyScrollRef.current?.scrollTo({ top: 0 });
+  }, [currentStepIndex]);
+  React.useEffect(() => {
+    const strip = stepStripRef.current;
+    if (!strip) return;
+    const activeChip = strip.children[currentStepIndex] as HTMLElement | undefined;
+    if (!activeChip) return;
+    // scrollTo on the strip itself, not scrollIntoView — the latter also scrolls
+    // ancestors, which would yank the dialog body out from under the user.
+    strip.scrollTo({
+      left: activeChip.offsetLeft - (strip.clientWidth - activeChip.offsetWidth) / 2,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+  }, [currentStepIndex]);
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   const filteredMerchants = React.useMemo(() => {
@@ -361,7 +387,7 @@ export function AdminInviteWizard({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
       {children && <DialogTrigger asChild>{children}</DialogTrigger>}
-      <DialogContent className="flex w-[calc(100%-1rem)] flex-col sm:max-w-[900px] h-[min(92vh,760px)] max-sm:h-dvh overflow-hidden gap-0 p-0 rounded-3xl max-sm:rounded-none max-sm:overflow-hidden">
+      <DialogContent className="flex w-[calc(100%-1rem)] flex-col sm:max-w-[900px] h-[min(92vh,760px)] overflow-hidden gap-0 p-0 rounded-3xl max-sm:h-dvh max-sm:w-screen max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:overflow-hidden">
         <div className="flex min-h-0 flex-1">
           {/* Left Sidebar - Steps (hidden on mobile, shown md+) */}
           <div className="hidden md:flex w-64 shrink-0 bg-muted/40 p-6 flex-col">
@@ -438,7 +464,10 @@ export function AdminInviteWizard({
               </DialogDescription>
 
               {/* Compact step indicator — mobile only (sidebar hidden below md) */}
-              <div className="mt-3 flex items-center gap-1.5 overflow-x-auto md:hidden">
+              <div
+                ref={stepStripRef}
+                className="mt-3 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:hidden"
+              >
                 {flowSteps.map((step, index) => {
                   const isActive = step.key === currentStep;
                   const isCompleted = index < currentStepIndex;
@@ -467,7 +496,10 @@ export function AdminInviteWizard({
               </div>
             </DialogHeader>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-6">
+            <div
+              ref={bodyScrollRef}
+              className="min-h-0 flex-1 overflow-y-auto px-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
               {isLoadingMerchants && currentStep === "merchants" ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center space-y-2">
@@ -624,7 +656,10 @@ export function AdminInviteWizard({
                                   <div className="text-sm text-muted-foreground mt-1">
                                     {role.description}
                                   </div>
-                                  <div className="flex flex-wrap gap-1 mt-2">
+                                  {/* Permission chips are desktop-only: on a phone
+                                      they wrap to three rows and bury the role
+                                      name and description under noise. */}
+                                  <div className="mt-2 hidden flex-wrap gap-1 sm:flex">
                                     {role.permissions.slice(0, 4).map((perm) => (
                                       <Badge key={perm} variant="outline" className="text-xs">
                                         {perm.split('.').slice(-1)[0].replace(/_/g, ' ')}
@@ -683,7 +718,7 @@ export function AdminInviteWizard({
                       {/* Merchant list — negative margin + matching padding so the
                           selected card's ring-2 isn't clipped by overflow-y-auto
                           while the rows stay flush with the content above. */}
-                      <div className="space-y-2 max-h-[400px] overflow-y-auto -mx-1 px-1 py-1">
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto -mx-1 px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {filteredMerchants.length === 0 ? (
                           <div className="text-center py-8 text-muted-foreground">
                             <Building2 className="h-12 w-12 mx-auto mb-2 opacity-50" />

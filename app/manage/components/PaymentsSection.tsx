@@ -31,6 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { usePlatformPaymentMetrics } from '@/lib/queries/use-platform-analytics-layer2'
 import { AnalyticsPanel, AnalyticsTooltip, SERIES } from './analytics-primitives'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 interface PaymentsSectionProps {
   from: string
@@ -46,6 +47,12 @@ const legendLabel = (value: string) => (
 
 export function PaymentsSection({ from, to }: PaymentsSectionProps) {
   const { data, isLoading } = usePlatformPaymentMetrics(from, to)
+  const isMobile = useIsMobile()
+  // Side margins are dead space on a phone; the axes already reserve gutters.
+  const chartMargin = isMobile
+    ? { top: 12, right: 0, left: 0, bottom: 5 }
+    : { top: 20, right: 30, left: 20, bottom: 5 }
+  const numAxisWidth = isMobile ? 38 : 60
 
   if (isLoading) {
     return (
@@ -116,7 +123,11 @@ export function PaymentsSection({ from, to }: PaymentsSectionProps) {
         caption="Daily transactions and failure rate trend"
       >
         <ResponsiveContainer width="100%" height={350}>
-          <ComposedChart data={combinedData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+          {/* Dual-axis chart: each YAxis already reserves its own gutter, so the
+              extra left/right margin was pure dead space — ~50px of a phone
+              screen the plot never got to use. Dropped on mobile, kept at
+              desktop where the breathing room is affordable. */}
+          <ComposedChart data={combinedData} margin={chartMargin}>
             <CartesianGrid {...CHART_GRID} />
             <XAxis
               dataKey="date"
@@ -127,6 +138,7 @@ export function PaymentsSection({ from, to }: PaymentsSectionProps) {
             />
             <YAxis
               yAxisId="left"
+              width={numAxisWidth}
               tick={CHART_TICK}
               tickLine={false}
               axisLine={false}
@@ -135,6 +147,7 @@ export function PaymentsSection({ from, to }: PaymentsSectionProps) {
             <YAxis
               yAxisId="right"
               orientation="right"
+              width={numAxisWidth}
               domain={[0, 100]}
               tick={CHART_TICK}
               tickLine={false}
