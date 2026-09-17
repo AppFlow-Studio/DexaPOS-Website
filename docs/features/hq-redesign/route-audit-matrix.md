@@ -81,11 +81,32 @@ requirement that every discovered route has a disposition.
 
 **Scope correction for that route.** The ticket lists it as a single "detail
 conversion". The `page.tsx` is 590 lines / 54 cards, but it also has **10
-co-located files in `components/`** carrying ~46 more cards
-(`AdminInviteWizard` 41KB, `CreateMerchantsButtons` 40KB, `AddMerchantButtons`
-27KB). Those components are **not converted** — they are dialog/wizard
-surfaces, closer to Family 3 in shape, and should be split per component the
-same way Family 3 splits per tab. The page shell that hosts them is done.
+co-located files in `components/`** — invisible to a `page.tsx`-only audit.
+Three of them imported `Card`; the other seven never did.
+
+**Those three are now converted (PR 2b), closing Family 2.**
+
+| Component | Conversion |
+|---|---|
+| `AddMerchantButtons.tsx` | 4 form `Card`s → `Panel` > `PanelSection`; `CardTitle`+`CardDescription` → `label`+`caption`; the leading `<Store />` in the title → `icon={Store}`; `CardContent`'s `grid gap-4 md:grid-cols-2` preserved as an inner `div` |
+| `CreateMerchantsButtons.tsx` | Same shape, 5 sections (adds Carrier Selection, `icon={Truck}`) |
+| `SendOrganizationMembersInviteButton.tsx` | The repeated invitation row is a list item, not a titled section — `Card className="p-4"` → `Panel nested padded` (tier 2, `rounded-2xl`), no `PanelSection` |
+
+Grep for `components/ui/card` under `app/manage/organizations/**` now returns
+**nothing**, and the same holds across all of Family 1 and Family 2.
+
+**Verification (PR 2b).** `tsc --noEmit` total is **805 before and 805 after** —
+exactly neutral. The 5 errors reported in these three files are all pre-existing
+(confirmed by stashing the change and re-running); none were introduced. `eslint`
+clean on all three.
+
+Because these are dialog-triggered surfaces that need an HQ session, they were
+rendered directly via a temporary `app/panel-qa` page (removed afterwards, not
+committed). All three dialogs open and every section renders with its label,
+caption and full field set intact; console shows no React or render errors (only
+Clerk network failures, which are environmental). At a 320px emulated viewport
+with `visualViewport.scale === 1`, all 4 panels measure 298px inside the viewport
+with **zero self-overflow**.
 
 **Verification (all six):** `tsc --noEmit` reports **zero errors in every file
 changed** — project total fell 809 → 805, since the narrowing in

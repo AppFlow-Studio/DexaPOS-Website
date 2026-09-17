@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell'
 import { UserPlus2, Plus, Users, Mail, Shield, User, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
@@ -114,7 +114,7 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch, r
                             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                                 <div className="space-y-4">
                                     {fields.map((field, index) => (
-                                        <Card key={field.id} className="p-4">
+                                        <Panel key={field.id} nested padded className="px-4 py-4 sm:px-4">
                                             <div className="flex items-center gap-4">
                                                 <div className="flex-1">
                                                     <FormField
@@ -189,7 +189,7 @@ export const SendOrganizationMembersInviteButton = ({ organizationId, refetch, r
                                                     </Button>
                                                 )}
                                             </div>
-                                        </Card>
+                                        </Panel>
                                     ))}
                                 </div>
 

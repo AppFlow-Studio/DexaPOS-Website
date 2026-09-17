@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormDescription, FormMessage } from '@/components/ui/form'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel, PanelSection } from '@/components/dashboard/shell'
 import { FileUpload } from '@/components/ui/file-upload'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Store, Plus, Loader2, X, ChevronDown, Utensils, ShoppingBag, ShoppingCart, Wrench, Coffee } from 'lucide-react'
@@ -198,18 +198,13 @@ export const AddMerchantButton = ({ carrierId, organizationId, refetch }: { carr
                             >
                                 <Form {...form}>
                                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                                        {/* Merchant Type Selection Card */}
-                                        <Card>
-                                            <CardHeader>
-                                                <CardTitle className="text-lg flex items-center gap-2">
-                                                    <Store className="h-5 w-5" />
-                                                    Business Type
-                                                </CardTitle>
-                                                <CardDescription>
-                                                    Select the type of business for this merchant
-                                                </CardDescription>
-                                            </CardHeader>
-                                            <CardContent>
+                                        {/* Merchant type selection */}
+                                        <Panel>
+                                            <PanelSection
+                                                icon={Store}
+                                                label="Business Type"
+                                                caption="Select the type of business for this merchant"
+                                            >
                                                 <FormField
                                                     control={form.control}
                                                     name="merchantType"
@@ -259,122 +254,119 @@ export const AddMerchantButton = ({ carrierId, organizationId, refetch }: { carr
                                                         </FormItem>
                                                     )}
                                                 />
-                                            </CardContent>
-                                        </Card>
+                                            </PanelSection>
+                                        </Panel>
 
-                                        <Card>
-                                            <CardHeader>
-                                                <CardTitle className="text-lg">Business Information</CardTitle>
-                                                <CardDescription>
-                                                    Basic information about the merchant business
-                                                </CardDescription>
-                                            </CardHeader>
-                                            <CardContent className="grid gap-4 md:grid-cols-2">
-                                                <FormField
-                                                    control={form.control}
-                                                    name="merchantName"
-                                                    render={({ field }: { field: any }) => (
-                                                        <FormItem>
-                                                            <FormLabel>Business Name</FormLabel>
-                                                            <FormControl>
-                                                                <Input placeholder="Joe's Coffee Shop" {...field} />
-                                                            </FormControl>
-                                                            <FormDescription>
-                                                                The public display name for this business.
-                                                            </FormDescription>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
+                                        <Panel>
+                                            <PanelSection
+                                                label="Business Information"
+                                                caption="Basic information about the merchant business"
+                                            >
+                                                <div className="grid gap-4 md:grid-cols-2">
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="merchantName"
+                                                        render={({ field }: { field: any }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Business Name</FormLabel>
+                                                                <FormControl>
+                                                                    <Input placeholder="Joe's Coffee Shop" {...field} />
+                                                                </FormControl>
+                                                                <FormDescription>
+                                                                    The public display name for this business.
+                                                                </FormDescription>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
 
-                                                <FormField
-                                                    control={form.control}
-                                                    name="businessAddress"
-                                                    render={({ field }: { field: any }) => (
-                                                        <FormItem>
-                                                            <FormLabel>Business Address</FormLabel>
-                                                            <FormControl>
-                                                                <Input placeholder="123 Main St, City, State 12345" {...field} />
-                                                            </FormControl>
-                                                            <FormDescription>
-                                                                Main business address for the merchant.
-                                                            </FormDescription>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                            </CardContent>
-                                        </Card>
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="businessAddress"
+                                                        render={({ field }: { field: any }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Business Address</FormLabel>
+                                                                <FormControl>
+                                                                    <Input placeholder="123 Main St, City, State 12345" {...field} />
+                                                                </FormControl>
+                                                                <FormDescription>
+                                                                    Main business address for the merchant.
+                                                                </FormDescription>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
 
-                                        <Card>
-                                            <CardHeader>
-                                                <CardTitle className="text-lg">Owner Information</CardTitle>
-                                                <CardDescription>
-                                                    Contact details for the business owner
-                                                </CardDescription>
-                                            </CardHeader>
-                                            <CardContent className="grid gap-4 md:grid-cols-2">
-                                                <FormField
-                                                    control={form.control}
-                                                    name="ownerName"
-                                                    render={({ field }: { field: any }) => (
-                                                        <FormItem>
-                                                            <FormLabel>Owner Name</FormLabel>
-                                                            <FormControl>
-                                                                <Input placeholder="John Doe" {...field} />
-                                                            </FormControl>
-                                                            <FormDescription>
-                                                                Full name of the business owner.
-                                                            </FormDescription>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
+                                                </div>
+                                            </PanelSection>
+                                        </Panel>
 
-                                                <FormField
-                                                    control={form.control}
-                                                    name="ownerEmail"
-                                                    render={({ field }: { field: any }) => (
-                                                        <FormItem>
-                                                            <FormLabel>Owner Email</FormLabel>
-                                                            <FormControl>
-                                                                <Input placeholder="john@joescoffee.com" type="email" {...field} />
-                                                            </FormControl>
-                                                            <FormDescription>
-                                                                Email address for the owner account.
-                                                            </FormDescription>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
+                                        <Panel>
+                                            <PanelSection
+                                                label="Owner Information"
+                                                caption="Contact details for the business owner"
+                                            >
+                                                <div className="grid gap-4 md:grid-cols-2">
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="ownerName"
+                                                        render={({ field }: { field: any }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Owner Name</FormLabel>
+                                                                <FormControl>
+                                                                    <Input placeholder="John Doe" {...field} />
+                                                                </FormControl>
+                                                                <FormDescription>
+                                                                    Full name of the business owner.
+                                                                </FormDescription>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
 
-                                                <FormField
-                                                    control={form.control}
-                                                    name="ownerPhone"
-                                                    render={({ field }: { field: any }) => (
-                                                        <FormItem>
-                                                            <FormLabel>Owner Phone</FormLabel>
-                                                            <FormControl>
-                                                                <Input placeholder="(555) 123-4567" {...field} />
-                                                            </FormControl>
-                                                            <FormDescription>
-                                                                Contact phone number for the owner.
-                                                            </FormDescription>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                            </CardContent>
-                                        </Card>
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="ownerEmail"
+                                                        render={({ field }: { field: any }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Owner Email</FormLabel>
+                                                                <FormControl>
+                                                                    <Input placeholder="john@joescoffee.com" type="email" {...field} />
+                                                                </FormControl>
+                                                                <FormDescription>
+                                                                    Email address for the owner account.
+                                                                </FormDescription>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
 
-                                        <Card>
-                                            <CardHeader>
-                                                <CardTitle className="text-lg">Business Logo</CardTitle>
-                                                <CardDescription>
-                                                    Upload a logo for the merchant store
-                                                </CardDescription>
-                                            </CardHeader>
-                                            <CardContent>
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="ownerPhone"
+                                                        render={({ field }: { field: any }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Owner Phone</FormLabel>
+                                                                <FormControl>
+                                                                    <Input placeholder="(555) 123-4567" {...field} />
+                                                                </FormControl>
+                                                                <FormDescription>
+                                                                    Contact phone number for the owner.
+                                                                </FormDescription>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                </div>
+                                            </PanelSection>
+                                        </Panel>
+
+                                        <Panel>
+                                            <PanelSection
+                                                label="Business Logo"
+                                                caption="Upload a logo for the merchant store"
+                                            >
                                                 <FormField
                                                     control={form.control}
                                                     name="merchantImage"
@@ -395,8 +387,8 @@ export const AddMerchantButton = ({ carrierId, organizationId, refetch }: { carr
                                                         </FormItem>
                                                     )}
                                                 />
-                                            </CardContent>
-                                        </Card>
+                                            </PanelSection>
+                                        </Panel>
 
                                         <div className="flex justify-end gap-2 pt-4 pb-4">
                                             <Button
