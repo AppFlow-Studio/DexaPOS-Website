@@ -39,7 +39,9 @@ export function MerchantCard({ merchant, onClick }: MerchantCardProps) {
       {/* Header */}
       <div className="mb-4 flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/10">
+          {/* Logo is `sm`-and-up only: at phone width it cost ~52px of a 375px
+              card, which is what pushed the merchant name into an ellipsis. */}
+          <div className="relative hidden h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/10 sm:flex">
             {merchant.logo_url ? (
               <Image src={merchant.logo_url} alt={merchant.name} fill className="object-cover" />
             ) : (
@@ -86,7 +88,8 @@ export function MerchantCard({ merchant, onClick }: MerchantCardProps) {
         )}
       </div>
 
-      <div className="mt-3 flex justify-end">
+      {/* Centred on a phone, right-aligned from `sm` up. */}
+      <div className="mt-3 flex justify-center sm:justify-end">
         <ImpersonateMerchantButton
           merchantId={merchant.id}
           merchantName={merchant.name}
