@@ -948,6 +948,7 @@ export function PaymentDeviceDetailView({ merchantId, serial }: { merchantId: st
 
     const { device: d, siblings, unsettled, batches, payments, attempts, webhookEvents, audit } = result.data
     const isValor = d.terminal_type === 'valor'
+    const isCodepay = d.terminal_type === 'codepay'
     const theme = brandTheme(d.terminal_type)
     const logo = BRAND_LOGO[d.terminal_type]
 
@@ -1021,11 +1022,16 @@ export function PaymentDeviceDetailView({ merchantId, serial }: { merchantId: st
                         ? <span className="text-blue-600">{(d.settle_time || '').slice(0, 5) || 'On'}</span>
                         : <span className="text-muted-foreground">Off</span>}
                 </DetailTile>
-                <DetailTile icon={Wifi} label="Last connection test">{timeAgo(d.last_connection_test_at)}</DetailTile>
+                <DetailTile icon={Wifi} label={isCodepay ? 'Last check' : 'Last connection test'}>{timeAgo(d.last_connection_test_at)}</DetailTile>
                 <DetailTile icon={Cpu} label="Model">{d.terminal_model || '—'}</DetailTile>
                 {isValor && (
                     <DetailTile icon={KeyRound} label="Valor EPI">
                         <span className="font-mono">{d.valor_epi || <span className="text-amber-600">not set</span>}</span>
+                    </DetailTile>
+                )}
+                {isCodepay && (
+                    <DetailTile icon={KeyRound} label="CodePay App ID">
+                        <span className="font-mono">{d.register_id || <span className="text-amber-600">not set</span>}</span>
                     </DetailTile>
                 )}
             </div>
