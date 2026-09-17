@@ -1,9 +1,16 @@
 'use client'
 
+import { useState } from 'react'
 import { useMerchantOnboardingFunnel } from '@/lib/queries/use-platform-analytics'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { AlertTriangle, TrendingUp, Filter } from 'lucide-react'
 import { Panel } from '@/components/dashboard/shell/Panel'
@@ -24,8 +31,25 @@ const STAGE_COLORS: Record<string, string> = {
   churned: '#ef4444',
 }
 
+/**
+ * Mobile column meta for the stuck-merchants table. Days in onboarding is the
+ * measure the list is built on, so it rides along with the merchant name.
+ */
+const STUCK_MERCHANT_COLUMNS: ReportColumn[] = [
+  { id: 'merchant', label: 'Merchant', locked: true },
+  { id: 'days', label: 'Days in Onboarding' },
+  { id: 'lastActivity', label: 'Last Activity', defaultHidden: true },
+  { id: 'admin', label: 'Assigned Admin', defaultHidden: true },
+  { id: 'risk', label: 'Risk', defaultHidden: true },
+]
+
 export function MerchantOnboardingFunnel() {
   const { data, isLoading } = useMerchantOnboardingFunnel()
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(STUCK_MERCHANT_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
 
   if (isLoading) {
     return (
@@ -93,6 +117,13 @@ export function MerchantOnboardingFunnel() {
             label={`Stuck merchants (${data.stuckMerchants.length})`}
             icon={AlertTriangle}
             caption="Merchants in onboarding for more than 14 days without progressing"
+            action={
+              <MobileColumnsButton
+                columns={STUCK_MERCHANT_COLUMNS}
+                hidden={hiddenCols}
+                onChange={setHiddenCols}
+              />
+            }
           >
             {/* The `variant="data"` well is the surface — §5.2: a table is not
                 wrapped in panel padding, or you get a box inside a box. */}
@@ -100,31 +131,39 @@ export function MerchantOnboardingFunnel() {
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead>Merchant</TableHead>
-                  <TableHead className="text-right">Days in Onboarding</TableHead>
-                  <TableHead>Last Activity</TableHead>
-                  <TableHead>Assigned Admin</TableHead>
-                  <TableHead>Risk</TableHead>
+                  {showCol('days') && <TableHead className="text-right">Days in Onboarding</TableHead>}
+                  {showCol('lastActivity') && <TableHead>Last Activity</TableHead>}
+                  {showCol('admin') && <TableHead>Assigned Admin</TableHead>}
+                  {showCol('risk') && <TableHead>Risk</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.stuckMerchants.map((m: StuckMerchant) => (
                   <TableRow key={m.id}>
                     <TableCell className="font-medium">{m.name}</TableCell>
-                    <TableCell className="text-right tabular-nums">{m.daysInOnboarding}d</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {m.lastActivity ? new Date(m.lastActivity).toLocaleDateString() : 'No activity'}
-                    </TableCell>
-                    <TableCell>
-                      {m.assignedAdmin ?? <span className="text-xs italic text-muted-foreground">Unassigned</span>}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className="w-fit rounded-full border-0 px-2.5 text-xs font-medium"
-                      >
-                        {m.daysInOnboarding >= 30 ? 'Critical' : 'At Risk'}
-                      </Badge>
-                    </TableCell>
+                    {showCol('days') && (
+                      <TableCell className="text-right tabular-nums">{m.daysInOnboarding}d</TableCell>
+                    )}
+                    {showCol('lastActivity') && (
+                      <TableCell className="text-muted-foreground">
+                        {m.lastActivity ? new Date(m.lastActivity).toLocaleDateString() : 'No activity'}
+                      </TableCell>
+                    )}
+                    {showCol('admin') && (
+                      <TableCell>
+                        {m.assignedAdmin ?? <span className="text-xs italic text-muted-foreground">Unassigned</span>}
+                      </TableCell>
+                    )}
+                    {showCol('risk') && (
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className="w-fit rounded-full border-0 px-2.5 text-xs font-medium"
+                        >
+                          {m.daysInOnboarding >= 30 ? 'Critical' : 'At Risk'}
+                        </Badge>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

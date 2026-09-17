@@ -5,6 +5,13 @@ import { useStaffLaborAnalytics } from '@/lib/queries/use-platform-analytics'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+    MobileColumnsButton,
+    initialHiddenColumns,
+    type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -27,10 +34,28 @@ function fmt(n: number) {
 const PEAK_FILL = '#6366f1'
 const BASE_FILL = '#94a3b8'
 
+/**
+ * Mobile column meta for the merchant labor breakdown. Hours is both the
+ * default sort key and the measure the panel is about, so it stays visible.
+ */
+const MERCHANT_LABOR_COLUMNS: ReportColumn[] = [
+    { id: 'merchant', label: 'Merchant', locked: true },
+    { id: 'staff', label: 'Staff', defaultHidden: true },
+    { id: 'hours', label: 'Hours' },
+    { id: 'orders', label: 'Orders', defaultHidden: true },
+    { id: 'hrsPerOrder', label: 'Hrs / Order', defaultHidden: true },
+    { id: 'openShifts', label: 'Open Shifts', defaultHidden: true },
+]
+
 export function StaffLaborAnalytics() {
     const [days, setDays] = useState(30)
     const [sortKey, setSortKey] = useState<SortKey>('totalHours')
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+    const isMobile = useIsMobile()
+    const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+        initialHiddenColumns(MERCHANT_LABOR_COLUMNS)
+    )
+    const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
 
     const { data, isLoading } = useStaffLaborAnalytics(days)
 
@@ -216,21 +241,30 @@ export function StaffLaborAnalytics() {
                     label="Merchant labor breakdown"
                     icon={Table2}
                     caption="Staff hours, orders, and labor efficiency per merchant"
+                    action={
+                        <MobileColumnsButton
+                            columns={MERCHANT_LABOR_COLUMNS}
+                            hidden={hiddenCols}
+                            onChange={setHiddenCols}
+                        />
+                    }
                 >
                     {sortedMerchants.length === 0 ? (
                         <div className="py-12 text-center text-sm text-muted-foreground">
                             No shift data in this period
                         </div>
                     ) : (
-                        <Table variant="data" className="min-w-[720px]">
+                        // Min-width lifted on mobile so hidden columns actually
+                        // narrow the table rather than leaving it scrolling sideways.
+                        <Table variant="data" className={cn(!isMobile && 'min-w-[720px]')}>
                             <TableHeader className="[&_tr]:border-0">
                                 <TableRow>
                                     <TableHead>{sortHeader('merchantName', 'Merchant', 'left')}</TableHead>
-                                    <TableHead className="text-right">{sortHeader('activeStaff', 'Staff')}</TableHead>
-                                    <TableHead className="text-right">{sortHeader('totalHours', 'Hours')}</TableHead>
-                                    <TableHead className="text-right">{sortHeader('totalOrders', 'Orders')}</TableHead>
-                                    <TableHead className="text-right">{sortHeader('hoursPerOrder', 'Hrs / Order')}</TableHead>
-                                    <TableHead className="text-right">Open Shifts</TableHead>
+                                    {showCol('staff') && <TableHead className="text-right">{sortHeader('activeStaff', 'Staff')}</TableHead>}
+                                    {showCol('hours') && <TableHead className="text-right">{sortHeader('totalHours', 'Hours')}</TableHead>}
+                                    {showCol('orders') && <TableHead className="text-right">{sortHeader('totalOrders', 'Orders')}</TableHead>}
+                                    {showCol('hrsPerOrder') && <TableHead className="text-right">{sortHeader('hoursPerOrder', 'Hrs / Order')}</TableHead>}
+                                    {showCol('openShifts') && <TableHead className="text-right">Open Shifts</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -244,26 +278,36 @@ export function StaffLaborAnalytics() {
                                                     <span className="ml-2 text-xs text-muted-foreground">High ratio</span>
                                                 )}
                                             </TableCell>
-                                            <TableCell className="text-right tabular-nums">{m.activeStaff}</TableCell>
-                                            <TableCell className="text-right tabular-nums">{m.totalHours.toLocaleString()}h</TableCell>
-                                            <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(m.totalOrders)}</TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                                {m.hoursPerOrder !== null ? (
-                                                    <span className="font-medium">{m.hoursPerOrder}h</span>
-                                                ) : (
-                                                    <span className="text-xs italic text-muted-foreground">No orders</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                                {m.openShiftsCount > 0 ? (
-                                                    <span className="inline-flex items-center gap-1 text-xs font-medium">
-                                                        <AlertCircle className="h-3 w-3" />
-                                                        {m.openShiftsCount}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-xs text-muted-foreground">—</span>
-                                                )}
-                                            </TableCell>
+                                            {showCol('staff') && (
+                                                <TableCell className="text-right tabular-nums">{m.activeStaff}</TableCell>
+                                            )}
+                                            {showCol('hours') && (
+                                                <TableCell className="text-right tabular-nums">{m.totalHours.toLocaleString()}h</TableCell>
+                                            )}
+                                            {showCol('orders') && (
+                                                <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(m.totalOrders)}</TableCell>
+                                            )}
+                                            {showCol('hrsPerOrder') && (
+                                                <TableCell className="text-right tabular-nums">
+                                                    {m.hoursPerOrder !== null ? (
+                                                        <span className="font-medium">{m.hoursPerOrder}h</span>
+                                                    ) : (
+                                                        <span className="text-xs italic text-muted-foreground">No orders</span>
+                                                    )}
+                                                </TableCell>
+                                            )}
+                                            {showCol('openShifts') && (
+                                                <TableCell className="text-right tabular-nums">
+                                                    {m.openShiftsCount > 0 ? (
+                                                        <span className="inline-flex items-center gap-1 text-xs font-medium">
+                                                            <AlertCircle className="h-3 w-3" />
+                                                            {m.openShiftsCount}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">—</span>
+                                                    )}
+                                                </TableCell>
+                                            )}
                                         </TableRow>
                                     )
                                 })}

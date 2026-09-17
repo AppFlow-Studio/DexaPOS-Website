@@ -34,6 +34,7 @@ import {
 } from '@/components/dashboard/shell'
 import {
     DropdownMenu,
+    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
@@ -45,10 +46,36 @@ import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 
 
+/**
+ * The fields a mobile record card can show, in render order.
+ *
+ * Only the card grid uses this: the desktop table renders every column, so
+ * there is nothing to pick there. Keep in sync with the card markup below.
+ */
+const CARD_FIELDS = [
+    { key: 'directorySync', label: 'Directory Sync' },
+    { key: 'users', label: 'Users' },
+    { key: 'sales', label: 'Sales' },
+    { key: 'conversion', label: 'Conversion' },
+    { key: 'growth', label: 'Growth' },
+    { key: 'created', label: 'Created' },
+] as const
+
+type CardFieldKey = (typeof CARD_FIELDS)[number]['key']
+
+const ALL_FIELDS_VISIBLE = Object.fromEntries(
+    CARD_FIELDS.map((f) => [f.key, true])
+) as Record<CardFieldKey, boolean>
+
 export default function OrganizationsPage() {
     const router = useRouter()
         const { data: organizationsData, isLoading, error } = useCarrierOrganizations()
     const [search, setSearch] = useState('')
+    const [visibleFields, setVisibleFields] =
+        useState<Record<CardFieldKey, boolean>>(ALL_FIELDS_VISIBLE)
+
+    const visibleFieldCount = CARD_FIELDS.filter((f) => visibleFields[f.key]).length
+    const hiddenFieldCount = CARD_FIELDS.length - visibleFieldCount
 
     /**
      * `useCarrierOrganizations` types its data as `any[] | Error`, so every
@@ -222,14 +249,51 @@ export default function OrganizationsPage() {
                             onChange={(e) => setSearch(e.target.value)}
                         />
                     </div>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-9 shrink-0 border-0 bg-muted/60 px-3 text-[0.8125rem] text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
-                    >
-                        <Filter className="mr-2 h-4 w-4" />
-                        Filter
-                    </Button>
+                    {/* Column filter — mobile only. The desktop table shows every
+                        column at once, so there is nothing to choose there; the
+                        card grid below <lg is where hiding fields earns its
+                        keep. `lg:hidden` mirrors the table's `hidden lg:block`. */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 shrink-0 border-0 bg-muted/60 px-3 text-[0.8125rem] text-muted-foreground shadow-none hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground lg:hidden"
+                            >
+                                <Filter className="mr-2 h-4 w-4" />
+                                Fields
+                                {hiddenFieldCount > 0 && (
+                                    <span className="ml-1.5 tabular-nums">({visibleFieldCount})</span>
+                                )}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuLabel>Show fields</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {CARD_FIELDS.map((field) => (
+                                <DropdownMenuCheckboxItem
+                                    key={field.key}
+                                    checked={visibleFields[field.key]}
+                                    onCheckedChange={(checked) =>
+                                        setVisibleFields((prev) => ({ ...prev, [field.key]: !!checked }))
+                                    }
+                                    /* Keep the menu open so several fields can be
+                                       toggled in one pass. */
+                                    onSelect={(e) => e.preventDefault()}
+                                >
+                                    {field.label}
+                                </DropdownMenuCheckboxItem>
+                            ))}
+                            {hiddenFieldCount > 0 && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onSelect={() => setVisibleFields(ALL_FIELDS_VISIBLE)}>
+                                        Reset to all fields
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 
@@ -333,27 +397,34 @@ export default function OrganizationsPage() {
                                                     <MoreHorizontal className="h-4 w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
+                                            {/*
+                                              This menu had six items and none had an
+                                              `onClick`, so every click fell through to
+                                              the row's own handler and all six did the
+                                              same thing — open the detail page.
+                                              "Edit Organization", "View Analytics",
+                                              "Configure SSO" and "Suspend
+                                              Organization" named features that exist
+                                              nowhere in the product, so they are gone
+                                              rather than left as dead promises.
+                                              Deletion stays on the detail page's
+                                              Settings tab, which owns the confirm
+                                              dialog.
+
+                                              "Manage users" was also dropped: it
+                                              deep-linked to `?tab=members`, which
+                                              works on a direct load but loses its
+                                              query on a client-side navigation from
+                                              here. Tab deep-linking needs its own
+                                              fix; a link that lands on the wrong tab
+                                              is worse than no link.
+                                            */}
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem>
-                                                    View Details
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem>
-                                                    Edit Organization
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem>
-                                                    View Analytics
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem>
-                                                    Manage Users
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem>
-                                                    Configure SSO
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem variant="destructive">
-                                                    Suspend Organization
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={`/manage/organizations/${org.clerk_org_id}`}>
+                                                        View details
+                                                    </Link>
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
@@ -380,7 +451,7 @@ export default function OrganizationsPage() {
                                             ID: {org.clerk_org_id}
                                         </p>
                                     </div>
-                                    {org.directorySync && (
+                                    {visibleFields.directorySync && org.directorySync && (
                                         <Badge
                                             variant="secondary"
                                             className="w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium"
@@ -391,39 +462,41 @@ export default function OrganizationsPage() {
                                     )}
                                 </div>
 
-                                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                                    <div className="min-w-0">
-                                        <p className="text-xs text-muted-foreground">Users</p>
-                                        <p className="font-medium tabular-nums">
-                                            {org.organizations.members.length}
-                                        </p>
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-xs text-muted-foreground">Sales</p>
-                                        <p className="font-medium tabular-nums">$0</p>
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-xs text-muted-foreground">Conversion</p>
-                                        <p className="font-medium tabular-nums">0%</p>
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-xs text-muted-foreground">Growth</p>
-                                        <p className="font-medium tabular-nums">0%</p>
-                                    </div>
+                                {/* `empty:hidden` so turning every field off collapses
+                                    the grid instead of leaving a 12px gap. */}
+                                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm empty:hidden empty:mt-0">
+                                    {visibleFields.users && (
+                                        <CardField label="Users" value={org.organizations.members.length} />
+                                    )}
+                                    {visibleFields.sales && <CardField label="Sales" value="$0" />}
+                                    {visibleFields.conversion && <CardField label="Conversion" value="0%" />}
+                                    {visibleFields.growth && <CardField label="Growth" value="0%" />}
                                 </div>
 
-                                <p className="mt-3 text-xs text-muted-foreground">
-                                    Created{' '}
-                                    {new Date(org.created_at).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric',
-                                    })}
-                                </p>
+                                {visibleFields.created && (
+                                    <p className="mt-3 text-xs text-muted-foreground">
+                                        Created{' '}
+                                        {new Date(org.created_at).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            year: 'numeric',
+                                        })}
+                                    </p>
+                                )}
                             </div>
                         ))}
                     </div>
             </div>
         </PageShell>
+    )
+}
+
+/** A label/value pair inside a mobile record card. */
+function CardField({ label, value }: { label: string; value: string | number }) {
+    return (
+        <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="truncate font-medium tabular-nums">{value}</p>
+        </div>
     )
 }

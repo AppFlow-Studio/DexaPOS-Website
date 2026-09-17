@@ -407,8 +407,14 @@ export function CreateMerchantWizard() {
           >
             {/* Step progress indicator — borderless pills on the inset
                 material. Progress is carried by fill and weight rather than
-                colour: green here marked "done", not a severity (D-03). */}
-            <div className="flex gap-1 overflow-x-auto pb-0.5">
+                colour: green here marked "done", not a severity (D-03).
+
+                `overflow-x-auto` clips at the padding edge, and the active
+                pill's `ring-1` paints *outside* its box — so with no inline or
+                top allowance the ring was shaved off the first and last pills.
+                Padding on every side gives the ring somewhere to land, and the
+                negative margin keeps the rail flush with the fields below. */}
+            <div className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1 pb-1 pt-0.5">
               {STEP_TITLES.map((title, index) => {
                 const stepNumber = index + 1
                 const isActive = step === stepNumber
@@ -416,14 +422,22 @@ export function CreateMerchantWizard() {
                 return (
                   <div
                     key={title}
+                    // `flex-1 truncate` only from `sm` up. Below that the titles
+                    // cannot fit, and truncating them left every pill reading
+                    // "1. …" — the ellipsis carried no information while
+                    // costing the width that made the number legible.
                     className={cn(
-                      'min-w-0 flex-1 truncate rounded-full px-2.5 py-1.5 text-xs',
+                      'min-w-0 shrink-0 rounded-full px-2.5 py-1.5 text-xs sm:flex-1 sm:shrink sm:truncate',
                       isActive && 'bg-background font-medium text-foreground ring-1 ring-border',
                       isComplete && 'bg-muted font-medium text-foreground',
                       !isActive && !isComplete && 'bg-muted/50 text-muted-foreground'
                     )}
+                    // The full title stays available to assistive tech and on
+                    // hover even when only the number is painted.
+                    title={`${stepNumber}. ${title}`}
                   >
-                    {stepNumber}. {title}
+                    <span className="sm:hidden">{stepNumber}</span>
+                    <span className="hidden sm:inline">{stepNumber}. {title}</span>
                   </div>
                 )
               })}
@@ -441,7 +455,7 @@ export function CreateMerchantWizard() {
                     name="businessLegalName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Business Legal Name</FormLabel>
+                        <FormLabel>Business Legal Name <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Joe's Coffee LLC" />
                         </FormControl>
@@ -455,7 +469,7 @@ export function CreateMerchantWizard() {
                     name="businessType"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Business Type</FormLabel>
+                        <FormLabel>Business Type <span className="text-destructive">*</span></FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
@@ -480,7 +494,7 @@ export function CreateMerchantWizard() {
                     name="einTaxId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>EIN / Tax ID</FormLabel>
+                        <FormLabel>EIN / Tax ID <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <Input
                             {...field}
@@ -500,7 +514,7 @@ export function CreateMerchantWizard() {
                     name="ownerFirstName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Owner First Name</FormLabel>
+                        <FormLabel>Owner First Name <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="John" />
                         </FormControl>
@@ -514,7 +528,7 @@ export function CreateMerchantWizard() {
                     name="ownerLastName"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Owner Last Name</FormLabel>
+                        <FormLabel>Owner Last Name <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Doe" />
                         </FormControl>
@@ -543,7 +557,7 @@ export function CreateMerchantWizard() {
                 </div>
 
                 {/* Business Logo — optional */}
-                <div className="rounded-lg border bg-muted/30 p-4 sm:p-5">
+                <div className="rounded-2xl bg-muted/40 p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-4 sm:gap-6">
                     <div className="flex-1 min-w-0 space-y-1">
                       <Label className="text-sm font-semibold">
@@ -620,7 +634,7 @@ export function CreateMerchantWizard() {
                     name="ownerEmail"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Owner Email</FormLabel>
+                        <FormLabel>Owner Email <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <Input {...field} type="email" placeholder="john@coffee.com" />
                         </FormControl>
@@ -634,7 +648,7 @@ export function CreateMerchantWizard() {
                     name="ownerPhone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Owner Phone</FormLabel>
+                        <FormLabel>Owner Phone <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <PhoneInput
                             value={field.value}
@@ -652,7 +666,7 @@ export function CreateMerchantWizard() {
                     name="ownerDob"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Owner Date of Birth</FormLabel>
+                        <FormLabel>Owner Date of Birth <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <Input {...field} type="date" />
                         </FormControl>
@@ -663,10 +677,13 @@ export function CreateMerchantWizard() {
                 </div>
 
                 {/* Government ID — required */}
+                {/* Borderless like the other blocks. The error state keeps a
+                    ring rather than a border, so the invalid case still reads
+                    as an outline without the resting state carrying one. */}
                 <div
                   className={cn(
-                    'rounded-lg border p-4 space-y-3',
-                    ownerIdError && 'border-destructive'
+                    'rounded-2xl bg-muted/40 p-4 space-y-3',
+                    ownerIdError && 'ring-1 ring-destructive'
                   )}
                 >
                   <div>
@@ -731,7 +748,7 @@ export function CreateMerchantWizard() {
                     name="businessAddressLine1"
                     render={({ field }) => (
                       <FormItem className="sm:col-span-2">
-                        <FormLabel>Address Line 1</FormLabel>
+                        <FormLabel>Address Line 1 <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <AddressAutocomplete
                             value={field.value ?? ''}
@@ -778,7 +795,7 @@ export function CreateMerchantWizard() {
                     name="businessCity"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>City</FormLabel>
+                        <FormLabel>City <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Brooklyn" />
                         </FormControl>
@@ -792,7 +809,7 @@ export function CreateMerchantWizard() {
                     name="businessState"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>State</FormLabel>
+                        <FormLabel>State <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="NY" />
                         </FormControl>
@@ -806,7 +823,7 @@ export function CreateMerchantWizard() {
                     name="businessPostalCode"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Postal Code</FormLabel>
+                        <FormLabel>Postal Code <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="11201" />
                         </FormControl>
@@ -881,7 +898,7 @@ export function CreateMerchantWizard() {
             {/* ── Step 4: Payment Processing ──────────────────────────────── */}
             {step === 4 && (
               <div className="space-y-4">
-                <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                <div className="rounded-2xl bg-muted/40 p-3 text-sm text-muted-foreground">
                   Enter the TSYS Merchant ID (MID) assigned to this merchant. This can be added
                   later from the merchant settings page if not yet available.
                 </div>
@@ -909,7 +926,7 @@ export function CreateMerchantWizard() {
             {step === 5 && (
               <div className="space-y-5">
                 {/* Business Identity */}
-                <div className="rounded-md border p-4 space-y-3">
+                <div className="rounded-2xl bg-muted/40 p-4 space-y-3">
                   <h3 className="font-semibold text-sm">Business Identity</h3>
                   <div className="flex gap-4 flex-wrap sm:flex-nowrap">
                     {logoPreview && (
@@ -934,7 +951,7 @@ export function CreateMerchantWizard() {
                 </div>
 
                 {/* Primary Contact */}
-                <div className="rounded-md border p-4 space-y-1">
+                <div className="rounded-2xl bg-muted/40 p-4 space-y-1">
                   <h3 className="font-semibold text-sm mb-3">Primary Contact</h3>
                   <ReviewRow label="Email" value={values.ownerEmail} />
                   {hasNationalDigits(values.ownerPhone) && (
@@ -952,7 +969,7 @@ export function CreateMerchantWizard() {
                 </div>
 
                 {/* First Location */}
-                <div className="rounded-md border p-4 space-y-1">
+                <div className="rounded-2xl bg-muted/40 p-4 space-y-1">
                   <h3 className="font-semibold text-sm mb-3">First Location</h3>
                   <ReviewRow
                     label="Address"
@@ -977,7 +994,7 @@ export function CreateMerchantWizard() {
 
                 {/* Payment Processing */}
                 {values.lucraMid?.trim() && (
-                  <div className="rounded-md border p-4 space-y-1">
+                  <div className="rounded-2xl bg-muted/40 p-4 space-y-1">
                     <h3 className="font-semibold text-sm mb-3">Payment Processing</h3>
                     <ReviewRow label="TSYS MID" value={values.lucraMid} />
                   </div>

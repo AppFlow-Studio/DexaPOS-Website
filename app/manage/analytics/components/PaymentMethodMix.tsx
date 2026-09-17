@@ -4,6 +4,13 @@ import { useState } from 'react'
 import { usePaymentMethodMix } from '@/lib/queries/use-platform-analytics'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { CreditCard, PieChart as PieChartIcon, Receipt, TrendingUp } from 'lucide-react'
@@ -17,9 +24,28 @@ function fmt(n: number) {
   return n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toFixed(2)}`
 }
 
+/**
+ * Mobile column meta for the fee exposure table. Est. Fees is what the table is
+ * named for, so it is the number kept beside the merchant on a phone.
+ */
+const FEE_EXPOSURE_COLUMNS: ReportColumn[] = [
+  { id: 'merchant', label: 'Merchant', locked: true },
+  { id: 'cardGpv', label: 'Card GPV', defaultHidden: true },
+  { id: 'cashGpv', label: 'Cash GPV', defaultHidden: true },
+  { id: 'cardPct', label: 'Card %', defaultHidden: true },
+  { id: 'estFees', label: 'Est. Fees' },
+]
+
 export function PaymentMethodMix() {
   const [days, setDays] = useState(30)
   const { data, isLoading } = usePaymentMethodMix(days)
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(FEE_EXPOSURE_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  // Keeps the empty-state cell full-width as columns are toggled.
+  const visibleColCount = FEE_EXPOSURE_COLUMNS.filter(c => showCol(c.id)).length
 
   const periodSelect = (
     <Select value={String(days)} onValueChange={v => setDays(Number(v))}>
@@ -95,30 +121,39 @@ export function PaymentMethodMix() {
             label="Fee exposure by merchant"
             icon={Receipt}
             caption="Estimated card processing fees at 2.5% of card GPV"
+            action={
+              <MobileColumnsButton
+                columns={FEE_EXPOSURE_COLUMNS}
+                hidden={hiddenCols}
+                onChange={setHiddenCols}
+              />
+            }
           >
-            <Table variant="data" className="min-w-[560px]">
+            {/* Min-width lifted on mobile so hidden columns actually narrow the
+                table instead of leaving it scrolling sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[560px]')}>
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead>Merchant</TableHead>
-                  <TableHead className="text-right">Card GPV</TableHead>
-                  <TableHead className="text-right">Cash GPV</TableHead>
-                  <TableHead className="text-right">Card %</TableHead>
-                  <TableHead className="text-right">Est. Fees</TableHead>
+                  {showCol('cardGpv') && <TableHead className="text-right">Card GPV</TableHead>}
+                  {showCol('cashGpv') && <TableHead className="text-right">Cash GPV</TableHead>}
+                  {showCol('cardPct') && <TableHead className="text-right">Card %</TableHead>}
+                  {showCol('estFees') && <TableHead className="text-right">Est. Fees</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.feeExposureTable.slice(0, 10).map((m: MerchantFeeExposure) => (
                   <TableRow key={m.merchantId}>
                     <TableCell>{m.merchantName}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(m.cardGPV)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(m.cashGPV)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{m.cardPercent}%</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(m.estimatedFees)}</TableCell>
+                    {showCol('cardGpv') && <TableCell className="text-right tabular-nums">{fmt(m.cardGPV)}</TableCell>}
+                    {showCol('cashGpv') && <TableCell className="text-right tabular-nums">{fmt(m.cashGPV)}</TableCell>}
+                    {showCol('cardPct') && <TableCell className="text-right tabular-nums">{m.cardPercent}%</TableCell>}
+                    {showCol('estFees') && <TableCell className="text-right tabular-nums">{fmt(m.estimatedFees)}</TableCell>}
                   </TableRow>
                 ))}
                 {data.feeExposureTable.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={visibleColCount} className="h-24 text-center text-muted-foreground">
                       No data
                     </TableCell>
                   </TableRow>

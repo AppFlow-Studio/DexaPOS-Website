@@ -1,6 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
+import {
+    MobileColumnsButton,
+    initialHiddenColumns,
+    type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
@@ -31,9 +38,26 @@ import {
 } from 'lucide-react'
 import { useDeviceStability, useVersionDrillDown } from '@/lib/queries/use-platform-analytics'
 
+/**
+ * Mobile column meta for the version summary table. Instability is the rate the
+ * whole panel exists to surface, so it stays beside the version number.
+ */
+const VERSION_DETAIL_COLUMNS: ReportColumn[] = [
+    { id: 'version', label: 'Version', locked: true },
+    { id: 'signals', label: 'Signals', defaultHidden: true },
+    { id: 'degraded', label: 'Degraded', defaultHidden: true },
+    { id: 'instability', label: 'Instability' },
+    { id: 'status', label: 'Status', defaultHidden: true },
+]
+
 export default function DeviceStabilityIndex() {
     const [days, setDays] = useState<number>(30)
     const [selectedVersion, setSelectedVersion] = useState<string | null>(null)
+    const isMobile = useIsMobile()
+    const [versionHiddenCols, setVersionHiddenCols] = useState<Set<string>>(() =>
+        initialHiddenColumns(VERSION_DETAIL_COLUMNS)
+    )
+    const showVersionCol = (id: string) => !isMobile || !versionHiddenCols.has(id)
 
     const { data: stabilityData, isLoading } = useDeviceStability(days)
     const { data: drillDownData, isLoading: drillDownLoading } = useVersionDrillDown(selectedVersion, days)
@@ -215,13 +239,19 @@ export default function DeviceStabilityIndex() {
                                             return null
                                         }}
                                     />
+                                    {/* `height` is a fixed box Recharts reserves above the
+                                        plot — it does not grow with content. At phone width
+                                        these three long labels wrap onto three lines and, at
+                                        36px, the overflow painted straight over the bars.
+                                        Mobile gets a taller box and shorter labels so the
+                                        legend fits the space reserved for it. */}
                                     <Legend
                                         verticalAlign="top"
-                                        height={36}
+                                        height={isMobile ? 72 : 36}
                                         formatter={(value) => {
-                                            if (value === 'healthy') return <span className="text-xs text-muted-foreground">Healthy Heartbeats</span>
-                                            if (value === 'degraded') return <span className="text-xs text-muted-foreground">Degraded (Low Resources)</span>
-                                            return <span className="text-xs text-muted-foreground">Unhealthy (Offline + Kicks)</span>
+                                            if (value === 'healthy') return <span className="text-xs text-muted-foreground">{isMobile ? 'Healthy' : 'Healthy Heartbeats'}</span>
+                                            if (value === 'degraded') return <span className="text-xs text-muted-foreground">{isMobile ? 'Degraded' : 'Degraded (Low Resources)'}</span>
+                                            return <span className="text-xs text-muted-foreground">{isMobile ? 'Unhealthy' : 'Unhealthy (Offline + Kicks)'}</span>
                                         }}
                                     />
                                     <Bar
@@ -305,7 +335,15 @@ export default function DeviceStabilityIndex() {
                                     <ArrowLeft className="h-4 w-4" />
                                     Back
                                 </Button>
-                            ) : undefined
+                            ) : (
+                                // Only in the summary view — the drill-down below is a
+                                // different table that this picker does not govern.
+                                <MobileColumnsButton
+                                    columns={VERSION_DETAIL_COLUMNS}
+                                    hidden={versionHiddenCols}
+                                    onChange={setVersionHiddenCols}
+                                />
+                            )
                         }
                     >
                         {!selectedVersion ? (
@@ -318,14 +356,16 @@ export default function DeviceStabilityIndex() {
                                 </div>
                             ) : stabilityData && stabilityData.versionBars.length > 0 ? (
                                 <div className="max-h-95 max-w-full overflow-auto">
-                                    <Table variant="data" className="min-w-[520px]">
+                                    {/* Min-width lifted on mobile so hidden columns actually
+                                        narrow the table instead of scrolling sideways. */}
+                                    <Table variant="data" className={cn(!isMobile && 'min-w-[520px]')}>
                                         <TableHeader className="[&_tr]:border-0">
                                             <TableRow>
                                                 <TableHead>Version</TableHead>
-                                                <TableHead className="text-right">Signals</TableHead>
-                                                <TableHead className="text-right">Degraded</TableHead>
-                                                <TableHead className="text-right">Instability</TableHead>
-                                                <TableHead className="text-right">Status</TableHead>
+                                                {showVersionCol('signals') && <TableHead className="text-right">Signals</TableHead>}
+                                                {showVersionCol('degraded') && <TableHead className="text-right">Degraded</TableHead>}
+                                                {showVersionCol('instability') && <TableHead className="text-right">Instability</TableHead>}
+                                                {showVersionCol('status') && <TableHead className="text-right">Status</TableHead>}
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -341,25 +381,33 @@ export default function DeviceStabilityIndex() {
                                                             <ChevronRight className="h-3 w-3 text-muted-foreground" />
                                                         </span>
                                                     </TableCell>
-                                                    <TableCell className="text-right tabular-nums">
-                                                        {bar.total.toLocaleString()}
-                                                    </TableCell>
-                                                    <TableCell className="text-right tabular-nums">
-                                                        {bar.degraded > 0
-                                                            ? <span className="font-medium">{bar.degraded.toLocaleString()}</span>
-                                                            : <span className="text-muted-foreground">—</span>
-                                                        }
-                                                    </TableCell>
-                                                    <TableCell className="text-right font-medium tabular-nums">
-                                                        {bar.instabilityRate}%
-                                                    </TableCell>
-                                                    <TableCell className="text-right text-sm text-muted-foreground">
-                                                        {bar.instabilityRate > INSTABILITY_THRESHOLD
-                                                            ? 'At Risk'
-                                                            : bar.degraded > 0
-                                                                ? 'Degraded'
-                                                                : 'Stable'}
-                                                    </TableCell>
+                                                    {showVersionCol('signals') && (
+                                                        <TableCell className="text-right tabular-nums">
+                                                            {bar.total.toLocaleString()}
+                                                        </TableCell>
+                                                    )}
+                                                    {showVersionCol('degraded') && (
+                                                        <TableCell className="text-right tabular-nums">
+                                                            {bar.degraded > 0
+                                                                ? <span className="font-medium">{bar.degraded.toLocaleString()}</span>
+                                                                : <span className="text-muted-foreground">—</span>
+                                                            }
+                                                        </TableCell>
+                                                    )}
+                                                    {showVersionCol('instability') && (
+                                                        <TableCell className="text-right font-medium tabular-nums">
+                                                            {bar.instabilityRate}%
+                                                        </TableCell>
+                                                    )}
+                                                    {showVersionCol('status') && (
+                                                        <TableCell className="text-right text-sm text-muted-foreground">
+                                                            {bar.instabilityRate > INSTABILITY_THRESHOLD
+                                                                ? 'At Risk'
+                                                                : bar.degraded > 0
+                                                                    ? 'Degraded'
+                                                                    : 'Stable'}
+                                                        </TableCell>
+                                                    )}
                                                 </TableRow>
                                             ))}
                                         </TableBody>

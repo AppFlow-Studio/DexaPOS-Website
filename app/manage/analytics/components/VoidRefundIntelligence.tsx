@@ -4,6 +4,13 @@ import { useState } from 'react'
 import { useVoidRefundIntelligence } from '@/lib/queries/use-platform-analytics'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { Ban, ListFilter, Users } from 'lucide-react'
@@ -17,9 +24,29 @@ function fmt(n: number) {
   return n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toFixed(2)}`
 }
 
+/**
+ * Mobile column meta for the void-rate anomaly table. Void rate is the measure
+ * the flagging is based on, so it stays beside the merchant name.
+ */
+const VOID_ANOMALY_COLUMNS: ReportColumn[] = [
+  { id: 'merchant', label: 'Merchant', locked: true },
+  { id: 'voidRate', label: 'Void Rate' },
+  { id: 'voided', label: 'Voided', defaultHidden: true },
+  { id: 'refundAmt', label: 'Refund Amt', defaultHidden: true },
+  { id: 'topReason', label: 'Top Reason', defaultHidden: true },
+  { id: 'status', label: 'Status', defaultHidden: true },
+]
+
 export function VoidRefundIntelligence() {
   const [days, setDays] = useState(30)
   const { data, isLoading } = useVoidRefundIntelligence(days)
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(VOID_ANOMALY_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  // Keeps the empty-state cell full-width as columns are toggled.
+  const visibleColCount = VOID_ANOMALY_COLUMNS.filter(c => showCol(c.id)).length
 
   const periodSelect = (
     <Select value={String(days)} onValueChange={v => setDays(Number(v))}>
@@ -97,40 +124,59 @@ export function VoidRefundIntelligence() {
                 : 'Merchant void rate anomalies'
             }
             caption={`Merchants with void rate >2× platform average (${data.platformVoidRate}%)`}
+            action={
+              <MobileColumnsButton
+                columns={VOID_ANOMALY_COLUMNS}
+                hidden={hiddenCols}
+                onChange={setHiddenCols}
+              />
+            }
           >
-            <Table variant="data" className="min-w-[640px]">
+            {/* Min-width lifted on mobile so hidden columns actually shrink the
+                table rather than leaving it scrolling sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[640px]')}>
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead>Merchant</TableHead>
-                  <TableHead className="text-right">Void Rate</TableHead>
-                  <TableHead className="text-right">Voided</TableHead>
-                  <TableHead className="text-right">Refund Amt</TableHead>
-                  <TableHead>Top Reason</TableHead>
-                  <TableHead>Status</TableHead>
+                  {showCol('voidRate') && <TableHead className="text-right">Void Rate</TableHead>}
+                  {showCol('voided') && <TableHead className="text-right">Voided</TableHead>}
+                  {showCol('refundAmt') && <TableHead className="text-right">Refund Amt</TableHead>}
+                  {showCol('topReason') && <TableHead>Top Reason</TableHead>}
+                  {showCol('status') && <TableHead>Status</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.merchantAnomalies.slice(0, 12).map((m: VoidAnomalyMerchant) => (
                   <TableRow key={m.merchantId}>
                     <TableCell>{m.merchantName}</TableCell>
-                    <TableCell className="text-right tabular-nums">{m.voidRate}%</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">{m.voidedOrders}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {m.refundAmount > 0 ? fmt(m.refundAmount) : <span className="text-muted-foreground">—</span>}
-                    </TableCell>
-                    <TableCell className="max-w-30 truncate text-muted-foreground">
-                      {m.topVoidReason ? m.topVoidReason.replace(/_/g, ' ') : <span className="italic">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {m.isAnomaly ? 'Anomaly' : 'Normal'}
-                      </span>
-                    </TableCell>
+                    {showCol('voidRate') && (
+                      <TableCell className="text-right tabular-nums">{m.voidRate}%</TableCell>
+                    )}
+                    {showCol('voided') && (
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{m.voidedOrders}</TableCell>
+                    )}
+                    {showCol('refundAmt') && (
+                      <TableCell className="text-right tabular-nums">
+                        {m.refundAmount > 0 ? fmt(m.refundAmount) : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                    )}
+                    {showCol('topReason') && (
+                      <TableCell className="max-w-30 truncate text-muted-foreground">
+                        {m.topVoidReason ? m.topVoidReason.replace(/_/g, ' ') : <span className="italic">—</span>}
+                      </TableCell>
+                    )}
+                    {showCol('status') && (
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {m.isAnomaly ? 'Anomaly' : 'Normal'}
+                        </span>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
                 {data.merchantAnomalies.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={visibleColCount} className="h-24 text-center text-muted-foreground">
                       No void activity in period
                     </TableCell>
                   </TableRow>

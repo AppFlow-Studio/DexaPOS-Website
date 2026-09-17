@@ -20,11 +20,16 @@ type FleetStatus = 'green' | 'yellow' | 'red' | 'grey'
  * gone: 60 pastel-filled tiles made the whole panel read as a colour field, so
  * the handful of red ones stopped standing out — the opposite of the intent.
  */
+/**
+ * The status dot carries the colour; the glyph beside it stays neutral. Tinting
+ * both meant every tile drew two coloured marks for one piece of information,
+ * and a wall of coloured icons read as noise rather than as signal.
+ */
 const STATUS: Record<FleetStatus, { dot: string; icon: string; Icon: typeof Wifi; label: string }> = {
-  green: { dot: 'bg-green-500', icon: 'text-green-600 dark:text-green-400', Icon: Wifi, label: 'Online' },
-  yellow: { dot: 'bg-yellow-500', icon: 'text-yellow-600 dark:text-yellow-400', Icon: BatteryWarning, label: 'Warning' },
-  red: { dot: 'bg-red-500', icon: 'text-red-600 dark:text-red-400', Icon: WifiOff, label: 'Offline' },
-  grey: { dot: 'bg-muted-foreground/50', icon: 'text-muted-foreground', Icon: AlertCircle, label: 'Inactive' },
+  green: { dot: 'bg-green-500', icon: 'text-foreground', Icon: Wifi, label: 'Online' },
+  yellow: { dot: 'bg-yellow-500', icon: 'text-foreground', Icon: BatteryWarning, label: 'Warning' },
+  red: { dot: 'bg-red-500', icon: 'text-foreground', Icon: WifiOff, label: 'Offline' },
+  grey: { dot: 'bg-muted-foreground/50', icon: 'text-foreground', Icon: AlertCircle, label: 'Inactive' },
 }
 
 const LEGEND = (Object.keys(STATUS) as FleetStatus[]).map((k) => ({

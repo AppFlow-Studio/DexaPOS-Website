@@ -1,16 +1,22 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { usePlatformAuditLogs, useAuditLogAnalytics } from '@/lib/queries/use-platform-analytics'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import {
   ShieldAlert,
   Search,
@@ -22,8 +28,6 @@ import {
   Info,
   TrendingUp,
   User,
-  Building2,
-  Clock,
   AlertCircle,
   CheckCircle2,
   Layers,
@@ -39,6 +43,43 @@ import {
   Legend,
 } from 'recharts'
 import type { TopAuditActor, FailedAuditAction, DailyAuditActivity } from '@/app/manage/actions/hq-platform/analytics'
+
+/**
+ * Mobile column meta for the three audit tables.
+ *
+ * Each keeps its identity column locked plus the one field the table is ranked
+ * or read by — action count for actors, the error itself for failures, the
+ * action name for the log — so a narrowed table still answers its own question.
+ */
+const TOP_ACTOR_COLUMNS: ReportColumn[] = [
+  { id: 'actor', label: 'Actor', locked: true },
+  { id: 'role', label: 'Role', defaultHidden: true },
+  { id: 'actions', label: 'Actions' },
+  { id: 'warnings', label: 'Warnings', defaultHidden: true },
+  { id: 'errors', label: 'Errors', defaultHidden: true },
+  { id: 'merchants', label: 'Merchants', defaultHidden: true },
+  { id: 'lastActive', label: 'Last Active', defaultHidden: true },
+]
+
+const FAILED_ACTION_COLUMNS: ReportColumn[] = [
+  { id: 'time', label: 'Time', locked: true },
+  { id: 'actor', label: 'Actor', defaultHidden: true },
+  { id: 'action', label: 'Action / Category', defaultHidden: true },
+  { id: 'error', label: 'Error Message' },
+  { id: 'resource', label: 'Resource', defaultHidden: true },
+  { id: 'merchant', label: 'Merchant', defaultHidden: true },
+  { id: 'severity', label: 'Severity', defaultHidden: true },
+]
+
+const FULL_LOG_COLUMNS: ReportColumn[] = [
+  { id: 'time', label: 'Time', locked: true },
+  { id: 'actor', label: 'Actor', defaultHidden: true },
+  { id: 'action', label: 'Action' },
+  { id: 'category', label: 'Category', defaultHidden: true },
+  { id: 'resource', label: 'Resource', defaultHidden: true },
+  { id: 'merchant', label: 'Merchant', defaultHidden: true },
+  { id: 'severity', label: 'Severity', defaultHidden: true },
+]
 
 // ============================================================================
 // CONSTANTS & HELPERS
@@ -75,29 +116,6 @@ const CATEGORY_CHART_COLORS: Record<string, string> = {
   other:    '#9CA3AF',
 }
 
-/** Category → badge colour (text labels) */
-const CATEGORY_BADGE_COLORS: Record<string, string> = {
-  auth:     'bg-purple-100 text-purple-700',
-  merchant: 'bg-blue-100 text-blue-700',
-  staff:    'bg-teal-100 text-teal-700',
-  order:    'bg-green-100 text-green-700',
-  settings: 'bg-orange-100 text-orange-700',
-  device:   'bg-indigo-100 text-indigo-700',
-}
-
-const SEVERITY_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  info:     'secondary',
-  warning:  'outline',
-  critical: 'destructive',
-  error:    'destructive',
-}
-const SEVERITY_BADGE_COLOR: Record<string, string> = {
-  info:     'text-blue-600',
-  warning:  'text-yellow-600',
-  critical: 'text-red-600',
-  error:    'text-red-600',
-}
-
 function fmtTime(iso: string) {
   const d = new Date(iso)
   return {
@@ -120,23 +138,24 @@ function fmtRelative(iso: string): string {
 // SUB-COMPONENTS
 // ============================================================================
 
+/**
+ * Severity and category read as plain text, not tinted pills.
+ *
+ * §14.3 HQ-2 keeps severity colour to `/manage/health` and the DLQ, and a log
+ * this dense drew a coloured chip on every row of every column — the tint
+ * stopped marking anything and just filled the table with noise. The words
+ * carry the distinction; the chart above still uses colour, where it maps a
+ * stacked bar to its legend entry (§4.6b).
+ */
 function SeverityBadge({ severity }: { severity: string | null }) {
-  const s = severity ?? 'info'
   return (
-    <Badge variant={SEVERITY_VARIANT[s] ?? 'secondary'} className={`text-xs capitalize ${SEVERITY_BADGE_COLOR[s] ?? ''}`}>
-      {s}
-    </Badge>
+    <span className="text-sm capitalize text-muted-foreground">{severity ?? 'info'}</span>
   )
 }
 
 function CategoryBadge({ category }: { category: string | null }) {
-  if (!category) return <span className="text-xs text-muted-foreground">—</span>
-  const cls = CATEGORY_BADGE_COLORS[category.toLowerCase()] ?? 'bg-gray-100 text-gray-700'
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${cls}`}>
-      {category}
-    </span>
-  )
+  if (!category) return <span className="text-muted-foreground">—</span>
+  return <span className="text-sm capitalize text-muted-foreground">{category}</span>
 }
 
 // ── Custom chart tooltip ────────────────────────────────────────────────────
@@ -264,7 +283,7 @@ function DailyActivityChart({ analytics, isLoading }: {
                 tickLine={false}
                 allowDecimals={false}
               />
-              <RechartsTooltip content={<DailyChartTooltip />} cursor={{ fill: 'hsl(var(--muted))' }} />
+              <RechartsTooltip content={<DailyChartTooltip />} cursor={{ fill: 'var(--muted)' }} />
               <Legend
                 iconType="circle"
                 iconSize={8}
@@ -297,39 +316,54 @@ function TopActorsTable({ actors, isLoading }: {
   actors: TopAuditActor[]
   isLoading: boolean
 }) {
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(TOP_ACTOR_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  const visibleColCount = TOP_ACTOR_COLUMNS.filter(c => showCol(c.id)).length
+
   return (
     <Panel>
       <PanelSection
         icon={User}
         label={!isLoading && actors.length > 0 ? `Top actors (${actors.length})` : 'Top actors'}
         caption="Most active admin users ranked by action count — last 30 days"
+        action={
+          <MobileColumnsButton
+            columns={TOP_ACTOR_COLUMNS}
+            hidden={hiddenCols}
+            onChange={setHiddenCols}
+          />
+        }
       >
         <div className="max-h-80 overflow-auto">
-          <Table variant="data" className="min-w-[820px]">
+          {/* Min-width lifted on mobile so hidden columns actually narrow the
+              table instead of leaving it scrolling sideways. */}
+          <Table variant="data" className={cn(!isMobile && 'min-w-[820px]')}>
             <TableHeader className="[&_tr]:border-0">
               <TableRow>
-                <TableHead className="w-10">#</TableHead>
                 <TableHead>Actor</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-                <TableHead className="text-right">Warnings</TableHead>
-                <TableHead className="text-right">Errors</TableHead>
-                <TableHead className="text-right">Merchants</TableHead>
-                <TableHead className="text-right">Last Active</TableHead>
+                {showCol('role') && <TableHead>Role</TableHead>}
+                {showCol('actions') && <TableHead className="text-right">Actions</TableHead>}
+                {showCol('warnings') && <TableHead className="text-right">Warnings</TableHead>}
+                {showCol('errors') && <TableHead className="text-right">Errors</TableHead>}
+                {showCol('merchants') && <TableHead className="text-right">Merchants</TableHead>}
+                {showCol('lastActive') && <TableHead className="text-right">Last Active</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: visibleColCount }).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : actors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={visibleColCount} className="h-24 text-center text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
                       <User className="h-7 w-7 opacity-30" />
                       No actor data available
@@ -337,47 +371,56 @@ function TopActorsTable({ actors, isLoading }: {
                   </TableCell>
                 </TableRow>
               ) : (
-                actors.map((actor, idx) => (
+                actors.map((actor) => (
                   <TableRow key={actor.actorName}>
-                    <TableCell className="tabular-nums text-muted-foreground">
-                      {idx + 1}
-                    </TableCell>
                     <TableCell>
                       <p className="font-medium leading-tight">{actor.actorName}</p>
                       {actor.actorEmail && actor.actorEmail !== actor.actorName && (
                         <p className="text-xs leading-tight text-muted-foreground">{actor.actorEmail}</p>
                       )}
                     </TableCell>
-                    <TableCell>
-                      {actor.actorRole ? (
-                        <span className="capitalize text-muted-foreground">{actor.actorRole}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {actor.totalActions.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {actor.warningCount > 0 ? (
-                        <span className="font-medium">{actor.warningCount}</span>
-                      ) : (
-                        <span className="text-muted-foreground">0</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {actor.errorCount > 0 ? (
-                        <span className="font-semibold">{actor.errorCount}</span>
-                      ) : (
-                        <span className="text-muted-foreground">0</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {actor.distinctMerchants}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-right text-muted-foreground">
-                      {fmtRelative(actor.lastActionAt)}
-                    </TableCell>
+                    {showCol('role') && (
+                      <TableCell>
+                        {actor.actorRole ? (
+                          <span className="capitalize text-muted-foreground">{actor.actorRole}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    )}
+                    {showCol('actions') && (
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {actor.totalActions.toLocaleString()}
+                      </TableCell>
+                    )}
+                    {showCol('warnings') && (
+                      <TableCell className="text-right tabular-nums">
+                        {actor.warningCount > 0 ? (
+                          <span className="font-medium">{actor.warningCount}</span>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </TableCell>
+                    )}
+                    {showCol('errors') && (
+                      <TableCell className="text-right tabular-nums">
+                        {actor.errorCount > 0 ? (
+                          <span className="font-semibold">{actor.errorCount}</span>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </TableCell>
+                    )}
+                    {showCol('merchants') && (
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {actor.distinctMerchants}
+                      </TableCell>
+                    )}
+                    {showCol('lastActive') && (
+                      <TableCell className="whitespace-nowrap text-right text-muted-foreground">
+                        {fmtRelative(actor.lastActionAt)}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
@@ -398,6 +441,12 @@ function FailedActionsFeed({ failed, isLoading }: {
   isLoading: boolean
   count: number
 }) {
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(FAILED_ACTION_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+
   return (
     <Panel>
       <PanelSection
@@ -415,7 +464,13 @@ function FailedActionsFeed({ failed, isLoading }: {
               <CheckCircle2 className="h-4 w-4" />
               All clear
             </span>
-          ) : undefined
+          ) : (
+            <MobileColumnsButton
+              columns={FAILED_ACTION_COLUMNS}
+              hidden={hiddenCols}
+              onChange={setHiddenCols}
+            />
+          )
         }
       >
         {isLoading ? (
@@ -430,16 +485,18 @@ function FailedActionsFeed({ failed, isLoading }: {
           </div>
         ) : (
           <div className="max-h-96 overflow-auto">
-            <Table variant="data" className="min-w-[920px]">
+            {/* Min-width lifted on mobile so hidden columns actually narrow the
+                table instead of leaving it scrolling sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[920px]')}>
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead className="w-36">Time</TableHead>
-                  <TableHead>Actor</TableHead>
-                  <TableHead>Action / Category</TableHead>
-                  <TableHead className="max-w-72">Error Message</TableHead>
-                  <TableHead>Resource</TableHead>
-                  <TableHead>Merchant</TableHead>
-                  <TableHead>Severity</TableHead>
+                  {showCol('actor') && <TableHead>Actor</TableHead>}
+                  {showCol('action') && <TableHead>Action / Category</TableHead>}
+                  {showCol('error') && <TableHead className="max-w-72">Error Message</TableHead>}
+                  {showCol('resource') && <TableHead>Resource</TableHead>}
+                  {showCol('merchant') && <TableHead>Merchant</TableHead>}
+                  {showCol('severity') && <TableHead>Severity</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -451,56 +508,68 @@ function FailedActionsFeed({ failed, isLoading }: {
                         <p className="text-xs font-medium">{time}</p>
                         <p className="text-xs text-muted-foreground">{date}</p>
                       </TableCell>
-                      <TableCell className="align-top">
-                        <p className="leading-tight">{f.actorName ?? <span className="text-muted-foreground">System</span>}</p>
-                        {f.actorEmail && f.actorEmail !== f.actorName && (
-                          <p className="text-xs text-muted-foreground">{f.actorEmail}</p>
-                        )}
-                      </TableCell>
-                      <TableCell className="align-top">
-                        <p className="max-w-48 truncate font-medium leading-tight" title={f.action ?? ''}>
-                          {f.action ?? <span className="text-muted-foreground">—</span>}
-                        </p>
-                        <div className="mt-0.5"><CategoryBadge category={f.actionCategory} /></div>
-                      </TableCell>
-                      <TableCell className="max-w-72 align-top">
-                        {f.errorMessage ? (
-                          // The message keeps its own quiet well so a wrapped
-                          // stack string stays distinguishable from the row.
-                          <p
-                            className="line-clamp-2 rounded-2xl bg-muted/60 px-2 py-1 font-mono text-xs leading-snug"
-                            title={f.errorMessage}
-                          >
-                            {f.errorMessage}
+                      {showCol('actor') && (
+                        <TableCell className="align-top">
+                          <p className="leading-tight">{f.actorName ?? <span className="text-muted-foreground">System</span>}</p>
+                          {f.actorEmail && f.actorEmail !== f.actorName && (
+                            <p className="text-xs text-muted-foreground">{f.actorEmail}</p>
+                          )}
+                        </TableCell>
+                      )}
+                      {showCol('action') && (
+                        <TableCell className="align-top">
+                          <p className="max-w-48 truncate font-medium leading-tight" title={f.action ?? ''}>
+                            {f.action ?? <span className="text-muted-foreground">—</span>}
                           </p>
-                        ) : f.status ? (
-                          <span className="text-sm text-muted-foreground">{f.status}</span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="align-top">
-                        {f.resourceName || f.resourceType ? (
-                          <>
-                            <p className="leading-tight">{f.resourceName ?? '—'}</p>
-                            {f.resourceType && (
-                              <p className="text-xs capitalize text-muted-foreground">{f.resourceType}</p>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="align-top">
-                        {f.merchantName ? (
-                          <p>{f.merchantName}</p>
-                        ) : (
-                          <span className="text-muted-foreground">Platform</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="align-top">
-                        <SeverityBadge severity={f.severity} />
-                      </TableCell>
+                          <div className="mt-0.5"><CategoryBadge category={f.actionCategory} /></div>
+                        </TableCell>
+                      )}
+                      {showCol('error') && (
+                        <TableCell className="max-w-72 align-top">
+                          {f.errorMessage ? (
+                            // The message keeps its own quiet well so a wrapped
+                            // stack string stays distinguishable from the row.
+                            <p
+                              className="line-clamp-2 rounded-2xl bg-muted/60 px-2 py-1 font-mono text-xs leading-snug"
+                              title={f.errorMessage}
+                            >
+                              {f.errorMessage}
+                            </p>
+                          ) : f.status ? (
+                            <span className="text-sm text-muted-foreground">{f.status}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      )}
+                      {showCol('resource') && (
+                        <TableCell className="align-top">
+                          {f.resourceName || f.resourceType ? (
+                            <>
+                              <p className="leading-tight">{f.resourceName ?? '—'}</p>
+                              {f.resourceType && (
+                                <p className="text-xs capitalize text-muted-foreground">{f.resourceType}</p>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      )}
+                      {showCol('merchant') && (
+                        <TableCell className="align-top">
+                          {f.merchantName ? (
+                            <p>{f.merchantName}</p>
+                          ) : (
+                            <span className="text-muted-foreground">Platform</span>
+                          )}
+                        </TableCell>
+                      )}
+                      {showCol('severity') && (
+                        <TableCell className="align-top">
+                          <SeverityBadge severity={f.severity} />
+                        </TableCell>
+                      )}
                     </TableRow>
                   )
                 })}
@@ -531,6 +600,13 @@ interface AuditLogRow {
 }
 
 function FullLogTable() {
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(FULL_LOG_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  const visibleColCount = FULL_LOG_COLUMNS.filter(c => showCol(c.id)).length
+
   const [search, setSearch]         = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [category, setCategory]     = useState('all')
@@ -550,7 +626,11 @@ function FullLogTable() {
     offset,
   )
 
-  const applySearch = useCallback(() => { setSearch(searchInput); setPage(0) }, [searchInput])
+  // Plain function, not a `useCallback`: this is only ever passed to onKeyDown
+  // and onBlur, never used as a memo dependency, so wrapping it bought nothing
+  // — and its dep list omitted `setPage`, which made React Compiler bail out of
+  // optimizing the whole component.
+  const applySearch = () => { setSearch(searchInput); setPage(0) }
 
   const logs: AuditLogRow[]   = data?.data  ?? []
   const total: number         = data?.total ?? 0
@@ -588,33 +668,40 @@ function FullLogTable() {
               {SEVERITIES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
             </SelectContent>
           </Select>
+          <MobileColumnsButton
+            columns={FULL_LOG_COLUMNS}
+            hidden={hiddenCols}
+            onChange={setHiddenCols}
+          />
         </div>
 
         <div className="space-y-4">
-          <Table variant="data" className="min-w-[920px]">
+          {/* Min-width lifted on mobile so hidden columns actually narrow the
+              table instead of leaving it scrolling sideways. */}
+          <Table variant="data" className={cn(!isMobile && 'min-w-[920px]')}>
             <TableHeader className="[&_tr]:border-0">
               <TableRow>
                 <TableHead className="w-36">Time</TableHead>
-                <TableHead>Actor</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Resource</TableHead>
-                <TableHead>Merchant</TableHead>
-                <TableHead>Severity</TableHead>
+                {showCol('actor') && <TableHead>Actor</TableHead>}
+                {showCol('action') && <TableHead>Action</TableHead>}
+                {showCol('category') && <TableHead>Category</TableHead>}
+                {showCol('resource') && <TableHead>Resource</TableHead>}
+                {showCol('merchant') && <TableHead>Merchant</TableHead>}
+                {showCol('severity') && <TableHead>Severity</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: visibleColCount }).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={visibleColCount} className="py-10 text-center text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
                       <Activity className="h-8 w-8 opacity-30" />
                       <span>No audit events found</span>
@@ -635,34 +722,46 @@ function FullLogTable() {
                         <p className="text-xs font-medium text-foreground">{time}</p>
                         <p className="text-xs text-muted-foreground">{date}</p>
                       </TableCell>
-                      <TableCell>
-                        {log.actor_name ?? <span className="text-muted-foreground">System</span>}
-                      </TableCell>
-                      <TableCell className="max-w-48 truncate font-medium" title={log.action}>
-                        {log.action}
-                      </TableCell>
-                      <TableCell>
-                        <CategoryBadge category={log.action_category} />
-                      </TableCell>
-                      <TableCell className="align-top">
-                        {log.resource_name || log.resource_type ? (
-                          <>
-                            <p>{log.resource_name ?? '—'}</p>
-                            {log.resource_type && <p className="text-xs capitalize text-muted-foreground">{log.resource_type}</p>}
-                          </>
-                        ) : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="align-top">
-                        {log.merchants?.name ? (
-                          <>
-                            <p>{log.merchants.name}</p>
-                            {log.location?.name && <p className="text-xs text-muted-foreground">{log.location.name}</p>}
-                          </>
-                        ) : <span className="text-muted-foreground">Platform</span>}
-                      </TableCell>
-                      <TableCell>
-                        <SeverityBadge severity={log.severity} />
-                      </TableCell>
+                      {showCol('actor') && (
+                        <TableCell>
+                          {log.actor_name ?? <span className="text-muted-foreground">System</span>}
+                        </TableCell>
+                      )}
+                      {showCol('action') && (
+                        <TableCell className="max-w-48 truncate font-medium" title={log.action}>
+                          {log.action}
+                        </TableCell>
+                      )}
+                      {showCol('category') && (
+                        <TableCell>
+                          <CategoryBadge category={log.action_category} />
+                        </TableCell>
+                      )}
+                      {showCol('resource') && (
+                        <TableCell className="align-top">
+                          {log.resource_name || log.resource_type ? (
+                            <>
+                              <p>{log.resource_name ?? '—'}</p>
+                              {log.resource_type && <p className="text-xs capitalize text-muted-foreground">{log.resource_type}</p>}
+                            </>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      )}
+                      {showCol('merchant') && (
+                        <TableCell className="align-top">
+                          {log.merchants?.name ? (
+                            <>
+                              <p>{log.merchants.name}</p>
+                              {log.location?.name && <p className="text-xs text-muted-foreground">{log.location.name}</p>}
+                            </>
+                          ) : <span className="text-muted-foreground">Platform</span>}
+                        </TableCell>
+                      )}
+                      {showCol('severity') && (
+                        <TableCell>
+                          <SeverityBadge severity={log.severity} />
+                        </TableCell>
+                      )}
                     </TableRow>
                   )
                 })

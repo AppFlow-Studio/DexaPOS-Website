@@ -1,8 +1,16 @@
 'use client'
 
+import { useState } from 'react'
 import { useMerchantActivationTimeline } from '@/lib/queries/use-platform-analytics'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { ArrowDownRight, ArrowUpRight, Minus, Timer, ListChecks } from 'lucide-react'
 import { Panel } from '@/components/dashboard/shell/Panel'
@@ -14,8 +22,32 @@ import type { NeverActivatedMerchant } from '@/app/manage/actions/hq-platform/an
 /** Bucket fills encode the histogram's time bands — data, not decoration (§4.6b). */
 const BUCKET_COLORS = ['#22c55e', '#86efac', '#f59e0b', '#fb923c', '#ef4444', '#991b1b']
 
+/**
+ * Mobile column meta for the never-activated table.
+ *
+ * Score is the roll-up of the six checklist columns, so it stays visible while
+ * the individual checkmarks start hidden — one number instead of six ticks is
+ * the right trade on a phone.
+ */
+const NEVER_ACTIVATED_COLUMNS: ReportColumn[] = [
+  { id: 'merchant', label: 'Merchant', locked: true },
+  { id: 'days', label: 'Days Since Sign-up', defaultHidden: true },
+  { id: 'logo', label: 'Logo', defaultHidden: true },
+  { id: 'location', label: 'Location', defaultHidden: true },
+  { id: 'menu', label: 'Menu', defaultHidden: true },
+  { id: 'staff', label: 'Staff', defaultHidden: true },
+  { id: 'device', label: 'Device', defaultHidden: true },
+  { id: 'order', label: 'Order', defaultHidden: true },
+  { id: 'score', label: 'Score' },
+]
+
 export function MerchantActivationTimeline() {
   const { data, isLoading } = useMerchantActivationTimeline()
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(NEVER_ACTIVATED_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
 
   if (isLoading) {
     return (
@@ -110,20 +142,29 @@ export function MerchantActivationTimeline() {
             label="Never activated merchants"
             icon={ListChecks}
             caption="Signed up 30+ days ago, no completed transactions. Onboarding checklist shows readiness (6 criteria)."
+            action={
+              <MobileColumnsButton
+                columns={NEVER_ACTIVATED_COLUMNS}
+                hidden={hiddenCols}
+                onChange={setHiddenCols}
+              />
+            }
           >
-            {/* `variant="data"` brings its own scrolling well — no extra wrapper. */}
-            <Table variant="data" className="min-w-[760px]">
+            {/* `variant="data"` brings its own scrolling well — no extra wrapper.
+                The min-width is dropped on mobile so hiding columns actually
+                narrows the table instead of just spreading it out. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[760px]')}>
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead>Merchant</TableHead>
-                  <TableHead className="whitespace-nowrap text-right">Days Since Sign-up</TableHead>
-                  <TableHead className="text-center">Logo</TableHead>
-                  <TableHead className="text-center">Location</TableHead>
-                  <TableHead className="text-center">Menu</TableHead>
-                  <TableHead className="text-center">Staff</TableHead>
-                  <TableHead className="text-center">Device</TableHead>
-                  <TableHead className="text-center">Order</TableHead>
-                  <TableHead className="text-center">Score</TableHead>
+                  {showCol('days') && <TableHead className="whitespace-nowrap text-right">Days Since Sign-up</TableHead>}
+                  {showCol('logo') && <TableHead className="text-center">Logo</TableHead>}
+                  {showCol('location') && <TableHead className="text-center">Location</TableHead>}
+                  {showCol('menu') && <TableHead className="text-center">Menu</TableHead>}
+                  {showCol('staff') && <TableHead className="text-center">Staff</TableHead>}
+                  {showCol('device') && <TableHead className="text-center">Device</TableHead>}
+                  {showCol('order') && <TableHead className="text-center">Order</TableHead>}
+                  {showCol('score') && <TableHead className="text-center">Score</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -132,18 +173,22 @@ export function MerchantActivationTimeline() {
                     <TableCell className="font-medium">
                       <span className="block truncate" title={m.name}>{m.name}</span>
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{m.daysSinceCreation}d</TableCell>
-                    <TableCell className="text-center"><CheckIcon ok={m.hasLogo} /></TableCell>
-                    <TableCell className="text-center"><CheckIcon ok={m.hasLocation} /></TableCell>
-                    <TableCell className="text-center"><CheckIcon ok={m.hasMenu} /></TableCell>
-                    <TableCell className="text-center"><CheckIcon ok={m.hasStaff} /></TableCell>
-                    <TableCell className="text-center"><CheckIcon ok={m.hasDevice} /></TableCell>
-                    <TableCell className="text-center"><CheckIcon ok={false} /></TableCell>
-                    <TableCell className="text-center">
-                      <span className="text-xs font-medium tabular-nums text-muted-foreground">
-                        {m.onboardingScore}/6
-                      </span>
-                    </TableCell>
+                    {showCol('days') && (
+                      <TableCell className="text-right tabular-nums">{m.daysSinceCreation}d</TableCell>
+                    )}
+                    {showCol('logo') && <TableCell className="text-center"><CheckIcon ok={m.hasLogo} /></TableCell>}
+                    {showCol('location') && <TableCell className="text-center"><CheckIcon ok={m.hasLocation} /></TableCell>}
+                    {showCol('menu') && <TableCell className="text-center"><CheckIcon ok={m.hasMenu} /></TableCell>}
+                    {showCol('staff') && <TableCell className="text-center"><CheckIcon ok={m.hasStaff} /></TableCell>}
+                    {showCol('device') && <TableCell className="text-center"><CheckIcon ok={m.hasDevice} /></TableCell>}
+                    {showCol('order') && <TableCell className="text-center"><CheckIcon ok={false} /></TableCell>}
+                    {showCol('score') && (
+                      <TableCell className="text-center">
+                        <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                          {m.onboardingScore}/6
+                        </span>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

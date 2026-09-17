@@ -216,8 +216,10 @@ export default function MerchantsPage() {
 
                 <div className="flex items-center gap-2">
                     {/* View Mode Toggle — a segmented pill on the same muted
-                        material as the filters, rather than a bordered group. */}
-                    <div className="flex items-center gap-0.5 rounded-full bg-muted/70 p-1">
+                        material as the filters, rather than a bordered group.
+                        Visible from `md` (768px) up; hidden on phones, where the
+                        table cannot render at all. */}
+                    <div className="hidden items-center gap-0.5 rounded-full bg-muted/70 p-1 md:flex">
                         <Button
                             variant="ghost"
                             size="icon"
@@ -404,11 +406,14 @@ function MerchantListView({
 
     return (
         <div className="min-w-0">
-            {/* §5.3: two trees off one dataset — the data table from `xl`, a card
-                grid below it. Never a horizontally scrolling table on a phone. */}
+            {/* §5.3: two trees off one dataset — the data table from `md`, a card
+                grid below it. Never a horizontally scrolling table on a phone;
+                from 768px the 900px-wide table scrolls inside its own tinted
+                well (the variant supplies `overflow-x-auto`), so the page itself
+                never gains a horizontal scrollbar. */}
             <Table
                 variant="data"
-                containerClassName="hidden xl:block"
+                containerClassName="hidden md:block"
                 className="min-w-[900px]"
             >
                 <TableHeader className="[&_tr]:border-0">
@@ -434,12 +439,17 @@ function MerchantListView({
                                 onClick={() => onMerchantClick(merchant.clerk_org_id)}
                             >
                                 <TableCell>
-                                    <div className="flex items-center gap-2">
-                                        {merchant.logo_url && <Image src={merchant.logo_url} alt={merchant.name} width={40} height={40} className="rounded-md object-cover" />}
-                                        <div className="flex flex-col">
-                                            <div className="font-semibold">{merchant.name}</div>
+                                    {/* `shrink-0` on the logo and `min-w-0` + `truncate`
+                                        on the text: without them a long merchant name
+                                        pushed out of this cell and overlapped the Owner
+                                        column once the table was allowed to render at
+                                        768px. */}
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        {merchant.logo_url && <Image src={merchant.logo_url} alt={merchant.name} width={40} height={40} className="shrink-0 rounded-md object-cover" />}
+                                        <div className="flex min-w-0 flex-col">
+                                            <div className="truncate font-semibold">{merchant.name}</div>
                                             {merchant.type && (
-                                                <div className="text-sm capitalize text-muted-foreground">
+                                                <div className="truncate text-sm capitalize text-muted-foreground">
                                                     {merchant.type}
                                                 </div>
                                             )}
@@ -447,12 +457,16 @@ function MerchantListView({
                                     </div>
                                 </TableCell>
                                 <TableCell>
-                                    <div className="flex flex-col">
-                                        <span className="font-medium">
+                                    {/* Long owner emails (`qa.autograant2_056126+clerk_test@…`)
+                                        widen this cell well past its share of the
+                                        table, so the text truncates rather than
+                                        stretching the row. */}
+                                    <div className="flex min-w-0 max-w-[16rem] flex-col">
+                                        <span className="truncate font-medium">
                                             {`${merchant.owner_first_name || ''} ${merchant.owner_last_name || ''}`.trim() || '-'}
                                         </span>
                                         {merchant.owner_email && (
-                                            <span className="text-xs text-muted-foreground">{merchant.owner_email}</span>
+                                            <span className="truncate text-xs text-muted-foreground" title={merchant.owner_email}>{merchant.owner_email}</span>
                                         )}
                                     </div>
                                 </TableCell>
@@ -496,7 +510,7 @@ function MerchantListView({
                 </TableBody>
             </Table>
 
-            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:hidden">
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 md:hidden">
                 {merchants.map((merchant) => {
                     const merchantStatus = merchant.onboarding_status || merchant.derived_status
                     const ownerName = `${merchant.owner_first_name || ''} ${merchant.owner_last_name || ''}`.trim()
@@ -508,13 +522,15 @@ function MerchantListView({
                         >
                             <div className="flex items-start justify-between gap-2">
                                 <div className="flex min-w-0 items-center gap-2">
+                                    {/* Logo is `sm`-and-up only, matching `MerchantCard`:
+                                        at phone width it just squeezes the name. */}
                                     {merchant.logo_url && (
                                         <Image
                                             src={merchant.logo_url}
                                             alt={merchant.name}
                                             width={32}
                                             height={32}
-                                            className="shrink-0 rounded-md object-cover"
+                                            className="hidden shrink-0 rounded-md object-cover sm:block"
                                         />
                                     )}
                                     <div className="min-w-0">

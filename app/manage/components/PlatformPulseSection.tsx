@@ -106,15 +106,7 @@ export function PlatformPulseSection() {
     <Panel>
       <PanelSection
         label="Platform Pulse"
-        caption={
-          <span className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75 motion-reduce:animate-none" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
-            </span>
-            Real-time platform metrics
-          </span>
-        }
+        caption="Real-time platform metrics"
         action={
           <span className="text-xs text-muted-foreground">Updated just now</span>
         }

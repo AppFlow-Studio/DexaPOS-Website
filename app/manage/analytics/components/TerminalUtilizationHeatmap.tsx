@@ -8,6 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+    MobileColumnsButton,
+    initialHiddenColumns,
+    type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
     ResponsiveContainer,
@@ -42,37 +49,48 @@ import Link from 'next/link'
 // Constants
 // ============================================================================
 
+/**
+ * Tier is carried by its label alone. The per-tier text colour, row tint and
+ * bar fill are gone: a tinted row plus a coloured figure plus a coloured badge
+ * stated the same tier three times, and a table where most rows are tinted
+ * reads as a colour field rather than as an exception worth noticing.
+ */
 const TIER_CONFIG: Record<UtilizationTier, {
     label: string
     variant: 'default' | 'secondary' | 'destructive'
-    colorClass: string
-    bgClass: string
-    barColor: string
 }> = {
     healthy: {
         label: 'Healthy',
         variant: 'default',
-        colorClass: 'text-green-600',
-        bgClass: 'bg-green-50 border-green-200',
-        barColor: '#22c55e',
     },
     underutilized: {
         label: 'Underutilized',
         variant: 'secondary',
-        colorClass: 'text-yellow-600',
-        bgClass: 'bg-yellow-50 border-yellow-200',
-        barColor: '#eab308',
     },
     critical: {
         label: 'Critical',
         variant: 'destructive',
-        colorClass: 'text-red-600',
-        bgClass: 'bg-red-50 border-red-200',
-        barColor: '#ef4444',
     },
 }
 
 type SortKey = 'utilizationRate' | 'totalStations' | 'zombieStations' | 'merchantName'
+
+/**
+ * Mobile column meta for the merchant terminal report.
+ *
+ * Heatmap is hidden by default on mobile: it is a wrapping grid of 24px squares,
+ * one per station, so it cannot narrow — it only overflows. It stays one tap
+ * away, and is always present on desktop. Util. Rate is the default sort key and
+ * the measure the panel exists for, so it is the number kept beside the name.
+ */
+const MERCHANT_TERMINAL_COLUMNS: ReportColumn[] = [
+    { id: 'merchant', label: 'Merchant', locked: true },
+    { id: 'stations', label: 'Stations', defaultHidden: true },
+    { id: 'utilRate', label: 'Util. Rate' },
+    { id: 'zombies', label: 'Zombies', defaultHidden: true },
+    { id: 'tier', label: 'Tier', defaultHidden: true },
+    { id: 'heatmap', label: 'Heatmap', defaultHidden: true },
+]
 
 // ============================================================================
 // Heatmap Cell — visual grid of stations per merchant
@@ -196,6 +214,14 @@ export default function TerminalUtilizationHeatmap() {
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
     const [expandedMerchant, setExpandedMerchant] = useState<string | null>(null)
     const [filterTier, setFilterTier] = useState<'all' | UtilizationTier>('all')
+    const isMobile = useIsMobile()
+    const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+        initialHiddenColumns(MERCHANT_TERMINAL_COLUMNS)
+    )
+    const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+    // +1 for the chevron column, which has no meta entry but occupies a cell.
+    // The empty state and the expanded drill-down row both span the full width.
+    const visibleColCount = MERCHANT_TERMINAL_COLUMNS.filter(c => showCol(c.id)).length + 1
 
     const { data, isLoading } = useTerminalUtilization(days)
 
@@ -407,21 +433,30 @@ export default function TerminalUtilizationHeatmap() {
                                         : `${filteredAndSorted.length} ${filterTier} merchants`
                                 }
                                 action={
-                                    <Select value={filterTier} onValueChange={(v) => setFilterTier(v as typeof filterTier)}>
-                                        <SelectTrigger className="h-9 w-40 shrink-0 rounded-full border-0 bg-muted/60 px-3 shadow-none">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Tiers</SelectItem>
-                                            <SelectItem value="critical">Critical (&lt;25%)</SelectItem>
-                                            <SelectItem value="underutilized">Underutilized (&lt;50%)</SelectItem>
-                                            <SelectItem value="healthy">Healthy (≥50%)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <div className="flex items-center gap-2">
+                                        <MobileColumnsButton
+                                            columns={MERCHANT_TERMINAL_COLUMNS}
+                                            hidden={hiddenCols}
+                                            onChange={setHiddenCols}
+                                        />
+                                        <Select value={filterTier} onValueChange={(v) => setFilterTier(v as typeof filterTier)}>
+                                            <SelectTrigger className="h-9 w-40 shrink-0 rounded-full border-0 bg-muted/60 px-3 shadow-none">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Tiers</SelectItem>
+                                                <SelectItem value="critical">Critical (&lt;25%)</SelectItem>
+                                                <SelectItem value="underutilized">Underutilized (&lt;50%)</SelectItem>
+                                                <SelectItem value="healthy">Healthy (≥50%)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 }
                             >
                                 <div className="max-h-112.5 overflow-auto">
-                                    <Table variant="data" className="min-w-[860px]">
+                                    {/* Min-width lifted on mobile so hidden columns actually
+                                        narrow the table instead of scrolling sideways. */}
+                                    <Table variant="data" className={cn(!isMobile && 'min-w-[860px]')}>
                                         <TableHeader className="[&_tr]:border-0">
                                             <TableRow>
                                                 <TableHead className="w-6"></TableHead>
@@ -434,41 +469,47 @@ export default function TerminalUtilizationHeatmap() {
                                                         <ArrowUpDown className="h-3 w-3" />
                                                     </span>
                                                 </TableHead>
-                                                <TableHead
-                                                    className="text-center cursor-pointer select-none hover:text-foreground"
-                                                    onClick={() => handleSort('totalStations')}
-                                                >
-                                                    <span className="flex items-center justify-center gap-1">
-                                                        Stations
-                                                        <ArrowUpDown className="h-3 w-3" />
-                                                    </span>
-                                                </TableHead>
-                                                <TableHead
-                                                    className="text-center cursor-pointer select-none hover:text-foreground"
-                                                    onClick={() => handleSort('utilizationRate')}
-                                                >
-                                                    <span className="flex items-center justify-center gap-1">
-                                                        Util. Rate
-                                                        <ArrowUpDown className="h-3 w-3" />
-                                                    </span>
-                                                </TableHead>
-                                                <TableHead
-                                                    className="text-center cursor-pointer select-none hover:text-foreground"
-                                                    onClick={() => handleSort('zombieStations')}
-                                                >
-                                                    <span className="flex items-center justify-center gap-1">
-                                                        Zombies
-                                                        <ArrowUpDown className="h-3 w-3" />
-                                                    </span>
-                                                </TableHead>
-                                                <TableHead className="text-center">Tier</TableHead>
-                                                <TableHead className="text-center">Heatmap</TableHead>
+                                                {showCol('stations') && (
+                                                    <TableHead
+                                                        className="text-center cursor-pointer select-none hover:text-foreground"
+                                                        onClick={() => handleSort('totalStations')}
+                                                    >
+                                                        <span className="flex items-center justify-center gap-1">
+                                                            Stations
+                                                            <ArrowUpDown className="h-3 w-3" />
+                                                        </span>
+                                                    </TableHead>
+                                                )}
+                                                {showCol('utilRate') && (
+                                                    <TableHead
+                                                        className="text-center cursor-pointer select-none hover:text-foreground"
+                                                        onClick={() => handleSort('utilizationRate')}
+                                                    >
+                                                        <span className="flex items-center justify-center gap-1">
+                                                            Util. Rate
+                                                            <ArrowUpDown className="h-3 w-3" />
+                                                        </span>
+                                                    </TableHead>
+                                                )}
+                                                {showCol('zombies') && (
+                                                    <TableHead
+                                                        className="text-center cursor-pointer select-none hover:text-foreground"
+                                                        onClick={() => handleSort('zombieStations')}
+                                                    >
+                                                        <span className="flex items-center justify-center gap-1">
+                                                            Zombies
+                                                            <ArrowUpDown className="h-3 w-3" />
+                                                        </span>
+                                                    </TableHead>
+                                                )}
+                                                {showCol('tier') && <TableHead className="text-center">Tier</TableHead>}
+                                                {showCol('heatmap') && <TableHead className="text-center">Heatmap</TableHead>}
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {filteredAndSorted.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                                    <TableCell colSpan={visibleColCount} className="text-center py-8 text-muted-foreground">
                                                         <div className="flex flex-col items-center gap-2">
                                                             <ShieldCheck className="h-8 w-8 opacity-30" />
                                                             <p className="text-sm font-medium">No merchants in this tier</p>
@@ -481,7 +522,7 @@ export default function TerminalUtilizationHeatmap() {
                                                 return (
                                                     <Fragment key={m.merchantId}>
                                                         <TableRow
-                                                            className={`cursor-pointer hover:bg-muted/50 ${tierCfg.bgClass}`}
+                                                            className="cursor-pointer hover:bg-muted/50"
                                                             onClick={() => setExpandedMerchant(isExpanded ? null : m.merchantId)}
                                                         >
                                                             <TableCell className="w-6 pr-0">
@@ -502,38 +543,48 @@ export default function TerminalUtilizationHeatmap() {
                                                                     {m.totalOrders.toLocaleString()} total orders
                                                                 </p>
                                                             </TableCell>
-                                                            <TableCell className="text-center">
-                                                                <span className="font-medium text-sm">
-                                                                    {m.activeStations}/{m.totalStations}
-                                                                </span>
-                                                            </TableCell>
-                                                            <TableCell className="text-center">
-                                                                <span className={`font-bold text-sm ${tierCfg.colorClass}`}>
-                                                                    {m.utilizationRate}%
-                                                                </span>
-                                                            </TableCell>
-                                                            <TableCell className="text-center">
-                                                                {m.zombieStations > 0 ? (
-                                                                    <span className="inline-flex items-center gap-1 text-sm font-medium tabular-nums">
-                                                                        <Ghost className="h-3 w-3" />
-                                                                        {m.zombieStations}
+                                                            {showCol('stations') && (
+                                                                <TableCell className="text-center">
+                                                                    <span className="font-medium text-sm">
+                                                                        {m.activeStations}/{m.totalStations}
                                                                     </span>
-                                                                ) : (
-                                                                    <span className="text-muted-foreground">—</span>
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell className="text-center text-sm text-muted-foreground">
-                                                                {tierCfg.label}
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <StationHeatmapGrid merchant={m} />
-                                                            </TableCell>
+                                                                </TableCell>
+                                                            )}
+                                                            {showCol('utilRate') && (
+                                                                <TableCell className="text-center">
+                                                                    <span className="text-sm font-semibold tabular-nums">
+                                                                        {m.utilizationRate}%
+                                                                    </span>
+                                                                </TableCell>
+                                                            )}
+                                                            {showCol('zombies') && (
+                                                                <TableCell className="text-center">
+                                                                    {m.zombieStations > 0 ? (
+                                                                        <span className="inline-flex items-center gap-1 text-sm font-medium tabular-nums">
+                                                                            <Ghost className="h-3 w-3" />
+                                                                            {m.zombieStations}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-muted-foreground">—</span>
+                                                                    )}
+                                                                </TableCell>
+                                                            )}
+                                                            {showCol('tier') && (
+                                                                <TableCell className="text-center text-sm text-muted-foreground">
+                                                                    {tierCfg.label}
+                                                                </TableCell>
+                                                            )}
+                                                            {showCol('heatmap') && (
+                                                                <TableCell>
+                                                                    <StationHeatmapGrid merchant={m} />
+                                                                </TableCell>
+                                                            )}
                                                         </TableRow>
 
                                                         {/* Expanded Drill-down Row */}
                                                         {isExpanded && (
                                                             <TableRow className="bg-muted/30">
-                                                                <TableCell colSpan={7} className="p-4">
+                                                                <TableCell colSpan={visibleColCount} className="p-4">
                                                                     <div className="space-y-3">
                                                                         <div className="flex items-center justify-between">
                                                                             <h4 className="text-sm font-semibold">Station Detail — {m.merchantName}</h4>

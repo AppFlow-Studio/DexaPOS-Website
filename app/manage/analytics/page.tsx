@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PageShell } from '@/components/dashboard/shell/PageShell'
@@ -35,7 +34,6 @@ import {
     BarChart2,
     MapPin,
     Utensils,
-    ShoppingBag,
     Cpu,
     Globe,
     BellRing,
@@ -53,6 +51,13 @@ import {
     ResponsiveContainer,
 } from 'recharts'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+    MobileColumnsButton,
+    initialHiddenColumns,
+    type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
@@ -84,8 +89,8 @@ import Link from 'next/link'
 // ── Chart config ──────────────────────────────────────────────────────────────
 
 const whaleChartConfig = {
-    gpvConcentration: { label: 'GPV Concentration', color: 'hsl(var(--chart-3))' },
-    equalLine: { label: 'Perfect Equality', color: 'hsl(var(--muted-foreground))' },
+    gpvConcentration: { label: 'GPV Concentration', color: 'var(--chart-3)' },
+    equalLine: { label: 'Perfect Equality', color: 'var(--muted-foreground)' },
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -128,14 +133,37 @@ function TabLabel({
 
 // ── Section divider ───────────────────────────────────────────────────────────
 
+/**
+ * A section heading above a group of panels.
+ *
+ * No rule beneath it: §5.5 bans horizontal lines as dividers — separation is
+ * carried by spacing and the panel surfaces below.
+ */
 function SectionHeader({ title, description }: { title: string; description?: string }) {
     return (
-        <div className="border-b pb-3 mb-5">
+        <div className="mb-5">
             <h2 className="text-base font-semibold">{title}</h2>
             {description && <p className="text-sm text-muted-foreground mt-0.5">{description}</p>}
         </div>
     )
 }
+
+/**
+ * Mobile column meta for the churn risk alert table.
+ *
+ * Merchant is locked (it is the row's identity) and Drop % is the reason the
+ * row is on the list, so those two are the mobile default. The GPV pair, the
+ * recency column and the action buttons are opt-in.
+ */
+const CHURN_RISK_COLUMNS: ReportColumn[] = [
+    { id: 'merchant', label: 'Merchant', locked: true },
+    { id: 'severity', label: 'Severity', defaultHidden: true },
+    { id: 'prevGpv', label: 'Prev 7d GPV', defaultHidden: true },
+    { id: 'lastGpv', label: 'Last 7d GPV', defaultHidden: true },
+    { id: 'drop', label: 'Drop %' },
+    { id: 'daysSince', label: 'Days Since Last Txn', defaultHidden: true },
+    { id: 'actions', label: 'Actions', defaultHidden: true },
+]
 
 // ============================================================================
 // PAGE
@@ -146,6 +174,43 @@ export default function AnalyticsPage() {
     const [whaleSortKey, setWhaleSortKey] = useState<'monthlyGPV' | 'percentOfTotal' | 'trend'>('monthlyGPV')
     const [whaleSortDir, setWhaleSortDir] = useState<'asc' | 'desc'>('desc')
     const [chartMetric, setChartMetric] = useState<'revenue' | 'orders'>('revenue')
+
+    const [activeTab, setActiveTab] = useState('overview')
+    const tabRailRef = useRef<HTMLDivElement>(null)
+
+    /**
+     * Keeps the selected tab pill within the scrolled rail.
+     *
+     * Scrolls the rail itself rather than calling `scrollIntoView` on the pill:
+     * that walks up to every scrollable ancestor, so on a phone it also drags
+     * the page vertically to bring the rail to the top of the viewport — the
+     * tab content jumps under your thumb just as you tap. Setting `scrollLeft`
+     * moves only this element, on the horizontal axis.
+     */
+    useEffect(() => {
+        const rail = tabRailRef.current
+        if (!rail) return
+        const pill = rail.querySelector<HTMLElement>(`[data-state="active"]`)
+        if (!pill) return
+
+        // Centre the pill when it can be centred; otherwise sit flush at the
+        // edge, so the first and last tabs don't leave a dead gap beside them.
+        const target = pill.offsetLeft - (rail.clientWidth - pill.offsetWidth) / 2
+        const max = rail.scrollWidth - rail.clientWidth
+        const left = Math.max(0, Math.min(target, max))
+        if (Math.abs(left - rail.scrollLeft) < 1) return
+
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        rail.scrollTo({ left, behavior: reduceMotion ? 'auto' : 'smooth' })
+    }, [activeTab])
+
+    const isMobile = useIsMobile()
+    const [churnHiddenCols, setChurnHiddenCols] = useState<Set<string>>(() =>
+        initialHiddenColumns(CHURN_RISK_COLUMNS)
+    )
+    // Hiding is mobile-only: the picker itself is `md:hidden`, so desktop must
+    // ignore the set rather than keep columns hidden with no way to restore them.
+    const showChurnCol = (id: string) => !isMobile || !churnHiddenCols.has(id)
 
     type SlackState = { status: 'idle' | 'sending' | 'sent' | 'error' | 'no_webhook' | 'no_critical'; message?: string }
     const [slackAlert, setSlackAlert] = useState<SlackState>({ status: 'idle' })
@@ -334,12 +399,14 @@ export default function AnalyticsPage() {
             {/* ══════════════════════════════════════════════════════════════════════
           6-TAB ANALYTICS SUITE
       ══════════════════════════════════════════════════════════════════════ */}
-            <Tabs defaultValue="overview" className="space-y-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
 
                 {/* Tab bar — DS-CTL-05. Scrolls rather than wraps: six labelled
                     triggers do not fit a phone, and a wrapped rail reads as two
-                    rows of unrelated controls. */}
-                <div className="w-full min-w-0 overflow-x-auto pb-1">
+                    rows of unrelated controls. The rail keeps the active pill in
+                    view itself (see `tabRailRef`), so the scrollbar is hidden —
+                    it would otherwise sit under the pills as a stray grey line. */}
+                <div ref={tabRailRef} className="no-scrollbar w-full min-w-0 overflow-x-auto pb-1">
                     <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
                         <TabsTrigger value="overview" className={TAB_PILL_CLASS}>
                             <TabLabel icon={BarChart3} label="Overview" />
@@ -416,8 +483,8 @@ export default function AnalyticsPage() {
                                                 />
                                             }
                                         />
-                                        <Area type="monotone" dataKey={chartMetric === 'revenue' ? 'revenue' : 'orderCount'} name="Current" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.25} strokeWidth={2} />
-                                        <Area type="monotone" dataKey={chartMetric === 'revenue' ? 'prevRevenue' : 'prevOrderCount'} name="Prior Period" stroke="hsl(var(--muted-foreground))" fill="transparent" strokeWidth={1.5} strokeDasharray="4 2" />
+                                        <Area type="monotone" dataKey={chartMetric === 'revenue' ? 'revenue' : 'orderCount'} name="Current" stroke="var(--primary)" fill="var(--primary)" fillOpacity={0.25} strokeWidth={2} />
+                                        <Area type="monotone" dataKey={chartMetric === 'revenue' ? 'prevRevenue' : 'prevOrderCount'} name="Prior Period" stroke="var(--muted-foreground)" fill="transparent" strokeWidth={1.5} strokeDasharray="4 2" />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             ) : (
@@ -517,13 +584,13 @@ export default function AnalyticsPage() {
                                             <AreaChart data={gpvData.lorenzCurve}>
                                                 <defs>
                                                     <linearGradient id="concentrationGap" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="0%" stopColor="hsl(var(--chart-3))" stopOpacity={0.3} />
-                                                        <stop offset="100%" stopColor="hsl(var(--chart-3))" stopOpacity={0.05} />
+                                                        <stop offset="0%" stopColor="var(--chart-3)" stopOpacity={0.3} />
+                                                        <stop offset="100%" stopColor="var(--chart-3)" stopOpacity={0.05} />
                                                     </linearGradient>
                                                 </defs>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                                <XAxis dataKey="merchantPercentile" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={val => `${val}%`} label={{ value: '% of Merchants (ranked by volume)', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' } }} />
-                                                <YAxis tickLine={false} axisLine={false} tickFormatter={val => `${val}%`} label={{ value: '% of Total GPV', angle: -90, position: 'insideLeft', offset: 10, style: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' } }} />
+                                                <XAxis dataKey="merchantPercentile" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={val => `${val}%`} label={{ value: '% of Merchants (ranked by volume)', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: 'var(--muted-foreground)' } }} />
+                                                <YAxis tickLine={false} axisLine={false} tickFormatter={val => `${val}%`} label={{ value: '% of Total GPV', angle: -90, position: 'insideLeft', offset: 10, style: { fontSize: 11, fill: 'var(--muted-foreground)' } }} />
                                                 <ChartTooltip content={({ active, payload }) => {
                                                     if (active && payload && payload.length) {
                                                         const d = payload[0].payload
@@ -536,8 +603,8 @@ export default function AnalyticsPage() {
                                                     }
                                                     return null
                                                 }} />
-                                                <Area type="linear" dataKey="equalityLine" stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" strokeOpacity={0.5} fill="none" strokeWidth={1.5} />
-                                                <Area type="monotone" dataKey="gpvPercentile" stroke="hsl(var(--chart-3))" fill="url(#concentrationGap)" strokeWidth={2.5} />
+                                                <Area type="linear" dataKey="equalityLine" stroke="var(--muted-foreground)" strokeDasharray="5 5" strokeOpacity={0.5} fill="none" strokeWidth={1.5} />
+                                                <Area type="monotone" dataKey="gpvPercentile" stroke="var(--chart-3)" fill="url(#concentrationGap)" strokeWidth={2.5} />
                                             </AreaChart>
                                         </ResponsiveContainer>
                                     </ChartContainer>
@@ -711,16 +778,25 @@ export default function AnalyticsPage() {
                                 </div>
 
                                 <div>
-                                    <Table variant="data" className="min-w-[900px]">
+                                    <div className="mb-2 flex justify-start">
+                                        <MobileColumnsButton
+                                            columns={CHURN_RISK_COLUMNS}
+                                            hidden={churnHiddenCols}
+                                            onChange={setChurnHiddenCols}
+                                        />
+                                    </div>
+                                    {/* The min-width is what forces the sideways scroll, so it
+                                        has to lift on mobile or hiding columns changes nothing. */}
+                                    <Table variant="data" className={cn(!isMobile && 'min-w-[900px]')}>
                                         <TableHeader className="[&_tr]:border-0">
                                             <TableRow>
                                                 <TableHead>Merchant</TableHead>
-                                                <TableHead>Severity</TableHead>
-                                                <TableHead className="text-right">Prev 7d GPV</TableHead>
-                                                <TableHead className="text-right">Last 7d GPV</TableHead>
-                                                <TableHead className="text-right">Drop %</TableHead>
-                                                <TableHead className="text-right">Days Since Last Txn</TableHead>
-                                                <TableHead className="text-right">Actions</TableHead>
+                                                {showChurnCol('severity') && <TableHead>Severity</TableHead>}
+                                                {showChurnCol('prevGpv') && <TableHead className="text-right">Prev 7d GPV</TableHead>}
+                                                {showChurnCol('lastGpv') && <TableHead className="text-right">Last 7d GPV</TableHead>}
+                                                {showChurnCol('drop') && <TableHead className="text-right">Drop %</TableHead>}
+                                                {showChurnCol('daysSince') && <TableHead className="text-right">Days Since Last Txn</TableHead>}
+                                                {showChurnCol('actions') && <TableHead className="text-right">Actions</TableHead>}
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -740,23 +816,34 @@ export default function AnalyticsPage() {
                                                                 {merchant.transactionsLast7Days} txns (was {merchant.transactionsPrev7Days})
                                                             </p>
                                                         </TableCell>
-                                                        <TableCell>
-                                                            <span className="flex w-fit items-center gap-1 text-sm text-muted-foreground">
-                                                                <AlertTriangle className="h-3 w-3" />
-                                                                {config.label}
-                                                            </span>
-                                                        </TableCell>
-                                                        <TableCell className="text-right font-medium tabular-nums">${merchant.prevSevenDaysGPV.toLocaleString()}</TableCell>
-                                                        <TableCell className="text-right font-medium tabular-nums">${merchant.lastSevenDaysGPV.toLocaleString()}</TableCell>
-                                                        <TableCell className="text-right font-semibold tabular-nums">
-                                                            -{merchant.dropPercentage}%
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <div className="flex items-center justify-end gap-1 whitespace-nowrap text-xs text-muted-foreground">
-                                                                <Clock className="h-3 w-3" />
-                                                                {daysSinceLastOrder === 0 ? 'Today' : `${daysSinceLastOrder}d ago`}
-                                                            </div>
-                                                        </TableCell>
+                                                        {showChurnCol('severity') && (
+                                                            <TableCell>
+                                                                <span className="flex w-fit items-center gap-1 text-sm text-muted-foreground">
+                                                                    <AlertTriangle className="h-3 w-3" />
+                                                                    {config.label}
+                                                                </span>
+                                                            </TableCell>
+                                                        )}
+                                                        {showChurnCol('prevGpv') && (
+                                                            <TableCell className="text-right font-medium tabular-nums">${merchant.prevSevenDaysGPV.toLocaleString()}</TableCell>
+                                                        )}
+                                                        {showChurnCol('lastGpv') && (
+                                                            <TableCell className="text-right font-medium tabular-nums">${merchant.lastSevenDaysGPV.toLocaleString()}</TableCell>
+                                                        )}
+                                                        {showChurnCol('drop') && (
+                                                            <TableCell className="text-right font-semibold tabular-nums">
+                                                                -{merchant.dropPercentage}%
+                                                            </TableCell>
+                                                        )}
+                                                        {showChurnCol('daysSince') && (
+                                                            <TableCell className="text-right">
+                                                                <div className="flex items-center justify-end gap-1 whitespace-nowrap text-xs text-muted-foreground">
+                                                                    <Clock className="h-3 w-3" />
+                                                                    {daysSinceLastOrder === 0 ? 'Today' : `${daysSinceLastOrder}d ago`}
+                                                                </div>
+                                                            </TableCell>
+                                                        )}
+                                                        {showChurnCol('actions') && (
                                                         <TableCell className="text-right">
                                                             <div className="flex flex-wrap items-center justify-end gap-1">
                                                                 <a href={`mailto:?subject=At-Risk%20Merchant%3A%20${encodeURIComponent(merchant.name)}&body=Hi%2C%0A%0AThis%20merchant%20has%20shown%20a%20${merchant.dropPercentage}%25%20GPV%20drop%20in%20the%20last%207%20days.%0A%0AMerchant%3A%20${encodeURIComponent(merchant.name)}%0ASeverity%3A%20${merchant.severity}%0APrev%207d%20GPV%3A%20%24${merchant.prevSevenDaysGPV.toLocaleString()}%0ALast%207d%20GPV%3A%20%24${merchant.lastSevenDaysGPV.toLocaleString()}%0A%0APlease%20follow%20up%20with%20this%20account.`}>
@@ -774,6 +861,7 @@ export default function AnalyticsPage() {
                                                                 </Link>
                                                             </div>
                                                         </TableCell>
+                                                        )}
                                                     </TableRow>
                                                 )
                                             })}

@@ -5,6 +5,13 @@ import { useKDSThroughput } from '@/lib/queries/use-platform-analytics'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -56,10 +63,45 @@ function barFill(seconds: number): string {
 
 type SortKey = 'merchantName' | 'avgPrepTimeSeconds' | 'totalItemsBumped' | 'displayCount'
 
+/**
+ * Mobile column meta for the kitchen-performance-by-merchant table. Avg Prep is
+ * the default sort key and the measure the panel is about, so it stays visible.
+ */
+/**
+ * Mobile column meta for the slowest-items table. Avg Prep is what the list is
+ * ranked by, so only P95 is offered as a toggle — enough to reach two columns.
+ */
+const SLOWEST_ITEM_COLUMNS: ReportColumn[] = [
+  { id: 'itemName', label: 'Item Name', locked: true },
+  { id: 'avgPrep', label: 'Avg Prep' },
+  { id: 'p95', label: 'P95', defaultHidden: true },
+]
+
+const KITCHEN_MERCHANT_COLUMNS: ReportColumn[] = [
+  { id: 'merchant', label: 'Merchant', locked: true },
+  { id: 'avgPrep', label: 'Avg Prep' },
+  { id: 'median', label: 'Median', defaultHidden: true },
+  { id: 'p95', label: 'P95', defaultHidden: true },
+  { id: 'itemsBumped', label: 'Items Bumped', defaultHidden: true },
+  { id: 'displays', label: 'Displays', defaultHidden: true },
+  { id: 'status', label: 'Status', defaultHidden: true },
+]
+
 export function KDSPerformance() {
   const [days, setDays] = useState(7)
   const [sortKey, setSortKey] = useState<SortKey>('avgPrepTimeSeconds')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(KITCHEN_MERCHANT_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  // Separate set from the merchant table below — different columns, read for
+  // different reasons, so one shared picker would be confusing.
+  const [itemHiddenCols, setItemHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(SLOWEST_ITEM_COLUMNS)
+  )
+  const showItemCol = (id: string) => !isMobile || !itemHiddenCols.has(id)
 
   const { data, isLoading } = useKDSThroughput(days)
 
@@ -251,37 +293,40 @@ export function KDSPerformance() {
             icon={UtensilsCrossed}
             caption="Items taking the longest from KDS appearance to bump — platform-wide, min. 3 data points"
             action={
-              <span className="text-sm text-muted-foreground">Top {data.slowestItems.length} items</span>
+              <div className="flex items-center gap-2">
+                <MobileColumnsButton
+                  columns={SLOWEST_ITEM_COLUMNS}
+                  hidden={itemHiddenCols}
+                  onChange={setItemHiddenCols}
+                />
+                <span className="text-sm text-muted-foreground">Top {data.slowestItems.length} items</span>
+              </div>
             }
           >
-            <Table variant="data" className="min-w-[640px]">
+            {/* Min-width lifted on mobile so hiding P95 actually narrows the
+                table instead of leaving it scrolling sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[360px]')}>
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
-                  <TableHead className="w-10">#</TableHead>
                   <TableHead>Item Name</TableHead>
-                  <TableHead className="text-right">Avg Prep</TableHead>
-                  <TableHead className="text-right">P95</TableHead>
-                  <TableHead className="text-right">Sample Size</TableHead>
-                  <TableHead className="text-right">Status</TableHead>
+                  {showItemCol('avgPrep') && <TableHead className="text-right">Avg Prep</TableHead>}
+                  {showItemCol('p95') && <TableHead className="text-right">P95</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(data.slowestItems as KDSSlowestItem[]).map((item, idx) => (
+                {(data.slowestItems as KDSSlowestItem[]).map((item) => (
                   <TableRow key={item.itemName}>
-                    <TableCell className="tabular-nums text-muted-foreground">{idx + 1}</TableCell>
                     <TableCell className="font-medium">{item.itemName}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {fmtSeconds(item.avgPrepTimeSeconds)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {fmtSeconds(item.p95PrepTimeSeconds)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {item.count.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground">
-                      {prepTier(item.avgPrepTimeSeconds)}
-                    </TableCell>
+                    {showItemCol('avgPrep') && (
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {fmtSeconds(item.avgPrepTimeSeconds)}
+                      </TableCell>
+                    )}
+                    {showItemCol('p95') && (
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {fmtSeconds(item.p95PrepTimeSeconds)}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -296,19 +341,28 @@ export function KDSPerformance() {
           icon={Building2}
           caption="Avg prep time, throughput, and slow ticket rate across all KDS displays"
           action={
-            <span className="text-sm text-muted-foreground">{sortedMerchants.length} merchants</span>
+            <div className="flex items-center gap-2">
+              <MobileColumnsButton
+                columns={KITCHEN_MERCHANT_COLUMNS}
+                hidden={hiddenCols}
+                onChange={setHiddenCols}
+              />
+              <span className="text-sm text-muted-foreground">{sortedMerchants.length} merchants</span>
+            </div>
           }
         >
-          <Table variant="data" className="min-w-[760px]">
+          {/* Min-width lifted on mobile so hidden columns actually narrow the
+              table instead of leaving it scrolling sideways. */}
+          <Table variant="data" className={cn(!isMobile && 'min-w-[760px]')}>
             <TableHeader className="[&_tr]:border-0">
               <TableRow>
                 <TableHead>{sortHeader('merchantName', 'Merchant', 'left')}</TableHead>
-                <TableHead className="text-right">{sortHeader('avgPrepTimeSeconds', 'Avg Prep')}</TableHead>
-                <TableHead className="text-right">Median</TableHead>
-                <TableHead className="text-right">P95</TableHead>
-                <TableHead className="text-right">{sortHeader('totalItemsBumped', 'Items Bumped')}</TableHead>
-                <TableHead className="text-right">{sortHeader('displayCount', 'Displays')}</TableHead>
-                <TableHead className="text-right">Status</TableHead>
+                {showCol('avgPrep') && <TableHead className="text-right">{sortHeader('avgPrepTimeSeconds', 'Avg Prep')}</TableHead>}
+                {showCol('median') && <TableHead className="text-right">Median</TableHead>}
+                {showCol('p95') && <TableHead className="text-right">P95</TableHead>}
+                {showCol('itemsBumped') && <TableHead className="text-right">{sortHeader('totalItemsBumped', 'Items Bumped')}</TableHead>}
+                {showCol('displays') && <TableHead className="text-right">{sortHeader('displayCount', 'Displays')}</TableHead>}
+                {showCol('status') && <TableHead className="text-right">Status</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -322,19 +376,31 @@ export function KDSPerformance() {
                         {m.displayCount} display{m.displayCount !== 1 ? 's' : ''}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {fmtSeconds(m.avgPrepTimeSeconds)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
-                      {/* merchant-level median not in KDSSlowestMerchant — show avg as proxy */}
-                      {avgMins.toFixed(1)}m
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">—</TableCell>
-                    <TableCell className="text-right tabular-nums">{m.totalItemsBumped.toLocaleString()}</TableCell>
-                    <TableCell className="text-right tabular-nums">{m.displayCount}</TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground">
-                      {prepTier(m.avgPrepTimeSeconds)}
-                    </TableCell>
+                    {showCol('avgPrep') && (
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {fmtSeconds(m.avgPrepTimeSeconds)}
+                      </TableCell>
+                    )}
+                    {showCol('median') && (
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
+                        {/* merchant-level median not in KDSSlowestMerchant — show avg as proxy */}
+                        {avgMins.toFixed(1)}m
+                      </TableCell>
+                    )}
+                    {showCol('p95') && (
+                      <TableCell className="text-right text-muted-foreground">—</TableCell>
+                    )}
+                    {showCol('itemsBumped') && (
+                      <TableCell className="text-right tabular-nums">{m.totalItemsBumped.toLocaleString()}</TableCell>
+                    )}
+                    {showCol('displays') && (
+                      <TableCell className="text-right tabular-nums">{m.displayCount}</TableCell>
+                    )}
+                    {showCol('status') && (
+                      <TableCell className="text-right text-sm text-muted-foreground">
+                        {prepTier(m.avgPrepTimeSeconds)}
+                      </TableCell>
+                    )}
                   </TableRow>
                 )
               })}

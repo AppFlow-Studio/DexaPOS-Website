@@ -11,14 +11,43 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
+import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
 } from 'recharts'
 import {
-  MapPin, ArrowUpRight, ArrowDownRight, Minus, Trophy,
-  TrendingDown, Search, Building2, Users, Monitor,
+  MapPin, ArrowUpRight, ArrowDownRight, Trophy,
+  Search, Users, Monitor,
 } from 'lucide-react'
 import type { LocationMetrics, SparklinePoint } from '@/app/manage/actions/hq-platform/analytics'
+
+/**
+ * Mobile column meta for the "All locations" table.
+ *
+ * Rank and Location stay locked so a narrowed table still says which location
+ * each row is; GPV is the metric the table is ranked by, so it is the one
+ * number kept by default. Everything else starts hidden, giving the two-column
+ * start the table needs to fit a phone without horizontal scrolling.
+ */
+const ALL_LOCATIONS_COLUMNS: ReportColumn[] = [
+  { id: 'location', label: 'Location', locked: true },
+  { id: 'merchant', label: 'Merchant', defaultHidden: true },
+  { id: 'gpv', label: 'GPV' },
+  { id: 'vsAvg', label: 'vs Avg', defaultHidden: true },
+  { id: 'orders', label: 'Orders', defaultHidden: true },
+  { id: 'avgOrder', label: 'Avg Order', defaultHidden: true },
+  { id: 'voidRate', label: 'Void %', defaultHidden: true },
+  { id: 'staff', label: 'Staff', defaultHidden: true },
+  { id: 'devices', label: 'Devices', defaultHidden: true },
+  { id: 'vsPrev', label: 'vs Prev', defaultHidden: true },
+  { id: 'trend', label: '7d Trend', defaultHidden: true },
+]
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,29 +57,19 @@ function fmtGPV(n: number) {
   return `$${n.toFixed(2)}`
 }
 
+/**
+ * Direction is carried by the arrow glyph, not a tint — the icon already states
+ * up or down, so the colour was a second encoding of the same fact.
+ */
 function TrendChip({ pct }: { pct: number | null }) {
   if (pct === null) return <span className="text-xs text-muted-foreground">—</span>
   const isPos = pct >= 0
   return (
-    <span className={`flex items-center justify-end gap-0.5 text-xs font-medium ${isPos ? 'text-green-600' : 'text-red-600'}`}>
+    <span className="flex items-center justify-end gap-0.5 text-xs font-medium tabular-nums">
       {isPos ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
       {pct > 0 ? '+' : ''}{pct}%
     </span>
   )
-}
-
-function RankBadge({ rank, total }: { rank: number; total: number }) {
-  if (rank === 1) return (
-    <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-600">
-      <Trophy className="h-3 w-3" /> #1
-    </span>
-  )
-  if (rank === total && total > 1) return (
-    <span className="inline-flex items-center gap-1 text-xs text-red-500">
-      <TrendingDown className="h-3 w-3" /> #{rank}
-    </span>
-  )
-  return <span className="text-xs text-muted-foreground">#{rank}</span>
 }
 
 // ── Inline SVG sparkline (7-day GPV trend) ───────────────────────────────────
@@ -67,30 +86,12 @@ function MiniSparkline({ data }: { data: SparklinePoint[] }) {
     return `${x.toFixed(1)},${y.toFixed(1)}`
   }).join(' ')
 
-  // Determine trend color: compare last 2 days
-  const last = data[data.length - 1]?.gpv ?? 0
-  const prev = data[data.length - 2]?.gpv ?? 0
-  const color = last >= prev ? '#22c55e' : '#ef4444'
-
+  // The line's shape shows the trend; `currentColor` keeps it on the text
+  // colour so it stays legible in both themes without encoding status.
   return (
-    <svg width={W} height={H} className="overflow-visible" aria-hidden>
-      <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    <svg width={W} height={H} className="overflow-visible text-muted-foreground" aria-hidden>
+      <polyline points={points} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
     </svg>
-  )
-}
-
-// ── Performance bar (% of top location GPV) ──────────────────────────────────
-
-function PerformanceBar({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0
-  const color = pct >= 70 ? 'bg-green-500' : pct >= 40 ? 'bg-amber-500' : 'bg-red-400'
-  return (
-    <div className="flex items-center gap-2 w-24">
-      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-xs text-muted-foreground w-8 text-right">{pct}%</span>
-    </div>
   )
 }
 
@@ -100,6 +101,15 @@ export function MultiLocationComparison() {
   const [days, setDays] = useState(30)
   const [search, setSearch] = useState('')
   const [selectedMerchantId, setSelectedMerchantId] = useState<string>('all')
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(ALL_LOCATIONS_COLUMNS)
+  )
+  // Hiding is mobile-only: on desktop every column fits, and the picker is
+  // `md:hidden`, so the two must agree or desktop would keep stale hides.
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  // Keeps the empty-state cell spanning the full width as columns are toggled.
+  const visibleColCount = ALL_LOCATIONS_COLUMNS.filter(c => showCol(c.id)).length
   const { data, isLoading } = useMultiLocationComparison(days)
 
   // Extract multi-location merchants (≥2 locations) from the dataset
@@ -156,10 +166,6 @@ export function MultiLocationComparison() {
       </Panel>
     )
   }
-
-  const topGPV = filteredLocations.length > 0
-    ? Math.max(...filteredLocations.map(l => l.totalGPV))
-    : (data.topLocation?.totalGPV ?? 0)
 
   // Top 15 locations for the chart (from filtered set)
   const chartData = filteredLocations.slice(0, 15).map((l, i) => ({
@@ -277,41 +283,54 @@ export function MultiLocationComparison() {
           label="All locations"
           caption={`Ranked by GPV — vs. prior ${days}-day period`}
           action={
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
-              <Input
-                placeholder="Filter location or merchant…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="h-9 w-52 rounded-full pl-9"
+            <div className="flex items-center gap-2">
+              <MobileColumnsButton
+                columns={ALL_LOCATIONS_COLUMNS}
+                hidden={hiddenCols}
+                onChange={setHiddenCols}
               />
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+                <Input
+                  placeholder="Filter location or merchant…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="h-9 w-52 rounded-full pl-9"
+                />
+              </div>
             </div>
           }
         >
           <div className="max-h-96 overflow-auto">
-            <Table variant="data" className="min-w-[1120px]">
+            {/* The min-width is what forces horizontal scrolling, so it has to
+                lift on mobile — otherwise hiding columns just widens the gaps
+                and the table still scrolls sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[1120px]')}>
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
-                  <TableHead className="w-10">#</TableHead>
                   <TableHead>Location</TableHead>
-                  <TableHead>Merchant</TableHead>
-                  <TableHead className="text-right">GPV</TableHead>
-                  <TableHead>vs Avg</TableHead>
-                  <TableHead className="text-right">Orders</TableHead>
-                  <TableHead className="text-right">Avg Order</TableHead>
-                  <TableHead className="text-right">Void %</TableHead>
-                  <TableHead className="text-right">
-                    <span className="flex items-center justify-end gap-1">
-                      <Users className="h-3 w-3" /> Staff
-                    </span>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <span className="flex items-center justify-end gap-1">
-                      <Monitor className="h-3 w-3" /> Devices
-                    </span>
-                  </TableHead>
-                  <TableHead className="text-right">vs Prev</TableHead>
-                  <TableHead className="text-right">7d Trend</TableHead>
+                  {showCol('merchant') && <TableHead>Merchant</TableHead>}
+                  {showCol('gpv') && <TableHead className="text-right">GPV</TableHead>}
+                  {showCol('vsAvg') && <TableHead>vs Avg</TableHead>}
+                  {showCol('orders') && <TableHead className="text-right">Orders</TableHead>}
+                  {showCol('avgOrder') && <TableHead className="text-right">Avg Order</TableHead>}
+                  {showCol('voidRate') && <TableHead className="text-right">Void %</TableHead>}
+                  {showCol('staff') && (
+                    <TableHead className="text-right">
+                      <span className="flex items-center justify-end gap-1">
+                        <Users className="h-3 w-3" /> Staff
+                      </span>
+                    </TableHead>
+                  )}
+                  {showCol('devices') && (
+                    <TableHead className="text-right">
+                      <span className="flex items-center justify-end gap-1">
+                        <Monitor className="h-3 w-3" /> Devices
+                      </span>
+                    </TableHead>
+                  )}
+                  {showCol('vsPrev') && <TableHead className="text-right">vs Prev</TableHead>}
+                  {showCol('trend') && <TableHead className="text-right">7d Trend</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -322,58 +341,74 @@ export function MultiLocationComparison() {
                     : 0
                   return (
                     <TableRow key={loc.locationId}>
-                      <TableCell className="text-center">
-                        <RankBadge rank={loc.gpvRank} total={data.totalLocations} />
-                      </TableCell>
                       <TableCell className="max-w-40">
                         <div className="flex items-center gap-1.5">
                           <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
                           <span className="truncate font-medium" title={loc.locationName}>{loc.locationName}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="max-w-32 text-muted-foreground">
-                        <span className="block truncate" title={loc.merchantName}>{loc.merchantName}</span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <p className="font-semibold tabular-nums">{fmtGPV(loc.totalGPV)}</p>
-                        <PerformanceBar value={loc.totalGPV} max={topGPV} />
-                      </TableCell>
-                      <TableCell className="tabular-nums text-muted-foreground">
-                        {vsAvgPct >= 0 ? '+' : ''}{vsAvgPct}% avg
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{loc.orderCount.toLocaleString()}</TableCell>
-                      <TableCell className="text-right tabular-nums">${loc.avgOrderValue.toFixed(2)}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {loc.voidRate > 0 ? (
-                          <span className={loc.voidRate > 5 ? 'font-medium' : 'text-muted-foreground'}>
-                            {loc.voidRate}%
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {loc.staffCount > 0
-                          ? loc.staffCount
-                          : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {loc.deviceCount > 0
-                          ? loc.deviceCount
-                          : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell>
-                        <TrendChip pct={loc.trendVsPrev} />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <MiniSparkline data={loc.sparkline ?? []} />
-                      </TableCell>
+                      {showCol('merchant') && (
+                        <TableCell className="max-w-32 text-muted-foreground">
+                          <span className="block truncate" title={loc.merchantName}>{loc.merchantName}</span>
+                        </TableCell>
+                      )}
+                      {showCol('gpv') && (
+                        <TableCell className="text-right">
+                          <p className="font-semibold tabular-nums">{fmtGPV(loc.totalGPV)}</p>
+                        </TableCell>
+                      )}
+                      {showCol('vsAvg') && (
+                        <TableCell className="tabular-nums text-muted-foreground">
+                          {vsAvgPct >= 0 ? '+' : ''}{vsAvgPct}% avg
+                        </TableCell>
+                      )}
+                      {showCol('orders') && (
+                        <TableCell className="text-right tabular-nums">{loc.orderCount.toLocaleString()}</TableCell>
+                      )}
+                      {showCol('avgOrder') && (
+                        <TableCell className="text-right tabular-nums">${loc.avgOrderValue.toFixed(2)}</TableCell>
+                      )}
+                      {showCol('voidRate') && (
+                        <TableCell className="text-right tabular-nums">
+                          {loc.voidRate > 0 ? (
+                            <span className={loc.voidRate > 5 ? 'font-medium' : 'text-muted-foreground'}>
+                              {loc.voidRate}%
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      )}
+                      {showCol('staff') && (
+                        <TableCell className="text-right tabular-nums">
+                          {loc.staffCount > 0
+                            ? loc.staffCount
+                            : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      )}
+                      {showCol('devices') && (
+                        <TableCell className="text-right tabular-nums">
+                          {loc.deviceCount > 0
+                            ? loc.deviceCount
+                            : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      )}
+                      {showCol('vsPrev') && (
+                        <TableCell>
+                          <TrendChip pct={loc.trendVsPrev} />
+                        </TableCell>
+                      )}
+                      {showCol('trend') && (
+                        <TableCell className="text-right">
+                          <MiniSparkline data={loc.sparkline ?? []} />
+                        </TableCell>
+                      )}
                     </TableRow>
                   )
                 })}
                 {filteredLocations.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={visibleColCount} className="h-24 text-center text-muted-foreground">
                       No locations match your search
                     </TableCell>
                   </TableRow>

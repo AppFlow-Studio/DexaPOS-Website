@@ -8,6 +8,13 @@ import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -18,7 +25,7 @@ import {
 } from 'recharts'
 import { useLocationDensity } from '@/lib/queries/use-platform-analytics'
 import type { LocationDensityState } from '@/app/manage/actions/hq-platform/analytics'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -205,7 +212,9 @@ function USChoropleth({ byState, coverageGaps }: USChoroplethProps) {
                 <TooltipContent side="top" className="space-y-1">
                   <p className="font-semibold text-sm">{name}</p>
                   {isGap ? (
-                    <p className="text-xs text-red-500">No locations — sales whitespace</p>
+                    // No tint: inherits the tooltip's own foreground, so it stays
+                    // legible on the dark surface in either theme.
+                    <p className="text-xs">No locations — sales whitespace</p>
                   ) : count > 0 ? (
                     <>
                       <p className="text-xs">
@@ -252,8 +261,38 @@ function USChoropleth({ byState, coverageGaps }: USChoroplethProps) {
 // COMPONENT
 // ============================================================================
 
+/**
+ * Mobile column meta for the two geography tables. Both are read as "where are
+ * we concentrated", so Locations — the count each is sorted by — is the number
+ * kept beside the place name.
+ */
+const STATE_BREAKDOWN_COLUMNS: ReportColumn[] = [
+  { id: 'state', label: 'State', locked: true },
+  { id: 'locations', label: 'Locations' },
+  { id: 'merchants', label: 'Merchants', defaultHidden: true },
+  { id: 'gpv', label: '30d GPV', defaultHidden: true },
+  { id: 'topCities', label: 'Top Cities', defaultHidden: true },
+]
+
+const TOP_CITY_COLUMNS: ReportColumn[] = [
+  { id: 'city', label: 'City', locked: true },
+  { id: 'state', label: 'State', defaultHidden: true },
+  { id: 'locations', label: 'Locations' },
+  { id: 'merchants', label: 'Merchants', defaultHidden: true },
+  { id: 'gpv', label: '30d GPV', defaultHidden: true },
+]
+
 export function LocationDensityInsights() {
   const { data, isLoading } = useLocationDensity()
+  const isMobile = useIsMobile()
+  const [stateHiddenCols, setStateHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(STATE_BREAKDOWN_COLUMNS)
+  )
+  const showStateCol = (id: string) => !isMobile || !stateHiddenCols.has(id)
+  const [cityHiddenCols, setCityHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(TOP_CITY_COLUMNS)
+  )
+  const showCityCol = (id: string) => !isMobile || !cityHiddenCols.has(id)
 
   if (isLoading) {
     return (
@@ -343,7 +382,10 @@ export function LocationDensityInsights() {
               <XAxis dataKey="state" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <RechartsTooltip content={<AnalyticsTooltip />} />
-              <Bar dataKey="locations" name="Locations" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+              {/* `var(--chart-1)` bare, never `hsl(var(--chart-1))` (C2): the
+                  token is already an `oklch()` colour, so wrapping it in `hsl()`
+                  produced invalid CSS and the bars fell back to black. */}
+              <Bar dataKey="locations" name="Locations" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </PanelSection>
@@ -357,16 +399,27 @@ export function LocationDensityInsights() {
           <PanelSection
             label="State breakdown"
             caption="All represented states sorted by location count"
+            action={
+              <MobileColumnsButton
+                columns={STATE_BREAKDOWN_COLUMNS}
+                hidden={stateHiddenCols}
+                onChange={setStateHiddenCols}
+              />
+            }
           >
             <div className="max-h-80 overflow-auto">
-              <Table variant="data" className="min-w-[620px]">
+              {/* Min-width lifted on mobile so hidden columns actually narrow the
+                  table instead of leaving it scrolling sideways. */}
+              <Table variant="data" className={cn(!isMobile && 'min-w-[620px]')}>
                 <TableHeader className="[&_tr]:border-0">
                   <TableRow>
                     <TableHead>State</TableHead>
-                    <TableHead className="text-right">Locations</TableHead>
-                    <TableHead className="text-right">Merchants</TableHead>
-                    <TableHead className="whitespace-nowrap text-right">30d GPV</TableHead>
-                    <TableHead className="hidden lg:table-cell">Top Cities</TableHead>
+                    {showStateCol('locations') && <TableHead className="text-right">Locations</TableHead>}
+                    {showStateCol('merchants') && <TableHead className="text-right">Merchants</TableHead>}
+                    {showStateCol('gpv') && <TableHead className="whitespace-nowrap text-right">30d GPV</TableHead>}
+                    {/* Top Cities was `hidden lg:table-cell`; the picker now owns
+                        that decision so there is one mechanism, not two fighting. */}
+                    {showStateCol('topCities') && <TableHead className="hidden lg:table-cell">Top Cities</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -376,12 +429,20 @@ export function LocationDensityInsights() {
                         <div className="font-medium">{row.stateName}</div>
                         <div className="text-xs text-muted-foreground">{row.state}</div>
                       </TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">{row.locationCount}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{row.merchantCount}</TableCell>
-                      <TableCell className="text-right tabular-nums">{fmtGPV(row.gpv30d)}</TableCell>
-                      <TableCell className="hidden text-muted-foreground lg:table-cell">
-                        {row.topCities.slice(0, 2).join(' · ')}
-                      </TableCell>
+                      {showStateCol('locations') && (
+                        <TableCell className="text-right font-medium tabular-nums">{row.locationCount}</TableCell>
+                      )}
+                      {showStateCol('merchants') && (
+                        <TableCell className="text-right tabular-nums text-muted-foreground">{row.merchantCount}</TableCell>
+                      )}
+                      {showStateCol('gpv') && (
+                        <TableCell className="text-right tabular-nums">{fmtGPV(row.gpv30d)}</TableCell>
+                      )}
+                      {showStateCol('topCities') && (
+                        <TableCell className="hidden text-muted-foreground lg:table-cell">
+                          {row.topCities.slice(0, 2).join(' · ')}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -419,28 +480,46 @@ export function LocationDensityInsights() {
       </div>
 
       <Panel>
-        <PanelSection label="Top cities" caption="Highest concentration markets by city — top 20">
+        <PanelSection
+          label="Top cities"
+          caption="Highest concentration markets by city — top 20"
+          action={
+            <MobileColumnsButton
+              columns={TOP_CITY_COLUMNS}
+              hidden={cityHiddenCols}
+              onChange={setCityHiddenCols}
+            />
+          }
+        >
           <div className="max-h-80 overflow-auto">
-            <Table variant="data" className="min-w-[620px]">
+            {/* Min-width lifted on mobile so hidden columns actually narrow the
+                table instead of leaving it scrolling sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[620px]')}>
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
-                  <TableHead className="w-8">#</TableHead>
                   <TableHead>City</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead className="text-right">Locations</TableHead>
-                  <TableHead className="text-right">Merchants</TableHead>
-                  <TableHead className="text-right">30d GPV</TableHead>
+                  {showCityCol('state') && <TableHead>State</TableHead>}
+                  {showCityCol('locations') && <TableHead className="text-right">Locations</TableHead>}
+                  {showCityCol('merchants') && <TableHead className="text-right">Merchants</TableHead>}
+                  {showCityCol('gpv') && <TableHead className="text-right">30d GPV</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.byCity.map((row, i) => (
+                {data.byCity.map(row => (
                   <TableRow key={`${row.city}-${row.state}`}>
-                    <TableCell className="tabular-nums text-muted-foreground">{i + 1}</TableCell>
                     <TableCell className="font-medium">{row.city}</TableCell>
-                    <TableCell className="text-muted-foreground">{row.state}</TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">{row.locationCount}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">{row.merchantCount}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmtGPV(row.gpv30d)}</TableCell>
+                    {showCityCol('state') && (
+                      <TableCell className="text-muted-foreground">{row.state}</TableCell>
+                    )}
+                    {showCityCol('locations') && (
+                      <TableCell className="text-right font-medium tabular-nums">{row.locationCount}</TableCell>
+                    )}
+                    {showCityCol('merchants') && (
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{row.merchantCount}</TableCell>
+                    )}
+                    {showCityCol('gpv') && (
+                      <TableCell className="text-right tabular-nums">{fmtGPV(row.gpv30d)}</TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

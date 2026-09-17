@@ -4,6 +4,13 @@ import { useState } from 'react'
 import { useDiscountUsageAnalysis } from '@/lib/queries/use-platform-analytics'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { TicketPercent, Users, Layers, Flag } from 'lucide-react'
@@ -25,9 +32,28 @@ const SCOPE_META: Record<string, { label: string; color: string }> = {
   unknown: { label: 'Unknown', color: 'bg-slate-400' },
 }
 
+/**
+ * Mobile column meta for the staff discount leaderboard. Total discount amount
+ * is what ranks the list, so it rides along with the staff name.
+ */
+const STAFF_DISCOUNT_COLUMNS: ReportColumn[] = [
+  { id: 'staff', label: 'Staff', locked: true },
+  { id: 'merchant', label: 'Merchant', defaultHidden: true },
+  { id: 'count', label: 'Count', defaultHidden: true },
+  { id: 'total', label: 'Total' },
+  { id: 'approvals', label: 'Mgr Approvals', defaultHidden: true },
+]
+
 export function DiscountAbuseDetection() {
   const [days, setDays] = useState(30)
   const { data, isLoading } = useDiscountUsageAnalysis(days)
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(STAFF_DISCOUNT_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  // Keeps the empty-state cell full-width as columns are toggled.
+  const visibleColCount = STAFF_DISCOUNT_COLUMNS.filter(c => showCol(c.id)).length
 
   const periodSelect = (
     <Select value={String(days)} onValueChange={v => setDays(Number(v))}>
@@ -119,38 +145,55 @@ export function DiscountAbuseDetection() {
             label="Top staff by discounts applied"
             icon={Users}
             caption="Highest discount issuers across the platform"
+            action={
+              <MobileColumnsButton
+                columns={STAFF_DISCOUNT_COLUMNS}
+                hidden={hiddenCols}
+                onChange={setHiddenCols}
+              />
+            }
           >
-            <Table variant="data" className="min-w-[560px]">
+            {/* Min-width lifted on mobile so hidden columns actually narrow the
+                table instead of leaving it scrolling sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[560px]')}>
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead>Staff</TableHead>
-                  <TableHead>Merchant</TableHead>
-                  <TableHead className="text-right">Count</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Mgr Approvals</TableHead>
+                  {showCol('merchant') && <TableHead>Merchant</TableHead>}
+                  {showCol('count') && <TableHead className="text-right">Count</TableHead>}
+                  {showCol('total') && <TableHead className="text-right">Total</TableHead>}
+                  {showCol('approvals') && <TableHead className="text-right">Mgr Approvals</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.staffLeaderboard.slice(0, 10).map((s: StaffDiscountEntry) => (
                   <TableRow key={s.staffId}>
                     <TableCell className="font-medium">{s.staffName}</TableCell>
-                    <TableCell className="text-muted-foreground">{s.merchantName}</TableCell>
-                    <TableCell className="text-right tabular-nums">{s.discountCount}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(s.totalDiscountAmount)}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {s.requiresManagerApprovalCount > 0 ? (
-                        <span className="font-medium">{s.requiresManagerApprovalCount}</span>
-                      ) : (
-                        <span className="text-muted-foreground">0</span>
-                      )}
-                    </TableCell>
+                    {showCol('merchant') && (
+                      <TableCell className="text-muted-foreground">{s.merchantName}</TableCell>
+                    )}
+                    {showCol('count') && (
+                      <TableCell className="text-right tabular-nums">{s.discountCount}</TableCell>
+                    )}
+                    {showCol('total') && (
+                      <TableCell className="text-right tabular-nums">{fmt(s.totalDiscountAmount)}</TableCell>
+                    )}
+                    {showCol('approvals') && (
+                      <TableCell className="text-right tabular-nums">
+                        {s.requiresManagerApprovalCount > 0 ? (
+                          <span className="font-medium">{s.requiresManagerApprovalCount}</span>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
                 {data.staffLeaderboard.length === 0 && (
-                  // colSpan matches the five headers above — it read 4 before,
-                  // leaving the empty-state cell short of the table width.
+                  // colSpan tracks the visible headers, so the empty-state cell
+                  // keeps spanning the table as columns are toggled.
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={visibleColCount} className="h-24 text-center text-muted-foreground">
                       No staff discount data
                     </TableCell>
                   </TableRow>

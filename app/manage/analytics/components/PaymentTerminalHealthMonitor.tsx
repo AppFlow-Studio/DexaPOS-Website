@@ -4,6 +4,13 @@ import { useState, useMemo } from 'react'
 import { usePaymentTerminalHealth } from '@/lib/queries/use-platform-analytics'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import {
@@ -106,10 +113,51 @@ function SettlementCell({ status, hours }: { status: TerminalSettlementStatus; h
 
 type FilterStatus = 'all' | 'disconnected' | 'connected' | 'unknown'
 
+/**
+ * Mobile column meta for the two terminal tables.
+ *
+ * Connection is why an operator opens the terminal list at all, so it is the
+ * one field kept beside the terminal name; the orphan table is a mapping
+ * problem, so Location — where the terminal physically sits — is kept instead.
+ */
+const ALL_TERMINAL_COLUMNS: ReportColumn[] = [
+  { id: 'terminal', label: 'Terminal', locked: true },
+  { id: 'tpn', label: 'TPN', defaultHidden: true },
+  { id: 'merchant', label: 'Merchant', defaultHidden: true },
+  { id: 'location', label: 'Location', defaultHidden: true },
+  { id: 'station', label: 'Station', defaultHidden: true },
+  { id: 'connection', label: 'Connection' },
+  { id: 'lastSeen', label: 'Last Seen', defaultHidden: true },
+  { id: 'lastTxn', label: 'Last Txn', defaultHidden: true },
+  { id: 'settlement', label: 'Settlement', defaultHidden: true },
+  { id: 'authKey', label: 'Auth Key', defaultHidden: true },
+  { id: 'env', label: 'Env', defaultHidden: true },
+]
+
+const ORPHAN_TERMINAL_COLUMNS: ReportColumn[] = [
+  { id: 'terminal', label: 'Terminal', locked: true },
+  { id: 'tpn', label: 'TPN', defaultHidden: true },
+  { id: 'merchant', label: 'Merchant', defaultHidden: true },
+  { id: 'location', label: 'Location' },
+  { id: 'type', label: 'Type', defaultHidden: true },
+]
+
 export function PaymentTerminalHealthMonitor() {
   const { data, isLoading, dataUpdatedAt } = usePaymentTerminalHealth()
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [search, setSearch] = useState('')
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(ALL_TERMINAL_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  const visibleColCount = ALL_TERMINAL_COLUMNS.filter(c => showCol(c.id)).length
+  // The orphan table keeps its own set — the two have different columns and are
+  // read for different reasons, so sharing one would make each picker confusing.
+  const [orphanHiddenCols, setOrphanHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(ORPHAN_TERMINAL_COLUMNS)
+  )
+  const showOrphanCol = (id: string) => !isMobile || !orphanHiddenCols.has(id)
 
   const filteredTerminals = useMemo(() => {
     if (!data?.terminals) return []
@@ -238,6 +286,11 @@ export function PaymentTerminalHealthMonitor() {
           caption="Grid showing TPN, connection status, last seen, settlement, and auth key health"
           action={
             <div className="flex flex-wrap items-center gap-2">
+              <MobileColumnsButton
+                columns={ALL_TERMINAL_COLUMNS}
+                hidden={hiddenCols}
+                onChange={setHiddenCols}
+              />
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                 <Input
@@ -261,29 +314,31 @@ export function PaymentTerminalHealthMonitor() {
             </div>
           }
         >
-          <Table variant="data" className="min-w-[1180px]">
+          {/* Min-width lifted on mobile so hidden columns actually narrow the
+              table instead of leaving it scrolling sideways. */}
+          <Table variant="data" className={cn(!isMobile && 'min-w-[1180px]')}>
             <TableHeader className="[&_tr]:border-0">
               <TableRow>
                 <TableHead>Terminal</TableHead>
-                <TableHead>TPN</TableHead>
-                <TableHead>Merchant</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Station</TableHead>
-                <TableHead>Connection</TableHead>
-                <TableHead>Last Seen</TableHead>
-                <TableHead>Last Txn</TableHead>
-                <TableHead>Settlement</TableHead>
-                <TableHead>Auth Key</TableHead>
-                <TableHead>Env</TableHead>
+                {showCol('tpn') && <TableHead>TPN</TableHead>}
+                {showCol('merchant') && <TableHead>Merchant</TableHead>}
+                {showCol('location') && <TableHead>Location</TableHead>}
+                {showCol('station') && <TableHead>Station</TableHead>}
+                {showCol('connection') && <TableHead>Connection</TableHead>}
+                {showCol('lastSeen') && <TableHead>Last Seen</TableHead>}
+                {showCol('lastTxn') && <TableHead>Last Txn</TableHead>}
+                {showCol('settlement') && <TableHead>Settlement</TableHead>}
+                {showCol('authKey') && <TableHead>Auth Key</TableHead>}
+                {showCol('env') && <TableHead>Env</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredTerminals.map(t => (
-                <TerminalRow key={t.id} terminal={t} />
+                <TerminalRow key={t.id} terminal={t} showCol={showCol} />
               ))}
               {filteredTerminals.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={visibleColCount} className="h-24 text-center text-muted-foreground">
                     {data.terminals.length === 0
                       ? 'No payment terminals registered'
                       : 'No terminals match the current filter'}
@@ -301,35 +356,52 @@ export function PaymentTerminalHealthMonitor() {
             label="Orphan terminals — no station mapping"
             icon={Link2Off}
             caption="These terminals are not linked to any POS station and cannot process payments until mapped"
+            action={
+              <MobileColumnsButton
+                columns={ORPHAN_TERMINAL_COLUMNS}
+                hidden={orphanHiddenCols}
+                onChange={setOrphanHiddenCols}
+              />
+            }
           >
-            <Table variant="data" className="min-w-[680px]">
+            {/* Min-width lifted on mobile so hidden columns actually narrow the
+                table instead of leaving it scrolling sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[680px]')}>
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead>Terminal</TableHead>
-                  <TableHead>TPN</TableHead>
-                  <TableHead>Merchant</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Type</TableHead>
+                  {showOrphanCol('tpn') && <TableHead>TPN</TableHead>}
+                  {showOrphanCol('merchant') && <TableHead>Merchant</TableHead>}
+                  {showOrphanCol('location') && <TableHead>Location</TableHead>}
+                  {showOrphanCol('type') && <TableHead>Type</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {orphanTerminals.map(t => (
                   <TableRow key={t.id}>
                     <TableCell className="font-medium">{t.terminalName}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{t.tpn}</TableCell>
-                    <TableCell>
-                      <span className="flex items-center gap-1.5">
-                        <Building2 className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        {t.merchantName}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="flex items-center gap-1.5">
-                        <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        {t.locationName || '—'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="capitalize text-muted-foreground">{t.terminalType}</TableCell>
+                    {showOrphanCol('tpn') && (
+                      <TableCell className="font-mono text-xs text-muted-foreground">{t.tpn}</TableCell>
+                    )}
+                    {showOrphanCol('merchant') && (
+                      <TableCell>
+                        <span className="flex items-center gap-1.5">
+                          <Building2 className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          {t.merchantName}
+                        </span>
+                      </TableCell>
+                    )}
+                    {showOrphanCol('location') && (
+                      <TableCell>
+                        <span className="flex items-center gap-1.5">
+                          <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          {t.locationName || '—'}
+                        </span>
+                      </TableCell>
+                    )}
+                    {showOrphanCol('type') && (
+                      <TableCell className="capitalize text-muted-foreground">{t.terminalType}</TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -343,7 +415,14 @@ export function PaymentTerminalHealthMonitor() {
 
 // ── Terminal table row ────────────────────────────────────────────────────────
 
-function TerminalRow({ terminal: t }: { terminal: PaymentTerminalRow }) {
+/**
+ * `showCol` is passed down rather than read from a hook here, so the row and the
+ * header above it are driven by one source of truth and can never disagree.
+ */
+function TerminalRow({ terminal: t, showCol }: {
+  terminal: PaymentTerminalRow
+  showCol: (id: string) => boolean
+}) {
   return (
     <TableRow>
       <TableCell>
@@ -357,57 +436,77 @@ function TerminalRow({ terminal: t }: { terminal: PaymentTerminalRow }) {
           </span>
         )}
       </TableCell>
-      <TableCell>
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{t.tpn}</code>
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <Building2 className="h-3 w-3 shrink-0" />
-          {t.merchantName}
-        </span>
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <MapPin className="h-3 w-3 shrink-0" />
-          {t.locationName || '—'}
-        </span>
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground">
-        {t.stationName
-          ? <span className="flex items-center gap-1"><Terminal className="h-3 w-3 shrink-0" />{t.stationName}</span>
-          : <span>—</span>}
-      </TableCell>
-      <TableCell>
-        <ConnectionCell status={t.connectionStatus} />
-        {t.lastError && (
-          <p className="mt-0.5 max-w-32 truncate text-[10px] text-muted-foreground" title={t.lastError}>
-            {t.lastError}
-          </p>
-        )}
-      </TableCell>
-      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-        {fmtLastSeen(t.lastSeenAt)}
-      </TableCell>
-      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-        {fmtHours(t.hoursSinceLastTransaction)}
-      </TableCell>
-      <TableCell>
-        <SettlementCell status={t.settlementStatus} hours={t.hoursSinceLastTransaction} />
-      </TableCell>
-      <TableCell>
-        {t.authStatus === 'valid' ? (
-          <span className="flex items-center gap-1 text-xs">
-            <CheckCircle2 className="h-3 w-3 shrink-0" /> Valid
+      {showCol('tpn') && (
+        <TableCell>
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{t.tpn}</code>
+        </TableCell>
+      )}
+      {showCol('merchant') && (
+        <TableCell className="text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Building2 className="h-3 w-3 shrink-0" />
+            {t.merchantName}
           </span>
-        ) : (
-          <span className="flex items-center gap-1 text-xs font-medium">
-            <KeyRound className="h-3 w-3 shrink-0" /> Missing
+        </TableCell>
+      )}
+      {showCol('location') && (
+        <TableCell className="text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <MapPin className="h-3 w-3 shrink-0" />
+            {t.locationName || '—'}
           </span>
-        )}
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground">
-        {t.apiEnvironment === 'production' ? 'Prod' : 'Sandbox'}
-      </TableCell>
+        </TableCell>
+      )}
+      {showCol('station') && (
+        <TableCell className="text-xs text-muted-foreground">
+          {t.stationName
+            ? <span className="flex items-center gap-1"><Terminal className="h-3 w-3 shrink-0" />{t.stationName}</span>
+            : <span>—</span>}
+        </TableCell>
+      )}
+      {showCol('connection') && (
+        <TableCell>
+          <ConnectionCell status={t.connectionStatus} />
+          {t.lastError && (
+            <p className="mt-0.5 max-w-32 truncate text-[10px] text-muted-foreground" title={t.lastError}>
+              {t.lastError}
+            </p>
+          )}
+        </TableCell>
+      )}
+      {showCol('lastSeen') && (
+        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+          {fmtLastSeen(t.lastSeenAt)}
+        </TableCell>
+      )}
+      {showCol('lastTxn') && (
+        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+          {fmtHours(t.hoursSinceLastTransaction)}
+        </TableCell>
+      )}
+      {showCol('settlement') && (
+        <TableCell>
+          <SettlementCell status={t.settlementStatus} hours={t.hoursSinceLastTransaction} />
+        </TableCell>
+      )}
+      {showCol('authKey') && (
+        <TableCell>
+          {t.authStatus === 'valid' ? (
+            <span className="flex items-center gap-1 text-xs">
+              <CheckCircle2 className="h-3 w-3 shrink-0" /> Valid
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-xs font-medium">
+              <KeyRound className="h-3 w-3 shrink-0" /> Missing
+            </span>
+          )}
+        </TableCell>
+      )}
+      {showCol('env') && (
+        <TableCell className="text-xs text-muted-foreground">
+          {t.apiEnvironment === 'production' ? 'Prod' : 'Sandbox'}
+        </TableCell>
+      )}
     </TableRow>
   )
 }

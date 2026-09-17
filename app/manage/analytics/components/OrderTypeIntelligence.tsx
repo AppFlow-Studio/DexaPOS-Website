@@ -32,10 +32,6 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
   catering: ChefHat,
 }
 
-const ORDER_TYPE_LABELS: Record<string, string> = {
-  dine_in: 'Dine In', takeout: 'Takeout', delivery: 'Delivery', online: 'Online',
-}
-
 /**
  * Per-type fills. These map a row or segment to its chart series, so they are
  * data encoding rather than status tinting (§4.6b's second exception) — which is
@@ -47,32 +43,6 @@ const TYPE_FILL: Record<string, string> = {
   delivery: '#f59e0b',
   online: '#8b5cf6',
   catering: '#ec4899',
-}
-
-// ── Stacked bar cell ─────────────────────────────────────────────────────────
-
-function TypeBar({ dineInPct, takeoutPct, deliveryPct, onlinePct }: {
-  dineInPct: number; takeoutPct: number; deliveryPct: number; onlinePct: number
-}) {
-  const segments = [
-    { pct: dineInPct, fill: TYPE_FILL.dine_in, label: 'Dine In' },
-    { pct: takeoutPct, fill: TYPE_FILL.takeout, label: 'Takeout' },
-    { pct: deliveryPct, fill: TYPE_FILL.delivery, label: 'Delivery' },
-    { pct: onlinePct, fill: TYPE_FILL.online, label: 'Online' },
-  ].filter(s => s.pct > 0)
-
-  return (
-    <div className="flex h-2 w-full min-w-24 gap-px overflow-hidden rounded-full bg-muted">
-      {segments.map(s => (
-        <div
-          key={s.label}
-          className="transition-all"
-          style={{ width: `${s.pct}%`, backgroundColor: s.fill }}
-          title={`${s.label}: ${s.pct}%`}
-        />
-      ))}
-    </div>
-  )
 }
 
 // ── Main Component ───────────────────────────────────────────────────────────
@@ -291,15 +261,12 @@ export function OrderTypeIntelligence() {
         <Panel>
           <PanelSection
             label="Per-merchant type mix"
-            caption={`Top ${data.merchantBreakdown.length} merchants — dominant channel and order type breakdown`}
+            caption={`Top ${data.merchantBreakdown.length} merchants — share of orders by type`}
           >
-            <Table variant="data" className="min-w-[860px]">
+            <Table variant="data" className="min-w-[480px]">
               <TableHeader className="[&_tr]:border-0">
                 <TableRow>
                   <TableHead>Merchant</TableHead>
-                  <TableHead className="text-right">Orders</TableHead>
-                  <TableHead>Dominant Type</TableHead>
-                  <TableHead className="min-w-32">Type Mix</TableHead>
                   <TableHead className="text-right">Dine In</TableHead>
                   <TableHead className="text-right">Takeout</TableHead>
                   <TableHead className="text-right">Delivery</TableHead>
@@ -310,24 +277,6 @@ export function OrderTypeIntelligence() {
                 {data.merchantBreakdown.map(row => (
                   <TableRow key={row.merchantId}>
                     <TableCell className="font-medium">{row.merchantName}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.totalOrders.toLocaleString()}</TableCell>
-                    <TableCell>
-                      <span className="inline-flex items-center gap-1.5 text-sm capitalize">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: TYPE_FILL[row.dominantType] ?? '#94a3b8' }}
-                        />
-                        {ORDER_TYPE_LABELS[row.dominantType] ?? row.dominantType.replace(/_/g, ' ')}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <TypeBar
-                        dineInPct={row.dineInPct}
-                        takeoutPct={row.takeoutPct}
-                        deliveryPct={row.deliveryPct}
-                        onlinePct={row.onlinePct}
-                      />
-                    </TableCell>
                     <TableCell className="text-right tabular-nums text-muted-foreground">
                       {row.dineInPct > 0 ? `${row.dineInPct}%` : '—'}
                     </TableCell>

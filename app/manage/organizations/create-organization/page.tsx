@@ -137,8 +137,16 @@ export default function CreateOrganizationPage() {
                                 )}
                             />
 
-                            <div className="flex items-center justify-end md:col-span-2">
-                                <Button type="submit" disabled={submitting || !form.formState.isValid}>
+                            {/* Centred on a phone, right-aligned from `sm` up: a
+                                lone right-hugging button reads as clipped at
+                                narrow widths. Full-width below `sm` gives it a
+                                comfortable tap target. */}
+                            <div className="flex items-center justify-center sm:justify-end md:col-span-2">
+                                <Button
+                                    type="submit"
+                                    disabled={submitting || !form.formState.isValid}
+                                    className="w-full sm:w-auto"
+                                >
                                     {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                     {submitting ? "Creating..." : "Create Organization"}
                                 </Button>
