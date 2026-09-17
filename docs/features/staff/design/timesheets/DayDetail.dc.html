@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #0C4FD1; text-decoration: none; } a:hover { color: #0a3fa8; }
+    .theme {
+      --bg: oklch(0.9842 0.0034 247.8575);
+      --fg: oklch(0.2795 0.0368 260.0310);
+      --card: #ffffff;
+      --muted: oklch(0.9670 0.0029 264.5419);
+      --muted-fg: oklch(0.5510 0.0234 264.3637);
+      --border: oklch(0.8717 0.0093 258.3382);
+      --brand: #0C4FD1;
+      --m45: color-mix(in oklch, var(--muted) 45%, transparent);
+      --m60: color-mix(in oklch, var(--muted) 60%, transparent);
+      font-family: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--fg);
+      -webkit-font-smoothing: antialiased;
+    }
+    .theme.dark {
+      --bg: #16181d; --fg: oklch(0.9288 0.0126 255.5078); --card: #1c1f26;
+      --muted: oklch(0.2427 0.0381 259.9437); --muted-fg: oklch(0.7137 0.0192 261.3246);
+      --border: oklch(0.4461 0.0263 256.8018); --brand: #6CA0FF;
+    }
+    .ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    .num { font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div class="theme {{themeClass}}" style="width: 1440px; min-height: 860px; box-sizing: border-box; padding: 64px 72px; background: rgba(15, 17, 21, 0.5); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 72px; align-items: start;">
+
+  <!-- Dialog A: overnight shift -->
+  <div style="background: var(--card); border: 1px solid var(--border); border-radius: 24px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.12);">
+    <div style="padding: 24px 24px 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 600;">Jordan Reyes</h2>
+        <p style="margin: 0; font-size: 14px; color: var(--muted-fg);">Tuesday, Sep 8, 2026 · Bartender</p>
+      </div>
+      <div style="width: 32px; height: 32px; border-radius: 9999px; background: var(--m60); color: var(--muted-fg); display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></div>
+    </div>
+
+    <div style="padding: 20px 24px 8px; display: flex; flex-direction: column; gap: 20px;">
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+        <div style="border-radius: 16px; background: var(--m60); padding: 16px;">
+          <div style="font-size: 14px; font-weight: 500; color: var(--muted-fg);">Worked</div>
+          <p class="num" style="margin: 4px 0 0; font-size: 20px; font-weight: 500; letter-spacing: -0.02em;">9.25 hrs</p>
+          <p style="margin: 4px 0 0; font-size: 12px; color: var(--muted-fg);">1 shift</p>
+        </div>
+        <div style="border-radius: 16px; background: var(--m60); padding: 16px;">
+          <div style="font-size: 14px; font-weight: 500; color: var(--muted-fg);">Unpaid breaks</div>
+          <p class="num" style="margin: 4px 0 0; font-size: 20px; font-weight: 500; letter-spacing: -0.02em;">30 min</p>
+          <p style="margin: 4px 0 0; font-size: 12px; color: var(--muted-fg);">Taken off the hours</p>
+        </div>
+        <div style="border-radius: 16px; background: var(--m60); padding: 16px;">
+          <div style="font-size: 14px; font-weight: 500; color: var(--muted-fg);">Est. pay</div>
+          <p class="num" style="margin: 4px 0 0; font-size: 20px; font-weight: 500; letter-spacing: -0.02em;">$175.75</p>
+          <p class="num" style="margin: 4px 0 0; font-size: 12px; color: var(--muted-fg);">$19.00 an hour</p>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <p style="margin: 0; font-size: 14px; color: var(--muted-fg);">Shifts</p>
+        <div style="border-radius: 16px; background: var(--m45); padding: 16px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+            <div style="display: grid; grid-template-columns: auto auto; column-gap: 32px; row-gap: 2px;">
+              <span style="font-size: 12px; color: var(--muted-fg);">Clock in</span>
+              <span style="font-size: 12px; color: var(--muted-fg);">Clock out</span>
+              <span class="num" style="font-size: 14px; font-weight: 500;">Tue, Sep 8 · 5:02 PM</span>
+              <span class="num" style="font-size: 14px; font-weight: 500;">Wed, Sep 9 · 2:47 AM</span>
+            </div>
+            <span class="num" style="font-size: 14px; font-weight: 600;">9.25 hrs</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <span style="display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px; background: var(--m60); padding: 2px 10px; font-size: 12px; font-weight: 500;"><svg class="ic" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg>Ends the next day</span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px; background: var(--m60); padding: 2px 10px; font-size: 12px; font-weight: 500;"><svg class="ic" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"></rect><line x1="12" x2="12.01" y1="18" y2="18"></line></svg>Clocked on POS</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 12px; color: var(--muted-fg);">Breaks</span>
+            <div style="display: flex; justify-content: space-between; font-size: 14px;">
+              <span>Unpaid · <span class="num">10:15 PM – 10:45 PM</span></span>
+              <span class="num" style="color: var(--muted-fg);">30 min</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 16px 24px 24px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+      <div style="height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">All of Jordan’s shifts this week <svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px;"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></div>
+      <div style="height: 36px; display: inline-flex; align-items: center; padding: 0 16px; border-radius: 9999px; border: 1px solid var(--border); background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-size: 13px; font-weight: 500;">Close</div>
+    </div>
+  </div>
+
+  <!-- Dialog B: missing clock-out -->
+  <div style="background: var(--card); border: 1px solid var(--border); border-radius: 24px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.12);">
+    <div style="padding: 24px 24px 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 600;">Diego Alvarez</h2>
+        <p style="margin: 0; font-size: 14px; color: var(--muted-fg);">Saturday, Sep 12, 2026 · Line cook</p>
+      </div>
+      <div style="width: 32px; height: 32px; border-radius: 9999px; background: var(--m60); color: var(--muted-fg); display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></div>
+    </div>
+
+    <div style="padding: 20px 24px 8px; display: flex; flex-direction: column; gap: 20px;">
+      <div style="border-radius: 16px; background: var(--m60); padding: 16px; display: flex; gap: 12px; align-items: flex-start;">
+        <svg class="ic" viewBox="0 0 24 24" style="margin-top: 2px; color: var(--muted-fg);"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <span style="font-size: 14px; font-weight: 500;">This shift has no clock-out</span>
+          <span style="font-size: 14px; color: var(--muted-fg); text-wrap: pretty;">Its hours aren’t counted in any total until a clock-out is added. A manager can add one from the shift list.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <p style="margin: 0; font-size: 14px; color: var(--muted-fg);">Shifts</p>
+        <div style="border-radius: 16px; background: var(--m45); padding: 16px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+            <div style="display: grid; grid-template-columns: auto auto; column-gap: 32px; row-gap: 2px;">
+              <span style="font-size: 12px; color: var(--muted-fg);">Clock in</span>
+              <span style="font-size: 12px; color: var(--muted-fg);">Clock out</span>
+              <span class="num" style="font-size: 14px; font-weight: 500;">Sat, Sep 12 · 10:58 AM</span>
+              <span style="font-size: 14px; font-weight: 500; color: var(--muted-fg);">Not recorded</span>
+            </div>
+            <span class="num" style="font-size: 14px; font-weight: 600; color: var(--muted-fg);">—</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <span style="display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px; background: var(--m60); padding: 2px 10px; font-size: 12px; font-weight: 500;">Missing clock-out</span>
+            <span style="display: inline-flex; align-items: center; gap: 6px; border-radius: 9999px; background: var(--m60); padding: 2px 10px; font-size: 12px; font-weight: 500;"><svg class="ic" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"></rect><line x1="12" x2="12.01" y1="18" y2="18"></line></svg>Clocked on POS</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding: 16px 24px 24px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+      <div style="height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Open in shift list <svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px;"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></div>
+      <div style="height: 36px; display: inline-flex; align-items: center; padding: 0 16px; border-radius: 9999px; border: 1px solid var(--border); background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-size: 13px; font-weight: 500;">Close</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { themeClass: this.props.dark ? 'dark' : '' };
+  }
+}
+</script>
+</body>
+</html>

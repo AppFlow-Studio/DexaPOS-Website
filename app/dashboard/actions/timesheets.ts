@@ -3,7 +3,9 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { ShiftBreakLog, StaffShift } from "@/types/staff";
+import type { TimesheetSummaryPayload } from "@/lib/timesheets/types";
 import { startOfDay, endOfDay } from "date-fns";
+import { z } from "zod";
 import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
@@ -187,6 +189,210 @@ export async function GetTimesheets(
       error:
         error instanceof Error ? error.message : "Failed to fetch timesheets",
     };
+  }
+}
+
+// ============================================================================
+// GET TIMESHEET SUMMARY (weekly / monthly grid)
+// ============================================================================
+
+// The RPC's snake_case payload, parsed and mapped to `lib/timesheets/types`.
+// Parsing is strict about shape but lenient about nulls the SQL may emit for
+// optional text, so a new nullable column cannot blank the page.
+const summaryBreakSchema = z.object({
+  type: z.enum(["paid", "unpaid"]),
+  start: z.string(),
+  end: z.string().nullable(),
+  minutes: z.number(),
+});
+
+const summaryShiftSchema = z
+  .object({
+    id: z.string(),
+    staff_profile_id: z.string(),
+    local_date: z.string(),
+    clock_in: z.string(),
+    clock_out: z.string().nullable(),
+    status: z.string(),
+    net_minutes: z.number(),
+    unpaid_break_minutes: z.number(),
+    paid_break_minutes: z.number(),
+    ot_minutes: z.number(),
+    rate: z.coerce.number(),
+    pay_cents: z.number().nullable(),
+    is_open: z.boolean(),
+    is_on_clock: z.boolean(),
+    is_missing_out: z.boolean(),
+    is_overnight: z.boolean(),
+    is_over_max: z.boolean(),
+    is_edited: z.boolean(),
+    is_auto_closed: z.boolean(),
+    from_pos: z.boolean(),
+    breaks: z.array(summaryBreakSchema),
+    break_logs: z.array(z.unknown()),
+    notes: z.string().nullable(),
+    is_verified: z.boolean().nullable(),
+  })
+  .transform((s) => ({
+    id: s.id,
+    staffProfileId: s.staff_profile_id,
+    localDate: s.local_date,
+    clockIn: s.clock_in,
+    clockOut: s.clock_out,
+    status: s.status,
+    netMinutes: s.net_minutes,
+    unpaidBreakMinutes: s.unpaid_break_minutes,
+    paidBreakMinutes: s.paid_break_minutes,
+    otMinutes: s.ot_minutes,
+    rate: s.rate,
+    payCents: s.pay_cents,
+    isOpen: s.is_open,
+    isOnClock: s.is_on_clock,
+    isMissingOut: s.is_missing_out,
+    isOvernight: s.is_overnight,
+    isOverMax: s.is_over_max,
+    isEdited: s.is_edited,
+    isAutoClosed: s.is_auto_closed,
+    fromPos: s.from_pos,
+    breaks: s.breaks,
+    breakLogs: s.break_logs,
+    notes: s.notes,
+    isVerified: s.is_verified ?? false,
+  }));
+
+const summaryPayloadSchema = z
+  .object({
+    meta: z.object({
+      location_id: z.string(),
+      location_name: z.string(),
+      timezone: z.string(),
+      week_starts_on: z.literal("monday"),
+      ot_threshold_minutes: z.number(),
+      ot_multiplier: z.coerce.number(),
+      max_shift_minutes: z.number(),
+      range_start: z.string(),
+      range_end: z.string(),
+      generated_at: z.string(),
+    }),
+    employees: z.array(
+      z.object({
+        staff_profile_id: z.string(),
+        display_name: z.string(),
+        first_name: z.string().nullable(),
+        last_name: z.string().nullable(),
+        avatar_url: z.string().nullable(),
+        role_name: z.string().nullable(),
+        is_active_member: z.boolean(),
+      }),
+    ),
+    shifts: z.array(summaryShiftSchema),
+  })
+  .transform(
+    (p): TimesheetSummaryPayload => ({
+      meta: {
+        locationId: p.meta.location_id,
+        locationName: p.meta.location_name,
+        timezone: p.meta.timezone,
+        weekStartsOn: "monday",
+        otThresholdMinutes: p.meta.ot_threshold_minutes,
+        otMultiplier: p.meta.ot_multiplier,
+        maxShiftMinutes: p.meta.max_shift_minutes,
+        rangeStart: p.meta.range_start,
+        rangeEnd: p.meta.range_end,
+        generatedAt: p.meta.generated_at,
+      },
+      employees: p.employees.map((e) => ({
+        staffProfileId: e.staff_profile_id,
+        displayName: e.display_name,
+        firstName: e.first_name ?? "",
+        lastName: e.last_name ?? "",
+        avatarUrl: e.avatar_url,
+        roleName: e.role_name,
+        isActiveMember: e.is_active_member,
+      })),
+      shifts: p.shifts,
+    }),
+  );
+
+const SUMMARY_ERRORS: Record<string, string> = {
+  PERMISSION_DENIED: "You don't have access to timesheets at this location.",
+  RANGE_TOO_LARGE: "Choose a range of 93 days or fewer.",
+  INVALID_RANGE: "That date range isn't valid.",
+  NOT_FOUND: "This location couldn't be found.",
+};
+
+export async function GetTimesheetSummary(input: {
+  locationId: string;
+  start: string;
+  end: string;
+}): Promise<MutationResult<TimesheetSummaryPayload>> {
+  try {
+    // The caller's Clerk JWT must reach the RPC: its authz resolves the user
+    // from `sub`. The service-role client has no `sub` and would be refused.
+    const supabase = createServerSupabaseClient();
+    const { data, error } = await (supabase as any).rpc(
+      "get_timesheet_summary",
+      {
+        p_location_id: input.locationId,
+        p_start: input.start,
+        p_end: input.end,
+      },
+    );
+
+    if (error) {
+      const text = getErrorText(error);
+      const code = Object.keys(SUMMARY_ERRORS).find((c) => text.includes(c));
+      if (!code) console.error("[GetTimesheetSummary] rpc error", error);
+      return {
+        success: false,
+        error: code ? SUMMARY_ERRORS[code] : "Timesheets couldn't be loaded.",
+      };
+    }
+
+    const parsed = summaryPayloadSchema.safeParse(data);
+    if (!parsed.success) {
+      console.error("[GetTimesheetSummary] unexpected payload", parsed.error);
+      return { success: false, error: "Timesheets couldn't be loaded." };
+    }
+
+    return { success: true, data: parsed.data };
+  } catch (error) {
+    console.error("[GetTimesheetSummary] error", error);
+    return { success: false, error: "Timesheets couldn't be loaded." };
+  }
+}
+
+/**
+ * Wage data leaving the system should leave a trail. Best-effort: a failed log
+ * never blocks the download the manager asked for.
+ */
+export async function LogTimesheetExport(input: {
+  clerkOrgId: string;
+  locationId: string;
+  kind: "summary" | "shifts";
+  start: string;
+  end: string;
+  rowCount: number;
+}): Promise<void> {
+  try {
+    await LogAuditEvent({
+      clerkOrgId: input.clerkOrgId,
+      locationId: input.locationId,
+      action: "timesheet_exported",
+      actionCategory: "staff_shifts",
+      severity: "info",
+      resourceType: "timesheet",
+      resourceName:
+        input.kind === "summary" ? "Timesheet summary" : "Shift detail",
+      metadata: {
+        kind: input.kind,
+        range_start: input.start,
+        range_end: input.end,
+        row_count: input.rowCount,
+      },
+    });
+  } catch (error) {
+    console.error("[LogTimesheetExport] error", error);
   }
 }
 

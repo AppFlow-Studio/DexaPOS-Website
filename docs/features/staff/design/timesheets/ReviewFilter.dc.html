@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #0C4FD1; text-decoration: none; } a:hover { color: #0a3fa8; }
+    .theme {
+      --bg: oklch(0.9842 0.0034 247.8575);
+      --fg: oklch(0.2795 0.0368 260.0310);
+      --card: #ffffff;
+      --muted: oklch(0.9670 0.0029 264.5419);
+      --muted-fg: oklch(0.5510 0.0234 264.3637);
+      --border: oklch(0.8717 0.0093 258.3382);
+      --brand: #0C4FD1;
+      --m20: color-mix(in oklch, var(--muted) 20%, transparent);
+      --m50: color-mix(in oklch, var(--muted) 50%, transparent);
+      --m60: color-mix(in oklch, var(--muted) 60%, transparent);
+      --m70: color-mix(in oklch, var(--muted) 70%, transparent);
+      --card70: color-mix(in oklch, var(--card) 70%, transparent);
+      font-family: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--fg); background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    .theme.dark {
+      --bg: #16181d; --fg: oklch(0.9288 0.0126 255.5078); --card: #1c1f26;
+      --muted: oklch(0.2427 0.0381 259.9437); --muted-fg: oklch(0.7137 0.0192 261.3246);
+      --border: oklch(0.4461 0.0263 256.8018); --brand: #6CA0FF;
+    }
+    .ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    .num { font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div class="theme {{themeClass}}" style="width: 1184px; min-height: 520px; padding: 24px; box-sizing: border-box;">
+  <div style="border: 1px solid var(--border); background: var(--card); border-radius: 24px; overflow: hidden;">
+    <section style="padding: 32px 24px;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; color: var(--brand);">
+            <svg class="ic" viewBox="0 0 24 24" style="width: 18px; height: 18px;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span>Hours by team member</span>
+          </div>
+          <p style="margin: 4px 0 0; font-size: 14px; color: var(--muted-fg);">Select a day to see the shifts behind it. Select a name to see all of that person’s shifts.</p>
+        </div>
+        <div style="display: inline-flex; gap: 2px; padding: 4px; border-radius: 9999px; background: var(--m70);">
+          <div style="padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 0 0 1px var(--border);">Summary</div>
+          <div style="padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Shifts</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div style="position: relative; width: 360px;">
+            <svg class="ic" viewBox="0 0 24 24" style="position: absolute; left: 14px; top: 12px; color: var(--muted-fg); opacity: 0.5;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+            <div style="height: 40px; border-radius: 9999px; background: var(--m60); padding-left: 40px; display: flex; align-items: center; font-size: 14px; color: var(--muted-fg);">Search team members…</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 13px; color: var(--muted-fg); margin-right: 4px;">Needs review</span>
+            <div style="height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 9999px; background: var(--muted); font-size: 13px; font-weight: 500; color: var(--fg);">
+              <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>
+              <span>Missing clock-out</span><span class="num">1</span>
+              <svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--muted-fg);"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+            </div>
+            <div style="height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 9999px; background: var(--m60); font-size: 13px; color: var(--muted-fg); opacity: 0.7;">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M5 22h14"></path><path d="M5 2h14"></path><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path></svg>
+              <span>Over 16 hours</span><span class="num" style="font-weight: 500; color: var(--fg);">1</span>
+            </div>
+            <div style="height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 9999px; background: var(--m60); font-size: 13px; color: var(--muted-fg); opacity: 0.7;">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"></path><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"></path></svg>
+              <span>No pay rate</span><span class="num" style="font-weight: 500; color: var(--fg);">1</span>
+            </div>
+            <div style="height: 36px; display: inline-flex; align-items: center; gap: 4px; padding: 0 12px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>Clear filters
+            </div>
+          </div>
+        </div>
+
+        <div style="border-radius: 16px; background: var(--m20); overflow: hidden; font-size: 14px;">
+          <div style="display: grid; grid-template-columns: 232px repeat(7, minmax(0, 1fr)) 92px 100px 110px; background: var(--m50); height: 52px; align-items: center;">
+            <div style="padding: 0 20px; font-weight: 500;">Team member</div>
+            <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+              <div style="padding: 0 12px; display: flex; flex-direction: column; align-items: flex-end; line-height: 16px;">
+                <span style="font-weight: 500;">{{d.name}}</span>
+                <span class="num" style="font-size: 12px; color: var(--muted-fg);">{{d.date}}</span>
+              </div>
+            </sc-for>
+            <div style="padding: 0 14px; text-align: right; font-weight: 500;">Total</div>
+            <div style="padding: 0 14px; text-align: right; font-weight: 500;">Overtime</div>
+            <div style="padding: 0 14px; text-align: right; font-weight: 500;">Est. pay</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 232px repeat(7, minmax(0, 1fr)) 92px 100px 110px; background: var(--card70); align-items: center; min-height: 60px;">
+            <div style="padding: 12px; display: flex; align-items: center; gap: 12px;">
+              <div style="width: 36px; height: 36px; border-radius: 9999px; background: var(--muted); color: var(--muted-fg); font-size: 12px; display: flex; align-items: center; justify-content: center;">DA</div>
+              <div style="display: flex; flex-direction: column;"><span style="font-weight: 500;">Diego Alvarez</span><span style="font-size: 12px; color: var(--muted-fg);">Line cook</span></div>
+            </div>
+            <sc-for list="{{cells}}" as="c" hint-placeholder-count="7">
+              <div style="padding: 0 8px; display: flex; justify-content: flex-end;">
+                <span class="num" style="display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 9999px; background: {{c.bg}}; box-shadow: {{c.ring}}; color: {{c.color}}; font-size: {{c.size}}; font-weight: {{c.weight}};">{{c.text}}</span>
+              </div>
+            </sc-for>
+            <div class="num" style="padding: 0 14px; text-align: right; font-weight: 500;">32.00</div>
+            <div class="num" style="padding: 0 14px; text-align: right; color: var(--muted-fg);">—</div>
+            <div class="num" style="padding: 0 14px; text-align: right;">$592.00</div>
+          </div>
+        </div>
+
+        <div style="font-size: 14px; color: var(--muted-fg);">Showing 1 of 12 team members · filtered to missing clock-outs</div>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1184,"height":520}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const v = ['8.00', '8.00', '8.00', '8.00', '—', 'Missing', '—'];
+    return {
+      themeClass: this.props.dark ? 'dark' : '',
+      days: [
+        { name: 'Mon', date: 'Sep 7' }, { name: 'Tue', date: 'Sep 8' }, { name: 'Wed', date: 'Sep 9' },
+        { name: 'Thu', date: 'Sep 10' }, { name: 'Fri', date: 'Sep 11' }, { name: 'Sat', date: 'Sep 12' }, { name: 'Sun', date: 'Sep 13' }
+      ],
+      cells: v.map((t, i) => ({
+        text: t,
+        bg: i === 5 ? 'var(--muted)' : 'transparent',
+        ring: i === 5 ? '0 0 0 1px var(--border)' : 'none',
+        color: t === '—' ? 'var(--muted-fg)' : 'var(--fg)',
+        size: i === 5 ? '12px' : '14px',
+        weight: i === 5 ? '500' : '400'
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>
