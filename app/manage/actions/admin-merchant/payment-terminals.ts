@@ -315,6 +315,9 @@ export async function getAdminMerchantTerminalStats(
       byType: {
         dejavoo: terminals.filter((t) => t.terminal_type === 'dejavoo').length,
         pax: terminals.filter((t) => t.terminal_type === 'pax').length,
+        castles: terminals.filter((t) => t.terminal_type === 'castles').length,
+        valor: terminals.filter((t) => t.terminal_type === 'valor').length,
+        codepay: terminals.filter((t) => t.terminal_type === 'codepay').length,
       },
     }
 

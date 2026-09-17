@@ -43,6 +43,8 @@ const terminalTypeLabel = (type: string): string => {
             return 'Valor'
         case 'dejavoo':
             return 'Dejavoo'
+        case 'codepay':
+            return 'CodePay'
         default:
             return type
     }
