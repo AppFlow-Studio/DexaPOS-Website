@@ -998,7 +998,7 @@ Updated as each route family lands. `—` means not yet converted.
 | Route family | Routes | Layout components | Status |
 |---|---|---|---|
 | HQ home / analytics / health | `/manage`, `/manage/analytics`, `/manage/health` | `app/manage/components/**` (14), `app/manage/analytics/components/**` (15, **not yet converted**) | `/manage` ✅, `/manage/health` ✅, `/manage/analytics` **shell only** — see note below |
-| Merchant + org operations | `/manage/merchants`, `…/new`, `/manage/create-merchant`, `/manage/organizations`, `…/[organizationId]`, `…/create-organization` | — | pending PR 2 |
+| Merchant + org operations | `/manage/merchants`, `…/new`, `/manage/create-merchant`, `/manage/organizations`, `…/[organizationId]`, `…/create-organization` | `components/admin/MerchantCard.tsx` ✅; `organizations/[organizationId]/components/**` (10, **not yet converted**) | ✅ all 6 routes — see note below |
 | Merchant detail workspace | `/manage/merchants/[merchantId]/**` (99 files) | — | pending PR 3, split by tab |
 | Money movement | `/manage/transactions`, `/manage/disputes`, `/manage/platform-fees`, `/manage/subscriptions`, `/manage/cash-drawers`, `/manage/reports/tax` | — | pending PR 4 |
 | Internal operations | `/manage/users`, `/manage/roles-permissions`, `/manage/audit-logs`, `…/impersonation`, `/manage/support`, `/manage/dlq`, `/manage/profile` | — | pending PR 5 |
@@ -1007,24 +1007,23 @@ Updated as each route family lands. `—` means not yet converted.
 `/manage/settings` is a bare `redirect()` and `/manage/unauthorized` is a
 minimal error surface — **no change** for both.
 
-> ⚠️ **`/manage/analytics` is converted except for the page's own tab bodies.**
-> The page shell is done — `PageShell as="div"` + `PageHeader`, a
-> `Panel`/`StatRow` KPI header and a DS-CTL-05 tab rail — and it passes the DoD
-> `<h1>` grep. **All 15 files in `app/manage/analytics/components/` are converted:
-> 415 → 0 `<Card>`, zero hairline dividers.**
+> ✅ **`/manage/analytics` is fully converted — 484 → 0 `<Card>`.** The route
+> page uses `PageShell as="div"` + `PageHeader`, `Panel`/`PanelSection` for every
+> block, `StatRow`/`StatTile` for all figures, `Table variant="data"` throughout
+> and a DS-CTL-05 tab rail. All 15 files in `app/manage/analytics/components/`
+> are converted too (415 → 0), with zero hairline dividers anywhere.
 >
-> Still outstanding: **45 `<Card>` inline in `page.tsx`'s own `overview` and
-> `revenue` tab bodies** (the GPV trend chart, extended KPI mini-tiles, the whale
-> watch/GPV-concentration blocks and the churn table). Those are the last of
-> Family 1.
+> Verified: `tsc --noEmit` at **805**, below the 822 baseline — each
+> `AnalyticsTooltip` swap retires a pre-existing Recharts `Formatter` error.
+> ESLint over the route matches baseline exactly (9 pre-existing
+> `react-hooks/preserve-manual-memoization` + `purity` errors, unchanged). The two
+> surviving type errors under `components/` (`AuditLogActivityMonitor`'s
+> `PlatformAuditLogRow[]` mismatch, `DeviceStabilityIndex`'s `SetStateAction`
+> argument) are pre-existing and untouched — worth fixing separately.
 >
-> Verified at that point: `tsc --noEmit` 822 → **809** (each `AnalyticsTooltip`
-> swap retires a pre-existing Recharts `Formatter` error); ESLint over the
-> component directory unchanged at 7 pre-existing
-> `react-hooks/preserve-manual-memoization` errors. The two surviving type errors
-> in that directory (`AuditLogActivityMonitor`'s `PlatformAuditLogRow[]` mismatch,
-> `DeviceStabilityIndex`'s `SetStateAction` argument) are pre-existing and
-> untouched — worth fixing separately.
+> **Not yet verified in a browser.** In particular `StatRow`'s dividers are
+> `nth-child`-positional and several panels here stack two rows (3+2, 4+3, 3+3)
+> to carry 5–7 figures, which is the case most worth a visual check.
 >
 > The conversion is mechanical — see the recipe below — but note two traps:
 > `StatRow` accepts only `columns={2|3|4}` (stack rows for 5–6 figures), and
@@ -1046,3 +1045,51 @@ minimal error surface — **no change** for both.
 >    de-dup move does **not** apply here: collapsing the route onto
 >    `AnalyticsContent` would delete live surfaces. Which metrics survive is a
 >    product decision, not a refactor.
+
+> ✅ **Family 2 (merchant + org operations) is converted — all 6 routes.**
+> `/manage/create-merchant` is re-dispositioned to **no change**: it is a bare
+> `redirect('/manage/merchants/new')`, the same case as `/manage/settings`. The
+> ticket listed it as "shell/header + form"; there is no shell to convert.
+>
+> Two structural notes specific to this family:
+>
+> - **Both list pages gained a mobile card grid they did not have.** §5.3 says
+>   never solve mobile with a horizontally scrolling table, but
+>   `/manage/merchants` (list view) and `/manage/organizations` shipped only a
+>   table. Each now renders two trees off one dataset — `Table variant="data"`
+>   above the breakpoint, a `bg-muted/45` card grid below.
+> - **The org detail route's page shell is converted; its 10 co-located
+>   components are not.** `organizations/[organizationId]/components/**` holds
+>   ~46 more cards across dialog and wizard surfaces (`AdminInviteWizard` 41KB,
+>   `CreateMerchantsButtons` 40KB, `AddMerchantButtons` 27KB). Those are
+>   dialog-shaped, not page-shaped, and should be split per component the way
+>   Family 3 splits per tab.
+>
+> Colour removed per D-03, because none of these encoded real severity: merchant
+> status badges (a `statusColors` map with six tinted variants — **deleted**),
+> the merchant stat numerals (green/red/amber), the org growth arrow tint, the
+> invite-status text colours, and the create-merchant wizard's green "complete"
+> step pills. Severity colour is retained in exactly one place in this family —
+> the org Settings **Danger Zone**, which guards an irreversible delete (§14.3
+> exception 2). Its heading keeps the standard brand-blue `PanelSection`
+> treatment rather than being recoloured: overriding that colour needed a
+> brittle descendant selector that silently stopped matching, and the
+> destructive signal belongs on the action row, which already carries it.
+>
+> Verified: `tsc --noEmit` **zero errors in every changed file**, project total
+> 809 → 805 (narrowing `organizationsData`'s `any[] | Error` union inside its
+> `useMemo` also cleared 3 pre-existing errors). ESLint clean. Live DOM with a
+> real HQ session at 1440 and 375: one `<main>`, `scale === 1`, no page-level
+> horizontal overflow on any of the six routes, and the detail route's wide
+> tables scroll inside their own wells rather than leaking.
+>
+> Two traps worth knowing before converting another HQ detail route:
+>
+> 1. **A controlled `Tabs` ignores a synthetic `click()`.** These pages wire
+>    `value={activeTab}` + `onValueChange`, so an injected
+>    `element.click()` does not switch tabs — it silently reports *empty* tab
+>    panels and reads as "the tab is broken". Drive tab content with a real
+>    trusted click, or the evidence is wrong.
+> 2. **These files are CRLF.** A multi-line search/replace built with `\n`
+>    joins will miss every time. Normalise to `\n`, edit, then write back
+>    `\r\n`.

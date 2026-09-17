@@ -2,7 +2,14 @@
 
 import Link from 'next/link'
 import { useOrganizationInfo } from "../../hooks/useOrganizationInfo"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+    PageHeader,
+    PageShell,
+    Panel,
+    PanelSection,
+    StatRow,
+    StatTile,
+} from '@/components/dashboard/shell'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
@@ -10,7 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { MoreHorizontal, Shield, Settings, UserPlus2, Users, AlertTriangle, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Shield, Settings, UserPlus2, Users, AlertTriangle, Trash2, Building2 } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react'
 import { SendAdminInviteButton } from './components/SendAdminInviteButton'
@@ -36,37 +43,40 @@ export default function OrganizationInfoPage() {
     const [openDeleteOrganizationDialog, setOpenDeleteOrganizationDialog] = useState(false)
     const [activeTab, setActiveTab] = useState('overview')
     const [inviteSearch, setInviteSearch] = useState('')
+    /* Shaped to the converted page: header block, then one panel. */
     if (isLoading) return (
-        <div className="space-y-6 animate-in fade-in-0 duration-300">
-            <div className="h-5 w-56 bg-muted rounded-md animate-pulse" />
-            <div className="border rounded-xl p-6">
-                <div className="flex items-center gap-4 mb-6">
-                    <div className="h-12 w-12 rounded-full bg-muted animate-pulse" />
+        <PageShell as="div" className="animate-in fade-in-0 duration-300">
+            <div className="h-5 w-56 animate-pulse rounded-md bg-muted" />
+            <Panel padded>
+                <div className="mb-6 flex items-center gap-4">
+                    <div className="h-12 w-12 animate-pulse rounded-lg bg-muted" />
                     <div className="space-y-2">
-                        <div className="h-6 w-40 bg-muted rounded-md animate-pulse" />
-                        <div className="h-4 w-64 bg-muted rounded-md animate-pulse" />
+                        <div className="h-6 w-40 animate-pulse rounded-md bg-muted" />
+                        <div className="h-4 w-64 max-w-full animate-pulse rounded-md bg-muted" />
                     </div>
                 </div>
-                <div className="h-10 w-full bg-muted rounded-md animate-pulse" />
-            </div>
-        </div>
+                <div className="h-10 w-full animate-pulse rounded-full bg-muted" />
+            </Panel>
+        </PageShell>
     )
 
+    /* The spinning ring read as "still loading" in an error state; a static
+       glyph on the inset material states the failure instead, and the recovery
+       controls are real `Button`s rather than bare `<button>`s (§4.2). */
     if (error) return (
-        <div className="flex flex-col items-center justify-center py-20 gap-4 animate-in fade-in-0 duration-300">
-            <div className="relative">
-                <div className="absolute inset-0 rounded-full bg-destructive/20 blur-2xl animate-pulse" />
-                <div className="h-14 w-14 rounded-full border-4 border-destructive border-t-transparent animate-spin" />
+        <PageShell as="div" className="animate-in fade-in-0 duration-300">
+            <div className="flex flex-col items-center justify-center gap-4 rounded-2xl bg-muted/30 px-4 py-20">
+                <Shield className="h-12 w-12 text-muted-foreground" />
+                <div className="space-y-2 text-center">
+                    <h2 className="text-lg font-semibold">Unable to load organization details</h2>
+                    <p className="text-sm text-muted-foreground">{error.message}</p>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                    <Button onClick={() => window.location.reload()}>Retry</Button>
+                    <Button variant="outline" onClick={() => history.back()}>Go Back</Button>
+                </div>
             </div>
-            <div className="text-center space-y-2">
-                <h3 className="text-lg font-semibold">Unable to load organization details</h3>
-                <p className="text-sm text-muted-foreground">{error.message}</p>
-            </div>
-            <div className="flex items-center gap-2">
-                <button onClick={() => window.location.reload()} className="h-9 px-4 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">Retry</button>
-                <button onClick={() => history.back()} className="h-9 px-4 rounded-md border border-border hover:bg-muted transition-colors">Go Back</button>
-            </div>
-        </div>
+        </PageShell>
     )
 
     const org: any = data
@@ -87,176 +97,190 @@ export default function OrganizationInfoPage() {
     const filteredMemberInvites = (org?.pending_org_member_invites || []).filter(matchesInvite)
 
     return (
-        <div className="space-y-6">
-            {/* Breadcrumb */}
-            <div className="text-sm text-muted-foreground">
-                <Link href="/manage/organizations" className="hover:underline">Organizations</Link>
-                <span className="mx-2">/</span>
-                <span className="text-foreground">Organization details</span>
+        /* `as="div"`: app/manage/layout.tsx already owns this surface's <main>. */
+        <PageShell as="div">
+            {/* The hand-rolled breadcrumb becomes the standard back pill (D-04). */}
+            <PageHeader
+                title={orgName}
+                backHref="/manage/organizations"
+                backLabel="Back to Organizations"
+                actions={
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActiveTab('settings')}
+                        className="h-9 border-0 bg-muted/60 px-3 text-[0.8125rem] text-muted-foreground shadow-none hover:bg-muted hover:text-foreground"
+                    >
+                        <Settings className="mr-2 h-4 w-4" /> Settings
+                    </Button>
+                }
+            />
+
+            {/* Identity row: the logo and the org's metadata badges. Previously
+                this was a `CardHeader` whose `CardTitle` competed with the page
+                title; the name now lives in `PageHeader` and this row carries
+                only the identifiers. */}
+            <div className="flex min-w-0 items-center gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/10">
+                    {orgImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={orgImage} alt={orgName} className="h-full w-full object-cover" />
+                    ) : (
+                        <Shield className="h-6 w-6 text-primary" />
+                    )}
+                </div>
+                <div className="min-w-0 flex-1">
+                    {orgId && (
+                        <Badge
+                            variant="secondary"
+                            className="flex max-w-full rounded-full border-0 font-mono text-xs sm:max-w-none"
+                        >
+                            <span className="block truncate">{orgId}</span>
+                        </Badge>
+                    )}
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                        {orgDomain && (
+                            <Badge variant="secondary" className="rounded-full border-0 px-2.5 text-xs font-medium">
+                                {orgDomain}
+                            </Badge>
+                        )}
+                        {createdAt && (
+                            <span className="text-xs text-muted-foreground">Created {new Date(createdAt).toLocaleDateString()}</span>
+                        )}
+                    </div>
+                </div>
             </div>
 
-            {/* Header */}
-            <Card>
-                <CardHeader className="pb-4">
-                    <div className="flex flex-col gap-3 min-w-0 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
-                            <div className="h-12 w-12 shrink-0 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
-                                {orgImage ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={orgImage} alt={orgName} className="h-full w-full object-cover" />
-                                ) : (
-                                    <Shield className="h-6 w-6 text-primary" />
-                                )}
+            {/* Tabs — the canonical pill strip on muted material, replacing the
+                bordered `TabsList` inside a card. */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <div className="-mx-1 overflow-x-auto px-1">
+                    <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                        {[
+                            ['overview', 'Overview'],
+                            ['members', 'Members'],
+                            ['merchants', 'Merchants'],
+                            ['roles', 'Roles'],
+                            ['invites', 'Invites'],
+                            ['audit', 'Audit Logs'],
+                            ['settings', 'Settings'],
+                        ].map(([value, label]) => (
+                            <TabsTrigger
+                                key={value}
+                                value={value}
+                                className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border"
+                            >
+                                {label}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+                </div>
+
+                {/* Overview */}
+                <TabsContent value="overview" className="mt-6">
+                    <Panel>
+                        <div className="px-4 py-6 sm:px-6">
+                            <StatRow columns={2}>
+                                <StatTile
+                                    label="Stores"
+                                    value={org?.stores_count ?? 0}
+                                    meta="Total active POS locations"
+                                    icon={<Building2 />}
+                                />
+                                <StatTile
+                                    label="Members"
+                                    value={members?.length ?? 0}
+                                    meta="Includes owners, managers and cashiers"
+                                    icon={<Users />}
+                                />
+                            </StatRow>
+                        </div>
+                    </Panel>
+                </TabsContent>
+
+                {/* Roles */}
+                <TabsContent value="roles" className="mt-6">
+                    <div className="space-y-6">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                                <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
+                                    Organization roles
+                                </h2>
+                                <p className="mt-1 text-sm text-muted-foreground">Assign POS roles to manage access for merchants and staff.</p>
                             </div>
-                            <div className="min-w-0 flex-1">
-                                <CardTitle className="text-2xl font-semibold truncate">{orgName}</CardTitle>
-                                {orgId && (
-                                    <Badge variant="outline" className="font-mono text-xs flex max-w-full mt-1 sm:max-w-none">
-                                        <span className="block truncate">{orgId}</span>
-                                    </Badge>
-                                )}
-                                <div className="flex flex-wrap items-center gap-2 mt-1 min-w-0">
-                                    {orgDomain && <Badge variant="secondary">{orgDomain}</Badge>}
-                                    {createdAt && (
-                                        <span className="text-xs text-muted-foreground">Created {new Date(createdAt).toLocaleDateString()}</span>
-                                    )}
-                                </div>
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                <Button variant="outline" size="sm" onClick={() => router.push('/manage/roles-permissions')}>Edit priority</Button>
+                                <Button size="sm" onClick={() => router.push('/manage/roles-permissions')}>Create role</Button>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-                            <Button variant="outline" size="sm" onClick={() => setActiveTab('settings')}>
-                                <Settings className="h-4 w-4 mr-2" /> Settings
-                            </Button>
-                        </div>
+
+                        <Table variant="data" className="min-w-[640px]">
+                            <TableHeader className="[&_tr]:border-0">
+                                <TableRow>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Slug</TableHead>
+                                    <TableHead>Permissions</TableHead>
+                                    <TableHead className="w-10"></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {[
+                                    { name: 'Member', slug: 'member', desc: 'Default user role', perms: [] },
+                                    { name: 'Admin', slug: 'admin', desc: 'Manage all organization resources', perms: ['pos:stores:manage'] },
+                                    { name: 'Store Manager', slug: 'store-manager', desc: 'Manage assigned store, products, staff', perms: ['pos:store:manage'] },
+                                    { name: 'Cashier', slug: 'cashier', desc: 'Process sales and refunds', perms: ['pos:sales:create'] },
+                                ].map((r) => (
+                                    <TableRow key={r.slug}>
+                                        <TableCell>
+                                            <div className="font-medium">{r.name}</div>
+                                            <div className="text-sm text-muted-foreground">{r.desc}</div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="secondary" className="w-fit rounded-full border-0 px-2.5 font-mono text-xs font-medium">
+                                                {r.slug}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            {r.perms.length ? r.perms.map((p) => (
+                                                <Badge key={p} variant="secondary" className="mb-1 mr-2 w-fit rounded-full border-0 px-2.5 text-xs font-medium">{p}</Badge>
+                                            )) : <span className="text-muted-foreground">—</span>}
+                                        </TableCell>
+                                        <TableCell className="text-right"><RoleRowMenu /></TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+
+                        <Panel>
+                            <PanelSection
+                                label="Role assignment in Admin Portal"
+                                caption="Map identity provider groups to POS roles per environment."
+                            >
+                                <Button variant="outline" size="sm">Customize for this organization</Button>
+                            </PanelSection>
+                        </Panel>
                     </div>
-                </CardHeader>
-                <CardContent>
-                    {/* Tabs */}
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                        <div className="overflow-x-auto">
-                            <TabsList className="inline-flex w-max">
-                                <TabsTrigger value="overview">Overview</TabsTrigger>
-                                <TabsTrigger value="members">Members</TabsTrigger>
-                                <TabsTrigger value="merchants">Merchants</TabsTrigger>
-                                <TabsTrigger value="roles">Roles</TabsTrigger>
-                                <TabsTrigger value="invites">Invites</TabsTrigger>
-                                <TabsTrigger value="audit">Audit Logs</TabsTrigger>
-                                <TabsTrigger value="settings">Settings</TabsTrigger>
-                            </TabsList>
-                        </div>
-
-                        {/* Overview */}
-                        <TabsContent value="overview" className="mt-6">
-                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                {/* <Card>
-                                    <CardHeader>
-                                        <CardTitle className="text-sm font-medium">Merchant Onboarding</CardTitle>
-                                        <CardDescription>Process for creating POS merchant accounts</CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="text-sm text-muted-foreground space-y-2">
-                                        <p>DexaPOS receives account info from Independent office or merchant directly (business name, address, owner details, and payment method).</p>
-                                        <p>DexaPOS creates the store, adds owner as top-permission employee, and assigns store to correct independent office.</p>
-                                    </CardContent>
-                                </Card> */}
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="text-sm font-medium">Stores</CardTitle>
-                                        <CardDescription>Assigned to this organization</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="text-2xl font-semibold">{org?.stores_count ?? 0}</div>
-                                        <p className="text-sm text-muted-foreground">Total active POS locations</p>
-                                    </CardContent>
-                                </Card>
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="text-sm font-medium">Members</CardTitle>
-                                        <CardDescription>Active users in this organization</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="text-2xl font-semibold">{members?.length ?? 0}</div>
-                                        <p className="text-sm text-muted-foreground">Includes owners, managers and cashiers</p>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        </TabsContent>
-
-                        {/* Roles */}
-                        <TabsContent value="roles" className="mt-6">
-                            <div className="space-y-4">
-                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="min-w-0">
-                                        <h3 className="text-lg font-semibold">Organization roles</h3>
-                                        <p className="text-sm text-muted-foreground">Assign POS roles to manage access for merchants and staff.</p>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2 shrink-0">
-                                        <Button variant="outline" size="sm" onClick={() => router.push('/manage/roles-permissions')}>Edit priority</Button>
-                                        <Button size="sm" onClick={() => router.push('/manage/roles-permissions')}>Create role</Button>
-                                    </div>
-                                </div>
-
-                                <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Slug</TableHead>
-                                            <TableHead>Permissions</TableHead>
-                                            <TableHead className="w-10"></TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {[
-                                            { name: 'Member', slug: 'member', desc: 'Default user role', perms: [] },
-                                            { name: 'Admin', slug: 'admin', desc: 'Manage all organization resources', perms: ['pos:stores:manage'] },
-                                            { name: 'Store Manager', slug: 'store-manager', desc: 'Manage assigned store, products, staff', perms: ['pos:store:manage'] },
-                                            { name: 'Cashier', slug: 'cashier', desc: 'Process sales and refunds', perms: ['pos:sales:create'] },
-                                        ].map((r) => (
-                                            <TableRow key={r.slug}>
-                                                <TableCell>
-                                                    <div className="font-medium">{r.name}</div>
-                                                    <div className="text-sm text-muted-foreground">{r.desc}</div>
-                                                </TableCell>
-                                                <TableCell><Badge variant="outline">{r.slug}</Badge></TableCell>
-                                                <TableCell>
-                                                    {r.perms.length ? r.perms.map((p) => (
-                                                        <Badge key={p} variant="secondary" className="mr-2 mb-1">{p}</Badge>
-                                                    )) : <span className="text-muted-foreground">—</span>}
-                                                </TableCell>
-                                                <TableCell className="text-right"><RoleRowMenu /></TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                                </div>
-
-                                <Card className="mt-4">
-                                    <CardHeader>
-                                        <CardTitle className="text-sm">Role assignment in Admin Portal</CardTitle>
-                                        <CardDescription>Map identity provider groups to POS roles per environment.</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <Button variant="outline" size="sm">Customize for this organization</Button>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        </TabsContent>
+                </TabsContent>
 
                         {/* Users */}
                         <TabsContent value="members" className="mt-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Members</CardTitle>
-                                    <CardDescription>People with access to this organization</CardDescription>
-                                    {members.length > 1 && <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' />}
-
-                                </CardHeader>
-                                <CardContent>
+                            <div className="space-y-6">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="min-w-0">
+                                        <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Members</h2>
+                                        <p className="mt-1 text-sm text-muted-foreground">People with access to this organization</p>
+                                    </div>
+                                    {members.length > 1 && (
+                                        <div className="min-w-0 max-w-full">
+                                            <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="min-w-0">
                                     {
                                         members.length > 0 &&
-                                        <div className="overflow-x-auto">
-                                        <Table>
-                                            <TableHeader>
+                                        <Table variant="data" className="min-w-[640px]">
+                                            <TableHeader className="[&_tr]:border-0">
                                                 <TableRow>
                                                     <TableHead>User</TableHead>
                                                     <TableHead>Role</TableHead>
@@ -286,7 +310,7 @@ export default function OrganizationInfoPage() {
                                                         <TableCell className="text-right">
                                                             <DropdownMenu>
                                                                 <DropdownMenuTrigger asChild>
-                                                                    <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                                                                    <Button variant="ghost" aria-label="Invite actions" className="h-8 w-8 rounded-full p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                                                                 </DropdownMenuTrigger>
                                                                 <DropdownMenuContent align="end">
                                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
@@ -304,11 +328,10 @@ export default function OrganizationInfoPage() {
                                                 ))}
                                             </TableBody>
                                         </Table>
-                                        </div>
                                     }
                                     {
                                         members.length === 0 &&
-                                        <div className="flex flex-col items-center justify-center space-y-4">
+                                        <div className="flex flex-col items-center justify-center space-y-4 rounded-2xl bg-muted/30 px-4 py-12">
                                             <div className="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
                                                 <Users className="h-8 w-8 text-muted-foreground" />
                                             </div>
@@ -331,41 +354,40 @@ export default function OrganizationInfoPage() {
                                             </div>
                                         </div>
                                     }
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </div>
                         </TabsContent>
 
                         {/* Merchants */}
                         <TabsContent value="merchants" className="mt-6">
-                            <Card>
-                                <CardHeader>
-                                    <div className='flex items-center justify-between'>
-                                        <div className='flex flex-col gap-2'>
-                                            <CardTitle>Merchants</CardTitle>
-                                            <CardDescription>Manage and view all merchants associated with this carrier.</CardDescription>
-                                        </div>
+                            <div className="space-y-6">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="min-w-0">
+                                        <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Merchants</h2>
+                                        <p className="mt-1 text-sm text-muted-foreground">Manage and view all merchants associated with this carrier.</p>
+                                    </div>
+                                    <div className="min-w-0 max-w-full">
                                         <AddMerchantButton carrierId={carrierId as string} organizationId={organizationId as string} refetch={refetchOrganizationInfo} />
                                     </div>
-                                </CardHeader>
-                                <CardContent>
+                                </div>
+                                <div className="min-w-0">
                                     <MerchantsTable merchants={org?.carriers?.merchants as MerchantsModel[]} />
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </div>
                         </TabsContent>
 
                         {/* Invites */}
                         <TabsContent value="invites" className="mt-6">
-                            <Card>
-                                <CardHeader>
-                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                        <div>
-                                            <CardTitle>Invites</CardTitle>
-                                            <CardDescription>Pending invitations</CardDescription>
+                            <div className="space-y-6">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                        <div className="min-w-0">
+                                            <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Invites</h2>
+                                            <p className="mt-1 text-sm text-muted-foreground">Pending invitations</p>
                                         </div>
-                                        <div className="flex flex-wrap items-center gap-2">
+                                        <div className="flex min-w-0 flex-wrap items-center gap-2">
                                             <Input
                                                 placeholder="Search..."
-                                                className="flex-1 min-w-[160px] sm:w-60 sm:flex-none"
+                                                className="h-9 min-w-[160px] flex-1 border-0 bg-muted/60 text-[0.8125rem] shadow-none focus-visible:bg-background sm:w-60 sm:flex-none"
                                                 value={inviteSearch}
                                                 onChange={(e) => setInviteSearch(e.target.value)}
                                             />
@@ -374,11 +396,10 @@ export default function OrganizationInfoPage() {
                                                 <SendAdminInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' />
                                             }
                                         </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent>
+                                </div>
+                                <div className="min-w-0">
                                     {(!filteredAdminInvites.length && !filteredMemberInvites.length) && (
-                                        <div className="flex flex-col items-center justify-center space-y-2 py-8 text-center">
+                                        <div className="flex flex-col items-center justify-center space-y-2 rounded-2xl bg-muted/30 px-4 py-8 text-center">
                                             <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
                                                 <Users className="h-6 w-6 text-muted-foreground" />
                                             </div>
@@ -390,24 +411,19 @@ export default function OrganizationInfoPage() {
 
                                     {filteredAdminInvites.length > 0 && (
                                         <div className="mb-6">
-                                            <div className="text-sm font-medium mb-3">Admin invite</div>
-                                            <div className="divide-y rounded-md border">
+                                            <div className="mb-3 text-sm text-muted-foreground">Admin invite</div>
+                                            <div className="space-y-2">
                                                 {filteredAdminInvites.map((inv: PendingOrgAdminInvitesModel) => (
-                                                    <div key={inv.id} className="flex items-center justify-between p-4">
+                                                    <div key={inv.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl bg-muted/45 p-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
                                                                 {(inv.email?.[0] || 'A').toUpperCase()}
                                                             </div>
                                                             <div>
-                                                                <div className={`*
-                                                                font-medium ${inv.status === 'pending' ? 'text-yellow-500' :
-                                                                        inv.status === 'revoked' ? 'text-red-500' :
-                                                                            inv.status === 'accepted' ? 'text-green-500' :
-                                                                                inv.status === 'expired' ? 'text-red-500' :
-                                                                                    inv.status === 'cancelled' ? 'text-red-500' :
-                                                                                        inv.status === 'failed' ? 'text-red-500' :
-                                                                                            inv.status === 'pending' ? 'text-yellow-500' : 'text-red-500'
-                                                                    }`}>{
+                                                                {/* Status is stated in words, not colour (D-03). The
+                                                                    previous class string also opened with a stray `*`,
+                                                                    which emitted a bogus `*` class. */}
+                                                                <div className="font-medium">{
                                                                         inv.status === 'pending' ? 'Pending Invitation' :
                                                                             inv.status === 'revoked' ? 'Invitation Revoked' :
                                                                                 inv.status === 'accepted' ? 'Invitation Accepted' :
@@ -423,7 +439,7 @@ export default function OrganizationInfoPage() {
                                                             <div className="text-muted-foreground">{inv.role}</div>
                                                             <DropdownMenu>
                                                                 <DropdownMenuTrigger asChild>
-                                                                    <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                                                                    <Button variant="ghost" aria-label="Invite actions" className="h-8 w-8 rounded-full p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                                                                 </DropdownMenuTrigger>
                                                                 <DropdownMenuContent align="end">
                                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
@@ -433,7 +449,7 @@ export default function OrganizationInfoPage() {
                                                                         setOpenResendAdminInvitePopup(true)
                                                                     }}>Resend</DropdownMenuItem>
                                                                     <DropdownMenuSeparator />
-                                                                    <DropdownMenuItem className='text-red-600' onClick={() => {
+                                                                    <DropdownMenuItem variant="destructive" onClick={() => {
                                                                         setRevokeAdminInvitePopup(inv)
                                                                         setOpenRevokeAdminInvitePopup(true)
                                                                     }}>
@@ -450,10 +466,10 @@ export default function OrganizationInfoPage() {
 
                                     {filteredMemberInvites.length > 0 && (
                                         <div>
-                                            <div className="text-sm font-medium mb-3">Member invites</div>
-                                            <div className="divide-y rounded-md border">
+                                            <div className="mb-3 text-sm text-muted-foreground">Member invites</div>
+                                            <div className="space-y-2">
                                                 {filteredMemberInvites.map((inv: any) => (
-                                                    <div key={inv.id} className="flex items-center justify-between p-4">
+                                                    <div key={inv.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl bg-muted/45 p-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
                                                                 {(inv.email?.[0] || 'M').toUpperCase()}
@@ -467,14 +483,14 @@ export default function OrganizationInfoPage() {
                                                             <div className="text-muted-foreground">Member</div>
                                                             <DropdownMenu>
                                                                 <DropdownMenuTrigger asChild>
-                                                                    <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                                                                    <Button variant="ghost" aria-label="Invite actions" className="h-8 w-8 rounded-full p-0"><MoreHorizontal className="h-4 w-4" /></Button>
                                                                 </DropdownMenuTrigger>
                                                                 <DropdownMenuContent align="end">
                                                                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                                                     <DropdownMenuItem>Copy invite link</DropdownMenuItem>
                                                                     <DropdownMenuItem >Resend</DropdownMenuItem>
                                                                     <DropdownMenuSeparator />
-                                                                    <DropdownMenuItem className="text-red-600">Revoke</DropdownMenuItem>
+                                                                    <DropdownMenuItem variant="destructive">Revoke</DropdownMenuItem>
                                                                 </DropdownMenuContent>
                                                             </DropdownMenu>
                                                         </div>
@@ -483,56 +499,56 @@ export default function OrganizationInfoPage() {
                                             </div>
                                         </div>
                                     )}
-                                </CardContent>
-                            </Card>
+                                </div>
+                            </div>
                         </TabsContent>
 
                         {/* Audit logs */}
                         <TabsContent value="audit" className="mt-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Audit logs</CardTitle>
-                                    <CardDescription>Security activity for this organization</CardDescription>
-                                </CardHeader>
-                                <CardContent className="text-sm text-muted-foreground">No events to display.</CardContent>
-                            </Card>
+                            <Panel>
+                                <PanelSection
+                                    label="Audit logs"
+                                    caption="Security activity for this organization"
+                                >
+                                    <p className="text-sm text-muted-foreground">No events to display.</p>
+                                </PanelSection>
+                            </Panel>
                         </TabsContent>
 
                         {/* Settings */}
                         <TabsContent value="settings" className="mt-6">
                             <div className="space-y-6">
                                 {/* General Settings */}
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>General Settings</CardTitle>
-                                        <CardDescription>Organization configuration and preferences</CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="text-sm text-muted-foreground">
-                                        <div className="text-center py-12">
-                                            <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                                            <h3 className="text-lg font-semibold mb-2">General Settings</h3>
+                                <Panel>
+                                    <PanelSection
+                                        label="General Settings"
+                                        caption="Organization configuration and preferences"
+                                    >
+                                        <div className="rounded-2xl bg-muted/30 px-4 py-12 text-center">
+                                            <Settings className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
                                             <p className="text-sm text-muted-foreground">
                                                 Organization configuration and settings panel coming soon.
                                             </p>
                                         </div>
-                                    </CardContent>
-                                </Card>
+                                    </PanelSection>
+                                </Panel>
 
-                                {/* Danger Zone */}
-                                <Card className="border-destructive">
-                                    <CardHeader>
-                                        <CardTitle className="text-destructive flex items-center gap-2">
-                                            <AlertTriangle className="h-5 w-5" />
-                                            Danger Zone
-                                        </CardTitle>
-                                        <CardDescription>
-                                            Irreversible and destructive actions. Please proceed with caution.
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
+                                {/* Danger Zone — the section heading keeps the standard
+                                    brand-blue treatment rather than being recoloured:
+                                    `PanelSection` owns that colour, and overriding it
+                                    took a brittle descendant selector that silently
+                                    stopped matching. The destructive signal lives on
+                                    the action row below, which is where the
+                                    irreversible thing actually happens (§6 ex. 2). */}
+                                <Panel>
+                                    <PanelSection
+                                        icon={AlertTriangle}
+                                        label="Danger Zone"
+                                        caption="Irreversible and destructive actions. Please proceed with caution."
+                                    >
                                         <div className="space-y-4">
-                                            <div className="flex flex-col gap-3 p-4 border border-destructive/20 rounded-lg bg-destructive/5 sm:flex-row sm:items-center sm:justify-between">
-                                                <div className="space-y-1 min-w-0">
+                                            <div className="flex min-w-0 flex-col gap-3 rounded-2xl border-0 bg-destructive/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                                                <div className="min-w-0 space-y-1">
                                                     <h4 className="font-medium text-destructive">Delete Organization</h4>
                                                     <p className="text-sm text-muted-foreground">
                                                         Permanently delete this organization and all associated data.
@@ -549,13 +565,11 @@ export default function OrganizationInfoPage() {
                                                 </Button>
                                             </div>
                                         </div>
-                                    </CardContent>
-                                </Card>
+                                    </PanelSection>
+                                </Panel>
                             </div>
                         </TabsContent>
-                    </Tabs>
-                </CardContent>
-            </Card>
+            </Tabs>
 
             <RemoveUserPopup user={removeUserPopup!} open={openRemoveUserPopup} setOpen={setOpenRemoveUserPopup} refetch={refetchOrganizationInfo} />
             <RevokeAdminInvitePopup invitation={revokeAdminInvitePopup!} open={openRevokeAdminInvitePopup} setOpen={setOpenRevokeAdminInvitePopup} refetch={refetchOrganizationInfo} />
@@ -567,7 +581,7 @@ export default function OrganizationInfoPage() {
                 setOpen={setOpenDeleteOrganizationDialog}
                 onSuccess={() => refetchOrganizationInfo()}
             />
-        </div>
+        </PageShell>
     )
 }
 

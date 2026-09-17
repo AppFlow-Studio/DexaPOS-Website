@@ -57,7 +57,7 @@ Regenerate the raw numbers with `scripts/hq-audit.sh` (see below).
 | Family | Routes | PR | Notes |
 |---|---:|---|---|
 | 1 — HQ home, analytics, health | 3 | PR 1 | Plus the 14 shared files in `app/manage/components/` (13 import `Card`). One PR: the three routes compose from the same components. |
-| 2 — Merchant + org operations | 6 | PR 2 | Includes ★ `/manage/organizations/create-organization`. **5 of 6 converted** — see Family 2 status below. |
+| 2 — Merchant + org operations | 6 | PR 2 | Includes ★ `/manage/organizations/create-organization`. **All 6 converted** — see Family 2 status below. |
 | 3 — Merchant detail workspace | 7 | PR 3a…n | 99 files under `app/manage/merchants/[merchantId]/**`. **Split by tab** — a single diff is not reviewable. Includes ★ `…/locations/new`. |
 | 4 — Money movement + billing | 8 | PR 4 | `/manage/cash-drawers` is a 7-line wrapper; real work is in `components/CashDrawerAnalytics`. |
 | 5 — Internal operations | 12 | PR 5 | Includes ★ `/manage/profile` and ★ `/manage/audit-logs/impersonation`. **Also rewrite the hand-rolled skeletons** for `support` and `users` (see `UI-DESIGN-SYSTEM.md` §14.4). |
@@ -67,7 +67,7 @@ Regenerate the raw numbers with `scripts/hq-audit.sh` (see below).
 ★ = route absent from the original ticket's Workstream C, added per the DoD
 requirement that every discovered route has a disposition.
 
-### Family 2 status (PR 2, in progress)
+### Family 2 status (PR 2, complete)
 
 | Route | Status | Notes |
 |---|---|---|
@@ -77,15 +77,36 @@ requirement that every discovered route has a disposition.
 | `/manage/organizations/create-organization` | ✅ converted | `width="narrow"`; form `Card` → `Panel` > `PanelSection`; zod/RHF gating untouched |
 | `/manage/merchants/new` | ✅ converted | `width="narrow"` replaces hand-rolled `mx-auto max-w-5xl`; `wizard.tsx` outer `Card` → `Panel` > `PanelSection`; step pills de-coloured (green "complete" → neutral fill, D-03) |
 | `/manage/create-merchant` | ✅ no change | **Re-dispositioned.** A bare `redirect('/manage/merchants/new')` — same case as `/manage/settings` in Family 6. The ticket listed it as "shell/header + form"; there is no shell to convert. |
-| `/manage/organizations/[organizationId]` | ⬜ not started | **Scope correction:** the ticket lists this as a single "detail conversion". It is 590 lines / 54 cards **plus 10 co-located files in `components/`** carrying ~46 more cards (`AdminInviteWizard` 41KB, `CreateMerchantsButtons` 40KB, `AddMerchantButtons` 27KB). A 7-tab workspace — closer to Family 3 in shape than to the two list pages, and should be split per tab the same way. |
+| `/manage/organizations/[organizationId]` | ✅ converted (page) | Breadcrumb → `PageHeader backHref`; outer host `Card` removed so the page title is no longer a `CardTitle` competing with `<h1>`; tab strip → canonical pill recipe; overview stat `Card`s → `Panel` > `StatRow`; Roles/Members tables → `variant="data"`; Audit + General Settings + role-assignment `Card`s → `Panel` > `PanelSection`; Danger Zone un-nested (bordered box inside bordered card → borderless `bg-destructive/5`), destructive colour retained per §6 ex. 2. **Also fixed a latent bug:** the invite-status class string opened with a stray `*` (``className={`* font-medium …``), emitting a bogus `*` class. |
 
-**Verification for the converted five:** `tsc --noEmit` reports zero errors in
-every changed file (project total fell 809 → 806 — the narrowing in
-`organizations/page.tsx` also cleared 3 pre-existing errors); `eslint` clean;
-live DOM at 1440/375 confirms `main` count 1, `visualViewport.scale === 1`, and
-**no horizontal overflow at either width** on `/manage/merchants`,
-`/manage/organizations`, `/manage/organizations/create-organization` and
-`/manage/merchants/new`.
+**Scope correction for that route.** The ticket lists it as a single "detail
+conversion". The `page.tsx` is 590 lines / 54 cards, but it also has **10
+co-located files in `components/`** carrying ~46 more cards
+(`AdminInviteWizard` 41KB, `CreateMerchantsButtons` 40KB, `AddMerchantButtons`
+27KB). Those components are **not converted** — they are dialog/wizard
+surfaces, closer to Family 3 in shape, and should be split per component the
+same way Family 3 splits per tab. The page shell that hosts them is done.
+
+**Verification (all six):** `tsc --noEmit` reports **zero errors in every file
+changed** — project total fell 809 → 805, since the narrowing in
+`organizations/page.tsx` also cleared 3 pre-existing errors. The 7 remaining
+errors under `organizations/**` are all pre-existing in the untouched
+co-located components and actions (baseline counts unchanged). `eslint` clean.
+
+Live DOM with a real HQ session confirms, at 1440 and 375:
+`document.querySelectorAll('main').length === 1`,
+`visualViewport.scale === 1`, and **no page-level horizontal overflow** on
+`/manage/merchants` (grid *and* list view), `/manage/organizations`,
+`/manage/organizations/[organizationId]` (Overview/Roles/Settings tabs),
+`/manage/organizations/create-organization` and `/manage/merchants/new`.
+On the detail route the Roles table correctly scrolls *inside* its own
+`overflow-x-auto` well at 375px with zero unscrollable leaks, and the data
+table's header rule computes to `0px` (§5.5).
+
+> Note on tab testing: this `Tabs` is controlled (`value` + `onValueChange`), so
+> a synthetic `element.click()` from an injected script does **not** change the
+> active tab — it silently reports empty tab panels. Use a real (trusted) click
+> to verify tab content, or the evidence is wrong.
 
 **Total: 44 routes.** Also in the tree: 9 `layout.tsx`, 9 `loading.tsx`
 (6 using `DataPageSkeleton` with `shell="plain"`, 3 hand-rolled).
