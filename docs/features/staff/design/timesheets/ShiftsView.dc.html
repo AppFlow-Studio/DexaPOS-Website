@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #0C4FD1; text-decoration: none; } a:hover { color: #0a3fa8; }
+    .theme {
+      --bg: oklch(0.9842 0.0034 247.8575);
+      --fg: oklch(0.2795 0.0368 260.0310);
+      --card: #ffffff;
+      --muted: oklch(0.9670 0.0029 264.5419);
+      --muted-fg: oklch(0.5510 0.0234 264.3637);
+      --border: oklch(0.8717 0.0093 258.3382);
+      --brand: #0C4FD1;
+      --m20: color-mix(in oklch, var(--muted) 20%, transparent);
+      --m50: color-mix(in oklch, var(--muted) 50%, transparent);
+      --m60: color-mix(in oklch, var(--muted) 60%, transparent);
+      --m70: color-mix(in oklch, var(--muted) 70%, transparent);
+      --card70: color-mix(in oklch, var(--card) 70%, transparent);
+      font-family: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--fg); background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    .theme.dark {
+      --bg: #16181d; --fg: oklch(0.9288 0.0126 255.5078); --card: #1c1f26;
+      --muted: oklch(0.2427 0.0381 259.9437); --muted-fg: oklch(0.7137 0.0192 261.3246);
+      --border: oklch(0.4461 0.0263 256.8018); --brand: #6CA0FF;
+    }
+    .ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    .num { font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div class="theme {{themeClass}}" style="width: 1184px; min-height: 780px; padding: 24px; box-sizing: border-box;">
+  <div style="border: 1px solid var(--border); background: var(--card); border-radius: 24px; overflow: hidden;">
+    <section style="padding: 32px 24px;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; color: var(--brand);">
+            <svg class="ic" viewBox="0 0 24 24" style="width: 18px; height: 18px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16.5 12"></polyline></svg>
+            <span>Shifts</span>
+          </div>
+          <p style="margin: 4px 0 0; font-size: 14px; color: var(--muted-fg);">Every clock-in and clock-out in this period. Managers can correct a shift from its menu.</p>
+        </div>
+        <div style="display: inline-flex; gap: 2px; padding: 4px; border-radius: 9999px; background: var(--m70);">
+          <div style="padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Summary</div>
+          <div style="padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 0 0 1px var(--border);">Shifts</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div style="position: relative; width: 360px;">
+            <svg class="ic" viewBox="0 0 24 24" style="position: absolute; left: 14px; top: 12px; color: var(--muted-fg); opacity: 0.5;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+            <div style="height: 40px; border-radius: 9999px; background: var(--m60); padding-left: 40px; display: flex; align-items: center; font-size: 14px; color: var(--muted-fg);">Search team members…</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="height: 36px; width: 200px; display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px; border-radius: 9999px; background: var(--m60); font-size: 13px;">
+              <span style="display: inline-flex; align-items: center; gap: 8px;"><svg class="ic" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>Jordan Reyes</span>
+              <svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--muted-fg);"><path d="m6 9 6 6 6-6"></path></svg>
+            </div>
+            <div style="height: 36px; display: inline-flex; align-items: center; gap: 4px; padding: 0 12px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>Clear filters
+            </div>
+          </div>
+        </div>
+
+        <div style="border-radius: 16px; background: var(--m20); overflow: hidden; font-size: 14px;">
+          <div style="display: grid; grid-template-columns: 200px 1fr 1fr 110px 100px 110px 150px 56px; background: var(--m50); height: 44px; align-items: center; font-weight: 500;">
+            <div style="padding: 0 16px;">Team member</div>
+            <div style="padding: 0 12px;">Clock in</div>
+            <div style="padding: 0 12px;">Clock out</div>
+            <div style="padding: 0 12px; text-align: right;">Breaks</div>
+            <div style="padding: 0 12px; text-align: right;">Hours</div>
+            <div style="padding: 0 12px; text-align: right;">Est. pay</div>
+            <div style="padding: 0 12px;">Status</div>
+            <div></div>
+          </div>
+          <sc-for list="{{shifts}}" as="s" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 200px 1fr 1fr 110px 100px 110px 150px 56px; background: var(--card70); align-items: center; min-height: 52px;">
+              <div style="padding: 0 16px; font-weight: 500;">Jordan Reyes</div>
+              <div class="num" style="padding: 0 12px;">{{s.in}}</div>
+              <div class="num" style="padding: 0 12px; display: flex; align-items: center; gap: 6px;">
+                <sc-if value="{{s.overnight}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24" style="width: 13px; height: 13px; color: var(--muted-fg);"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+                <span>{{s.out}}</span>
+              </div>
+              <div class="num" style="padding: 0 12px; text-align: right; color: {{s.breakColor}};">{{s.breaks}}</div>
+              <div class="num" style="padding: 0 12px; text-align: right; font-weight: 500;">{{s.hours}}</div>
+              <div class="num" style="padding: 0 12px; text-align: right;">{{s.pay}}</div>
+              <div style="padding: 0 12px; display: flex; gap: 6px;">
+                <span style="border-radius: 9999px; background: var(--m60); padding: 2px 10px; font-size: 12px; font-weight: 500;">{{s.status}}</span>
+                <sc-if value="{{s.edited}}" hint-placeholder-val="{{false}}"><span style="border-radius: 9999px; background: var(--m60); padding: 2px 10px; font-size: 12px; font-weight: 500;">Edited</span></sc-if>
+              </div>
+              <div style="display: flex; justify-content: center;">
+                <div style="width: 32px; height: 32px; border-radius: 9999px; display: flex; align-items: center; justify-content: center; color: var(--muted-fg);"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 14px; color: var(--muted-fg);">
+          <span>Showing 6 shifts · Jordan Reyes · Sep 7 – 13, 2026</span>
+          <span>Times in Eastern Time</span>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1184,"height":780}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      themeClass: this.props.dark ? 'dark' : '',
+      shifts: [
+        { in: 'Mon, Sep 7 · 4:00 PM', out: 'Mon, Sep 7 · 10:00 PM', breaks: '—', breakColor: 'var(--muted-fg)', hours: '6.00', pay: '$114.00', status: 'Completed' },
+        { in: 'Tue, Sep 8 · 5:02 PM', out: 'Wed, Sep 9 · 2:47 AM', overnight: true, breaks: '30 min', breakColor: 'var(--fg)', hours: '9.25', pay: '$175.75', status: 'Completed' },
+        { in: 'Wed, Sep 9 · 4:00 PM', out: 'Thu, Sep 10 · 12:00 AM', overnight: true, breaks: '—', breakColor: 'var(--muted-fg)', hours: '8.00', pay: '$152.00', status: 'Completed' },
+        { in: 'Thu, Sep 10 · 3:30 PM', out: 'Fri, Sep 11 · 12:00 AM', overnight: true, breaks: '—', breakColor: 'var(--muted-fg)', hours: '8.50', pay: '$161.50', status: 'Completed', edited: true },
+        { in: 'Fri, Sep 11 · 4:00 PM', out: 'Sat, Sep 12 · 1:30 AM', overnight: true, breaks: '30 min', breakColor: 'var(--fg)', hours: '9.00', pay: '$178.12', status: 'Completed' },
+        { in: 'Sat, Sep 12 · 5:00 PM', out: 'Sun, Sep 13 · 1:45 AM', overnight: true, breaks: '30 min', breakColor: 'var(--fg)', hours: '8.25', pay: '$235.12', status: 'Completed' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
