@@ -1,0 +1,19 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Week view · desktop", "x": 0, "y": 0, "w": 1440, "h": 1560 },
+    { "file": "Mobile.dc.html", "title": "Week view · phone", "x": 1540, "y": 0, "w": 390, "h": 1700 },
+    { "file": "MonthView.dc.html", "title": "Month view", "x": 0, "y": 1840, "w": 1184, "h": 1320 },
+    { "file": "DayDetail.dc.html", "title": "Day detail dialog", "x": 1284, "y": 1840, "w": 1440, "h": 860 },
+    { "file": "ReviewFilter.dc.html", "title": "Needs review filter applied", "x": 0, "y": 3300, "w": 1184, "h": 520 },
+    { "file": "ShiftsView.dc.html", "title": "Shifts view (existing list, restyled)", "x": 1284, "y": 3300, "w": 1184, "h": 780 },
+    { "file": "States.dc.html", "title": "Loading, empty, export", "x": 0, "y": 4220, "w": 1184, "h": 900 }
+  ],
+  "annotations": [
+    { "id": "sample-data", "x": -620, "y": 0, "w": 520, "text": "Timesheets summary grid, design for review.\nNames and figures are sample data. Every total is the exact sum of the shifts beneath it: hours from whole minutes, pay from each shift rounded down to the cent." },
+    { "id": "week-interactions", "x": 1980, "y": 0, "w": 380, "text": "Week view interactions\n• Day cell opens the Day detail dialog. Jordan's Tuesday is shown hovered.\n• Name opens the Shifts view filtered to that person.\n• Needs review chips filter the grid.\n• Total, Overtime and Est. pay sort.\n• Moon = shift ends the next day. Hourglass = over 16 hours.\n• No colour anywhere: status is words and icons (design system rule D-12)." },
+    { "id": "month-rules", "x": -620, "y": 1840, "w": 560, "text": "Month = the calendar month exactly. Week columns are clipped at the month's edges, so August has 6 columns, not 5. Overtime is worked out shift by shift over the full Mon–Sun week, so a partial week still gets the right overtime. Selecting a week cell opens that week." },
+    { "id": "dialog-rules", "x": 2780, "y": 1840, "w": 360, "text": "Centred dialog, not a side sheet (D-13). Full screen on phones. Every clock-out shows its date. Read-only: fixes happen in the Shifts list, which still has Adjust shift." },
+    { "id": "shifts-rules", "x": 2520, "y": 3300, "w": 360, "text": "The existing shift list stays one switch away. It holds the Adjust shift action, so replacing it would orphan that feature. Restyled: neutral pills instead of green/blue/red/amber, and clock-out always dated." }
+  ],
+  "launch": { "view": "canvas" }
+}

@@ -525,6 +525,7 @@ const BRAND_LOGO: Record<string, string> = {
     valor: '/valorlogo.jpg',
     castles: '/castles.jpg',
     dejavoo: '/dejavoo.png',
+    codepay: '/codepaylogo.jpg',
 }
 
 type BrandTheme = {
@@ -556,6 +557,13 @@ function brandTheme(type: string): BrandTheme {
                 heroGradient: 'from-slate-900 via-slate-900 to-purple-950',
                 glow: 'bg-purple-500/30',
                 modelChip: 'border-purple-400/30 bg-purple-500/10 text-purple-100',
+            }
+        case 'codepay':
+            return {
+                label: 'CodePay',
+                heroGradient: 'from-slate-900 via-slate-900 to-emerald-950',
+                glow: 'bg-emerald-500/30',
+                modelChip: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100',
             }
         default:
             return {

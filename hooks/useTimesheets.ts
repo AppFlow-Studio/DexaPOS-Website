@@ -1,8 +1,14 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   GetTimesheets,
+  GetTimesheetSummary,
   GetTimesheetResources,
   GetShiftById,
   UpdateShiftStatus,
@@ -94,6 +100,40 @@ export function useTimesheets(filters: TimesheetFilters) {
       return result.data;
     },
     enabled: hasDateRange,
+  });
+}
+
+// ============================================================================
+// GET TIMESHEET SUMMARY (grid + shift list share this one payload)
+// ============================================================================
+
+export function useTimesheetSummary({
+  clerkOrgId,
+  locationId,
+  start,
+  end,
+}: {
+  clerkOrgId: string;
+  locationId: string | null;
+  start: string;
+  end: string;
+}) {
+  return useQuery({
+    queryKey: ["timesheet-summary", clerkOrgId, locationId, start, end],
+    queryFn: async () => {
+      const result = await GetTimesheetSummary({
+        locationId: locationId as string,
+        start,
+        end,
+      });
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: !!clerkOrgId && !!locationId,
+    // Stepping between weeks keeps the previous week on screen (faded) until
+    // the next one lands, so the grid never collapses to a spinner.
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
 }
 
@@ -213,6 +253,7 @@ export function useAdjustShiftTimes() {
       if (result.success) {
         toast.success("Shift times adjusted");
         queryClient.invalidateQueries({ queryKey: ["timesheets"] });
+        queryClient.invalidateQueries({ queryKey: ["timesheet-summary"] });
         queryClient.invalidateQueries({ queryKey: ["shift", result.data.id] });
       } else {
         toast.error(

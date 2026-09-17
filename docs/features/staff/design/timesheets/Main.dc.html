@@ -1,0 +1,329 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #0C4FD1; text-decoration: none; } a:hover { color: #0a3fa8; }
+    .theme {
+      --bg: oklch(0.9842 0.0034 247.8575);
+      --fg: oklch(0.2795 0.0368 260.0310);
+      --card: #ffffff;
+      --muted: oklch(0.9670 0.0029 264.5419);
+      --muted-fg: oklch(0.5510 0.0234 264.3637);
+      --border: oklch(0.8717 0.0093 258.3382);
+      --brand: #0C4FD1;
+      --sidebar: #f8fafc; --sidebar-fg: #475569; --sidebar-accent: #eef3fe; --sidebar-accent-fg: #0c4fd1; --sidebar-border: #e2e8f0;
+      --m20: color-mix(in oklch, var(--muted) 20%, transparent);
+      --m40: color-mix(in oklch, var(--muted) 40%, transparent);
+      --m50: color-mix(in oklch, var(--muted) 50%, transparent);
+      --m60: color-mix(in oklch, var(--muted) 60%, transparent);
+      --m70: color-mix(in oklch, var(--muted) 70%, transparent);
+      --card70: color-mix(in oklch, var(--card) 70%, transparent);
+      --border60: color-mix(in oklch, var(--border) 60%, transparent);
+      font-family: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--fg); background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    .theme.dark {
+      --bg: #16181d; --fg: oklch(0.9288 0.0126 255.5078); --card: #1c1f26;
+      --muted: oklch(0.2427 0.0381 259.9437); --muted-fg: oklch(0.7137 0.0192 261.3246);
+      --border: oklch(0.4461 0.0263 256.8018); --brand: #6CA0FF;
+      --sidebar: #0f1115; --sidebar-fg: #9ca3af; --sidebar-accent: #182338; --sidebar-accent-fg: #6ca0ff; --sidebar-border: #232730;
+    }
+    .ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    .num { font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div class="theme {{themeClass}}" style="width: 1440px; min-height: 1560px; display: flex;">
+
+  <!-- Sidebar (context only) -->
+  <aside style="width: 256px; flex-shrink: 0; background: var(--sidebar); border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; gap: 20px; padding: 16px 12px;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 6px 8px;">
+      <div style="width: 32px; height: 32px; border-radius: 8px; background: #0C4FD1; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px;">J</div>
+      <div style="display: flex; flex-direction: column;">
+        <span style="font-size: 14px; font-weight: 600; color: var(--fg);">Joes Coffee Shop</span>
+        <span style="font-size: 12px; color: var(--sidebar-fg);">Merchant</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-size: 12px; color: var(--sidebar-fg); opacity: 0.7; padding: 0 8px 6px;">Operations</span>
+      <sc-for list="{{navOps}}" as="n" hint-placeholder-count="5">
+        <div style="height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 8px; font-size: 14px; color: var(--sidebar-fg);">
+          <svg class="ic" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"></rect></svg>
+          <span>{{n}}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-size: 12px; color: var(--sidebar-fg); opacity: 0.7; padding: 0 8px 6px;">Management</span>
+      <div style="height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 8px; font-size: 14px; font-weight: 500; background: var(--sidebar-accent); color: var(--sidebar-accent-fg);">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        <span>Staff</span>
+      </div>
+      <sc-for list="{{navMgmt}}" as="n" hint-placeholder-count="5">
+        <div style="height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 8px; font-size: 14px; color: var(--sidebar-fg);">
+          <svg class="ic" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"></rect></svg>
+          <span>{{n}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </aside>
+
+  <!-- Content column -->
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+    <div style="height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px;">
+      <svg class="ic" viewBox="0 0 24 24" style="color: var(--muted-fg);"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path></svg>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 9999px; background: var(--m50); font-size: 14px;">
+        <svg class="ic" viewBox="0 0 24 24" style="color: var(--muted-fg);"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg>
+        <span style="font-weight: 500;">Uptown Branch</span>
+      </div>
+    </div>
+
+    <main style="padding: 24px; display: flex; flex-direction: column; gap: 24px;">
+
+      <!-- PageHeader -->
+      <div style="display: flex; flex-direction: column;">
+        <div style="display: flex;">
+          <div style="margin-left: -8px; height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 9999px; font-size: 14px; font-weight: 500; color: var(--muted-fg);">
+            <svg class="ic" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>
+            Back to Staff
+          </div>
+        </div>
+        <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.02em;">Timesheets</h1>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <p style="margin: 0 8px 0 0; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted-fg);">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              Uptown Branch
+            </p>
+            <div style="height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 16px; border-radius: 9999px; border: 1px solid var(--border); background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,0.05); font-size: 13px; font-weight: 500;">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>
+              Export
+              <svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--muted-fg);"><path d="m6 9 6 6 6-6"></path></svg>
+            </div>
+          </div>
+        </div>
+        <p style="margin: 4px 0 0; font-size: 14px; color: var(--muted-fg);">Hours worked by each team member, by week or month.</p>
+      </div>
+
+      <!-- Period control row -->
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div style="display: inline-flex; gap: 2px; padding: 4px; border-radius: 9999px; background: var(--m70);">
+          <div style="padding: 8px 16px; border-radius: 9999px; font-size: 13px; font-weight: 500; background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 0 0 1px var(--border);">Week</div>
+          <div style="padding: 8px 16px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Month</div>
+          <div style="padding: 8px 16px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Custom</div>
+        </div>
+        <div style="display: inline-flex; align-items: center; gap: 4px; padding: 4px; border-radius: 9999px; background: var(--m60);">
+          <div style="width: 32px; height: 32px; border-radius: 9999px; display: flex; align-items: center; justify-content: center;"><svg class="ic" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg></div>
+          <span class="num" style="min-width: 200px; text-align: center; font-size: 14px; font-weight: 500;">Sep 7 – 13, 2026</span>
+          <div style="width: 32px; height: 32px; border-radius: 9999px; display: flex; align-items: center; justify-content: center;"><svg class="ic" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></svg></div>
+        </div>
+        <div style="height: 36px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">This week</div>
+      </div>
+
+      <!-- Stat panel -->
+      <div style="border: 1px solid var(--border); background: var(--card); border-radius: 24px; padding: 24px;">
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 40px;">
+          <sc-for list="{{tiles}}" as="t" hint-placeholder-count="3">
+            <div style="min-width: 0; padding-left: {{t.pl}}; border-left: {{t.bl}};">
+              <div style="display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted-fg);">
+                <sc-if value="{{t.isHours}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16.5 12"></polyline></svg></sc-if>
+                <sc-if value="{{t.isOt}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24"><line x1="10" x2="14" y1="2" y2="2"></line><line x1="12" x2="15" y1="14" y2="11"></line><circle cx="12" cy="14" r="8"></circle></svg></sc-if>
+                <sc-if value="{{t.isCost}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"></path><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"></path></svg></sc-if>
+                <span>{{t.label}}</span>
+              </div>
+              <p class="num" style="margin: 4px 0 0; font-size: 28px; line-height: 1.25; font-weight: 500; letter-spacing: -0.02em;">{{t.value}}</p>
+              <p style="margin: 2px 0 0; font-size: 13px; color: var(--muted-fg);">{{t.meta}}</p>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- Hours panel -->
+      <div style="border: 1px solid var(--border); background: var(--card); border-radius: 24px; overflow: hidden;">
+        <section style="padding: 32px 24px;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; color: var(--brand);">
+                <svg class="ic" viewBox="0 0 24 24" style="width: 18px; height: 18px;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                <span>Hours by team member</span>
+              </div>
+              <p style="margin: 4px 0 0; font-size: 14px; color: var(--muted-fg);">Select a day to see the shifts behind it. Select a name to see all of that person’s shifts.</p>
+            </div>
+            <div style="display: inline-flex; gap: 2px; padding: 4px; border-radius: 9999px; background: var(--m70);">
+              <div style="padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 0 0 1px var(--border);">Summary</div>
+              <div style="padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Shifts</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 20px;">
+            <!-- Toolbar -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+              <div style="position: relative; width: 360px;">
+                <svg class="ic" viewBox="0 0 24 24" style="position: absolute; left: 14px; top: 12px; color: var(--muted-fg); opacity: 0.5;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+                <div style="height: 40px; border-radius: 9999px; background: var(--m60); padding-left: 40px; display: flex; align-items: center; font-size: 14px; color: var(--muted-fg);">Search team members…</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 13px; color: var(--muted-fg); margin-right: 4px;">Needs review</span>
+                <sc-for list="{{chips}}" as="ch" hint-placeholder-count="3">
+                  <div style="height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 9999px; background: var(--m60); font-size: 13px; color: var(--muted-fg);">
+                    <sc-if value="{{ch.isOpen}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg></sc-if>
+                    <sc-if value="{{ch.isLong}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24"><path d="M5 22h14"></path><path d="M5 2h14"></path><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path></svg></sc-if>
+                    <sc-if value="{{ch.isRate}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"></path><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"></path></svg></sc-if>
+                    <span>{{ch.label}}</span>
+                    <span class="num" style="font-weight: 500; color: var(--fg);">{{ch.count}}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <!-- Data table well -->
+            <div style="border-radius: 16px; background: var(--m20); overflow: hidden; font-size: 14px;">
+              <!-- Header band -->
+              <div style="display: grid; grid-template-columns: 232px repeat(7, minmax(0, 1fr)) 92px 100px 110px; background: var(--m50); height: 52px; align-items: center;">
+                <div style="padding: 0 12px;">
+                  <span style="height: 32px; display: inline-flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 9999px; font-weight: 500;">Team member <svg class="ic" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path d="m21 16-4 4-4-4"></path><path d="M17 20V4"></path><path d="m3 8 4-4 4 4"></path><path d="M7 4v16"></path></svg></span>
+                </div>
+                <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+                  <div style="padding: 0 12px; text-align: right; display: flex; flex-direction: column; align-items: flex-end; line-height: 16px;">
+                    <span style="font-weight: 500;">{{d.name}}</span>
+                    <span class="num" style="font-size: 12px; color: var(--muted-fg);">{{d.date}}</span>
+                  </div>
+                </sc-for>
+                <sc-for list="{{sortHeads}}" as="sh" hint-placeholder-count="3">
+                  <div style="padding: 0 6px; display: flex; justify-content: flex-end;">
+                    <span style="height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 9999px; font-weight: 500;">{{sh}} <svg class="ic" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><path d="m21 16-4 4-4-4"></path><path d="M17 20V4"></path><path d="m3 8 4-4 4 4"></path><path d="M7 4v16"></path></svg></span>
+                  </div>
+                </sc-for>
+              </div>
+
+              <!-- Rows -->
+              <sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
+                <div style="display: grid; grid-template-columns: 232px repeat(7, minmax(0, 1fr)) 92px 100px 110px; background: {{r.bg}}; align-items: center; min-height: 60px;">
+                  <div style="padding: 12px; display: flex; align-items: center; gap: 12px; min-width: 0;">
+                    <div style="width: 36px; height: 36px; border-radius: 9999px; background: var(--muted); color: var(--muted-fg); font-size: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">{{r.init}}</div>
+                    <div style="display: flex; flex-direction: column; min-width: 0;">
+                      <span style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.name}}</span>
+                      <span style="font-size: 12px; color: var(--muted-fg);">{{r.role}}</span>
+                    </div>
+                  </div>
+                  <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="7">
+                    <div style="padding: 0 8px; display: flex; justify-content: flex-end;">
+                      <span class="num" style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 9999px; background: {{c.bg}}; box-shadow: {{c.ring}}; color: {{c.color}};">
+                        <sc-if value="{{c.overnight}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24" style="width: 13px; height: 13px; color: var(--muted-fg);"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path></svg></sc-if>
+                        <sc-if value="{{c.long}}" hint-placeholder-val="{{false}}"><svg class="ic" viewBox="0 0 24 24" style="width: 13px; height: 13px; color: var(--muted-fg);"><path d="M5 22h14"></path><path d="M5 2h14"></path><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path></svg></sc-if>
+                        <sc-if value="{{c.open}}" hint-placeholder-val="{{false}}"><span style="display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 12px; font-weight: 500; color: var(--fg);"><svg class="ic" viewBox="0 0 24 24" style="width: 13px; height: 13px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>Missing</span></sc-if>
+                        <span>{{c.text}}</span>
+                      </span>
+                    </div>
+                  </sc-for>
+                  <div class="num" style="padding: 0 14px; text-align: right; font-weight: 500; color: {{r.totalColor}};">{{r.total}}</div>
+                  <div class="num" style="padding: 0 14px; text-align: right; color: {{r.otColor}};">{{r.ot}}</div>
+                  <div style="padding: 0 14px; text-align: right; display: flex; flex-direction: column; align-items: flex-end;">
+                    <span class="num" style="color: {{r.payColor}};">{{r.pay}}</span>
+                    <sc-if value="{{r.noRate}}" hint-placeholder-val="{{false}}"><span style="font-size: 12px; color: var(--muted-fg);">No pay rate</span></sc-if>
+                  </div>
+                </div>
+              </sc-for>
+
+              <!-- Footer band: daily totals -->
+              <div style="display: grid; grid-template-columns: 232px repeat(7, minmax(0, 1fr)) 92px 100px 110px; background: var(--m50); height: 52px; align-items: center; font-weight: 500;">
+                <div style="padding: 0 20px;">Daily total</div>
+                <sc-for list="{{footer}}" as="f" hint-placeholder-count="10">
+                  <div class="num" style="padding: 0 16px; text-align: right;">{{f}}</div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-size: 14px; color: var(--muted-fg);">
+              <span>Showing 12 of 12 team members</span>
+              <span>Hours count on the day a shift starts · Eastern Time · Weeks run Mon–Sun</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":1560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dash = '—';
+    const fmt = (v) => v.toFixed(2);
+    const people = [
+      { name: 'Amara Okafor', role: 'Server', h: [8, 7.5, null, 8, 9.25, 6, null], total: 38.75, ot: 0, pay: '$658.75' },
+      { name: 'Chloe Dubois', role: 'Barista', h: [7, 7, 7, 7, 7, null, null], total: 35, ot: 0, pay: '$560.00' },
+      { name: 'Diego Alvarez', role: 'Line cook', h: [8, 8, 8, 8, null, 'open', null], total: 32, ot: 0, pay: '$592.00' },
+      { name: 'Hana Sato', role: 'Barista', h: [6.5, 6.5, 6.5, 6.5, 6.5, null, null], total: 32.5, ot: 0, pay: null },
+      { name: 'Jordan Reyes', role: 'Bartender', h: [6, 9.25, 8, 8.5, 9, 8.25, null], total: 49, ot: 9, pay: '$1,016.49', overnight: [1, 2, 3, 4, 5], hover: 1 },
+      { name: 'Lena Fischer', role: 'Server', h: [null, null, 6, 6, 7.25, 8, 7.5], total: 34.75, ot: 0, pay: '$573.37' },
+      { name: 'Marcus Bell', role: 'Line cook', h: [7.5, 7.5, 7.5, null, 7.75, 7.75, null], total: 38, ot: 0, pay: '$703.00' },
+      { name: 'Nadia Haddad', role: 'Server', h: [null, 5, 5, 5, null, 8, 8], total: 31, ot: 0, pay: '$511.50' },
+      { name: 'Owen Price', role: 'Busser', h: [null, null, null, null, null, null, null], total: 0, ot: 0, pay: '$0.00' },
+      { name: 'Priya Nair', role: 'Shift lead', h: [8, 8, 8, 8, 8, 4.5, null], total: 44.5, ot: 4.5, pay: '$1,028.50' },
+      { name: 'Sam Whitaker', role: 'Host', h: [4, 4, null, 4, 5.5, 6, 6], total: 29.5, ot: 0, pay: '$442.50' },
+      { name: 'Theo Martin', role: 'Dishwasher', h: [null, null, 17.25, null, 6, 6, 6], total: 35.25, ot: 0, pay: '$546.37', long: [2] }
+    ];
+    const rows = people.map((p, i) => {
+      const init = p.name.split(' ').map((s) => s[0]).join('');
+      const cells = p.h.map((v, d) => {
+        const isOpen = v === 'open';
+        const hovered = p.hover === d;
+        return {
+          text: isOpen ? '' : (v == null ? dash : fmt(v)),
+          color: v == null ? 'var(--muted-fg)' : 'var(--fg)',
+          open: isOpen,
+          overnight: (p.overnight || []).includes(d),
+          long: (p.long || []).includes(d),
+          bg: isOpen ? 'var(--m60)' : (hovered ? 'var(--muted)' : 'transparent'),
+          ring: hovered ? '0 0 0 1px var(--border)' : 'none'
+        };
+      });
+      return {
+        name: p.name, role: p.role, init, cells,
+        bg: 'var(--card70)',
+        total: fmt(p.total),
+        totalColor: p.total === 0 ? 'var(--muted-fg)' : 'var(--fg)',
+        ot: p.ot > 0 ? fmt(p.ot) : dash,
+        otColor: p.ot > 0 ? 'var(--fg)' : 'var(--muted-fg)',
+        pay: p.pay == null ? dash : p.pay,
+        payColor: p.pay == null || p.total === 0 ? 'var(--muted-fg)' : 'var(--fg)',
+        noRate: p.pay == null
+      };
+    });
+    return {
+      themeClass: this.props.dark ? 'dark' : '',
+      navOps: ['Dashboard', 'Locations', 'Orders', 'Tables', 'Reservations'],
+      navMgmt: ['Schedules', 'Online Ordering', 'Website', 'Customers', 'Reports'],
+      tiles: [
+        { label: 'Total hours', value: '400.25', meta: '12 team members · 57 shifts', isHours: true, pl: '0px', bl: 'none' },
+        { label: 'Overtime hours', value: '13.50', meta: '2 people over 40 hours', isOt: true, pl: '40px', bl: '1px solid var(--border60)' },
+        { label: 'Estimated labor cost', value: '$6,632.48', meta: 'Not counted: 1 person with no pay rate', isCost: true, pl: '40px', bl: '1px solid var(--border60)' }
+      ],
+      chips: [
+        { label: 'Missing clock-out', count: '1', isOpen: true },
+        { label: 'Over 16 hours', count: '1', isLong: true },
+        { label: 'No pay rate', count: '1', isRate: true }
+      ],
+      days: [
+        { name: 'Mon', date: 'Sep 7' }, { name: 'Tue', date: 'Sep 8' }, { name: 'Wed', date: 'Sep 9' },
+        { name: 'Thu', date: 'Sep 10' }, { name: 'Fri', date: 'Sep 11' }, { name: 'Sat', date: 'Sep 12' }, { name: 'Sun', date: 'Sep 13' }
+      ],
+      sortHeads: ['Total', 'Overtime', 'Est. pay'],
+      rows,
+      footer: ['55.00', '62.75', '73.25', '61.00', '66.25', '54.50', '27.50', '400.25', '13.50', '$6,632.48']
+    };
+  }
+}
+</script>
+</body>
+</html>

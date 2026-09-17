@@ -15,7 +15,7 @@ import bcrypt from 'bcryptjs'
 // Types (duplicated from dashboard/actions/payment-terminals.ts for server action compatibility)
 // ============================================================================
 
-export type TerminalType = 'dejavoo' | 'castles' | 'valor' | 'pax'
+export type TerminalType = 'dejavoo' | 'castles' | 'valor' | 'pax' | 'codepay'
 export type ApiEnvironment = 'sandbox' | 'production'
 export type ConnectionType = 'cloud' | 'local'
 
@@ -450,7 +450,11 @@ export async function adminCreateTerminal(
         api_environment: input.api_environment || 'sandbox',
         connection_type:
           input.connection_type ||
-          (input.terminal_type === 'castles' || input.terminal_type === 'valor' ? 'local' : 'cloud'),
+          (input.terminal_type === 'castles' ||
+          input.terminal_type === 'valor' ||
+          input.terminal_type === 'codepay'
+            ? 'local'
+            : 'cloud'),
         local_ip_address: input.local_ip_address || null,
         local_port: input.local_port || null,
         signature_threshold: input.signature_threshold ?? 25.0,
