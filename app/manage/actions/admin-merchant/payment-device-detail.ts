@@ -34,6 +34,8 @@ export interface DeviceIdentity {
   auto_settle: boolean
   settle_time: string | null
   valor_epi: string | null
+  /** CodePay Intent app_id (stored on payment_terminals.register_id). */
+  register_id: string | null
   created_at: string
   updated_at: string
 }
@@ -221,6 +223,7 @@ export async function getPaymentDeviceDetail(merchantId: string, serial: string)
       auto_settle: !!t.auto_settle,
       settle_time: t.settle_time ?? null,
       valor_epi: epi,
+      register_id: (t.register_id as string | null) ?? null,
       created_at: t.created_at,
       updated_at: t.updated_at,
     }

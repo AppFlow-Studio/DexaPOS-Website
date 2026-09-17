@@ -26,6 +26,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ShiftBreakLog, StaffShift } from "@/types/staff";
 import { useAdjustShiftTimes } from "@/hooks/useTimesheets";
+import { fromZonedInput, toZonedInput } from "@/lib/timesheets/format";
 
 type BreakDraft = {
   id: string;
@@ -34,18 +35,16 @@ type BreakDraft = {
   endAt: string;
 };
 
-function toLocalDateTimeInput(value: string | null | undefined) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
-}
-
-function fromLocalDateTimeInput(value: string) {
-  return new Date(value).toISOString();
-}
+/**
+ * Breaks arrive in two shapes: the POS writes `{start, end, type}`, web
+ * adjustments write `{id, type, start_at, end_at, duration_minutes}`. Reading
+ * only the web keys loaded every POS break with blank times, so a POS shift
+ * could not be corrected without deleting its breaks.
+ */
+type StoredBreak = Partial<ShiftBreakLog> & {
+  start?: string | null;
+  end?: string | null;
+};
 
 function makeId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -55,34 +54,40 @@ function makeId() {
   return `break-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function getBreakDurationMinutes(row: BreakDraft) {
-  if (!row.startAt || !row.endAt) return 0;
-  const minutes = differenceInMinutes(new Date(row.endAt), new Date(row.startAt));
+/** Minutes between two wall-clock inputs, measured as real elapsed time at the location. */
+function minutesBetween(startAt: string, endAt: string, timeZone: string) {
+  if (!startAt || !endAt) return 0;
+  const minutes = differenceInMinutes(
+    new Date(fromZonedInput(endAt, timeZone)),
+    new Date(fromZonedInput(startAt, timeZone)),
+  );
   return minutes > 0 ? minutes : 0;
 }
 
-function addMinutesToLocalInput(value: string, minutes: number) {
+/** Adds minutes to a "YYYY-MM-DDTHH:mm" wall clock without consulting any zone. */
+function addMinutesToWallTime(value: string, minutes: number) {
   if (!value) return "";
-  const date = new Date(value);
+  const date = new Date(`${value}:00Z`);
   if (Number.isNaN(date.getTime())) return "";
-
-  date.setMinutes(date.getMinutes() + minutes);
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
+  date.setUTCMinutes(date.getUTCMinutes() + minutes);
+  return date.toISOString().slice(0, 16);
 }
 
-function buildBreakDrafts(breakLogs: ShiftBreakLog[] | null | undefined): BreakDraft[] {
-  return (breakLogs ?? []).map((breakLog) => ({
+function buildBreakDrafts(breakLogs: unknown, timeZone: string): BreakDraft[] {
+  if (!Array.isArray(breakLogs)) return [];
+  return (breakLogs as StoredBreak[]).map((breakLog) => ({
     id: breakLog.id || makeId(),
-    type: breakLog.type,
-    startAt: toLocalDateTimeInput(breakLog.start_at),
-    endAt: toLocalDateTimeInput(breakLog.end_at ?? null),
+    type: breakLog.type === "paid" ? "paid" : "unpaid",
+    startAt: toZonedInput(breakLog.start_at ?? breakLog.start ?? null, timeZone),
+    endAt: toZonedInput(breakLog.end_at ?? breakLog.end ?? null, timeZone),
   }));
 }
 
 interface ShiftAdjustmentDialogProps {
   clerkOrgId: string;
   shift: StaffShift | null;
+  /** The location's zone: staff clocked in local time, so that is what a manager edits. */
+  timeZone: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -90,6 +95,7 @@ interface ShiftAdjustmentDialogProps {
 export function ShiftAdjustmentDialog({
   clerkOrgId,
   shift,
+  timeZone,
   open,
   onOpenChange,
 }: ShiftAdjustmentDialogProps) {
@@ -99,14 +105,18 @@ export function ShiftAdjustmentDialog({
   const [breakRows, setBreakRows] = useState<BreakDraft[]>([]);
   const [reason, setReason] = useState("");
 
+  const getBreakDurationMinutes = (row: BreakDraft) =>
+    minutesBetween(row.startAt, row.endAt, timeZone);
+  const fromLocalDateTimeInput = (value: string) => fromZonedInput(value, timeZone);
+
   useEffect(() => {
     if (!shift || !open) return;
 
-    setClockIn(toLocalDateTimeInput(shift.clock_in_time));
-    setClockOut(toLocalDateTimeInput(shift.clock_out_time));
-    setBreakRows(buildBreakDrafts(shift.break_logs));
+    setClockIn(toZonedInput(shift.clock_in_time, timeZone));
+    setClockOut(toZonedInput(shift.clock_out_time, timeZone));
+    setBreakRows(buildBreakDrafts(shift.break_logs, timeZone));
     setReason(shift.notes ?? "");
-  }, [shift, open]);
+  }, [shift, open, timeZone]);
 
   const staffName = shift?.staff_profile
     ? `${shift.staff_profile.first_name} ${shift.staff_profile.last_name}`
@@ -122,10 +132,10 @@ export function ShiftAdjustmentDialog({
       };
     }
 
-    const totalMinutes = differenceInMinutes(new Date(clockOut), new Date(clockIn));
+    const totalMinutes = minutesBetween(clockIn, clockOut, timeZone);
     const unpaidBreakMinutes = breakRows
       .filter((row) => row.type === "unpaid")
-      .reduce((sum, row) => sum + getBreakDurationMinutes(row), 0);
+      .reduce((sum, row) => sum + minutesBetween(row.startAt, row.endAt, timeZone), 0);
     const netMinutes = Math.max(totalMinutes - unpaidBreakMinutes, 0);
     const estimatedPay =
       shift?.hourly_rate_snapshot != null
@@ -138,7 +148,7 @@ export function ShiftAdjustmentDialog({
       netMinutes,
       estimatedPay,
     };
-  }, [breakRows, clockIn, clockOut, shift?.hourly_rate_snapshot]);
+  }, [breakRows, clockIn, clockOut, shift?.hourly_rate_snapshot, timeZone]);
 
   const updateBreak = (id: string, patch: Partial<BreakDraft>) => {
     setBreakRows((rows) =>
@@ -153,7 +163,7 @@ export function ShiftAdjustmentDialog({
         id: makeId(),
         type: "unpaid",
         startAt: clockIn,
-        endAt: addMinutesToLocalInput(clockIn, 30),
+        endAt: addMinutesToWallTime(clockIn, 30),
       },
     ]);
   };
@@ -221,7 +231,7 @@ export function ShiftAdjustmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-dvh max-h-dvh min-h-0 w-full max-w-none flex-col overflow-hidden border-0 bg-white max-sm:rounded-none sm:h-auto sm:max-h-[90vh] sm:max-w-3xl">
+      <DialogContent className="flex h-dvh max-h-dvh min-h-0 w-full max-w-none flex-col overflow-hidden border-0 bg-background max-sm:rounded-none sm:h-auto sm:max-h-[90vh] sm:max-w-3xl">
         <DialogHeader className="shrink-0 text-left">
           <DialogTitle>Adjust shift</DialogTitle>
           <DialogDescription>
@@ -286,7 +296,7 @@ export function ShiftAdjustmentDialog({
                 breakRows.map((row, index) => (
                   <div
                     key={row.id}
-                    className="grid min-w-0 gap-3 rounded-xl border-0 bg-white p-3 sm:grid-cols-[110px_minmax(0,1fr)_minmax(0,1fr)_auto]"
+                    className="grid min-w-0 gap-3 rounded-xl border-0 bg-card p-3 sm:grid-cols-[110px_minmax(0,1fr)_minmax(0,1fr)_auto]"
                   >
                     <div className="space-y-2">
                       <Label>Type</Label>
