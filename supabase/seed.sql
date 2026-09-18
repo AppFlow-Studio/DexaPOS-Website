@@ -30915,7 +30915,8 @@ INSERT INTO "public"."permissions" ("id", "code", "name", "description", "catego
 	('bafe6e15-6792-44fa-8166-728d8412eed9', 'location.transactions.view', 'View Location Transactions', 'View transactions at location', 'transactions', 'location', '2025-12-04 17:40:37.521093+00'),
 	('014781e9-30d8-477f-85e4-a17e75b552ba', 'location.transactions.refund', 'Process Location Refunds', 'Process refunds at location', 'transactions', 'location', '2025-12-04 17:40:37.521093+00'),
 	('f91615d7-8c8e-4edc-ba58-d20d28535e06', 'location.devices.view', 'View Location Devices', 'View POS devices at location', 'devices', 'location', '2025-12-04 17:40:37.521093+00'),
-	('0d37b423-4c87-4bd8-8940-5961c51372a4', 'location.devices.manage', 'Manage Location Devices', 'Configure devices at location', 'devices', 'location', '2025-12-04 17:40:37.521093+00');
+	('0d37b423-4c87-4bd8-8940-5961c51372a4', 'location.devices.manage', 'Manage Location Devices', 'Configure devices at location', 'devices', 'location', '2025-12-04 17:40:37.521093+00')
+ON CONFLICT DO NOTHING;
 
 
 --

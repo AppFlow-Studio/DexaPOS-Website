@@ -49,7 +49,7 @@ import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   CreateMenu,
-  ToggleMenuActive,
+  SetMenuActive,
   DeleteMenu,
   GetMenuWithCategories,
   UpdateMenusOrder
@@ -69,6 +69,7 @@ import { useMerchantCdnImageUpload } from '@/lib/cdn/use-merchant-cdn-image-uplo
 import { useState } from 'react'
 import { SetLocationMenuChannelVisibility } from '../actions/location-menus'
 import type { MenuChannelVisibility } from '@/lib/menu/menu-channel-visibility'
+import { applyMenuActiveState } from '@/lib/menu/menu-active-state'
 const menuSchema = z.object({
   name: z
     .string()
@@ -127,6 +128,10 @@ export default function MenuPage () {
   const [reorderedMenus, setReorderedMenus] = useState<MenuWithLocation[]>([])
   const [hasOrderChanges, setHasOrderChanges] = useState(false)
   const [isSavingOrder, setIsSavingOrder] = useState(false)
+  const [savingActiveMenuIds, setSavingActiveMenuIds] = useState<Set<string>>(
+    () => new Set()
+  )
+  const activeMenuWritesRef = React.useRef(new Set<string>())
 
   const handleChannelVisibilityChange = async (
     menuId: string,
@@ -280,13 +285,36 @@ export default function MenuPage () {
     }
   }
 
-  const handleToggleActive = async (menuId: string) => {
+  const handleToggleActive = async (menuId: string, isActive: boolean) => {
+    if (activeMenuWritesRef.current.has(menuId)) return
+
+    activeMenuWritesRef.current.add(menuId)
+    setSavingActiveMenuIds(current => new Set(current).add(menuId))
+
+    const menuQueryKey = ['menus', clerkOrgId || '', menuLocationId] as const
+    const previousMenus = queryClient.getQueryData<MenuWithLocation[]>(menuQueryKey)
+    const previousIsActive =
+      previousMenus?.find(menu => menu.id === menuId)?.is_active ?? !isActive
+    queryClient.setQueryData<MenuWithLocation[]>(menuQueryKey, current =>
+      applyMenuActiveState(current, menuId, isActive)
+    )
+    setReorderedMenus(current =>
+      applyMenuActiveState(current, menuId, isActive) ?? current
+    )
+
     try {
-      const result = await ToggleMenuActive(
+      const result = await SetMenuActive(
         menuId,
+        isActive,
         selectedLocationId || undefined
       )
       if (result.error) {
+        queryClient.setQueryData<MenuWithLocation[]>(menuQueryKey, current =>
+          applyMenuActiveState(current, menuId, previousIsActive)
+        )
+        setReorderedMenus(current =>
+          applyMenuActiveState(current, menuId, previousIsActive) ?? current
+        )
         toast.error('Update Failed', {
           description: result.error
         })
@@ -295,13 +323,25 @@ export default function MenuPage () {
       toast.success('Status Updated', {
         description: 'The menu status has been updated.'
       })
-      queryClient.invalidateQueries({ queryKey: ['menus'] })
-      queryClient.invalidateQueries({ queryKey: ['categories'] })
-      queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
-      refetch()
+      void queryClient.invalidateQueries({ queryKey: ['menus'] })
+      void queryClient.invalidateQueries({ queryKey: ['categories'] })
+      void queryClient.invalidateQueries({ queryKey: ['categories-with-items'] })
     } catch (error) {
+      queryClient.setQueryData<MenuWithLocation[]>(menuQueryKey, current =>
+        applyMenuActiveState(current, menuId, previousIsActive)
+      )
+      setReorderedMenus(current =>
+        applyMenuActiveState(current, menuId, previousIsActive) ?? current
+      )
       toast.error('Update Failed', {
         description: 'Unable to update the menu status. Please try again.'
+      })
+    } finally {
+      activeMenuWritesRef.current.delete(menuId)
+      setSavingActiveMenuIds(current => {
+        const next = new Set(current)
+        next.delete(menuId)
+        return next
       })
     }
   }
@@ -796,6 +836,7 @@ export default function MenuPage () {
             onSetOnlineMenu={handleSetOnlineMenu}
             onChannelVisibilityChange={handleChannelVisibilityChange}
             channelVisibilityDisabled={!gatedLocationId}
+            savingActiveMenuIds={savingActiveMenuIds}
             showLocations={isAllLocations && !isSingleLocation}
           />
           {filteredMenus.length > 0 && (

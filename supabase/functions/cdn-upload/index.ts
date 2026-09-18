@@ -2,23 +2,11 @@ import { verifyToken } from "npm:@clerk/backend";
 import { createClient } from "npm:@supabase/supabase-js";
 import { SignJWT, jwtVerify } from "npm:jose@6";
 
-type MerchantAssetCategory =
-  | "logos"
-  | "cfd-images"
-  | "menu-categories"
-  | "menu-items"
-  | "menus"
-  | "documents"
-  // Website builder media (parity plan Phase 3). Uploads reach this category
-  // only through `UploadSiteAsset`, which applies a *stricter* gate than the
-  // one below — it rejects SVG outright and verifies the file's magic bytes
-  // against its declared type. The allowlist here stays as it was so the
-  // categories that predate it keep working.
-  | "website"
-  | "kiosk"
-  | "support";
-
-type OrganizationAssetCategory = "logos" | "documents" | "support";
+import {
+  isValidAssetCategory,
+  type MerchantAssetCategory,
+  type OrganizationAssetCategory,
+} from "../_shared/cdn-asset-policy.ts";
 
 type UploadRequest =
   | {
@@ -129,44 +117,6 @@ function jsonResponse(body: CdnResponse | { error: string }, status = 200): Resp
       ...corsHeaders,
     },
   });
-}
-
-/**
- * The categories that actually exist, at runtime.
- *
- * **`MerchantAssetCategory` above is a type, and types do not survive to
- * runtime.** `category` was interpolated straight into the storage path with
- * nothing checking it, so an authenticated merchant admin could send
- * `category: "../../organizations/<someone>/logos"` and write outside their own
- * directory — `sanitizeFileName` rejects `..` and slashes, but only in
- * `fileName`. These sets are what makes the union real.
- */
-const MERCHANT_CATEGORIES = new Set<string>([
-  "logos",
-  "cfd-images",
-  "menu-categories",
-  "menu-items",
-  "menus",
-  "documents",
-  "website",
-  // Kiosk idle-screen media (logos, idle images, order-banner images). Videos
-  // take the binary path, which skips this allowlist, so its absence only broke
-  // the JSON (image/logo) uploads with a 400 "Invalid category".
-  "kiosk",
-  "support",
-]);
-
-const ORGANIZATION_CATEGORIES = new Set<string>([
-  "logos",
-  "documents",
-  "support",
-]);
-
-function isValidCategory(scope: string, category: unknown): boolean {
-  if (typeof category !== "string") return false;
-  return scope === "merchant"
-    ? MERCHANT_CATEGORIES.has(category)
-    : ORGANIZATION_CATEGORIES.has(category);
 }
 
 /**
@@ -445,7 +395,7 @@ async function handleBinaryUpload(
     return jsonResponse({ success: false, error: "Invalid fileName" }, 400);
   }
 
-  if (!isValidCategory(scope, category)) {
+  if (!isValidAssetCategory(scope, category)) {
     return jsonResponse({ success: false, error: "Invalid category" }, 400);
   }
 
@@ -650,7 +600,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       }
 
       // Before `buildStoragePath`, which interpolates this directly.
-      if (!isValidCategory(body.scope, body.category)) {
+      if (!isValidAssetCategory(body.scope, body.category)) {
         return jsonResponse({ success: false, error: "Invalid category" }, 400);
       }
 

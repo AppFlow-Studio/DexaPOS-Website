@@ -9,6 +9,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveImpersonationFromCookies } from "@/lib/admin/impersonation";
 import { LogAuditEvent } from "./audit-logs";
 import { getCurrentUserMerchantRole } from "./role-check";
+import { getFunctionErrorMessage } from "@/lib/supabase/function-error";
 
 export type KioskTemplateId = "template_a" | "template_b" | "template_c";
 export type KioskOrientation = "vertical" | "horizontal";
@@ -671,7 +672,12 @@ export async function uploadKioskAsset(
       },
     });
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      return {
+        success: false,
+        error: await getFunctionErrorMessage(error, "Kiosk asset upload failed"),
+      };
+    }
     const response = data as { success?: boolean; cdnUrl?: string; error?: string } | null;
     if (!response?.success || !response.cdnUrl) {
       return { success: false, error: response?.error ?? "Upload failed" };

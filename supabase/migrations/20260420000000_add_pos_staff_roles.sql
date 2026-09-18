@@ -9,6 +9,24 @@
 -- =============================================================================
 
 BEGIN;
+
+-- Migrations run before seed.sql on fresh previews, so ensure every referenced
+-- permission exists before inserting the role mappings below.
+INSERT INTO public.permissions (id, code, name, description, category, scope, created_at)
+VALUES
+  ('ae12e11b-1a20-465c-a58d-80031ec1cb73', 'merchant.pos.use', 'Use POS', 'Use the POS tablet application', 'organization', 'merchant', now()),
+  ('5d36f19e-b350-484d-82eb-0ab326323c29', 'merchant.products.view', 'View Products', 'View product catalog', 'organization', 'merchant', now()),
+  ('66417eb2-7e0b-46bd-a7bc-ced26e614f96', 'merchant.inventory.view', 'View Inventory', 'View inventory levels', 'organization', 'merchant', now()),
+  ('5c87be0e-fae0-4a89-8a70-85a10bc2bd9d', 'merchant.orders.view', 'View Orders', 'View customer orders', 'organization', 'merchant', now()),
+  ('7cbd9acf-0bc3-4681-ab55-b51f4889581e', 'merchant.orders.manage', 'Manage Orders', 'Process and manage orders', 'organization', 'merchant', now()),
+  ('2d1bb8c9-d1a8-4ac5-9dba-9d743b82db7f', 'merchant.transactions.view', 'View Transactions', 'View transaction history', 'organization', 'merchant', now()),
+  ('ee9d36e3-ad98-4bba-959b-55a9615d62e9', 'merchant.customers.view', 'View Customers', 'View customer data', 'organization', 'merchant', now()),
+  ('c3d8bcde-e4fb-49bd-9103-aba2bf9d1551', 'location.view', 'View Location', 'View location details', 'location', 'location', now()),
+  ('fe22c9d1-5396-47f9-8b91-b4c89e330e89', 'location.menu.view', 'View Location Menu', 'View location menu settings', 'menu', 'location', now()),
+  ('6926338f-dd19-4e56-a698-7e90aeeff20a', 'location.orders.view', 'View Location Orders', 'View orders at location', 'orders', 'location', now()),
+  ('41516883-cd8f-4b45-aed8-8ad821631f35', 'location.orders.manage', 'Manage Location Orders', 'Process orders at location', 'orders', 'location', now()),
+  ('bafe6e15-6792-44fa-8166-728d8412eed9', 'location.transactions.view', 'View Location Transactions', 'View transactions at location', 'transactions', 'location', now())
+ON CONFLICT (code) DO NOTHING;
 -- ─── Insert new roles ───────────────────────────────────────────────────────
 
 INSERT INTO public.roles (id, code, name, description, organization_type, level, is_system_role, level_type, requires_clerk_account, created_at, updated_at)

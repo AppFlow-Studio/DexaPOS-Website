@@ -334,7 +334,7 @@ The **effective price** is the highest applicable level. The UI shows an "overri
 | `CreateMenu(clerkOrgId, data)` | Create menu, auto-sync to all locations |
 | `UpdateMenu(menuId, data, locationId?)` | Update menu properties |
 | `UpdateMenusOrder(menuOrders[], locationId?)` | Batch reorder menus |
-| `ToggleMenuActive(menuId, locationId?)` | Enable/disable menu |
+| `SetMenuActive(menuId, isActive, locationId?)` | Enable/disable menu |
 | `DeleteMenu(menuId, locationId?)` | Delete menu with audit log |
 
 #### Menu Item Server Actions

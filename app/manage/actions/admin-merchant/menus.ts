@@ -1216,7 +1216,7 @@ export async function toggleAdminMenuActive(
   // Dashboard toggle uses: `Menu ${newStatus}: ${updatedMenu.name}`
   // To match dashboard, we might want to override or add another log.
   // But updateAdminMenu already logs, so creating another log might be spammy.
-  // Dashboard's ToggleMenuActive uses LogAuditEvent directly and doesn't call UpdateMenu.
+  // Dashboard's SetMenuActive uses LogAuditEvent directly and doesn't call UpdateMenu.
   // Since we call updateAdminMenu, we get the "Updated Menu" log which shows the change in `changes`.
   // That should be sufficient and consistent with "Updated Menu".
   
