@@ -51,4 +51,19 @@ describe("pre-snapshot migration bootstrap ordering", () => {
       /ADD COLUMN total_tips NUMERIC\(12,2\) GENERATED ALWAYS AS/,
     );
   });
+
+  it("creates POS role permissions before their mappings", () => {
+    const roleMigration = read(
+      "supabase/migrations/20260420000000_add_pos_staff_roles.sql",
+    );
+    const seed = read("supabase/seed.sql");
+
+    expect(roleMigration.indexOf("INSERT INTO public.permissions")).toBeLessThan(
+      roleMigration.indexOf("INSERT INTO public.role_permissions"),
+    );
+    expect(roleMigration).toContain("ON CONFLICT (code) DO NOTHING");
+    expect(seed).toMatch(
+      /INSERT INTO "public"\."permissions"[\s\S]+ON CONFLICT DO NOTHING;/,
+    );
+  });
 });
