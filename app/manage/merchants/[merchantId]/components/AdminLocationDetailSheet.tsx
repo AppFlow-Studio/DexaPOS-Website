@@ -9,7 +9,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -402,12 +403,9 @@ export function AdminLocationDetailSheet({
             </TabsList>
 
             <TabsContent value="details">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Location Details</CardTitle>
-                  <CardDescription>Edit the full location profile from HQ</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
+              <Panel>
+                <PanelSection label="Location Details" caption="Edit the full location profile from HQ">
+                  <div className="mt-4 space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Name</Label>
@@ -505,17 +503,15 @@ export function AdminLocationDetailSheet({
                     {isSavingDetails ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save Details
                   </Button>
-                </CardContent>
-              </Card>
+                  </div>
+                </PanelSection>
+              </Panel>
             </TabsContent>
 
             <TabsContent value="hours">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Business Hours</CardTitle>
-                  <CardDescription>Update operating hours for each day</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
+              <Panel>
+                <PanelSection label="Business Hours" caption="Update operating hours for each day">
+                  <div className="mt-4 space-y-3">
                   {DAYS.map(({ key, label }) => {
                     const day = hours[key] || DEFAULT_BUSINESS_HOURS[key] || { open: '09:00', close: '17:00', is_closed: false, is_overnight: false }
                     const isOvernight = day.is_overnight ?? false
@@ -576,17 +572,19 @@ export function AdminLocationDetailSheet({
                     {isSavingHours ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save Hours
                   </Button>
-                </CardContent>
-              </Card>
+                  </div>
+                </PanelSection>
+              </Panel>
             </TabsContent>
 
-            <TabsContent value="settings" className="space-y-4">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2"><ShoppingCart className="h-4 w-4" />Order Settings</CardTitle>
-                  <CardDescription>Control whether this location accepts orders</CardDescription>
-                </CardHeader>
-                <CardContent className="flex items-center justify-between gap-4">
+            <TabsContent value="settings">
+              <Panel>
+                <PanelSection
+                  icon={ShoppingCart}
+                  label="Order Settings"
+                  caption="Control whether this location accepts orders"
+                >
+                  <div className="mt-4 flex items-center justify-between gap-4">
                   <div>
                     <p className="font-medium">{currentLocation.is_accepting_orders ? 'Accepting orders' : 'Orders paused'}</p>
                     <p className="text-sm text-muted-foreground">
@@ -597,15 +595,16 @@ export function AdminLocationDetailSheet({
                     {isTogglingOrders ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
                     <Switch checked={currentLocation.is_accepting_orders} onCheckedChange={handleToggleOrders} disabled={isTogglingOrders || !currentLocation.is_active} />
                   </div>
-                </CardContent>
-              </Card>
+                  </div>
+                </PanelSection>
 
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2"><Globe className="h-4 w-4" />Pricing & Menu</CardTitle>
-                  <CardDescription>Inheritance and pricing strategy</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
+                <PanelSection
+                  icon={Globe}
+                  label="Pricing & Menu"
+                  caption="Inheritance and pricing strategy"
+                  divider
+                >
+                  <div className="mt-4 space-y-4">
                   <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-4 py-3">
                     <div>
                       <p className="font-medium">Use Merchant Pricing Defaults</p>
@@ -634,15 +633,16 @@ export function AdminLocationDetailSheet({
                   <div className="rounded-xl border bg-slate-50 px-4 py-3 text-sm text-muted-foreground">
                     Menu mode: {currentLocation.uses_global_menu ? 'Using merchant global menu' : 'Using location-specific menu'}
                   </div>
-                </CardContent>
-              </Card>
+                  </div>
+                </PanelSection>
 
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2"><Power className="h-4 w-4" />Location Status</CardTitle>
-                  <CardDescription>Activate or deactivate this location</CardDescription>
-                </CardHeader>
-                <CardContent className="flex items-center justify-between gap-4">
+                <PanelSection
+                  icon={Power}
+                  label="Location Status"
+                  caption="Activate or deactivate this location"
+                  divider
+                >
+                  <div className="mt-4 flex items-center justify-between gap-4">
                   <div>
                     <p className="font-medium">{currentLocation.is_active ? 'Active' : 'Inactive'}</p>
                     <p className="text-sm text-muted-foreground">
@@ -653,8 +653,9 @@ export function AdminLocationDetailSheet({
                     {isTogglingStatus ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Power className="mr-2 h-4 w-4" />}
                     {currentLocation.is_active ? 'Deactivate' : 'Activate'}
                   </Button>
-                </CardContent>
-              </Card>
+                  </div>
+                </PanelSection>
+              </Panel>
             </TabsContent>
           </Tabs>
         </div>
