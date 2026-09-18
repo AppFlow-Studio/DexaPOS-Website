@@ -136,8 +136,14 @@ export function AnalyticsContent() {
           padding sits above the pinned bar as a transparent strip, and rows
           scroll through it. Opaque `bg-background`, not a translucent blur —
           a chart sliding under a 75%-opaque bar stays legible enough to read
-          as a glitch. */}
-      <div className="sticky -top-4 z-20 -mx-4 -mt-4 border-b bg-background px-4 pb-3 pt-4 sm:-top-6 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6">
+          as a glitch.
+
+          `[&>div]:justify-center` centres the picker's own flex row from here
+          rather than in `DateRangePicker`, which other routes also render and
+          which should stay left-aligned there. No bottom rule: the design
+          language has no dividing lines (§0), and the opaque background is
+          already enough of an edge once content scrolls beneath it. */}
+      <div className="sticky -top-4 z-20 -mx-4 -mt-4 bg-background px-4 pb-3 pt-4 [&>div]:justify-center sm:-top-6 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6">
         <DateRangePicker
           from={dateRange.from}
           to={dateRange.to}

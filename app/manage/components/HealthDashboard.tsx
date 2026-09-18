@@ -357,21 +357,28 @@ function HealthRow({
                     </div>
 
                     <div className="min-w-0 flex-1">
-                        <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
-                            <h3 className="min-w-0 truncate font-semibold">{merchant.name}</h3>
-                            {/* Phone-only stand-in for the hidden disc. The
-                                `sm:hidden` pair mirrors the disc's `hidden sm:flex`,
+                        {/* The status group is one flex item, so a long
+                            merchant name truncates instead of wrapping the
+                            score pill onto a line by itself. */}
+                        <div className="mb-1 flex min-w-0 items-center gap-2">
+                            <h3 className="min-w-0 flex-1 truncate font-semibold">{merchant.name}</h3>
+                            <span className="flex shrink-0 items-center gap-2">
+                            <span className={BADGE_SHELL}>{tone.label}</span>
+                            {/* Phone-only stand-in for the hidden disc, sharing
+                                the badge's shaded pill so the two read as one
+                                status group rather than a loose numeral. The
+                                `sm:hidden` mirrors the disc's `hidden sm:flex`,
                                 so exactly one of them is ever on screen — the
                                 disc carries the aria-label at sm+, this one
                                 below it. */}
                             <span
-                                className={`text-sm font-bold tabular-nums sm:hidden ${tone.text}`}
+                                className={`inline-flex shrink-0 items-center rounded-full bg-muted/60 px-2 py-0.5 text-xs font-bold tabular-nums sm:hidden ${tone.text}`}
                                 role="img"
                                 aria-label={`Health score ${merchant.healthScore} of 100 — ${tone.label}`}
                             >
                                 <span aria-hidden="true">{merchant.healthScore}</span>
                             </span>
-                            <span className={BADGE_SHELL}>{tone.label}</span>
+                            </span>
                         </div>
 
                         {merchant.type && (
@@ -442,8 +449,49 @@ function HealthRow({
                     </div>
                 )}
 
-                {/* Bottom Row: Stats Grid */}
-                <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
+                {/* Bottom Row: Stats.
+                    Two structures, one per breakpoint. The stacked
+                    label-over-value grid below reads fine in a wide 4-up row,
+                    but at `grid-cols-2` on a phone it became four tall blocks
+                    of mostly empty space — the desktop layout squeezed, not a
+                    mobile one. Phones get a single wrapping line of
+                    `label value` pairs instead, so the same four numbers cost
+                    one or two lines rather than four blocks. */}
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1 text-sm sm:hidden">
+                    <span className="text-muted-foreground">
+                        Locations{' '}
+                        <span className="font-semibold tabular-nums text-foreground">
+                            {merchant.total_locations}
+                        </span>
+                    </span>
+                    <span className="text-muted-foreground">
+                        Devices{' '}
+                        <span className="font-semibold tabular-nums text-foreground">
+                            {merchant.totalStations}
+                        </span>
+                    </span>
+                    <span className="text-muted-foreground">
+                        Revenue{' '}
+                        <span className="font-semibold tabular-nums text-foreground">
+                            {formatCurrency(merchant.revenue_today)}
+                        </span>
+                    </span>
+                    <span className="text-muted-foreground">
+                        Orders{' '}
+                        <span className="font-semibold tabular-nums text-foreground">
+                            {merchant.orders_today}
+                        </span>
+                    </span>
+                    <span className="basis-full text-xs text-muted-foreground">
+                        {merchant.last_order_at
+                            ? formatDistanceToNow(new Date(merchant.last_order_at), {
+                                addSuffix: true,
+                            })
+                            : 'No orders'}
+                    </span>
+                </div>
+
+                <div className="hidden min-w-0 grid-cols-2 gap-3 sm:grid md:grid-cols-4">
                     <div className="min-w-0 text-sm">
                         <p className="mb-0.5 text-xs text-muted-foreground">Locations</p>
                         <p className="font-semibold tabular-nums">{merchant.total_locations}</p>
