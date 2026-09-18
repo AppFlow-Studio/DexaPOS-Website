@@ -76,4 +76,14 @@ describe("pre-snapshot migration bootstrap ordering", () => {
       "to_regprocedure('public.user_belongs_to_merchant(uuid)')",
     );
   });
+
+  it("appends the new device view column without changing existing ordinals", () => {
+    const moneyMigration = read(
+      "supabase/migrations/20260428010000_money_numeric_cols.sql",
+    );
+
+    expect(moneyMigration).toMatch(
+      /CREATE OR REPLACE VIEW public\.admin_device_inventory[\s\S]+di\.linked_printer_id,\s+dc\.monthly_fee\s+FROM/,
+    );
+  });
 });
