@@ -86,4 +86,15 @@ describe("pre-snapshot migration bootstrap ordering", () => {
       /CREATE OR REPLACE VIEW public\.admin_device_inventory[\s\S]+di\.linked_printer_id,\s+dc\.monthly_fee\s+FROM/,
     );
   });
+
+  it("uses the customer soft-delete flag in the phone uniqueness index", () => {
+    const phoneMigration = read(
+      "supabase/migrations/20260504000001_phone_e164_constraints.sql",
+    );
+
+    expect(phoneMigration).toContain(
+      "WHERE phone IS NOT NULL AND is_active = true",
+    );
+    expect(phoneMigration).not.toContain("deleted_at IS NULL");
+  });
 });
