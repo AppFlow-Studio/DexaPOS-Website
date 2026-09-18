@@ -1,7 +1,8 @@
 ﻿'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -343,15 +344,12 @@ export function OnlineStoreTab({
     if (!selectedLocationId) {
         return (
             <div className="space-y-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Online Store Settings</CardTitle>
-                        <CardDescription>
-                            Configure online ordering for each merchant location. Select a location to manage its
-                            storefront settings.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                <Panel>
+                    <PanelSection
+                        label="Online Store Settings"
+                        caption="Configure online ordering for each merchant location. Select a location to manage its storefront settings."
+                    >
+                        <div className="mt-4">
                         {locationsLoading || overviewLoading ? (
                             <div className="space-y-3">
                                 {[...Array(3)].map((_, i) => (
@@ -472,8 +470,9 @@ export function OnlineStoreTab({
                                 })}
                             </div>
                         )}
-                    </CardContent>
-                </Card>
+                        </div>
+                    </PanelSection>
+                </Panel>
             </div>
         )
     }
@@ -562,33 +561,30 @@ export function OnlineStoreTab({
                     <Skeleton className="h-64 w-full" />
                 </div>
             ) : !localSettings ? (
-                <Card>
-                    <CardContent className="py-12 text-center">
+                <Panel padded>
+                    <div className="py-12 text-center">
                         <p className="text-muted-foreground">Failed to load settings</p>
-                    </CardContent>
-                </Card>
+                    </div>
+                </Panel>
             ) : (
                 <>
                     {requestStatus === 'not_requested' && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Awaiting Merchant Request</CardTitle>
-                                <CardDescription>
-                                    This location does not have an online-store setup request yet. Review details below, but branch setup should start from the merchant request flow.
-                                </CardDescription>
-                            </CardHeader>
-                        </Card>
+                        <Panel>
+                            <PanelSection
+                                label="Awaiting Merchant Request"
+                                caption="This location does not have an online-store setup request yet. Review details below, but branch setup should start from the merchant request flow."
+                            >
+                            </PanelSection>
+                        </Panel>
                     )}
 
                     {requestStatus === 'pending_review' && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Review Request</CardTitle>
-                                <CardDescription>
-                                    Inspect the merchant and location packet below. Approve to unlock HQ setup, or reject and provide a reason that will be emailed to the merchant owner/admin.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex gap-3">
+                        <Panel>
+                            <PanelSection
+                                label="Review Request"
+                                caption="Inspect the merchant and location packet below. Approve to unlock HQ setup, or reject and provide a reason that will be emailed to the merchant owner/admin."
+                            >
+                                <div className="mt-4 flex gap-3">
                                 <Button onClick={handleApproveRequest} disabled={approveMutation.isPending || rejectMutation.isPending}>
                                     {approveMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
                                     Approve
@@ -601,42 +597,40 @@ export function OnlineStoreTab({
                                     {rejectMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <X className="h-4 w-4 mr-2" />}
                                     Reject
                                 </Button>
-                            </CardContent>
-                        </Card>
+                                </div>
+                            </PanelSection>
+                        </Panel>
                     )}
 
                     {requestStatus === 'approved' && (
-                        <Card className="border-yellow-300/60">
-                            <CardHeader>
-                                <CardTitle>Request Approved</CardTitle>
-                                <CardDescription>
-                                    HQ can now complete storefront setup. The first successful save from this screen marks the request as setup completed.
-                                </CardDescription>
-                            </CardHeader>
-                        </Card>
+                        <Panel className="border-yellow-300/60">
+                            <PanelSection
+                                label="Request Approved"
+                                caption="HQ can now complete storefront setup. The first successful save from this screen marks the request as setup completed."
+                            />
+                        </Panel>
                     )}
 
                     {requestStatus === 'rejected' && (
-                        <Card className="border-destructive/40">
-                            <CardHeader>
-                                <CardTitle>Request Rejected</CardTitle>
-                                <CardDescription>
-                                    The merchant must resubmit the request after addressing the rejection reason below.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="text-sm text-muted-foreground">
-                                {localSettings.setupRejectionReason || 'No rejection reason recorded.'}
-                            </CardContent>
-                        </Card>
+                        <Panel className="border-destructive/40">
+                            <PanelSection
+                                label="Request Rejected"
+                                caption="The merchant must resubmit the request after addressing the rejection reason below."
+                            >
+                                <div className="mt-4 text-sm text-muted-foreground">
+                                    {localSettings.setupRejectionReason || 'No rejection reason recorded.'}
+                                </div>
+                            </PanelSection>
+                        </Panel>
                     )}
 
                     <div className="grid gap-4 xl:grid-cols-2">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Merchant Review Packet</CardTitle>
-                                <CardDescription>Compliance fields collected during merchant onboarding.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-3 text-sm">
+                        <Panel>
+                            <PanelSection
+                                label="Merchant Review Packet"
+                                caption="Compliance fields collected during merchant onboarding."
+                            >
+                                <div className="mt-4 space-y-3 text-sm">
                                 <div className="flex items-center justify-between gap-4">
                                     <span className="text-muted-foreground">Legal Business Name</span>
                                     <span>{localSettings.merchantReviewPacket?.legalBusinessName || 'Missing'}</span>
@@ -681,15 +675,16 @@ export function OnlineStoreTab({
                                         <span>Missing</span>
                                     )}
                                 </div>
-                            </CardContent>
-                        </Card>
+                                </div>
+                            </PanelSection>
+                        </Panel>
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Location Review Packet</CardTitle>
-                                <CardDescription>Banking and support documents collected for this branch.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-3 text-sm">
+                        <Panel>
+                            <PanelSection
+                                label="Location Review Packet"
+                                caption="Banking and support documents collected for this branch."
+                            >
+                                <div className="mt-4 space-y-3 text-sm">
                                 <div className="flex items-center justify-between gap-4">
                                     <span className="text-muted-foreground">Bank Name</span>
                                     <span>{localSettings.locationReviewPacket?.bankName || 'Missing'}</span>
@@ -716,18 +711,17 @@ export function OnlineStoreTab({
                                         <span>Missing</span>
                                     )}
                                 </div>
-                            </CardContent>
-                        </Card>
+                                </div>
+                            </PanelSection>
+                        </Panel>
                     </div>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Review Checklist</CardTitle>
-                            <CardDescription>
-                                Required packet items before HQ should approve setup.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <Panel>
+                        <PanelSection
+                            label="Review Checklist"
+                            caption="Required packet items before HQ should approve setup."
+                        >
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                             {([
                                 ['Legal Business Name', localSettings.reviewChecklist?.legalBusinessName],
                                 ['DBA Name', localSettings.reviewChecklist?.dbaName],
@@ -745,26 +739,26 @@ export function OnlineStoreTab({
                                     </Badge>
                                 </div>
                             ))}
-                        </CardContent>
-                    </Card>
+                            </div>
+                        </PanelSection>
+                    </Panel>
 
                     {requirementsData?.success && !requirementsData.complete ? (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Missing Packet Items</CardTitle>
-                                <CardDescription>
-                                    These fields are required before approval. Use the editor to fill only the missing items.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex items-center justify-between gap-4">
+                        <Panel>
+                            <PanelSection
+                                label="Missing Packet Items"
+                                caption="These fields are required before approval. Use the editor to fill only the missing items."
+                            >
+                                <div className="mt-4 flex items-center justify-between gap-4">
                                 <div className="text-sm text-muted-foreground">
                                     {Object.values(requirementsData.missing).filter(Boolean).length} missing fields detected.
                                 </div>
                                 <Button onClick={() => setMissingFormOpen(true)} variant="outline">
                                     Edit Missing Fields
                                 </Button>
-                            </CardContent>
-                        </Card>
+                                </div>
+                            </PanelSection>
+                        </Panel>
                     ) : null}
 
                     <MissingDataForm
@@ -798,8 +792,7 @@ export function OnlineStoreTab({
                     {canEditStoreSetup ? (
                         <>
                     {/* Enable/Disable Toggle */}
-                    <Card>
-                        <CardContent className="pt-6">
+                    <Panel padded>
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-4">
                                     <div
@@ -831,18 +824,14 @@ export function OnlineStoreTab({
                                     onCheckedChange={(enabled) => updateSettings({ enabled })}
                                 />
                             </div>
-                        </CardContent>
-                    </Card>
+                    </Panel>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Online Card Payments</CardTitle>
-                            <CardDescription>
-                                This location&apos;s storefront takes card payments through Valor. Board the
-                                location, then set it live to accept cards online.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
+                    <Panel>
+                        <PanelSection
+                            label="Online Card Payments"
+                            caption="This location&apos;s storefront takes card payments through Valor. Board the location, then set it live to accept cards online."
+                        >
+                            <div className="mt-4 space-y-4">
                             <div className="flex items-center justify-between rounded-md border p-3">
                                 <div>
                                     <p className="text-sm font-medium">Store Status</p>
@@ -919,8 +908,9 @@ export function OnlineStoreTab({
                                     </Button>
                                 )}
                             </div>
-                        </CardContent>
-                    </Card>
+                            </div>
+                        </PanelSection>
+                    </Panel>
 
                     {/* Settings Tabs */}
                     <Tabs defaultValue="store" className="space-y-6">
@@ -949,12 +939,12 @@ export function OnlineStoreTab({
 
                         {/* Store Info */}
                         <TabsContent value="store" className="space-y-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Store Information</CardTitle>
-                                    <CardDescription>Basic information about the online store</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-6">
+                            <Panel>
+                                <PanelSection
+                                    label="Store Information"
+                                    caption="Basic information about the online store"
+                                >
+                                    <div className="mt-4 space-y-6">
                                     <div className="grid gap-4 sm:grid-cols-2">
                                         <div className="space-y-2">
                                             <Label htmlFor="storeName">Store Name</Label>
@@ -1057,18 +1047,19 @@ export function OnlineStoreTab({
                                             </Button>
                                         </div>
                                     </div>
-                                </CardContent>
-                            </Card>
+                                    </div>
+                                </PanelSection>
+                            </Panel>
                         </TabsContent>
 
                         {/* Branding Settings */}
                         <TabsContent value="branding" className="space-y-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Brand Colors</CardTitle>
-                                    <CardDescription>Customize the store's color scheme</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-6">
+                            <Panel>
+                                <PanelSection
+                                    label="Brand Colors"
+                                    caption="Customize the store's color scheme"
+                                >
+                                    <div className="mt-4 space-y-6">
                                     <div className="grid gap-6 sm:grid-cols-2">
                                         <div className="space-y-3">
                                             <Label>Template</Label>
@@ -1284,8 +1275,9 @@ export function OnlineStoreTab({
                                             This text appears above the store name on the hero banner
                                         </p>
                                     </div>
-                                </CardContent>
-                            </Card>
+                                    </div>
+                                </PanelSection>
+                            </Panel>
                         </TabsContent>
 
                         <HoursConfigModal
@@ -1300,60 +1292,34 @@ export function OnlineStoreTab({
                         {/* Pickup & Delivery */}
                         <TabsContent value="ordering" className="space-y-6">
                             <div className="grid gap-6 xl:grid-cols-2">
-                                <Card>
-                                    <CardHeader>
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <div
-                                                    className={cn(
-                                                        'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
-                                                        localSettings.pickupEnabled
-                                                            ? 'bg-primary/10 text-primary'
-                                                            : 'bg-muted text-muted-foreground'
-                                                    )}
-                                                >
-                                                    <Store className="h-5 w-5" />
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <CardTitle className="text-base">Pickup Orders</CardTitle>
-                                                    <CardDescription>Allow customers to pick up orders</CardDescription>
-                                                </div>
-                                            </div>
-                                            <Switch className="shrink-0"
+                                <Panel>
+                                    <PanelSection
+                                        icon={Store}
+                                        label="Pickup Orders"
+                                        caption="Allow customers to pick up orders"
+                                        action={
+                                            <Switch
                                                 checked={localSettings.pickupEnabled ?? true}
                                                 onCheckedChange={(pickupEnabled) => updateSettings({ pickupEnabled })}
                                             />
-                                        </div>
-                                    </CardHeader>
-                                </Card>
+                                        }
+                                    />
+                                </Panel>
 
-                                <Card>
-                                    <CardHeader>
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <div
-                                                    className={cn(
-                                                        'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
-                                                        localSettings.deliveryEnabled
-                                                            ? 'bg-primary/10 text-primary'
-                                                            : 'bg-muted text-muted-foreground'
-                                                    )}
-                                                >
-                                                    <Truck className="h-5 w-5" />
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <CardTitle className="text-base">Delivery Orders</CardTitle>
-                                                    <CardDescription>Offer delivery to customers</CardDescription>
-                                                </div>
-                                            </div>
-                                            <Switch className="shrink-0"
+                                <Panel>
+                                    <PanelSection
+                                        icon={Truck}
+                                        label="Delivery Orders"
+                                        caption="Offer delivery to customers"
+                                        action={
+                                            <Switch
                                                 checked={localSettings.deliveryEnabled ?? false}
                                                 onCheckedChange={(deliveryEnabled) => updateSettings({ deliveryEnabled })}
                                             />
-                                        </div>
-                                    </CardHeader>
+                                        }
+                                    >
                                     {localSettings.deliveryEnabled && (
-                                        <CardContent className="space-y-4">
+                                        <div className="mt-4 space-y-4">
                                             <div className="grid gap-4 sm:grid-cols-2">
                                                 <div className="space-y-2">
                                                     <Label>Base Delivery Fee</Label>
@@ -1394,17 +1360,18 @@ export function OnlineStoreTab({
                                                     </p>
                                                 </div>
                                             </div>
-                                        </CardContent>
+                                        </div>
                                     )}
-                                </Card>
+                                    </PanelSection>
+                                </Panel>
                             </div>
 
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Order Settings</CardTitle>
-                                    <CardDescription>Configure order timing and requirements</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-6">
+                            <Panel>
+                                <PanelSection
+                                    label="Order Settings"
+                                    caption="Configure order timing and requirements"
+                                >
+                                    <div className="mt-4 space-y-6">
                                     <div className="grid gap-6 sm:grid-cols-2">
                                         <div className="space-y-2">
                                             <Label>Preparation Lead Time (minutes)</Label>
@@ -1453,15 +1420,16 @@ export function OnlineStoreTab({
                                             <p className="text-xs text-muted-foreground">Set to 0 for no minimum</p>
                                         </div>
                                     </div>
-                                </CardContent>
-                            </Card>
+                                    </div>
+                                </PanelSection>
+                            </Panel>
 
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Order Automation</CardTitle>
-                                    <CardDescription>Automate order handling to match the merchant dashboard flow</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
+                            <Panel>
+                                <PanelSection
+                                    label="Order Automation"
+                                    caption="Automate order handling to match the merchant dashboard flow"
+                                >
+                                    <div className="mt-4 space-y-4">
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 min-w-0">
                                             <Zap className="h-5 w-5 text-yellow-500 shrink-0" />
@@ -1495,15 +1463,16 @@ export function OnlineStoreTab({
                                             }
                                         />
                                     </div>
-                                </CardContent>
-                            </Card>
+                                    </div>
+                                </PanelSection>
+                            </Panel>
 
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Notifications</CardTitle>
-                                    <CardDescription>Get notified about new orders</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
+                            <Panel>
+                                <PanelSection
+                                    label="Notifications"
+                                    caption="Get notified about new orders"
+                                >
+                                    <div className="mt-4 space-y-4">
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 min-w-0">
                                             <Bell className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -1532,18 +1501,19 @@ export function OnlineStoreTab({
                                             />
                                         </div>
                                     )}
-                                </CardContent>
-                            </Card>
+                                    </div>
+                                </PanelSection>
+                            </Panel>
                         </TabsContent>
 
                         {/* Payment & Tips */}
                         <TabsContent value="payment" className="space-y-6">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Payment Methods</CardTitle>
-                                    <CardDescription>Choose which payment methods to accept</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
+                            <Panel>
+                                <PanelSection
+                                    label="Payment Methods"
+                                    caption="Choose which payment methods to accept"
+                                >
+                                    <div className="mt-4 space-y-4">
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 min-w-0">
                                             <CreditCard className="h-5 w-5 text-muted-foreground shrink-0" />
@@ -1620,24 +1590,23 @@ export function OnlineStoreTab({
                                             }
                                         />
                                     </div>
-                                </CardContent>
-                            </Card>
+                                    </div>
+                                </PanelSection>
+                            </Panel>
 
-                            <Card>
-                                <CardHeader>
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div>
-                                            <CardTitle>Tipping</CardTitle>
-                                            <CardDescription>Configure tipping options for customers</CardDescription>
-                                        </div>
-                                        <Switch className="shrink-0"
+                            <Panel>
+                                <PanelSection
+                                    label="Tipping"
+                                    caption="Configure tipping options for customers"
+                                    action={
+                                        <Switch
                                             checked={localSettings.tippingEnabled ?? true}
                                             onCheckedChange={(tippingEnabled) => updateSettings({ tippingEnabled })}
                                         />
-                                    </div>
-                                </CardHeader>
+                                    }
+                                >
                                 {localSettings.tippingEnabled && (
-                                    <CardContent className="space-y-6">
+                                    <div className="mt-4 space-y-6">
                                         <div className="space-y-3">
                                             <Label>Preset Tip Percentages</Label>
                                             <div className="flex gap-2 flex-wrap">
@@ -1676,27 +1645,26 @@ export function OnlineStoreTab({
                                                 )}
                                             </div>
                                         </div>
-                                    </CardContent>
+                                    </div>
                                 )}
-                            </Card>
+                                </PanelSection>
+                            </Panel>
 
-                            <Card>
-                                <CardHeader>
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div>
-                                            <CardTitle>Convenience Fee</CardTitle>
-                                            <CardDescription>Add a fee for online ordering</CardDescription>
-                                        </div>
-                                        <Switch className="shrink-0"
+                            <Panel>
+                                <PanelSection
+                                    label="Convenience Fee"
+                                    caption="Add a fee for online ordering"
+                                    action={
+                                        <Switch
                                             checked={localSettings.convenienceFeeEnabled ?? false}
                                             onCheckedChange={(convenienceFeeEnabled) =>
                                                 updateSettings({ convenienceFeeEnabled })
                                             }
                                         />
-                                    </div>
-                                </CardHeader>
+                                    }
+                                >
                                 {localSettings.convenienceFeeEnabled && (
-                                    <CardContent>
+                                    <div className="mt-4">
                                         <div className="grid gap-4 sm:grid-cols-2">
                                             <div className="space-y-2">
                                                 <Label>Percentage Fee</Label>
@@ -1733,28 +1701,21 @@ export function OnlineStoreTab({
                                                 </div>
                                             </div>
                                         </div>
-                                    </CardContent>
+                                    </div>
                                 )}
-                            </Card>
+                                </PanelSection>
+                            </Panel>
                         </TabsContent>
 
                         <TabsContent value="orderout" className="space-y-6">
-                            <Card>
-                                <CardHeader>
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div>
-                                            <CardTitle className="flex items-center gap-2">
-                                                <Plug className="h-5 w-5" />
-                                                OrderOut Delivery Integration
-                                            </CardTitle>
-                                            <CardDescription>
-                                                Connect this location to UberEats, DoorDash, Grubhub, and other delivery marketplaces.
-                                            </CardDescription>
-                                        </div>
-                                        <Badge variant="outline">$79.99/mo</Badge>
-                                    </div>
-                                </CardHeader>
-                                <CardContent>
+                            <Panel>
+                                <PanelSection
+                                    icon={Plug}
+                                    label="OrderOut Delivery Integration"
+                                    caption="Connect this location to UberEats, DoorDash, Grubhub, and other delivery marketplaces."
+                                    action={<Badge variant="outline">$79.99/mo</Badge>}
+                                >
+                                <div className="mt-4">
                                     {(() => {
                                         const locOO = orderOutStatus?.restaurants.find(
                                             (restaurant) => restaurant.locationId === selectedLocationId
@@ -1840,8 +1801,9 @@ export function OnlineStoreTab({
                                             </div>
                                         )
                                     })()}
-                                </CardContent>
-                            </Card>
+                                </div>
+                                </PanelSection>
+                            </Panel>
                         </TabsContent>
                     </Tabs>
                         </>
