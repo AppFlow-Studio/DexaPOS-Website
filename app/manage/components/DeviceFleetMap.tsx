@@ -12,30 +12,29 @@ import { usePlatformStationFleet } from '@/lib/queries/use-platform-dashboard'
 type FleetStatus = 'green' | 'yellow' | 'red' | 'grey'
 
 /**
- * Device status keeps its colour — HQ exception 2 (`UI-DESIGN-SYSTEM.md`
- * §14.3 HQ-2): an offline terminal or a dying battery is an operational alarm
- * an HQ operator must spot in a dense grid, not decorative state tinting.
+ * Status is text-led, not colour-coded (`UI-DESIGN-SYSTEM.md` §4.6b,
+ * `DS-CTL-09` / D-12): one neutral pill per tile, the **word** carrying the
+ * meaning.
  *
- * The colour now rides on the dot and glyph only. The tinted card fills are
- * gone: 60 pastel-filled tiles made the whole panel read as a colour field, so
- * the handful of red ones stopped standing out — the opposite of the intent.
+ * This panel renders on `/manage` only, so HQ exception 2 (§14.3 HQ-2) does
+ * not apply — that exception is scoped to `/manage/health` and the DLQ, and
+ * ends "everywhere else in HQ, status stays text-led".
+ *
+ * The coloured dot it replaces was the panel's second mark for one fact: a
+ * neutral glyph on the left and a hued dot on the right, so the glyph was
+ * decoration and the dot was a colour key the operator had to learn. Naming
+ * the state costs a few pixels and removes the legend entirely.
  */
-/**
- * The status dot carries the colour; the glyph beside it stays neutral. Tinting
- * both meant every tile drew two coloured marks for one piece of information,
- * and a wall of coloured icons read as noise rather than as signal.
- */
-const STATUS: Record<FleetStatus, { dot: string; icon: string; Icon: typeof Wifi; label: string }> = {
-  green: { dot: 'bg-green-500', icon: 'text-foreground', Icon: Wifi, label: 'Online' },
-  yellow: { dot: 'bg-yellow-500', icon: 'text-foreground', Icon: BatteryWarning, label: 'Warning' },
-  red: { dot: 'bg-red-500', icon: 'text-foreground', Icon: WifiOff, label: 'Offline' },
-  grey: { dot: 'bg-muted-foreground/50', icon: 'text-foreground', Icon: AlertCircle, label: 'Inactive' },
+const STATUS: Record<FleetStatus, { Icon: typeof Wifi; label: string }> = {
+  green: { Icon: Wifi, label: 'Online' },
+  yellow: { Icon: BatteryWarning, label: 'Warning' },
+  red: { Icon: WifiOff, label: 'Offline' },
+  grey: { Icon: AlertCircle, label: 'Inactive' },
 }
 
-const LEGEND = (Object.keys(STATUS) as FleetStatus[]).map((k) => ({
-  dot: STATUS[k].dot,
-  label: STATUS[k].label,
-}))
+/** §4.6b `DS-CTL-09`, minus the horizontal padding a tile this dense can't spare. */
+const STATUS_PILL =
+  'inline-flex shrink-0 items-center rounded-full border-0 bg-muted/60 px-2 py-0.5 text-[0.6875rem] font-medium text-muted-foreground'
 
 export function DeviceFleetMap() {
   const { data: fleet, isLoading, error } = usePlatformStationFleet()
@@ -46,18 +45,6 @@ export function DeviceFleetMap() {
       <PanelSection
         icon={Radio}
         label="Device Fleet Health"
-        action={
-          !isLoading && !error && fleet && fleet.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              {LEGEND.map(({ dot, label }) => (
-                <div key={label} className="flex items-center gap-1.5">
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
-                  <span>{label}</span>
-                </div>
-              ))}
-            </div>
-          ) : undefined
-        }
       >
         {isLoading ? (
           <div className="space-y-4">
@@ -67,7 +54,7 @@ export function DeviceFleetMap() {
           </div>
         ) : error ? (
           <div className="py-8 text-center">
-            <p className="text-sm font-medium text-red-600 dark:text-red-400">
+            <p className="text-sm font-medium text-destructive">
               Error loading fleet data
             </p>
             <p className="mt-1 text-xs text-muted-foreground">{(error as Error).message}</p>
@@ -97,14 +84,13 @@ export function DeviceFleetMap() {
                         className="min-w-0 rounded-2xl bg-muted/40 p-3 text-left transition-colors hover:bg-muted/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <div className="flex min-w-0 items-start gap-2">
-                          <Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${tone.icon}`} aria-hidden="true" />
+                          <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0 truncate text-sm font-semibold">
                                 {station.name}
                               </div>
-                              <span className={`h-2 w-2 shrink-0 rounded-full ${tone.dot}`} />
-                              <span className="sr-only">{tone.label}</span>
+                              <span className={STATUS_PILL}>{tone.label}</span>
                             </div>
                             <div className="truncate text-xs text-muted-foreground">
                               {station.locationName}

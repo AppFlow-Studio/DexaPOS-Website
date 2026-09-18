@@ -344,8 +344,12 @@ function HealthRow({
             <div className="flex min-w-0 flex-col gap-3">
                 {/* Top Row: Score, Name, Type */}
                 <div className="flex min-w-0 items-start gap-4">
+                    {/* The 64px score disc is a phone's whole left quarter, and
+                        it indents every line beside it. Below `sm` the score
+                        rides inline next to the status instead (see the name
+                        row); from `sm` up there is room for the disc. */}
                     <div
-                        className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-muted/60 text-2xl font-bold tabular-nums ${tone.text}`}
+                        className={`hidden h-16 w-16 shrink-0 items-center justify-center rounded-full bg-muted/60 text-2xl font-bold tabular-nums sm:flex ${tone.text}`}
                         role="img"
                         aria-label={`Health score ${merchant.healthScore} of 100 — ${tone.label}`}
                     >
@@ -355,6 +359,18 @@ function HealthRow({
                     <div className="min-w-0 flex-1">
                         <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2">
                             <h3 className="min-w-0 truncate font-semibold">{merchant.name}</h3>
+                            {/* Phone-only stand-in for the hidden disc. The
+                                `sm:hidden` pair mirrors the disc's `hidden sm:flex`,
+                                so exactly one of them is ever on screen — the
+                                disc carries the aria-label at sm+, this one
+                                below it. */}
+                            <span
+                                className={`text-sm font-bold tabular-nums sm:hidden ${tone.text}`}
+                                role="img"
+                                aria-label={`Health score ${merchant.healthScore} of 100 — ${tone.label}`}
+                            >
+                                <span aria-hidden="true">{merchant.healthScore}</span>
+                            </span>
                             <span className={BADGE_SHELL}>{tone.label}</span>
                         </div>
 
@@ -394,14 +410,27 @@ function HealthRow({
                     same 80px column offset. */}
                 {merchant.alerts.length > 0 ? (
                     <div className="flex min-w-0 flex-col gap-1 sm:pl-20">
+                        {/* One alert on a phone, two from `sm` up. The second is
+                            rendered but `hidden` rather than sliced away, so the
+                            cutoff is a CSS breakpoint and not a JS guess at the
+                            viewport — no hydration mismatch, no resize listener. */}
                         {merchant.alerts.slice(0, 2).map((alert, idx) => (
-                            <div key={idx} className="flex items-start gap-2 text-sm">
+                            <div
+                                key={idx}
+                                className={`flex items-start gap-2 text-sm ${idx === 1 ? 'hidden sm:flex' : ''}`}
+                            >
                                 <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${tone.text}`} />
                                 <span className="min-w-0 text-muted-foreground">{alert}</span>
                             </div>
                         ))}
+                        {/* Two counts for the two cutoffs; CSS picks one. */}
+                        {merchant.alerts.length > 1 && (
+                            <p className="text-xs text-muted-foreground sm:hidden">
+                                +{merchant.alerts.length - 1} more issue{merchant.alerts.length - 1 !== 1 ? 's' : ''}
+                            </p>
+                        )}
                         {merchant.alerts.length > 2 && (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="hidden text-xs text-muted-foreground sm:block">
                                 +{merchant.alerts.length - 2} more issue{merchant.alerts.length - 2 !== 1 ? 's' : ''}
                             </p>
                         )}

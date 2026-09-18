@@ -113,14 +113,37 @@ export function AnalyticsContent() {
           icon={BarChart3}
           label="Analytics"
           caption="Comprehensive insights into platform growth, revenue, operations, and payments"
-        >
-          <DateRangePicker
-            from={dateRange.from}
-            to={dateRange.to}
-            onChange={setDateRange}
-          />
-        </PanelSection>
+        />
       </Panel>
+
+      {/* The range controls sit OUTSIDE the title panel so they can pin for the
+          whole scroll. Nested inside it they would unpin the moment the panel
+          itself left the viewport — sticky only travels within its own parent —
+          which is exactly the case that matters here, reading a figure far down
+          the page and needing to know whether it is 7D or 90D.
+
+          Sticky, not fixed: the offset parent is `#main-content` (the layout's
+          `overflow-y-auto` pane), so `top-0` lands under the app header without
+          hard-coding its height. `-top-4` rather than `top-0`: the pane's own
+          `p-4` padding sits inside the scroll box, so a bar pinned at `top-0`
+          leaves exactly that 16px of page visible above it (measured). Pulling
+          the pin up by the padding and adding it back as `pt-4` lands the bar
+          flush against the header with the controls in the same place.
+
+          The negative margins cancel that pane's
+          `p-4 sm:p-6` on all sides, and the matching padding puts the controls
+          back where they were: without the negative TOP margin the pane's own
+          padding sits above the pinned bar as a transparent strip, and rows
+          scroll through it. Opaque `bg-background`, not a translucent blur —
+          a chart sliding under a 75%-opaque bar stays legible enough to read
+          as a glitch. */}
+      <div className="sticky -top-4 z-20 -mx-4 -mt-4 border-b bg-background px-4 pb-3 pt-4 sm:-top-6 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6">
+        <DateRangePicker
+          from={dateRange.from}
+          to={dateRange.to}
+          onChange={setDateRange}
+        />
+      </div>
 
       <Tabs
         value={activeTab}
