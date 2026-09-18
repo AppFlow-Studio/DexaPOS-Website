@@ -29,4 +29,14 @@ describe("pre-snapshot migration bootstrap ordering", () => {
     expect(snapshot).toContain('"category_items_item_cat_nomenu_idx"');
     expect(snapshot).toContain('"category_items_item_cat_menu_idx"');
   });
+
+  it("terminates the order broadcast function before altering it", () => {
+    const snapshot = read(
+      "supabase/migrations/20260413215901_remote_schema.sql",
+    );
+
+    expect(snapshot).toMatch(
+      /RAISE WARNING 'broadcast_order_changes failed: %', SQLERRM;\s+RETURN NULL;\s+END;\s+\$\$;\s+ALTER FUNCTION "public"\."broadcast_order_changes"/,
+    );
+  });
 });

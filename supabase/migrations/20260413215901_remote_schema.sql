@@ -4233,6 +4233,8 @@ EXCEPTION WHEN OTHERS THEN
   RETURN NULL;
 END;
 
+$$;
+
 
 
 ALTER FUNCTION "public"."broadcast_order_changes"() OWNER TO "postgres";
