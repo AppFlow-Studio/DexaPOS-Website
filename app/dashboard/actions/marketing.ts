@@ -17,6 +17,15 @@ type EligibleRow = {
   channel: string;
 };
 
+type ProviderSendResult = {
+  id?: string;
+  error?: string;
+  errorCode?: string | null;
+  status?: string;
+  fromNumber?: string | null;
+  messagingProfileId?: string | null;
+};
+
 /**
  * Get all marketing campaigns for a merchant
  */
@@ -333,7 +342,7 @@ export async function CreateAndSendCampaign({
       const { recipient_id, customer_id: cid, destination, channel } = row;
       if (!destination) continue;
 
-      let sendResult: { id?: string; error?: string } = {};
+      let sendResult: ProviderSendResult = {};
       try {
         if (channel === "sms") {
           sendResult = isValidPhoneNumber(destination)
@@ -370,7 +379,9 @@ export async function CreateAndSendCampaign({
           campaignId: campaign.id,
           recipientId: recipient_id,
           status: sendResult.error ? "failed" : "sent",
-          errorCode: sendResult.error || null,
+          errorCode: sendResult.errorCode ?? sendResult.error ?? null,
+          fromNumber: sendResult.fromNumber ?? null,
+          messagingProfileId: sendResult.messagingProfileId ?? null,
         });
       }
 
@@ -454,7 +465,7 @@ export async function SendCampaignNow(campaignId: string) {
         const { recipient_id, customer_id: cid, destination, channel } = row;
         if (!destination) continue;
 
-        let sendResult: { id?: string; error?: string } = {};
+        let sendResult: ProviderSendResult = {};
         try {
           if (channel === "sms") {
             sendResult = isValidPhoneNumber(destination)
@@ -489,7 +500,9 @@ export async function SendCampaignNow(campaignId: string) {
             campaignId,
             recipientId: recipient_id,
             status: sendResult.error ? "failed" : "sent",
-            errorCode: sendResult.error || null,
+            errorCode: sendResult.errorCode ?? sendResult.error ?? null,
+            fromNumber: sendResult.fromNumber ?? null,
+            messagingProfileId: sendResult.messagingProfileId ?? null,
           });
         }
 
@@ -574,7 +587,7 @@ export async function SendQuickMessage({
     return { error: "Failed to create campaign" };
   }
 
-  let sendResult: { id?: string; error?: string } = {};
+  let sendResult: ProviderSendResult = {};
   let status: "delivered" | "failed" = "failed";
 
   if (channel === "sms") {
@@ -641,7 +654,9 @@ export async function SendQuickMessage({
       campaignId: campaign.id,
       recipientId: recipient?.id ?? null,
       status: sendResult.error ? "failed" : "sent",
-      errorCode: sendResult.error || null,
+      errorCode: sendResult.errorCode ?? sendResult.error ?? null,
+      fromNumber: sendResult.fromNumber ?? null,
+      messagingProfileId: sendResult.messagingProfileId ?? null,
     });
   }
 

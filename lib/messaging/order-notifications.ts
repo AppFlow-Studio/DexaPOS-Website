@@ -3,6 +3,7 @@ import "server-only";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { sendEmail } from "@/lib/messaging/resend";
 import { sendSMS } from "@/lib/messaging/telnyx";
+import { logOutboundMessage, logSmsSendResult } from "@/lib/messaging/message-log";
 import { renderReceiptHtml } from "@/lib/messaging/receipt-template";
 
 export type OrderEvent =
@@ -36,6 +37,7 @@ const DEFAULT_PREFS: NotificationPrefs = {
 interface OrderContext {
   orderId: string;
   merchantId: string;
+  customerId: string | null;
   storeName: string;
   slug: string;
   primaryColor: string;
@@ -94,7 +96,7 @@ async function loadOrderContext(orderId: string): Promise<OrderContext | null> {
     .select(
       `id, display_number, status, order_type, customer_name, customer_email, customer_phone,
        cancellation_reason, subtotal, tax_amount, tip_amount, total_amount, location_id,
-       merchant_id,
+       merchant_id, customer_id,
        order_items (item_name, quantity, subtotal)`
     )
     .eq("id", orderId)
@@ -117,6 +119,7 @@ async function loadOrderContext(orderId: string): Promise<OrderContext | null> {
     total_amount: number | string;
     location_id: string;
     merchant_id: string;
+    customer_id: string | null;
     order_items: { item_name: string; quantity: number; subtotal: number | string }[];
   };
 
@@ -157,6 +160,7 @@ async function loadOrderContext(orderId: string): Promise<OrderContext | null> {
   return {
     orderId: o.id,
     merchantId: o.merchant_id,
+    customerId: o.customer_id,
     storeName,
     slug,
     primaryColor: cfg.primary_color ?? "#111827",
@@ -193,7 +197,14 @@ async function logNotification(
   channel: "email" | "sms",
   event: OrderEvent,
   recipient: string,
-  result: { id?: string; error?: string },
+  result: {
+    id?: string;
+    error?: string;
+    errorCode?: string | null;
+    status?: string;
+    fromNumber?: string | null;
+    messagingProfileId?: string | null;
+  },
   forced?: { status: "sent" | "failed" | "skipped" }
 ) {
   const supabase = createServiceRoleClient();
@@ -215,6 +226,20 @@ async function logNotification(
     provider_id: "id" in result ? (result.id ?? null) : null,
     error: "error" in result ? (result.error ?? null) : null,
   });
+
+  if (channel === "sms" && status !== "skipped") {
+    await logOutboundMessage(supabase, {
+      merchantId: ctx.merchantId,
+      customerId: ctx.customerId,
+      toNumber: recipient,
+      body: statusCopy(event, ctx).sms,
+      telnyxMessageId: result.id ?? null,
+      status,
+      errorCode: result.errorCode ?? result.error ?? null,
+      fromNumber: result.fromNumber ?? null,
+      messagingProfileId: result.messagingProfileId ?? null,
+    });
+  }
 }
 
 function statusCopy(event: OrderEvent, ctx: OrderContext): { subject: string; headline: string; body: string; sms: string } {
@@ -479,17 +504,23 @@ export async function sendTestNotification(
   const supabase = createServiceRoleClient();
   const { data: config } = await supabase
     .from("online_store_config")
-    .select("store_name, primary_color, slug")
+    .select("store_name, primary_color, slug, merchant_id")
     .eq("id", storeConfigId)
     .single();
 
-  const cfg = (config ?? {}) as { store_name?: string; primary_color?: string; slug?: string };
+  const cfg = (config ?? {}) as {
+    store_name?: string;
+    primary_color?: string;
+    slug?: string;
+    merchant_id?: string;
+  };
   const storeName = cfg.store_name ?? "Your store";
   const slug = cfg.slug ?? "";
 
   const stubCtx: OrderContext = {
     orderId: "test",
     merchantId: "test",
+    customerId: null,
     storeName,
     slug,
     primaryColor: cfg.primary_color ?? "#111827",
@@ -525,6 +556,18 @@ export async function sendTestNotification(
       : { success: true };
   }
   const copy = statusCopy("placed", stubCtx);
+  if (!cfg.merchant_id) {
+    return { success: false, error: "Merchant could not be resolved." };
+  }
   const result = await sendSMS(to, `[TEST] ${copy.sms}`);
-  return "error" in result ? { success: false, error: result.error } : { success: true };
+  if ("error" in result) return { success: false, error: result.error };
+
+  const ledger = await logSmsSendResult(supabase, {
+    merchantId: cfg.merchant_id,
+    toNumber: to,
+    body: `[TEST] ${copy.sms}`,
+  }, result);
+  return ledger.ok
+    ? { success: true }
+    : { success: true, error: `SMS sent but ledger recording failed: ${ledger.error}` };
 }

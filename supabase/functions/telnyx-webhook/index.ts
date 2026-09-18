@@ -1,16 +1,7 @@
-// Telnyx messaging webhook — inbound/outbound message ledger writer.
-//
-// Contract (Telnyx Messaging API):
-//   * Events: message.received (inbound), message.sent (accepted by carrier),
-//     message.finalized (terminal: delivered / failed). Shape:
-//     { data: { event_type, id, occurred_at, payload, record_type }, meta }.
-//   * Security: Ed25519 signature over `${timestamp}|${rawBody}`, sent in headers
-//     `telnyx-signature-ed25519` (base64) + `telnyx-timestamp` (unix seconds),
-//     verified against the Telnyx public key. 300s timestamp tolerance blocks replays.
-//     VERIFY BEFORE PARSING — a forged/unsigned request writes nothing (4xx).
-//   * Ack: return 2xx fast or Telnyx retries (up to 3) then hits the failover URL.
-//   * Idempotency: Telnyx can redeliver — dedupe handled in record_telnyx_message
-//     (unique telnyx_message_id), so a redelivered event is a harmless no-op upsert.
+// Telnyx messaging webhook: verified inbound/outbound message ledger writer.
+// The signature covers the exact `${timestamp}|${rawBody}` bytes, so verify
+// before parsing. Message rows dedupe on provider message ID; DLQ rows dedupe
+// on provider event ID.
 
 import { createClient } from 'npm:@supabase/supabase-js'
 
@@ -18,6 +9,25 @@ const TELNYX_PUBLIC_KEY = Deno.env.get('TELNYX_PUBLIC_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const TIMESTAMP_TOLERANCE_SECONDS = 300
+const MESSAGE_EVENTS = new Set([
+  'message.received',
+  'message.sent',
+  'message.finalized',
+])
+
+interface TelnyxEnvelope {
+  data?: {
+    id?: string
+    event_type?: string
+    payload?: unknown
+  }
+  meta?: unknown
+}
+
+interface LedgerResult {
+  ok?: boolean
+  reason?: string
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -26,18 +36,13 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
-/** base64 string -> Uint8Array */
-function b64ToBytes(b64: string): Uint8Array {
+function b64ToBuffer(b64: string): ArrayBuffer {
   const bin = atob(b64)
   const bytes = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-  return bytes
+  return bytes.buffer as ArrayBuffer
 }
 
-/**
- * Verify Telnyx's Ed25519 signature over `${timestamp}|${rawBody}`.
- * Returns false on any error (missing headers, bad key, bad signature).
- */
 async function verifyTelnyxSignature(
   rawBody: string,
   signatureB64: string | null,
@@ -45,7 +50,6 @@ async function verifyTelnyxSignature(
 ): Promise<boolean> {
   if (!TELNYX_PUBLIC_KEY || !signatureB64 || !timestamp) return false
 
-  // Replay guard: reject stale timestamps.
   const ts = Number(timestamp)
   if (!Number.isFinite(ts)) return false
   const ageSeconds = Math.abs(Date.now() / 1000 - ts)
@@ -54,13 +58,18 @@ async function verifyTelnyxSignature(
   try {
     const key = await crypto.subtle.importKey(
       'raw',
-      b64ToBytes(TELNYX_PUBLIC_KEY),
+      b64ToBuffer(TELNYX_PUBLIC_KEY),
       { name: 'Ed25519' },
       false,
       ['verify'],
     )
     const signedPayload = new TextEncoder().encode(`${timestamp}|${rawBody}`)
-    return await crypto.subtle.verify('Ed25519', key, b64ToBytes(signatureB64), signedPayload)
+    return await crypto.subtle.verify(
+      'Ed25519',
+      key,
+      b64ToBuffer(signatureB64),
+      signedPayload,
+    )
   } catch (err) {
     console.error('[telnyx-webhook] signature verification threw', err)
     return false
@@ -76,45 +85,70 @@ Deno.serve(async (req) => {
     return json({ error: 'server_not_configured' }, 500)
   }
 
-  // Read the raw body BEFORE parsing — the signature covers the exact bytes.
   const rawBody = await req.text()
   const signature = req.headers.get('telnyx-signature-ed25519')
   const timestamp = req.headers.get('telnyx-timestamp')
 
-  const verified = await verifyTelnyxSignature(rawBody, signature, timestamp)
-  if (!verified) {
-    // Forged / unsigned / stale -> reject, write nothing.
+  if (!(await verifyTelnyxSignature(rawBody, signature, timestamp))) {
     return json({ error: 'invalid_signature' }, 401)
   }
 
-  let payload: unknown
+  let parsed: unknown
   try {
-    payload = JSON.parse(rawBody)
+    parsed = JSON.parse(rawBody)
   } catch {
     return json({ error: 'invalid_json' }, 400)
   }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return json({ error: 'invalid_payload' }, 400)
+  }
+  const payload = parsed as TelnyxEnvelope
 
-  const eventType =
-    (payload as { data?: { event_type?: string } })?.data?.event_type ?? 'unknown'
-
-  // Only message.* events carry a ledger-relevant payload; ack anything else.
-  if (!eventType.startsWith('message.')) {
+  const eventType = payload.data?.event_type ?? 'unknown'
+  const eventId = payload.data?.id ?? null
+  if (!MESSAGE_EVENTS.has(eventType)) {
     return json({ ok: true, ignored: eventType }, 200)
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
 
-  // Single writer: idempotent upsert + recipient rollup + STOP/START all happen
-  // inside record_telnyx_message. The RPC is a single fast statement, so we await
-  // it and surface a 500 (=> Telnyx retry, protected by idempotency) on failure.
+  async function deadLetter(errorMessage: string): Promise<boolean> {
+    const { error: dlqError } = await supabase
+      .from('webhook_dead_letter_queue')
+      .insert({
+        source: 'telnyx',
+        external_event_id: eventId,
+        event_type: eventType,
+        raw_payload: payload,
+        error_message: errorMessage,
+      })
+
+    if (!dlqError || dlqError.code === '23505') return true
+    console.error('[telnyx-webhook] DLQ write failed', {
+      code: dlqError.code,
+      message: dlqError.message,
+    })
+    return false
+  }
+
   const { data, error } = await supabase.rpc('record_telnyx_message', {
     p_payload: payload,
   })
+  const ledgerResult = data as LedgerResult | null
 
-  if (error) {
-    console.error('[telnyx-webhook] record_telnyx_message failed', error)
-    return json({ error: 'ledger_write_failed', detail: error.message }, 500)
+  if (error || ledgerResult?.ok !== true) {
+    const reason = error?.message ?? ledgerResult?.reason ?? 'ledger_write_failed'
+    const captured = await deadLetter(reason)
+    console.error('[telnyx-webhook] ledger write failed', {
+      eventId,
+      eventType,
+      captured,
+      code: error?.code,
+    })
+    return json({ error: 'ledger_write_failed', captured }, 500)
   }
 
-  return json({ ok: true, result: data }, 200)
+  return json({ ok: true, result: ledgerResult }, 200)
 })
