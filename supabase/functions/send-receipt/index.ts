@@ -305,13 +305,40 @@ serve(async (req: Request) => {
 
     const text = renderReceiptText(order as any, location, receiptUrl);
     const smsResult = await sendSMS(recipient, text);
+    const { error: ledgerError } = await sb.rpc('log_outbound_message', {
+      p_merchant_id: merchantId,
+      p_to_number: recipient,
+      p_body: text,
+      p_telnyx_message_id: smsResult.id ?? null,
+      p_channel: 'sms',
+      p_customer_id:
+        (order as { customer_id?: string | null }).customer_id ?? null,
+      p_status: 'error' in smsResult ? 'failed' : 'sent',
+      p_error_code:
+        'error' in smsResult
+          ? (smsResult.errorCode ?? smsResult.error)
+          : null,
+      p_from_number: smsResult.fromNumber ?? null,
+      p_messaging_profile_id: smsResult.messagingProfileId ?? null,
+    });
+    if (ledgerError) {
+      console.error('receipt SMS ledger write failed', {
+        code: ledgerError.code,
+        message: ledgerError.message,
+      });
+    }
 
     const newStatus = 'error' in smsResult ? 'failed' : 'sent';
     await sb
       .from('receipt_sends')
       .update({
         status: newStatus,
-        error_message: 'error' in smsResult ? smsResult.error : null,
+        error_message:
+          'error' in smsResult
+            ? smsResult.error
+            : ledgerError
+              ? `Ledger: ${ledgerError.message}`
+              : null,
       })
       .eq('id', (pendingRow as { id: string }).id);
 

@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { sendSMS as sendTelnyxSMS } from "@/lib/messaging/telnyx";
+import { logSmsSendResult } from "@/lib/messaging/message-log";
 
 const OTP_LENGTH = 6;
 const OTP_EXPIRY_MINUTES = 5;
@@ -97,6 +98,11 @@ export async function sendOtp(
   // Verification SMS = transactional → Telnyx (Twilio is reserved for marketing).
   const body = `Your ${storeName} verification code is ${code}. It expires in ${OTP_EXPIRY_MINUTES} minutes.`;
   const result = await sendTelnyxSMS(normalized, body);
+  await logSmsSendResult(supabase, {
+    merchantId,
+    toNumber: normalized,
+    body: `Your ${storeName} verification code is [REDACTED]. It expires in ${OTP_EXPIRY_MINUTES} minutes.`,
+  }, result);
 
   if ("error" in result) {
     console.error("[sendOtp] Telnyx error:", result.error);
