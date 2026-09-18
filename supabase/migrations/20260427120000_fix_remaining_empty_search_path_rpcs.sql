@@ -58,6 +58,11 @@ ALTER FUNCTION public.get_session_variance_analysis(uuid)
 ALTER FUNCTION public.get_kds_tickets_v2(uuid, text[], uuid)
   SET search_path = public;
 -- RLS helper (used inside policies — could silently break access checks)
-ALTER FUNCTION public.user_belongs_to_merchant(uuid)
-  SET search_path = public;
+DO $$
+BEGIN
+  IF to_regprocedure('public.user_belongs_to_merchant(uuid)') IS NOT NULL THEN
+    EXECUTE 'ALTER FUNCTION public.user_belongs_to_merchant(uuid) SET search_path = public';
+  END IF;
+END;
+$$;
 NOTIFY pgrst, 'reload schema';

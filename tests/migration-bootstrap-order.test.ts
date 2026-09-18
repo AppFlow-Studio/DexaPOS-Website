@@ -66,4 +66,14 @@ describe("pre-snapshot migration bootstrap ordering", () => {
       /INSERT INTO "public"\."permissions"[\s\S]+ON CONFLICT DO NOTHING;/,
     );
   });
+
+  it("guards the RLS helper altered before its creation", () => {
+    const hardeningMigration = read(
+      "supabase/migrations/20260427120000_fix_remaining_empty_search_path_rpcs.sql",
+    );
+
+    expect(hardeningMigration).toContain(
+      "to_regprocedure('public.user_belongs_to_merchant(uuid)')",
+    );
+  });
 });
