@@ -147,6 +147,80 @@ Per the ticket's four-way classification:
   severity colour on `/manage/health` + DLQ (§14.3 HQ-2); command-centre
   composition on `/manage` (HQ-3).
 
+## Family 3 audit — merchant detail workspace
+
+Spec §5 estimates "99 files, 36 card importers" and defers sub-PR boundaries to
+this audit. Measured at commit `26dad585`: **107 `.ts(x)` files** under
+`app/manage/merchants/[merchantId]/`.
+
+### Reachability
+
+Boundaries are set by what the routes actually mount, not by file count. The
+static import graph was walked from every route entry (`page`/`layout`/
+`loading`/`error`). Family 3 contains **no dynamic `import()`**, so the static
+graph is complete.
+
+| | Files | Lines |
+|---|---:|---:|
+| Reachable from a route | **51** | 19,844 |
+| Unreachable | **56** | 21,301 |
+| Total | 107 | 41,145 |
+
+**Over half of Family 3 is unreachable from any route**, including its heaviest
+files: `SettingsTab.tsx` (1,089 L / 39 `<Card`), `MenuTab/MenusTable.tsx`
+(1,233 L), `StaffTab.tsx` (789 L), `OrdersTab.tsx` (646 L), `ProductsTab.tsx`
+(464 L), the whole `components/MenuTab/` host tree, and all of
+`components/subscription/` — the live `subscriptions` tab renders
+`HqSubscriptionsWorkspace` from `components/billing/` instead, so the
+co-located `subscription/` folder is a superseded duplicate.
+
+**Disposition: unreachable — no conversion.** Restyling pages no user can open
+spends review budget with no user-visible result, and deleting them is not a
+presentation change (§7). They are excluded from Family 3 and recorded for a
+separate cleanup ticket. Regenerate the list with `node scripts/hq-reachability.js`.
+
+### Live tab structure
+
+`app/manage/merchants/[merchantId]/page.tsx` is a tab host: a `NavItem` sidebar
+driving **16 tabs** via `activeTab` state (not Radix `Tabs`, and not URL-backed —
+so there are no per-tab deep links to preserve). Tabs map to:
+
+| Tab | Renders | Weight |
+|---|---|---|
+| `overview` | `OnboardingStatusCard` + `OverviewTab` | 52 `<Card` |
+| `business-info` | `BusinessInfoTab` → `AdminLocationDetailSheet` | 62 `<Card`, 13 `<Table` |
+| `notes` | `NotesTab` | 8 `<Card` |
+| `audit` | `AuditLogsTab` | 3 `<Card`, 31 `<Table` |
+| `mids` / `valor-boarding` | `MidsSection`, `ValorBoardingSection` | table-led |
+| `settlements` | `SettlementsSection` → 3 Luqra tables | 89 `<Table` |
+| `disputes` | `DisputesSection` | 29 `<Table` |
+| `billing` | `BillingTab` → `PaymentsTable` | 31 `<Table` |
+| `platform-billing` | `PlatformBillingTab` | 2 `<Card`, 17 `<Table` |
+| `subscriptions` | `HqSubscriptionsWorkspace` (**outside Family 3**) | — |
+| `online-store` | `OnlineStoreTab` | **106 `<Card`** |
+| `support` | `SupportTicketsSection` | — |
+| `devices` | `DevicesTab` → `ConnectedTerminalsPanel` | 19 `<Card`, 59 `<Table` |
+| `locations` | `LocationsSection` | — |
+
+23 of the 51 live files carry conversion work: **338 `<Card`, 453 `<Table`**.
+
+### Sub-PR boundaries
+
+Split by tab group, so each PR is one reviewable surface:
+
+| Sub-PR | Scope | Weight |
+|---|---|---:|
+| **3a** | Tab host shell + header + `overview` (`page.tsx`, `OnboardingStatusCard`, `OverviewTab`, `MerchantHeaderBar`) | 54 `<Card` |
+| **3b** | `business-info` (`BusinessInfoTab`, `AdminLocationDetailSheet`, `AddStationDialog`) | 62 `<Card` |
+| **3c** | `online-store` (`OnlineStoreTab` alone) | 106 `<Card` |
+| **3d** | Money tabs: `settlements`, `disputes`, `billing`, `platform-billing` | 2 `<Card`, 166 `<Table` |
+| **3e** | `devices` + device detail routes (`DevicesTab`, `ConnectedTerminalsPanel`, `[device_id]`, terminal `[serial]`) | 43 `<Card`, 189 `<Table` |
+| **3f** | `menu/[menuId]` route (`page.tsx`, `AdminMenuOrderOutTab`, `AdminPriceBreakdown`) | 60 `<Card`, 40 `<Table` |
+| **3g** | `notes` + `audit` (`NotesTab`, `AuditLogsTab`) | 11 `<Card`, 31 `<Table` |
+
+`orders/[orderId]`, `locations/new` and `billing/page.tsx` are thin wrappers
+(≤51 L, 0 cards) — folded into the nearest sub-PR as shell/header only.
+
 ## Regeneration
 
 ```bash

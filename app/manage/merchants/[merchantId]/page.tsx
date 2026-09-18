@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { DataPageSkeleton } from '@/components/dashboard/loading/DataPageSkeleton'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageShell } from '@/components/dashboard/shell/PageShell'
+import { Panel } from '@/components/dashboard/shell/Panel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -188,7 +189,7 @@ export default function MerchantDetailsPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <PageShell as="div">
             <div className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
                 <Link href="/manage/merchants" className="hover:underline">
                     Merchants
@@ -228,184 +229,182 @@ export default function MerchantDetailsPage() {
                 onOpenChange={setCloverImportOpen}
             />
 
-            <Card>
-                <CardContent className="pt-6">
-                    {/* Mobile: horizontal scrollable tab strip */}
-                    <div className="md:hidden mb-4 -mx-1 overflow-x-auto">
-                        <div className="flex gap-1 px-1 min-w-max">
-                            {([
-                                { value: 'overview', icon: LayoutDashboard, label: 'Overview' },
-                                { value: 'business-info', icon: Building2, label: 'Business' },
-                                { value: 'notes', icon: StickyNote, label: 'Notes' },
-                                { value: 'audit', icon: History, label: 'Audit' },
-                                { value: 'mids', icon: CreditCard, label: 'MIDs' },
-                                { value: 'valor-boarding', icon: CreditCard, label: 'Valor' },
-                                { value: 'settlements', icon: Banknote, label: 'Settlements' },
-                                { value: 'disputes', icon: ShieldCheck, label: 'Disputes' },
-                                { value: 'billing', icon: Receipt, label: 'Billing' },
-                                { value: 'platform-billing', icon: FileText, label: 'Platform Billing' },
-                                ...(canManageBilling ? [{ value: 'subscriptions', icon: CircleDollarSign, label: 'Subscriptions' }] : []),
-                                { value: 'online-store', icon: Globe, label: 'Online Store' },
-                                { value: 'support', icon: LifeBuoy, label: 'Support' },
-                                ...(canManageDevices ? [{ value: 'devices', icon: Monitor, label: 'Devices' }] : []),
-                                { value: 'locations', icon: MapPin, label: 'Locations' },
-                            ] as Array<{ value: SectionKey; icon: React.ElementType; label: string }>).map(({ value, icon: Icon, label }) => (
-                                <button
-                                    key={value}
-                                    onClick={() => setActiveTab(value)}
-                                    className={cn(
-                                        'flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs transition-colors',
-                                        activeTab === value
-                                            ? 'bg-primary/10 font-medium text-primary'
-                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                                    )}
-                                >
-                                    <Icon className="h-3.5 w-3.5 shrink-0" />
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="flex gap-6">
-                        {/* Desktop: vertical sidebar nav */}
-                        <nav className="hidden md:block w-[200px] shrink-0 space-y-5 sticky top-7 self-start">
-                            <NavGroup label="Account">
-                                <NavItem value="overview" icon={LayoutDashboard} active={activeTab === 'overview'} onClick={setActiveTab}>
-                                    Overview
-                                </NavItem>
-                                <NavItem value="business-info" icon={Building2} active={activeTab === 'business-info'} onClick={setActiveTab}>
-                                    Business
-                                </NavItem>
-                                <NavItem value="notes" icon={StickyNote} active={activeTab === 'notes'} onClick={setActiveTab}>
-                                    Notes
-                                </NavItem>
-                                <NavItem value="audit" icon={History} active={activeTab === 'audit'} onClick={setActiveTab}>
-                                    Audit
-                                </NavItem>
-                            </NavGroup>
-
-                            <NavGroup label="Processing">
-                                <NavItem value="mids" icon={CreditCard} active={activeTab === 'mids'} onClick={setActiveTab}>
-                                    MIDs
-                                </NavItem>
-                                <NavItem value="valor-boarding" icon={CreditCard} active={activeTab === 'valor-boarding'} onClick={setActiveTab}>
-                                    Valor Boarding
-                                </NavItem>
-                                <NavItem value="settlements" icon={Banknote} active={activeTab === 'settlements'} onClick={setActiveTab}>
-                                    Settlements
-                                </NavItem>
-                                <NavItem value="disputes" icon={ShieldCheck} active={activeTab === 'disputes'} onClick={setActiveTab}>
-                                    Disputes
-                                </NavItem>
-                                <NavItem value="billing" icon={Receipt} active={activeTab === 'billing'} onClick={setActiveTab}>
-                                    Billing
-                                </NavItem>
-                                <NavItem value="platform-billing" icon={FileText} active={activeTab === 'platform-billing'} onClick={setActiveTab}>
-                                    Platform Billing
-                                </NavItem>
-                                {canManageBilling && (
-                                    <NavItem value="subscriptions" icon={CircleDollarSign} active={activeTab === 'subscriptions'} onClick={setActiveTab}>
-                                        Subscriptions
-                                    </NavItem>
+            <Panel className="px-4 py-6 sm:px-6">
+                {/* Mobile: horizontal scrollable tab strip */}
+                <div className="md:hidden mb-4 -mx-1 overflow-x-auto">
+                    <div className="flex gap-1 px-1 min-w-max">
+                        {([
+                            { value: 'overview', icon: LayoutDashboard, label: 'Overview' },
+                            { value: 'business-info', icon: Building2, label: 'Business' },
+                            { value: 'notes', icon: StickyNote, label: 'Notes' },
+                            { value: 'audit', icon: History, label: 'Audit' },
+                            { value: 'mids', icon: CreditCard, label: 'MIDs' },
+                            { value: 'valor-boarding', icon: CreditCard, label: 'Valor' },
+                            { value: 'settlements', icon: Banknote, label: 'Settlements' },
+                            { value: 'disputes', icon: ShieldCheck, label: 'Disputes' },
+                            { value: 'billing', icon: Receipt, label: 'Billing' },
+                            { value: 'platform-billing', icon: FileText, label: 'Platform Billing' },
+                            ...(canManageBilling ? [{ value: 'subscriptions', icon: CircleDollarSign, label: 'Subscriptions' }] : []),
+                            { value: 'online-store', icon: Globe, label: 'Online Store' },
+                            { value: 'support', icon: LifeBuoy, label: 'Support' },
+                            ...(canManageDevices ? [{ value: 'devices', icon: Monitor, label: 'Devices' }] : []),
+                            { value: 'locations', icon: MapPin, label: 'Locations' },
+                        ] as Array<{ value: SectionKey; icon: React.ElementType; label: string }>).map(({ value, icon: Icon, label }) => (
+                            <button
+                                key={value}
+                                onClick={() => setActiveTab(value)}
+                                className={cn(
+                                    'flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs transition-colors',
+                                    activeTab === value
+                                        ? 'bg-primary/10 font-medium text-primary'
+                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                                 )}
-                            </NavGroup>
-
-                            <NavGroup label="Operations">
-                                <NavItem value="online-store" icon={Globe} active={activeTab === 'online-store'} onClick={setActiveTab}>
-                                    Online Store
-                                </NavItem>
-                                <NavItem value="support" icon={LifeBuoy} active={activeTab === 'support'} onClick={setActiveTab}>
-                                    Support
-                                </NavItem>
-                                {canManageDevices && (
-                                    <NavItem value="devices" icon={Monitor} active={activeTab === 'devices'} onClick={setActiveTab}>
-                                        Devices
-                                    </NavItem>
-                                )}
-                                <NavItem value="locations" icon={MapPin} active={activeTab === 'locations'} onClick={setActiveTab}>
-                                    Locations
-                                </NavItem>
-                            </NavGroup>
-                        </nav>
-
-                        <div className="min-w-0 flex-1 md:border-l md:pl-6">
-                            {activeTab === 'overview' && (
-                                <div className="space-y-6">
-                                    <OnboardingStatusCard merchant={merchantDetails} />
-                                    <OverviewTab merchantInfo={merchantDetails} />
-                                </div>
-                            )}
-
-                            {activeTab === 'business-info' && (
-                                <BusinessInfoTab merchantInfo={merchantDetails} />
-                            )}
-
-                            {activeTab === 'notes' && <NotesTab merchantId={merchantDetails.id} />}
-
-                            {activeTab === 'audit' && (
-                                <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
-                            )}
-
-                            {activeTab === 'mids' && <MidsSection merchantId={merchantDetails.id} />}
-
-                            {activeTab === 'valor-boarding' && <ValorBoardingSection merchantId={merchantDetails.id} />}
-
-                            {activeTab === 'settlements' && (
-                                <SettlementsSection merchantId={merchantDetails.id} />
-                            )}
-
-                            {activeTab === 'disputes' && (
-                                <DisputesSection merchantId={merchantDetails.id} />
-                            )}
-
-                            {activeTab === 'billing' && (
-                                <BillingTab
-                                    merchantId={merchantDetails.id}
-                                    merchantName={merchantDetails.name}
-                                    canEdit={canManageMerchantStatus}
-                                    locations={merchantDetails.locations}
-                                />
-                            )}
-
-                            {activeTab === 'platform-billing' && (
-                                <PlatformBillingTab
-                                    merchantId={merchantDetails.id}
-                                    locations={merchantDetails.locations}
-                                />
-                            )}
-
-                            {activeTab === 'subscriptions' && canManageBilling && (
-                                <HqSubscriptionsWorkspace
-                                    merchant={merchantDetails}
-                                    canManageBilling={canManageBilling}
-                                />
-                            )}
-
-                            {activeTab === 'online-store' && (
-                                <OnlineStoreTab
-                                    merchantId={merchantDetails.id}
-                                    merchantName={merchantDetails.name}
-                                    locations={merchantDetails.locations}
-                                    locationsLoading={false}
-                                />
-                            )}
-
-                            {activeTab === 'support' && (
-                                <SupportTicketsSection merchantId={merchantDetails.id} />
-                            )}
-
-                            {canManageDevices && activeTab === 'devices' && (
-                                <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
-                            )}
-
-                            {activeTab === 'locations' && (
-                                <LocationsSection locations={merchantDetails.locations} />
-                            )}
-                        </div>
+                            >
+                                <Icon className="h-3.5 w-3.5 shrink-0" />
+                                {label}
+                            </button>
+                        ))}
                     </div>
-                </CardContent>
-            </Card>
-        </div>
+                </div>
+
+                <div className="flex gap-6">
+                    {/* Desktop: vertical sidebar nav */}
+                    <nav className="hidden md:block w-[200px] shrink-0 space-y-5 sticky top-7 self-start">
+                        <NavGroup label="Account">
+                            <NavItem value="overview" icon={LayoutDashboard} active={activeTab === 'overview'} onClick={setActiveTab}>
+                                Overview
+                            </NavItem>
+                            <NavItem value="business-info" icon={Building2} active={activeTab === 'business-info'} onClick={setActiveTab}>
+                                Business
+                            </NavItem>
+                            <NavItem value="notes" icon={StickyNote} active={activeTab === 'notes'} onClick={setActiveTab}>
+                                Notes
+                            </NavItem>
+                            <NavItem value="audit" icon={History} active={activeTab === 'audit'} onClick={setActiveTab}>
+                                Audit
+                            </NavItem>
+                        </NavGroup>
+
+                        <NavGroup label="Processing">
+                            <NavItem value="mids" icon={CreditCard} active={activeTab === 'mids'} onClick={setActiveTab}>
+                                MIDs
+                            </NavItem>
+                            <NavItem value="valor-boarding" icon={CreditCard} active={activeTab === 'valor-boarding'} onClick={setActiveTab}>
+                                Valor Boarding
+                            </NavItem>
+                            <NavItem value="settlements" icon={Banknote} active={activeTab === 'settlements'} onClick={setActiveTab}>
+                                Settlements
+                            </NavItem>
+                            <NavItem value="disputes" icon={ShieldCheck} active={activeTab === 'disputes'} onClick={setActiveTab}>
+                                Disputes
+                            </NavItem>
+                            <NavItem value="billing" icon={Receipt} active={activeTab === 'billing'} onClick={setActiveTab}>
+                                Billing
+                            </NavItem>
+                            <NavItem value="platform-billing" icon={FileText} active={activeTab === 'platform-billing'} onClick={setActiveTab}>
+                                Platform Billing
+                            </NavItem>
+                            {canManageBilling && (
+                                <NavItem value="subscriptions" icon={CircleDollarSign} active={activeTab === 'subscriptions'} onClick={setActiveTab}>
+                                    Subscriptions
+                                </NavItem>
+                            )}
+                        </NavGroup>
+
+                        <NavGroup label="Operations">
+                            <NavItem value="online-store" icon={Globe} active={activeTab === 'online-store'} onClick={setActiveTab}>
+                                Online Store
+                            </NavItem>
+                            <NavItem value="support" icon={LifeBuoy} active={activeTab === 'support'} onClick={setActiveTab}>
+                                Support
+                            </NavItem>
+                            {canManageDevices && (
+                                <NavItem value="devices" icon={Monitor} active={activeTab === 'devices'} onClick={setActiveTab}>
+                                    Devices
+                                </NavItem>
+                            )}
+                            <NavItem value="locations" icon={MapPin} active={activeTab === 'locations'} onClick={setActiveTab}>
+                                Locations
+                            </NavItem>
+                        </NavGroup>
+                    </nav>
+
+                    <div className="min-w-0 flex-1 md:border-l md:pl-6">
+                        {activeTab === 'overview' && (
+                            <div className="space-y-6">
+                                <OnboardingStatusCard merchant={merchantDetails} />
+                                <OverviewTab merchantInfo={merchantDetails} />
+                            </div>
+                        )}
+
+                        {activeTab === 'business-info' && (
+                            <BusinessInfoTab merchantInfo={merchantDetails} />
+                        )}
+
+                        {activeTab === 'notes' && <NotesTab merchantId={merchantDetails.id} />}
+
+                        {activeTab === 'audit' && (
+                            <AuditLogsTab merchantInfo={merchantDetails as unknown as MerchantInfoModel} />
+                        )}
+
+                        {activeTab === 'mids' && <MidsSection merchantId={merchantDetails.id} />}
+
+                        {activeTab === 'valor-boarding' && <ValorBoardingSection merchantId={merchantDetails.id} />}
+
+                        {activeTab === 'settlements' && (
+                            <SettlementsSection merchantId={merchantDetails.id} />
+                        )}
+
+                        {activeTab === 'disputes' && (
+                            <DisputesSection merchantId={merchantDetails.id} />
+                        )}
+
+                        {activeTab === 'billing' && (
+                            <BillingTab
+                                merchantId={merchantDetails.id}
+                                merchantName={merchantDetails.name}
+                                canEdit={canManageMerchantStatus}
+                                locations={merchantDetails.locations}
+                            />
+                        )}
+
+                        {activeTab === 'platform-billing' && (
+                            <PlatformBillingTab
+                                merchantId={merchantDetails.id}
+                                locations={merchantDetails.locations}
+                            />
+                        )}
+
+                        {activeTab === 'subscriptions' && canManageBilling && (
+                            <HqSubscriptionsWorkspace
+                                merchant={merchantDetails}
+                                canManageBilling={canManageBilling}
+                            />
+                        )}
+
+                        {activeTab === 'online-store' && (
+                            <OnlineStoreTab
+                                merchantId={merchantDetails.id}
+                                merchantName={merchantDetails.name}
+                                locations={merchantDetails.locations}
+                                locationsLoading={false}
+                            />
+                        )}
+
+                        {activeTab === 'support' && (
+                            <SupportTicketsSection merchantId={merchantDetails.id} />
+                        )}
+
+                        {canManageDevices && activeTab === 'devices' && (
+                            <DevicesTab merchantId={merchantDetails.id} merchantInfo={merchantDetails} />
+                        )}
+
+                        {activeTab === 'locations' && (
+                            <LocationsSection locations={merchantDetails.locations} />
+                        )}
+                    </div>
+                </div>
+            </Panel>
+        </PageShell>
     )
 }

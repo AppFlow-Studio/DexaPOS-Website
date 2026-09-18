@@ -1,7 +1,9 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel, PanelGrid } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
 import {
     DollarSign,
     ShoppingCart,
@@ -130,99 +132,75 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
             {/* Main KPIs */}
-            <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Net Sales (30d)</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                        {growth !== 0 && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
-                                {growth > 0 ? <ArrowUpRight className="h-3 w-3 text-green-600" /> : <ArrowDownRight className="h-3 w-3 text-red-600" />}
-                                <span className={growth > 0 ? "text-green-600" : "text-red-600"}>{growth > 0 ? '+' : ''}{growth.toFixed(1)}%</span> from previous
-                            </p>
-                        )}
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Total Orders (30d)</CardTitle>
-                        <ShoppingCart className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{totalOrders.toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Captured orders</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Avg. Order Value</CardTitle>
-                        <Target className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">${avgOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                         <p className="text-xs text-muted-foreground">Per transaction</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Refunds (30d)</CardTitle>
-                        <TrendingDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-red-600">${(financialKPIs?.summary?.refunds_total || 0).toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Total refunded</p>
-                    </CardContent>
-                </Card>
-            </div>
+            <Panel>
+                <PanelSection label="Last 30 days">
+                    <StatRow columns={4} className="mt-6">
+                        <StatTile
+                            label="Net Sales"
+                            icon={<DollarSign />}
+                            value={`$${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            meta={
+                                growth !== 0 ? (
+                                    <span className="flex flex-wrap items-center gap-1">
+                                        {growth > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                                        {growth > 0 ? '+' : ''}{growth.toFixed(1)}% from previous
+                                    </span>
+                                ) : undefined
+                            }
+                        />
+                        <StatTile
+                            label="Total Orders"
+                            icon={<ShoppingCart />}
+                            value={totalOrders.toLocaleString()}
+                            meta="Captured orders"
+                        />
+                        <StatTile
+                            label="Avg. Order Value"
+                            icon={<Target />}
+                            value={`$${avgOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            meta="Per transaction"
+                        />
+                        <StatTile
+                            label="Refunds"
+                            icon={<TrendingDown />}
+                            value={`$${(financialKPIs?.summary?.refunds_total || 0).toLocaleString()}`}
+                            meta="Total refunded"
+                        />
+                    </StatRow>
+                </PanelSection>
 
-            {/* Additional KPIs - Today's Snapshot */}
-            <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
-                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Revenue Today</CardTitle>
-                        <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">${(todaySummary?.netSales || 0).toLocaleString()}</div>
-                         <p className="text-xs text-muted-foreground">Net sales for today</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Tips Collected</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">${(todaySummary?.totalTips || 0).toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Tips for today</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium min-w-0 mr-2">Tax Collected</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">${(todaySummary?.totalTax || 0).toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Tax for today</p>
-                    </CardContent>
-                </Card>
-            </div>
+                {/* Additional KPIs - Today's Snapshot */}
+                <PanelSection label="Today" divider>
+                    <StatRow columns={3} className="mt-6">
+                        <StatTile
+                            label="Revenue Today"
+                            icon={<Activity />}
+                            value={`$${(todaySummary?.netSales || 0).toLocaleString()}`}
+                            meta="Net sales for today"
+                        />
+                        <StatTile
+                            label="Tips Collected"
+                            icon={<TrendingUp />}
+                            value={`$${(todaySummary?.totalTips || 0).toLocaleString()}`}
+                            meta="Tips for today"
+                        />
+                        <StatTile
+                            label="Tax Collected"
+                            icon={<DollarSign />}
+                            value={`$${(todaySummary?.totalTax || 0).toLocaleString()}`}
+                            meta="Tax for today"
+                        />
+                    </StatRow>
+                </PanelSection>
+            </Panel>
 
             {/* Charts Section */}
-            <div className="grid gap-4 md:grid-cols-2">
+            <PanelGrid columns={2}>
                 {/* Sales Trend Chart */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Sales Trend (30 Days)</CardTitle>
-                        <CardDescription>Daily sales performance</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                <Panel>
+                    <PanelSection label="Sales Trend (30 Days)" caption="Daily sales performance">
                         {salesTrendData.length > 0 ? (
                             <ChartContainer config={chartConfig} className="h-75 w-full">
                                 <AreaChart data={salesTrendData}>
@@ -242,16 +220,12 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                         ) : (
                             <div className="flex items-center justify-center h-75 text-muted-foreground">No data available</div>
                         )}
-                    </CardContent>
-                </Card>
+                    </PanelSection>
+                </Panel>
 
                 {/* Order Types */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Order Sources</CardTitle>
-                        <CardDescription>Distribution by order type</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                <Panel>
+                    <PanelSection label="Order Sources" caption="Distribution by order type">
                         {orderTypeData.length > 0 ? (
                              <ChartContainer config={chartConfig} className="h-75 w-full">
                                 <PieChart>
@@ -282,29 +256,27 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                                 </div>
                             ))}
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
+                    </PanelSection>
+                </Panel>
+            </PanelGrid>
 
             {/* Bottom Section: Business Info and Recent Activity */}
-            <div className="grid gap-4 md:grid-cols-2">
+            <PanelGrid columns={2}>
                 {/* Business Information — compact summary; full details + editing on the Business Info tab */}
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-start justify-between gap-2">
-                            <div>
-                                <CardTitle className="text-lg">Business Information</CardTitle>
-                                <CardDescription>Merchant business details and contact</CardDescription>
-                            </div>
-                            <Button variant="ghost" size="sm" asChild className="shrink-0">
+                <Panel>
+                    <PanelSection
+                        label="Business Information"
+                        caption="Merchant business details and contact"
+                        action={
+                            <Button variant="ghost" size="sm" asChild>
                                 <Link href={`/manage/merchants/${merchantId}?tab=business-info`}>
                                     Manage
                                     <ArrowUpRight className="h-4 w-4 ml-1" />
                                 </Link>
                             </Button>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
+                        }
+                    >
+                        <div className="mt-4 space-y-4">
                         <div className="flex items-center gap-3">
                             <Store className="h-4 w-4 text-muted-foreground" />
                             <div className="min-w-0">
@@ -343,17 +315,14 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                                 <div className="text-sm text-muted-foreground">{locationSummary || 'Not provided'}</div>
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
+                        </div>
+                    </PanelSection>
+                </Panel>
 
                 {/* Recent Activity */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-lg">Recent Orders</CardTitle>
-                        <CardDescription>Latest transactions</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
+                <Panel>
+                    <PanelSection label="Recent Orders" caption="Latest transactions">
+                        <div className="mt-4 space-y-4">
                             {recentOrders && recentOrders.length > 0 ? recentOrders.map((order: any) => (
                                 <div key={order.id} className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
                                     <div className="flex items-center gap-3">
@@ -374,9 +343,9 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                                 <p className="text-muted-foreground text-sm">No recent orders found.</p>
                             )}
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
+                    </PanelSection>
+                </Panel>
+            </PanelGrid>
         </div>
     )
 }
