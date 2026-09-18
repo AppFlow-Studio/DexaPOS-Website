@@ -7,9 +7,14 @@ export const MERCHANT_ASSET_CATEGORIES = [
   "documents",
   "website",
   "kiosk",
+  "support",
 ] as const;
 
-export const ORGANIZATION_ASSET_CATEGORIES = ["logos", "documents"] as const;
+export const ORGANIZATION_ASSET_CATEGORIES = [
+  "logos",
+  "documents",
+  "support",
+] as const;
 
 export type MerchantAssetCategory = (typeof MERCHANT_ASSET_CATEGORIES)[number];
 export type OrganizationAssetCategory = (typeof ORGANIZATION_ASSET_CATEGORIES)[number];

@@ -15,6 +15,7 @@ import { normalizePageWithReport } from "@/lib/site-builder/normalize";
 import type { PageDocument } from "@/lib/site-builder/page-document";
 import { validatePage } from "@/lib/site-builder/validate";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { assertMerchantOwner } from "./owner-guard";
 
 /**
  * Publishing.
@@ -75,6 +76,9 @@ export async function PublishPage(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const { data: pageData, error: pageError } = await supabase
     .from("site_pages")
@@ -426,6 +430,9 @@ export async function UnpublishPage(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const { data: pageData, error: pageError } = await supabase
     .from("site_pages")

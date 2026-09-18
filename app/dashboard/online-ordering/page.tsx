@@ -9,6 +9,7 @@ import {
 } from "./hooks/useOnlineOrderingSettings";
 import { useGatedLocationId, useGatedLocation, useHasLocations } from "@/stores/location-store";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
+import { FeaturePaywall } from "@/components/billing/FeaturePaywall";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -1043,6 +1044,33 @@ function CompletedSetupPanel({
                 disabled={isSaving}
               />
 
+              {/* Window to accept orders — only meaningful when auto-accept is off,
+                  since auto-accepted orders never sit in "pending". */}
+              <div className="space-y-2">
+                <Label>Accept window</Label>
+                <Select
+                  value={String(settings.pendingAcceptWindowMinutes ?? 5)}
+                  onValueChange={(v) => onUpdate({ pendingAcceptWindowMinutes: Number(v) })}
+                  disabled={isSaving || settings.autoAcceptOrders}
+                >
+                  <SelectTrigger className="w-full sm:w-56">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 minute</SelectItem>
+                    <SelectItem value="2">2 minutes</SelectItem>
+                    <SelectItem value="3">3 minutes</SelectItem>
+                    <SelectItem value="5">5 minutes</SelectItem>
+                    <SelectItem value="10">10 minutes</SelectItem>
+                    <SelectItem value="15">15 minutes</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  How long a new order waits for staff to accept it before the customer&apos;s order
+                  auto-cancels. Only applies when auto-accept is off.
+                </p>
+              </div>
+
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
                   <Label>Prep Time (minutes)</Label>
@@ -1287,17 +1315,29 @@ function CompletedSetupPanel({
                   </PanelSection>
                 </Panel>
               ) : (
-                <OrderOutTab
-                  clerkOrgId={orgId}
+                <FeaturePaywall
+                  serviceCode="orderout"
                   locationId={selectedLocationId}
-                  orderOutStatus={(orderOutStatusResult as any)?.data ?? null}
-                  showOnboardingForm={showOrderOutForm}
-                  onShowOnboardingForm={setShowOrderOutForm}
-                  onboardMutation={onboardMutation}
-                  merchantName={orgSlug || "Merchant"}
-                  locationName={locationName}
-                  locationDefaults={locationDefaults as any}
-                />
+                  clerkOrgId={orgId}
+                  title="Orderout"
+                  description="Connect delivery channels such as Uber Eats, DoorDash, and Grubhub, with menu sync and consolidated orders."
+                  grandfathered={Boolean(
+                    (orderOutStatusResult as any)?.data?.hasAccount ||
+                    (orderOutStatusResult as any)?.data?.hasRestaurant
+                  )}
+                >
+                  <OrderOutTab
+                    clerkOrgId={orgId}
+                    locationId={selectedLocationId}
+                    orderOutStatus={(orderOutStatusResult as any)?.data ?? null}
+                    showOnboardingForm={showOrderOutForm}
+                    onShowOnboardingForm={setShowOrderOutForm}
+                    onboardMutation={onboardMutation}
+                    merchantName={orgSlug || "Merchant"}
+                    locationName={locationName}
+                    locationDefaults={locationDefaults as any}
+                  />
+                </FeaturePaywall>
               )}
           </div>
         </TabsContent>
@@ -1332,6 +1372,7 @@ export default function OnlineOrderingPage() {
   const selectedLocationId = gatedLocationId ?? "all";
   const selectedLocation = useGatedLocation();
   const isAllLocations = !gatedLocationId;
+  const paywallOrgId = useClerkOrgId();
   // Distinguishes "the store has not populated yet" from "this account really
   // has no location to show" — see the guard further down.
   const hasLocations = useHasLocations();
@@ -1509,13 +1550,22 @@ export default function OnlineOrderingPage() {
             </div>
           }
         />
-        <StatusCard
-          status={status}
-          settings={currentSettings}
-          locationName={selectedLocation.name}
-          onRequestSetup={() => handleRequestSetup(selectedLocationId)}
-          isLoading={isSaving || requirementsSaving}
-        />
+        <FeaturePaywall
+          serviceCode="online_ordering"
+          locationId={selectedLocationId}
+          clerkOrgId={paywallOrgId}
+          title="Online Ordering"
+          description="Launch a branded online-ordering website for this location so guests can order directly for pickup and delivery."
+          grandfathered={status !== "not_requested"}
+        >
+          <StatusCard
+            status={status}
+            settings={currentSettings}
+            locationName={selectedLocation.name}
+            onRequestSetup={() => handleRequestSetup(selectedLocationId)}
+            isLoading={isSaving || requirementsSaving}
+          />
+        </FeaturePaywall>
 
         <Dialog open={requirementsOpen} onOpenChange={setRequirementsOpen}>
           <DialogContent className="max-w-2xl">

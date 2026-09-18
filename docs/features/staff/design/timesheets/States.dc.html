@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #0C4FD1; text-decoration: none; } a:hover { color: #0a3fa8; }
+    .theme {
+      --bg: oklch(0.9842 0.0034 247.8575);
+      --fg: oklch(0.2795 0.0368 260.0310);
+      --card: #ffffff;
+      --muted: oklch(0.9670 0.0029 264.5419);
+      --muted-fg: oklch(0.5510 0.0234 264.3637);
+      --border: oklch(0.8717 0.0093 258.3382);
+      --brand: #0C4FD1;
+      --m20: color-mix(in oklch, var(--muted) 20%, transparent);
+      --m30: color-mix(in oklch, var(--muted) 30%, transparent);
+      --m50: color-mix(in oklch, var(--muted) 50%, transparent);
+      --m60: color-mix(in oklch, var(--muted) 60%, transparent);
+      --m70: color-mix(in oklch, var(--muted) 70%, transparent);
+      --card70: color-mix(in oklch, var(--card) 70%, transparent);
+      font-family: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--fg); background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    .theme.dark {
+      --bg: #16181d; --fg: oklch(0.9288 0.0126 255.5078); --card: #1c1f26;
+      --muted: oklch(0.2427 0.0381 259.9437); --muted-fg: oklch(0.7137 0.0192 261.3246);
+      --border: oklch(0.4461 0.0263 256.8018); --brand: #6CA0FF;
+    }
+    .ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    .num { font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div class="theme {{themeClass}}" style="width: 1184px; min-height: 900px; padding: 24px; box-sizing: border-box; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start;">
+
+  <!-- 1. Loading -->
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <p style="margin: 0; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Loading · first visit</p>
+    <div style="border: 1px solid var(--border); background: var(--card); border-radius: 24px; padding: 32px 24px;">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; color: var(--brand);">Hours by team member</div>
+      <div style="margin-top: 20px; border-radius: 16px; background: var(--m20); overflow: hidden;">
+        <div style="height: 44px; background: var(--m50);"></div>
+        <sc-for list="{{skeleton}}" as="s" hint-placeholder-count="6">
+          <div style="display: grid; grid-template-columns: 150px repeat(4, minmax(0, 1fr)); gap: 16px; align-items: center; padding: 16px 12px; background: var(--card70);">
+            <div style="display: flex; align-items: center; gap: 10px;"><div style="width: 32px; height: 32px; border-radius: 9999px; background: var(--m70);"></div><div style="height: 12px; width: 80px; border-radius: 9999px; background: var(--m70);"></div></div>
+            <div style="height: 12px; border-radius: 9999px; background: var(--m70);"></div>
+            <div style="height: 12px; border-radius: 9999px; background: var(--m70);"></div>
+            <div style="height: 12px; border-radius: 9999px; background: var(--m70);"></div>
+            <div style="height: 12px; border-radius: 9999px; background: var(--m70);"></div>
+          </div>
+        </sc-for>
+      </div>
+      <p style="margin: 12px 0 0; font-size: 13px; color: var(--muted-fg);">When stepping between weeks, the previous week stays on screen, slightly faded, until the new one arrives.</p>
+    </div>
+  </div>
+
+  <!-- 2. Empty: nobody at this location -->
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <p style="margin: 0; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Empty · no team members at this location</p>
+    <div style="border: 1px solid var(--border); background: var(--card); border-radius: 24px; padding: 32px 24px;">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; color: var(--brand);">Hours by team member</div>
+      <div style="margin-top: 20px; min-height: 300px; border-radius: 16px; background: var(--m30); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 24px;">
+        <div style="width: 48px; height: 48px; border-radius: 9999px; background: var(--m60); color: var(--muted-fg); display: flex; align-items: center; justify-content: center;"><svg class="ic" viewBox="0 0 24 24" style="width: 20px; height: 20px;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
+        <div>
+          <p style="margin: 0; font-size: 15px; font-weight: 500;">No one works at Uptown Branch yet</p>
+          <p style="margin: 4px 0 0; font-size: 14px; color: var(--muted-fg);">Add team members from Staff and their hours will show here once they clock in.</p>
+        </div>
+        <div style="height: 36px; display: inline-flex; align-items: center; padding: 0 16px; border-radius: 9999px; border: 1px solid var(--border); background: var(--bg); font-size: 13px; font-weight: 500;">Go to Staff</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Nothing needs review -->
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <p style="margin: 0; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Toolbar · nothing needs review</p>
+    <div style="border: 1px solid var(--border); background: var(--card); border-radius: 24px; padding: 24px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <div style="position: relative; width: 240px;">
+          <svg class="ic" viewBox="0 0 24 24" style="position: absolute; left: 14px; top: 12px; color: var(--muted-fg); opacity: 0.5;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+          <div style="height: 40px; border-radius: 9999px; background: var(--m60); padding-left: 40px; display: flex; align-items: center; font-size: 14px; color: var(--muted-fg);">Search team members…</div>
+        </div>
+        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted-fg);"><svg class="ic" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></svg>Nothing needs review this week</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Export menu -->
+  <div style="display: flex; flex-direction: column; gap: 12px;">
+    <p style="margin: 0; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Export menu · open</p>
+    <div style="border: 1px solid var(--border); background: var(--card); border-radius: 24px; padding: 24px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-height: 180px;">
+      <div style="height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 16px; border-radius: 9999px; border: 1px solid var(--border); background: var(--bg); font-size: 13px; font-weight: 500;">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg>Export
+        <svg class="ic" viewBox="0 0 24 24" style="width: 14px; height: 14px; color: var(--muted-fg);"><path d="m6 9 6 6 6-6"></path></svg>
+      </div>
+      <div style="width: 280px; border-radius: 16px; border: 1px solid var(--border); background: var(--card); padding: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); display: flex; flex-direction: column; gap: 2px;">
+        <div style="border-radius: 9999px; padding: 8px 12px; background: var(--m60); display: flex; align-items: center; justify-content: space-between; font-size: 14px;"><span>Summary</span><span style="font-size: 12px; color: var(--muted-fg);">CSV · as shown</span></div>
+        <div style="border-radius: 9999px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; font-size: 14px;"><span>Shift detail</span><span style="font-size: 12px; color: var(--muted-fg);">CSV · one row per shift</span></div>
+      </div>
+      <p class="num" style="margin: 4px 0 0; font-size: 12px; color: var(--muted-fg);">timesheets-summary_uptown-branch_2026-09-07_2026-09-13.csv</p>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1184,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { themeClass: this.props.dark ? 'dark' : '', skeleton: [1, 2, 3, 4, 5, 6] };
+  }
+}
+</script>
+</body>
+</html>

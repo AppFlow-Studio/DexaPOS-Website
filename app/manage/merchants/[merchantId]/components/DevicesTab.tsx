@@ -100,6 +100,12 @@ const getTerminalTypeLabel = (type: string): string => {
             return 'Dejavoo'
         case 'pax':
             return 'PAX'
+        case 'castles':
+            return 'Castles'
+        case 'valor':
+            return 'Valor'
+        case 'codepay':
+            return 'CodePay'
         default:
             return type
     }
@@ -178,6 +184,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
         const search = searchTerm.toLowerCase()
         return (
             terminal.terminal_name.toLowerCase().includes(search) ||
+            terminal.serial_number?.toLowerCase().includes(search) ||
             terminal.register_id?.toLowerCase().includes(search) ||
             terminal.location_name.toLowerCase().includes(search)
         )
@@ -595,7 +602,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                 <TableRow>
                                                     <TableHead>Terminal</TableHead>
                                                     <TableHead>Type</TableHead>
-                                                    <TableHead>Register ID</TableHead>
+                                                    <TableHead>Serial Number</TableHead>
                                                     <TableHead>Assigned Station</TableHead>
                                                     <TableHead>Status</TableHead>
                                                     <TableHead className="w-[50px]"></TableHead>
@@ -628,7 +635,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                         </TableCell>
                                                         <TableCell>
                                                             <code className="text-sm bg-muted px-2 py-1 rounded">
-                                                                {terminal.register_id}
+                                                                {terminal.serial_number || '—'}
                                                             </code>
                                                         </TableCell>
                                                         <TableCell>

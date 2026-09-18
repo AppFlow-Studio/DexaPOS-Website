@@ -8,14 +8,14 @@
 
 import { createClient } from 'npm:@supabase/supabase-js'
 import { Resend } from 'npm:resend'
+import { getAppBaseUrl } from '../_shared/app-url.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const RESEND_FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') || 'orders@resend.dev'
-const APP_URL = Deno.env.get('NEXT_PUBLIC_APP_URL') || Deno.env.get('VERCEL_URL')
-  ? `https://${Deno.env.get('VERCEL_URL')}`
-  : 'http://localhost:3000'
+// null when unset/localhost — a recovery email without a tappable link is useless.
+const APP_URL = getAppBaseUrl()
 
 const ABANDONMENT_THRESHOLD_MINUTES = 30
 
@@ -164,6 +164,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     .select('id, name')
     .in('id', locationIds)
   const locationMap = new Map((locations ?? []).map((l: any) => [l.id, l.name]))
+
+  // Without a public origin every recovery link would be a dead localhost URL,
+  // so skip the run entirely and surface the misconfiguration.
+  if (!APP_URL) {
+    console.error('[process-abandoned-carts] No public app origin (set APP_URL). Skipping recovery emails.')
+    return new Response(
+      JSON.stringify({ success: false, processed: 0, error: 'app_url_not_configured' }),
+      { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
 
   let sent = 0
   let failed = 0

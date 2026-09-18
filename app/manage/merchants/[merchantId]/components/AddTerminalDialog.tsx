@@ -30,7 +30,7 @@ interface AddTerminalDialogProps {
 const UNASSIGNED_STATION = '__unassigned__'
 
 const terminalTypeLabel = (type: TerminalType): string =>
-    type === 'valor' ? 'Valor' : 'Castles'
+    type === 'valor' ? 'Valor' : type === 'codepay' ? 'CodePay' : 'Castles'
 
 export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, stations }: AddTerminalDialogProps) {
     // Form state
@@ -40,6 +40,8 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
     const [terminalType, setTerminalType] = useState<TerminalType>('castles')
     const [serialNumber, setSerialNumber] = useState('')
     const [valorEpi, setValorEpi] = useState('')
+    // CodePay Register app_id (Intent extra) — stored on payment_terminals.register_id.
+    const [codepayAppId, setCodepayAppId] = useState('')
 
     // Mutations
     const createTerminalMutation = useAdminCreateTerminal()
@@ -58,6 +60,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
             setTerminalType('castles')
             setSerialNumber('')
             setValorEpi('')
+            setCodepayAppId('')
         }
     }, [open])
 
@@ -79,6 +82,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
             terminal_type: terminalType,
             serial_number: serialNumber.trim() || null,
             ...(terminalType === 'valor' ? { valor_epi: valorEpi.trim() || null } : {}),
+            ...(terminalType === 'codepay' ? { register_id: codepayAppId.trim() || null } : {}),
         }
 
         try {
@@ -197,6 +201,7 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                                 <SelectContent>
                                     <SelectItem value="castles">Castles</SelectItem>
                                     <SelectItem value="valor">Valor</SelectItem>
+                                    <SelectItem value="codepay">CodePay</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -230,6 +235,23 @@ export function AddTerminalDialog({ open, onOpenChange, merchantId, locations, s
                             />
                             <p className="text-xs text-muted-foreground">
                                 The device EPI Valor sends on its auto-batch webhook. Required to record this terminal&apos;s settlements automatically.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* CodePay App ID (CodePay only) */}
+                    {terminalType === 'codepay' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="codepay-app-id">CodePay App ID</Label>
+                            <Input
+                                id="codepay-app-id"
+                                placeholder="Merchant app_id from CodePay (e.g., wz1f2e3295adc70112)"
+                                value={codepayAppId}
+                                onChange={(e) => setCodepayAppId(e.target.value)}
+                                className="font-mono"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                The merchant app_id the POS passes on the CodePay Register Intent. Stored on register_id; required for on-terminal sales and batch-out.
                             </p>
                         </div>
                     )}

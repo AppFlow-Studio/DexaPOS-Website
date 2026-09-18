@@ -147,7 +147,7 @@ export function OrderConfirmation({
             <Clock className="h-4 w-4 flex-shrink-0 animate-pulse" style={{ color: "#f59e0b" }} />
             <div>
               <p className="text-sm font-semibold" style={{ color: "#78350f" }}>Awaiting restaurant acceptance</p>
-              <p className="text-xs mt-0.5" style={{ color: "#92400e", opacity: 0.75 }}>Usually within 1 minute</p>
+              <p className="text-xs mt-0.5" style={{ color: "#92400e", opacity: 0.75 }}>Usually within a few minutes</p>
             </div>
           </div>
         ) : etaText ? (

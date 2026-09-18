@@ -852,19 +852,62 @@ export interface OrderOutLiveMenuItem {
   suspended: boolean;
 }
 
+/**
+ * How an item the merchant has made unavailable is ACTUALLY represented on the
+ * live OrderOut menu:
+ *  - "suspended": present but marked Sold Out (suspension_info) — correct for a 86.
+ *  - "hidden":    dropped from the payload entirely — correct for a deliberate turn-off.
+ *  - "orderable": still present AND orderable — DRIFT; customers can still order it.
+ */
+export type OrderOutUnavailableReflection = "suspended" | "hidden" | "orderable";
+
+/** A menu item the merchant has sold-out (86) or turned off, reconciled vs OrderOut. */
+export interface OrderOutUnavailableItem {
+  menuItemId: string;
+  name: string;
+  /** "sold_out" = timed/manual 86 (own or via category); "turned_off" = deliberate hide. */
+  reason: "sold_out" | "turned_off";
+  /** Raw snooze target (ISO or "infinity") for a sold_out item; null for turned_off. */
+  snoozedUntil: string | null;
+  reflection: OrderOutUnavailableReflection;
+  /** True when OrderOut is NOT still serving it orderable (suspended or hidden). */
+  reflected: boolean;
+}
+
 export interface OrderOutLiveMenu {
   ooMenuId: string;
-  itemCount: number;
-  suspendedCount: number;
+  /** Distinct items on the merchant's menu at this location (source of truth). */
+  menuItemCount: number;
+  /** Items available for sale locally (not sold out / turned off). */
+  availableCount: number;
+  /** Items the merchant has sold out or turned off (source of truth). */
+  unavailableCount: number;
+  /** Items present on the menu OrderOut is actually serving. */
+  ooItemCount: number;
+  /** Items OrderOut is serving marked Sold Out (suspension_info in the future). */
+  ooSuspendedCount: number;
+  /** Unavailable items STILL ORDERABLE on OrderOut (the drift to fix). */
+  driftCount: number;
+  /** Every unavailable item + how OrderOut currently reflects it. */
+  unavailableItems: OrderOutUnavailableItem[];
+  /** Raw OrderOut live items (drives the "suspended on OrderOut" detail). */
   items: OrderOutLiveMenuItem[];
   fetchedAt: string;
 }
 
 /**
- * Fetch the live menu OrderOut is serving for a location (get-menu endpoint) and
- * flatten it to items + their suspension state. Read-only verification tool for
- * the OrderOut tab — reuses the merchant/restaurant resolver + env pattern from
- * getOrderOutMenus, but returns item-level detail (which the list GET omits).
+ * Fetch the live menu OrderOut is serving for a location AND reconcile it against
+ * the merchant's own menu (get_menu_with_categories — the exact source the push
+ * transform uses). Read-only verification tool for the OrderOut tab.
+ *
+ * Why the reconciliation: an item made unavailable reaches OrderOut in one of two
+ * shapes — a 86 (snooze) stays on the payload marked Sold Out (suspension_info),
+ * but a deliberate turn-off is DROPPED from the payload entirely (transform-menu.ts).
+ * Counting only what OrderOut still serves therefore reports "0 sold out" even when
+ * the merchant has items off, because the dropped ones are invisible. We instead
+ * take the sold-out/unavailable set from the merchant's menu (the truth) and check,
+ * per item, whether OrderOut correctly reflects it (suspended / hidden) or is still
+ * serving it orderable (drift the merchant must fix by republishing).
  */
 export async function getOrderOutLiveMenu(
   clerkOrgId: string,
@@ -918,6 +961,8 @@ export async function getOrderOutLiveMenu(
     const body = await response.json();
     const nowSec = Math.floor(Date.now() / 1000);
     const items: OrderOutLiveMenuItem[] = [];
+    // Item id -> its live OrderOut state, so the reconciliation below is O(1) per item.
+    const ooById = new Map<string, OrderOutLiveMenuItem>();
 
     const readSuspendUntil = (it: Record<string, unknown>): number | null => {
       const info = it.suspension_info as { suspend_until?: unknown } | undefined;
@@ -932,13 +977,15 @@ export async function getOrderOutLiveMenu(
 
     const pushItem = (it: Record<string, unknown>) => {
       const suspendUntil = readSuspendUntil(it);
-      items.push({
+      const entry: OrderOutLiveMenuItem = {
         id: String(it.id ?? it.item_id ?? ""),
         name: (it.name as string) ?? null,
         suspendUntil,
         // >now (or the year-2100 indefinite sentinel) means sold out; 0/null = live.
         suspended: suspendUntil !== null && suspendUntil !== 0 && suspendUntil > nowSec,
-      });
+      };
+      items.push(entry);
+      if (entry.id) ooById.set(entry.id, entry);
     };
 
     // get-menu nests items under categories; flatten defensively across shapes.
@@ -952,12 +999,91 @@ export async function getOrderOutLiveMenu(
       for (const it of menu.items) pushItem(it);
     }
 
+    // Reconcile against the merchant's own menu. Without this the sold-out count is
+    // only ever "items still on OrderOut that happen to be suspended" — which is 0
+    // whenever the unavailable items were dropped from the payload instead of
+    // suspended (deliberate turn-offs, and 86s the surgical push hasn't landed yet).
+    const { data: menuData, error: menuError } = await supabase.rpc(
+      "get_menu_with_categories",
+      { p_menu_id: online.menu_id, p_location_id: locationId }
+    );
+    if (menuError || !menuData) {
+      return {
+        success: false,
+        data: null,
+        error: menuError?.message || "Could not load your menu to compare against OrderOut",
+      };
+    }
+
+    const menuWithCats = menuData as MenuWithCategories;
+    const unavailableItems: OrderOutUnavailableItem[] = [];
+    const seen = new Set<string>();
+    let availableCount = 0;
+
+    for (const category of menuWithCats.categories ?? []) {
+      // is_active=false already drops the whole category from the payload.
+      if (!category.is_active) continue;
+      const catSuspendUntil = snoozeToSuspendUntil(
+        (category as { snoozed_until?: string | null }).snoozed_until
+      );
+
+      for (const catItem of category.items ?? []) {
+        const mi = catItem.menu_item;
+        if (!mi?.id || seen.has(mi.id)) continue; // dedupe items shared across categories
+        seen.add(mi.id);
+
+        // Classify exactly like transform-menu.ts so this agrees with what is pushed:
+        //  - not-snoozed + unavailable  -> deliberate turn-off (dropped from payload)
+        //  - snoozed (own or category)  -> 86, kept but marked Sold Out
+        //  - otherwise                  -> available
+        const itemSnoozedUntil = (mi as { snoozed_until?: string | null }).snoozed_until ?? null;
+        const itemSuspendUntil = snoozeToSuspendUntil(itemSnoozedUntil);
+        const itemSnoozed = itemSuspendUntil !== null;
+        const isSnoozed = (itemSuspendUntil ?? catSuspendUntil) !== null;
+
+        let reason: "sold_out" | "turned_off" | null = null;
+        if (mi.effective_availability === false && !itemSnoozed) reason = "turned_off";
+        else if (isSnoozed) reason = "sold_out";
+
+        if (!reason) {
+          availableCount++;
+          continue;
+        }
+
+        const oo = ooById.get(mi.id);
+        const reflection: OrderOutUnavailableReflection = !oo
+          ? "hidden" // absent from the payload — fully off the delivery apps
+          : oo.suspended
+            ? "suspended" // present but Sold Out
+            : "orderable"; // present AND orderable -> drift
+
+        unavailableItems.push({
+          menuItemId: mi.id,
+          name: mi.name ?? "",
+          reason,
+          snoozedUntil:
+            reason === "sold_out"
+              ? itemSnoozedUntil ??
+                (category as { snoozed_until?: string | null }).snoozed_until ??
+                null
+              : null,
+          reflection,
+          reflected: reflection !== "orderable",
+        });
+      }
+    }
+
     return {
       success: true,
       data: {
         ooMenuId: String(online.oo_menu_id),
-        itemCount: items.length,
-        suspendedCount: items.filter((i) => i.suspended).length,
+        menuItemCount: seen.size,
+        availableCount,
+        unavailableCount: unavailableItems.length,
+        ooItemCount: items.length,
+        ooSuspendedCount: items.filter((i) => i.suspended).length,
+        driftCount: unavailableItems.filter((i) => !i.reflected).length,
+        unavailableItems,
         items,
         fetchedAt: new Date().toISOString(),
       },

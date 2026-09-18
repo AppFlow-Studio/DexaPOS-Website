@@ -10,6 +10,9 @@ import { getEffectiveMerchantContext } from '@/lib/admin/merchant-context'
 import { buildEmailTemplate, sendEmail } from '@/lib/messaging/resend'
 import { createAppNotification } from '@/lib/notifications/app-notifications'
 import { parseSupportAssigneeEmails } from '@/lib/support/assignees'
+import { resolveProcessorAccount } from '@/lib/payments/resolver'
+import { createSale, readSaleVaultProfile } from '@/lib/payments/valor/saleApi'
+import { getMerchantBillingCardSetup } from '@/app/manage/actions/merchant-billing'
 import {
   formatLongDate,
   formatShortDateRange,
@@ -269,6 +272,78 @@ async function resolveMerchantForCurrentOrg() {
     clerkOrgId: merchant.clerk_org_id as string,
     serviceRole,
   }
+}
+
+export interface MerchantBillingHistoryInvoice {
+  id: string
+  invoiceNumber: string | null
+  status: string
+  locationName: string | null
+  billingPeriodStart: string | null
+  billingPeriodEnd: string | null
+  totalAmount: number
+  dueDate: string | null
+  paidAt: string | null
+  createdAt: string
+  publicToken: string | null
+}
+
+export interface MerchantBillingHistory {
+  invoices: MerchantBillingHistoryInvoice[]
+  payments: MerchantBillingHistoryInvoice[]
+  totalPaid: number
+  outstanding: number
+}
+
+/**
+ * Merchant-facing billing + payments history for /dashboard/subscriptions/billing.
+ * Merchant-scoped list of all subscription invoices (with the public_token so the
+ * UI can deep-link to the hosted invoice + PDF), plus a paid-only payments view
+ * and paid/outstanding rollups.
+ */
+export async function getMerchantSubscriptionBillingHistory(): Promise<MerchantBillingHistory> {
+  const { merchantId, serviceRole } = await resolveMerchantForCurrentOrg()
+
+  const { data, error } = await serviceRole
+    .from('subscription_invoices')
+    .select(
+      'id, invoice_number, status, location_id, billing_period_start, billing_period_end, total_amount, due_date, paid_at, created_at, public_token',
+    )
+    .eq('merchant_id', merchantId)
+    .order('created_at', { ascending: false })
+    .limit(200)
+
+  if (error) throw new Error(error.message)
+
+  const rows = data ?? []
+  const locationIds = [...new Set(rows.map((r) => r.location_id).filter(Boolean) as string[])]
+  const locationNames = new Map<string, string>()
+  if (locationIds.length) {
+    const { data: locs } = await serviceRole.from('locations').select('id, name').in('id', locationIds)
+    for (const l of locs ?? []) locationNames.set(l.id as string, l.name as string)
+  }
+
+  const invoices: MerchantBillingHistoryInvoice[] = rows.map((row) => ({
+    id: row.id as string,
+    invoiceNumber: (row.invoice_number as string | null) ?? null,
+    status: (row.status as string) ?? 'open',
+    locationName: row.location_id ? locationNames.get(row.location_id as string) ?? null : null,
+    billingPeriodStart: (row.billing_period_start as string | null) ?? null,
+    billingPeriodEnd: (row.billing_period_end as string | null) ?? null,
+    totalAmount: Number(row.total_amount ?? 0),
+    dueDate: (row.due_date as string | null) ?? null,
+    paidAt: (row.paid_at as string | null) ?? null,
+    createdAt: row.created_at as string,
+    publicToken: (row.public_token as string | null) ?? null,
+  }))
+
+  const payments = invoices.filter((i) => i.status === 'paid')
+  const totalPaid = payments.reduce((sum, i) => sum + i.totalAmount, 0)
+  const outstanding = invoices
+    .filter((i) => i.status === 'open' || i.status === 'failed' || i.status === 'processing')
+    .reduce((sum, i) => sum + i.totalAmount, 0)
+
+  return { invoices, payments, totalPaid, outstanding }
 }
 
 function normalizeSubscriptionInvoiceLineItems(
@@ -1119,6 +1194,421 @@ export async function RequestMerchantServiceAddOn(
   } catch (error) {
     console.error('[RequestMerchantServiceAddOn] exception:', error)
     return { success: false, error: error instanceof Error ? error.message : 'Failed to submit the add-on request.' }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Self-service feature unlock: read entitlement ("feature flag") + pay to unlock
+// ---------------------------------------------------------------------------
+
+export interface MerchantServiceEntitlement {
+  serviceCode: string
+  serviceId: string | null
+  displayName: string | null
+  /** True when the location already has this paid feature. */
+  entitled: boolean
+  status: string | null
+  reason: string | null
+  /** Catalog monthly price (display). */
+  priceMonthly: number
+  /** One full month charged today to activate (incl. card surcharge). */
+  activationTotal: number
+  activationSubtotal: number
+  activationSurcharge: number
+  /** Valor SaaS rail provisioned for this location's subscription card. */
+  billingConfigured: boolean
+  /** A card is already vaulted for this location (recurring-ready). */
+  hasCardOnFile: boolean
+  /** Passage.js client token + EPI so the paywall can collect the activation card. */
+  clientToken: string | null
+  epi: string | null
+  isDemo: boolean
+}
+
+/**
+ * Merchant-facing entitlement read for a single feature/service at a location.
+ * Wraps get_subscription_entitlement (the "feature flag") and joins the catalog
+ * price + the Valor card-setup so a paywall can render + charge in one round-trip.
+ */
+export async function getMerchantServiceEntitlement(
+  locationId: string,
+  serviceCode: string,
+): Promise<MerchantServiceEntitlement> {
+  const empty: MerchantServiceEntitlement = {
+    serviceCode,
+    serviceId: null,
+    displayName: null,
+    entitled: false,
+    status: null,
+    reason: null,
+    priceMonthly: 0,
+    activationTotal: 0,
+    activationSubtotal: 0,
+    activationSurcharge: 0,
+    billingConfigured: false,
+    hasCardOnFile: false,
+    clientToken: null,
+    epi: null,
+    isDemo: false,
+  }
+
+  if (!locationId || !serviceCode) return empty
+
+  const { merchantId, serviceRole } = await resolveMerchantForCurrentOrg()
+
+  const { data: service } = await (serviceRole as any)
+    .from('billable_services')
+    .select('id, service_code, display_name, base_price_monthly')
+    .eq('service_code', serviceCode)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (!service) return empty
+
+  const [entitlementLookup, quoteResult, cardProfile] = await Promise.all([
+    (serviceRole as any).rpc('get_subscription_entitlement', {
+      p_merchant_id: merchantId,
+      p_location_id: locationId,
+      p_service_code: serviceCode,
+    }),
+    (serviceRole as any).rpc('calculate_billable_service_amounts', {
+      p_service_id: service.id,
+      p_quantity: 1,
+      p_billing_method: 'card',
+    }),
+    (serviceRole as any)
+      .from('merchant_billing_profiles')
+      .select('id')
+      .eq('merchant_id', merchantId)
+      .eq('location_id', locationId)
+      .eq('is_active', true)
+      .eq('is_primary', true)
+      .maybeSingle(),
+  ])
+
+  const entitlement = (entitlementLookup?.data ?? {}) as Record<string, any>
+  const quote = quoteResult?.data?.[0] ?? {}
+  const entitled = Boolean(entitlement.entitled)
+
+  // Only fetch the Valor card-setup (a live GetClientToken call) when locked —
+  // the paywall needs it to collect the activation card. Skip on the happy path.
+  const cardSetup = entitled ? null : await getMerchantBillingCardSetup(merchantId, locationId).catch(() => null)
+
+  return {
+    serviceCode,
+    serviceId: service.id as string,
+    displayName: (service.display_name as string) ?? serviceCode,
+    entitled,
+    status: typeof entitlement.status === 'string' ? entitlement.status : null,
+    reason: typeof entitlement.reason === 'string' ? entitlement.reason : null,
+    priceMonthly: toNumber(service.base_price_monthly),
+    activationTotal: toNumber(quote.total_amount),
+    activationSubtotal: toNumber(quote.subtotal),
+    activationSurcharge: toNumber(quote.card_surcharge),
+    billingConfigured: Boolean(cardSetup?.configured),
+    hasCardOnFile: Boolean(cardProfile?.data?.id),
+    clientToken: cardSetup?.clientToken ?? null,
+    epi: cardSetup?.epi ?? null,
+    isDemo: Boolean(cardSetup?.isDemo),
+  }
+}
+
+/**
+ * Instant self-service: charge one full month now for a paid add-on and enable
+ * it immediately (no HQ approval). The card entered at the paywall funds the
+ * one-time activation via Valor Direct Sale and is vaulted (shouldVaultCard) so
+ * the recurring monthly bill has a card. The service is then enabled on the
+ * location subscription (creating it if needed) so future invoices include it —
+ * enabled via the raw RPCs, NOT saveAndChargeMerchantSubscription, because the
+ * activation was already charged here and that path would double-charge.
+ */
+export async function PurchaseMerchantServiceAddOn(
+  params: {
+    locationId: string
+    serviceId: string
+    paymentToken: string
+    cardholderName: string
+    billingEmail?: string
+    billingZip?: string
+  },
+  authorization: { accepted: boolean },
+): Promise<{
+  success: boolean
+  entitled?: boolean
+  transactionId?: string | null
+  needsBillingSetup?: boolean
+  recurringCardWarning?: string
+  error?: string
+}> {
+  try {
+    if (!authorization.accepted) {
+      return { success: false, error: 'Accept the recurring charge authorization before paying.' }
+    }
+    if (!params.locationId || !params.serviceId || !params.paymentToken?.trim()) {
+      return { success: false, error: 'Select a location and add-on, then enter a card.' }
+    }
+    if (!params.cardholderName?.trim()) {
+      return { success: false, error: 'Enter the cardholder name.' }
+    }
+
+    const { userId } = await auth()
+    if (!userId) return { success: false, error: 'Unauthorized' }
+    const { merchantId, merchantName, clerkOrgId, serviceRole } = await resolveMerchantForCurrentOrg()
+
+    const [locationResult, serviceResult] = await Promise.all([
+      serviceRole.from('locations').select('id, name').eq('id', params.locationId).eq('merchant_id', merchantId).maybeSingle(),
+      (serviceRole as any).from('billable_services').select('*').eq('id', params.serviceId).eq('is_active', true).neq('service_category', 'hardware').maybeSingle(),
+    ])
+    if (locationResult.error || !locationResult.data) return { success: false, error: 'The selected location is not available.' }
+    if (serviceResult.error || !serviceResult.data) return { success: false, error: 'The selected add-on is not available.' }
+    const service = serviceResult.data as any
+
+    // Already active? Nothing to charge.
+    const entitlementLookup = await (serviceRole as any).rpc('get_subscription_entitlement', {
+      p_merchant_id: merchantId,
+      p_location_id: params.locationId,
+      p_service_code: service.service_code,
+    })
+    if (entitlementLookup.error) return { success: false, error: 'Failed to verify the current entitlement.' }
+    if (entitlementLookup.data?.entitled) {
+      return { success: true, entitled: true }
+    }
+
+    // Resolve the location's Valor SaaS (subscription) rail credentials.
+    const processorAccount = await resolveProcessorAccount(merchantId, 'subscription', { locationId: params.locationId })
+    if (!processorAccount || processorAccount.processor !== 'valor') {
+      return { success: false, needsBillingSetup: true, error: 'Subscription billing is not set up for this location yet.' }
+    }
+    const { data: credentialRows } = await (serviceRole as any).rpc('get_valor_account_credentials', {
+      p_account_id: processorAccount.id,
+    })
+    const cred = (Array.isArray(credentialRows) ? credentialRows[0] : credentialRows) as any
+    const credentials =
+      cred?.valor_appid && cred?.decrypted_appkey && cred?.valor_epi
+        ? { appId: String(cred.valor_appid).trim(), appKey: String(cred.decrypted_appkey).trim(), epi: String(cred.valor_epi).trim() }
+        : null
+    if (!credentials) {
+      return { success: false, needsBillingSetup: true, error: 'Subscription billing credentials are unavailable for this location.' }
+    }
+
+    // Quote one full month (incl. card surcharge) — charged now to activate.
+    const quoteResult = await (serviceRole as any).rpc('calculate_billable_service_amounts', {
+      p_service_id: params.serviceId,
+      p_quantity: 1,
+      p_billing_method: 'card',
+    })
+    const quote = quoteResult?.data?.[0]
+    if (quoteResult.error || !quote) return { success: false, error: 'Failed to calculate the activation price.' }
+    const activationTotal = toNumber(quote.total_amount)
+    if (activationTotal <= 0) return { success: false, error: 'This add-on has no chargeable price configured.' }
+
+    // Charge the activation via Valor Direct Sale (vaulting the card for recurring).
+    const invoiceNumber = `ADN${Date.now().toString(36).toUpperCase()}`.slice(0, 12)
+    const sale = await createSale(
+      { credentials },
+      {
+        money: { amountMinor: Math.round(activationTotal * 100), currency: 'USD' },
+        token: params.paymentToken.trim(),
+        invoiceNumber,
+        productLines: [],
+        orderDescription: `${service.display_name} activation`,
+        email: params.billingEmail,
+        zip: params.billingZip,
+        customerName: params.cardholderName,
+        shouldVaultCard: true,
+      },
+    )
+    if (sale.outcome !== 'approved') {
+      return {
+        success: false,
+        error:
+          sale.responseText ||
+          (sale.outcome === 'declined'
+            ? 'Your card was declined. Please try another card.'
+            : 'Payment could not be processed. Please try again.'),
+      }
+    }
+    const transactionId = sale.transactionId ?? null
+
+    // Best-effort: persist the vaulted card as the location's recurring billing profile.
+    let recurringCardWarning: string | undefined
+    const vault = readSaleVaultProfile((sale.raw ?? {}) as any)
+    const { data: existingCard } = await (serviceRole as any)
+      .from('merchant_billing_profiles')
+      .select('id')
+      .eq('merchant_id', merchantId)
+      .eq('location_id', params.locationId)
+      .eq('is_active', true)
+      .eq('is_primary', true)
+      .maybeSingle()
+    if (!existingCard?.id) {
+      if (vault.customerProfileId) {
+        await (serviceRole as any)
+          .from('merchant_billing_profiles')
+          .update({ is_primary: false, updated_at: new Date().toISOString() })
+          .eq('merchant_id', merchantId)
+          .eq('location_id', params.locationId)
+          .eq('is_primary', true)
+        const { error: cardInsertError } = await (serviceRole as any).from('merchant_billing_profiles').insert({
+          merchant_id: merchantId,
+          location_id: params.locationId,
+          billing_email: params.billingEmail ?? null,
+          billing_method: 'card',
+          account_holder_name: params.cardholderName,
+          processor: 'valor',
+          processor_account_id: processorAccount.id,
+          customer_vault_id: vault.customerProfileId,
+          payment_profile_id: vault.paymentProfileId,
+          vaulted_under_epi: credentials.epi,
+          is_primary: true,
+          is_verified: true,
+          is_active: true,
+        } as any)
+        if (cardInsertError) {
+          recurringCardWarning = 'Payment succeeded, but saving the card for future billing failed — add a card in Billing settings.'
+        }
+      } else {
+        recurringCardWarning = 'Payment succeeded, but no card was saved for future billing — add a card in Billing settings.'
+      }
+    }
+
+    const recurringCardProfileId = existingCard?.id ?? null
+
+    // Enable the service on the location subscription (create it if missing) so
+    // the next monthly invoice includes it. No charge here — activation is paid.
+    let subscription = (
+      await serviceRole
+        .from('merchant_subscriptions')
+        .select('id, plan_id, current_period_start, current_period_end, next_billing_date, metadata, billing_profile_id')
+        .eq('merchant_id', merchantId)
+        .eq('location_id', params.locationId)
+        .contains('metadata', { billing_scope: 'location' })
+        .neq('status', 'canceled')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    ).data as any
+
+    if (!subscription?.id) {
+      const { data: plan } = await (serviceRole as any)
+        .from('subscription_plans')
+        .select('id')
+        .eq('plan_code', 'SERVICE_CATALOG')
+        .maybeSingle()
+      const today = new Date()
+      const periodStart = today.toISOString().slice(0, 10)
+      const nextMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, today.getUTCDate()))
+      const nextBillingDate = nextMonth.toISOString().slice(0, 10)
+      const periodEnd = new Date(nextMonth.getTime() - 86_400_000).toISOString().slice(0, 10)
+      const { data: newSubId, error: upsertError } = await (serviceRole as any).rpc('upsert_merchant_subscription', {
+        p_subscription_id: null,
+        p_merchant_id: merchantId,
+        p_location_id: params.locationId,
+        p_plan_id: plan?.id ?? null,
+        p_current_period_start: periodStart,
+        p_current_period_end: periodEnd,
+        p_next_billing_date: nextBillingDate,
+        p_status: 'active',
+        p_trial_ends_at: null,
+        p_billing_profile_id: recurringCardProfileId,
+        p_metadata: { billing_scope: 'location', source: 'self_service_addon' },
+      })
+      if (upsertError || !newSubId) {
+        return {
+          success: true,
+          entitled: true,
+          transactionId,
+          recurringCardWarning:
+            'Payment succeeded, but activating the recurring subscription failed. Contact support to finish setup.',
+        }
+      }
+      subscription = { id: newSubId as string }
+    }
+
+    const existingAssignments = subscription?.id
+      ? (
+          await serviceRole
+            .from('merchant_subscription_services')
+            .select('service_id, quantity, is_enabled, metadata')
+            .eq('subscription_id', subscription.id)
+        ).data ?? []
+      : []
+    const services = (existingAssignments as any[])
+      .filter((a) => a.service_id !== params.serviceId && a.is_enabled)
+      .map((a) => ({ service_id: a.service_id, quantity: Number(a.quantity ?? 1), enabled: true, metadata: a.metadata ?? {} }))
+    services.push({
+      service_id: params.serviceId,
+      quantity: 1,
+      enabled: true,
+      metadata: { source: 'self_service_addon', service_code: service.service_code, activation_transaction_id: transactionId },
+    })
+    const { error: replaceError } = await (serviceRole as any).rpc('replace_merchant_subscription_services', {
+      p_subscription_id: subscription.id,
+      p_services: services,
+    })
+    if (replaceError) {
+      return {
+        success: true,
+        entitled: true,
+        transactionId,
+        recurringCardWarning: 'Payment succeeded and the feature is unlocked, but recurring billing setup needs attention. Contact support.',
+      }
+    }
+
+    // Capture immutable authorization + payment evidence (self-service, pre-approved).
+    const [clerkUser, requestHeaders] = await Promise.all([currentUser(), headers()])
+    const requestedByEmail =
+      clerkUser?.emailAddresses.find((email) => email.id === clerkUser.primaryEmailAddressId)?.emailAddress ??
+      clerkUser?.emailAddresses[0]?.emailAddress ?? null
+    const forwardedFor = requestHeaders.get('x-forwarded-for')
+    const ipAddress = (
+      forwardedFor?.split(',')[0]?.trim() ||
+      requestHeaders.get('cf-connecting-ip')?.trim() ||
+      requestHeaders.get('x-real-ip')?.trim() ||
+      ''
+    ).slice(0, 128) || null
+    const userAgent = requestHeaders.get('user-agent')?.trim().slice(0, 1000) || null
+    const authorizationText = `I authorize DEXA POS to charge ${formatUsd(activationTotal)} today to activate ${service.display_name} at ${locationResult.data.name}, and ${formatUsd(activationTotal)} per month thereafter until cancellation under the applicable terms.`
+    await (serviceRole as any).from('subscription_service_requests').insert({
+      merchant_id: merchantId,
+      location_id: params.locationId,
+      service_id: params.serviceId,
+      merchant_name_snapshot: merchantName,
+      location_name_snapshot: locationResult.data.name,
+      service_name_snapshot: service.display_name,
+      requested_quantity: 1,
+      requested_by: userId,
+      requested_by_email: requestedByEmail,
+      authorization_reference: `AUTH-${randomUUID().toUpperCase()}`,
+      authorization_accepted: true,
+      authorization_accepted_at: new Date().toISOString(),
+      authorization_terms_version: 'merchant-self-service-addon-v1',
+      authorization_text: authorizationText,
+      authorized_subtotal: toNumber(quote.subtotal),
+      authorized_card_surcharge: toNumber(quote.card_surcharge),
+      authorized_total: activationTotal,
+      authorized_billing_cadence: 'monthly_recurring',
+      authorization_ip_address: ipAddress,
+      authorization_user_agent: userAgent,
+      status: 'approved',
+      reviewed_at: new Date().toISOString(),
+      applied_subscription_id: subscription.id,
+      metadata: {
+        source: 'merchant_self_service_addon',
+        self_service: true,
+        service_code: service.service_code,
+        activation_transaction_id: transactionId,
+      },
+    })
+
+    revalidatePath('/dashboard/subscriptions')
+    revalidatePath('/dashboard/online-ordering')
+    revalidatePath('/dashboard/tables')
+    revalidatePath('/dashboard/website')
+    return { success: true, entitled: true, transactionId, recurringCardWarning }
+  } catch (error) {
+    console.error('[PurchaseMerchantServiceAddOn] exception:', error)
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to unlock the feature.' }
   }
 }
 

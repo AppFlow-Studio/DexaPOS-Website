@@ -38,6 +38,8 @@ export default async function AdminMerchantBillingPage({ params }: AdminMerchant
         context="admin"
         canEdit={hasPermission('hq.merchant.update')}
         locations={(merchant.locations ?? []) as Array<{ id: string; name: string }>}
+        backHref={`/manage/merchants/${merchantParam}`}
+        backLabel={`Back to ${merchant.name}`}
       />
     </div>
   )

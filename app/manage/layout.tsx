@@ -50,7 +50,6 @@ import {
     MonitorPlay,
     AlertOctagon,
     Receipt,
-    CircleDollarSign,
     Globe,
     LucideIcon,
 } from 'lucide-react'
@@ -138,12 +137,6 @@ const navMain: NavGroup[] = [
                 icon: Receipt,
                 requiredPermission: 'hq.merchant.transactions' as PermissionCode,
             },
-            {
-                title: 'Subscriptions',
-                url: '/manage/subscriptions',
-                icon: CircleDollarSign,
-                requiredPermission: 'system.billing.manage' as PermissionCode,
-            },
         ]
     },
     {
@@ -214,6 +207,12 @@ const navMain: NavGroup[] = [
                 url: '/admin',
                 icon: Globe,
                 requiredPermission: 'system.config.manage' as PermissionCode,
+            },
+            {
+                title: 'Billing Catalog',
+                url: '/manage/settings/billing-catalog',
+                icon: Receipt,
+                requiredPermission: 'system.billing.manage' as PermissionCode,
             },
         ]
     }
@@ -512,7 +511,6 @@ export default function ManageLayout({
         { title: 'Analytics', url: '/manage/analytics', icon: BarChart3 },
         { title: 'TSYS Disputes', url: '/manage/disputes', icon: ShieldAlert },
         { title: 'Platform Fees', url: '/manage/platform-fees', icon: Receipt },
-        { title: 'Subscriptions', url: '/manage/subscriptions', icon: CircleDollarSign },
         { title: 'Roles & Permissions', url: '/manage/roles-permissions', icon: ShieldCheck },
         { title: 'Audit Logs', url: '/manage/audit-logs', icon: History },
         { title: 'Support', url: '/manage/support', icon: MessageSquare },

@@ -15,6 +15,11 @@ describe("CDN asset category policy", () => {
     expect(isValidAssetCategory("organization", "kiosk")).toBe(false);
   });
 
+  it("preserves support uploads in both scopes", () => {
+    expect(isValidAssetCategory("merchant", "support")).toBe(true);
+    expect(isValidAssetCategory("organization", "support")).toBe(true);
+  });
+
   it("rejects unknown and non-string categories", () => {
     expect(isValidAssetCategory("merchant", "../kiosk")).toBe(false);
     expect(isValidAssetCategory("unknown", "logos")).toBe(false);

@@ -32,6 +32,7 @@ import type {
   MerchantSiteRow,
   SitePageRow,
 } from "@/lib/site-builder/db-types";
+import { assertMerchantOwner } from "./owner-guard";
 
 /**
  * Site-level actions for the merchant website builder.
@@ -147,6 +148,9 @@ export async function UpdateSiteSettings(
 
   const supabase = createServerSupabaseClient();
 
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const { data: before } = await supabase
     .from("merchant_sites")
     .select("*")
@@ -214,6 +218,11 @@ export async function UpdateSiteNav(
   items: NavItem[],
 ): Promise<ActionResult<MerchantSiteRow>> {
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
+
+  const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const result = await UpdateSiteSettings(clerkOrgId, siteId, { nav: serializeNav(items) });
 
@@ -301,6 +310,11 @@ export async function UpdateSiteFeatures(
 ): Promise<ActionResult<MerchantSiteRow>> {
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
+  const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const parsed = siteFeaturesSchema.safeParse(features);
   if (!parsed.success) {
     return { error: "Those settings could not be saved", code: "invalid_document" };
@@ -333,6 +347,11 @@ export async function UpdateSiteBrand(
 ): Promise<ActionResult<MerchantSiteRow>> {
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
+  const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
+
   const parsed = siteBrandSchema.safeParse(brand);
   if (!parsed.success) {
     const first = parsed.error.issues[0];
@@ -363,6 +382,11 @@ export async function UpdateSiteSeo(
   seo: SiteSeo,
 ): Promise<ActionResult<MerchantSiteRow>> {
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
+
+  const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const cleaned = Object.fromEntries(
     Object.entries(seo).filter(([, value]) => typeof value === "string" && value.trim()),
@@ -405,6 +429,11 @@ export async function UpdateSiteIntegrations(
   tracking: SiteTracking,
 ): Promise<ActionResult<MerchantSiteRow>> {
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
+
+  const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const cleaned = Object.fromEntries(
     Object.entries(tracking).filter(([, value]) => typeof value === "string" && value.trim() !== ""),
@@ -452,6 +481,9 @@ export async function SetSiteLogo(
   if (!clerkOrgId) return { error: "Organization ID is required", code: "unauthenticated" };
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const { data, error } = await supabase
     .from("merchant_sites")
@@ -511,6 +543,9 @@ export async function ClaimSubdomain(
   }
 
   const supabase = createServerSupabaseClient();
+
+  const guard = await assertMerchantOwner(supabase, clerkOrgId);
+  if (!guard.ok) return guard.failure;
 
   const { data: before } = await supabase
     .from("merchant_sites")

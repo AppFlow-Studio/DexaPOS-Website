@@ -9,12 +9,13 @@ import {
   AddMessage,
   ReopenTicket,
   GetSupportUploadUrl,
+  DiscardSupportUpload,
 } from "../actions/support";
 import { TicketStatus, TicketCategory, AttachmentInput } from "@/types/support-ticket";
 import { toast } from "sonner";
 
 // Re-export for use in components
-export { GetSupportUploadUrl };
+export { GetSupportUploadUrl, DiscardSupportUpload };
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 

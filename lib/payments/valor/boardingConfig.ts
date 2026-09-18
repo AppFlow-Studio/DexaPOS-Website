@@ -119,6 +119,50 @@ export function readBoardingMcc(env: EnvLike = process.env): string {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Per-merchant acquirer identifiers (dynamic boarding).
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The per-merchant fields captured from underwriting. Everything else in the
+ * acquirer profile (BIN, agent, agentBank, chain, association, industry, EBT,
+ * program type, …) is ISO-level and stays in the env template — see
+ * `applyAcquirerIdentifiers`.
+ */
+export interface AcquirerIdentifiers {
+  /** TSYS merchant number — identifies the settlement DDA. */
+  mid: string;
+  /** TSYS V-Number. */
+  vNumber: string;
+  storeNo: string;
+  termNo: string;
+}
+
+/**
+ * Overlay a merchant's own identifiers onto the ISO-level env template.
+ *
+ * Valor's `processorData` block uses "twin" keys; only the `1`-suffixed keys are
+ * populated in production. The per-merchant values live in `mid1`/`vNumber1`/
+ * `storeNo1`/`termNo1`; the base (unsuffixed) keys stay blank exactly as the env
+ * template authors them. This is a pure merge so it can be unit-tested and reused
+ * per-location.
+ */
+export function applyAcquirerIdentifiers(
+  base: ValorAcquirerConfig,
+  ids: AcquirerIdentifiers
+): ValorAcquirerConfig {
+  return {
+    ...base,
+    processorData: {
+      ...base.processorData,
+      mid1: ids.mid,
+      vNumber1: ids.vNumber,
+      storeNo1: ids.storeNo,
+      termNo1: ids.termNo,
+    },
+  };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // DB row → boarding detail mapping.
 // ────────────────────────────────────────────────────────────────────────────
 

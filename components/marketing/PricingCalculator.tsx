@@ -4,9 +4,9 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { SectionItem } from "@/lib/cms/cms-sections";
 
-type PriceKey = "firstStation" | "addlStation" | "tablet" | "kds" | "onlineOrdering" | "loyalty" | "delivery" | "franchise";
-type StepperKey = "stations" | "tablets" | "kds";
-type ToggleKey = "onlineOrdering" | "loyalty" | "delivery" | "franchise";
+type PriceKey = "additionalLocation" | "tablet" | "kds" | "onlineOrdering" | "loyalty" | "delivery" | "fineDining";
+type StepperKey = "locations" | "tablets" | "kds";
+type ToggleKey = "onlineOrdering" | "loyalty" | "delivery" | "fineDining";
 type CalculatorKey = StepperKey | ToggleKey;
 type CalculatorState = Record<StepperKey, number> & Record<ToggleKey, boolean>;
 
@@ -29,31 +29,31 @@ export interface PricingCalculatorSettings {
   savingsTemplate?: string;
 }
 
+// First location is free; each additional location adds a flat merchant fee.
 const DEFAULT_PRICE: Record<PriceKey, number> = {
-  firstStation: 99,
-  addlStation: 49,
+  additionalLocation: 60,
   tablet: 39,
   kds: 29,
   onlineOrdering: 100,
   loyalty: 79,
   delivery: 79,
-  franchise: 399,
+  fineDining: 30,
 };
 
 const DEFAULT_LIMITS: Record<StepperKey, { min: number; max: number }> = {
-  stations: { min: 1, max: 20 },
+  locations: { min: 1, max: 20 },
   tablets: { min: 0, max: 30 },
   kds: { min: 0, max: 10 },
 };
 
 const DEFAULT_ITEMS: Record<CalculatorKey, { title: string; description: string }> = {
-  stations: { title: "POS Stations", description: "$99 first - $49 each additional" },
+  locations: { title: "Locations", description: "First location free - $60/mo each additional" },
   tablets: { title: "POS Tablets", description: "$39/month each - tableside ordering" },
   kds: { title: "Kitchen Displays", description: "$29/month each - station routing" },
   onlineOrdering: { title: "Online Ordering", description: "$100/month - branded ordering page, no commission" },
   loyalty: { title: "Loyalty Program", description: "$79/month - points, rewards, SMS marketing" },
   delivery: { title: "Delivery App Integration", description: "$79/month - Uber Eats, Grubhub, DoorDash" },
-  franchise: { title: "Franchise Package", description: "$399/month - multi-location tools, royalty calcs" },
+  fineDining: { title: "Fine Dining", description: "$30/month - table mapping, reservations, coursing" },
 };
 
 function fmt(n: number) {
@@ -64,15 +64,12 @@ function compute(state: CalculatorState, prices: Record<PriceKey, number>) {
   let total = 0;
   const lines: { label: string; qty: number; sub: number }[] = [];
 
-  if (state.stations >= 1) {
-    total += prices.firstStation;
-    lines.push({ label: "First POS station", qty: 1, sub: prices.firstStation });
-    if (state.stations > 1) {
-      const extra = state.stations - 1;
-      const sub = extra * prices.addlStation;
-      total += sub;
-      lines.push({ label: "Additional stations", qty: extra, sub });
-    }
+  // Merchant tier: first location free, +$60/mo per additional location.
+  if (state.locations > 1) {
+    const extra = state.locations - 1;
+    const sub = extra * prices.additionalLocation;
+    total += sub;
+    lines.push({ label: "Additional locations", qty: extra, sub });
   }
   if (state.tablets > 0) {
     const sub = state.tablets * prices.tablet;
@@ -96,9 +93,9 @@ function compute(state: CalculatorState, prices: Record<PriceKey, number>) {
     total += prices.delivery;
     lines.push({ label: "Delivery Integration", qty: 1, sub: prices.delivery });
   }
-  if (state.franchise) {
-    total += prices.franchise;
-    lines.push({ label: "Franchise Package", qty: 1, sub: prices.franchise });
+  if (state.fineDining) {
+    total += prices.fineDining;
+    lines.push({ label: "Fine Dining", qty: 1, sub: prices.fineDining });
   }
 
   return { total, lines };
@@ -106,7 +103,7 @@ function compute(state: CalculatorState, prices: Record<PriceKey, number>) {
 
 function mergeLimits(settings?: PricingCalculatorSettings) {
   return {
-    stations: { ...DEFAULT_LIMITS.stations, ...settings?.limits?.stations },
+    locations: { ...DEFAULT_LIMITS.locations, ...settings?.limits?.locations },
     tablets: { ...DEFAULT_LIMITS.tablets, ...settings?.limits?.tablets },
     kds: { ...DEFAULT_LIMITS.kds, ...settings?.limits?.kds },
   };
@@ -131,34 +128,34 @@ export default function PricingCalculator({
   const limits = mergeLimits(settings);
   const defaults = settings?.defaults || {};
 
-  const [stations, setStations] = useState(typeof defaults.stations === "number" ? defaults.stations : 1);
+  const [locations, setLocations] = useState(typeof defaults.locations === "number" ? defaults.locations : 1);
   const [tablets, setTablets] = useState(typeof defaults.tablets === "number" ? defaults.tablets : 1);
   const [kds, setKds] = useState(typeof defaults.kds === "number" ? defaults.kds : 1);
   const [onlineOrdering, setOnlineOrdering] = useState(Boolean(defaults.onlineOrdering));
   const [loyalty, setLoyalty] = useState(Boolean(defaults.loyalty));
   const [delivery, setDelivery] = useState(Boolean(defaults.delivery));
-  const [franchise, setFranchise] = useState(Boolean(defaults.franchise));
+  const [fineDining, setFineDining] = useState(Boolean(defaults.fineDining));
 
-  const state: CalculatorState = { stations, tablets, kds, onlineOrdering, loyalty, delivery, franchise };
+  const state: CalculatorState = { locations, tablets, kds, onlineOrdering, loyalty, delivery, fineDining };
   const { total, lines } = compute(state, prices);
 
   const toastEquiv =
-    (state.stations === 0 ? 0 : 69 + Math.max(0, state.stations - 1) * 55) +
+    Math.max(0, state.locations) * 69 +
+    Math.max(0, state.locations - 1) * 90 +
     state.tablets * 50 +
     state.kds * 40 +
     (state.onlineOrdering ? 135 : 0) +
     (state.loyalty ? 99 : 0) +
     (state.delivery ? 99 : 0) +
-    (state.franchise ? 450 : 0) +
-    (state.stations > 0 ? 200 : 0) +
-    (state.stations > 0 ? 60 * state.stations : 0);
+    (state.fineDining ? 60 : 0) +
+    (state.locations > 0 ? 200 : 0);
 
   const savings = Math.max(0, toastEquiv - total);
   const showSavings = savings >= 50;
 
   const stepper = useCallback(
     (key: StepperKey, delta: number) => {
-      const setter = { stations: setStations, tablets: setTablets, kds: setKds }[key];
+      const setter = { locations: setLocations, tablets: setTablets, kds: setKds }[key];
       setter((prev) => {
         const next = prev + delta;
         if (next < limits[key].min || next > limits[key].max) return prev;
@@ -169,7 +166,7 @@ export default function PricingCalculator({
   );
 
   const deviceRows: { key: StepperKey; value: number }[] = [
-    { key: "stations", value: stations },
+    { key: "locations", value: locations },
     { key: "tablets", value: tablets },
     { key: "kds", value: kds },
   ];
@@ -177,7 +174,7 @@ export default function PricingCalculator({
     { key: "onlineOrdering", checked: onlineOrdering, setter: setOnlineOrdering },
     { key: "loyalty", checked: loyalty, setter: setLoyalty },
     { key: "delivery", checked: delivery, setter: setDelivery },
-    { key: "franchise", checked: franchise, setter: setFranchise },
+    { key: "fineDining", checked: fineDining, setter: setFineDining },
   ];
   const savingsText = (settings?.savingsTemplate || "Save approx. {amount}/mo vs a comparable Toast setup").replace("{amount}", fmt(savings));
 
@@ -186,8 +183,8 @@ export default function PricingCalculator({
       <div className="calc-controls">
         <div className="calc-group">
           <div className="calc-group-head">
-            <div className="title">{settings?.groups?.devicesTitle || "Stations & tablets"}</div>
-            <div className="help">{settings?.groups?.devicesHelp || "How many devices on your floor"}</div>
+            <div className="title">{settings?.groups?.devicesTitle || "Locations & devices"}</div>
+            <div className="help">{settings?.groups?.devicesHelp || "Your first location is free"}</div>
           </div>
           {deviceRows.map(({ key, value }) => {
             const item = getCalculatorItem(items, key);
@@ -234,7 +231,7 @@ export default function PricingCalculator({
         <div className="summary-title">{settings?.summaryTitle || "Your monthly cost"}</div>
         <ul className="summary-breakdown">
           {lines.length === 0 ? (
-            <li className="summary-empty">{settings?.emptyText || "Add at least one station to start."}</li>
+            <li className="summary-empty">{settings?.emptyText || "One location, no add-ons - you're on us."}</li>
           ) : (
             lines.map((line, i) => (
               <li className="summary-line" key={i}>

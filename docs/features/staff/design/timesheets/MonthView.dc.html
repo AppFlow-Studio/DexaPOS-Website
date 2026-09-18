@@ -1,0 +1,228 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #0C4FD1; text-decoration: none; } a:hover { color: #0a3fa8; }
+    .theme {
+      --bg: oklch(0.9842 0.0034 247.8575);
+      --fg: oklch(0.2795 0.0368 260.0310);
+      --card: #ffffff;
+      --muted: oklch(0.9670 0.0029 264.5419);
+      --muted-fg: oklch(0.5510 0.0234 264.3637);
+      --border: oklch(0.8717 0.0093 258.3382);
+      --brand: #0C4FD1;
+      --m20: color-mix(in oklch, var(--muted) 20%, transparent);
+      --m50: color-mix(in oklch, var(--muted) 50%, transparent);
+      --m60: color-mix(in oklch, var(--muted) 60%, transparent);
+      --m70: color-mix(in oklch, var(--muted) 70%, transparent);
+      --card70: color-mix(in oklch, var(--card) 70%, transparent);
+      --border60: color-mix(in oklch, var(--border) 60%, transparent);
+      font-family: Geist, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      color: var(--fg); background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+    .theme.dark {
+      --bg: #16181d; --fg: oklch(0.9288 0.0126 255.5078); --card: #1c1f26;
+      --muted: oklch(0.2427 0.0381 259.9437); --muted-fg: oklch(0.7137 0.0192 261.3246);
+      --border: oklch(0.4461 0.0263 256.8018); --brand: #6CA0FF;
+    }
+    .ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+    .num { font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div class="theme {{themeClass}}" style="width: 1184px; min-height: 1320px; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px;">
+
+  <!-- Period control row: Month selected -->
+  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+    <div style="display: inline-flex; gap: 2px; padding: 4px; border-radius: 9999px; background: var(--m70);">
+      <div style="padding: 8px 16px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Week</div>
+      <div style="padding: 8px 16px; border-radius: 9999px; font-size: 13px; font-weight: 500; background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 0 0 1px var(--border);">Month</div>
+      <div style="padding: 8px 16px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Custom</div>
+    </div>
+    <div style="display: inline-flex; align-items: center; gap: 4px; padding: 4px; border-radius: 9999px; background: var(--m60);">
+      <div style="width: 32px; height: 32px; border-radius: 9999px; display: flex; align-items: center; justify-content: center;"><svg class="ic" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg></div>
+      <span class="num" style="min-width: 200px; text-align: center; font-size: 14px; font-weight: 500;">August 2026</span>
+      <div style="width: 32px; height: 32px; border-radius: 9999px; display: flex; align-items: center; justify-content: center;"><svg class="ic" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></svg></div>
+    </div>
+    <div style="height: 36px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">This month</div>
+  </div>
+
+  <!-- Stat panel -->
+  <div style="border: 1px solid var(--border); background: var(--card); border-radius: 24px; padding: 24px;">
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 40px;">
+      <div style="min-width: 0;">
+        <div style="font-size: 14px; color: var(--muted-fg); display: flex; align-items: center; gap: 6px;"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16.5 12"></polyline></svg>Total hours</div>
+        <p class="num" style="margin: 4px 0 0; font-size: 28px; line-height: 1.25; font-weight: 500; letter-spacing: -0.02em;">1,720.75</p>
+        <p style="margin: 2px 0 0; font-size: 13px; color: var(--muted-fg);">12 team members · 241 shifts</p>
+      </div>
+      <div style="min-width: 0; padding-left: 40px; border-left: 1px solid var(--border60);">
+        <div style="font-size: 14px; color: var(--muted-fg); display: flex; align-items: center; gap: 6px;"><svg class="ic" viewBox="0 0 24 24"><line x1="10" x2="14" y1="2" y2="2"></line><line x1="12" x2="15" y1="14" y2="11"></line><circle cx="12" cy="14" r="8"></circle></svg>Overtime hours</div>
+        <p class="num" style="margin: 4px 0 0; font-size: 28px; line-height: 1.25; font-weight: 500; letter-spacing: -0.02em;">34.00</p>
+        <p style="margin: 2px 0 0; font-size: 13px; color: var(--muted-fg);">2 people · counted week by week</p>
+      </div>
+      <div style="min-width: 0; padding-left: 40px; border-left: 1px solid var(--border60);">
+        <div style="font-size: 14px; color: var(--muted-fg); display: flex; align-items: center; gap: 6px;"><svg class="ic" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"></path><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"></path></svg>Estimated labor cost</div>
+        <p class="num" style="margin: 4px 0 0; font-size: 28px; line-height: 1.25; font-weight: 500; letter-spacing: -0.02em;">$28,259.87</p>
+        <p style="margin: 2px 0 0; font-size: 13px; color: var(--muted-fg);">Not counted: 1 person with no pay rate</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hours panel -->
+  <div style="border: 1px solid var(--border); background: var(--card); border-radius: 24px; overflow: hidden;">
+    <section style="padding: 32px 24px;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; color: var(--brand);">
+            <svg class="ic" viewBox="0 0 24 24" style="width: 18px; height: 18px;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span>Hours by team member</span>
+          </div>
+          <p style="margin: 4px 0 0; font-size: 14px; color: var(--muted-fg);">Select a week to open it day by day.</p>
+        </div>
+        <div style="display: inline-flex; gap: 2px; padding: 4px; border-radius: 9999px; background: var(--m70);">
+          <div style="padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 0 0 1px var(--border);">Summary</div>
+          <div style="padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 500; color: var(--muted-fg);">Shifts</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+          <div style="position: relative; width: 360px;">
+            <svg class="ic" viewBox="0 0 24 24" style="position: absolute; left: 14px; top: 12px; color: var(--muted-fg); opacity: 0.5;"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+            <div style="height: 40px; border-radius: 9999px; background: var(--m60); padding-left: 40px; display: flex; align-items: center; font-size: 14px; color: var(--muted-fg);">Search team members…</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 13px; color: var(--muted-fg); margin-right: 4px;">Needs review</span>
+            <div style="height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 9999px; background: var(--m60); font-size: 13px; color: var(--muted-fg);">
+              <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line></svg>
+              <span>Missing clock-out</span><span class="num" style="font-weight: 500; color: var(--fg);">1</span>
+            </div>
+            <div style="height: 36px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 9999px; background: var(--m60); font-size: 13px; color: var(--muted-fg);">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"></path><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"></path></svg>
+              <span>No pay rate</span><span class="num" style="font-weight: 500; color: var(--fg);">1</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="border-radius: 16px; background: var(--m20); overflow: hidden; font-size: 14px;">
+          <div style="display: grid; grid-template-columns: 232px repeat(6, minmax(0, 1fr)) 100px 100px 118px; background: var(--m50); height: 52px; align-items: center;">
+            <div style="padding: 0 12px;"><span style="height: 32px; display: inline-flex; align-items: center; gap: 8px; padding: 0 8px; font-weight: 500;">Team member</span></div>
+            <sc-for list="{{weeks}}" as="w" hint-placeholder-count="6">
+              <div style="padding: 0 8px; display: flex; flex-direction: column; align-items: flex-end; line-height: 16px;">
+                <span class="num" style="font-weight: 500; font-size: 13px; white-space: nowrap;">{{w.range}}</span>
+                <span style="font-size: 12px; color: var(--muted-fg);">{{w.sub}}</span>
+              </div>
+            </sc-for>
+            <div style="padding: 0 20px; text-align: right; font-weight: 500;">Total</div>
+            <div style="padding: 0 20px; text-align: right; font-weight: 500;">Overtime</div>
+            <div style="padding: 0 20px; text-align: right; font-weight: 500;">Est. pay</div>
+          </div>
+
+          <sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
+            <div style="display: grid; grid-template-columns: 232px repeat(6, minmax(0, 1fr)) 100px 100px 118px; background: var(--card70); align-items: center; min-height: 60px;">
+              <div style="padding: 12px; display: flex; align-items: center; gap: 12px; min-width: 0;">
+                <div style="width: 36px; height: 36px; border-radius: 9999px; background: var(--muted); color: var(--muted-fg); font-size: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">{{r.init}}</div>
+                <div style="display: flex; flex-direction: column; min-width: 0;">
+                  <span style="font-weight: 500;">{{r.name}}</span>
+                  <span style="font-size: 12px; color: var(--muted-fg);">{{r.role}}</span>
+                </div>
+              </div>
+              <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="6">
+                <div style="padding: 0 8px; display: flex; justify-content: flex-end;">
+                  <span class="num" style="display: inline-flex; flex-direction: column; align-items: flex-end; padding: 4px 8px; border-radius: 12px; line-height: 18px; color: {{c.color}};">
+                    <span>{{c.text}}</span>
+                    <sc-if value="{{c.ot}}" hint-placeholder-val="{{false}}"><span style="font-size: 11px; line-height: 14px; white-space: nowrap; color: var(--muted-fg);">{{c.otText}}</span></sc-if>
+                  </span>
+                </div>
+              </sc-for>
+              <div class="num" style="padding: 0 20px; text-align: right; font-weight: 500;">{{r.total}}</div>
+              <div class="num" style="padding: 0 20px; text-align: right; color: {{r.otColor}};">{{r.ot}}</div>
+              <div style="padding: 0 20px; text-align: right; display: flex; flex-direction: column; align-items: flex-end;">
+                <span class="num" style="color: {{r.payColor}};">{{r.pay}}</span>
+                <sc-if value="{{r.noRate}}" hint-placeholder-val="{{false}}"><span style="font-size: 12px; color: var(--muted-fg);">No pay rate</span></sc-if>
+              </div>
+            </div>
+          </sc-for>
+
+          <div style="display: grid; grid-template-columns: 232px repeat(6, minmax(0, 1fr)) 100px 100px 118px; background: var(--m50); height: 52px; align-items: center; font-weight: 500;">
+            <div style="padding: 0 20px;">Weekly total</div>
+            <sc-for list="{{footer}}" as="f" hint-placeholder-count="9">
+              <div class="num" style="padding: 0 16px 0 8px; text-align: right;">{{f}}</div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; font-size: 14px; color: var(--muted-fg);">
+          <span>Showing 12 of 12 team members</span>
+          <span>Partial weeks show only the days inside August · overtime still uses the full week</span>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1184,"height":1320}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dash = '—';
+    const fmt = (v) => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const people = [
+      { name: 'Amara Okafor', role: 'Server', h: [6, 38.5, 39.25, 36, 38.75, 8], ot: [0, 0, 0, 0, 0, 0], total: 166.5, pay: '$2,830.50' },
+      { name: 'Chloe Dubois', role: 'Barista', h: [null, 35, 35, 35, 35, 7], ot: [0, 0, 0, 0, 0, 0], total: 147, pay: '$2,352.00' },
+      { name: 'Diego Alvarez', role: 'Line cook', h: [8, 40, 32, 40, 32, 8], ot: [0, 0, 0, 0, 0, 0], total: 160, pay: '$2,960.00' },
+      { name: 'Hana Sato', role: 'Barista', h: [null, 32.5, 32.5, 30, 32.5, 6.5], ot: [0, 0, 0, 0, 0, 0], total: 134, pay: null },
+      { name: 'Jordan Reyes', role: 'Bartender', h: [8.25, 44, 46.5, 41.25, 49, 9], ot: [2.25, 4, 6.5, 1.25, 9, 0], total: 198, pay: '$3,980.50' },
+      { name: 'Lena Fischer', role: 'Server', h: [8, 34.75, 30, 36.25, 34.75, null], ot: [0, 0, 0, 0, 0, 0], total: 143.75, pay: '$2,371.87' },
+      { name: 'Marcus Bell', role: 'Line cook', h: [7.5, 38, 38, 37.5, 38, 7.5], ot: [0, 0, 0, 0, 0, 0], total: 166.5, pay: '$3,080.25' },
+      { name: 'Nadia Haddad', role: 'Server', h: [8, 31, 29, 33, 31, null], ot: [0, 0, 0, 0, 0, 0], total: 132, pay: '$2,178.00' },
+      { name: 'Owen Price', role: 'Busser', h: [null, null, 12, 18.5, null, null], ot: [0, 0, 0, 0, 0, 0], total: 30.5, pay: '$427.00' },
+      { name: 'Priya Nair', role: 'Shift lead', h: [null, 44.5, 40, 42, 44.5, 8], ot: [0, 4.5, 0, 2, 4.5, 0], total: 179, pay: '$4,059.00' },
+      { name: 'Sam Whitaker', role: 'Host', h: [6, 29.5, 28, 30, 29.5, 4], ot: [0, 0, 0, 0, 0, 0], total: 127, pay: '$1,905.00' },
+      { name: 'Theo Martin', role: 'Dishwasher', h: [6, 35.25, 30, 24, 35.25, 6], ot: [0, 0, 0, 0, 0, 0], total: 136.5, pay: '$2,115.75' }
+    ];
+    const rows = people.map((p) => {
+      const otTotal = p.ot.reduce((a, b) => a + b, 0);
+      return {
+        name: p.name, role: p.role,
+        init: p.name.split(' ').map((s) => s[0]).join(''),
+        cells: p.h.map((v, i) => ({
+          text: v == null ? dash : fmt(v),
+          color: v == null ? 'var(--muted-fg)' : 'var(--fg)',
+          ot: p.ot[i] > 0,
+          otText: fmt(p.ot[i]) + ' OT'
+        })),
+        total: fmt(p.total),
+        ot: otTotal > 0 ? fmt(otTotal) : dash,
+        otColor: otTotal > 0 ? 'var(--fg)' : 'var(--muted-fg)',
+        pay: p.pay == null ? dash : p.pay,
+        payColor: p.pay == null ? 'var(--muted-fg)' : 'var(--fg)',
+        noRate: p.pay == null
+      };
+    });
+    return {
+      themeClass: this.props.dark ? 'dark' : '',
+      weeks: [
+        { range: 'Aug 1–2', sub: 'Sat–Sun' },
+        { range: 'Aug 3–9', sub: 'Week 2' },
+        { range: 'Aug 10–16', sub: 'Week 3' },
+        { range: 'Aug 17–23', sub: 'Week 4' },
+        { range: 'Aug 24–30', sub: 'Week 5' },
+        { range: 'Aug 31', sub: 'Mon' }
+      ],
+      rows,
+      footer: ['57.75', '403.00', '392.25', '403.50', '400.25', '64.00', '1,720.75', '34.00', '$28,259.87']
+    };
+  }
+}
+</script>
+</body>
+</html>
