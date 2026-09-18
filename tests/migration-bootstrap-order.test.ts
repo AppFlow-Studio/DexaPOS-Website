@@ -39,4 +39,16 @@ describe("pre-snapshot migration bootstrap ordering", () => {
       /RAISE WARNING 'broadcast_order_changes failed: %', SQLERRM;\s+RETURN NULL;\s+END;\s+\$\$;\s+ALTER FUNCTION "public"\."broadcast_order_changes"/,
     );
   });
+
+  it("rebuilds the generated tip total around source type changes", () => {
+    const tipMigration = read(
+      "supabase/migrations/20260419000000_tip_system_v1_1_bolstering.sql",
+    );
+
+    expect(tipMigration).toContain("DROP COLUMN IF EXISTS total_tips");
+    expect(tipMigration).not.toMatch(/ALTER COLUMN total_tips\s+TYPE/);
+    expect(tipMigration).toMatch(
+      /ADD COLUMN total_tips NUMERIC\(12,2\) GENERATED ALWAYS AS/,
+    );
+  });
 });

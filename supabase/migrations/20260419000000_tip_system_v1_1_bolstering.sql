@@ -45,6 +45,11 @@ BEGIN;
 -- INTEGER → NUMERIC is a widening conversion and PostgreSQL handles it cleanly).
 -- =============================================================================
 
+-- total_tips is generated from six of these columns. PostgreSQL will not alter
+-- either the generated column or its dependencies in place, so rebuild it.
+ALTER TABLE public.employee_daily_tips
+  DROP COLUMN IF EXISTS total_tips;
+
 ALTER TABLE public.employee_daily_tips
   ALTER COLUMN cash_tips_declared   TYPE NUMERIC(12,2) USING cash_tips_declared::numeric,
   ALTER COLUMN charged_tips         TYPE NUMERIC(12,2) USING charged_tips::numeric,
@@ -52,7 +57,6 @@ ALTER TABLE public.employee_daily_tips
   ALTER COLUMN tip_pool_contributed TYPE NUMERIC(12,2) USING tip_pool_contributed::numeric,
   ALTER COLUMN tip_out_given        TYPE NUMERIC(12,2) USING tip_out_given::numeric,
   ALTER COLUMN tip_out_received     TYPE NUMERIC(12,2) USING tip_out_received::numeric,
-  ALTER COLUMN total_tips           TYPE NUMERIC(12,2) USING total_tips::numeric,
   ALTER COLUMN gross_sales          TYPE NUMERIC(12,2) USING gross_sales::numeric;
 -- Set clean defaults to 0.00 instead of 0 for the now-numeric columns
 ALTER TABLE public.employee_daily_tips
@@ -62,6 +66,16 @@ ALTER TABLE public.employee_daily_tips
   ALTER COLUMN tip_pool_contributed SET DEFAULT 0.00,
   ALTER COLUMN tip_out_given        SET DEFAULT 0.00,
   ALTER COLUMN tip_out_received     SET DEFAULT 0.00;
+
+ALTER TABLE public.employee_daily_tips
+  ADD COLUMN total_tips NUMERIC(12,2) GENERATED ALWAYS AS (
+    cash_tips_declared
+    + charged_tips
+    + tip_pool_received
+    - tip_pool_contributed
+    + tip_out_received
+    - tip_out_given
+  ) STORED;
 -- =============================================================================
 -- CHUNK 2 — Attribution plumbing
 -- -----------------------------------------------------------------------------
