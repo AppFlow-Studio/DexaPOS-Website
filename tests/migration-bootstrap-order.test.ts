@@ -97,4 +97,18 @@ describe("pre-snapshot migration bootstrap ordering", () => {
     );
     expect(phoneMigration).not.toContain("deleted_at IS NULL");
   });
+
+  it("creates the processor fee snapshot before the payment backfill", () => {
+    const feeColumns = read(
+      "supabase/migrations/20260503234806_platform_fee_columns_columns_only.sql",
+    );
+    const backfill = read(
+      "supabase/migrations/20260508084521_backfill_processor_fee_snapshot_recent.sql",
+    );
+
+    expect(feeColumns).toContain(
+      "ADD COLUMN IF NOT EXISTS processor_fee_percentage_snapshot numeric(5,2) NOT NULL DEFAULT 0",
+    );
+    expect(backfill).toContain("processor_fee_percentage_snapshot = l.dual_pricing_percentage");
+  });
 });
