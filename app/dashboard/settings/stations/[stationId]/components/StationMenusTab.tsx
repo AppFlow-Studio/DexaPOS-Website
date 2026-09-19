@@ -1,12 +1,13 @@
 'use client'
 
-import { AlertTriangle, EyeOff, Loader2 } from 'lucide-react'
+import { AlertTriangle, EyeOff, Loader2, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import { Station } from '@/app/dashboard/actions/stations'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -81,6 +82,16 @@ export function StationMenusTab({ station }: StationMenusTabProps) {
     [optionsQuery.data],
   )
   const selectedSet = useMemo(() => new Set(current.menuIds), [current.menuIds])
+
+  // Name filter for the checklist only. Counts, warnings and the save payload
+  // still read from the full `options` list so a ticked menu that is filtered
+  // out of view is never silently dropped.
+  const [search, setSearch] = useState('')
+  const visibleOptions = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return options
+    return options.filter((o) => o.name.toLowerCase().includes(q))
+  }, [options, search])
 
   // Ids that are ticked but no longer exist at this location (a deleted or
   // moved menu). They are shown so the manager knows why the count is off,
@@ -207,6 +218,19 @@ export function StationMenusTab({ station }: StationMenusTabProps) {
 
             {current.scope === 'selected' && (
               <div className="space-y-3" data-testid="station-menu-checklist">
+                {options.length > 0 && (
+                  <div className="relative min-w-0 sm:max-w-[300px]">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+                    <Input
+                      placeholder="Search menus..."
+                      className="h-10 w-full rounded-full pl-10"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      aria-label="Search menus"
+                    />
+                  </div>
+                )}
+
                 {optionsQuery.isLoading ? (
                   <Skeleton className="h-32 w-full rounded-2xl" />
                 ) : optionsQuery.isError ? (
@@ -217,9 +241,13 @@ export function StationMenusTab({ station }: StationMenusTabProps) {
                   <p className="text-sm text-muted-foreground">
                     This location has no menus yet.
                   </p>
+                ) : visibleOptions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No menus match &ldquo;{search.trim()}&rdquo;.
+                  </p>
                 ) : (
                   <ul className="divide-y-0 space-y-1">
-                    {options.map((menu) => {
+                    {visibleOptions.map((menu) => {
                       const checked = selectedSet.has(menu.id)
                       const hiddenOnChannel = isMenuHiddenOnStationChannel(
                         menu,
