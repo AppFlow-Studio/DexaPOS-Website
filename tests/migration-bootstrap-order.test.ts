@@ -111,4 +111,14 @@ describe("pre-snapshot migration bootstrap ordering", () => {
     );
     expect(backfill).toContain("processor_fee_percentage_snapshot = l.dual_pricing_percentage");
   });
+
+  it("skips the one-off settlement when its historical batch is absent", () => {
+    const settlementMigration = read(
+      "supabase/migrations/20260510192118_wave_d4_manual_mark_batch_settled.sql",
+    );
+
+    expect(settlementMigration).toMatch(
+      /IF EXISTS \([\s\S]+FROM public\.settlement_batches[\s\S]+a59f40fb-2960-4939-b019-c80d0fcf93ad[\s\S]+PERFORM public\.manual_mark_batch_settled/,
+    );
+  });
 });

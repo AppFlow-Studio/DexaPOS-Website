@@ -51,8 +51,17 @@ GRANT EXECUTE ON FUNCTION public.manual_mark_batch_settled(uuid, uuid, text) TO 
 -- One-off: mark the orphan batch a59f40fb settled now, since its 30 linked
 -- payments were already settled on the terminal in prior sessions and we
 -- can't (and shouldn't) re-settle them.
-SELECT public.manual_mark_batch_settled(
-    'a59f40fb-2960-4939-b019-c80d0fcf93ad'::uuid,
-    '2add44cb-f498-4653-aca3-a8f0ca258e70'::uuid,
-    'Reconciled by support: 30 historical payments already settled on terminal in prior sessions before host-keyed batching went live.'
-);;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM public.settlement_batches
+        WHERE id = 'a59f40fb-2960-4939-b019-c80d0fcf93ad'::uuid
+    ) THEN
+        PERFORM public.manual_mark_batch_settled(
+            'a59f40fb-2960-4939-b019-c80d0fcf93ad'::uuid,
+            '2add44cb-f498-4653-aca3-a8f0ca258e70'::uuid,
+            'Reconciled by support: 30 historical payments already settled on terminal in prior sessions before host-keyed batching went live.'
+        );
+    END IF;
+END;
+$$;
