@@ -9807,8 +9807,7 @@ INSERT INTO "public"."roles" ("id", "code", "name", "description", "organization
 	('f7cba7df-c631-40b8-8616-9b9e239ca601', 'hq.support_agent', 'Support Agent', 'Provide customer support', 'hq', 4, true, '2025-10-18 16:13:12.96273+00', '2025-10-18 16:13:12.96273+00', 'manager', 'clerk'),
 	('1cd42a47-b3a0-4787-9d03-0515b3a1d677', 'merchant.staff', 'Staff', 'Basic store operations', 'merchant', 2, true, '2025-10-18 16:13:12.96273+00', '2025-12-14 18:22:14.950075+00', 'member', 'pos_only'),
 	('9dd0f722-aa57-4316-a6e2-2009a9768a65', 'merchant.cashier', 'Cashier', 'Process sales and transactions', 'merchant', 3, true, '2025-10-18 16:13:12.96273+00', '2025-12-14 18:22:23.670548+00', 'member', 'pos_only'),
-	('6b950b57-189d-4189-9780-763e12af90b9', 'hq.manager', 'Manager', 'Operational management - can view and edit assigned merchants, view team info', 'hq', 5, true, '2026-02-20 18:40:28.2752+00', '2026-02-20 18:40:28.2752+00', 'hq', 'clerk')
-ON CONFLICT DO NOTHING;
+	('6b950b57-189d-4189-9780-763e12af90b9', 'hq.manager', 'Manager', 'Operational management - can view and edit assigned merchants, view team info', 'hq', 5, true, '2026-02-20 18:40:28.2752+00', '2026-02-20 18:40:28.2752+00', 'hq', 'clerk');
 
 
 --
@@ -30916,8 +30915,7 @@ INSERT INTO "public"."permissions" ("id", "code", "name", "description", "catego
 	('bafe6e15-6792-44fa-8166-728d8412eed9', 'location.transactions.view', 'View Location Transactions', 'View transactions at location', 'transactions', 'location', '2025-12-04 17:40:37.521093+00'),
 	('014781e9-30d8-477f-85e4-a17e75b552ba', 'location.transactions.refund', 'Process Location Refunds', 'Process refunds at location', 'transactions', 'location', '2025-12-04 17:40:37.521093+00'),
 	('f91615d7-8c8e-4edc-ba58-d20d28535e06', 'location.devices.view', 'View Location Devices', 'View POS devices at location', 'devices', 'location', '2025-12-04 17:40:37.521093+00'),
-	('0d37b423-4c87-4bd8-8940-5961c51372a4', 'location.devices.manage', 'Manage Location Devices', 'Configure devices at location', 'devices', 'location', '2025-12-04 17:40:37.521093+00')
-ON CONFLICT DO NOTHING;
+	('0d37b423-4c87-4bd8-8940-5961c51372a4', 'location.devices.manage', 'Manage Location Devices', 'Configure devices at location', 'devices', 'location', '2025-12-04 17:40:37.521093+00');
 
 
 --

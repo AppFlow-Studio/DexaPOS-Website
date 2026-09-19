@@ -9,26 +9,18 @@
 --   L5 = Branch menu category base     (location_menu_item_overrides)
 -- =============================================================================
 
--- Fresh Supabase preview databases replay this file before the later remote
--- schema snapshot creates these tables. Existing environments had the tables
--- when this migration originally ran. Skip only the early table mutation in a
--- fresh bootstrap; the snapshot contains the same column and indexes.
-DO $$
-BEGIN
-  IF to_regclass('public.category_items') IS NOT NULL
-     AND to_regclass('public.menus') IS NOT NULL THEN
-    EXECUTE 'ALTER TABLE public.category_items
-      ADD COLUMN IF NOT EXISTS menu_id uuid
-      REFERENCES public.menus(id) ON DELETE CASCADE';
-    EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS category_items_item_cat_nomenu_idx
-      ON public.category_items (menu_item_id, category_id)
-      WHERE menu_id IS NULL';
-    EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS category_items_item_cat_menu_idx
-      ON public.category_items (menu_item_id, category_id, menu_id)
-      WHERE menu_id IS NOT NULL';
-  END IF;
-END;
-$$;
+-- Step 1: Add menu_id column (nullable) to category_items
+ALTER TABLE public.category_items
+  ADD COLUMN IF NOT EXISTS menu_id uuid REFERENCES public.menus(id) ON DELETE CASCADE;
+-- Step 2: Partial unique indexes to differentiate L2 rows (no menu) from L4 rows (with menu)
+-- L2: one row per (item, category) globally
+CREATE UNIQUE INDEX IF NOT EXISTS category_items_item_cat_nomenu_idx
+  ON public.category_items (menu_item_id, category_id)
+  WHERE menu_id IS NULL;
+-- L4: one row per (item, category, menu)
+CREATE UNIQUE INDEX IF NOT EXISTS category_items_item_cat_menu_idx
+  ON public.category_items (menu_item_id, category_id, menu_id)
+  WHERE menu_id IS NOT NULL;
 -- =============================================================================
 -- Step 3: Update upsert_category_item_override to handle L4
 -- =============================================================================

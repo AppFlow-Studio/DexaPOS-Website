@@ -21,7 +21,6 @@ ALTER TABLE public.order_payments
   ADD COLUMN IF NOT EXISTS refunded_tip_fee numeric(12,2) NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS original_tip_fee numeric(12,2),
   ADD COLUMN IF NOT EXISTS dual_pricing_percentage_snapshot numeric(5,2) NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS processor_fee_percentage_snapshot numeric(5,2) NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS tip_surcharge_percentage_snapshot numeric(5,2) NOT NULL DEFAULT 0;
 
 -- 3. Constraint guards.

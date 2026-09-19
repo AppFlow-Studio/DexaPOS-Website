@@ -76,14 +76,14 @@ CREATE OR REPLACE VIEW public.admin_device_inventory AS
     dc.model_name,
     dc.model_sku,
     dc.monthly_fee_cents,
+    dc.monthly_fee,
     di.merchant_id,
     m.name  AS merchant_name,
     di.location_id,
     l.name  AS location_name,
     di.linked_station_id,
     di.linked_payment_terminal_id,
-    di.linked_printer_id,
-    dc.monthly_fee
+    di.linked_printer_id
   FROM public.device_inventory di
   JOIN public.device_catalog    dc ON dc.id = di.catalog_id
   LEFT JOIN public.merchants    m  ON m.id  = di.merchant_id

@@ -1,8 +1,6 @@
 DO $$
 DECLARE
-    -- Deferred because payment and settlement paths still depend on this shim.
-    -- See docs/engineering/preview-bootstrap-2026-09-20.md before changing it.
-    v_deadline date := DATE '2026-12-31';
+    v_deadline date := DATE '2026-08-10';
     v_exists boolean;
 BEGIN
     SELECT EXISTS (

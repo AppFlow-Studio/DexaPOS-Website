@@ -50,9 +50,7 @@ Three related website defects should ship in one pull request:
 
 - Deploy `supabase/functions/cdn-upload/index.ts` after merging. The kiosk
   upload fix is not live merely because its source is merged.
-- No new database migration or live database apply is required. Two historical
-  migrations now guard table mutations that run before the repository's schema
-  snapshot when Supabase creates a fresh PR preview database.
+- No database migration or live database apply is required for these fixes.
 - No new environment variables are required.
 
 ## Verification

@@ -15,13 +15,7 @@
 -- indexes correctly treat them as distinct rows.
 -- =============================================================================
 
-DO $$
-BEGIN
-  IF to_regclass('public.category_items') IS NOT NULL THEN
-    EXECUTE 'ALTER TABLE public.category_items
-      DROP CONSTRAINT IF EXISTS menu_item_categories_menu_item_id_category_id_key';
-  END IF;
-END;
-$$;
+ALTER TABLE public.category_items
+  DROP CONSTRAINT IF EXISTS menu_item_categories_menu_item_id_category_id_key;
 -- Also drop the old non-partial index if it exists as an index (not a constraint)
 DROP INDEX IF EXISTS public.menu_item_categories_menu_item_id_category_id_key;
