@@ -132,6 +132,35 @@ table's header rule computes to `0px` (§5.5).
 **Total: 44 routes.** Also in the tree: 9 `layout.tsx`, 9 `loading.tsx`
 (6 using `DataPageSkeleton` with `shell="plain"`, 3 hand-rolled).
 
+### Family 3 status (PRs 3a–3g, complete)
+
+All **51 reachable** files converted; no live file under
+`app/manage/merchants/[merchantId]` imports `@/components/ui/card` any more.
+The 56 unreachable files were deliberately not converted (see
+*Family 3 audit → Reachability* below) and are left for a separate cleanup
+ticket.
+
+| Sub-PR | Scope | Status | Notes |
+|---|---|---|---|
+| **3a** | tab host + overview | ✅ converted | `PageShell as="div"`; host `Card`/`CardContent` → `Panel`; `OnboardingStatusCard` → `Panel` > `PanelSection` (status badge → `caption`, Manage link → `action`); `OverviewTab`'s 7 KPI `Card`s → two `PanelSection`s ("Last 30 days", "Today") over `StatRow`/`StatTile`; 2 chart + 2 detail cards → `PanelGrid`. Red refunds numeral and green/red growth delta de-coloured (§4.6b) — neither encodes severity. Tab dispatch, `?tab=` resolution and permission gates untouched. |
+| **3b** | business-info | ✅ converted | Legal sub-tab's 4 sibling `Card`s → one `Panel` of 4 `divider`-separated `PanelSection`s; Locations sub-tab → `Panel` with Add Location as `action`, its 3 KPI cards → a "Location Summary" `StatRow`. `AdminLocationDetailSheet`'s 5 cards → one `Panel` per sheet tab; the three Settings cards' leading icons → `PanelSection icon`. |
+| **3c** | online-store | ✅ converted | Heaviest live file (1,854 L). The audit's "106 cards" is really **23 `<Card>` elements** — the proxy grep counts every `<Card*` tag. 14 converted by a structural script, 9 by hand (icon-badge + trailing-`Switch` headers → `icon`/`action`; conditional `CardContent` → conditional div). Two request-status cards keep their border colour: it encodes approval state (§6 ex. 2). |
+| **3d** | money tabs | ✅ mostly no change | **Re-dispositioned.** `SettlementsSection`, `DisputesSection`, `PaymentsTable` and the three Luqra tables contain **zero `<Card>`** — they are already table-led and needed no conversion. Only `PlatformBillingTab`'s single wrapper card → `Panel`. |
+| **3e** | devices + device detail | ✅ converted | 4 KPI cards → `StatRow`; tabs+search header → a bordered toolbar row (controls, no heading); device-detail identity header (image + name) stays a header row in `Panel padded`. **`StatRow` is 3-up, not 4**: this tab renders beside the merchant nav, leaving a 4th column ~100px that truncated "Payment Terminals"/"Connected Terminals" — recorded under §4.2 density rather than solved ad hoc. |
+| **3f** | menu route | ✅ converted | 8 cards by script, 7 by hand: 2 empty states → `Panel padded`; schedule list item → `Panel nested padded` (tier 2) keeping its Active/Inactive badge; Menu Status's conditional `CardDescription` → a caption expression; the OrderOut payload's clickable `CardHeader` → a real `<button>` with `aria-expanded` (better exposed than the div it replaced). `AdminPriceBreakdown` keeps its cascade-level styling — that UI is owned by the menu epic, so only its container changed. |
+| **3g** | notes + audit | ✅ converted | Note composer and list → `Panel` > `PanelSection`; the audit filter rail and table shell were plain containers, so they become `Panel`s and drop decorative `shadow-lg` / `backdrop-blur`. |
+
+**Defect filed, not fixed** (§7): the menu route's tab strip is clipped rather
+than scrolled at 375px, leaving the OrderOut tab unreachable on a phone —
+[`menu-route-tablist-mobile-ticket.md`](./menu-route-tablist-mobile-ticket.md).
+Pre-existing and byte-identical on the baseline. It is invisible to a
+document-level overflow check, because the content is clipped rather than
+scrollable; the acceptance check is that every tab is *reachable* at 375px.
+
+> Note on tab testing, confirmed again here: the merchant-detail nav and the
+> online-store inner tabs are controlled, so a synthetic `element.click()`
+> silently fails and reports an empty panel. Use trusted clicks.
+
 ## Conversion classification
 
 Per the ticket's four-way classification:
