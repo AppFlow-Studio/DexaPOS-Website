@@ -154,4 +154,24 @@ describe("pre-snapshot migration bootstrap ordering", () => {
     expect(seedRoles).not.toBeNull();
     expect(roleRows(grantMigration)).toEqual(roleRows(seedRoles![0]));
   });
+
+  it("uses the transactional replacement for the May 18 prefetch indexes", () => {
+    const superseded = read(
+      "supabase/migrations/20260518000000_order_prefetch_indexes.sql",
+    );
+    const replacement = read(
+      "supabase/migrations/20260518000001_order_prefetch_indexes.sql",
+    );
+
+    expect(superseded).toMatch(/SELECT 1;/);
+    expect(superseded).not.toMatch(/^CREATE INDEX/gm);
+    for (const index of [
+      "idx_orders_location_created_at",
+      "idx_order_items_order_active",
+      "idx_order_payments_order_id",
+    ]) {
+      expect(replacement).toContain(`CREATE INDEX IF NOT EXISTS ${index}`);
+    }
+    expect(replacement).not.toMatch(/^CREATE INDEX CONCURRENTLY/gm);
+  });
 });
