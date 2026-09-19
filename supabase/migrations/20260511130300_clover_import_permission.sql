@@ -14,6 +14,19 @@
 -- =============================================================================
 
 -- Step 1: register the permission code itself.
+-- Fresh previews apply migrations before seed.sql; install the canonical role
+-- rows first so the foreign-keyed grants below are not silently skipped.
+INSERT INTO public.roles (
+    id, code, name, description, organization_type, level, is_system_role,
+    level_type, requires_clerk_account
+)
+VALUES
+    ('2c79e923-b896-4136-8b05-dc3da07bd29f', 'hq.super_admin', 'Super Admin',
+     'Full system access - can do everything', 'hq', 10, true, 'admin', 'clerk'),
+    ('6d4a04dc-363e-494a-ac65-2100489c58c2', 'hq.platform_admin', 'Platform Admin',
+     'Manage carriers and merchants', 'hq', 9, true, 'admin', 'clerk')
+ON CONFLICT (code) DO NOTHING;
+
 INSERT INTO public.permissions (code, name, description, category, scope)
 VALUES (
     'hq.merchant.menu.import',

@@ -132,4 +132,17 @@ describe("pre-snapshot migration bootstrap ordering", () => {
       "docs/engineering/preview-bootstrap-2026-09-20.md",
     );
   });
+
+  it("creates HQ roles before the Clover import permission grants", () => {
+    const grantMigration = read(
+      "supabase/migrations/20260511130300_clover_import_permission.sql",
+    );
+    const seed = read("supabase/seed.sql");
+
+    expect(grantMigration.indexOf("INSERT INTO public.roles")).toBeLessThan(
+      grantMigration.indexOf("INSERT INTO public.role_permissions"),
+    );
+    expect(grantMigration).toContain("ON CONFLICT (code) DO NOTHING");
+    expect(seed).toMatch(/INSERT INTO "public"\."roles"[\s\S]+ON CONFLICT DO NOTHING;/);
+  });
 });
