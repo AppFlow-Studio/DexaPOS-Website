@@ -44,6 +44,7 @@ import {
   Settings,
   HelpCircle,
   MessageCircle,
+  Megaphone,
   Search,
   MoreHorizontal,
   CreditCard,
@@ -266,6 +267,11 @@ const navMain = [
         title: "Customers",
         url: "/dashboard/customers",
         icon: User,
+      },
+      {
+        title: "Campaigns",
+        url: "/dashboard/campaigns",
+        icon: Megaphone,
       },
       {
         title: "Inventory",
@@ -1580,6 +1586,7 @@ export default function MerchantDashboardLayout({
     { title: "Online Ordering", url: "/dashboard/online-ordering", icon: Globe },
     { title: "Kiosk", url: "/dashboard/kiosk", icon: MonitorPlay },
     { title: "Customers", url: "/dashboard/customers", icon: User },
+    { title: "Campaigns", url: "/dashboard/campaigns", icon: Megaphone },
     { title: "Inventory", url: "/dashboard/inventory", icon: Package },
     { title: "Subscriptions", url: "/dashboard/subscriptions", icon: FileText },
     { title: "Devices", url: "/dashboard/devices", icon: Monitor },

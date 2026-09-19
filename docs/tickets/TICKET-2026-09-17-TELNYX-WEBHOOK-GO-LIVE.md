@@ -10,6 +10,58 @@
 - Discussions when fetched: none
 - Fetch date: 2026-09-18
 
+### Source rechecked for the Campaigns UI (2026-09-20)
+
+- Re-fetched the complete ticket and requested all discussions, including resolved
+  block discussions. No discussions were returned. Ticket status: In progress.
+- Also fetched the original source ticket and its discussions:
+  `Wire-Up & Hardening — Support Counter, Notification Bell, Customer Marketing (Telnyx Email + SMS)`.
+- Original page ID: `3728280c-1b1d-8182-9a45-e9e9fd2b79e2`.
+- Original URL: https://app.notion.com/p/3728280c1b1d81829a45e9e9fd2b79e2?pvs=204
+- Original ticket status: Done; no discussions returned.
+- The September ticket explicitly leaves the Message Log UI for a follow-up.
+  The user requested that follow-up as a new **Campaigns** navigation entry.
+- The June ticket describes Telnyx email, while current Website email sends use
+  Resend. This UI follow-up does not change providers or implement email callbacks.
+
+### Campaigns UI follow-up
+
+- Route: `/dashboard/campaigns`, linked beside Customers in the desktop sidebar,
+  mobile More menu, and global navigation search.
+- Campaign history lists existing SMS/email campaigns and quick messages, with
+  campaign text, submission status, recipient count, and search/pagination.
+- SMS message log reads `message_log` directly and includes transactional sends,
+  campaign sends, and inbound replies. Filter by status, direction, rolling time
+  period, phone/text, or a selected campaign. Open a row for full body, timestamps,
+  sender/recipient, error, cost, Telnyx ID, and messaging profile.
+- Active lists refresh every 15 seconds, with manual refresh and explicit loading,
+  error, and empty states. Missing cost is not displayed as zero. Cost has no
+  currency symbol because the ledger does not retain a separate currency column.
+- Reads resolve the merchant on the server, explicitly filter its ID, and use
+  the caller's authenticated Supabase client so existing RLS remains in force.
+  Raw webhook payloads are not sent to the browser. The new page is read-only;
+  campaign creation and sends remain in the existing Customers flow.
+- No migrations, Edge Functions, webhooks, cron jobs, or environment variables
+  are added by this UI follow-up. Existing webhook deployment requirements below
+  still apply for delivered/failed updates, inbound replies, and reported cost.
+- Automated verification: 31 tests pass across `tests/campaigns-actions.test.ts`,
+  `tests/telnyx-ledger-go-live.test.ts`, and
+  `lib/messaging/__tests__/message-log.test.ts`. New page/actions and navigation
+  search pass ESLint. Linting the shared dashboard layout reports its existing
+  `react-hooks/set-state-in-effect` violation in `MerchantDashboardLayout`.
+- The repository-wide TypeScript check reports existing errors in other areas
+  (including shared layout submenu icon types); none reference the new
+  `app/dashboard/campaigns` files or `tests/campaigns-actions.test.ts`.
+- Browser verification used the actual page with fixture data in an isolated
+  local preview: campaign-to-log navigation, pagination, status filtering,
+  search, empty state, details, refresh, and failed-request retry all pass.
+  Desktop/light and mobile/dark screenshots were inspected. The log and detail
+  dialog have no axe WCAG A/AA violations in this preview. This does not verify
+  authentication, live RLS, or provider callbacks against staging.
+- Pending manual QA: sign in as a merchant, open both tabs, inspect send/reply
+  records, filter and paginate, verify mobile/dark mode, and repeat under a
+  second merchant. Live delivery, recording, and verifier sign-off remain pending.
+
 ## Website Scope
 
 - Harden the existing `telnyx-webhook` receiver and dead-letter failures.
