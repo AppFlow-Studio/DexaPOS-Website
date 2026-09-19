@@ -10,7 +10,8 @@ import { toast } from 'sonner'
 // UI Components
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -672,46 +673,41 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Categories</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <Panel>
+                <PanelSection label="Categories">
+                    <div className="mt-4">
                 <div className="flex items-center gap-2">
                   <Folder className="h-5 w-5 text-muted-foreground" />
                   <span className="text-2xl font-bold">{menu.categories_count}</span>
                 </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Items</CardTitle>
-              </CardHeader>
-              <CardContent>
+                    </div>
+                </PanelSection>
+            </Panel>
+            <Panel>
+                <PanelSection label="Items">
+                    <div className="mt-4">
                 <div className="flex items-center gap-2">
                   <Package className="h-5 w-5 text-muted-foreground" />
                   <span className="text-2xl font-bold">{menu.items_count}</span>
                 </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Schedules</CardTitle>
-              </CardHeader>
-              <CardContent>
+                    </div>
+                </PanelSection>
+            </Panel>
+            <Panel>
+                <PanelSection label="Schedules">
+                    <div className="mt-4">
                 <div className="flex items-center gap-2">
                   <Clock className="h-5 w-5 text-muted-foreground" />
                   <span className="text-2xl font-bold">{schedules.length}</span>
                 </div>
-              </CardContent>
-            </Card>
+                    </div>
+                </PanelSection>
+            </Panel>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Menu Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <Panel>
+              <PanelSection label="Menu Information">
+                  <div className="mt-4 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Created</p>
@@ -730,8 +726,9 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+                  </div>
+              </PanelSection>
+          </Panel>
         </TabsContent>
 
         {/* Categories & Items Tab */}
@@ -779,8 +776,8 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
           </div>
 
           {displayCategories.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
+            <Panel padded>
+              <div className="flex flex-col items-center justify-center py-12">
                 <FolderOpen className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <p className="text-muted-foreground">No categories in this menu</p>
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
@@ -792,8 +789,8 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
                     Link Existing Category
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </Panel>
           ) : (
             <div className="space-y-2">
               {displayCategories.map((category, index) => (
@@ -825,19 +822,18 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
               <Skeleton className="h-20 w-full" />
             </div>
           ) : schedules.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
+            <Panel padded>
+              <div className="flex flex-col items-center justify-center py-12">
                 <Clock className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <p className="text-muted-foreground">No schedules assigned to this menu</p>
-              </CardContent>
-            </Card>
+              </div>
+            </Panel>
           ) : (
             <div className="space-y-4">
               {schedules.map((schedule) => (
-                <Card key={schedule.id}>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base">{schedule.name}</CardTitle>
+                <Panel key={schedule.id} nested padded>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="min-w-0 text-base font-medium">{schedule.name}</h4>
                       <Badge
                         variant="outline"
                         className={schedule.is_active ? 'bg-green-50 text-green-700 border-0' : 'bg-red-50 text-red-700 border-0'}
@@ -846,11 +842,9 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
                       </Badge>
                     </div>
                     {schedule.description && (
-                      <CardDescription>{schedule.description}</CardDescription>
+                      <p className="mt-1 text-sm text-muted-foreground">{schedule.description}</p>
                     )}
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="mt-4 flex flex-wrap gap-2">
                       {schedule.time_slots.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No time slots defined</p>
                       ) : (
@@ -861,8 +855,7 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
                         ))
                       )}
                     </div>
-                  </CardContent>
-                </Card>
+                </Panel>
               ))}
             </div>
           )}
@@ -870,12 +863,12 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
 
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Menu Details</CardTitle>
-              <CardDescription>Update the menu name and description</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <Panel>
+              <PanelSection
+                  label="Menu Details"
+                  caption="Update the menu name and description"
+              >
+                  <div className="mt-4 space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="menu-name">Name</Label>
                 <Input
@@ -921,43 +914,44 @@ export default function AdminMenuDetailPage({ params }: AdminMenuDetailPageProps
                   </Button>
                 </div>
               )}
-            </CardContent>
-          </Card>
+                  </div>
+              </PanelSection>
+          </Panel>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Menu Status</CardTitle>
-              <CardDescription>
-                {menu.is_active
+          <Panel>
+            <PanelSection
+              label="Menu Status"
+              caption={
+                menu.is_active
                   ? 'This menu is currently active and visible to customers'
-                  : 'This menu is currently inactive and hidden from customers'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button
-                variant="outline"
-                onClick={() => setMenuFormOpen(true)}
-              >
-                <Pencil className="h-4 w-4 mr-2" />
-                Edit Menu
-              </Button>
-            </CardContent>
-          </Card>
+                  : 'This menu is currently inactive and hidden from customers'
+              }
+            >
+              <div className="mt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setMenuFormOpen(true)}
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Edit Menu
+                </Button>
+              </div>
+            </PanelSection>
+          </Panel>
 
-          <Card className="border-destructive/50">
-            <CardHeader>
-              <CardTitle className="text-destructive">Danger Zone</CardTitle>
-              <CardDescription>
-                Permanently delete this menu. This action cannot be undone.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          <Panel className="border-destructive/50">
+              <PanelSection
+                  label="Danger Zone"
+                  caption="Permanently delete this menu. This action cannot be undone."
+              >
+                  <div className="mt-4">
               <Button variant="destructive" onClick={() => setDeleteMenuOpen(true)}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete Menu
               </Button>
-            </CardContent>
-          </Card>
+                  </div>
+              </PanelSection>
+          </Panel>
         </TabsContent>
 
         {/* OrderOut Tab */}

@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -148,11 +149,9 @@ function AdminOrderOutOnboarding({
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">OrderOut Integration</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <Panel>
+          <PanelSection label="OrderOut Integration">
+              <div className="mt-4 space-y-4">
           <OrderOutStatusCard
             hasAccount={hasAccount}
             hasRestaurant={false}
@@ -172,8 +171,9 @@ function AdminOrderOutOnboarding({
               onCancel={() => setShowForm(false)}
             />
           )}
-        </CardContent>
-      </Card>
+              </div>
+          </PanelSection>
+      </Panel>
     </div>
   )
 }
@@ -281,13 +281,12 @@ function AdminMenuSyncUI({
   return (
     <div className="space-y-4">
       {/* Section 1: Sync Status Card */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Sync Status</CardTitle>
-          <SyncStatusBadge lastSync={lastSync ?? null} />
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <Panel>
+        <PanelSection
+          label="Sync Status"
+          action={<SyncStatusBadge lastSync={lastSync ?? null} />}
+        >
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <p className="text-xs text-muted-foreground">OrderOut Menu ID</p>
               <p className="text-sm font-medium">
@@ -326,8 +325,8 @@ function AdminMenuSyncUI({
               </p>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
       {/* Section 1a: THE online menu control — always publishes the ONE
           designated online menu (HQ can't push a non-online menu by accident). */}
@@ -363,11 +362,9 @@ function AdminMenuSyncUI({
       {/* (Publish + changes-pending live in OnlineMenuControlCard above.) */}
 
       {/* Section 3: Sync History Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Sync History</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+          <PanelSection label="Sync History">
+              <div className="mt-4">
           {syncHistory.length === 0 ? (
             <Empty
               icon={Clock}
@@ -456,30 +453,31 @@ function AdminMenuSyncUI({
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+              </div>
+          </PanelSection>
+      </Panel>
 
       {/* Section 4: Payload Preview (collapsible) */}
       {lastPayloadSnapshot && (
-        <Card>
-          <CardHeader
-            className="cursor-pointer"
+        <Panel>
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-2 px-4 py-4 text-left sm:px-6"
             onClick={() => setShowPayload(!showPayload)}
+            aria-expanded={showPayload}
           >
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Code className="h-4 w-4" />
-                Last Synced Payload
-              </CardTitle>
-              {showPayload ? (
-                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              )}
-            </div>
-          </CardHeader>
+            <span className="flex items-center gap-2 text-sm font-medium">
+              <Code className="h-4 w-4" />
+              Last Synced Payload
+            </span>
+            {showPayload ? (
+              <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
+          </button>
           {showPayload && (
-            <CardContent>
+            <div className="border-t px-4 py-6 sm:px-6">
               <p className="text-xs text-muted-foreground mb-2">
                 The JSON payload that was last sent to OrderOut for this menu.
               </p>
@@ -494,9 +492,9 @@ function AdminMenuSyncUI({
                 {'\n'}OrderOut Menu ID:{' '}
                 {lastPayloadSnapshot.ooMenuId || 'Not available'}
               </pre>
-            </CardContent>
+            </div>
           )}
-        </Card>
+        </Panel>
       )}
 
       {/* Publish Confirmation — names the exact menu that will go live. */}
