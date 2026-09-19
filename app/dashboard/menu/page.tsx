@@ -797,6 +797,7 @@ export default function MenuPage () {
             onChannelVisibilityChange={handleChannelVisibilityChange}
             channelVisibilityDisabled={!gatedLocationId}
             showLocations={isAllLocations && !isSingleLocation}
+            stationCoverageLocationId={gatedLocationId}
           />
           {filteredMenus.length > 0 && (
             <div className='flex items-center gap-2 mt-4 text-sm text-muted-foreground'>

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { MenuActionsDropdown } from "./MenuActionsDropdown";
 import { MenuChannelVisibilityControls } from "./MenuChannelVisibilityControls";
+import { MenuStationCoverage } from "./MenuStationCoverage";
 import {
   normalizeMenuChannelVisibility,
   type MenuChannelVisibility,
@@ -103,6 +104,11 @@ interface MenuListViewProps {
   channelVisibilityDisabled?: boolean;
   /** Show effective menu availability across locations in the table view. */
   showLocations?: boolean;
+  /**
+   * Location whose stations the "N of M stations" pill reports on. Null or
+   * 'all' hides the pill: per-station scope is a per-location question.
+   */
+  stationCoverageLocationId?: string | null;
 }
 
 // Internal Helper Interface for Actions
@@ -123,6 +129,7 @@ function SortableGridCard({
   linkedMenuIds,
   onChannelVisibilityChange,
   channelVisibilityDisabled,
+  stationCoverageLocationId,
 }: {
   menu: MenuWithLocation;
   handleRowClick: (id: string) => void;
@@ -132,6 +139,7 @@ function SortableGridCard({
   linkedMenuIds?: string[];
   onChannelVisibilityChange?: MenuListViewProps["onChannelVisibilityChange"];
   channelVisibilityDisabled?: boolean;
+  stationCoverageLocationId?: string | null;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
   const visibility = normalizeMenuChannelVisibility(menu);
@@ -205,6 +213,12 @@ function SortableGridCard({
             disabled={channelVisibilityDisabled}
             onChange={(next) => onChannelVisibilityChange?.(menu.id, next)}
           />
+          <MenuStationCoverage
+            menuId={menu.id}
+            visibility={visibility}
+            locationId={stationCoverageLocationId}
+            className="mt-2"
+          />
         </div>
 
         <div className="mt-auto flex min-w-0 flex-wrap items-center gap-2 pt-3">
@@ -254,6 +268,7 @@ function SortableTableRow({
   onChannelVisibilityChange,
   channelVisibilityDisabled,
   showLocations,
+  stationCoverageLocationId,
 }: {
   menu: MenuWithLocation;
   handleRowClick: (id: string) => void;
@@ -264,6 +279,7 @@ function SortableTableRow({
   onChannelVisibilityChange?: MenuListViewProps["onChannelVisibilityChange"];
   channelVisibilityDisabled?: boolean;
   showLocations: boolean;
+  stationCoverageLocationId?: string | null;
 }) {
   const isOnlineMenu = !!onlineMenuId && onlineMenuId === menu.id;
   const visibility = normalizeMenuChannelVisibility(menu);
@@ -377,6 +393,12 @@ function SortableTableRow({
           disabled={channelVisibilityDisabled}
           onChange={(next) => onChannelVisibilityChange?.(menu.id, next)}
         />
+        <MenuStationCoverage
+          menuId={menu.id}
+          visibility={visibility}
+          locationId={stationCoverageLocationId}
+          className="mt-1.5"
+        />
       </TableCell>
       <TableCell className="hidden text-muted-foreground sm:table-cell">
         {new Date(menu.created_at).toLocaleDateString()}
@@ -416,6 +438,7 @@ export function MenuListView({
   onChannelVisibilityChange,
   channelVisibilityDisabled = false,
   showLocations = false,
+  stationCoverageLocationId = null,
 }: MenuListViewProps) {
   const router = useRouter();
   const actions = { onToggleActive, onDelete, onDuplicate, onSettings, onSetOnlineMenu };
@@ -509,6 +532,7 @@ export function MenuListView({
                 linkedMenuIds={linkedMenuIds}
                 onChannelVisibilityChange={onChannelVisibilityChange}
                 channelVisibilityDisabled={channelVisibilityDisabled}
+                stationCoverageLocationId={stationCoverageLocationId}
               />
             ))}
           </div>
@@ -558,6 +582,7 @@ export function MenuListView({
                     onChannelVisibilityChange={onChannelVisibilityChange}
                     channelVisibilityDisabled={channelVisibilityDisabled}
                     showLocations={showLocations}
+                    stationCoverageLocationId={stationCoverageLocationId}
                   />
                 ))}
               </SortableContext>
