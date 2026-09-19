@@ -8,12 +8,11 @@ import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Badge } from "@/components/ui/badge"
 import { FileUpload } from "@/components/ui/file-upload"
+import { PageHeader, PageShell, Panel, PanelSection } from "@/components/dashboard/shell"
 import { ClerkCreateOrganization } from "../actions/clerk-create-organization"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
@@ -78,27 +77,26 @@ export default function CreateOrganizationPage() {
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Create Organization</h1>
-                    <p className="text-muted-foreground">Add a new partner organization</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Link href="/manage/organizations">
-                        <Button variant="outline">Cancel</Button>
-                    </Link>
-                </div>
-            </div>
+        /* `as="div"`: app/manage/layout.tsx already owns this surface's <main>.
+           `width="narrow"` is the form-page width (§3.1). */
+        <PageShell as="div" width="narrow">
+            <PageHeader
+                title="Create Organization"
+                subtitle="Add a new partner organization"
+                backHref="/manage/organizations"
+                backLabel="Back to Organizations"
+                actions={
+                    <Button variant="outline" asChild>
+                        <Link href="/manage/organizations">Cancel</Link>
+                    </Button>
+                }
+            />
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Organization Details</CardTitle>
-                    <CardDescription>
-                        Provide the organization name and upload a square logo (recommended 512x512)
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
+            <Panel>
+                <PanelSection
+                    label="Organization Details"
+                    caption="Provide the organization name and upload a square logo (recommended 512x512)"
+                >
                     <Form {...(form as unknown as UseFormReturn)}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-6 md:grid-cols-2">
                             <FormField
@@ -139,27 +137,24 @@ export default function CreateOrganizationPage() {
                                 )}
                             />
 
-                            <div className="md:col-span-2 flex items-center justify-between">
-                                <div className="space-x-2">
-                                    {/* <Badge variant="secondary">Validated with Zod</Badge>
-                                    <Badge variant="outline">RHF Integrated</Badge> */}
-                                </div>
-                                <Button type="submit" disabled={submitting || !form.formState.isValid}>
+                            {/* Centred on a phone, right-aligned from `sm` up: a
+                                lone right-hugging button reads as clipped at
+                                narrow widths. Full-width below `sm` gives it a
+                                comfortable tap target. */}
+                            <div className="flex items-center justify-center sm:justify-end md:col-span-2">
+                                <Button
+                                    type="submit"
+                                    disabled={submitting || !form.formState.isValid}
+                                    className="w-full sm:w-auto"
+                                >
                                     {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                     {submitting ? "Creating..." : "Create Organization"}
                                 </Button>
                             </div>
-
-                            {/* {error && (
-                                <p className="text-destructive md:col-span-2">{error}</p>
-                            )}
-                            {success && (
-                                <p className="text-green-600 md:col-span-2">{success}</p>
-                            )} */}
                         </form>
                     </Form>
-                </CardContent>
-            </Card>
-        </div>
+                </PanelSection>
+            </Panel>
+        </PageShell>
     )
 }

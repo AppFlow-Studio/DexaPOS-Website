@@ -153,7 +153,7 @@ export function DateTimePopover({
             day: "relative flex h-8 items-center justify-center p-0 text-center text-[0.8125rem]",
             day_button: cn(
               buttonVariants({ variant: "ghost" }),
-              "h-8 w-full min-h-0 rounded-full p-0 text-[0.8125rem] font-normal tabular-nums aria-selected:opacity-100",
+              "h-8 w-full min-h-0 rounded-md p-0 text-[0.8125rem] font-normal tabular-nums aria-selected:opacity-100",
             ),
           }}
         />

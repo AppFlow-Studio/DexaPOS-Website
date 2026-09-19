@@ -1,14 +1,22 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { usePlatformAuditLogs, useAuditLogAnalytics } from '@/lib/queries/use-platform-analytics'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import {
   ShieldAlert,
   Search,
@@ -20,8 +28,6 @@ import {
   Info,
   TrendingUp,
   User,
-  Building2,
-  Clock,
   AlertCircle,
   CheckCircle2,
   Layers,
@@ -37,6 +43,44 @@ import {
   Legend,
 } from 'recharts'
 import type { TopAuditActor, FailedAuditAction, DailyAuditActivity } from '@/app/manage/actions/hq-platform/analytics'
+import { VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
+
+/**
+ * Mobile column meta for the three audit tables.
+ *
+ * Each keeps its identity column locked plus the one field the table is ranked
+ * or read by — action count for actors, the error itself for failures, the
+ * action name for the log — so a narrowed table still answers its own question.
+ */
+const TOP_ACTOR_COLUMNS: ReportColumn[] = [
+  { id: 'actor', label: 'Actor', locked: true },
+  { id: 'role', label: 'Role', defaultHidden: true },
+  { id: 'actions', label: 'Actions' },
+  { id: 'warnings', label: 'Warnings', defaultHidden: true },
+  { id: 'errors', label: 'Errors', defaultHidden: true },
+  { id: 'merchants', label: 'Merchants', defaultHidden: true },
+  { id: 'lastActive', label: 'Last Active', defaultHidden: true },
+]
+
+const FAILED_ACTION_COLUMNS: ReportColumn[] = [
+  { id: 'time', label: 'Time', locked: true },
+  { id: 'actor', label: 'Actor', defaultHidden: true },
+  { id: 'action', label: 'Action / Category', defaultHidden: true },
+  { id: 'error', label: 'Error Message' },
+  { id: 'resource', label: 'Resource', defaultHidden: true },
+  { id: 'merchant', label: 'Merchant', defaultHidden: true },
+  { id: 'severity', label: 'Severity', defaultHidden: true },
+]
+
+const FULL_LOG_COLUMNS: ReportColumn[] = [
+  { id: 'time', label: 'Time', locked: true },
+  { id: 'actor', label: 'Actor', defaultHidden: true },
+  { id: 'action', label: 'Action' },
+  { id: 'category', label: 'Category', defaultHidden: true },
+  { id: 'resource', label: 'Resource', defaultHidden: true },
+  { id: 'merchant', label: 'Merchant', defaultHidden: true },
+  { id: 'severity', label: 'Severity', defaultHidden: true },
+]
 
 // ============================================================================
 // CONSTANTS & HELPERS
@@ -73,29 +117,6 @@ const CATEGORY_CHART_COLORS: Record<string, string> = {
   other:    '#9CA3AF',
 }
 
-/** Category → badge colour (text labels) */
-const CATEGORY_BADGE_COLORS: Record<string, string> = {
-  auth:     'bg-purple-100 text-purple-700',
-  merchant: 'bg-blue-100 text-blue-700',
-  staff:    'bg-teal-100 text-teal-700',
-  order:    'bg-green-100 text-green-700',
-  settings: 'bg-orange-100 text-orange-700',
-  device:   'bg-indigo-100 text-indigo-700',
-}
-
-const SEVERITY_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  info:     'secondary',
-  warning:  'outline',
-  critical: 'destructive',
-  error:    'destructive',
-}
-const SEVERITY_BADGE_COLOR: Record<string, string> = {
-  info:     'text-blue-600',
-  warning:  'text-yellow-600',
-  critical: 'text-red-600',
-  error:    'text-red-600',
-}
-
 function fmtTime(iso: string) {
   const d = new Date(iso)
   return {
@@ -118,23 +139,24 @@ function fmtRelative(iso: string): string {
 // SUB-COMPONENTS
 // ============================================================================
 
+/**
+ * Severity and category read as plain text, not tinted pills.
+ *
+ * §14.3 HQ-2 keeps severity colour to `/manage/health` and the DLQ, and a log
+ * this dense drew a coloured chip on every row of every column — the tint
+ * stopped marking anything and just filled the table with noise. The words
+ * carry the distinction; the chart above still uses colour, where it maps a
+ * stacked bar to its legend entry (§4.6b).
+ */
 function SeverityBadge({ severity }: { severity: string | null }) {
-  const s = severity ?? 'info'
   return (
-    <Badge variant={SEVERITY_VARIANT[s] ?? 'secondary'} className={`text-xs capitalize ${SEVERITY_BADGE_COLOR[s] ?? ''}`}>
-      {s}
-    </Badge>
+    <span className="text-sm capitalize text-muted-foreground">{severity ?? 'info'}</span>
   )
 }
 
 function CategoryBadge({ category }: { category: string | null }) {
-  if (!category) return <span className="text-xs text-muted-foreground">—</span>
-  const cls = CATEGORY_BADGE_COLORS[category.toLowerCase()] ?? 'bg-gray-100 text-gray-700'
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${cls}`}>
-      {category}
-    </span>
-  )
+  if (!category) return <span className="text-muted-foreground">—</span>
+  return <span className="text-sm capitalize text-muted-foreground">{category}</span>
 }
 
 // ── Custom chart tooltip ────────────────────────────────────────────────────
@@ -146,7 +168,7 @@ function DailyChartTooltip({ active, payload, label }: any) {
     <div className="bg-background border rounded-lg p-3 shadow-md text-xs space-y-1 min-w-44">
       <p className="font-semibold text-foreground mb-1.5">{d.date}</p>
       <p className="text-muted-foreground font-medium">Total: <span className="text-foreground font-bold">{d.total}</span></p>
-      <div className="border-t pt-1 space-y-0.5">
+      <div className="space-y-0.5 pt-1">
         {(Object.keys(CATEGORY_CHART_COLORS) as Array<keyof typeof CATEGORY_CHART_COLORS>)
           .filter(cat => (d as any)[cat] > 0)
           .map(cat => (
@@ -163,29 +185,6 @@ function DailyChartTooltip({ active, payload, label }: any) {
   )
 }
 
-// ── Section title used within the component ─────────────────────────────────
-function SectionTitle({ icon: Icon, title, subtitle, right }: {
-  icon: React.ElementType
-  title: string
-  subtitle?: string
-  right?: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-2.5">
-        <div className="p-1.5 rounded-md bg-muted">
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold leading-tight">{title}</p>
-          {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
-        </div>
-      </div>
-      {right}
-    </div>
-  )
-}
-
 // ============================================================================
 // SECTION 1 — Summary stat cards
 // ============================================================================
@@ -194,64 +193,40 @@ function AuditSummaryStats({ analytics, isLoading }: {
   analytics: ReturnType<typeof useAuditLogAnalytics>['data']
   isLoading: boolean
 }) {
+  // Severity is carried by the label, not a tint: §14.3 HQ-2 keeps severity
+  // colour to `/manage/health` and the DLQ, so this surface stays text-led.
   const stats = [
-    {
-      label: 'Total Events (30d)',
-      value: analytics?.total30d,
-      icon: Activity,
-      color: 'text-blue-600',
-      bg:   'bg-blue-50',
-    },
-    {
-      label: 'Info',
-      value: analytics?.infoCount,
-      icon: Info,
-      color: 'text-blue-500',
-      bg:   'bg-blue-50',
-    },
-    {
-      label: 'Warnings',
-      value: analytics?.warningCount,
-      icon: AlertTriangle,
-      color: 'text-yellow-600',
-      bg:   'bg-yellow-50',
-    },
+    { label: 'Total Events (30d)', value: analytics?.total30d, icon: Activity },
+    { label: 'Info', value: analytics?.infoCount, icon: Info },
+    { label: 'Warnings', value: analytics?.warningCount, icon: AlertTriangle },
     {
       label: 'Errors & Critical',
       value: analytics ? analytics.errorCount + analytics.criticalCount : undefined,
       icon: XCircle,
-      color: 'text-red-600',
-      bg:   'bg-red-50',
     },
-    {
-      label: 'Failed Actions',
-      value: analytics?.failedActionsCount,
-      icon: AlertCircle,
-      color: 'text-destructive',
-      bg:   'bg-destructive/10',
-    },
+    { label: 'Failed Actions', value: analytics?.failedActionsCount, icon: AlertCircle },
   ]
 
+  const tile = ({ label, value, icon: Icon }: (typeof stats)[number]) => (
+    <StatTile
+      key={label}
+      label={label}
+      icon={<Icon />}
+      isLoading={isLoading}
+      value={value?.toLocaleString() ?? '—'}
+    />
+  )
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-      {stats.map(({ label, value, icon: Icon, color, bg }) => (
-        <div key={label} className="rounded-lg border bg-card p-3 flex items-center gap-3">
-          <div className={`p-2 rounded-md ${bg} shrink-0`}>
-            <Icon className={`h-4 w-4 ${color}`} />
-          </div>
-          <div>
-            {isLoading ? (
-              <Skeleton className="h-5 w-12 mb-0.5" />
-            ) : (
-              <p className={`text-xl font-bold leading-tight ${color}`}>
-                {value?.toLocaleString() ?? '—'}
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground leading-tight">{label}</p>
-          </div>
+    <Panel>
+      <PanelSection label="Audit activity" icon={ShieldAlert}>
+        {/* Five figures: 3-up then 2-up — `StatRow` tops out at four columns. */}
+        <div className="space-y-6">
+          <StatRow columns={3}>{stats.slice(0, 3).map(tile)}</StatRow>
+          <StatRow columns={2}>{stats.slice(3).map(tile)}</StatRow>
         </div>
-      ))}
-    </div>
+      </PanelSection>
+    </Panel>
   )
 }
 
@@ -263,30 +238,24 @@ function DailyActivityChart({ analytics, isLoading }: {
   analytics: ReturnType<typeof useAuditLogAnalytics>['data']
   isLoading: boolean
 }) {
+  const isMobile = useIsMobile()
   const hasData = analytics && analytics.dailyActivity.some(d => d.total > 0)
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              Daily Activity Volume
-            </CardTitle>
-            <CardDescription className="mt-0.5">
-              Audit events per day, stacked by action category — last 30 days
-            </CardDescription>
-          </div>
-          {!isLoading && analytics && (
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground">30-day total</p>
-              <p className="text-lg font-bold">{analytics.total30d.toLocaleString()}</p>
+    <Panel>
+      <PanelSection
+        icon={TrendingUp}
+        label="Daily activity volume"
+        caption="Audit events per day, stacked by action category — last 30 days"
+        action={
+          !isLoading && analytics ? (
+            <div className="text-right text-sm">
+              <p className="text-muted-foreground">30-day total</p>
+              <p className="font-semibold tabular-nums">{analytics.total30d.toLocaleString()}</p>
             </div>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
+          ) : undefined
+        }
+      >
         {isLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : !hasData ? (
@@ -315,8 +284,9 @@ function DailyActivityChart({ analytics, isLoading }: {
                 axisLine={false}
                 tickLine={false}
                 allowDecimals={false}
+                  width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined}
               />
-              <RechartsTooltip content={<DailyChartTooltip />} cursor={{ fill: 'hsl(var(--muted))' }} />
+              <RechartsTooltip content={<DailyChartTooltip />} cursor={{ fill: 'var(--muted)' }} />
               <Legend
                 iconType="circle"
                 iconSize={8}
@@ -336,8 +306,8 @@ function DailyActivityChart({ analytics, isLoading }: {
             </BarChart>
           </ResponsiveContainer>
         )}
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   )
 }
 
@@ -349,49 +319,54 @@ function TopActorsTable({ actors, isLoading }: {
   actors: TopAuditActor[]
   isLoading: boolean
 }) {
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(TOP_ACTOR_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  const visibleColCount = TOP_ACTOR_COLUMNS.filter(c => showCol(c.id)).length
+
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <User className="h-4 w-4 text-muted-foreground" />
-          Top Actors
-          {!isLoading && actors.length > 0 && (
-            <Badge variant="secondary" className="text-xs ml-1">{actors.length}</Badge>
-          )}
-        </CardTitle>
-        <CardDescription>Most active admin users ranked by action count — last 30 days</CardDescription>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="overflow-auto max-h-80">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="text-xs pl-4">#</TableHead>
-                <TableHead className="text-xs">Actor</TableHead>
-                <TableHead className="text-xs">Role</TableHead>
-                <TableHead className="text-xs text-right">Actions</TableHead>
-                <TableHead className="text-xs text-right">
-                  <span className="text-yellow-600">Warnings</span>
-                </TableHead>
-                <TableHead className="text-xs text-right">
-                  <span className="text-red-600">Errors</span>
-                </TableHead>
-                <TableHead className="text-xs text-right">Merchants</TableHead>
-                <TableHead className="text-xs text-right pr-4">Last Active</TableHead>
+    <Panel>
+      <PanelSection
+        icon={User}
+        label={!isLoading && actors.length > 0 ? `Top actors (${actors.length})` : 'Top actors'}
+        caption="Most active admin users ranked by action count — last 30 days"
+        action={
+          <MobileColumnsButton
+            columns={TOP_ACTOR_COLUMNS}
+            hidden={hiddenCols}
+            onChange={setHiddenCols}
+          />
+        }
+      >
+        <div className="max-h-80 overflow-auto">
+          {/* Min-width lifted on mobile so hidden columns actually narrow the
+              table instead of leaving it scrolling sideways. */}
+          <Table variant="data" className={cn(!isMobile && 'min-w-[820px]')}>
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow>
+                <TableHead>Actor</TableHead>
+                {showCol('role') && <TableHead>Role</TableHead>}
+                {showCol('actions') && <TableHead className="text-right">Actions</TableHead>}
+                {showCol('warnings') && <TableHead className="text-right">Warnings</TableHead>}
+                {showCol('errors') && <TableHead className="text-right">Errors</TableHead>}
+                {showCol('merchants') && <TableHead className="text-right">Merchants</TableHead>}
+                {showCol('lastActive') && <TableHead className="text-right">Last Active</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
-                      <TableCell key={j} className="py-2"><Skeleton className="h-4 w-full" /></TableCell>
+                    {Array.from({ length: visibleColCount }).map((_, j) => (
+                      <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : actors.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground text-sm py-8">
+                  <TableCell colSpan={visibleColCount} className="h-24 text-center text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
                       <User className="h-7 w-7 opacity-30" />
                       No actor data available
@@ -399,63 +374,64 @@ function TopActorsTable({ actors, isLoading }: {
                   </TableCell>
                 </TableRow>
               ) : (
-                actors.map((actor, idx) => (
-                  <TableRow key={actor.actorName} className={idx === 0 ? 'bg-primary/5' : undefined}>
-                    <TableCell className="py-2 pl-4 text-xs text-muted-foreground font-medium">
-                      {idx + 1}
-                    </TableCell>
-                    <TableCell className="py-2">
-                      <p className="text-sm font-medium leading-tight">{actor.actorName}</p>
+                actors.map((actor) => (
+                  <TableRow key={actor.actorName}>
+                    <TableCell>
+                      <p className="font-medium leading-tight">{actor.actorName}</p>
                       {actor.actorEmail && actor.actorEmail !== actor.actorName && (
-                        <p className="text-xs text-muted-foreground leading-tight">{actor.actorEmail}</p>
+                        <p className="text-xs leading-tight text-muted-foreground">{actor.actorEmail}</p>
                       )}
                     </TableCell>
-                    <TableCell className="py-2">
-                      {actor.actorRole ? (
-                        <Badge variant="outline" className="text-xs capitalize">{actor.actorRole}</Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2 text-right">
-                      <span className="text-sm font-bold">{actor.totalActions.toLocaleString()}</span>
-                    </TableCell>
-                    <TableCell className="py-2 text-right">
-                      {actor.warningCount > 0 ? (
-                        <span className="text-xs font-medium text-yellow-600">{actor.warningCount}</span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">0</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2 text-right">
-                      {actor.errorCount > 0 ? (
-                        <span className="text-xs font-bold text-red-600">{actor.errorCount}</span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground flex items-center justify-end gap-0.5">
-                          <CheckCircle2 className="h-3 w-3 text-green-500" /> 0
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2 text-right">
-                      <span className="text-xs text-muted-foreground flex items-center justify-end gap-1">
-                        <Building2 className="h-3 w-3" />
+                    {showCol('role') && (
+                      <TableCell>
+                        {actor.actorRole ? (
+                          <span className="capitalize text-muted-foreground">{actor.actorRole}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    )}
+                    {showCol('actions') && (
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {actor.totalActions.toLocaleString()}
+                      </TableCell>
+                    )}
+                    {showCol('warnings') && (
+                      <TableCell className="text-right tabular-nums">
+                        {actor.warningCount > 0 ? (
+                          <span className="font-medium">{actor.warningCount}</span>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </TableCell>
+                    )}
+                    {showCol('errors') && (
+                      <TableCell className="text-right tabular-nums">
+                        {actor.errorCount > 0 ? (
+                          <span className="font-semibold">{actor.errorCount}</span>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </TableCell>
+                    )}
+                    {showCol('merchants') && (
+                      <TableCell className="text-right tabular-nums text-muted-foreground">
                         {actor.distinctMerchants}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-2 text-right pr-4">
-                      <span className="text-xs text-muted-foreground flex items-center justify-end gap-1">
-                        <Clock className="h-3 w-3" />
+                      </TableCell>
+                    )}
+                    {showCol('lastActive') && (
+                      <TableCell className="whitespace-nowrap text-right text-muted-foreground">
                         {fmtRelative(actor.lastActionAt)}
-                      </span>
-                    </TableCell>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
         </div>
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   )
 }
 
@@ -468,112 +444,135 @@ function FailedActionsFeed({ failed, isLoading }: {
   isLoading: boolean
   count: number
 }) {
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(FAILED_ACTION_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+
   return (
-    <Card className="border-destructive/30">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-destructive">
-              <AlertCircle className="h-4 w-4" />
-              Failed Actions Feed
-              {!isLoading && failed.length > 0 && (
-                <Badge variant="destructive" className="text-xs">{failed.length}</Badge>
-              )}
-            </CardTitle>
-            <CardDescription className="mt-0.5">
-              All actions where <code className="text-xs bg-muted px-1 rounded">status = &apos;failed&apos;</code> or an <code className="text-xs bg-muted px-1 rounded">error_message</code> is present
-            </CardDescription>
-          </div>
-          {!isLoading && failed.length === 0 && (
-            <div className="flex items-center gap-1.5 text-green-600 text-sm">
+    <Panel>
+      <PanelSection
+        icon={AlertCircle}
+        label={!isLoading && failed.length > 0 ? `Failed actions feed (${failed.length})` : 'Failed actions feed'}
+        caption={
+          <>
+            All actions where <code className="rounded bg-muted px-1 text-xs">status = &apos;failed&apos;</code> or an{' '}
+            <code className="rounded bg-muted px-1 text-xs">error_message</code> is present
+          </>
+        }
+        action={
+          !isLoading && failed.length === 0 ? (
+            <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <CheckCircle2 className="h-4 w-4" />
               All clear
-            </div>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="p-0">
+            </span>
+          ) : (
+            <MobileColumnsButton
+              columns={FAILED_ACTION_COLUMNS}
+              hidden={hiddenCols}
+              onChange={setHiddenCols}
+            />
+          )
+        }
+      >
         {isLoading ? (
-          <div className="p-4 space-y-3">
+          <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
           </div>
         ) : failed.length === 0 ? (
-          <div className="py-10 flex flex-col items-center justify-center text-muted-foreground gap-2">
-            <CheckCircle2 className="h-8 w-8 text-green-500 opacity-70" />
+          <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
+            <CheckCircle2 className="h-8 w-8 opacity-70" />
             <p className="text-sm font-medium">No failed actions detected</p>
             <p className="text-xs">All recent platform operations completed successfully.</p>
           </div>
         ) : (
-          <div className="overflow-auto max-h-96">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-destructive/5">
-                  <TableHead className="text-xs pl-4 w-36">Time</TableHead>
-                  <TableHead className="text-xs">Actor</TableHead>
-                  <TableHead className="text-xs">Action / Category</TableHead>
-                  <TableHead className="text-xs max-w-72">Error Message</TableHead>
-                  <TableHead className="text-xs">Resource</TableHead>
-                  <TableHead className="text-xs">Merchant</TableHead>
-                  <TableHead className="text-xs pr-4">Severity</TableHead>
+          <div className="max-h-96 overflow-auto">
+            {/* Min-width lifted on mobile so hidden columns actually narrow the
+                table instead of leaving it scrolling sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[920px]')}>
+              <TableHeader className="[&_tr]:border-0">
+                <TableRow>
+                  <TableHead className="w-36">Time</TableHead>
+                  {showCol('actor') && <TableHead>Actor</TableHead>}
+                  {showCol('action') && <TableHead>Action / Category</TableHead>}
+                  {showCol('error') && <TableHead className="max-w-72">Error Message</TableHead>}
+                  {showCol('resource') && <TableHead>Resource</TableHead>}
+                  {showCol('merchant') && <TableHead>Merchant</TableHead>}
+                  {showCol('severity') && <TableHead>Severity</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {failed.map((f) => {
                   const { date, time } = fmtTime(f.createdAt)
                   return (
-                    <TableRow key={f.id} className="border-l-2 border-l-destructive/40">
-                      <TableCell className="py-2 pl-4 align-top">
+                    <TableRow key={f.id}>
+                      <TableCell className="align-top">
                         <p className="text-xs font-medium">{time}</p>
                         <p className="text-xs text-muted-foreground">{date}</p>
                       </TableCell>
-                      <TableCell className="py-2 align-top">
-                        <p className="text-sm leading-tight">{f.actorName ?? <span className="text-muted-foreground">System</span>}</p>
-                        {f.actorEmail && f.actorEmail !== f.actorName && (
-                          <p className="text-xs text-muted-foreground">{f.actorEmail}</p>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2 align-top">
-                        <p className="text-sm font-medium leading-tight max-w-48 truncate" title={f.action ?? ''}>
-                          {f.action ?? <span className="text-muted-foreground">—</span>}
-                        </p>
-                        <div className="mt-0.5"><CategoryBadge category={f.actionCategory} /></div>
-                      </TableCell>
-                      <TableCell className="py-2 align-top max-w-72">
-                        {f.errorMessage ? (
-                          <p
-                            className="text-xs text-destructive leading-snug line-clamp-2 font-mono bg-destructive/5 rounded px-1.5 py-1"
-                            title={f.errorMessage}
-                          >
-                            {f.errorMessage}
+                      {showCol('actor') && (
+                        <TableCell className="align-top">
+                          <p className="leading-tight">{f.actorName ?? <span className="text-muted-foreground">System</span>}</p>
+                          {f.actorEmail && f.actorEmail !== f.actorName && (
+                            <p className="text-xs text-muted-foreground">{f.actorEmail}</p>
+                          )}
+                        </TableCell>
+                      )}
+                      {showCol('action') && (
+                        <TableCell className="align-top">
+                          <p className="max-w-48 truncate font-medium leading-tight" title={f.action ?? ''}>
+                            {f.action ?? <span className="text-muted-foreground">—</span>}
                           </p>
-                        ) : f.status ? (
-                          <Badge variant="destructive" className="text-xs">{f.status}</Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2 align-top">
-                        {f.resourceName || f.resourceType ? (
-                          <>
-                            <p className="text-sm leading-tight">{f.resourceName ?? '—'}</p>
-                            {f.resourceType && (
-                              <p className="text-xs text-muted-foreground capitalize">{f.resourceType}</p>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2 align-top">
-                        {f.merchantName ? (
-                          <p className="text-sm">{f.merchantName}</p>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Platform</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2 pr-4 align-top">
-                        <SeverityBadge severity={f.severity} />
-                      </TableCell>
+                          <div className="mt-0.5"><CategoryBadge category={f.actionCategory} /></div>
+                        </TableCell>
+                      )}
+                      {showCol('error') && (
+                        <TableCell className="max-w-72 align-top">
+                          {f.errorMessage ? (
+                            // The message keeps its own quiet well so a wrapped
+                            // stack string stays distinguishable from the row.
+                            <p
+                              className="line-clamp-2 rounded-2xl bg-muted/60 px-2 py-1 font-mono text-xs leading-snug"
+                              title={f.errorMessage}
+                            >
+                              {f.errorMessage}
+                            </p>
+                          ) : f.status ? (
+                            <span className="text-sm text-muted-foreground">{f.status}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      )}
+                      {showCol('resource') && (
+                        <TableCell className="align-top">
+                          {f.resourceName || f.resourceType ? (
+                            <>
+                              <p className="leading-tight">{f.resourceName ?? '—'}</p>
+                              {f.resourceType && (
+                                <p className="text-xs capitalize text-muted-foreground">{f.resourceType}</p>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      )}
+                      {showCol('merchant') && (
+                        <TableCell className="align-top">
+                          {f.merchantName ? (
+                            <p>{f.merchantName}</p>
+                          ) : (
+                            <span className="text-muted-foreground">Platform</span>
+                          )}
+                        </TableCell>
+                      )}
+                      {showCol('severity') && (
+                        <TableCell className="align-top">
+                          <SeverityBadge severity={f.severity} />
+                        </TableCell>
+                      )}
                     </TableRow>
                   )
                 })}
@@ -581,8 +580,8 @@ function FailedActionsFeed({ failed, isLoading }: {
             </Table>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   )
 }
 
@@ -604,6 +603,13 @@ interface AuditLogRow {
 }
 
 function FullLogTable() {
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(FULL_LOG_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  const visibleColCount = FULL_LOG_COLUMNS.filter(c => showCol(c.id)).length
+
   const [search, setSearch]         = useState('')
   const [searchInput, setSearchInput] = useState('')
   const [category, setCategory]     = useState('all')
@@ -623,79 +629,82 @@ function FullLogTable() {
     offset,
   )
 
-  const applySearch = useCallback(() => { setSearch(searchInput); setPage(0) }, [searchInput])
+  // Plain function, not a `useCallback`: this is only ever passed to onKeyDown
+  // and onBlur, never used as a memo dependency, so wrapping it bought nothing
+  // — and its dep list omitted `setPage`, which made React Compiler bail out of
+  // optimizing the whole component.
+  const applySearch = () => { setSearch(searchInput); setPage(0) }
 
   const logs: AuditLogRow[]   = data?.data  ?? []
   const total: number         = data?.total ?? 0
   const totalPages            = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <Layers className="h-4 w-4 text-muted-foreground" />
-          Full Event Log
-          {!isLoading && total > 0 && (
-            <Badge variant="secondary" className="text-xs">{total.toLocaleString()} events</Badge>
-          )}
-        </CardTitle>
-        <CardDescription>Filterable, paginated view of every audit entry — newest first</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Filter bar */}
-        <div className="flex flex-wrap gap-2">
-          <div className="flex gap-2 flex-1 min-w-56">
+    <Panel>
+      <PanelSection
+        icon={Layers}
+        label={!isLoading && total > 0 ? `Full event log (${total.toLocaleString()} events)` : 'Full event log'}
+        caption="Filterable, paginated view of every audit entry — newest first"
+      >
+        {/* Toolbar — §5.2: rounded search on the left, borderless muted pills right. */}
+        <div className="mb-4 flex flex-wrap gap-2">
+          <div className="relative min-w-56 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
             <Input
               placeholder="Search action, actor, resource…"
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && applySearch()}
-              className="h-9 text-sm"
+              onBlur={applySearch}
+              className="h-10 w-full rounded-full pl-10"
             />
-            <Button size="sm" variant="outline" className="h-9 px-3" onClick={applySearch}>
-              <Search className="h-4 w-4" />
-            </Button>
           </div>
           <Select value={category} onValueChange={v => { setCategory(v); setPage(0) }}>
-            <SelectTrigger className="h-9 w-40 text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-9 w-40 rounded-full border-0 bg-muted/60 px-3 shadow-none"><SelectValue /></SelectTrigger>
             <SelectContent>
               {ACTION_CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={severity} onValueChange={v => { setSeverity(v); setPage(0) }}>
-            <SelectTrigger className="h-9 w-38 text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-9 w-38 rounded-full border-0 bg-muted/60 px-3 shadow-none"><SelectValue /></SelectTrigger>
             <SelectContent>
               {SEVERITIES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
             </SelectContent>
           </Select>
+          <MobileColumnsButton
+            columns={FULL_LOG_COLUMNS}
+            hidden={hiddenCols}
+            onChange={setHiddenCols}
+          />
         </div>
 
-        {/* Table */}
-        <div className="rounded-lg border overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="text-xs w-36">Time</TableHead>
-                <TableHead className="text-xs">Actor</TableHead>
-                <TableHead className="text-xs">Action</TableHead>
-                <TableHead className="text-xs">Category</TableHead>
-                <TableHead className="text-xs">Resource</TableHead>
-                <TableHead className="text-xs">Merchant</TableHead>
-                <TableHead className="text-xs">Severity</TableHead>
+        <div className="space-y-4">
+          {/* Min-width lifted on mobile so hidden columns actually narrow the
+              table instead of leaving it scrolling sideways. */}
+          <Table variant="data" className={cn(!isMobile && 'min-w-[920px]')}>
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow>
+                <TableHead className="w-36">Time</TableHead>
+                {showCol('actor') && <TableHead>Actor</TableHead>}
+                {showCol('action') && <TableHead>Action</TableHead>}
+                {showCol('category') && <TableHead>Category</TableHead>}
+                {showCol('resource') && <TableHead>Resource</TableHead>}
+                {showCol('merchant') && <TableHead>Merchant</TableHead>}
+                {showCol('severity') && <TableHead>Severity</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
-                      <TableCell key={j} className="py-2"><Skeleton className="h-4 w-full" /></TableCell>
+                    {Array.from({ length: visibleColCount }).map((_, j) => (
+                      <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground text-sm py-10">
+                  <TableCell colSpan={visibleColCount} className="py-10 text-center text-muted-foreground">
                     <div className="flex flex-col items-center gap-2">
                       <Activity className="h-8 w-8 opacity-30" />
                       <span>No audit events found</span>
@@ -712,38 +721,50 @@ function FullLogTable() {
                   const { date, time } = fmtTime(log.created_at)
                   return (
                     <TableRow key={log.id}>
-                      <TableCell className="py-2 align-top">
+                      <TableCell className="align-top">
                         <p className="text-xs font-medium text-foreground">{time}</p>
                         <p className="text-xs text-muted-foreground">{date}</p>
                       </TableCell>
-                      <TableCell className="text-sm py-2">
-                        {log.actor_name ?? <span className="text-muted-foreground">System</span>}
-                      </TableCell>
-                      <TableCell className="text-sm py-2 font-medium max-w-48 truncate" title={log.action}>
-                        {log.action}
-                      </TableCell>
-                      <TableCell className="py-2">
-                        <CategoryBadge category={log.action_category} />
-                      </TableCell>
-                      <TableCell className="py-2 align-top">
-                        {log.resource_name || log.resource_type ? (
-                          <>
-                            <p className="text-sm">{log.resource_name ?? '—'}</p>
-                            {log.resource_type && <p className="text-xs text-muted-foreground capitalize">{log.resource_type}</p>}
-                          </>
-                        ) : <span className="text-xs text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="py-2 align-top">
-                        {log.merchants?.name ? (
-                          <>
-                            <p className="text-sm">{log.merchants.name}</p>
-                            {log.location?.name && <p className="text-xs text-muted-foreground">{log.location.name}</p>}
-                          </>
-                        ) : <span className="text-xs text-muted-foreground">Platform</span>}
-                      </TableCell>
-                      <TableCell className="py-2">
-                        <SeverityBadge severity={log.severity} />
-                      </TableCell>
+                      {showCol('actor') && (
+                        <TableCell>
+                          {log.actor_name ?? <span className="text-muted-foreground">System</span>}
+                        </TableCell>
+                      )}
+                      {showCol('action') && (
+                        <TableCell className="max-w-48 truncate font-medium" title={log.action}>
+                          {log.action}
+                        </TableCell>
+                      )}
+                      {showCol('category') && (
+                        <TableCell>
+                          <CategoryBadge category={log.action_category} />
+                        </TableCell>
+                      )}
+                      {showCol('resource') && (
+                        <TableCell className="align-top">
+                          {log.resource_name || log.resource_type ? (
+                            <>
+                              <p>{log.resource_name ?? '—'}</p>
+                              {log.resource_type && <p className="text-xs capitalize text-muted-foreground">{log.resource_type}</p>}
+                            </>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      )}
+                      {showCol('merchant') && (
+                        <TableCell className="align-top">
+                          {log.merchants?.name ? (
+                            <>
+                              <p>{log.merchants.name}</p>
+                              {log.location?.name && <p className="text-xs text-muted-foreground">{log.location.name}</p>}
+                            </>
+                          ) : <span className="text-muted-foreground">Platform</span>}
+                        </TableCell>
+                      )}
+                      {showCol('severity') && (
+                        <TableCell>
+                          <SeverityBadge severity={log.severity} />
+                        </TableCell>
+                      )}
                     </TableRow>
                   )
                 })
@@ -771,8 +792,8 @@ function FullLogTable() {
             </Button>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   )
 }
 

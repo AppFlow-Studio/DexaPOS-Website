@@ -2,29 +2,69 @@
 
 import { useState } from 'react'
 import { usePaymentMethodMix } from '@/lib/queries/use-platform-analytics'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts'
-import type { PaymentMethodSplit, MerchantFeeExposure, DualPricingAnalysis, MonthlyPaymentTrend } from '@/app/manage/actions/hq-platform/analytics'
+import { CreditCard, PieChart as PieChartIcon, Receipt, TrendingUp } from 'lucide-react'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile, InsetTile } from '@/components/dashboard/shell/StatTile'
+import { AnalyticsTooltip, VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
+import type { PaymentMethodSplit, MerchantFeeExposure } from '@/app/manage/actions/hq-platform/analytics'
 
 function fmt(n: number) {
   return n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toFixed(2)}`
 }
 
+/**
+ * Mobile column meta for the fee exposure table. Est. Fees is what the table is
+ * named for, so it is the number kept beside the merchant on a phone.
+ */
+const FEE_EXPOSURE_COLUMNS: ReportColumn[] = [
+  { id: 'merchant', label: 'Merchant', locked: true },
+  { id: 'cardGpv', label: 'Card GPV', defaultHidden: true },
+  { id: 'cashGpv', label: 'Cash GPV', defaultHidden: true },
+  { id: 'cardPct', label: 'Card %', defaultHidden: true },
+  { id: 'estFees', label: 'Est. Fees' },
+]
+
 export function PaymentMethodMix() {
   const [days, setDays] = useState(30)
   const { data, isLoading } = usePaymentMethodMix(days)
+  const isMobile = useIsMobile()
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(FEE_EXPOSURE_COLUMNS)
+  )
+  const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+  // Keeps the empty-state cell full-width as columns are toggled.
+  const visibleColCount = FEE_EXPOSURE_COLUMNS.filter(c => showCol(c.id)).length
+
+  const periodSelect = (
+    <Select value={String(days)} onValueChange={v => setDays(Number(v))}>
+      <SelectTrigger className="h-9 w-36 rounded-full border-0 bg-muted/60 px-3 shadow-none">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="7">Last 7 days</SelectItem>
+        <SelectItem value="30">Last 30 days</SelectItem>
+        <SelectItem value="90">Last 90 days</SelectItem>
+      </SelectContent>
+    </Select>
+  )
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-40" />
-        <div className="grid grid-cols-2 gap-4">
-          <Skeleton className="h-70" />
-          <Skeleton className="h-70" />
-        </div>
+      <div className="space-y-6">
+        <Skeleton className="h-40 w-full rounded-3xl" />
+        <Skeleton className="h-70 w-full rounded-3xl" />
       </div>
     )
   }
@@ -33,56 +73,20 @@ export function PaymentMethodMix() {
 
   return (
     <div className="space-y-6">
-      {/* Period selector */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Period:</span>
-        <Select value={String(days)} onValueChange={v => setDays(Number(v))}>
-          <SelectTrigger className="w-32 h-8 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Last 7 days</SelectItem>
-            <SelectItem value="30">Last 30 days</SelectItem>
-            <SelectItem value="90">Last 90 days</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <Panel>
+        <PanelSection label="Payment mix" icon={CreditCard} action={periodSelect}>
+          <StatRow columns={4}>
+            <StatTile label="Total GPV" value={fmt(data.totalGPV)} />
+            <StatTile label="Transactions" value={data.totalTransactions.toLocaleString()} />
+            <StatTile label="Cash" value={`${data.cashPercent}%`} />
+            <StatTile label="Card" value={`${data.cardPercent}%`} />
+          </StatRow>
+        </PanelSection>
+      </Panel>
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold">{fmt(data.totalGPV)}</p>
-            <p className="text-xs text-muted-foreground">Total GPV</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold">{data.totalTransactions.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground">Transactions</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold text-green-600">{data.cashPercent}%</p>
-            <p className="text-xs text-muted-foreground">Cash</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-2xl font-bold text-blue-600">{data.cardPercent}%</p>
-            <p className="text-xs text-muted-foreground">Card</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Donut */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Payment Method Split</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <div className="grid min-w-0 grid-cols-1 gap-6 md:grid-cols-2">
+        <Panel>
+          <PanelSection label="Payment method split" icon={PieChartIcon}>
             <ResponsiveContainer width="100%" height={240}>
               <PieChart>
                 <Pie data={data.split} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="totalAmount">
@@ -90,116 +94,121 @@ export function PaymentMethodMix() {
                     <Cell key={i} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v: number, name: string) => [fmt(v), name]} />
-                <Legend formatter={(v: string) => {
-                  const item = data.split.find(s => s.totalAmount === data.split.find(x => x.label === v)?.totalAmount)
-                  return `${v}`
-                }} />
+                <Tooltip content={<AnalyticsTooltip formatter={fmt} />} />
+                <Legend />
               </PieChart>
             </ResponsiveContainer>
+
             <div className="mt-2 space-y-1">
               {data.split.map((m: PaymentMethodSplit) => (
-                <div key={m.method} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: m.color }} />
-                    <span>{m.label}</span>
+                <div key={m.method} className="flex items-center justify-between gap-3 text-xs">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {/* The swatch maps the row to its slice — data encoding (§4.6b). */}
+                    <div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: m.color }} />
+                    <span className="truncate">{m.label}</span>
                   </div>
-                  <span className="text-muted-foreground">{m.percentage}% · {fmt(m.totalAmount)}</span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {m.percentage}% · {fmt(m.totalAmount)}
+                  </span>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
 
-        {/* Fee Exposure */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Fee Exposure by Merchant</CardTitle>
-            <CardDescription className="text-xs">Estimated card processing fees at 2.5% of card GPV</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
+        <Panel>
+          <PanelSection
+            label="Fee exposure by merchant"
+            icon={Receipt}
+            caption="Estimated card processing fees at 2.5% of card GPV"
+            action={
+              <MobileColumnsButton
+                columns={FEE_EXPOSURE_COLUMNS}
+                hidden={hiddenCols}
+                onChange={setHiddenCols}
+              />
+            }
+          >
+            {/* Min-width lifted on mobile so hidden columns actually narrow the
+                table instead of leaving it scrolling sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[560px]')}>
+              <TableHeader className="[&_tr]:border-0">
                 <TableRow>
-                  <TableHead className="text-xs">Merchant</TableHead>
-                  <TableHead className="text-xs text-right">Card GPV</TableHead>
-                  <TableHead className="text-xs text-right">Cash GPV</TableHead>
-                  <TableHead className="text-xs text-right">Card %</TableHead>
-                  <TableHead className="text-xs text-right">Est. Fees</TableHead>
+                  <TableHead>Merchant</TableHead>
+                  {showCol('cardGpv') && <TableHead className="text-right">Card GPV</TableHead>}
+                  {showCol('cashGpv') && <TableHead className="text-right">Cash GPV</TableHead>}
+                  {showCol('cardPct') && <TableHead className="text-right">Card %</TableHead>}
+                  {showCol('estFees') && <TableHead className="text-right">Est. Fees</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.feeExposureTable.slice(0, 10).map((m: MerchantFeeExposure) => (
                   <TableRow key={m.merchantId}>
-                    <TableCell className="text-sm py-2">{m.merchantName}</TableCell>
-                    <TableCell className="text-sm py-2 text-right font-mono text-blue-600">{fmt(m.cardGPV)}</TableCell>
-                    <TableCell className="text-sm py-2 text-right font-mono text-green-600">{fmt(m.cashGPV)}</TableCell>
-                    <TableCell className="text-sm py-2 text-right font-mono">{m.cardPercent}%</TableCell>
-                    <TableCell className="text-sm py-2 text-right font-mono text-amber-600">{fmt(m.estimatedFees)}</TableCell>
+                    <TableCell>{m.merchantName}</TableCell>
+                    {showCol('cardGpv') && <TableCell className="text-right tabular-nums">{fmt(m.cardGPV)}</TableCell>}
+                    {showCol('cashGpv') && <TableCell className="text-right tabular-nums">{fmt(m.cashGPV)}</TableCell>}
+                    {showCol('cardPct') && <TableCell className="text-right tabular-nums">{m.cardPercent}%</TableCell>}
+                    {showCol('estFees') && <TableCell className="text-right tabular-nums">{fmt(m.estimatedFees)}</TableCell>}
                   </TableRow>
                 ))}
                 {data.feeExposureTable.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground text-sm py-4">No data</TableCell>
+                    <TableCell colSpan={visibleColCount} className="h-24 text-center text-muted-foreground">
+                      No data
+                    </TableCell>
                   </TableRow>
                 )}
               </TableBody>
             </Table>
-            </div>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       </div>
 
-      {/* Dual Pricing Analysis */}
       {data.dualPricingAnalysis && data.dualPricingAnalysis.merchantsWithDualPricing > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Dual Pricing Analysis</CardTitle>
-            <CardDescription className="text-xs">
-              {data.dualPricingAnalysis.merchantsWithDualPricing} merchant{data.dualPricingAnalysis.merchantsWithDualPricing !== 1 ? 's' : ''} with dual pricing enabled
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 rounded-lg bg-blue-50 border border-blue-100">
-                <p className="text-xs text-blue-600 font-medium uppercase tracking-wide">Est. Card Surcharge Collected</p>
-                <p className="text-2xl font-bold text-blue-700 mt-1">{fmt(data.dualPricingAnalysis.estimatedCardSurchargeCollected)}</p>
-                <p className="text-xs text-blue-500 mt-1">Revenue recovered from card users</p>
-              </div>
-              <div className="p-4 rounded-lg bg-green-50 border border-green-100">
-                <p className="text-xs text-green-600 font-medium uppercase tracking-wide">Est. Cash Discount Given</p>
-                <p className="text-2xl font-bold text-green-700 mt-1">{fmt(data.dualPricingAnalysis.estimatedCashDiscountGiven)}</p>
-                <p className="text-xs text-green-500 mt-1">Incentive driving cash adoption</p>
-              </div>
+        <Panel>
+          <PanelSection
+            label="Dual pricing analysis"
+            caption={`${data.dualPricingAnalysis.merchantsWithDualPricing} merchant${
+              data.dualPricingAnalysis.merchantsWithDualPricing !== 1 ? 's' : ''
+            } with dual pricing enabled`}
+          >
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+              <InsetTile
+                label="Est. Card Surcharge Collected"
+                value={fmt(data.dualPricingAnalysis.estimatedCardSurchargeCollected)}
+                meta="Revenue recovered from card users"
+              />
+              <InsetTile
+                label="Est. Cash Discount Given"
+                value={fmt(data.dualPricingAnalysis.estimatedCashDiscountGiven)}
+                meta="Incentive driving cash adoption"
+              />
             </div>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       )}
 
-      {/* 6-Month Payment Method Trend */}
       {data.monthlyTrend && data.monthlyTrend.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Payment Mix Trend (Last 6 Months)</CardTitle>
-            <CardDescription className="text-xs">Cash vs card adoption over time — are merchants shifting toward cash with dual pricing?</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <Panel>
+          <PanelSection
+            label="Payment mix trend (last 6 months)"
+            icon={TrendingUp}
+            caption="Cash vs card adoption over time — are merchants shifting toward cash with dual pricing?"
+          >
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={data.monthlyTrend}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="month" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
-                <Tooltip formatter={(v: number, name: string) => [`${v}%`, name]} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[0, 100]} width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined} />
+                <Tooltip content={<AnalyticsTooltip formatter={(v: number) => `${v}%`} />} />
                 <Line type="monotone" dataKey="cashPercent" name="Cash %" stroke="#22c55e" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="cardPercent" name="Card %" stroke="#3b82f6" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="otherPercent" name="Other %" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
               </LineChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       )}
-
     </div>
   )
 }

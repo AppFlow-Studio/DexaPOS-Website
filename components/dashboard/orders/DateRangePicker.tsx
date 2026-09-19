@@ -1,11 +1,11 @@
 'use client'
 
 import * as React from 'react'
-import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Calendar as CalendarIcon, ChevronDown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { DayPicker } from 'react-day-picker'
 import type { DateRange } from 'react-day-picker'
 
 export type DatePreset =
@@ -314,7 +314,12 @@ export function DateRangePicker({
                                 right padding keeps the vertical scrollbar from
                                 landing on top of the month nav arrows. */}
                             <div className="min-h-0 overflow-y-auto overflow-x-clip pr-2">
-                            <DayPicker
+                            {/* Day/range styling comes from the shared Calendar
+                                primitive so this picker matches every other
+                                calendar in the app. Only the dropdown caption
+                                layout is overridden here — that is specific to
+                                this picker, which needs month/year jumping. */}
+                            <Calendar
                                 mode="range"
                                 selected={draftRange}
                                 onSelect={(nextRange) => {
@@ -325,73 +330,22 @@ export function DateRangePicker({
                                 startMonth={new Date(2015, 0)}
                                 endMonth={new Date(currentYear, 11)}
                                 showOutsideDays={true}
+                                className="p-0"
                                 classNames={{
-                                    root: "p-0",
-                                    months: "flex flex-col",
-                                    month: "flex flex-col gap-4",
-                                    // Caption holds the month/year dropdowns on
-                                    // the left and leaves room on the right for
-                                    // the (absolutely-positioned) nav arrows so
-                                    // the two never overlap and steal clicks.
+                                    // The dropdowns sit left; the nav arrows are
+                                    // absolutely positioned top-right, so the
+                                    // caption reserves room on the right and the
+                                    // two never overlap and steal clicks.
                                     month_caption: "flex justify-start pt-1 relative items-center gap-1 h-8 pr-16",
                                     caption_label: "hidden",
                                     dropdowns: "flex min-w-0 gap-1 items-center",
-                                    dropdown: cn(
-                                        "min-w-0 appearance-none bg-background border border-input rounded-lg px-2 py-1",
-                                        "text-sm font-medium cursor-pointer",
-                                        "hover:bg-accent hover:text-accent-foreground",
-                                        "focus:outline-none focus:ring-1 focus:ring-ring"
-                                    ),
-                                    dropdown_root: "relative",
-                                    // Both arrows grouped at the top-right. z-10
-                                    // lifts them above the (normal-flow) caption
-                                    // div, whose full-width box otherwise covers
-                                    // the arrows and swallows the click.
-                                    // Offset clears the scroll wrapper's right
-                                    // padding so the scrollbar never overlaps
-                                    // the arrows.
+                                    dropdown_root: "relative rounded-lg border border-input bg-background px-2 py-1 text-sm font-medium hover:bg-accent hover:text-accent-foreground",
+                                    // z-10 lifts the arrows above the caption's
+                                    // full-width box, which would otherwise
+                                    // swallow the click. right-5 clears the
+                                    // scroll wrapper's padding so the scrollbar
+                                    // never lands on top of them.
                                     nav: "flex items-center gap-1 absolute right-5 top-3 h-8 z-10",
-                                    button_previous: cn(
-                                        buttonVariants({ variant: "outline" }),
-                                        "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-                                    ),
-                                    button_next: cn(
-                                        buttonVariants({ variant: "outline" }),
-                                        "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-                                    ),
-                                    // Day cells are fluid rather than a fixed
-                                    // w-9: seven 36px columns plus the preset
-                                    // rail overflow a phone, which clipped the
-                                    // right-hand days off-screen. flex-1 with a
-                                    // max keeps the desktop size but lets the
-                                    // grid shrink to whatever width is left.
-                                    month_grid: "w-full border-collapse",
-                                    weekdays: "flex",
-                                    weekday: "text-muted-foreground min-w-0 flex-1 basis-0 max-w-9 font-normal text-[0.8rem] text-center",
-                                    weeks: "flex flex-col gap-1 mt-2",
-                                    week: "flex",
-                                    day: "h-9 min-w-0 flex-1 basis-0 max-w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20 [&:has([data-selected])]:bg-accent [&:has([data-selected][data-range-end])]:rounded-r-md [&:has([data-selected][data-range-start])]:rounded-l-md first:[&:has([data-selected])]:rounded-l-md last:[&:has([data-selected])]:rounded-r-md",
-                                    day_button: cn(
-                                        buttonVariants({ variant: "ghost" }),
-                                        "h-9 w-full p-0 font-normal",
-                                        "[&[data-selected]]:opacity-100",
-                                        "[&[data-range-start]]:bg-primary [&[data-range-start]]:text-primary-foreground",
-                                        "[&[data-range-end]]:bg-primary [&[data-range-end]]:text-primary-foreground",
-                                        "[&[data-selected][data-range-middle]]:bg-transparent [&[data-selected][data-range-middle]]:text-accent-foreground",
-                                    ),
-                                    range_start: "rounded-l-md",
-                                    range_end: "rounded-r-md",
-                                    range_middle: "bg-accent",
-                                    selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-                                    today: "bg-accent text-accent-foreground",
-                                    outside: "text-muted-foreground opacity-50 [&[data-selected]]:bg-accent/50 [&[data-selected]]:text-muted-foreground [&[data-selected]]:opacity-30",
-                                    disabled: "text-muted-foreground opacity-50",
-                                    hidden: "invisible",
-                                }}
-                                components={{
-                                    Chevron: ({ orientation }) => orientation === 'left'
-                                        ? <ChevronLeft className="h-4 w-4" />
-                                        : <ChevronRight className="h-4 w-4" />,
                                 }}
                             />
                             </div>

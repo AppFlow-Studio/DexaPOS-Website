@@ -326,8 +326,19 @@ function AppSidebar() {
                         <Skeleton className="h-8 w-8" />
                     ) : (
                         <>
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                                <Image src={DexaLogoLight} alt={hqOrg?.name || 'Dexa POS HQ'} width={32} height={32} className=''  />
+                            {/* HQ always shows the bundled Dexa mark rather than
+                                the org's remote imageURL: it is a fixed brand,
+                                and a static import cannot 404 the way the CDN
+                                URL did. object-contain inside a fixed 32px box
+                                keeps a non-square source from distorting. */}
+                            <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary">
+                                <Image
+                                    src={DexaLogoLight}
+                                    alt={hqOrg?.name || 'Dexa POS HQ'}
+                                    fill
+                                    sizes="32px"
+                                    className="object-contain p-1"
+                                />
                             </div>
                             <div className="grid flex-1 text-left text-sm leading-tight">
                                 <span className="truncate font-semibold">{hqOrg?.name || 'Dexa POS HQ'}</span>

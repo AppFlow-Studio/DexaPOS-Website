@@ -1,12 +1,20 @@
 'use client'
 
 import { useState, useMemo, Fragment } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile, InsetTile } from '@/components/dashboard/shell/StatTile'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+    MobileColumnsButton,
+    initialHiddenColumns,
+    type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
     ResponsiveContainer,
@@ -36,42 +44,54 @@ import {
 import { useTerminalUtilization } from '@/lib/queries/use-platform-analytics'
 import type { MerchantTerminalUtilization, UtilizationTier } from '@/app/manage/actions/hq-platform/analytics'
 import Link from 'next/link'
+import { VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
 
 // ============================================================================
 // Constants
 // ============================================================================
 
+/**
+ * Tier is carried by its label alone. The per-tier text colour, row tint and
+ * bar fill are gone: a tinted row plus a coloured figure plus a coloured badge
+ * stated the same tier three times, and a table where most rows are tinted
+ * reads as a colour field rather than as an exception worth noticing.
+ */
 const TIER_CONFIG: Record<UtilizationTier, {
     label: string
     variant: 'default' | 'secondary' | 'destructive'
-    colorClass: string
-    bgClass: string
-    barColor: string
 }> = {
     healthy: {
         label: 'Healthy',
         variant: 'default',
-        colorClass: 'text-green-600',
-        bgClass: 'bg-green-50 border-green-200',
-        barColor: '#22c55e',
     },
     underutilized: {
         label: 'Underutilized',
         variant: 'secondary',
-        colorClass: 'text-yellow-600',
-        bgClass: 'bg-yellow-50 border-yellow-200',
-        barColor: '#eab308',
     },
     critical: {
         label: 'Critical',
         variant: 'destructive',
-        colorClass: 'text-red-600',
-        bgClass: 'bg-red-50 border-red-200',
-        barColor: '#ef4444',
     },
 }
 
 type SortKey = 'utilizationRate' | 'totalStations' | 'zombieStations' | 'merchantName'
+
+/**
+ * Mobile column meta for the merchant terminal report.
+ *
+ * Heatmap is hidden by default on mobile: it is a wrapping grid of 24px squares,
+ * one per station, so it cannot narrow — it only overflows. It stays one tap
+ * away, and is always present on desktop. Util. Rate is the default sort key and
+ * the measure the panel exists for, so it is the number kept beside the name.
+ */
+const MERCHANT_TERMINAL_COLUMNS: ReportColumn[] = [
+    { id: 'merchant', label: 'Merchant', locked: true },
+    { id: 'stations', label: 'Stations', defaultHidden: true },
+    { id: 'utilRate', label: 'Util. Rate' },
+    { id: 'zombies', label: 'Zombies', defaultHidden: true },
+    { id: 'tier', label: 'Tier', defaultHidden: true },
+    { id: 'heatmap', label: 'Heatmap', defaultHidden: true },
+]
 
 // ============================================================================
 // Heatmap Cell — visual grid of stations per merchant
@@ -150,48 +170,38 @@ function ZombieInsightBanner({
         `$${n.toLocaleString()}`
 
     return (
-        <Card className="border-red-200 bg-linear-to-r from-red-50 to-orange-50">
-            <CardContent className="py-5">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                    <div className="p-2.5 rounded-lg bg-red-100 shrink-0">
-                        <Ghost className="h-6 w-6 text-red-700" />
-                    </div>
-
-                    {/* Left — fleet-wide summary */}
-                    <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-red-900">
-                            {merchantsWithZombies.length} merchant{merchantsWithZombies.length !== 1 ? 's have' : ' has'}{' '}
-                            {totalZombieStations} zombie tablet{totalZombieStations !== 1 ? 's' : ''} — no transaction in 30+ days
-                        </p>
-                        <p className="text-sm text-red-800 mt-0.5">
-                            Worst offender:{' '}
-                            <span className="font-bold">{worstMerchant.merchantName}</span>{' '}
-                            ({worstMerchant.zombieStations} zombie{worstMerchant.zombieStations !== 1 ? 's' : ''} · paying for{' '}
-                            {worstMerchant.totalStations} but only using {worstMerchant.activeStations}).
-                        </p>
-                    </div>
-
-                    {/* Right — wasted value callout */}
-                    <div className="flex items-center gap-3 shrink-0 rounded-lg bg-white border border-red-200 px-4 py-3">
-                        <DollarSign className="h-5 w-5 text-red-600" />
-                        <div>
-                            <p className="text-xs text-muted-foreground leading-tight">Estimated wasted hardware value</p>
-                            <p className="text-2xl font-bold text-red-600 leading-tight">{fmtDollars(estimatedWastedHardwareValue)}</p>
-                            <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
-                                Based on ~{fmtDollars(hardwareCostPerUnit)}/unit assumption
-                            </p>
-                        </div>
-                    </div>
-
+        <Panel>
+            <PanelSection
+                icon={Ghost}
+                label={`${merchantsWithZombies.length} merchant${merchantsWithZombies.length !== 1 ? 's have' : ' has'} ${totalZombieStations} zombie tablet${totalZombieStations !== 1 ? 's' : ''}`}
+                caption="No transaction in 30+ days"
+                action={
                     <Link href={`/manage/merchants/${worstMerchant.merchantId}`}>
-                        <Button variant="outline" size="sm" className="border-red-300 text-red-800 hover:bg-red-100 shrink-0">
-                            <ExternalLink className="h-3 w-3 mr-1" />
+                        <Button variant="outline" size="sm" className="shrink-0 rounded-full">
+                            <ExternalLink className="mr-1 h-3 w-3" />
                             View Merchant
                         </Button>
                     </Link>
+                }
+            >
+                <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
+                    <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+                        Worst offender:{' '}
+                        <span className="font-semibold text-foreground">{worstMerchant.merchantName}</span>{' '}
+                        ({worstMerchant.zombieStations} zombie{worstMerchant.zombieStations !== 1 ? 's' : ''} · paying for{' '}
+                        {worstMerchant.totalStations} but only using {worstMerchant.activeStations}).
+                    </p>
+
+                    <InsetTile
+                        className="shrink-0 sm:w-64"
+                        icon={<DollarSign />}
+                        label="Estimated wasted hardware value"
+                        value={fmtDollars(estimatedWastedHardwareValue)}
+                        meta={`Based on ~${fmtDollars(hardwareCostPerUnit)}/unit assumption`}
+                    />
                 </div>
-            </CardContent>
-        </Card>
+            </PanelSection>
+        </Panel>
     )
 }
 
@@ -205,6 +215,14 @@ export default function TerminalUtilizationHeatmap() {
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
     const [expandedMerchant, setExpandedMerchant] = useState<string | null>(null)
     const [filterTier, setFilterTier] = useState<'all' | UtilizationTier>('all')
+    const isMobile = useIsMobile()
+    const [hiddenCols, setHiddenCols] = useState<Set<string>>(() =>
+        initialHiddenColumns(MERCHANT_TERMINAL_COLUMNS)
+    )
+    const showCol = (id: string) => !isMobile || !hiddenCols.has(id)
+    // +1 for the chevron column, which has no meta entry but occupies a cell.
+    // The empty state and the expanded drill-down row both span the full width.
+    const visibleColCount = MERCHANT_TERMINAL_COLUMNS.filter(c => showCol(c.id)).length + 1
 
     const { data, isLoading } = useTerminalUtilization(days)
 
@@ -269,22 +287,16 @@ export default function TerminalUtilizationHeatmap() {
                         </p>
                     </div>
                     {!isLoading && data && (
-                        data.summary.overallUtilizationRate >= 75 ? (
-                            <Badge variant="default" className="flex items-center gap-1 shrink-0 bg-green-600">
-                                <ShieldCheck className="h-3 w-3" />
-                                {data.summary.overallUtilizationRate}% Fleet Utilized
-                            </Badge>
-                        ) : data.summary.overallUtilizationRate >= 50 ? (
-                            <Badge variant="secondary" className="flex items-center gap-1 shrink-0">
-                                <AlertTriangle className="h-3 w-3" />
-                                {data.summary.overallUtilizationRate}% Fleet Utilized
-                            </Badge>
-                        ) : (
-                            <Badge variant="destructive" className="flex items-center gap-1 shrink-0">
-                                <AlertTriangle className="h-3 w-3" />
-                                {data.summary.overallUtilizationRate}% Fleet Utilized
-                            </Badge>
-                        )
+                        <span
+                            className={`flex shrink-0 items-center gap-1 text-sm ${
+                                data.summary.overallUtilizationRate >= 75 ? 'text-muted-foreground' : 'font-medium'
+                            }`}
+                        >
+                            {data.summary.overallUtilizationRate >= 75
+                                ? <ShieldCheck className="h-3.5 w-3.5" />
+                                : <AlertTriangle className="h-3.5 w-3.5" />}
+                            {data.summary.overallUtilizationRate}% Fleet Utilized
+                        </span>
                     )}
                 </div>
                 <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
@@ -302,101 +314,48 @@ export default function TerminalUtilizationHeatmap() {
             {/* Loading State */}
             {isLoading && (
                 <>
-                    <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-                        {Array.from({ length: 4 }).map((_, i) => (
-                            <Card key={i} className="min-w-0 overflow-hidden">
-                                <CardHeader className="pb-2">
-                                    <Skeleton className="h-4 w-28 max-w-full" />
-                                </CardHeader>
-                                <CardContent>
-                                    <Skeleton className="h-8 w-20 max-w-full" />
-                                    <Skeleton className="h-3 w-32 max-w-full mt-2" />
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                    <Card>
-                        <CardContent className="pt-6">
-                            <div className="space-y-3">
-                                {Array.from({ length: 5 }).map((_, i) => (
-                                    <Skeleton key={i} className="h-16 w-full" />
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <Skeleton className="h-40 w-full rounded-3xl" />
+                    <Skeleton className="h-75 w-full rounded-3xl" />
                 </>
             )}
 
             {/* Loaded State */}
             {!isLoading && data && (
                 <>
-                    {/* KPI Summary Cards */}
-                    <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Total Stations</CardTitle>
-                                <Monitor className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{data.summary.totalStations}</div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    {data.summary.totalActiveStations} active across {data.summary.totalMerchants} merchants
-                                </p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Active Utilization Rate</CardTitle>
-                                <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className={`text-2xl font-bold ${
-                                    data.summary.overallUtilizationRate >= 75
-                                        ? 'text-green-600'
-                                        : data.summary.overallUtilizationRate >= 50
-                                            ? 'text-yellow-600'
-                                            : 'text-red-600'
-                                }`}>
-                                    {data.summary.overallUtilizationRate}%
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    {data.summary.totalActiveStations} of {data.summary.totalStations} tablets active
-                                </p>
-                            </CardContent>
-                        </Card>
-                        <Card className={data.summary.totalZombieStations > 0 ? 'border-red-200' : undefined}>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Zombie Tablets</CardTitle>
-                                <Ghost className={`h-4 w-4 ${data.summary.totalZombieStations > 0 ? 'text-red-500' : 'text-muted-foreground'}`} />
-                            </CardHeader>
-                            <CardContent>
-                                <div className={`text-2xl font-bold ${data.summary.totalZombieStations > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                    {data.summary.totalZombieStations}
-                                </div>
-                                {data.summary.estimatedWastedHardwareValue > 0 ? (
-                                    <p className="text-xs text-red-600 font-medium mt-1">
-                                        ~${data.summary.estimatedWastedHardwareValue.toLocaleString()} wasted hardware
-                                    </p>
-                                ) : (
-                                    <p className="text-xs text-muted-foreground mt-1">No transactions in 30+ days</p>
-                                )}
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Underutilized Merchants</CardTitle>
-                                <TrendingDown className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className={`text-2xl font-bold ${data.summary.underutilizedMerchantCount > 0 ? 'text-yellow-600' : 'text-green-600'}`}>
-                                    {data.summary.underutilizedMerchantCount}
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    &lt;50% utilization · {data.summary.totalReclaimableStations} reclaimable tablets
-                                </p>
-                            </CardContent>
-                        </Card>
-                    </div>
+                    <Panel>
+                        <PanelSection label="Terminal utilization" icon={Monitor}>
+                            <StatRow columns={4}>
+                                <StatTile
+                                    label="Total Stations"
+                                    icon={<Monitor />}
+                                    value={data.summary.totalStations}
+                                    meta={`${data.summary.totalActiveStations} active across ${data.summary.totalMerchants} merchants`}
+                                />
+                                <StatTile
+                                    label="Active Utilization Rate"
+                                    icon={<BarChart3 />}
+                                    value={`${data.summary.overallUtilizationRate}%`}
+                                    meta={`${data.summary.totalActiveStations} of ${data.summary.totalStations} tablets active`}
+                                />
+                                <StatTile
+                                    label="Zombie Tablets"
+                                    icon={<Ghost />}
+                                    value={data.summary.totalZombieStations}
+                                    meta={
+                                        data.summary.estimatedWastedHardwareValue > 0
+                                            ? `~$${data.summary.estimatedWastedHardwareValue.toLocaleString()} wasted hardware`
+                                            : 'No transactions in 30+ days'
+                                    }
+                                />
+                                <StatTile
+                                    label="Underutilized Merchants"
+                                    icon={<TrendingDown />}
+                                    value={data.summary.underutilizedMerchantCount}
+                                    meta={`<50% utilization · ${data.summary.totalReclaimableStations} reclaimable tablets`}
+                                />
+                            </StatRow>
+                        </PanelSection>
+                    </Panel>
 
                     {/* Zombie Insight Banner */}
                     {data.merchants.some(m => m.zombieStations > 0) && (
@@ -411,12 +370,11 @@ export default function TerminalUtilizationHeatmap() {
                     {/* Utilization Distribution Chart + Merchant Table */}
                     <div className="grid gap-4 lg:grid-cols-7">
                         {/* Distribution Chart */}
-                        <Card className="lg:col-span-3 min-w-0 overflow-hidden">
-                            <CardHeader>
-                                <CardTitle className="text-sm font-medium">Utilization Distribution</CardTitle>
-                                <CardDescription>Number of merchants per utilization bracket</CardDescription>
-                            </CardHeader>
-                            <CardContent>
+                        <Panel className="lg:col-span-3">
+                            <PanelSection
+                                label="Utilization distribution"
+                                caption="Number of merchants per utilization bracket"
+                            >
                                 {chartData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height={280}>
                                         <BarChart data={chartData} barCategoryGap="20%" margin={{ bottom: 20 }}>
@@ -434,6 +392,7 @@ export default function TerminalUtilizationHeatmap() {
                                                 tick={{ fontSize: 11 }}
                                                 tickLine={false}
                                                 axisLine={false}
+                                                width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined}
                                             />
                                             <RechartsTooltip
                                                 content={({ active, payload }) => {
@@ -463,39 +422,45 @@ export default function TerminalUtilizationHeatmap() {
                                         No data available
                                     </div>
                                 )}
-                            </CardContent>
-                        </Card>
+                            </PanelSection>
+                        </Panel>
 
                         {/* Merchant Table */}
-                        <Card className="lg:col-span-4 min-w-0 overflow-hidden">
-                            <CardHeader>
-                                <div className="flex flex-wrap items-start gap-3 justify-between">
-                                    <div className="min-w-0">
-                                        <CardTitle className="text-sm font-medium">Merchant Terminal Report</CardTitle>
-                                        <CardDescription>
-                                            {filterTier === 'all'
-                                                ? `All ${data.summary.totalMerchants} merchants`
-                                                : `${filteredAndSorted.length} ${filterTier} merchants`}
-                                        </CardDescription>
+                        <Panel className="lg:col-span-4">
+                            <PanelSection
+                                label="Merchant terminal report"
+                                caption={
+                                    filterTier === 'all'
+                                        ? `All ${data.summary.totalMerchants} merchants`
+                                        : `${filteredAndSorted.length} ${filterTier} merchants`
+                                }
+                                action={
+                                    <div className="flex items-center gap-2">
+                                        <MobileColumnsButton
+                                            columns={MERCHANT_TERMINAL_COLUMNS}
+                                            hidden={hiddenCols}
+                                            onChange={setHiddenCols}
+                                        />
+                                        <Select value={filterTier} onValueChange={(v) => setFilterTier(v as typeof filterTier)}>
+                                            <SelectTrigger className="h-9 w-40 shrink-0 rounded-full border-0 bg-muted/60 px-3 shadow-none">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Tiers</SelectItem>
+                                                <SelectItem value="critical">Critical (&lt;25%)</SelectItem>
+                                                <SelectItem value="underutilized">Underutilized (&lt;50%)</SelectItem>
+                                                <SelectItem value="healthy">Healthy (≥50%)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
-                                    <Select value={filterTier} onValueChange={(v) => setFilterTier(v as typeof filterTier)}>
-                                        <SelectTrigger className="w-37.5 shrink-0">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Tiers</SelectItem>
-                                            <SelectItem value="critical">Critical (&lt;25%)</SelectItem>
-                                            <SelectItem value="underutilized">Underutilized (&lt;50%)</SelectItem>
-                                            <SelectItem value="healthy">Healthy (≥50%)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
+                                }
+                            >
                                 <div className="max-h-112.5 overflow-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow className="bg-muted/50">
+                                    {/* Min-width lifted on mobile so hidden columns actually
+                                        narrow the table instead of scrolling sideways. */}
+                                    <Table variant="data" className={cn(!isMobile && 'min-w-[860px]')}>
+                                        <TableHeader className="[&_tr]:border-0">
+                                            <TableRow>
                                                 <TableHead className="w-6"></TableHead>
                                                 <TableHead
                                                     className="cursor-pointer select-none hover:text-foreground"
@@ -506,41 +471,47 @@ export default function TerminalUtilizationHeatmap() {
                                                         <ArrowUpDown className="h-3 w-3" />
                                                     </span>
                                                 </TableHead>
-                                                <TableHead
-                                                    className="text-center cursor-pointer select-none hover:text-foreground"
-                                                    onClick={() => handleSort('totalStations')}
-                                                >
-                                                    <span className="flex items-center justify-center gap-1">
-                                                        Stations
-                                                        <ArrowUpDown className="h-3 w-3" />
-                                                    </span>
-                                                </TableHead>
-                                                <TableHead
-                                                    className="text-center cursor-pointer select-none hover:text-foreground"
-                                                    onClick={() => handleSort('utilizationRate')}
-                                                >
-                                                    <span className="flex items-center justify-center gap-1">
-                                                        Util. Rate
-                                                        <ArrowUpDown className="h-3 w-3" />
-                                                    </span>
-                                                </TableHead>
-                                                <TableHead
-                                                    className="text-center cursor-pointer select-none hover:text-foreground"
-                                                    onClick={() => handleSort('zombieStations')}
-                                                >
-                                                    <span className="flex items-center justify-center gap-1">
-                                                        Zombies
-                                                        <ArrowUpDown className="h-3 w-3" />
-                                                    </span>
-                                                </TableHead>
-                                                <TableHead className="text-center">Tier</TableHead>
-                                                <TableHead className="text-center">Heatmap</TableHead>
+                                                {showCol('stations') && (
+                                                    <TableHead
+                                                        className="text-center cursor-pointer select-none hover:text-foreground"
+                                                        onClick={() => handleSort('totalStations')}
+                                                    >
+                                                        <span className="flex items-center justify-center gap-1">
+                                                            Stations
+                                                            <ArrowUpDown className="h-3 w-3" />
+                                                        </span>
+                                                    </TableHead>
+                                                )}
+                                                {showCol('utilRate') && (
+                                                    <TableHead
+                                                        className="text-center cursor-pointer select-none hover:text-foreground"
+                                                        onClick={() => handleSort('utilizationRate')}
+                                                    >
+                                                        <span className="flex items-center justify-center gap-1">
+                                                            Util. Rate
+                                                            <ArrowUpDown className="h-3 w-3" />
+                                                        </span>
+                                                    </TableHead>
+                                                )}
+                                                {showCol('zombies') && (
+                                                    <TableHead
+                                                        className="text-center cursor-pointer select-none hover:text-foreground"
+                                                        onClick={() => handleSort('zombieStations')}
+                                                    >
+                                                        <span className="flex items-center justify-center gap-1">
+                                                            Zombies
+                                                            <ArrowUpDown className="h-3 w-3" />
+                                                        </span>
+                                                    </TableHead>
+                                                )}
+                                                {showCol('tier') && <TableHead className="text-center">Tier</TableHead>}
+                                                {showCol('heatmap') && <TableHead className="text-center">Heatmap</TableHead>}
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {filteredAndSorted.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                                    <TableCell colSpan={visibleColCount} className="text-center py-8 text-muted-foreground">
                                                         <div className="flex flex-col items-center gap-2">
                                                             <ShieldCheck className="h-8 w-8 opacity-30" />
                                                             <p className="text-sm font-medium">No merchants in this tier</p>
@@ -553,7 +524,7 @@ export default function TerminalUtilizationHeatmap() {
                                                 return (
                                                     <Fragment key={m.merchantId}>
                                                         <TableRow
-                                                            className={`cursor-pointer hover:bg-muted/50 ${tierCfg.bgClass}`}
+                                                            className="cursor-pointer hover:bg-muted/50"
                                                             onClick={() => setExpandedMerchant(isExpanded ? null : m.merchantId)}
                                                         >
                                                             <TableCell className="w-6 pr-0">
@@ -561,102 +532,154 @@ export default function TerminalUtilizationHeatmap() {
                                                                     ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
                                                                     : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                                                             </TableCell>
-                                                            <TableCell>
+                                                            {/* TableCell is `whitespace-nowrap`, so a long merchant name
+                                                                sized this column to ~212px and pushed the table past its
+                                                                scroller — the Status column ended up off-screen and the
+                                                                row had to be scrolled sideways to read. Wrapping the name
+                                                                lets the table fit the viewport instead. */}
+                                                            <TableCell className="whitespace-normal">
                                                                 <Link
                                                                     href={`/manage/merchants/${m.merchantId}`}
-                                                                    className="hover:underline font-medium text-sm flex items-center gap-1"
+                                                                    className="hover:underline font-medium text-sm flex items-start gap-1"
                                                                     onClick={(e) => e.stopPropagation()}
                                                                 >
-                                                                    {m.merchantName}
-                                                                    <ExternalLink className="h-3 w-3 opacity-40" />
+                                                                    <span className="min-w-0">{m.merchantName}</span>
+                                                                    <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 opacity-40" />
                                                                 </Link>
                                                                 <p className="text-xs text-muted-foreground">
                                                                     {m.totalOrders.toLocaleString()} total orders
                                                                 </p>
                                                             </TableCell>
-                                                            <TableCell className="text-center">
-                                                                <span className="font-medium text-sm">
-                                                                    {m.activeStations}/{m.totalStations}
-                                                                </span>
-                                                            </TableCell>
-                                                            <TableCell className="text-center">
-                                                                <span className={`font-bold text-sm ${tierCfg.colorClass}`}>
-                                                                    {m.utilizationRate}%
-                                                                </span>
-                                                            </TableCell>
-                                                            <TableCell className="text-center">
-                                                                {m.zombieStations > 0 ? (
-                                                                    <Badge variant="destructive" className="text-xs">
-                                                                        <Ghost className="h-3 w-3 mr-1" />
-                                                                        {m.zombieStations}
-                                                                    </Badge>
-                                                                ) : (
-                                                                    <span className="text-xs text-muted-foreground">—</span>
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell className="text-center">
-                                                                <Badge variant={tierCfg.variant} className="text-xs">
+                                                            {showCol('stations') && (
+                                                                <TableCell className="text-center">
+                                                                    <span className="font-medium text-sm">
+                                                                        {m.activeStations}/{m.totalStations}
+                                                                    </span>
+                                                                </TableCell>
+                                                            )}
+                                                            {showCol('utilRate') && (
+                                                                <TableCell className="text-center">
+                                                                    <span className="text-sm font-semibold tabular-nums">
+                                                                        {m.utilizationRate}%
+                                                                    </span>
+                                                                </TableCell>
+                                                            )}
+                                                            {showCol('zombies') && (
+                                                                <TableCell className="text-center">
+                                                                    {m.zombieStations > 0 ? (
+                                                                        <span className="inline-flex items-center gap-1 text-sm font-medium tabular-nums">
+                                                                            <Ghost className="h-3 w-3" />
+                                                                            {m.zombieStations}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-muted-foreground">—</span>
+                                                                    )}
+                                                                </TableCell>
+                                                            )}
+                                                            {showCol('tier') && (
+                                                                <TableCell className="text-center text-sm text-muted-foreground">
                                                                     {tierCfg.label}
-                                                                </Badge>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <StationHeatmapGrid merchant={m} />
-                                                            </TableCell>
+                                                                </TableCell>
+                                                            )}
+                                                            {showCol('heatmap') && (
+                                                                <TableCell>
+                                                                    <StationHeatmapGrid merchant={m} />
+                                                                </TableCell>
+                                                            )}
                                                         </TableRow>
 
                                                         {/* Expanded Drill-down Row */}
                                                         {isExpanded && (
                                                             <TableRow className="bg-muted/30">
-                                                                <TableCell colSpan={7} className="p-4">
-                                                                    <div className="space-y-3">
-                                                                        <div className="flex items-center justify-between">
-                                                                            <h4 className="text-sm font-semibold">Station Detail — {m.merchantName}</h4>
+                                                                {/* `whitespace-normal` so the drill-down, which is a block
+                                                                    of its own, does not inherit TableCell's nowrap and
+                                                                    report an inflated width to the parent's auto layout. */}
+                                                                <TableCell colSpan={visibleColCount} className="whitespace-normal p-2 sm:p-4">
+                                                                    <div className="min-w-0 space-y-3">
+                                                                        {/* Wraps rather than squeezing: a long merchant name
+                                                                            beside a `shrink-0` pill otherwise collapses the
+                                                                            heading to one word per line on a phone. */}
+                                                                        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                                                                            <h4 className="min-w-0 text-sm font-semibold">Station Detail — {m.merchantName}</h4>
                                                                             {m.reclaimableStations > 0 && (
-                                                                                <Badge variant="outline" className="text-xs text-amber-700 border-amber-300">
-                                                                                    <Recycle className="h-3 w-3 mr-1" />
+                                                                                <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                                                                                    <Recycle className="h-3 w-3" />
                                                                                     {m.reclaimableStations} reclaimable
-                                                                                </Badge>
+                                                                                </span>
                                                                             )}
                                                                         </div>
-                                                                        <Table>
-                                                                            <TableHeader>
-                                                                                <TableRow className="text-xs">
+                                                                        {/* Same rule as the parent table: the min-width is what
+                                                                            forces sideways scrolling, so it lifts on mobile. A
+                                                                            7-column drill-down at 680px inside a ~300px panel was
+                                                                            unreadable — on a phone it keeps the three columns that
+                                                                            answer "is this station earning its keep" and drops the
+                                                                            rest, which are available at tablet width and up. */}
+                                                                        <Table
+                                                                            variant="data"
+                                                                            className={cn(
+                                                                                !isMobile && 'min-w-[680px]',
+                                                                                // Station names are the long value here; let
+                                                                                // them wrap so the drill-down fits the row it
+                                                                                // sits in rather than widening the parent.
+                                                                                isMobile && 'w-full table-fixed [&_td]:px-2 [&_th]:px-2 [&_td]:whitespace-normal'
+                                                                            )}
+                                                                        >
+                                                                            <TableHeader className="[&_tr]:border-0">
+                                                                                <TableRow>
                                                                                     <TableHead>Station</TableHead>
-                                                                                    <TableHead>Type</TableHead>
-                                                                                    <TableHead className="text-right">Orders</TableHead>
-                                                                                    <TableHead className="text-right">Active Days</TableHead>
-                                                                                    <TableHead className="text-right">Avg/Day</TableHead>
-                                                                                    <TableHead className="text-right">Last Txn</TableHead>
-                                                                                    <TableHead className="text-center">Status</TableHead>
+                                                                                    {!isMobile && <TableHead>Type</TableHead>}
+                                                                                    <TableHead className={cn('text-right', isMobile && 'w-16')}>Orders</TableHead>
+                                                                                    {!isMobile && <TableHead className="text-right">Active Days</TableHead>}
+                                                                                    {!isMobile && <TableHead className="text-right">Avg/Day</TableHead>}
+                                                                                    {!isMobile && <TableHead className="text-right">Last Txn</TableHead>}
+                                                                                    <TableHead className={cn('text-center', isMobile && 'w-20')}>Status</TableHead>
                                                                                 </TableRow>
                                                                             </TableHeader>
                                                                             <TableBody>
                                                                                 {m.stations.map((s) => (
-                                                                                    <TableRow key={s.stationId} className={s.isZombie ? 'bg-red-50/50' : ''}>
-                                                                                        <TableCell className="text-sm font-medium">{s.stationName}</TableCell>
-                                                                                        <TableCell className="text-xs text-muted-foreground">{s.stationType}</TableCell>
-                                                                                        <TableCell className="text-right text-sm">{s.totalOrders.toLocaleString()}</TableCell>
-                                                                                        <TableCell className="text-right text-sm">{s.activeDays}</TableCell>
-                                                                                        <TableCell className="text-right text-sm">{s.avgOrdersPerActiveDay}</TableCell>
-                                                                                        <TableCell className="text-right text-xs text-muted-foreground">
-                                                                                            {s.lastTransactionAt ? (
-                                                                                                s.daysSinceLastTxn === 0 ? 'Today' : `${s.daysSinceLastTxn}d ago`
-                                                                                            ) : (
-                                                                                                <span className="text-red-500">Never</span>
+                                                                                    <TableRow key={s.stationId}>
+                                                                                        <TableCell className="font-medium">
+                                                                                            <span className="block truncate">{s.stationName}</span>
+                                                                                            {/* The dropped columns fold into a caption
+                                                                                                here rather than disappearing, so a phone
+                                                                                                still gets type and recency. */}
+                                                                                            {isMobile && (
+                                                                                                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                                                                                                    {s.stationType}
+                                                                                                    {' · '}
+                                                                                                    {s.lastTransactionAt
+                                                                                                        ? s.daysSinceLastTxn === 0
+                                                                                                            ? 'today'
+                                                                                                            : `${s.daysSinceLastTxn}d ago`
+                                                                                                        : 'never'}
+                                                                                                </span>
                                                                                             )}
                                                                                         </TableCell>
-                                                                                        <TableCell className="text-center">
+                                                                                        {!isMobile && <TableCell className="text-xs text-muted-foreground">{s.stationType}</TableCell>}
+                                                                                        <TableCell className="text-right tabular-nums">{s.totalOrders.toLocaleString()}</TableCell>
+                                                                                        {!isMobile && <TableCell className="text-right tabular-nums">{s.activeDays}</TableCell>}
+                                                                                        {!isMobile && <TableCell className="text-right tabular-nums">{s.avgOrdersPerActiveDay}</TableCell>}
+                                                                                        {!isMobile && (
+                                                                                            <TableCell className="whitespace-nowrap text-right text-xs text-muted-foreground">
+                                                                                                {s.lastTransactionAt ? (
+                                                                                                    s.daysSinceLastTxn === 0 ? 'Today' : `${s.daysSinceLastTxn}d ago`
+                                                                                                ) : (
+                                                                                                    <span>Never</span>
+                                                                                                )}
+                                                                                            </TableCell>
+                                                                                        )}
+                                                                                        <TableCell className="text-center text-sm text-muted-foreground">
                                                                                             {s.isZombie ? (
-                                                                                                <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                                                                                                    <Ghost className="h-3 w-3 mr-0.5" />
+                                                                                                <span className="inline-flex items-center gap-1 font-medium">
+                                                                                                    <Ghost className="h-3 w-3" />
                                                                                                     Zombie
-                                                                                                </Badge>
+                                                                                                </span>
                                                                                             ) : s.activeDays === 0 ? (
-                                                                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Idle</Badge>
+                                                                                                'Idle'
                                                                                             ) : s.avgOrdersPerActiveDay < 1 ? (
-                                                                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 text-yellow-700">Low</Badge>
+                                                                                                'Low'
                                                                                             ) : (
-                                                                                                <Badge variant="default" className="text-[10px] px-1.5 py-0 bg-green-600">Active</Badge>
+                                                                                                'Active'
                                                                                             )}
                                                                                         </TableCell>
                                                                                     </TableRow>
@@ -673,47 +696,34 @@ export default function TerminalUtilizationHeatmap() {
                                         </TableBody>
                                     </Table>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </PanelSection>
+                        </Panel>
                     </div>
 
                     {/* Empty State */}
                     {data.summary.totalStations === 0 && (
-                        <Card className="border-dashed">
-                            <CardContent className="py-12">
-                                <div className="flex flex-col items-center justify-center text-center gap-3">
-                                    <div className="p-3 rounded-full bg-muted">
-                                        <Tablet className="h-8 w-8 text-muted-foreground opacity-50" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-semibold">No Stations Found</h3>
-                                        <p className="text-sm text-muted-foreground mt-1">
-                                            No active stations detected. Terminal utilization data will appear once merchants register their devices.
-                                        </p>
-                                    </div>
+                        <Panel>
+                            <PanelSection label="No stations found">
+                                <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+                                    <Tablet className="h-8 w-8 text-muted-foreground opacity-50" />
+                                    <p className="max-w-md text-sm text-muted-foreground">
+                                        No active stations detected. Terminal utilization data will appear once merchants register their devices.
+                                    </p>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </PanelSection>
+                        </Panel>
                     )}
 
                     {/* All-Healthy State */}
                     {data.summary.totalStations > 0 && data.summary.underutilizedMerchantCount === 0 && data.summary.totalZombieStations === 0 && (
-                        <Card className="border-green-200 bg-linear-to-r from-green-50 to-emerald-50">
-                            <CardContent className="py-8">
-                                <div className="flex flex-col items-center justify-center text-center gap-3">
-                                    <div className="p-3 rounded-full bg-green-100">
-                                        <ShieldCheck className="h-8 w-8 text-green-600" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-green-900">Fleet Fully Utilized</h3>
-                                        <p className="text-sm text-green-700 mt-1">
-                                            All {data.summary.totalStations} terminals across {data.summary.totalMerchants} merchants are actively processing transactions.
-                                            No zombie tablets or underutilized merchants detected.
-                                        </p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <Panel>
+                            <PanelSection icon={ShieldCheck} label="Fleet fully utilized">
+                                <p className="text-sm text-muted-foreground">
+                                    All {data.summary.totalStations} terminals across {data.summary.totalMerchants} merchants are actively processing transactions.
+                                    No zombie tablets or underutilized merchants detected.
+                                </p>
+                            </PanelSection>
+                        </Panel>
                     )}
                 </>
             )}

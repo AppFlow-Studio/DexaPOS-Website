@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PageHeader } from '@/components/dashboard/shell/PageHeader'
+import { PageShell } from '@/components/dashboard/shell/PageShell'
 import { UserPlus2, BarChart3, Activity, Zap } from 'lucide-react'
 import { AdminInviteWizard } from './organizations/[organizationId]/components/AdminInviteWizard'
 import { PlatformPulseSection } from './components/PlatformPulseSection'
@@ -21,47 +23,41 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('dashboard')
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-blue-50/30 dark:from-background dark:to-background p-6 space-y-8 min-w-0 overflow-x-hidden">
-      {/* Header with action button */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-br from-slate-900 to-blue-900 dark:from-slate-100 dark:to-blue-300 bg-clip-text text-transparent">
-            Mission Control
-          </h1>
-          <p className="text-sm text-muted-foreground/80">
-            Platform dashboard and real-time monitoring
-          </p>
-        </div>
-        <Button
-          size="sm"
-          onClick={() => setIsAdminInviteOpen(true)}
-          className="shadow-sm hover:shadow-md transition-all duration-200 self-start sm:self-auto"
-        >
-          <UserPlus2 className="h-4 w-4 mr-2" />
-          Invite Admin
-        </Button>
-      </div>
+    <PageShell as="div">
+      <PageHeader
+        title="Mission Control"
+        subtitle="Platform dashboard and real-time monitoring"
+        actions={
+          <Button size="sm" onClick={() => setIsAdminInviteOpen(true)}>
+            <UserPlus2 className="h-4 w-4 mr-2" />
+            Invite Admin
+          </Button>
+        }
+      />
 
       {/* Tab Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="inline-flex h-auto p-1 bg-white/80 dark:bg-card/80 backdrop-blur-sm border border-blue-100/50 dark:border-border shadow-sm rounded-xl">
+        {/* Scrolls rather than clips: three labelled triggers do not fit a
+            320px viewport, and a wrapped tab strip reads as two rows of
+            unrelated controls. */}
+        <TabsList className="inline-flex h-auto max-w-full gap-1 overflow-x-auto rounded-full bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <TabsTrigger
             value="dashboard"
-            className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all duration-200"
+            className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
           >
             <Zap className="h-4 w-4" />
             <span className="hidden sm:inline">Dashboard</span>
           </TabsTrigger>
           <TabsTrigger
             value="health"
-            className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all duration-200"
+            className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
           >
             <Activity className="h-4 w-4" />
             <span className="hidden sm:inline">Health</span>
           </TabsTrigger>
           <TabsTrigger
             value="analytics"
-            className="gap-2 px-4 py-2.5 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all duration-200"
+            className="gap-2 rounded-full px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
           >
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Analytics</span>
@@ -119,6 +115,6 @@ export default function Dashboard() {
           console.log('Admin invited successfully')
         }}
       />
-    </div>
+    </PageShell>
   )
 }
