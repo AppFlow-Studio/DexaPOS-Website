@@ -121,4 +121,15 @@ describe("pre-snapshot migration bootstrap ordering", () => {
       /IF EXISTS \([\s\S]+FROM public\.settlement_batches[\s\S]+a59f40fb-2960-4939-b019-c80d0fcf93ad[\s\S]+PERFORM public\.manual_mark_batch_settled/,
     );
   });
+
+  it("keeps an explicit future deadline for the active batch-number shim", () => {
+    const sentinel = read(
+      "supabase/migrations/20260510210307_wave_h3_dejavoo_batch_number_shim_sentinel.sql",
+    );
+
+    expect(sentinel).toContain("DATE '2026-12-31'");
+    expect(sentinel).toContain(
+      "docs/engineering/preview-bootstrap-2026-09-20.md",
+    );
+  });
 });
