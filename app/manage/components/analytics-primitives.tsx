@@ -37,6 +37,28 @@ export const SERIES = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'] as
 export const CATEGORY_AXIS_WIDTH = { mobile: 88, desktop: 120 } as const
 
 /**
+ * Y-axis gutter for vertical (value-axis) cartesian charts on a phone.
+ *
+ * Recharts reserves ~60px for a numeric Y axis regardless of how short the
+ * labels are. Inside a 309px panel body that left a 65px gutter against a 5px
+ * right margin, so the plot sat visibly shoved to the right of its card while
+ * the space under "$8k" went unused. 38px fits the widest tick these charts
+ * produce (`$8k`, `100%`) and leaves the plot centred in the card.
+ */
+export const VALUE_AXIS_WIDTH_MOBILE = 38
+
+/**
+ * Balanced plot margins for a value-axis chart.
+ *
+ * Pair with `VALUE_AXIS_WIDTH_MOBILE`. The y-axis gutter is asymmetric by
+ * nature — it holds the tick labels — so the right margin is set to roughly
+ * half of it: enough that the plot reads as centred in its card and the last
+ * x tick is not clipped, without wasting the width the axis already paid for.
+ * Spread it as `margin={CHART_MARGIN}`.
+ */
+export const CHART_MARGIN = { top: 4, right: 16, left: 0, bottom: 0 } as const
+
+/**
  * Wrapping tick for a category axis.
  *
  * Recharts renders a tick as a single `<text>` that it will happily let

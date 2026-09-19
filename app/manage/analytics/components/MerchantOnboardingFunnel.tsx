@@ -16,7 +16,7 @@ import { AlertTriangle, TrendingUp, Filter } from 'lucide-react'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
-import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
+import { AnalyticsTooltip, VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
 import type { OnboardingFunnelStage, StuckMerchant } from '@/app/manage/actions/hq-platform/analytics'
 
 /**
@@ -182,7 +182,7 @@ export function MerchantOnboardingFunnel() {
             <BarChart data={data.monthlyTrend}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined} />
               <Tooltip content={<AnalyticsTooltip />} />
               <Bar dataKey="newCount" name="New Merchants" fill="#94a3b8" radius={[3, 3, 0, 0]} />
               <Bar dataKey="activeCount" name="Activated" fill="#22c55e" radius={[3, 3, 0, 0]} />

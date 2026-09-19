@@ -17,7 +17,7 @@ import { CreditCard, PieChart as PieChartIcon, Receipt, TrendingUp } from 'lucid
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile, InsetTile } from '@/components/dashboard/shell/StatTile'
-import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
+import { AnalyticsTooltip, VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
 import type { PaymentMethodSplit, MerchantFeeExposure } from '@/app/manage/actions/hq-platform/analytics'
 
 function fmt(n: number) {
@@ -199,7 +199,7 @@ export function PaymentMethodMix() {
               <LineChart data={data.monthlyTrend}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="month" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} />
-                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[0, 100]} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} domain={[0, 100]} width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined} />
                 <Tooltip content={<AnalyticsTooltip formatter={(v: number) => `${v}%`} />} />
                 <Line type="monotone" dataKey="cashPercent" name="Cash %" stroke="#22c55e" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="cardPercent" name="Card %" stroke="#3b82f6" strokeWidth={2} dot={false} />

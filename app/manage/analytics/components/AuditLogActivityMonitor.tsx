@@ -43,6 +43,7 @@ import {
   Legend,
 } from 'recharts'
 import type { TopAuditActor, FailedAuditAction, DailyAuditActivity } from '@/app/manage/actions/hq-platform/analytics'
+import { VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
 
 /**
  * Mobile column meta for the three audit tables.
@@ -237,6 +238,7 @@ function DailyActivityChart({ analytics, isLoading }: {
   analytics: ReturnType<typeof useAuditLogAnalytics>['data']
   isLoading: boolean
 }) {
+  const isMobile = useIsMobile()
   const hasData = analytics && analytics.dailyActivity.some(d => d.total > 0)
 
   return (
@@ -282,6 +284,7 @@ function DailyActivityChart({ analytics, isLoading }: {
                 axisLine={false}
                 tickLine={false}
                 allowDecimals={false}
+                  width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined}
               />
               <RechartsTooltip content={<DailyChartTooltip />} cursor={{ fill: 'var(--muted)' }} />
               <Legend

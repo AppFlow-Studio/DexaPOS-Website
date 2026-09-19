@@ -16,7 +16,7 @@ import { ArrowDownRight, ArrowUpRight, Minus, Timer, ListChecks } from 'lucide-r
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
-import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
+import { AnalyticsTooltip, VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
 import type { NeverActivatedMerchant } from '@/app/manage/actions/hq-platform/analytics'
 
 /** Bucket fills encode the histogram's time bands — data, not decoration (§4.6b). */
@@ -124,7 +124,7 @@ export function MerchantActivationTimeline() {
             <BarChart data={data.histogram} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined} />
               <Tooltip content={<AnalyticsTooltip />} />
               <Bar dataKey="count" name="Merchants" radius={[4, 4, 0, 0]}>
                 {data.histogram.map((_, i) => (

@@ -4,7 +4,7 @@ import { MapPin, Globe, TrendingUp, AlertTriangle } from 'lucide-react'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
-import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
+import { AnalyticsTooltip, VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
@@ -380,7 +380,7 @@ export function LocationDensityInsights() {
             <BarChart data={chartData} margin={{ bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="state" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined} />
               <RechartsTooltip content={<AnalyticsTooltip />} />
               {/* `var(--chart-1)` bare, never `hsl(var(--chart-1))` (C2): the
                   token is already an `oklch()` colour, so wrapping it in `hsl()`

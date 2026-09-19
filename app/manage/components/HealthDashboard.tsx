@@ -333,6 +333,13 @@ function HealthRow({
     // wider than its track or a negative width.
     const healthPercentage = Math.max(0, Math.min(100, merchant.healthScore))
 
+    // Today's trading figures are only worth their line on a phone if the
+    // merchant actually traded today. For the long tail of idle merchants
+    // "Revenue $0 · Orders 0" is two stats that say the same nothing the
+    // "No orders" timestamp already says, so the phone layout drops them and
+    // keeps Locations/Devices, which describe the estate either way.
+    const tradedToday = merchant.revenue_today > 0 || merchant.orders_today > 0
+
     return (
         // A real button: the row was a click-only Card, so the whole health
         // grid was unreachable by keyboard.
@@ -430,16 +437,25 @@ function HealthRow({
                                 <span className="min-w-0 text-muted-foreground">{alert}</span>
                             </div>
                         ))}
-                        {/* Two counts for the two cutoffs; CSS picks one. */}
-                        {merchant.alerts.length > 1 && (
-                            <p className="text-xs text-muted-foreground sm:hidden">
-                                +{merchant.alerts.length - 1} more issue{merchant.alerts.length - 1 !== 1 ? 's' : ''}
-                            </p>
-                        )}
+                        {/* The overflow count earns its line at `sm`+, where
+                            there is room for it. On a phone it does not: the
+                            whole card is a button that opens the full alert
+                            list, so a line saying "there is more" spends a row
+                            of a crowded card to duplicate the affordance.
+                            Hiding it visually would also hide it from a screen
+                            reader, so the count moves into the sr-only summary
+                            below, which is breakpoint-independent. */}
                         {merchant.alerts.length > 2 && (
                             <p className="hidden text-xs text-muted-foreground sm:block">
                                 +{merchant.alerts.length - 2} more issue{merchant.alerts.length - 2 !== 1 ? 's' : ''}
                             </p>
+                        )}
+                        {/* Announces the true total regardless of which
+                            breakpoint's visible cutoff is in effect. */}
+                        {merchant.alerts.length > 1 && (
+                            <span className="sr-only">
+                                {merchant.alerts.length} issues in total. Activate to see all.
+                            </span>
                         )}
                     </div>
                 ) : (
@@ -470,18 +486,22 @@ function HealthRow({
                             {merchant.totalStations}
                         </span>
                     </span>
-                    <span className="text-muted-foreground">
-                        Revenue{' '}
-                        <span className="font-semibold tabular-nums text-foreground">
-                            {formatCurrency(merchant.revenue_today)}
-                        </span>
-                    </span>
-                    <span className="text-muted-foreground">
-                        Orders{' '}
-                        <span className="font-semibold tabular-nums text-foreground">
-                            {merchant.orders_today}
-                        </span>
-                    </span>
+                    {tradedToday && (
+                        <>
+                            <span className="text-muted-foreground">
+                                Revenue{' '}
+                                <span className="font-semibold tabular-nums text-foreground">
+                                    {formatCurrency(merchant.revenue_today)}
+                                </span>
+                            </span>
+                            <span className="text-muted-foreground">
+                                Orders{' '}
+                                <span className="font-semibold tabular-nums text-foreground">
+                                    {merchant.orders_today}
+                                </span>
+                            </span>
+                        </>
+                    )}
                     <span className="basis-full text-xs text-muted-foreground">
                         {merchant.last_order_at
                             ? formatDistanceToNow(new Date(merchant.last_order_at), {

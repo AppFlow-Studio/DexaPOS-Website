@@ -44,6 +44,7 @@ import {
 import { useTerminalUtilization } from '@/lib/queries/use-platform-analytics'
 import type { MerchantTerminalUtilization, UtilizationTier } from '@/app/manage/actions/hq-platform/analytics'
 import Link from 'next/link'
+import { VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
 
 // ============================================================================
 // Constants
@@ -391,6 +392,7 @@ export default function TerminalUtilizationHeatmap() {
                                                 tick={{ fontSize: 11 }}
                                                 tickLine={false}
                                                 axisLine={false}
+                                                width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined}
                                             />
                                             <RechartsTooltip
                                                 content={({ active, payload }) => {
@@ -530,14 +532,19 @@ export default function TerminalUtilizationHeatmap() {
                                                                     ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
                                                                     : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                                                             </TableCell>
-                                                            <TableCell>
+                                                            {/* TableCell is `whitespace-nowrap`, so a long merchant name
+                                                                sized this column to ~212px and pushed the table past its
+                                                                scroller — the Status column ended up off-screen and the
+                                                                row had to be scrolled sideways to read. Wrapping the name
+                                                                lets the table fit the viewport instead. */}
+                                                            <TableCell className="whitespace-normal">
                                                                 <Link
                                                                     href={`/manage/merchants/${m.merchantId}`}
-                                                                    className="hover:underline font-medium text-sm flex items-center gap-1"
+                                                                    className="hover:underline font-medium text-sm flex items-start gap-1"
                                                                     onClick={(e) => e.stopPropagation()}
                                                                 >
-                                                                    {m.merchantName}
-                                                                    <ExternalLink className="h-3 w-3 opacity-40" />
+                                                                    <span className="min-w-0">{m.merchantName}</span>
+                                                                    <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 opacity-40" />
                                                                 </Link>
                                                                 <p className="text-xs text-muted-foreground">
                                                                     {m.totalOrders.toLocaleString()} total orders
@@ -584,44 +591,83 @@ export default function TerminalUtilizationHeatmap() {
                                                         {/* Expanded Drill-down Row */}
                                                         {isExpanded && (
                                                             <TableRow className="bg-muted/30">
-                                                                <TableCell colSpan={visibleColCount} className="p-4">
-                                                                    <div className="space-y-3">
-                                                                        <div className="flex items-center justify-between">
-                                                                            <h4 className="text-sm font-semibold">Station Detail — {m.merchantName}</h4>
+                                                                {/* `whitespace-normal` so the drill-down, which is a block
+                                                                    of its own, does not inherit TableCell's nowrap and
+                                                                    report an inflated width to the parent's auto layout. */}
+                                                                <TableCell colSpan={visibleColCount} className="whitespace-normal p-2 sm:p-4">
+                                                                    <div className="min-w-0 space-y-3">
+                                                                        {/* Wraps rather than squeezing: a long merchant name
+                                                                            beside a `shrink-0` pill otherwise collapses the
+                                                                            heading to one word per line on a phone. */}
+                                                                        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                                                                            <h4 className="min-w-0 text-sm font-semibold">Station Detail — {m.merchantName}</h4>
                                                                             {m.reclaimableStations > 0 && (
-                                                                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                                                                <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
                                                                                     <Recycle className="h-3 w-3" />
                                                                                     {m.reclaimableStations} reclaimable
                                                                                 </span>
                                                                             )}
                                                                         </div>
-                                                                        <Table variant="data" className="min-w-[680px]">
+                                                                        {/* Same rule as the parent table: the min-width is what
+                                                                            forces sideways scrolling, so it lifts on mobile. A
+                                                                            7-column drill-down at 680px inside a ~300px panel was
+                                                                            unreadable — on a phone it keeps the three columns that
+                                                                            answer "is this station earning its keep" and drops the
+                                                                            rest, which are available at tablet width and up. */}
+                                                                        <Table
+                                                                            variant="data"
+                                                                            className={cn(
+                                                                                !isMobile && 'min-w-[680px]',
+                                                                                // Station names are the long value here; let
+                                                                                // them wrap so the drill-down fits the row it
+                                                                                // sits in rather than widening the parent.
+                                                                                isMobile && 'w-full table-fixed [&_td]:px-2 [&_th]:px-2 [&_td]:whitespace-normal'
+                                                                            )}
+                                                                        >
                                                                             <TableHeader className="[&_tr]:border-0">
                                                                                 <TableRow>
                                                                                     <TableHead>Station</TableHead>
-                                                                                    <TableHead>Type</TableHead>
-                                                                                    <TableHead className="text-right">Orders</TableHead>
-                                                                                    <TableHead className="text-right">Active Days</TableHead>
-                                                                                    <TableHead className="text-right">Avg/Day</TableHead>
-                                                                                    <TableHead className="text-right">Last Txn</TableHead>
-                                                                                    <TableHead className="text-center">Status</TableHead>
+                                                                                    {!isMobile && <TableHead>Type</TableHead>}
+                                                                                    <TableHead className={cn('text-right', isMobile && 'w-16')}>Orders</TableHead>
+                                                                                    {!isMobile && <TableHead className="text-right">Active Days</TableHead>}
+                                                                                    {!isMobile && <TableHead className="text-right">Avg/Day</TableHead>}
+                                                                                    {!isMobile && <TableHead className="text-right">Last Txn</TableHead>}
+                                                                                    <TableHead className={cn('text-center', isMobile && 'w-20')}>Status</TableHead>
                                                                                 </TableRow>
                                                                             </TableHeader>
                                                                             <TableBody>
                                                                                 {m.stations.map((s) => (
                                                                                     <TableRow key={s.stationId}>
-                                                                                        <TableCell className="font-medium">{s.stationName}</TableCell>
-                                                                                        <TableCell className="text-xs text-muted-foreground">{s.stationType}</TableCell>
-                                                                                        <TableCell className="text-right tabular-nums">{s.totalOrders.toLocaleString()}</TableCell>
-                                                                                        <TableCell className="text-right tabular-nums">{s.activeDays}</TableCell>
-                                                                                        <TableCell className="text-right tabular-nums">{s.avgOrdersPerActiveDay}</TableCell>
-                                                                                        <TableCell className="whitespace-nowrap text-right text-xs text-muted-foreground">
-                                                                                            {s.lastTransactionAt ? (
-                                                                                                s.daysSinceLastTxn === 0 ? 'Today' : `${s.daysSinceLastTxn}d ago`
-                                                                                            ) : (
-                                                                                                <span>Never</span>
+                                                                                        <TableCell className="font-medium">
+                                                                                            <span className="block truncate">{s.stationName}</span>
+                                                                                            {/* The dropped columns fold into a caption
+                                                                                                here rather than disappearing, so a phone
+                                                                                                still gets type and recency. */}
+                                                                                            {isMobile && (
+                                                                                                <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                                                                                                    {s.stationType}
+                                                                                                    {' · '}
+                                                                                                    {s.lastTransactionAt
+                                                                                                        ? s.daysSinceLastTxn === 0
+                                                                                                            ? 'today'
+                                                                                                            : `${s.daysSinceLastTxn}d ago`
+                                                                                                        : 'never'}
+                                                                                                </span>
                                                                                             )}
                                                                                         </TableCell>
+                                                                                        {!isMobile && <TableCell className="text-xs text-muted-foreground">{s.stationType}</TableCell>}
+                                                                                        <TableCell className="text-right tabular-nums">{s.totalOrders.toLocaleString()}</TableCell>
+                                                                                        {!isMobile && <TableCell className="text-right tabular-nums">{s.activeDays}</TableCell>}
+                                                                                        {!isMobile && <TableCell className="text-right tabular-nums">{s.avgOrdersPerActiveDay}</TableCell>}
+                                                                                        {!isMobile && (
+                                                                                            <TableCell className="whitespace-nowrap text-right text-xs text-muted-foreground">
+                                                                                                {s.lastTransactionAt ? (
+                                                                                                    s.daysSinceLastTxn === 0 ? 'Today' : `${s.daysSinceLastTxn}d ago`
+                                                                                                ) : (
+                                                                                                    <span>Never</span>
+                                                                                                )}
+                                                                                            </TableCell>
+                                                                                        )}
                                                                                         <TableCell className="text-center text-sm text-muted-foreground">
                                                                                             {s.isZombie ? (
                                                                                                 <span className="inline-flex items-center gap-1 font-medium">

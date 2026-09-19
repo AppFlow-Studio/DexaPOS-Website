@@ -5,7 +5,7 @@ import { useMultiLocationComparison } from '@/lib/queries/use-platform-analytics
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
-import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
+import { AnalyticsTooltip, VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -266,7 +266,7 @@ export function MultiLocationComparison() {
                 interval={0}
                 height={60}
               />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => fmtGPV(v)} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => fmtGPV(v)} width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined} />
               <Tooltip content={<AnalyticsTooltip formatter={(v: number) => fmtGPV(v)} />} />
               <Bar dataKey="gpv" radius={[4, 4, 0, 0]}>
                 {chartData.map((entry, i) => (
@@ -283,19 +283,25 @@ export function MultiLocationComparison() {
           label="All locations"
           caption={`Ranked by GPV — vs. prior ${days}-day period`}
           action={
-            <div className="flex items-center gap-2">
+            // `flex-wrap` + `min-w-0`: the row sits in PanelSection's header,
+            // which lets it shrink. A rigid `w-52` input in a non-wrapping row
+            // could not, so on a phone the field ran past the panel's rounded
+            // edge and its right half was clipped. The input now takes the
+            // full remaining width and drops below the Columns button when
+            // there isn't enough, capped at its old 13rem on wider screens.
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <MobileColumnsButton
                 columns={ALL_LOCATIONS_COLUMNS}
                 hidden={hiddenCols}
                 onChange={setHiddenCols}
               />
-              <div className="relative">
+              <div className="relative min-w-0 flex-1 sm:max-w-52">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
                 <Input
                   placeholder="Filter location or merchant…"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
-                  className="h-9 w-52 rounded-full pl-9"
+                  className="h-9 w-full rounded-full pl-9"
                 />
               </div>
             </div>

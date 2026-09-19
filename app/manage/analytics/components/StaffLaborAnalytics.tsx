@@ -21,7 +21,7 @@ import { ArrowUpDown, Clock, Zap, AlertCircle, CalendarDays, Table2 } from 'luci
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
-import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
+import { AnalyticsTooltip, VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
 import type { MerchantLaborStat } from '@/app/manage/actions/hq-platform/analytics'
 
 type SortKey = 'totalHours' | 'activeStaff' | 'totalOrders' | 'hoursPerOrder' | 'merchantName'
@@ -201,7 +201,7 @@ export function StaffLaborAnalytics() {
                             <BarChart data={data.hourlyPattern} barCategoryGap="10%">
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <XAxis dataKey="label" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} interval={2} />
-                                <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                                <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined} />
                                 <Tooltip content={<AnalyticsTooltip formatter={(v: number) => `${v} shifts started`} />} />
                                 <Bar dataKey="shiftCount" name="Shifts" radius={[3, 3, 0, 0]}>
                                     {data.hourlyPattern.map((entry, i) => (
@@ -223,7 +223,7 @@ export function StaffLaborAnalytics() {
                             <BarChart data={data.dayOfWeekPattern} barCategoryGap="20%">
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <XAxis dataKey="day" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                                <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                                <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined} />
                                 <Tooltip content={<AnalyticsTooltip formatter={(v: number) => `${v} shifts started`} />} />
                                 <Bar dataKey="shiftCount" name="Shifts" radius={[3, 3, 0, 0]}>
                                     {data.dayOfWeekPattern.map((entry, i) => (
