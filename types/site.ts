@@ -44,7 +44,14 @@ export interface OnlineOrderingConfig {
 
   // Pickup & Delivery
   pickupEnabled?: boolean;
+  /**
+   * Resolved server-side: accepts_delivery AND delivery_fulfillment is
+   * 'orderout_direct' AND the location has an active OrderOut restaurant.
+   * Under 'self' delivery stays hidden (no fulfilment path exists yet).
+   */
   deliveryEnabled?: boolean;
+  /** Who delivers website orders. 'orderout_direct' = live courier quote at checkout. */
+  deliveryFulfillment?: "self" | "orderout_direct";
   /**
    * When true (default), online orders use the item's delivery_price
    * (separate online/delivery pricing). When false, online orders use the

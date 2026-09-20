@@ -347,6 +347,28 @@ export interface OrderTrackingData {
     subtotal: number;
     specialInstructions: string | null;
   }[];
+  /** Present on OrderOut Direct delivery orders; null for pickup / self-delivery. */
+  delivery: OrderTrackingDelivery | null;
+}
+
+export interface OrderTrackingDelivery {
+  /** Outbox state: awaiting_accept | pending | dispatched | failed | cancel_pending | cancelled */
+  state: string;
+  /** Last courier status from OrderOut (runner_assigned, picked_up, …) or null before dispatch. */
+  status: string | null;
+  /** Monotonic rank of `status`; the stepper is driven by this, never by the raw string. */
+  rank: number;
+  courierName: string | null;
+  eta: string | null;
+  trackingUrl: string | null;
+  fee: number;
+  address: {
+    street: string;
+    unit: string | null;
+    city: string;
+    state: string;
+    zip: string;
+  } | null;
 }
 
 export async function getOrderTracking(
@@ -363,7 +385,7 @@ export async function getOrderTracking(
       ready_at, completed_at, cancelled_at, cancelled_by, cancellation_reason,
       declined_at, declined_reason, estimated_delivery_time,
       subtotal, tax_amount, tip_amount, total_amount,
-      special_instructions, location_id,
+      special_instructions, location_id, delivery_address,
       order_items (item_name, quantity, unit_price, subtotal, special_instructions, tax_rate)
     `
     )
@@ -397,6 +419,39 @@ export async function getOrderTracking(
     .select("timezone")
     .eq("id", (order as any).location_id)
     .single();
+
+  // OrderOut Direct dispatch row (service role — the table has no anon policy).
+  // Only delivery orders have one; everything else stays null.
+  let delivery: OrderTrackingDelivery | null = null;
+  if ((order as any).order_type === "delivery") {
+    const { data: dispatch } = await supabase
+      .from("orderout_delivery_dispatches")
+      .select("state, delivery_status, delivery_status_rank, courier_name, eta, tracking_url, charged_fee")
+      .eq("order_id", orderId)
+      .maybeSingle();
+    const addr = ((order as any).delivery_address ?? null) as Record<string, unknown> | null;
+    if (dispatch) {
+      const d = dispatch as any;
+      delivery = {
+        state: d.state,
+        status: d.delivery_status ?? null,
+        rank: Number(d.delivery_status_rank) || 0,
+        courierName: d.courier_name ?? null,
+        eta: d.eta ?? null,
+        trackingUrl: d.tracking_url ?? null,
+        fee: Number(d.charged_fee) || 0,
+        address: addr
+          ? {
+              street: String(addr.street ?? ""),
+              unit: addr.unit ? String(addr.unit) : null,
+              city: String(addr.city ?? ""),
+              state: String(addr.state ?? ""),
+              zip: String(addr.zip ?? ""),
+            }
+          : null,
+      };
+    }
+  }
 
   const o = order as any;
   return {
@@ -443,6 +498,7 @@ export async function getOrderTracking(
         subtotal: Number(i.subtotal) || 0,
         specialInstructions: i.special_instructions,
       })),
+      delivery,
     },
   };
 }

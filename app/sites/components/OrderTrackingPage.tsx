@@ -13,6 +13,8 @@ import {
   Navigation,
   Store as StoreIcon,
   Clock4,
+  Truck,
+  ExternalLink,
 } from "lucide-react";
 import { useStorefrontPath } from "../lib/use-storefront-path";
 import { getOrderTracking, cancelOnlineOrder, type OrderTrackingData } from "../order-actions";
@@ -164,6 +166,35 @@ function statusToStepIndex(status: string): number {
 }
 
 const PROGRESS_STEPS = ["Placed", "Accepted", "Preparing", "Ready", "Done"] as const;
+
+// OrderOut Direct delivery orders: kitchen stages then courier stages. The
+// courier part is driven by delivery.rank, which the server keeps monotonic,
+// so the strip can never move backwards on a late or duplicated event.
+const DELIVERY_STEPS = ["Placed", "Accepted", "Preparing", "Driver assigned", "Picked up", "Delivered"] as const;
+
+function deliveryStepIndex(status: string, delivery: OrderTrackingData["delivery"]): number {
+  const kitchen = Math.min(statusToStepIndex(status), 2); // Placed / Accepted / Preparing
+  const rank = delivery?.rank ?? 0;
+  if (rank >= 8) return 5;           // completed
+  if (rank >= 5) return 4;           // picked_up, en_route_dropoff, arrived_dropoff
+  if (rank >= 2) return 3;           // runner_assigned, en_route_pickup, arrived_pickup
+  if (status === "completed") return 5;
+  return kitchen;
+}
+
+const DELIVERY_STATUS_LABELS: Record<string, string> = {
+  pending_assign: "Finding a driver",
+  pending_merchant: "Finding a driver",
+  scheduled: "Scheduled",
+  runner_assigned: "Driver assigned",
+  en_route_pickup: "Driver heading to the store",
+  arrived_pickup: "Driver at the store",
+  picked_up: "Picked up",
+  en_route_dropoff: "On the way",
+  arrived_dropoff: "Driver has arrived",
+  completed: "Delivered",
+  cancelled: "Courier cancelled",
+};
 
 export function OrderTrackingPage({
   initialOrder,
@@ -329,7 +360,28 @@ export function OrderTrackingPage({
   const canCustomerCancel = isPending && !!sessionToken;
   const estimatedReady = getEstimatedReadyTime(order);
   const statusColor = STATUS_COLORS[order.status] ?? STATUS_COLORS.pending;
-  const currentStepIndex = statusToStepIndex(order.status);
+  const isDelivery = order.orderType === "delivery" && !!order.delivery;
+  const delivery = isDelivery ? order.delivery : null;
+  const progressSteps: readonly string[] = isDelivery ? DELIVERY_STEPS : PROGRESS_STEPS;
+  const currentStepIndex = isDelivery
+    ? deliveryStepIndex(order.status, delivery)
+    : statusToStepIndex(order.status);
+  const deliveryFailed = delivery?.state === "failed";
+  const deliveryEta = delivery?.eta ? new Date(delivery.eta) : null;
+  const deliveryEtaLabel =
+    deliveryEta && !Number.isNaN(deliveryEta.getTime())
+      ? deliveryEta.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+      : null;
+  const deliveryAddressLabel = delivery?.address
+    ? [
+        [delivery.address.street, delivery.address.unit].filter(Boolean).join(" "),
+        `${delivery.address.city}, ${delivery.address.state} ${delivery.address.zip}`,
+      ].join(", ")
+    : null;
+  const statusLabel =
+    isDelivery && order.status === "ready"
+      ? "Waiting for driver"
+      : (STATUS_LABELS[order.status] ?? order.status);
 
   const storedRate = order.taxRatePercent != null ? order.taxRatePercent / 100 : null;
   const effectiveRate = storedRate ?? taxRate;
@@ -360,6 +412,8 @@ export function OrderTrackingPage({
           orderId={orderId}
           sessionToken={qrTableLabel ? sessionToken : null}
           onDecision={refreshOrder}
+          onDelivery={refreshOrder}
+          orderType={order.orderType}
           silentStatuses={["cancelled"]}
         />
       )}
@@ -395,10 +449,19 @@ export function OrderTrackingPage({
 
           {/* ── Hero: ETA as H1 ── */}
           <div className="text-center space-y-1">
-            {estimatedReady && !isCancelled && !isDeclined ? (
+            {isDelivery && deliveryEtaLabel && !isCancelled && !isDeclined && !deliveryFailed ? (
               <>
                 <h1 className="text-3xl font-bold tracking-tight" style={{ color: "#111827" }}>
-                  Ready by {estimatedReady.wallClock}
+                  Arriving by {deliveryEtaLabel}
+                </h1>
+                <p className="text-sm" style={{ color: "#6b7280" }}>
+                  {delivery?.status ? `${DELIVERY_STATUS_LABELS[delivery.status] ?? delivery.status} · ` : ""}Order #{order.displayNumber}
+                </p>
+              </>
+            ) : estimatedReady && !isCancelled && !isDeclined ? (
+              <>
+                <h1 className="text-3xl font-bold tracking-tight" style={{ color: "#111827" }}>
+                  {isDelivery ? "Preparing your delivery" : `Ready by ${estimatedReady.wallClock}`}
                 </h1>
                 <p className="text-sm" style={{ color: "#6b7280" }}>
                   {mounted ? `${estimatedReady.label} · ` : ""}Order #{order.displayNumber}
@@ -414,7 +477,7 @@ export function OrderTrackingPage({
             ) : (
               <>
                 <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#111827" }}>
-                  {STATUS_LABELS[order.status] ?? order.status}
+                  {statusLabel}
                 </h1>
                 <p className="text-sm" style={{ color: "#6b7280" }}>Order #{order.displayNumber}</p>
               </>
@@ -429,7 +492,7 @@ export function OrderTrackingPage({
                   borderLeft: `3px solid ${statusColor.border}`,
                 }}
               >
-                {STATUS_LABELS[order.status] ?? order.status}
+                {statusLabel}
               </span>
             </div>
           </div>
@@ -438,7 +501,7 @@ export function OrderTrackingPage({
           {!isCancelled && !isDeclined && (
             <div className="rounded-xl px-4 py-4" style={{ border: "1px solid #e5e7eb" }}>
               <div className="flex justify-between mb-2">
-                {PROGRESS_STEPS.map((label, i) => {
+                {progressSteps.map((label, i) => {
                   const isCompleted = i < currentStepIndex;
                   const isCurrent = i === currentStepIndex;
                   return (
@@ -464,10 +527,50 @@ export function OrderTrackingPage({
                   className="absolute inset-y-0 left-0 rounded-full transition-all duration-700"
                   style={{
                     backgroundColor: "var(--primary)",
-                    width: `${(currentStepIndex / (PROGRESS_STEPS.length - 1)) * 100}%`,
+                    width: `${(currentStepIndex / (progressSteps.length - 1)) * 100}%`,
                   }}
                 />
               </div>
+            </div>
+          )}
+
+          {/* ── Delivery: courier card / delay notice ── */}
+          {isDelivery && deliveryFailed && !isCancelled && !isDeclined && (
+            <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ backgroundColor: "#fffbeb", border: "1px solid #f59e0b" }}>
+              <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: "#b45309" }} />
+              <div className="text-sm" style={{ color: "#92400e" }}>
+                <p className="font-semibold">Delivery delayed</p>
+                <p>We couldn&apos;t confirm a courier for this order. The restaurant has been notified and will contact you.</p>
+              </div>
+            </div>
+          )}
+
+          {isDelivery && !deliveryFailed && !isCancelled && !isDeclined && (delivery?.courierName || delivery?.trackingUrl || delivery?.status) && (
+            <div className="rounded-xl px-4 py-3 space-y-2" style={{ border: "1px solid #e5e7eb" }}>
+              <div className="flex items-center gap-2">
+                <Truck className="h-4 w-4 flex-shrink-0" style={{ color: "#9ca3af" }} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold leading-tight" style={{ color: "#111827" }}>
+                    {delivery?.courierName ? `Your driver: ${delivery.courierName}` : "Your courier"}
+                  </p>
+                  <p className="text-xs" style={{ color: "#6b7280" }}>
+                    {delivery?.status ? DELIVERY_STATUS_LABELS[delivery.status] ?? delivery.status : "Booking a courier"}
+                    {deliveryEtaLabel ? ` · ETA ${deliveryEtaLabel}` : ""}
+                  </p>
+                </div>
+              </div>
+              {delivery?.trackingUrl && (
+                <a
+                  href={delivery.trackingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 w-full px-4 py-2 text-sm font-semibold"
+                  style={{ backgroundColor: "var(--primary)", color: "#ffffff" }}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Track your driver
+                </a>
+              )}
             </div>
           )}
 
@@ -612,6 +715,7 @@ export function OrderTrackingPage({
                 storePhone={storePhone ?? null}
                 hoursLabel={hoursLabel}
                 directionsHref={directionsHref}
+                deliveryAddress={deliveryAddressLabel}
               />
             </div>
           )}
@@ -686,7 +790,7 @@ export function OrderTrackingPage({
       <section className="hidden lg:block flex-1 relative" style={{ backgroundColor: "#e5e7eb" }}>
         {mapEmbedSrc ? (
           <iframe
-            title="Pickup location map"
+            title={isDelivery ? "Store location map" : "Pickup location map"}
             className="absolute inset-0 w-full h-full"
             style={{ border: 0 }}
             loading="lazy"
@@ -705,6 +809,7 @@ export function OrderTrackingPage({
             storePhone={storePhone ?? null}
             hoursLabel={hoursLabel}
             directionsHref={directionsHref}
+            deliveryAddress={deliveryAddressLabel}
           />
         </div>
       </section>
@@ -718,21 +823,34 @@ function StoreInfoBlock({
   storePhone,
   hoursLabel,
   directionsHref,
+  deliveryAddress,
 }: {
   storeName: string;
   storeAddress: string | null;
   storePhone: string | null;
   hoursLabel: string | null;
   directionsHref: string | null;
+  /** Delivery orders: the customer's dropoff. Hides "Pickup location" copy and directions. */
+  deliveryAddress?: string | null;
 }) {
+  const isDelivery = !!deliveryAddress;
   return (
     <div className="p-4 space-y-3">
+      {isDelivery && (
+        <div className="flex items-start gap-2" style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "12px" }}>
+          <Truck className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: "#9ca3af" }} />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs" style={{ color: "#9ca3af" }}>Delivering to</p>
+            <p className="text-sm font-semibold leading-snug" style={{ color: "#111827" }}>{deliveryAddress}</p>
+          </div>
+        </div>
+      )}
       {/* Store name row */}
       <div className="flex items-center gap-2" style={{ borderBottom: "1px solid #f3f4f6", paddingBottom: "12px" }}>
         <StoreIcon className="h-4 w-4 flex-shrink-0" style={{ color: "#9ca3af" }} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-tight" style={{ color: "#111827" }}>{storeName}</p>
-          <p className="text-xs" style={{ color: "#9ca3af" }}>Pickup location</p>
+          <p className="text-xs" style={{ color: "#9ca3af" }}>{isDelivery ? "Prepared by" : "Pickup location"}</p>
         </div>
       </div>
 
@@ -758,7 +876,7 @@ function StoreInfoBlock({
         )}
       </div>
 
-      {directionsHref && (
+      {directionsHref && !isDelivery && (
         <a
           href={directionsHref}
           target="_blank"

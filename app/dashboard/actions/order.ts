@@ -512,7 +512,22 @@ export async function GetOrderDetails(
         return null;
       }
 
-      return order as OrderResponse;
+      // OrderOut Direct courier booking (website delivery orders only). The
+      // table is service-role only, so it is read here rather than embedded.
+      let dispatch: OrderResponse["orderout_delivery_dispatch"] = null;
+      if ((order as { order_type?: string }).order_type === "delivery") {
+        const serviceRole = createServiceRoleClient();
+        const { data: dispatchRow } = await serviceRole
+          .from("orderout_delivery_dispatches")
+          .select(
+            "state, delivery_status, courier_name, courier_phone, tracking_url, eta, charged_fee, requote_delta, last_error, attempts, dispatched_at, failed_at"
+          )
+          .eq("order_id", orderId)
+          .maybeSingle();
+        dispatch = (dispatchRow as OrderResponse["orderout_delivery_dispatch"]) ?? null;
+      }
+
+      return { ...(order as OrderResponse), orderout_delivery_dispatch: dispatch };
     }
   } catch (error) {
     console.error("[GetOrderDetails] Unexpected error:", error);

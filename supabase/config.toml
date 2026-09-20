@@ -434,6 +434,32 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/orderout-push-menu-webhook/index.ts"
 
+# Outbound status relay worker (pg_net poke + cron drain). Was deployed with
+# --no-verify-jwt via CLI before this block existed.
+[functions.orderout-status-relay]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/orderout-status-relay/index.ts"
+
+# OrderOut Direct delivery: storefront quote (browser, anon key) and the
+# dispatch worker (pg_net poke + cron drain, x-internal-secret).
+[functions.orderout-delivery-quote]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/orderout-delivery-quote/index.ts"
+
+[functions.orderout-delivery-dispatch]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/orderout-delivery-dispatch/index.ts"
+
+# Courier status intake (Bearer ORDEROUT_WEBHOOK_SECRET). Registered with
+# OrderOut only once they confirm the delivery webhook mechanism.
+[functions.orderout-delivery-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/orderout-delivery-webhook/index.ts"
+
 [functions.process-abandoned-carts]
 enabled = true
 verify_jwt = false

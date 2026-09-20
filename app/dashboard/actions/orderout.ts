@@ -171,6 +171,15 @@ export async function onboardOrderOut(
       return { success: false, error: "Merchant not found" };
     }
 
+    // The store's own phone goes onto the OrderOut restaurant record (Direct
+    // delivery quotes require it); the manager phone is only the fallback.
+    const { data: location } = await supabase
+      .from("locations")
+      .select("phone")
+      .eq("id", params.locationId)
+      .eq("merchant_id", merchant.id)
+      .maybeSingle();
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -200,6 +209,7 @@ export async function onboardOrderOut(
           restaurant_manager_firstname: params.restaurantManagerFirstname,
           restaurant_manager_lastname: params.restaurantManagerLastname,
           restaurant_manager_phone: params.restaurantManagerPhone,
+          restaurant_phone: location?.phone || undefined,
         }),
       }
     );

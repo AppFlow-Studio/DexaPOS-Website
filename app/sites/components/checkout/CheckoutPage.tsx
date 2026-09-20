@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
@@ -42,6 +42,12 @@ import { getQrOrderStatus } from "../../qr-actions";
 import type { Site, OnlineOrderingConfig } from "@/types/site";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+
+type DeliveryQuoteState =
+  | { status: "idle" }
+  | { status: "loading"; previousFee?: number }
+  | { status: "ready"; quoteId: string; fee: number; etaMinutes: number; expiresAt: string }
+  | { status: "unavailable"; message: string; previousFee?: number };
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 interface CheckoutPageProps {
   site: Site | null;
@@ -203,6 +209,13 @@ export function CheckoutPage({
   const [zoneCheckMessage, setZoneCheckMessage] = useState<string | undefined>();
   const zoneDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // OrderOut Direct: the live courier quote for the current address. The
+  // server stores every quote and only hands back our own row id; the fee
+  // shown here is informational — create-online-order charges the stored one.
+  const isDirectDelivery = config?.deliveryFulfillment === "orderout_direct";
+  const [deliveryQuote, setDeliveryQuote] = useState<DeliveryQuoteState>({ status: "idle" });
+  const quoteRequestSeq = useRef(0);
+
   // Tip
   const tipPresets = (config?.tipConfig?.presetPercentages as number[]) ?? [15, 18, 20, 25];
   const [selectedTipIndex, setSelectedTipIndex] = useState<number | null>(1);
@@ -254,13 +267,17 @@ export function CheckoutPage({
         : Number(customTip) || 0;
   const tax = Math.round(subtotal * taxRate * 100) / 100;
   const deliveryFee =
-    orderType === "delivery"
-      ? (config?.baseDeliveryFee ?? 0) > 0 &&
-        config?.freeDeliveryThreshold &&
-        subtotal >= config.freeDeliveryThreshold
-        ? 0
-        : config?.baseDeliveryFee ?? 0
-      : 0;
+    orderType !== "delivery"
+      ? 0
+      : isDirectDelivery
+        ? deliveryQuote.status === "ready"
+          ? deliveryQuote.fee
+          : 0
+        : (config?.baseDeliveryFee ?? 0) > 0 &&
+            config?.freeDeliveryThreshold &&
+            subtotal >= config.freeDeliveryThreshold
+          ? 0
+          : config?.baseDeliveryFee ?? 0;
   const discountAmount = appliedPromo?.discountAmount ?? 0;
   const total = Math.max(0, subtotal - discountAmount + tax + tipAmount + deliveryFee);
 
@@ -337,28 +354,127 @@ export function CheckoutPage({
     }
   }, [isAuthenticated, orderType]);
 
-  // Debounced delivery zone check — fires when customer types a new address.
-  // Resets when switching away from delivery or selecting a saved address.
+  // The address the customer is actually ordering to, whichever way it was
+  // chosen. Saved addresses are quoted too under OrderOut Direct.
+  const activeAddress = useMemo(() => {
+    if (orderType !== "delivery") return null;
+    if (selectedAddressId !== "new") {
+      const addr = savedAddresses.find((a) => a.id === selectedAddressId);
+      if (!addr) return null;
+      return {
+        street: addr.addressLine1,
+        unit: addr.addressLine2 ?? "",
+        city: addr.city,
+        state: addr.state,
+        zip: addr.postalCode,
+        notes: addr.deliveryNotes ?? "",
+        source: "saved" as const,
+      };
+    }
+    return { ...newAddress, unit: "", source: "new" as const };
+  }, [orderType, selectedAddressId, savedAddresses, newAddress]);
+
+  /**
+   * OrderOut Direct: fetch a courier quote for the active address. Returns the
+   * fresh quote so callers (place-order retry) can compare fees.
+   */
+  const requestDeliveryQuote = useCallback(
+    async (address: NonNullable<typeof activeAddress>): Promise<DeliveryQuoteState> => {
+      const seq = ++quoteRequestSeq.current;
+      setDeliveryQuote((q) => ({
+        status: "loading",
+        previousFee: q.status === "ready" ? q.fee : q.status === "idle" ? undefined : q.previousFee,
+      }));
+      setZoneCheckState("checking");
+      setZoneCheckMessage("Getting a delivery quote…");
+      const { sessionToken } = useSession.getState();
+      let next: DeliveryQuoteState;
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/orderout-delivery-quote`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${ANON_KEY}` },
+          body: JSON.stringify({
+            store_config_id: storeConfigId,
+            ...(sessionToken ? { session_token: sessionToken } : {}),
+            dropoff: {
+              street: address.street,
+              unit: address.unit || undefined,
+              city: address.city,
+              state: address.state,
+              zip: address.zip,
+              instructions: address.notes || undefined,
+            },
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.available) {
+          next = {
+            status: "ready",
+            quoteId: data.quote_id,
+            fee: Number(data.fee),
+            etaMinutes: Number(data.eta_minutes),
+            expiresAt: data.expires_at,
+          };
+        } else {
+          next = {
+            status: "unavailable",
+            message:
+              data.message ??
+              (res.status === 429
+                ? "Too many quote requests — please wait a moment."
+                : "Delivery isn't available for this address. Pickup is still available."),
+          };
+        }
+      } catch {
+        next = { status: "unavailable", message: "Couldn't reach the delivery service. Pickup is still available." };
+      }
+      // A newer request superseded this one — drop the result.
+      if (seq !== quoteRequestSeq.current) return next;
+      setDeliveryQuote(next);
+      if (next.status === "ready") {
+        setZoneCheckState("valid");
+        setZoneCheckMessage(`Delivery $${next.fee.toFixed(2)} · about ${next.etaMinutes} min`);
+      } else {
+        setZoneCheckState("invalid");
+        setZoneCheckMessage(next.message);
+      }
+      return next;
+    },
+    [storeConfigId]
+  );
+
+  // Debounced delivery eligibility — fires when the active address changes.
+  //   self fulfilment → delivery zone check (typed addresses only, as before)
+  //   orderout_direct → live courier quote (typed and saved addresses)
   useEffect(() => {
-    if (orderType !== "delivery" || selectedAddressId !== "new") {
+    if (!activeAddress) {
       setZoneCheckState("idle");
       setZoneCheckMessage(undefined);
+      setDeliveryQuote({ status: "idle" });
       return;
     }
 
-    const { street, city, state, zip } = newAddress;
-    const hasEnoughInput = street.trim().length > 3 && city.trim().length > 0;
+    const { street, city, state, zip } = activeAddress;
+    const hasEnoughInput = isDirectDelivery
+      ? street.trim().length > 3 && city.trim().length > 0 && /^[A-Za-z]{2}$/.test(state.trim()) && /^\d{5}(-\d{4})?$/.test(zip.trim())
+      : activeAddress.source === "new" && street.trim().length > 3 && city.trim().length > 0;
 
     if (!hasEnoughInput) {
       setZoneCheckState("idle");
       setZoneCheckMessage(undefined);
+      setDeliveryQuote({ status: "idle" });
       return;
     }
 
     setZoneCheckState("checking");
+    setZoneCheckMessage(undefined);
 
     if (zoneDebounceRef.current) clearTimeout(zoneDebounceRef.current);
     zoneDebounceRef.current = setTimeout(async () => {
+      if (isDirectDelivery) {
+        await requestDeliveryQuote(activeAddress);
+        return;
+      }
       try {
         const result = await checkDeliveryZone(storeConfigId, { street, city, state, zip });
         if (result.valid) {
@@ -377,7 +493,19 @@ export function CheckoutPage({
     return () => {
       if (zoneDebounceRef.current) clearTimeout(zoneDebounceRef.current);
     };
-  }, [orderType, selectedAddressId, newAddress.street, newAddress.city, newAddress.state, newAddress.zip, storeConfigId]);
+  }, [activeAddress, isDirectDelivery, storeConfigId, requestDeliveryQuote]);
+
+  // Quotes expire. Refresh 30s before expiry while the customer is still on
+  // the page so the fee they see is the fee that will be charged.
+  useEffect(() => {
+    if (deliveryQuote.status !== "ready" || !activeAddress) return;
+    const msLeft = new Date(deliveryQuote.expiresAt).getTime() - Date.now() - 30_000;
+    const t = setTimeout(() => {
+      void requestDeliveryQuote(activeAddress);
+    }, Math.max(msLeft, 5_000));
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deliveryQuote.status === "ready" ? deliveryQuote.expiresAt : null]);
 
   // Store address string
   const storeAddress = [
@@ -531,6 +659,9 @@ export function CheckoutPage({
             items: orderItems,
             order_type: orderType,
             delivery_address: deliveryAddress,
+            ...(isDirectDelivery && orderType === "delivery" && deliveryQuote.status === "ready"
+              ? { delivery_quote_id: deliveryQuote.quoteId }
+              : {}),
             requested_time: requestedTime,
             tip: tipAmount,
             special_instructions: specialInstructions || undefined,
@@ -623,6 +754,32 @@ export function CheckoutPage({
         if (result.code === "outside_delivery_zone") {
           setZoneCheckState("invalid");
           setZoneCheckMessage(result.error ?? "We don't deliver to this address.");
+        }
+        // Stored quote expired/invalid before the charge: fetch a fresh one and
+        // let the customer re-confirm. Nothing has been charged at this point.
+        if (
+          (result.code === "delivery_quote_expired" ||
+            result.code === "delivery_quote_invalid" ||
+            result.code === "delivery_quote_required") &&
+          activeAddress
+        ) {
+          const previousFee = deliveryQuote.status === "ready" ? deliveryQuote.fee : null;
+          const fresh = await requestDeliveryQuote(activeAddress);
+          if (fresh.status === "ready") {
+            const changed = previousFee !== null && Math.abs(fresh.fee - previousFee) >= 0.01;
+            setPaymentError(
+              changed
+                ? `Your delivery fee changed to $${fresh.fee.toFixed(2)} (was $${previousFee!.toFixed(2)}). Please review your total and place the order again.`
+                : "Your delivery quote was refreshed. Please place the order again."
+            );
+          } else {
+            setPaymentError(
+              fresh.status === "unavailable"
+                ? fresh.message
+                : "Delivery isn't available right now. Pickup is still available."
+            );
+          }
+          return;
         }
         setPaymentError(errorMsg);
       }
@@ -724,7 +881,9 @@ export function CheckoutPage({
   const meetsMinOrder = subtotal >= minOrder;
   // Reuse the early-computed value (same inputs, avoids double call).
   const storeIsClosed = _storeOpenEarly === false;
-  const zoneBlocked = orderType === "delivery" && selectedAddressId === "new" && zoneCheckState === "invalid";
+  const zoneBlocked = isDirectDelivery
+    ? orderType === "delivery" && deliveryQuote.status !== "ready"
+    : orderType === "delivery" && selectedAddressId === "new" && zoneCheckState === "invalid";
   const paymentMethodReady =
     !config?.acceptOnlinePayments ||
     payCashInStore ||
@@ -1007,6 +1166,7 @@ export function CheckoutPage({
 
             {config?.tippingEnabled !== false && (
               <TipSection
+                title={isDirectDelivery && orderType === "delivery" ? "Add a driver tip" : undefined}
                 subtotal={subtotal}
                 tipPresets={tipPresets}
                 selectedTipIndex={selectedTipIndex}
@@ -1047,6 +1207,7 @@ export function CheckoutPage({
                 total={total}
                 itemCount={items.length}
                 showDeliveryFee={orderType === "delivery"}
+                deliveryFeePending={isDirectDelivery && orderType === "delivery" && deliveryQuote.status !== "ready"}
                 taxRate={taxRate}
                 discountAmount={discountAmount}
                 promoCode={appliedPromo?.code}
