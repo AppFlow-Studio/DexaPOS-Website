@@ -215,18 +215,6 @@ async function logNotification(
       : "id" in result && result.id
         ? "sent"
         : "failed");
-
-  await supabase.from("order_notifications").insert({
-    order_id: ctx.orderId,
-    merchant_id: ctx.merchantId,
-    channel,
-    event,
-    recipient,
-    status,
-    provider_id: "id" in result ? (result.id ?? null) : null,
-    error: "error" in result ? (result.error ?? null) : null,
-  });
-
   if (channel === "sms" && status !== "skipped") {
     await logOutboundMessage(supabase, {
       merchantId: ctx.merchantId,
@@ -240,6 +228,17 @@ async function logNotification(
       messagingProfileId: result.messagingProfileId ?? null,
     });
   }
+
+  await supabase.from("order_notifications").insert({
+    order_id: ctx.orderId,
+    merchant_id: ctx.merchantId,
+    channel,
+    event,
+    recipient,
+    status,
+    provider_id: "id" in result ? (result.id ?? null) : null,
+    error: "error" in result ? (result.error ?? null) : null,
+  });
 }
 
 function statusCopy(event: OrderEvent, ctx: OrderContext): { subject: string; headline: string; body: string; sms: string } {
@@ -560,13 +559,13 @@ export async function sendTestNotification(
     return { success: false, error: "Merchant could not be resolved." };
   }
   const result = await sendSMS(to, `[TEST] ${copy.sms}`);
-  if ("error" in result) return { success: false, error: result.error };
 
   const ledger = await logSmsSendResult(supabase, {
     merchantId: cfg.merchant_id,
     toNumber: to,
     body: `[TEST] ${copy.sms}`,
   }, result);
+  if ("error" in result) return { success: false, error: result.error };
   return ledger.ok
     ? { success: true }
     : { success: true, error: `SMS sent but ledger recording failed: ${ledger.error}` };

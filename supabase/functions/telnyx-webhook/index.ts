@@ -103,6 +103,14 @@ Deno.serve(async (req) => {
     return json({ error: 'invalid_payload' }, 400)
   }
   const payload = parsed as TelnyxEnvelope
+  // Verify the original bytes first, then redact OTP text before any DB/DLQ write.
+  const messagePayload = payload.data?.payload
+  if (messagePayload && typeof messagePayload === 'object' && !Array.isArray(messagePayload)) {
+    const message = messagePayload as Record<string, unknown>
+    if (message.direction !== 'inbound' && typeof message.text === 'string') {
+      message.text = message.text.replace(/(verification code is )\d+/gi, '$1[REDACTED]')
+    }
+  }
 
   const eventType = payload.data?.event_type ?? 'unknown'
   const eventId = payload.data?.id ?? null
@@ -115,27 +123,36 @@ Deno.serve(async (req) => {
   })
 
   async function deadLetter(errorMessage: string): Promise<boolean> {
-    const { error: dlqError } = await supabase
-      .from('webhook_dead_letter_queue')
-      .insert({
-        source: 'telnyx',
-        external_event_id: eventId,
-        event_type: eventType,
-        raw_payload: payload,
-        error_message: errorMessage,
-      })
+    try {
+      const { error: dlqError } = await supabase
+        .from('webhook_dead_letter_queue')
+        .insert({
+          source: 'telnyx',
+          external_event_id: eventId,
+          event_type: eventType,
+          raw_payload: payload,
+          error_message: errorMessage,
+        })
 
-    if (!dlqError || dlqError.code === '23505') return true
-    console.error('[telnyx-webhook] DLQ write failed', {
-      code: dlqError.code,
-      message: dlqError.message,
-    })
-    return false
+      if (!dlqError || dlqError.code === '23505') return true
+      console.error('[telnyx-webhook] DLQ write failed', {
+        code: dlqError.code,
+      })
+      return false
+    } catch {
+      console.error('[telnyx-webhook] DLQ transport failed', { eventId })
+      return false
+    }
   }
 
-  const { data, error } = await supabase.rpc('record_telnyx_message', {
-    p_payload: payload,
-  })
+  let response
+  try {
+    response = await supabase.rpc('record_telnyx_message', { p_payload: payload })
+  } catch {
+    const captured = await deadLetter('ledger_transport_failed')
+    return json({ error: 'ledger_write_failed', captured }, 500)
+  }
+  const { data, error } = response
   const ledgerResult = data as LedgerResult | null
 
   if (error || ledgerResult?.ok !== true) {

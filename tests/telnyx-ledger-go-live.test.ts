@@ -61,7 +61,7 @@ describe("Telnyx ledger go-live contract", () => {
     "supabase/functions/send-receipt/index.ts",
     "app/sites/auth-actions.ts",
   ])("connects %s to the outbound ledger", (path) => {
-    expect(read(path)).toMatch(/logSmsSendResult|logOutboundMessage|log_outbound_message/);
+    expect(read(path)).toMatch(/logSmsSendResult|logOutboundMessage|log_outbound_message|writeOutboundLedger/);
   });
 
   it("uses profile webhooks and never stores storefront OTP values", () => {

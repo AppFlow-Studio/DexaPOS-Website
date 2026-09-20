@@ -1,11 +1,12 @@
 // deno-lint-ignore-file no-explicit-any
+import { writeOutboundLedger } from '../_shared/message-ledger.ts';
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Resend } from 'npm:resend@4.0.1';
 import {
   renderReceiptHtml,
   renderReceiptText,
-} from '../_shared/receipt-template.ts';
+} from '../_shared/pos-receipt-template.ts';
 import { sendSMS } from '../_shared/telnyx.ts';
 
 const corsHeaders = {
@@ -22,6 +23,7 @@ interface SendReceiptBody {
   delivery_method: 'email' | 'sms';
   recipient: string;
   receipt_template_id?: string;
+  confirmation?: boolean;
 }
 
 function jsonResp(body: unknown, init: ResponseInit = {}) {
@@ -58,7 +60,7 @@ function appBaseUrl(): string {
 }
 
 async function ensureReceiptToken(
-  sb: ReturnType<typeof createClient>,
+  sb: SupabaseClient,
   orderId: string,
 ): Promise<string | null> {
   const { data } = await sb
@@ -84,7 +86,7 @@ async function ensureReceiptToken(
 }
 
 async function fetchMerchantLogoUrl(
-  sb: ReturnType<typeof createClient>,
+  sb: SupabaseClient,
   merchantId: string,
 ): Promise<string | null> {
   const { data } = await sb
@@ -124,7 +126,7 @@ serve(async (req: Request) => {
     );
   }
 
-  const { order_id, delivery_method, recipient, receipt_template_id } = body;
+  const { order_id, delivery_method, recipient, receipt_template_id, confirmation } = body;
   if (!order_id || !delivery_method || !recipient) {
     return jsonResp(
       {
@@ -242,11 +244,13 @@ serve(async (req: Request) => {
           : null;
 
       const merchantLogoUrl = await fetchMerchantLogoUrl(sb, merchantId);
-      const html = renderReceiptHtml(order as any, location, {
+      const renderedHtml = renderReceiptHtml(order as any, location, {
         merchantLogoUrl,
-        receiptUrl,
       });
 
+      const html = receiptUrl
+        ? renderedHtml.replace('</body>', `<p><a href="${receiptUrl.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}">View receipt</a></p></body>`)
+        : renderedHtml;
       const { error: emailError } = await resend.emails.send({
         from: fromEmail,
         to: recipient,
@@ -301,11 +305,11 @@ serve(async (req: Request) => {
     const baseUrl = appBaseUrl();
     const receiptUrl = receiptToken && sendToken && baseUrl
       ? `${baseUrl}/receipts/${receiptToken}/${sendToken}`
-      : baseUrl;
+      : null;
 
-    const text = renderReceiptText(order as any, location, receiptUrl);
+    const text = renderReceiptText(order as any, location, { confirmation: confirmation === true, receiptUrl });
     const smsResult = await sendSMS(recipient, text);
-    const { error: ledgerError } = await sb.rpc('log_outbound_message', {
+    const ledger = await writeOutboundLedger(sb, {
       p_merchant_id: merchantId,
       p_to_number: recipient,
       p_body: text,
@@ -321,10 +325,10 @@ serve(async (req: Request) => {
       p_from_number: smsResult.fromNumber ?? null,
       p_messaging_profile_id: smsResult.messagingProfileId ?? null,
     });
-    if (ledgerError) {
+    if (!ledger.ok) {
       console.error('receipt SMS ledger write failed', {
-        code: ledgerError.code,
-        message: ledgerError.message,
+        recoveryQueued: ledger.recoveryQueued,
+        providerMessageId: ledger.providerMessageId,
       });
     }
 
@@ -336,8 +340,8 @@ serve(async (req: Request) => {
         error_message:
           'error' in smsResult
             ? smsResult.error
-            : ledgerError
-              ? `Ledger: ${ledgerError.message}`
+            : !ledger.ok
+              ? `Ledger: ${ledger.error}`
               : null,
       })
       .eq('id', (pendingRow as { id: string }).id);

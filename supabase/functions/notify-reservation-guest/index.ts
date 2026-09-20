@@ -1,3 +1,4 @@
+import { writeOutboundLedger } from '../_shared/message-ledger.ts';
 // notify-reservation-guest
 //
 // Server-side template registry for reservation SMS, mirroring the
@@ -245,14 +246,7 @@ serve(async (req: Request) => {
     const smsResult = await sendSMS(e164Phone, message)
     const smsOk = !('error' in smsResult)
 
-    await adminClient.rpc('record_reservation_sms_result', {
-      p_reservation_id: reservationId,
-      p_success: smsOk,
-      p_template_key: templateKey
-    })
-
-    const { error: ledgerError } = await adminClient.rpc(
-      'log_outbound_message',
+    const ledger = await writeOutboundLedger(adminClient,
       {
         p_merchant_id: reservation.merchant_id,
         p_to_number: e164Phone,
@@ -268,12 +262,18 @@ serve(async (req: Request) => {
         p_messaging_profile_id: smsResult.messagingProfileId ?? null
       }
     )
-    if (ledgerError) {
+    if (!ledger.ok) {
       console.error('reservation SMS ledger write failed', {
-        code: ledgerError.code,
-        message: ledgerError.message
+        recoveryQueued: ledger.recoveryQueued,
+        message: ledger.error
       })
     }
+
+    await adminClient.rpc('record_reservation_sms_result', {
+      p_reservation_id: reservationId,
+      p_success: smsOk,
+      p_template_key: templateKey
+    })
 
     if (smsOk) {
       return new Response(JSON.stringify({ success: true, sms: true }), {

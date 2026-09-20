@@ -105,14 +105,16 @@ export function MarketingTab({ customer, merchantId }: MarketingTabProps) {
     }
 
     try {
-      await sendQuickMessageMutation.mutateAsync({
+      const result = await sendQuickMessageMutation.mutateAsync({
         customerId,
         merchantId,
         channel: messageChannel,
         destination,
         message: quickMessage,
       });
-      alert("Message sent successfully!");
+      alert(result?.trackingWarning
+        ? `Message sent. ${result.trackingWarning}`
+        : "Message sent. Delivery confirmation is pending.");
       setQuickMessage("");
     } catch (error: any) {
       alert(`Failed to send message: ${error.message || "Unknown error"}`);

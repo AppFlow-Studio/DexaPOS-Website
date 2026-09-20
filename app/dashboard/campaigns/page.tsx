@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Megaphone, MessageSquare, RefreshCw, Search } from "lucide-react";
+import { ArrowUpRight, Megaphone, MessageSquare, Plus, RefreshCw, Search } from "lucide-react";
 import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import { useDebounce } from "@/lib/hooks/useDebounce";
 import { formatMessageError } from "@/lib/messaging/message-error";
@@ -20,8 +20,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { getCampaigns, getMessages } from "./actions";
 import type { Campaign, Message, MessageFilters } from "./types";
 import { MessagePreview } from "./MessagePreview";
+import { CampaignDemo } from "./CampaignDemo";
 
-const date = (value: string | null) => value ? new Date(value).toLocaleString() : "Not available";
+const date = (value: string | null) => value ? new Date(value).toLocaleString(undefined, {
+  year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit",
+}) : "Not available";
 
 export default function CampaignsPage() {
   const clerkOrgId = useClerkOrgId();
@@ -32,7 +35,8 @@ export default function CampaignsPage() {
 function CampaignsWorkspace({ clerkOrgId }: { clerkOrgId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tab = searchParams.get("view") === "messages" ? "messages" : "campaigns";
+  const view = searchParams.get("view");
+  const tab = view === "create" ? "create" : view === "messages" ? "messages" : "campaigns";
   const [campaign, setCampaign] = useState<Campaign | null>(null);
 
   return (
@@ -43,6 +47,10 @@ function CampaignsWorkspace({ clerkOrgId }: { clerkOrgId: string }) {
         actions={<Button variant="outline" className="rounded-full" asChild><Link href="/dashboard/customers">Manage customers</Link></Button>}
       />
       <nav aria-label="Campaign views" className="flex w-fit max-w-full flex-wrap gap-1 rounded-2xl bg-muted/60 p-1 sm:rounded-full">
+        <Link href="/dashboard/campaigns?view=create" scroll={false} onClick={() => setCampaign(null)} aria-current={tab === "create" ? "page" : undefined}
+          className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium focus-visible:outline focus-visible:outline-2 ${tab === "create" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+          <Plus className="h-4 w-4" />Create campaign <Badge variant="secondary" className="text-[10px]">Demo</Badge>
+        </Link>
         <Link href="/dashboard/campaigns?view=campaigns" scroll={false} aria-current={tab === "campaigns" ? "page" : undefined}
           className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium focus-visible:outline focus-visible:outline-2 ${tab === "campaigns" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
           <Megaphone className="h-4 w-4" />Campaign history
@@ -52,7 +60,7 @@ function CampaignsWorkspace({ clerkOrgId }: { clerkOrgId: string }) {
           <MessageSquare className="h-4 w-4" />Customer messages
         </Link>
       </nav>
-      {tab === "campaigns" ? (
+      {tab === "create" ? <CampaignDemo /> : tab === "campaigns" ? (
         <CampaignHistory clerkOrgId={clerkOrgId} onViewMessages={(selected) => { setCampaign(selected); router.push("/dashboard/campaigns?view=messages", { scroll: false }); }} />
       ) : (
         <MessageLog key={campaign?.id ?? "all"} clerkOrgId={clerkOrgId} campaign={campaign} onClearCampaign={() => setCampaign(null)} />
