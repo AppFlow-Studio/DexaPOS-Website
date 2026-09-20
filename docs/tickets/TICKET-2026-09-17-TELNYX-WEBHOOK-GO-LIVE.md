@@ -30,16 +30,34 @@
   mobile More menu, and global navigation search.
 - Campaign history lists existing SMS/email campaigns and quick messages, with
   campaign text, submission status, recipient count, and search/pagination.
-- SMS message log reads `message_log` directly and includes transactional sends,
+- Campaign history and Customer messages use URL-backed navigation links
+  (`?view=campaigns` and `?view=messages`) that support reload and browser history.
+  Both text and email campaigns open a details dialog; text campaigns also link
+  to their individual customer messages.
+- Customer messages reads `message_log` and includes transactional sends,
   campaign sends, and inbound replies. Filter by status, direction, rolling time
-  period, phone/text, or a selected campaign. Open a row for full body, timestamps,
-  sender/recipient, error, cost, Telnyx ID, and messaging profile.
+  period, phone/text, or a selected campaign. Details show a readable purpose
+  (such as Reservation confirmation), customer phone, date, message preview,
+  delivery explanation, and an actionable failure description.
+- Public links have short labels. Local/private links are replaced in the preview
+  with an explanation that customers cannot open them. Stored message bodies and
+  sending behavior are unchanged; future messages with localhost links still
+  require the public website URL to be configured separately.
 - Active lists refresh every 15 seconds, with manual refresh and explicit loading,
-  error, and empty states. Missing cost is not displayed as zero. Cost has no
-  currency symbol because the ledger does not retain a separate currency column.
-- Reads resolve the merchant on the server, explicitly filter its ID, and use
-  the caller's authenticated Supabase client so existing RLS remains in force.
-  Raw webhook payloads are not sent to the browser. The new page is read-only;
+  error, and empty states. Provider IDs, messaging profiles, raw webhook payloads,
+  and cost are not fetched for this merchant-facing page.
+- Message errors use the same readable descriptions in the desktop table, mobile
+  cards, and details dialog. Translates provider codes, legacy HTTP/JSON responses,
+  and known plain-text failures; unknown errors show a neutral support message.
+  Raw errors remain stored for diagnostics and are never echoed in these views.
+- Reads resolve the merchant on the server and explicitly filter its ID.
+  Message reads use the caller's authenticated Supabase client and existing RLS.
+  Campaign reads first verify `is_merchant_admin` with the caller's JWT, then use
+  the existing server-only service client with the resolved merchant filter.
+  This avoids the legacy campaign policy's `auth.uid()` UUID comparison with
+  Clerk text IDs. Denied or failed permission checks prevent privileged reads.
+  Membership/active HQ impersonation is also checked during context resolution.
+  The new page is read-only;
   campaign creation and sends remain in the existing Customers flow.
 - No migrations, Edge Functions, webhooks, cron jobs, or environment variables
   are added by this UI follow-up. Existing webhook deployment requirements below
@@ -49,6 +67,12 @@
   `lib/messaging/__tests__/message-log.test.ts`. New page/actions and navigation
   search pass ESLint. Linting the shared dashboard layout reports its existing
   `react-hooks/set-state-in-effect` violation in `MerchantDashboardLayout`.
+- Merchant-usability follow-up: 75 tests pass across the expanded
+  `tests/campaigns-actions.test.ts`, `lib/messaging/__tests__/message-error.test.ts`,
+  and `lib/messaging/__tests__/message-presentation.test.ts`. These cover denied
+  campaign access, merchant filtering, error translation, truthful delivery
+  labels, readable purposes, and public/local link previews. Changed Campaigns
+  files, presentation helper/tests, and action tests pass ESLint.
 - The repository-wide TypeScript check reports existing errors in other areas
   (including shared layout submenu icon types); none reference the new
   `app/dashboard/campaigns` files or `tests/campaigns-actions.test.ts`.
@@ -58,6 +82,12 @@
   Desktop/light and mobile/dark screenshots were inspected. The log and detail
   dialog have no axe WCAG A/AA violations in this preview. This does not verify
   authentication, live RLS, or provider callbacks against staging.
+- Follow-up browser checks pass for desktop clicks/mobile taps between views,
+  direct view URLs, reload/back navigation, SMS and email campaign dialogs,
+  campaign filtering, and readable reservation details without technical fields.
+  Inspected desktop/light and mobile/dark screenshots; the desktop details
+  dialog passes axe WCAG A/AA checks. This preview uses fixture data and mocked
+  Next navigation; authenticated Next.js navigation still needs merchant QA.
 - Pending manual QA: sign in as a merchant, open both tabs, inspect send/reply
   records, filter and paginate, verify mobile/dark mode, and repeat under a
   second merchant. Live delivery, recording, and verifier sign-off remain pending.

@@ -2,6 +2,7 @@
 
 import { getEffectiveMerchantContext } from "@/lib/admin/merchant-context";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { buildPaginationMeta, normalizePagination } from "@/lib/pagination";
 import type { PaginatedResult } from "@/types/pagination";
 import type { Campaign, Message, MessageFilters } from "./types";
@@ -17,8 +18,18 @@ export async function getCampaigns(
   options: { page?: number; search?: string } = {},
 ): Promise<PaginatedResult<Campaign>> {
   const { merchantId } = await getEffectiveMerchantContext(clerkOrgId);
-  // Use the caller's JWT so RLS remains in force, including during HQ viewing.
-  const supabase = createServerSupabaseClient();
+  // The legacy campaign policy compares merchant_id to auth.uid(), which cannot
+  // read campaigns with Clerk's text user IDs. Check the existing merchant-admin
+  // permission with the caller's JWT BEFORE creating a privileged read client.
+  // Context resolution also validates membership / active HQ impersonation.
+  const authenticated = createServerSupabaseClient();
+  const { data: allowed, error: accessError } = await authenticated.rpc(
+    "is_merchant_admin", { p_merchant_id: merchantId },
+  );
+  if (accessError || allowed !== true) {
+    throw new Error("You do not have permission to view campaigns for this business.");
+  }
+  const supabase = createServiceRoleClient();
   const pagination = normalizePagination({ page: options.page, pageSize: 25 });
   let query = supabase.from("marketing_campaigns")
     .select("id,name,campaign_type,status,body,subject,created_at,scheduled_for,total_recipients", { count: "exact" })
@@ -40,7 +51,7 @@ export async function getMessages(
   const supabase = createServerSupabaseClient();
   const pagination = normalizePagination({ page: filters.page, pageSize: 25 });
   let query = supabase.from("message_log")
-    .select("id,body,campaign_id,channel,cost,created_at,direction,error_code,from_number,messaging_profile_id,occurred_at,status,telnyx_message_id,to_number,updated_at", { count: "exact" })
+    .select("id,body,campaign_id,created_at,direction,error_code,from_number,status,to_number", { count: "exact" })
     .eq("merchant_id", merchantId)
     .eq("channel", "sms");
   if (filters.direction && filters.direction !== "all") {
