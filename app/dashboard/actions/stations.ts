@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { StationMenuScope } from "@/lib/stations/station-menu-scope";
 import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
@@ -70,6 +71,12 @@ export interface Station {
   can_update_kitchen_status: boolean;
   view_scope: ViewScope;
   pos_config_overrides?: Record<string, unknown>;
+  /**
+   * Per-station menu scope: `all` (default) or `selected` (see station_menus).
+   * Optional because generated types and environments lag the shared migration
+   * (20260919120000_station_menu_scope.sql); absent reads as `all`.
+   */
+  menu_scope?: StationMenuScope;
 
   // Status
   is_active: boolean;

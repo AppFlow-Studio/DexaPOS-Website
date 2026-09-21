@@ -59,10 +59,15 @@ import { StationConnectionTab } from "./components/StationConnectionTab";
 import { StationActivityTab } from "./components/StationActivityTab";
 import { RemoteActionsPanel } from "./components/RemoteActionsPanel";
 import { StationPrintersTab } from "./components/StationPrintersTab";
+import { StationMenusTab } from "./components/StationMenusTab";
 
 // Tab configuration
 const TABS = [
   { id: "overview", label: "Overview" },
+  // Placement of the Menus section is Abubeckr's call (see
+  // docs/features/menu-management/FEATURE-2026-09-19-PER-STATION-MENU-SCOPE-WEB.md);
+  // it ships as its own tab next to Overview and is trivially relocatable.
+  { id: "menus", label: "Menus" },
   { id: "devices", label: "Devices" },
   { id: "printers", label: "Printers" },
   { id: "terminal", label: "Payment Terminal" },
@@ -71,9 +76,10 @@ const TABS = [
   { id: "activity", label: "Activity" },
 ];
 
-// KDS stations don't take payments, so hide the Payment Terminal tab
+// KDS stations don't take payments and don't render a menu, so hide the
+// Payment Terminal and Menus tabs
 const TABS_HIDDEN_BY_STATION_TYPE: Record<string, string[]> = {
-  kds: ["terminal"],
+  kds: ["terminal", "menus"],
 };
 
 function getVisibleTabs(stationType: string | null | undefined) {
@@ -416,6 +422,7 @@ export default function StationDetailPage() {
         {activeTab === "overview" && (
           <StationOverviewTab station={station} timeFilter={timeFilter} />
         )}
+        {activeTab === "menus" && <StationMenusTab station={station} />}
         {activeTab === "devices" && <StationDevicesTab station={station} />}
         {activeTab === "printers" && <StationPrintersTab station={station} />}
         {activeTab === "terminal" && <PaymentTerminalTab station={station} />}
