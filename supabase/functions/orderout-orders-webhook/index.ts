@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js'
+import { notifyMerchantDispatch } from '../_shared/orderout-dispatch-notify.ts'
 import type {
   OnlineOrderRpcParams,
   OnlineOrderRpcResult,
@@ -329,6 +330,117 @@ function translateOrderOutPayload(
 // CANCELLATION HANDLER
 // ============================================================================
 
+// ============================================================================
+// ORDEROUT DIRECT ECHO GUARD
+// ============================================================================
+// Website delivery orders are pushed to OrderOut through the *channel* API so
+// a courier gets booked. Dexa is also the connected POS, so OrderOut sends
+// that same order straight back here as if it were a new marketplace order.
+// Without this guard every Direct delivery would become a second orders row,
+// a second KDS ticket and a second print.
+//
+// Match is exact, on the dispatch outbox: the worker stores source.orderNumber
+// (= orders.order_number) on the row BEFORE the push, so the echo is
+// recognised even if it arrives before the push response does. The echo is
+// also how we learn OrderOut's id for the order (externalReferenceId), which
+// the cancel endpoint needs.
+
+interface DirectDispatchEchoRow {
+  id: string
+  order_id: string
+  online_order_id: string | null
+  merchant_id: string
+  state: string
+  oo_channel_order_id: string | null
+  oo_order_number: string
+}
+
+async function handleDirectEcho(
+  supabase: ReturnType<typeof createClient>,
+  body: OrderOutWebhookPayload
+): Promise<Response | null> {
+  const orderNumber = body.source?.orderNumber
+  if (!orderNumber) return null
+
+  const { data: dispatchData } = await supabase
+    .from('orderout_delivery_dispatches')
+    .select('id, order_id, online_order_id, merchant_id, state, oo_channel_order_id, oo_order_number')
+    .eq('oo_order_number', orderNumber)
+    .maybeSingle()
+  const dispatch = dispatchData as unknown as DirectDispatchEchoRow | null
+
+  if (!dispatch) return null // not one of ours — normal marketplace order
+
+  const externalReferenceId = body.source?.externalReferenceId || null
+  const eventAction = body.event?.toLowerCase()
+
+  logEvent('ECHO', `Direct delivery echo for ${orderNumber}`, {
+    event: eventAction,
+    dispatchState: dispatch.state,
+    externalReferenceId,
+  })
+
+  if (eventAction === 'cancelled') {
+    // "cancelled" echoed back is either OrderOut confirming OUR cancel (row is
+    // cancel_pending / cancelled — the RPC just closes it and returns false)
+    // or a courier-side cancellation of a live booking (row is dispatched —
+    // the RPC fails the delivery and returns true; the merchant must decide
+    // what happens to the food).
+    const { data: courierCancelled } = await supabase.rpc('apply_orderout_delivery_status', {
+      p_dispatch_id: dispatch.id,
+      p_status: 'cancelled',
+      p_courier: {},
+      p_eta: null,
+      p_tracking_url: null,
+      p_raw: body,
+    })
+    if (courierCancelled === true) {
+      const { data: order } = await supabase
+        .from('orders')
+        .select('display_number')
+        .eq('id', dispatch.order_id)
+        .maybeSingle()
+      await notifyMerchantDispatch(supabase, {
+        merchantId: dispatch.merchant_id,
+        orderId: dispatch.order_id,
+        orderNumber: dispatch.oo_order_number,
+        displayNumber: (order as { display_number?: string | null } | null)?.display_number ?? null,
+        type: 'orderout_delivery_courier_cancelled',
+        detail: body.source?.deliveryCompany?.name ?? null,
+      })
+    }
+    return successResponse(
+      { order_id: dispatch.order_id, linked: true, courier_cancelled: courierCancelled === true },
+      'Direct delivery cancel linked'
+    )
+  }
+
+  // The echo is proof the order exists at OrderOut: confirms a pending /
+  // push_unconfirmed row, or turns a row whose order was cancelled meanwhile
+  // into cancel_pending so the courier gets cancelled.
+  const { data: linkedState, error: linkError } = await supabase.rpc('link_orderout_delivery_echo', {
+    p_dispatch_id: dispatch.id,
+    p_channel_order_id: externalReferenceId,
+    p_raw: body,
+  })
+  if (linkError) {
+    logEvent('ECHO', `link_orderout_delivery_echo failed for ${orderNumber}`, { error: linkError.message })
+  }
+
+  if (dispatch.online_order_id && externalReferenceId) {
+    await supabase
+      .from('online_orders')
+      .update({ external_reference: externalReferenceId, status_updated_at: new Date().toISOString() })
+      .eq('id', dispatch.online_order_id)
+      .is('external_reference', null)
+  }
+
+  return successResponse(
+    { order_id: dispatch.order_id, online_order_id: dispatch.online_order_id, linked: true, state: linkedState ?? null },
+    'Direct delivery echo linked to existing order'
+  )
+}
+
 async function handleCancellation(
   supabase: ReturnType<typeof createClient>,
   body: OrderOutWebhookPayload,
@@ -466,6 +578,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
   })
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+  // 2.5. OrderOut Direct echo guard — our own pushed website order coming back.
+  const echoResponse = await handleDirectEcho(supabase, body)
+  if (echoResponse) return echoResponse
 
   // 3. Validate restaurant ID present
   const restaurantId = body.destination?.restaurantId

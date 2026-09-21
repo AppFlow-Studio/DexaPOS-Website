@@ -220,3 +220,49 @@ Two stacked bugs:
    an empty response body — recurring not confirmed; this EPI may not be provisioned for native
    recurring"). Meta-lesson: a payment integration must persist the raw processor response on failure
    — a generic fallback string with an empty body is undebuggable and hides double-charge risk.
+
+## Check the team's accepted environment practice before proposing infrastructure (2026-09-20)
+
+Context: OrderOut Direct spike. I found that the single OrderOut `push_order` webhook is
+registered platform-wide against **production**, and that the API key is shared by staging and
+prod. I escalated this into a multi-step "get a second integrator key, re-register webhooks,
+re-onboard staging restaurants" proposal. The user cut it off: the team's position is that the
+shared key + Joes Coffee Shop *is* the staging account, and that's an accepted trade-off.
+
+Lesson: a real finding still needs to be **sized against how the team already works** before it
+becomes a plan. State the fact in one line with its concrete consequence ("staging pushes will
+echo into prod's webhook; the echo guard can't be E2E-tested on staging"), ask whether that's
+acceptable, and stop. Don't design the fix until someone says the problem is theirs to fix.
+Corollary: when a user says "nevermind this", drop it fully — record the fact in the plan doc
+as a known constraint and move to the next unblocked step.
+
+## Read the vendor's stored record before blaming your own request (2026-09-20)
+
+`POST /v2/delivery/quotes` returned `400 {"reason": "Invalid 'phone_number'"}`. I burned five
+attempts guessing request field names (`phone_number`, `dropoff_phone`, `customer_phone`, …).
+The error was about the **restaurant record on OrderOut's side** (`phone_number: ""`, plus a
+Virginia zip on a Brooklyn store) — one `GET /api/pos/restaurant/{id}` showed it immediately.
+Lesson: when a vendor rejects a field you didn't send, read back the entity you're acting on
+first. Second-order finding: `orderout-onboard` never sent `phone_number`, so every merchant was
+un-quotable — a spike against real data surfaced a shipped bug the docs never would have.
+
+## An outbox pattern is only safe for idempotent calls — check that before copying it (2026-09-20)
+
+Context: OrderOut Direct dispatch. I copied the proven `orderout_status_relay_queue` pattern
+(claim with backoff-as-lease → HTTP → complete → retry on 5xx) for the courier push. The relay's
+call is a PUT of a status — harmless to repeat. The push is `POST /api/channel/order/push`, which
+**books a courier**: every retry after an ambiguous result (5xx, timeout, network, worker crash
+between the call and `complete`) is a second courier and a second charge. An adversarial review
+found three CRITICALs that were all this one mistake: in-process retry, retry on the next claim,
+and a 30 s lease that let the next drain re-push a slow batch.
+
+Lesson: before reusing a retry/queue pattern, write down what the remote call does when it is
+repeated. If the answer is "creates something", the design needs (1) no automatic retry after an
+ambiguous outcome — park the row in an explicit `*_unconfirmed` state that only positive evidence
+(echo, status event) or a human resolves; (2) a lease that is longer than the worst-case batch and
+separate from the backoff; (3) every completion RPC conditional on the row's *current* state, so a
+concurrent cancel is never overwritten; (4) a "call attempted" marker written before the call so a
+crashed worker's row is parked, not re-sent. Corollary from the same review: put the dashboard
+lookup in the branch the dashboard actually calls — I added the dispatch banner to the HQ-only
+branch of `GetOrderDetails` and merchants never saw it.
+

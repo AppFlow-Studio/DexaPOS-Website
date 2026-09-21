@@ -75,6 +75,13 @@ export interface OnlineOrderingSettings {
   // Ordering
   pickupEnabled: boolean;
   deliveryEnabled: boolean;
+  /**
+   * Who delivers website orders. 'self' keeps delivery hidden on the storefront
+   * (no fulfilment path yet); 'orderout_direct' books a courier through OrderOut
+   * at the live quoted price. Saving 'orderout_direct' requires an active
+   * OrderOut restaurant on the location.
+   */
+  deliveryFulfillment: "self" | "orderout_direct";
   deliveryPricingEnabled: boolean;
   autoAcceptOrders: boolean;
   /** Minutes a pending order waits for acceptance before the storefront auto-cancels it. */
@@ -219,6 +226,7 @@ const createDefaultSettings = (
 
   pickupEnabled: true,
   deliveryEnabled: false,
+  deliveryFulfillment: "self",
   deliveryPricingEnabled: true,
   autoAcceptOrders: false,
   pendingAcceptWindowMinutes: 5,
@@ -392,6 +400,7 @@ export const useOnlineOrderingSettings = create<OnlineOrderingStore>(
           operatingHours: currentSettings.operatingHours,
           pickupEnabled: currentSettings.pickupEnabled,
           deliveryEnabled: currentSettings.deliveryEnabled,
+          deliveryFulfillment: currentSettings.deliveryFulfillment,
           deliveryPricingEnabled: currentSettings.deliveryPricingEnabled,
           autoAcceptOrders: currentSettings.autoAcceptOrders,
           pendingAcceptWindowMinutes: currentSettings.pendingAcceptWindowMinutes,

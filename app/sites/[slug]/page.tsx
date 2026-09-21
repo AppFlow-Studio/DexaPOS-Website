@@ -218,7 +218,11 @@ export default async function StorefrontPage({ params, searchParams }: PageProps
           allItems={menus.flatMap((m) => m.categories?.flatMap((c) => c.items ?? []) ?? [])}
         />
         <FloatingCartBar
-          freeDeliveryThreshold={site?.online_ordering_config?.freeDeliveryThreshold ?? null}
+          freeDeliveryThreshold={
+            site?.online_ordering_config?.deliveryFulfillment === "orderout_direct"
+              ? null
+              : site?.online_ordering_config?.freeDeliveryThreshold ?? null
+          }
           baseDeliveryFee={site?.online_ordering_config?.baseDeliveryFee ?? null}
           prepTime={site?.online_ordering_config?.preparationLeadTime ?? null}
         />

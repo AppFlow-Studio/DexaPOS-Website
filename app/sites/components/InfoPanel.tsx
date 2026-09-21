@@ -120,6 +120,7 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
   const deliveryEnabled = config?.deliveryEnabled === true;
   const prepTime = config?.preparationLeadTime;
   const minOrder = config?.minimumOrderAmount;
+  const isDirectDelivery = config?.deliveryFulfillment === "orderout_direct";
   const deliveryFee = config?.baseDeliveryFee;
   const freeDeliveryThreshold = config?.freeDeliveryThreshold;
   const showOrderingOptions =
@@ -262,7 +263,19 @@ export function InfoPanel({ site, location }: InfoPanelProps) {
                   </span>
                 </div>
 
-                {deliveryEnabled && deliveryFee != null && (
+                {deliveryEnabled && isDirectDelivery && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm" style={muted}>
+                      <BadgeDollarSign className="h-4 w-4" />
+                      <span>Delivery Fee</span>
+                    </div>
+                    <span className="text-sm font-medium" style={{ color: "#111827" }}>
+                      Calculated at checkout
+                    </span>
+                  </div>
+                )}
+
+                {deliveryEnabled && !isDirectDelivery && deliveryFee != null && (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-sm" style={muted}>
                       <BadgeDollarSign className="h-4 w-4" />
