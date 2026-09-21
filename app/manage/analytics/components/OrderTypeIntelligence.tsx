@@ -13,7 +13,8 @@ import { Utensils, ShoppingBag, Truck, Globe, TrendingUp, Package2, ChefHat, Arr
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection, PanelSubLabel } from '@/components/dashboard/shell/PanelSection'
 import { InsetTile } from '@/components/dashboard/shell/StatTile'
-import { AnalyticsTooltip } from '@/app/manage/components/analytics-primitives'
+import { AnalyticsTooltip, CATEGORY_AXIS_WIDTH, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
+import { useIsMobile } from '@/hooks/use-mobile'
 import type { ChannelStat } from '@/app/manage/actions/hq-platform/analytics'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ const TYPE_FILL: Record<string, string> = {
 export function OrderTypeIntelligence() {
   const [days, setDays] = useState(30)
   const { data, isLoading } = useOrderTypeIntelligence(days)
+  const isMobile = useIsMobile()
 
   const periodSelect = (
     <Select value={String(days)} onValueChange={v => setDays(Number(v))}>
@@ -145,10 +147,10 @@ export function OrderTypeIntelligence() {
               <div className="min-w-0">
                 <PanelSubLabel>Orders by channel</PanelSubLabel>
                 <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={data.channelBreakdown ?? []} layout="vertical" margin={{ left: 8, right: 32 }}>
+                  <BarChart data={data.channelBreakdown ?? []} layout="vertical" margin={{ left: 0, right: isMobile ? 12 : 32 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" tick={{ fontSize: 11 }} />
-                    <YAxis type="category" dataKey="label" tick={{ fontSize: 12 }} width={80} />
+                    <YAxis type="category" dataKey="label" tick={{ fontSize: 12 }} width={isMobile ? CATEGORY_AXIS_WIDTH.mobile : 80} />
                     <Tooltip content={<AnalyticsTooltip formatter={(v: number) => `${v.toLocaleString()} orders`} />} />
                     <Bar dataKey="orderCount" radius={[0, 4, 4, 0]}>
                       {(data.channelBreakdown ?? []).map((entry, i) => (
@@ -162,10 +164,10 @@ export function OrderTypeIntelligence() {
               <div className="min-w-0">
                 <PanelSubLabel>Avg order value by channel</PanelSubLabel>
                 <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={data.channelBreakdown ?? []} layout="vertical" margin={{ left: 8, right: 32 }}>
+                  <BarChart data={data.channelBreakdown ?? []} layout="vertical" margin={{ left: 0, right: isMobile ? 12 : 32 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => `$${v}`} />
-                    <YAxis type="category" dataKey="label" tick={{ fontSize: 12 }} width={80} />
+                    <YAxis type="category" dataKey="label" tick={{ fontSize: 12 }} width={isMobile ? CATEGORY_AXIS_WIDTH.mobile : 80} />
                     <Tooltip content={<AnalyticsTooltip formatter={(v: number) => `$${v.toFixed(2)}`} />} />
                     <Bar dataKey="avgOrderValue" radius={[0, 4, 4, 0]}>
                       {(data.channelBreakdown ?? []).map((entry, i) => (
@@ -221,10 +223,18 @@ export function OrderTypeIntelligence() {
         <Panel>
           <PanelSection label="GPV by order type" caption="Revenue distribution across service channels">
             <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={data.breakdown} layout="vertical" margin={{ left: 16, right: 24 }}>
+              {/* `left: 0` plus a tight category gutter: the 16px margin and a
+                  65px label column started the bars ~81px in, so a phone lost a
+                  quarter of the plot before the first bar. */}
+              <BarChart data={data.breakdown} layout="vertical" margin={{ left: 0, right: isMobile ? 12 : 24 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => fmtGPV(v)} />
-                <YAxis type="category" dataKey="label" tick={{ fontSize: 12 }} width={65} />
+                <YAxis
+                  type="category"
+                  dataKey="label"
+                  tick={{ fontSize: 12 }}
+                  width={isMobile ? 56 : 65}
+                />
                 <Tooltip content={<AnalyticsTooltip formatter={(v: number) => fmtGPV(v)} />} />
                 <Bar dataKey="totalGPV" radius={[0, 4, 4, 0]}>
                   {data.breakdown.map((entry, i) => (
@@ -241,10 +251,12 @@ export function OrderTypeIntelligence() {
         <Panel>
           <PanelSection label="Daily order type trend" icon={TrendingUp} caption="Order counts by type per day">
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={trendData} barSize={14}>
+              <BarChart data={trendData} barSize={14} margin={{ top: 4, right: isMobile ? 8 : 16, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 11 }} />
+                {/* Daily order counts are 1-2 digits, so the axis only needs
+                    room for those rather than Recharts' default ~60px. */}
+                <YAxis tick={{ fontSize: 11 }} width={isMobile ? valueAxisWidthMobile(2) : undefined} />
                 <Tooltip content={<AnalyticsTooltip />} />
                 <Bar dataKey="dine_in" stackId="a" fill={TYPE_FILL.dine_in} name="Dine In" radius={[0, 0, 0, 0]} />
                 <Bar dataKey="takeout" stackId="a" fill={TYPE_FILL.takeout} name="Takeout" radius={[0, 0, 0, 0]} />

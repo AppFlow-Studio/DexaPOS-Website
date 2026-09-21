@@ -27,7 +27,7 @@ import {
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
-import { AnalyticsTooltip, VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
+import { AnalyticsTooltip, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
 import type { KDSSlowestMerchant, KDSSlowestItem } from '@/app/manage/actions/hq-platform/analytics'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -224,7 +224,7 @@ export function KDSPerformance() {
                 <BarChart data={data.timingDistribution} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="bucketLabel" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} width={isMobile ? valueAxisWidthMobile(4) : undefined} />
                   <Tooltip content={<AnalyticsTooltip formatter={(v: number) => `${v}%`} />} />
                   <Bar dataKey="percentage" radius={[4, 4, 0, 0]}>
                     {data.timingDistribution.map((entry, i) => {

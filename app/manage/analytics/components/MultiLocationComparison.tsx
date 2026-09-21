@@ -5,7 +5,7 @@ import { useMultiLocationComparison } from '@/lib/queries/use-platform-analytics
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
-import { AnalyticsTooltip, VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
+import { AnalyticsTooltip, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -266,7 +266,7 @@ export function MultiLocationComparison() {
                 interval={0}
                 height={60}
               />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => fmtGPV(v)} width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => fmtGPV(v)} width={isMobile ? valueAxisWidthMobile(6) : undefined} />
               <Tooltip content={<AnalyticsTooltip formatter={(v: number) => fmtGPV(v)} />} />
               <Bar dataKey="gpv" radius={[4, 4, 0, 0]}>
                 {chartData.map((entry, i) => (

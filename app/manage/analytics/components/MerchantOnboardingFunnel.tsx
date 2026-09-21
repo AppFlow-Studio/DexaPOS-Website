@@ -16,7 +16,7 @@ import { AlertTriangle, TrendingUp, Filter } from 'lucide-react'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
-import { AnalyticsTooltip, VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
+import { AnalyticsTooltip, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
 import type { OnboardingFunnelStage, StuckMerchant } from '@/app/manage/actions/hq-platform/analytics'
 
 /**
@@ -88,8 +88,20 @@ export function MerchantOnboardingFunnel() {
               {data.funnel.map((stage: OnboardingFunnelStage) => {
                 const pct = Math.round((stage.count / maxCount) * 100)
                 return (
-                  <div key={stage.stage} className="flex items-center gap-3">
-                    <div className="w-24 shrink-0 text-right text-xs text-muted-foreground">{stage.label}</div>
+                  /* Mobile stacks the label over a full-width track; the two
+                     fixed 24/20 gutters of the desktop row left the bar only
+                     the ~130px that remained on a 390px phone, so every bar
+                     started a quarter of the way in against dead space. */
+                  <div
+                    key={stage.stage}
+                    className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3"
+                  >
+                    <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground sm:w-24 sm:shrink-0 sm:justify-end sm:text-right">
+                      <span>{stage.label}</span>
+                      {stage.conversionFromPrev !== null && (
+                        <span className="tabular-nums sm:hidden">{stage.conversionFromPrev}% conv.</span>
+                      )}
+                    </div>
                     <div className="h-8 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
                       <div
                         className="flex h-full items-center rounded-full pl-3 text-xs font-medium text-white transition-all duration-500"
@@ -99,7 +111,7 @@ export function MerchantOnboardingFunnel() {
                       </div>
                     </div>
                     {stage.conversionFromPrev !== null && (
-                      <div className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                      <div className="hidden w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground sm:block">
                         {stage.conversionFromPrev}% conv.
                       </div>
                     )}
@@ -182,7 +194,7 @@ export function MerchantOnboardingFunnel() {
             <BarChart data={data.monthlyTrend}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined} />
+              <YAxis tick={{ fontSize: 10 }} width={isMobile ? valueAxisWidthMobile(3) : undefined} />
               <Tooltip content={<AnalyticsTooltip />} />
               <Bar dataKey="newCount" name="New Merchants" fill="#94a3b8" radius={[3, 3, 0, 0]} />
               <Bar dataKey="activeCount" name="Activated" fill="#22c55e" radius={[3, 3, 0, 0]} />

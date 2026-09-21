@@ -40,12 +40,21 @@ export const CATEGORY_AXIS_WIDTH = { mobile: 88, desktop: 120 } as const
  * Y-axis gutter for vertical (value-axis) cartesian charts on a phone.
  *
  * Recharts reserves ~60px for a numeric Y axis regardless of how short the
- * labels are. Inside a 309px panel body that left a 65px gutter against a 5px
- * right margin, so the plot sat visibly shoved to the right of its card while
- * the space under "$8k" went unused. 38px fits the widest tick these charts
- * produce (`$8k`, `100%`) and leaves the plot centred in the card.
+ * labels are. Inside a 309px panel body that leaves the plot shoved right,
+ * with the space beside a short tick like `8` unused.
+ *
+ * This is deliberately a function of the longest tick rather than one fixed
+ * number: a single width cannot serve both `8` and `240`. A previous fixed
+ * 38px was too wide for single-digit counts and too narrow for three-digit
+ * ones, which clipped them.
+ *
+ * `chars` is the longest formatted tick the chart will render — count the
+ * characters, including `$`, `%` or `k`. Sized at ~7px per character (the 11px
+ * tick font) plus 10px for the tick mark and its gap, floored at 22px.
  */
-export const VALUE_AXIS_WIDTH_MOBILE = 38
+export function valueAxisWidthMobile(chars: number): number {
+    return Math.max(22, Math.round(chars * 7) + 10)
+}
 
 /**
  * Balanced plot margins for a value-axis chart.

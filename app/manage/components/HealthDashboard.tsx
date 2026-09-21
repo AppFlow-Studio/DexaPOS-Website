@@ -208,25 +208,54 @@ export function HealthDashboard() {
     )
 }
 
+/**
+ * Loading state for the health grid.
+ *
+ * Shaped per breakpoint, because `HealthRow` is: the 64px score disc, the
+ * score bar, the second alert line and the 4-up stats grid are all `sm:`-only.
+ * A single desktop-shaped skeleton therefore promised a phone a tall card with
+ * a big avatar circle and four stat blocks, then collapsed to a short one —
+ * the layout shift the skeleton exists to prevent. Each breakpoint's blocks
+ * are rendered and hidden by CSS rather than picked in JS, so there is no
+ * hydration mismatch and no resize listener.
+ */
 function HealthGridSkeleton() {
     return (
         <div className="flex min-w-0 flex-col gap-3">
             {[...Array(5)].map((_, i) => (
                 <Panel key={i} padded>
-                    <div className="flex min-w-0 flex-col gap-4">
+                    <div className="flex min-w-0 flex-col gap-3">
                         <div className="flex min-w-0 items-start gap-4">
-                            <Skeleton className="h-16 w-16 shrink-0 rounded-full" />
+                            {/* Mirrors the disc's `hidden sm:flex`. */}
+                            <Skeleton className="hidden h-16 w-16 shrink-0 rounded-full sm:block" />
                             <div className="min-w-0 flex-1 space-y-2">
-                                <Skeleton className="h-5 w-40 max-w-[60%]" />
-                                <Skeleton className="h-4 w-32 max-w-[50%]" />
-                                {/* Mirrors the score bar's sm+ visibility so the
-                                    card does not change height on load. */}
-                                <Skeleton className="hidden h-2 w-full rounded-full sm:block" />
-                                <Skeleton className="h-4 w-52 max-w-[80%]" />
-                                <Skeleton className="h-3 w-48 max-w-[70%]" />
+                                {/* Name + status badges: one row on a phone,
+                                    matching the real card's name/badge line. */}
+                                <div className="flex min-w-0 items-center gap-2">
+                                    <Skeleton className="h-5 w-40 max-w-[55%]" />
+                                    <Skeleton className="h-5 w-16 shrink-0 rounded-full" />
+                                    <Skeleton className="h-5 w-8 shrink-0 rounded-full sm:hidden" />
+                                </div>
+                                <Skeleton className="h-4 w-24 max-w-[40%]" />
+                                <Skeleton className="mt-2 hidden h-2 w-full rounded-full sm:block" />
                             </div>
                         </div>
-                        <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-4">
+
+                        {/* Alerts: one line on a phone, two from `sm` up. */}
+                        <div className="flex min-w-0 flex-col gap-1 sm:pl-20">
+                            <Skeleton className="h-4 w-52 max-w-[80%]" />
+                            <Skeleton className="hidden h-4 w-44 max-w-[70%] sm:block" />
+                        </div>
+
+                        {/* Phone: the single wrapping `label value` line. */}
+                        <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1 sm:hidden">
+                            <Skeleton className="h-4 w-24" />
+                            <Skeleton className="h-4 w-20" />
+                            <Skeleton className="h-3 w-28 basis-full" />
+                        </div>
+
+                        {/* sm+: the 2-up / 4-up stats grid. */}
+                        <div className="hidden min-w-0 grid-cols-2 gap-3 sm:grid md:grid-cols-4">
                             {[...Array(4)].map((_, j) => (
                                 <div key={j} className="space-y-1">
                                     <Skeleton className="h-3 w-16 max-w-full" />

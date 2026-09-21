@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/dashboard/shell/PageHeader'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
-import { AnalyticsTooltip, CHART_MARGIN, VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
+import { AnalyticsTooltip, CHART_MARGIN, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
 import {
     BarChart3,
     TrendingDown,
@@ -475,7 +475,7 @@ export default function AnalyticsPage() {
                                         <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={d => d.slice(5)} />
                                         <YAxis
                                             tick={{ fontSize: 11 }}
-                                            width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined}
+                                            width={isMobile ? valueAxisWidthMobile(4) : undefined}
                                             tickFormatter={v => chartMetric === 'revenue' ? `$${(v / 1000).toFixed(0)}k` : String(v)}
                                         />
                                         <Tooltip

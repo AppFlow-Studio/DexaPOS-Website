@@ -4,7 +4,7 @@ import { MapPin, Globe, TrendingUp, AlertTriangle } from 'lucide-react'
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
-import { AnalyticsTooltip, VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
+import { AnalyticsTooltip, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
@@ -295,13 +295,97 @@ export function LocationDensityInsights() {
   const showCityCol = (id: string) => !isMobile || !cityHiddenCols.has(id)
 
   if (isLoading) {
+    // Built from the same Panel/PanelSection/StatRow primitives as the loaded
+    // view rather than from loose rectangles: the headings, captions and tile
+    // labels are known before the data arrives, so they render for real and
+    // only the figures are skeletons. A hand-sized `h-24`/`h-64` stack drifts
+    // from the real layout every time either one changes — this cannot.
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}
+      <div className="space-y-6">
+        <Panel>
+          <PanelSection label="Location footprint" icon={MapPin}>
+            <StatRow columns={4}>
+              <StatTile isLoading label="Total Locations" icon={<MapPin />} value={null} meta="Active across the platform" />
+              <StatTile isLoading label="States Covered" icon={<Globe />} value={null} meta="Including D.C." />
+              <StatTile isLoading label="Whitespace States" icon={<AlertTriangle />} value={null} meta="States with no presence" />
+              <StatTile isLoading label="Top State" icon={<TrendingUp />} value={null} />
+            </StatRow>
+          </PanelSection>
+        </Panel>
+
+        <Panel>
+          <PanelSection
+            label="Geographic distribution"
+            caption="Location density by state — hover for details · red = no presence (sales whitespace)"
+          >
+            {/* Mirrors USChoropleth: the same 12×8 aspect-square tile grid and
+                the same legend row beneath it. */}
+            <div className="space-y-3">
+              <div
+                className="grid w-full gap-1"
+                style={{
+                  gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
+                  gridTemplateRows: `repeat(${GRID_ROWS}, 1fr)`,
+                }}
+              >
+                {Array.from({ length: GRID_ROWS * GRID_COLS }).map((_, i) => {
+                  const row = Math.floor(i / GRID_COLS)
+                  const col = i % GRID_COLS
+                  const occupied = Object.values(STATE_GRID).some(v => v.row === row && v.col === col)
+                  return occupied ? (
+                    <Skeleton key={i} className="aspect-square rounded" />
+                  ) : (
+                    <div key={i} />
+                  )
+                })}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <span className="text-xs text-muted-foreground">Locations:</span>
+                {LEGEND_TIERS.map(({ label }) => (
+                  <div key={label} className="flex items-center gap-1">
+                    <Skeleton className="h-4 w-4 rounded" />
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </PanelSection>
+        </Panel>
+
+        <Panel>
+          <PanelSection
+            label="Top 10 states by location count"
+            caption="Active locations per state — highest concentration markets"
+          >
+            <Skeleton className="h-60 w-full" />
+          </PanelSection>
+        </Panel>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Panel className="lg:col-span-2">
+            <PanelSection label="State breakdown" caption="All represented states sorted by location count">
+              <div className="space-y-3">
+                {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+              </div>
+            </PanelSection>
+          </Panel>
+
+          <Panel>
+            <PanelSection label="Coverage gaps" caption="States with zero active locations — sales targets">
+              <div className="flex flex-wrap gap-1.5">
+                {[...Array(14)].map((_, i) => <Skeleton key={i} className="h-5 w-10 rounded-full" />)}
+              </div>
+            </PanelSection>
+          </Panel>
         </div>
-        <Skeleton className="h-64 w-full" />
-        <Skeleton className="h-72 w-full" />
+
+        <Panel>
+          <PanelSection label="Top cities" caption="Highest concentration markets by city — top 20">
+            <div className="space-y-3">
+              {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+            </div>
+          </PanelSection>
+        </Panel>
       </div>
     )
   }
@@ -380,7 +464,7 @@ export function LocationDensityInsights() {
             <BarChart data={chartData} margin={{ bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="state" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} width={isMobile ? valueAxisWidthMobile(3) : undefined} />
               <RechartsTooltip content={<AnalyticsTooltip />} />
               {/* `var(--chart-1)` bare, never `hsl(var(--chart-1))` (C2): the
                   token is already an `oklch()` colour, so wrapping it in `hsl()`

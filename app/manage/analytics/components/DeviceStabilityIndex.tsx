@@ -37,7 +37,7 @@ import {
     ChevronRight,
 } from 'lucide-react'
 import { useDeviceStability, useVersionDrillDown } from '@/lib/queries/use-platform-analytics'
-import { VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
+import { valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
 
 /**
  * Mobile column meta for the version summary table. Instability is the rate the
@@ -206,7 +206,7 @@ export default function DeviceStabilityIndex() {
                                         axisLine={false}
                                         tickFormatter={(val) => val.toLocaleString()}
                                         fontSize={12}
-                                        width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined}
+                                        width={isMobile ? valueAxisWidthMobile(4) : undefined}
                                     />
                                     <Tooltip
                                         content={({ active, payload, label }) => {

@@ -44,7 +44,7 @@ import {
 import { useTerminalUtilization } from '@/lib/queries/use-platform-analytics'
 import type { MerchantTerminalUtilization, UtilizationTier } from '@/app/manage/actions/hq-platform/analytics'
 import Link from 'next/link'
-import { VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
+import { valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
 
 // ============================================================================
 // Constants
@@ -392,7 +392,7 @@ export default function TerminalUtilizationHeatmap() {
                                                 tick={{ fontSize: 11 }}
                                                 tickLine={false}
                                                 axisLine={false}
-                                                width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined}
+                                                width={isMobile ? valueAxisWidthMobile(3) : undefined}
                                             />
                                             <RechartsTooltip
                                                 content={({ active, payload }) => {
@@ -628,18 +628,25 @@ export default function TerminalUtilizationHeatmap() {
                                                                                 <TableRow>
                                                                                     <TableHead>Station</TableHead>
                                                                                     {!isMobile && <TableHead>Type</TableHead>}
-                                                                                    <TableHead className={cn('text-right', isMobile && 'w-16')}>Orders</TableHead>
+                                                                                    {/* Narrow, right-aligned numerics so the station
+                                                                                        name — the column that identifies the row —
+                                                                                        keeps the remaining width and shows in full. */}
+                                                                                    <TableHead className={cn('text-right', isMobile && 'w-12')}>Orders</TableHead>
                                                                                     {!isMobile && <TableHead className="text-right">Active Days</TableHead>}
                                                                                     {!isMobile && <TableHead className="text-right">Avg/Day</TableHead>}
                                                                                     {!isMobile && <TableHead className="text-right">Last Txn</TableHead>}
-                                                                                    <TableHead className={cn('text-center', isMobile && 'w-20')}>Status</TableHead>
+                                                                                    <TableHead className={cn('text-center', isMobile && 'w-16')}>Status</TableHead>
                                                                                 </TableRow>
                                                                             </TableHeader>
                                                                             <TableBody>
                                                                                 {m.stations.map((s) => (
                                                                                     <TableRow key={s.stationId}>
                                                                                         <TableCell className="font-medium">
-                                                                                            <span className="block truncate">{s.stationName}</span>
+                                                                                            {/* Wraps rather than truncating: on a phone
+                                                                                                "Audit Fix Station UPDATED" became
+                                                                                                "Audit Fix S…", which is not enough to
+                                                                                                tell two stations apart. */}
+                                                                                            <span className="block sm:truncate">{s.stationName}</span>
                                                                                             {/* The dropped columns fold into a caption
                                                                                                 here rather than disappearing, so a phone
                                                                                                 still gets type and recency. */}

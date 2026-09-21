@@ -43,7 +43,7 @@ import {
   Legend,
 } from 'recharts'
 import type { TopAuditActor, FailedAuditAction, DailyAuditActivity } from '@/app/manage/actions/hq-platform/analytics'
-import { VALUE_AXIS_WIDTH_MOBILE } from '@/app/manage/components/analytics-primitives'
+import { valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
 
 /**
  * Mobile column meta for the three audit tables.
@@ -267,7 +267,11 @@ function DailyActivityChart({ analytics, isLoading }: {
           <ResponsiveContainer width="100%" height={280}>
             <BarChart
               data={analytics!.dailyActivity}
-              margin={{ top: 4, right: 4, left: -16, bottom: 0 }}
+              // The desktop -16px left pull trims Recharts' default 60px axis
+              // gutter. On mobile the gutter is already sized to the widest
+              // tick by `valueAxisWidthMobile`, so pulling it left again eats
+              // half of it and clips the tick labels off the panel edge.
+              margin={isMobile ? { top: 4, right: 12, left: 0, bottom: 0 } : { top: 4, right: 4, left: -16, bottom: 0 }}
               barSize={10}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
@@ -284,7 +288,7 @@ function DailyActivityChart({ analytics, isLoading }: {
                 axisLine={false}
                 tickLine={false}
                 allowDecimals={false}
-                  width={isMobile ? VALUE_AXIS_WIDTH_MOBILE : undefined}
+                width={isMobile ? valueAxisWidthMobile(3) : undefined}
               />
               <RechartsTooltip content={<DailyChartTooltip />} cursor={{ fill: 'var(--muted)' }} />
               <Legend
