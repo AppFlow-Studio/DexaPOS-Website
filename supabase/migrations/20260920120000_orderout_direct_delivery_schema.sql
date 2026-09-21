@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS public.orderout_delivery_quotes (
   oo_quote_id      text NOT NULL,
   provider         text NOT NULL,
   price            numeric(12,2) NOT NULL,
-  raw_price        integer NOT NULL,
+  raw_price        numeric(14,4) NOT NULL,
   raw_unit         text,
   pickup_mins      integer,
   delivery_mins    integer,
@@ -83,6 +83,10 @@ COMMENT ON TABLE public.orderout_delivery_quotes IS
 
 CREATE INDEX IF NOT EXISTS idx_oo_quotes_session
   ON public.orderout_delivery_quotes (session_id, fetched_at DESC);
+
+-- Per-store rate-limit window in orderout-delivery-quote.
+CREATE INDEX IF NOT EXISTS idx_oo_quotes_store_selected
+  ON public.orderout_delivery_quotes (store_config_id, fetched_at DESC) WHERE is_selected;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_oo_quotes_selected_per_batch
   ON public.orderout_delivery_quotes (request_key) WHERE is_selected;
@@ -123,8 +127,11 @@ CREATE TABLE IF NOT EXISTS public.orderout_delivery_dispatches (
   oo_delivery_order_id  text,
   tracker_id            text,
   fd_id                 text,
+  -- push_unconfirmed: the push call ended ambiguously (timeout / 5xx / network)
+  -- after possibly reaching OrderOut. It is never retried automatically —
+  -- only the echo (link_orderout_delivery_echo) or a human resolves it.
   state                 text NOT NULL DEFAULT 'awaiting_accept'
-    CHECK (state IN ('awaiting_accept', 'pending', 'dispatched', 'failed', 'cancel_pending', 'cancelled')),
+    CHECK (state IN ('awaiting_accept', 'pending', 'push_unconfirmed', 'dispatched', 'failed', 'cancel_pending', 'cancelled')),
   delivery_status       text,
   delivery_status_rank  integer NOT NULL DEFAULT 0,
   courier_name          text,
@@ -134,6 +141,10 @@ CREATE TABLE IF NOT EXISTS public.orderout_delivery_dispatches (
   attempts              integer NOT NULL DEFAULT 0,
   max_attempts          integer NOT NULL DEFAULT 6,
   next_attempt_at       timestamptz NOT NULL DEFAULT now(),
+  -- Lease held by the worker that claimed the row. Separate from the retry
+  -- backoff so a slow batch can never be re-claimed (and re-pushed) by the
+  -- next drain while the first push is still in flight.
+  claimed_until         timestamptz,
   last_error            text,
   last_status_code      integer,
   request_payload       jsonb,
@@ -142,6 +153,7 @@ CREATE TABLE IF NOT EXISTS public.orderout_delivery_dispatches (
   dispatched_at         timestamptz,
   cancel_reason         text,
   cancelled_at          timestamptz,
+  cancel_rejected_at    timestamptz,
   failed_at             timestamptz,
   created_at            timestamptz NOT NULL DEFAULT now(),
   updated_at            timestamptz NOT NULL DEFAULT now()
@@ -157,9 +169,13 @@ CREATE INDEX IF NOT EXISTS idx_oo_dispatch_due
 CREATE INDEX IF NOT EXISTS idx_oo_dispatch_order_number
   ON public.orderout_delivery_dispatches (oo_order_number);
 
-CREATE INDEX IF NOT EXISTS idx_oo_dispatch_active
-  ON public.orderout_delivery_dispatches (location_id)
-  WHERE state = 'dispatched';
+-- Status intake looks dispatches up by whichever OrderOut id the event carries.
+CREATE INDEX IF NOT EXISTS idx_oo_dispatch_delivery_order_id
+  ON public.orderout_delivery_dispatches (oo_delivery_order_id) WHERE oo_delivery_order_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_oo_dispatch_channel_order_id
+  ON public.orderout_delivery_dispatches (oo_channel_order_id) WHERE oo_channel_order_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_oo_dispatch_tracker_id
+  ON public.orderout_delivery_dispatches (tracker_id) WHERE tracker_id IS NOT NULL;
 
 ALTER TABLE public.orderout_delivery_dispatches ENABLE ROW LEVEL SECURITY;
 

@@ -352,7 +352,7 @@ export interface OrderTrackingData {
 }
 
 export interface OrderTrackingDelivery {
-  /** Outbox state: awaiting_accept | pending | dispatched | failed | cancel_pending | cancelled */
+  /** Outbox state: awaiting_accept | pending | push_unconfirmed | dispatched | failed | cancel_pending | cancelled */
   state: string;
   /** Last courier status from OrderOut (runner_assigned, picked_up, …) or null before dispatch. */
   status: string | null;

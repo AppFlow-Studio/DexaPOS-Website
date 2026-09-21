@@ -708,6 +708,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // the live courier quote that orderout-delivery-quote stored server-side.
     // Everything below is a server-side trust check on that stored row —
     // nothing about the fee comes from the request body.
+    if (payCashInStore) {
+      // The courier is pushed as PAID and the food leaves the store: there is
+      // no "pay when you collect" moment. Card only.
+      return errorResponse(
+        'Delivery orders must be paid online.',
+        'delivery_cash_payment_not_supported',
+        422
+      )
+    }
     if (body.requested_time) {
       return errorResponse(
         'Scheduled delivery is not available yet. Please choose ASAP.',
@@ -1240,6 +1249,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       table_label: session?.table_label ?? null,
       floor_plan_object_id: session?.floor_plan_object_id ?? null,
       table_qr_code_id: session?.table_qr_code_id ?? null,
+      // Recorded atomically with the order so sweep_orderout_delivery_dispatches()
+      // can rebuild the dispatch row from the exact quote the card was charged.
+      ...(directQuote
+        ? { delivery_quote_id: directQuote.id, delivery_fee: toDollars(deliveryFeeCents) }
+        : {}),
     },
   }
 

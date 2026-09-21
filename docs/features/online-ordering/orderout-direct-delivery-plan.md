@@ -226,9 +226,15 @@ Rank table for D6: `pending_assign 1, pending_merchant 1, scheduled 1, runner_as
 
 ```
 insert ──► awaiting_accept ──(orders.accepted_at set)──► pending ──(push 2xx)──► dispatched ──(cancel)──► cancel_pending ──► cancelled
-                 │                                        │  └─(terminal / max attempts)──► failed          └─(reject e.g. picked up)──► dispatched + merchant alert
+                 │                                        │  ├─(4xx / 429 at max)──► failed                 └─(reject e.g. picked up)──► dispatched + merchant alert
+                 │                                        │  └─(5xx / timeout / network)──► push_unconfirmed ──(echo or status event)──► dispatched
                  └──(order cancelled/declined before accept)──► cancelled   (no OrderOut call)
+cancelled ──(late push 2xx / echo: the cancel raced the push)──► cancel_pending
 ```
+
+Revised after the 2026-09-20 adversarial review (see plan §4b): the push is **not idempotent**, so it is
+never retried after an ambiguous result; every transition in `complete_*` / `link_*` / `apply_*` is
+conditional on the row's current state; the claim holds a 5-minute lease separate from the backoff.
 
 Triggers on `orders` (AFTER UPDATE, exception-guarded like the relay, nested BEGIN for the poke):
 - `trg_oo_dispatch_on_accept` — `OF accepted_at WHEN (OLD.accepted_at IS NULL AND NEW.accepted_at IS NOT NULL)` → `awaiting_accept → pending`, poke.
@@ -289,7 +295,7 @@ Each phase ends with its own verification. Branch: `feat/orderout-direct-deliver
 - **Verified (SQL replay, scratch DB):** replay a recorded status sequence (incl. duplicate + out-of-order) against the RPC in SQL → rank monotonic; browser: stepper advances live without refresh; duplicate/out-of-order events leave the stepper unchanged
 
 ### Phase 5 — Dashboard
-- [x] `app/dashboard/online-ordering/page.tsx`: delete `DELIVERY_TEMPORARILY_DISABLED` (`:61-67`); add "Delivery fulfilment" select (`Self — coming soon` disabled / `OrderOut Direct`) inside `<FeaturePaywall serviceCode="orderout">`; Delivery toggle enabled only when fulfilment is `orderout_direct`; fee/threshold/radius inputs hidden under Direct with helper text "Customers pay the live courier quote"
+- [x] `app/dashboard/online-ordering/page.tsx`: delete `DELIVERY_TEMPORARILY_DISABLED` (`:61-67`); add "Delivery fulfilment" select (`None — delivery off` / `OrderOut Direct`; `self` stays selectable so a store can be switched back off Direct — picking it forces the Delivery toggle off) inside `<FeaturePaywall serviceCode="orderout">`; Delivery toggle enabled only when fulfilment is `orderout_direct`; fee/threshold/radius inputs hidden under Direct with helper text "Customers pay the live courier quote"
 - [x] `useOnlineOrderingSettings.ts`: `deliveryFulfillment` field; `saveOnlineOrderingSettings` (`actions.ts:1049-1276`): server-side refusal to save `orderout_direct` without active `orderout_restaurants` row + `get_subscription_entitlement.entitled`; `LogAuditEvent` `changes.before/after` includes the field
 - [x] Order detail (`app/dashboard/orders/[orderId]/page.tsx`, `DeliveryDispatchBanner`; `GetOrderDetails` reads the dispatch row with the service role): `GetOrderDetails` (`order.ts:409-521`) left-joins the dispatch row; full-width banner between `:516` and `:518` for `failed` ("Delivery not dispatched — {last_error}. Call the customer or arrange delivery.") and for `cancel_rejected`; courier block for `dispatched`
 - [ ] HQ mirror: `app/manage/actions/admin-merchant/online-ordering.ts` reads/writes the new column (read-only display is enough for v1)
@@ -316,6 +322,34 @@ Each phase ends with its own verification. Branch: `feat/orderout-direct-deliver
 | Not built | poll branch for status (only if OrderOut has no webhook); D11 ready-relay extension (only if Step 0 Q6 says so); HQ mirror of the fulfilment setting (read-only display) | pending Step 0 |
 
 **Deploy order when unblocked:** apply migration A, B on staging → `supabase functions deploy orderout-delivery-quote orderout-delivery-dispatch orderout-delivery-webhook create-online-order orderout-orders-webhook cancel-online-order orderout-onboard --no-verify-jwt` → `vault.create_secret('https://dfwqakoyittmrwbqvxgw.supabase.co/functions/v1/orderout-delivery-dispatch','orderout_delivery_dispatch_url')` → flip Joes Brooklyn to `orderout_direct` on the dashboard → browser QA.
+
+### 4b. Adversarial review — 2026-09-20 (31 findings, all verified line-by-line)
+
+Fixed on the branch (scratch-DB scenarios E–M added to the spike script, 26/26 pass; deno + tsc + eslint parity):
+
+| Finding | Fix |
+|---|---|
+| F1 cancel-during-push overwritten | `complete_*` is state-guarded; `dispatched` on a `cancelled` row → `cancel_pending` + poke, ids kept |
+| F2 30 s lease vs slow batch → double push | `claimed_until` 5-min lease separate from backoff; 15 s HTTP timeout; state re-checked by a conditional `UPDATE … WHERE state='pending'` right before the push |
+| F3 non-idempotent push retried | `pushChannelOrder` has `maxRetries: 0`; 5xx/timeout/network → new state `push_unconfirmed` (parked, merchant bell, banner); resolved only by the echo (`link_orderout_delivery_echo`) or a status event; a claimed row that already has `request_payload` is parked too (worker died mid-push); 429 disarms the marker and retries |
+| F4 banner never shown to merchants | dispatch lookup hoisted into `withDeliveryDispatch()` for both `GetOrderDetails` branches |
+| F5 quote fn unlimited without a session | live store-bound session required (401 `session_invalid`), plus a per-store cap (300 batches / 10 min) |
+| F7 / F18 / F27 own cancel reported as courier cancel; terminal states not locked | `apply_*`: rank ≥ 8 locks the row; `cancelled` on `cancel_pending`/`cancelled` closes it and returns `false` (no bell/broadcast); echo cancel path only rings when the RPC returns `true` |
+| F9 notes keystrokes re-quote | `activeAddress` keyed on street/city/state/zip only; notes dropped from the quote body |
+| F10 courier-cancelled shows "Delivered" | `deliveryStepIndex` returns the kitchen step for `failed` / `cancelled` |
+| F11 cash + Direct delivery | 422 `delivery_cash_payment_not_supported` |
+| F12 refund after delivery cancels courier | cancel trigger skips rows with `delivery_status_rank >= 8` |
+| F13 silent terminal failures | `failAndNotify()` used for every terminal path |
+| F14 PostgREST `.or()` interpolation | id validated `^\d{1,32}$`, two `.eq` lookups |
+| F19 `is_selected` by id; dollar truncation; `raw_price integer` | selected by position; `Math.round`; `raw_price numeric(14,4)` |
+| F23 expired session → re-quote loop | quote fn checks `expires_at`; checkout re-inits the session on 401 and quotes again |
+| F24 sweep picks latest session quote | `delivery_quote_id` written into `online_orders.provider_metadata` atomically via the RPC; sweep prefers it and no longer needs `online_session_id` |
+| F26 stray `last_error` = "cancel rejected"; retry@max flips a dispatched row | `cancel_rejected_at` column; `retry`/`failed` ignored unless state is pending/cancel_pending/push_unconfirmed |
+| F28 missing indexes | partial indexes on `oo_delivery_order_id`, `oo_channel_order_id`, `tracker_id`; store-window index on quotes |
+| F29 cancel with no id waits ~31 min | capped at `CANCEL_NO_ID_MAX_ATTEMPTS = 4` (~3.5 min) then `cancel_failed` bell |
+| F25 wrong comment about auto-accept | corrected |
+
+Still open — decisions, not code (see handoff §7): F8 quote TTL vs accept window / which fee to push; F6 treat cancel 404 as success; F16 driver tip in `tip_amount`; F17 public tracking exposes full address; F15 echo match only on `orderNumber`; F20 item price includes modifiers; F21 BigInt regex inside strings; F22 webhook `pick()` nested scan; F30 Mark-Ready relay; F31 pg_net 5 s poke timeout.
 
 ## 5. QA matrix
 

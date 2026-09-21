@@ -130,13 +130,74 @@ All paths repo-relative. Every file type-checks (targeted `tsc` for Next files; 
 | B3 | Migrations not applied, functions not deployed, Vault secret not created | Ali (needs go) | Deploy order in the plan's "Where it stands". Safe to do now; B1 only blocks the push itself. |
 | B4 | Browser QA not run | Ali | Everything short of the push is testable once B3 is done: quote line, no-coverage, pickup regression, `self` store hides delivery, dashboard save refusal, audit row, tracking page with a hand-inserted dispatch row. |
 
+**2026-09-21 docs re-verification** (`orderout-api-docs-verification-2026-09-21.md`): the Delivery Dispatch guide documents a direct courier-booking endpoint `POST /v2/delivery/orders` (quote id in, `{id, fd_id, tracker_id}` out — no channel, no store id) but the route returns HTML 404 on the live API for any key; if OrderOut enables it, B1 goes away. Cancel with an unknown id returns JSON 404 "Order not found", so 404 cannot be treated as "already cancelled" (F6 → do it). `driverTip` is documented as the courier's tip, separate from `staffTip` (F16 → do it).
+
 Side effects on the staging test restaurant (6487684134600704) that a future engineer should know: phone/zip corrected on OrderOut; an `ONLINE_ORDERING` channel with `store_id = pos_uuid` is registered; `delivery_services_status` went `null → NOT_ACCEPTING_ORDERS` (no disconnect endpoint found).
+
+## 6b. Adversarial review + fixes — 2026-09-20 (after the first commit)
+
+An Opus 5 reviewer went over commit `f0e6ebfb` and returned 31 findings; every one was re-verified
+against the code before acting. Three were CRITICAL and shared one root cause: **I had treated the
+OrderOut push like an idempotent outbox message and it is not** — a retried push books a second
+courier. The rework (all on the branch, migrations still NOT applied):
+
+- **State machine hardened.** `complete_orderout_delivery_dispatch` and the new
+  `link_orderout_delivery_echo` are conditional on the row's *current* state; a cancel that lands
+  mid-push turns the successful push into `cancel_pending` instead of being overwritten.
+- **New state `push_unconfirmed`.** 5xx / timeout / network on the push, or a claimed row that
+  already carries `request_payload` (worker died mid-push), is parked, the merchant gets a bell and
+  an amber banner, and only OrderOut's echo or a courier status event moves it to `dispatched`.
+  Nothing is ever re-pushed automatically. `pushChannelOrder` has `maxRetries: 0`; 429 is the one
+  retried code (provably unprocessed).
+- **Lease ≠ backoff.** `claimed_until` (5 min) stops the one-minute drain re-claiming a row whose
+  push is still in flight; 15 s HTTP timeout; state re-checked by a conditional `UPDATE` right before
+  the HTTP call.
+- **Status intake.** rank ≥ 8 is terminal; "cancelled" confirming *our* cancel closes the row
+  silently (no "courier cancelled" bell / customer toast); a status event on `push_unconfirmed`
+  proves the booking.
+- **Quote fn** requires a live store-bound session (401 `session_invalid`; the checkout re-inits and
+  retries) and adds a per-store cap. Cash payment refused for Direct delivery. Delivery notes no
+  longer trigger quotes.
+- **Dashboard** banner actually renders for merchants now (the lookup was only in the HQ branch);
+  `cancel_rejected_at` replaces the `last_error` heuristic.
+- **Sweep** rebuilds from `online_orders.provider_metadata.delivery_quote_id` (written atomically
+  by the RPC), so it recovers the exact quote the card was charged and no longer needs the session
+  binding.
+- Refund after delivery no longer tries to cancel the courier; cancel-with-no-id gives up after
+  ~3.5 min instead of ~31; `is_selected` by position; `raw_price numeric`; lookup indexes; PostgREST
+  filter injection in the status webhook closed.
+
+Verification: 26-scenario SQL script on scratch Postgres (12 new scenarios covering each fix),
+`deno check` clean on every new/edited function (pre-existing untyped-client errors unchanged in
+count), targeted `tsc` clean, ESLint parity (same 9 pre-existing React Compiler errors). Full table
+in the plan §4b.
+
+## 6c. Staging rollout + browser QA — 2026-09-21
+
+**Rollout (staging `dfwqakoyittmrwbqvxgw`):** both migrations applied by Ali via the SQL editor (cron jobs 24/25); the seven functions deployed through the Management API (`POST /v1/projects/{ref}/functions/deploy`, multipart `index.ts` + transitive `_shared` files, `verify_jwt=false`) — versions: `orderout-delivery-quote` 1, `-dispatch` 1, `-webhook` 1, `create-online-order` 234, `orderout-orders-webhook` 256, `cancel-online-order` 193, `orderout-onboard` 170; each smoke-tested on its live URL. Vault `orderout_delivery_dispatch_url` created; the next cron tick logged `POST | 200 | …/orderout-delivery-dispatch`, proving DB → pg_net → worker auth end to end. **Note:** staging runs the review-fixed code, which was not yet committed at the time.
+
+**Store flip:** Joes Downtown Brooklyn set to fulfilment *OrderOut Direct* + Delivery on, through the real dashboard UI (Playwright, merchant login), verified after reload.
+
+**Storefront QA (guest, `localhost:3000/sites/joes-downtown-brooklyn`, headless Chrome) — 11/11:** storefront loads; item added; **Delivery tab present** (resolveDeliveryFulfillment → `orderout_direct`); summary shows *Calculated at checkout* before an address; Brooklyn address (1 Hanson Pl) → `orderout-delivery-quote` 200 `available:true fee 5.19 eta 77` → green line **"Delivery $5.19 · about 77 min"** and summary `3.25 + 0.29 tax + 5.19 + 0.59 tip = $9.32`; typing delivery notes fires **0** extra quotes (F9 fix); Washington DC address → 200 `available:false no_coverage` → *"Delivery isn't available for this address. Pickup is still available."* and summary back to *Calculated at checkout*, Place Order disabled; Pickup tab shows no delivery/quote text. Two quote calls total.
+
+**Not QA'd yet:** placing an order, the tracking-page courier stepper, the order-detail banner — the store's `process-online-payment` bootstrap returns **503 on staging (pre-existing, Valor/NMI not configured for this store)**, so Place Order is disabled independent of this feature. Needs a hand-inserted order + dispatch row (DB write) or a payment-configured store.
 
 ## 7. Open questions for Temur (decisions, not blockers)
 1. Cheapest vs fastest courier (D2).
-2. Driver tips inside `orders.tip_amount` in reports (D8).
+2. Driver tips inside `orders.tip_amount` in reports (D8) — reviewer F16: currently the same $ is
+   both staff gratuity *and* `driverTip` in the push. Recommend storing it only on the dispatch row.
 3. Who pays OrderOut for the courier — `orderout_accounts.oo_billing_account_id` is the platform default `5546155819794432` on every account.
 4. `connect_channel` must run once per restaurant — add to `orderout-onboard` for new merchants once B1 is answered.
+5. **Quote TTL vs accept window (F8).** TTL is a guessed 5 min and the default accept window is 5 min,
+   so nearly every manually-accepted order re-quotes at dispatch, and the push sends the *old* fee
+   with the *new* quote id. Ask OrderOut the real quote lifetime; regardless, decide whether to push
+   the fresh fee (merchant absorbs the delta, already tracked in `requote_delta`).
+6. **Cancel 404 = success? (F6)** Until the id the cancel endpoint wants is proven live, a 404 may
+   mean "wrong id", not "already gone". Option: treat 404 as `cancel_rejected` + bell for now.
+7. **Public tracking page (F17)** now returns the full drop-off address + courier name behind the
+   order UUID only. Options: street + city only, or gate behind the session token.
+8. Echo match is `source.orderNumber` only (F15); item `price` includes modifiers and modifiers are
+   also priced (F20) — both need a live push to confirm OrderOut's behaviour; cheap to harden either way.
 
 ## 8. How to pick this up
 1. Read the plan doc §2a (spike results) and "Where it stands".

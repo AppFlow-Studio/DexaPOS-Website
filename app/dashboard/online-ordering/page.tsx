@@ -1044,7 +1044,7 @@ function CompletedSetupPanel({
                     <SelectValue placeholder="Choose who delivers" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="self">Own drivers — coming soon (delivery stays hidden)</SelectItem>
+                    <SelectItem value="self">None — delivery off</SelectItem>
                     <SelectItem value="orderout_direct" disabled={!orderOutRestaurantActive}>
                       OrderOut Direct — on-demand couriers{orderOutRestaurantActive ? "" : " (set up OrderOut first)"}
                     </SelectItem>

@@ -7,6 +7,7 @@ import { ShoppingBag } from "lucide-react";
 import { useCart, resolveCartUnitPrice } from "../../hooks/useCart";
 import { useSession } from "../../hooks/useSession";
 import { useSessionInit } from "../../hooks/useSessionInit";
+import { initSession } from "../../session-actions";
 import { useCartSync } from "../../hooks/useCartSync";
 import { useQrFunnelTracking } from "../../hooks/useQrFunnelTracking";
 import { useStorefrontPath } from "../../lib/use-storefront-path";
@@ -355,7 +356,11 @@ export function CheckoutPage({
   }, [isAuthenticated, orderType]);
 
   // The address the customer is actually ordering to, whichever way it was
-  // chosen. Saved addresses are quoted too under OrderOut Direct.
+  // chosen. Saved addresses are quoted too under OrderOut Direct. Keyed on
+  // the address fields only — delivery notes never affect a quote, so typing
+  // them must not re-fire one (each quote is a real OrderOut call and counts
+  // toward the rate limit).
+  const { street: newStreet, city: newCity, state: newState, zip: newZip } = newAddress;
   const activeAddress = useMemo(() => {
     if (orderType !== "delivery") return null;
     if (selectedAddressId !== "new") {
@@ -367,12 +372,11 @@ export function CheckoutPage({
         city: addr.city,
         state: addr.state,
         zip: addr.postalCode,
-        notes: addr.deliveryNotes ?? "",
         source: "saved" as const,
       };
     }
-    return { ...newAddress, unit: "", source: "new" as const };
-  }, [orderType, selectedAddressId, savedAddresses, newAddress]);
+    return { street: newStreet, city: newCity, state: newState, zip: newZip, unit: "", source: "new" as const };
+  }, [orderType, selectedAddressId, savedAddresses, newStreet, newCity, newState, newZip]);
 
   /**
    * OrderOut Direct: fetch a courier quote for the active address. Returns the
@@ -387,10 +391,8 @@ export function CheckoutPage({
       }));
       setZoneCheckState("checking");
       setZoneCheckMessage("Getting a delivery quote…");
-      const { sessionToken } = useSession.getState();
-      let next: DeliveryQuoteState;
-      try {
-        const res = await fetch(`${SUPABASE_URL}/functions/v1/orderout-delivery-quote`, {
+      const post = (sessionToken: string | null) =>
+        fetch(`${SUPABASE_URL}/functions/v1/orderout-delivery-quote`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${ANON_KEY}` },
           body: JSON.stringify({
@@ -402,11 +404,25 @@ export function CheckoutPage({
               city: address.city,
               state: address.state,
               zip: address.zip,
-              instructions: address.notes || undefined,
             },
           }),
         });
-        const data = await res.json();
+      let next: DeliveryQuoteState;
+      try {
+        let res = await post(useSession.getState().sessionToken);
+        let data = await res.json();
+        // The quote is bound to the storefront session and create-online-order
+        // will only redeem it under that same session. If ours expired while
+        // the customer sat on checkout, start a fresh one and quote again —
+        // otherwise every "place the order again" would loop on the dead token.
+        if (res.status === 401 && data?.code === "session_invalid" && storeConfigId) {
+          const fresh = await initSession(storeConfigId);
+          if (fresh.data?.sessionToken) {
+            useSession.getState().initSessionToken(fresh.data.sessionToken, storeConfigId);
+            res = await post(fresh.data.sessionToken);
+            data = await res.json();
+          }
+        }
         if (res.ok && data.available) {
           next = {
             status: "ready",

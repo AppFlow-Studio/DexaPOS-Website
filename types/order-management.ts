@@ -316,7 +316,14 @@ export interface OrderStatusHistory {
 }
 
 export interface OrderoutDeliveryDispatchSummary {
-  state: "awaiting_accept" | "pending" | "dispatched" | "failed" | "cancel_pending" | "cancelled";
+  state:
+    | "awaiting_accept"
+    | "pending"
+    | "push_unconfirmed"
+    | "dispatched"
+    | "failed"
+    | "cancel_pending"
+    | "cancelled";
   delivery_status: string | null;
   courier_name: string | null;
   courier_phone: string | null;
@@ -327,6 +334,7 @@ export interface OrderoutDeliveryDispatchSummary {
   last_error: string | null;
   attempts: number;
   dispatched_at: string | null;
+  cancel_rejected_at: string | null;
   failed_at: string | null;
 }
 

@@ -129,20 +129,26 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return dlq(`Unrecognised delivery status: ${event.status ?? 'missing'}`)
   }
 
-  // Resolve the dispatch row by whichever id the event carries.
-  let query = supabase
+  // Resolve the dispatch row by whichever id the event carries. Ids are
+  // matched with .eq()/.in() only — never interpolated into a PostgREST
+  // filter string, which would let a crafted value widen the query.
+  const base = () => supabase
     .from('orderout_delivery_dispatches')
     .select('id, order_id, merchant_id, oo_order_number, state, delivery_status_rank')
+  let dispatch: { id: string; order_id: string; merchant_id: string; oo_order_number: string; state: string; delivery_status_rank: number } | null = null
   if (event.deliveryOrderId) {
-    query = query.or(`oo_delivery_order_id.eq.${event.deliveryOrderId},oo_channel_order_id.eq.${event.deliveryOrderId}`)
+    if (!/^\d{1,32}$/.test(event.deliveryOrderId)) {
+      return dlq(`Malformed delivery order id: ${event.deliveryOrderId.slice(0, 64)}`)
+    }
+    const byDelivery = await base().eq('oo_delivery_order_id', event.deliveryOrderId).maybeSingle()
+    dispatch = byDelivery.data ?? (await base().eq('oo_channel_order_id', event.deliveryOrderId).maybeSingle()).data
   } else if (event.trackerId) {
-    query = query.eq('tracker_id', event.trackerId)
+    dispatch = (await base().eq('tracker_id', event.trackerId).maybeSingle()).data
   } else if (event.orderNumber) {
-    query = query.eq('oo_order_number', event.orderNumber)
+    dispatch = (await base().eq('oo_order_number', event.orderNumber).maybeSingle()).data
   } else {
     return dlq('Event carries no order id, tracker id or order number')
   }
-  const { data: dispatch } = await query.maybeSingle()
   if (!dispatch) {
     return dlq('No dispatch row matches this event')
   }

@@ -174,6 +174,9 @@ const DELIVERY_STEPS = ["Placed", "Accepted", "Preparing", "Driver assigned", "P
 
 function deliveryStepIndex(status: string, delivery: OrderTrackingData["delivery"]): number {
   const kitchen = Math.min(statusToStepIndex(status), 2); // Placed / Accepted / Preparing
+  // A failed booking or a courier cancellation (rank 99) is not "Delivered":
+  // the strip stays at the kitchen stage and the delay notice explains.
+  if (delivery?.state === "failed" || delivery?.status === "cancelled") return kitchen;
   const rank = delivery?.rank ?? 0;
   if (rank >= 8) return 5;           // completed
   if (rank >= 5) return 4;           // picked_up, en_route_dropoff, arrived_dropoff

@@ -9,6 +9,7 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@^2'
 
 export type DispatchNotificationType =
   | 'orderout_delivery_dispatch_failed'
+  | 'orderout_delivery_push_unconfirmed'
   | 'orderout_delivery_cancel_failed'
   | 'orderout_delivery_cancel_rejected'
   | 'orderout_delivery_courier_cancelled'
@@ -28,6 +29,10 @@ const COPY: Record<DispatchNotificationType, { title: string; body: (n: string, 
   orderout_delivery_dispatch_failed: {
     title: 'Delivery not dispatched',
     body: (n, d) => `Order ${n} was paid but no courier could be booked${d ? ` (${d})` : ''}. Call the customer or arrange delivery.`,
+  },
+  orderout_delivery_push_unconfirmed: {
+    title: 'Courier booking unconfirmed',
+    body: (n, d) => `OrderOut did not confirm the courier for order ${n}${d ? ` (${d})` : ''}. Check the OrderOut dashboard: if the order is there it will link itself shortly, otherwise arrange delivery.`,
   },
   orderout_delivery_cancel_failed: {
     title: 'Delivery cancel not sent',

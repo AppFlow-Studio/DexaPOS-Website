@@ -11,14 +11,20 @@
 // The table is the source of truth; a lost invocation only costs latency.
 //
 // Retries: claim_orderout_delivery_dispatch bumps next_attempt_at with
-// exponential backoff, so this function does NOT retry in-process beyond the
-// shared client's short 5xx retry. A transient failure is reported as
-// 'retry' and the row becomes due again later; a terminal one is 'failed'.
+// exponential backoff and holds a 5-minute lease, so this function does NOT
+// retry in-process. Only failures that provably did not reach OrderOut
+// (re-quote problems, 429) are reported as 'retry'; a 4xx is 'failed'.
+//
+// The push is NOT idempotent. A 5xx / timeout / network failure may still
+// have booked a courier, so it is reported as 'push_unconfirmed': the row is
+// parked, the merchant is told, and only OrderOut's echo (or a status event)
+// moves it on. The same applies to a row that was claimed with a
+// request_payload already stored — a previous attempt died mid-push.
 //
 // Double-courier guard: before every push the row is checked for evidence
-// that OrderOut already has this order (echo linked it, or an id is stored).
-// A timed-out push that actually succeeded upstream is then completed as
-// dispatched instead of being pushed again.
+// that OrderOut already has this order (echo linked it, or an id is stored),
+// and its state is re-read right before the HTTP call so a cancel that landed
+// after the claim is honoured instead of booking a courier we then cancel.
 //
 // Auth: x-internal-secret must equal INTERNAL_NOTIFICATION_SECRET (or a
 // service-role bearer). Deploy with --no-verify-jwt so pg_net can reach it.
@@ -43,7 +49,9 @@ const BATCH_SIZE = 20
 /** Alert the merchant when a re-quote at accept came in more than this over what the customer paid. */
 const REQUOTE_ALERT_THRESHOLD = 1.0
 
-type DispatchState = 'awaiting_accept' | 'pending' | 'dispatched' | 'failed' | 'cancel_pending' | 'cancelled'
+type DispatchState = 'awaiting_accept' | 'pending' | 'push_unconfirmed' | 'dispatched' | 'failed' | 'cancel_pending' | 'cancelled'
+/** A cancel with no OrderOut id yet waits this many claims (~3.5 min) for the echo before alerting. */
+const CANCEL_NO_ID_MAX_ATTEMPTS = 4
 
 interface DispatchRow {
   id: string
@@ -61,6 +69,7 @@ interface DispatchRow {
   attempts: number
   max_attempts: number
   echo_received_at: string | null
+  request_payload: Record<string, unknown> | null
   cancel_reason: string | null
 }
 
@@ -106,7 +115,7 @@ interface QuoteRow {
   pickup_mins: number | null
 }
 
-type Outcome = 'dispatched' | 'cancelled' | 'cancel_rejected' | 'retry' | 'failed'
+type Outcome = 'dispatched' | 'push_unconfirmed' | 'cancelled' | 'cancel_rejected' | 'retry' | 'failed' | 'skipped'
 
 function json(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -120,7 +129,7 @@ function money(n: unknown): number {
 async function complete(
   supabase: SupabaseClient,
   id: string,
-  outcome: Outcome,
+  outcome: Exclude<Outcome, 'skipped'>,
   statusCode: number | null,
   error: string | null,
   result: Record<string, unknown> = {},
@@ -133,6 +142,34 @@ async function complete(
     p_result: result,
   })
   if (rpcError) console.error('[oo-dispatch] complete RPC failed', { id, outcome, rpcError })
+}
+
+/** Terminal failure: the row is closed AND the merchant is told, always together. */
+async function failAndNotify(
+  supabase: SupabaseClient,
+  row: DispatchRow,
+  type: 'orderout_delivery_dispatch_failed' | 'orderout_delivery_cancel_failed',
+  statusCode: number | null,
+  error: string,
+  detail: string | null,
+  displayNumber: string | null,
+  result: Record<string, unknown> = {},
+): Promise<'failed'> {
+  await complete(supabase, row.id, 'failed', statusCode, error, result)
+  await notifyMerchantDispatch(supabase, {
+    merchantId: row.merchant_id,
+    orderId: row.order_id,
+    orderNumber: row.oo_order_number,
+    displayNumber,
+    type,
+    detail,
+  })
+  return 'failed'
+}
+
+async function displayNumberOf(supabase: SupabaseClient, orderId: string): Promise<string | null> {
+  const { data } = await supabase.from('orders').select('display_number').eq('id', orderId).maybeSingle()
+  return (data as { display_number?: string | null } | null)?.display_number ?? null
 }
 
 /** Pull any id-shaped fields out of whatever the push actually returned. */
@@ -165,6 +202,23 @@ async function handlePush(supabase: SupabaseClient, row: DispatchRow): Promise<O
     return 'dispatched'
   }
 
+  // A stored request_payload on a still-pending row means an earlier attempt
+  // got as far as the HTTP call and never reported back (worker died). That
+  // push may have booked a courier: park it rather than push again.
+  if (row.request_payload) {
+    console.warn('[oo-dispatch] previous push attempt never completed — parking', { id: row.id, order: row.oo_order_number })
+    await complete(supabase, row.id, 'push_unconfirmed', null, 'previous push attempt did not complete')
+    await notifyMerchantDispatch(supabase, {
+      merchantId: row.merchant_id,
+      orderId: row.order_id,
+      orderNumber: row.oo_order_number,
+      displayNumber: await displayNumberOf(supabase, row.order_id),
+      type: 'orderout_delivery_push_unconfirmed',
+      detail: 'worker interrupted',
+    })
+    return 'push_unconfirmed'
+  }
+
   const [{ data: order }, { data: items }, { data: quote }, { data: restaurant }] = await Promise.all([
     supabase
       .from('orders')
@@ -189,8 +243,10 @@ async function handlePush(supabase: SupabaseClient, row: DispatchRow): Promise<O
 
   if (!order || !quote || !restaurant) {
     const missing = [!order && 'order', !quote && 'quote', !restaurant && 'restaurant'].filter(Boolean).join(',')
-    await complete(supabase, row.id, 'failed', null, `missing ${missing}`)
-    return 'failed'
+    return failAndNotify(
+      supabase, row, 'orderout_delivery_dispatch_failed', null, `missing ${missing}`, `missing ${missing}`,
+      (order as OrderRow | null)?.display_number ?? null,
+    )
   }
 
   const typedOrder = order as OrderRow
@@ -204,8 +260,11 @@ async function handlePush(supabase: SupabaseClient, row: DispatchRow): Promise<O
     const eligibility = await resolveDirectEligibility(supabase, activeQuote.store_config_id)
     const dropoff = normalizeDropoff(activeQuote.dropoff)
     if (!eligibility.eligible || !dropoff) {
-      await complete(supabase, row.id, 'failed', null, `requote impossible: ${eligibility.reason ?? 'bad dropoff'}`)
-      return 'failed'
+      const why = eligibility.reason ?? 'bad dropoff'
+      return failAndNotify(
+        supabase, row, 'orderout_delivery_dispatch_failed', null, `requote impossible: ${why}`, why,
+        typedOrder.display_number,
+      )
     }
     const fresh = await fetchAndStoreQuotes(supabase, eligibility, dropoff, activeQuote.session_id)
     if (!fresh.available) {
@@ -290,12 +349,20 @@ async function handlePush(supabase: SupabaseClient, row: DispatchRow): Promise<O
     },
   }
 
-  // Persist what we are about to send BEFORE the call, so the echo guard and a
-  // post-mortem both see the exact request even if the process dies mid-flight.
-  await supabase
+  // Persist what we are about to send BEFORE the call — it is the marker a
+  // later claim uses to know a push was attempted (see header) and the exact
+  // request for a post-mortem. Conditional on the row still being pending: a
+  // cancel that landed since the claim must win over the push.
+  const { data: armed } = await supabase
     .from('orderout_delivery_dispatches')
     .update({ request_payload: payload as unknown as Record<string, unknown> })
     .eq('id', row.id)
+    .eq('state', 'pending')
+    .select('id')
+  if (!armed || armed.length === 0) {
+    console.log('[oo-dispatch] push skipped — row left pending before the call', { id: row.id, order: row.oo_order_number })
+    return 'skipped'
+  }
 
   const res = await pushChannelOrder(payload)
 
@@ -320,50 +387,61 @@ async function handlePush(supabase: SupabaseClient, row: DispatchRow): Promise<O
     return 'dispatched'
   }
 
-  const terminal = isTerminalStatus(res.status)
-  const outOfAttempts = row.attempts >= row.max_attempts
   const errorText = res.error ?? `HTTP ${res.status}`
-  if (terminal || outOfAttempts) {
-    await complete(supabase, row.id, 'failed', res.status || null, errorText, { response_payload: res.data ?? null })
-    await notifyMerchantDispatch(supabase, {
-      merchantId: row.merchant_id,
-      orderId: row.order_id,
-      orderNumber: row.oo_order_number,
-      displayNumber: typedOrder.display_number,
-      type: 'orderout_delivery_dispatch_failed',
-      detail: res.status ? `OrderOut ${res.status}` : 'network error',
-    })
-    return 'failed'
+  const detail = res.status ? `OrderOut ${res.status}` : 'network error'
+
+  // 4xx (other than 429): OrderOut rejected it and will again. Terminal.
+  if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+    return failAndNotify(
+      supabase, row, 'orderout_delivery_dispatch_failed', res.status, errorText, detail,
+      typedOrder.display_number, { response_payload: res.data ?? null },
+    )
   }
 
-  await complete(supabase, row.id, 'retry', res.status || null, errorText, { response_payload: res.data ?? null })
-  return 'retry'
+  // 429: provably not processed. Safe to retry after backoff — so disarm the
+  // request_payload marker, otherwise the next claim would park this row as
+  // an unconfirmed push.
+  if (res.status === 429) {
+    if (row.attempts >= row.max_attempts) {
+      return failAndNotify(
+        supabase, row, 'orderout_delivery_dispatch_failed', res.status, errorText, detail,
+        typedOrder.display_number, { response_payload: res.data ?? null },
+      )
+    }
+    await supabase.from('orderout_delivery_dispatches').update({ request_payload: null }).eq('id', row.id)
+    await complete(supabase, row.id, 'retry', res.status, errorText, { response_payload: res.data ?? null })
+    return 'retry'
+  }
+
+  // 5xx / timeout / network: the order MAY exist at OrderOut. Never push again;
+  // wait for the echo, and tell the merchant to check.
+  await complete(supabase, row.id, 'push_unconfirmed', res.status || null, errorText, { response_payload: res.data ?? null })
+  await notifyMerchantDispatch(supabase, {
+    merchantId: row.merchant_id,
+    orderId: row.order_id,
+    orderNumber: row.oo_order_number,
+    displayNumber: typedOrder.display_number,
+    type: 'orderout_delivery_push_unconfirmed',
+    detail,
+  })
+  return 'push_unconfirmed'
 }
 
 // ── cancel ──────────────────────────────────────────────────────────────────
 
 async function handleCancel(supabase: SupabaseClient, row: DispatchRow): Promise<Outcome> {
-  const { data: order } = await supabase
-    .from('orders')
-    .select('display_number')
-    .eq('id', row.order_id)
-    .maybeSingle()
-  const displayNumber = (order as { display_number?: string | null } | null)?.display_number ?? null
+  const displayNumber = await displayNumberOf(supabase, row.order_id)
 
   const deliveryId = row.oo_delivery_order_id ?? row.oo_channel_order_id
   if (!deliveryId) {
-    // Pushed but no id yet (echo hasn't arrived). Wait for it, then give up.
-    if (row.attempts >= row.max_attempts) {
-      await complete(supabase, row.id, 'failed', null, 'cancel: no OrderOut order id available')
-      await notifyMerchantDispatch(supabase, {
-        merchantId: row.merchant_id,
-        orderId: row.order_id,
-        orderNumber: row.oo_order_number,
-        displayNumber,
-        type: 'orderout_delivery_cancel_failed',
-        detail: 'no OrderOut order id',
-      })
-      return 'failed'
+    // Pushed (or maybe pushed) but no id yet: the echo has not arrived. Wait a
+    // few claims for it, then hand it to the merchant — a courier cannot be
+    // left running for the full backoff ladder.
+    if (row.attempts >= CANCEL_NO_ID_MAX_ATTEMPTS) {
+      return failAndNotify(
+        supabase, row, 'orderout_delivery_cancel_failed', null,
+        'cancel: no OrderOut order id available', 'no OrderOut order id', displayNumber,
+      )
     }
     await complete(supabase, row.id, 'retry', null, 'cancel: waiting for OrderOut order id')
     return 'retry'
@@ -397,16 +475,10 @@ async function handleCancel(supabase: SupabaseClient, row: DispatchRow): Promise
   }
 
   if (row.attempts >= row.max_attempts) {
-    await complete(supabase, row.id, 'failed', res.status || null, res.error ?? 'cancel failed', { response_payload: res.data ?? null })
-    await notifyMerchantDispatch(supabase, {
-      merchantId: row.merchant_id,
-      orderId: row.order_id,
-      orderNumber: row.oo_order_number,
-      displayNumber,
-      type: 'orderout_delivery_cancel_failed',
-      detail: res.status ? `OrderOut ${res.status}` : 'network error',
-    })
-    return 'failed'
+    return failAndNotify(
+      supabase, row, 'orderout_delivery_cancel_failed', res.status || null, res.error ?? 'cancel failed',
+      res.status ? `OrderOut ${res.status}` : 'network error', displayNumber, { response_payload: res.data ?? null },
+    )
   }
 
   await complete(supabase, row.id, 'retry', res.status || null, res.error ?? 'cancel failed', { response_payload: res.data ?? null })
@@ -434,7 +506,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const rows = (claimed ?? []) as DispatchRow[]
   if (rows.length === 0) return json({ success: true, claimed: 0 })
 
-  const counts: Record<Outcome, number> = { dispatched: 0, cancelled: 0, cancel_rejected: 0, retry: 0, failed: 0 }
+  const counts: Record<Outcome, number> = {
+    dispatched: 0, push_unconfirmed: 0, cancelled: 0, cancel_rejected: 0, retry: 0, failed: 0, skipped: 0,
+  }
 
   for (const row of rows) {
     try {

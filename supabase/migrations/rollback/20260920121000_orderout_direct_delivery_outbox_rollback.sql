@@ -20,6 +20,7 @@ DROP FUNCTION IF EXISTS public.oo_dispatch_on_order_accepted();
 DROP FUNCTION IF EXISTS public.oo_dispatch_on_order_cancelled();
 DROP FUNCTION IF EXISTS public.sweep_orderout_delivery_dispatches();
 DROP FUNCTION IF EXISTS public.apply_orderout_delivery_status(uuid, text, jsonb, timestamptz, text, jsonb);
+DROP FUNCTION IF EXISTS public.link_orderout_delivery_echo(uuid, text, jsonb);
 DROP FUNCTION IF EXISTS public.orderout_delivery_status_rank(text);
 DROP FUNCTION IF EXISTS public.complete_orderout_delivery_dispatch(uuid, text, integer, text, jsonb);
 DROP FUNCTION IF EXISTS public.claim_orderout_delivery_dispatch(integer);

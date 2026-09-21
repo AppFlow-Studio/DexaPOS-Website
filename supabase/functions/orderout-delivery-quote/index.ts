@@ -26,6 +26,8 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 /** Quote batches allowed per session per window. Address retyping is bursty; couriers are not free to poll. */
 const RATE_LIMIT_BATCHES = 12
 const RATE_LIMIT_WINDOW_MINUTES = 10
+/** Second layer, per store: caps what a swarm of fresh sessions can cost a merchant in OrderOut calls. */
+const STORE_RATE_LIMIT_BATCHES = 300
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -113,37 +115,47 @@ Deno.serve(async (req: Request): Promise<Response> => {
       })
     }
 
-    // Session is optional (guest checkout creates one later) but when present
-    // it must belong to this store, and it is the rate-limit key.
-    let sessionId: string | null = null
-    if (body.session_token) {
-      const { data: session } = await supabase
-        .from('online_order_sessions')
-        .select('id, store_config_id, expires_at')
-        .eq('session_token', body.session_token)
-        .maybeSingle()
-
-      if (session && session.store_config_id === body.store_config_id) {
-        sessionId = session.id
-      }
+    // A live storefront session for this store is required: it is the
+    // rate-limit key, and create-online-order will refuse a quote whose
+    // session does not match the one placing the order. The storefront
+    // creates one on load, so a missing/expired token means the page must
+    // re-init its session (401 session_invalid) before quoting again.
+    if (!body.session_token) {
+      return errorResponse('A storefront session is required.', 'session_invalid', 401)
     }
+    const { data: session } = await supabase
+      .from('online_order_sessions')
+      .select('id, store_config_id, expires_at')
+      .eq('session_token', body.session_token)
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle()
+    if (!session || session.store_config_id !== body.store_config_id) {
+      return errorResponse('This storefront session has expired.', 'session_invalid', 401)
+    }
+    const sessionId: string = session.id
 
-    if (sessionId) {
-      const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60_000).toISOString()
-      const { data: recent } = await supabase
+    const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MINUTES * 60_000).toISOString()
+    const [{ data: recentSession }, { count: recentStoreRows }] = await Promise.all([
+      supabase
         .from('orderout_delivery_quotes')
         .select('request_key')
         .eq('session_id', sessionId)
-        .gte('fetched_at', since)
+        .gte('fetched_at', since),
+      supabase
+        .from('orderout_delivery_quotes')
+        .select('id', { count: 'exact', head: true })
+        .eq('store_config_id', body.store_config_id)
+        .eq('is_selected', true) // one selected row per batch => batch count
+        .gte('fetched_at', since),
+    ])
 
-      const batches = new Set((recent ?? []).map((r: { request_key: string }) => r.request_key)).size
-      if (batches >= RATE_LIMIT_BATCHES) {
-        return errorResponse(
-          'Too many delivery quotes requested. Please wait a moment and try again.',
-          'rate_limited',
-          429,
-        )
-      }
+    const batches = new Set((recentSession ?? []).map((r: { request_key: string }) => r.request_key)).size
+    if (batches >= RATE_LIMIT_BATCHES || (recentStoreRows ?? 0) >= STORE_RATE_LIMIT_BATCHES) {
+      return errorResponse(
+        'Too many delivery quotes requested. Please wait a moment and try again.',
+        'rate_limited',
+        429,
+      )
     }
 
     const result = await fetchAndStoreQuotes(supabase, eligibility, dropoff, sessionId)

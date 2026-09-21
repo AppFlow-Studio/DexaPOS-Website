@@ -18,6 +18,7 @@
 const ORDEROUT_HOST = 'https://api.orderout.co'
 const DEFAULT_MAX_RETRIES = 2
 const DEFAULT_BASE_DELAY_MS = 500
+const DEFAULT_TIMEOUT_MS = 15_000
 
 export interface OrderOutResponse<T> {
   ok: boolean
@@ -70,6 +71,8 @@ export interface OrderOutRequestOptions {
   apiKey?: string
   maxRetries?: number
   baseDelayMs?: number
+  /** Per-attempt HTTP timeout. Defaults to 15s. */
+  timeoutMs?: number
   /** Defaults to https://api.orderout.co. Override only in tests. */
   host?: string
 }
@@ -91,6 +94,7 @@ export async function orderOutRequest<T = unknown>(
   const url = `${options.host ?? ORDEROUT_HOST}${path}`
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
   const baseDelayMs = options.baseDelayMs ?? DEFAULT_BASE_DELAY_MS
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
 
   const headers: Record<string, string> = {
     'api-key': apiKey,
@@ -99,7 +103,7 @@ export async function orderOutRequest<T = unknown>(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const init: RequestInit = { method, headers }
+      const init: RequestInit = { method, headers, signal: AbortSignal.timeout(timeoutMs) }
       if (body !== undefined && method !== 'GET') {
         init.body = stringifyWithRawInts(body)
       }
@@ -240,7 +244,7 @@ export async function getDeliveryQuotes(
 export function quotePriceToDollars(quote: Pick<DeliveryQuote, 'price' | 'unit'>, defaultUnit?: 'cent' | 'dollar'): number {
   const unit = quote.unit ?? defaultUnit
   if (unit === 'cent') return Math.trunc(quote.price) / 100
-  if (unit === 'dollar') return Math.trunc(quote.price * 100) / 100
+  if (unit === 'dollar') return Math.round(quote.price * 100) / 100
   throw new Error(`Quote has no unit and no default was supplied (price=${quote.price})`)
 }
 
@@ -315,11 +319,20 @@ export interface ChannelPushOrderResponse {
   [key: string]: unknown
 }
 
+/**
+ * NOT idempotent: a push that reached OrderOut books a courier even if the
+ * response never made it back to us. It is therefore never retried here — a
+ * 5xx / timeout / network failure is reported once and the caller parks the
+ * row as push_unconfirmed until OrderOut's echo proves what happened.
+ */
 export function pushChannelOrder(
   payload: ChannelPushOrderPayload,
   options?: OrderOutRequestOptions,
 ): Promise<OrderOutResponse<ChannelPushOrderResponse>> {
-  return orderOutRequest<ChannelPushOrderResponse>('POST', '/api/channel/order/push', payload, options)
+  return orderOutRequest<ChannelPushOrderResponse>('POST', '/api/channel/order/push', payload, {
+    ...options,
+    maxRetries: 0,
+  })
 }
 
 // ── Delivery: cancel ────────────────────────────────────────────────────────

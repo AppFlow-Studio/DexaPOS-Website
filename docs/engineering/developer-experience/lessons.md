@@ -245,3 +245,24 @@ Virginia zip on a Brooklyn store) — one `GET /api/pos/restaurant/{id}` showed 
 Lesson: when a vendor rejects a field you didn't send, read back the entity you're acting on
 first. Second-order finding: `orderout-onboard` never sent `phone_number`, so every merchant was
 un-quotable — a spike against real data surfaced a shipped bug the docs never would have.
+
+## An outbox pattern is only safe for idempotent calls — check that before copying it (2026-09-20)
+
+Context: OrderOut Direct dispatch. I copied the proven `orderout_status_relay_queue` pattern
+(claim with backoff-as-lease → HTTP → complete → retry on 5xx) for the courier push. The relay's
+call is a PUT of a status — harmless to repeat. The push is `POST /api/channel/order/push`, which
+**books a courier**: every retry after an ambiguous result (5xx, timeout, network, worker crash
+between the call and `complete`) is a second courier and a second charge. An adversarial review
+found three CRITICALs that were all this one mistake: in-process retry, retry on the next claim,
+and a 30 s lease that let the next drain re-push a slow batch.
+
+Lesson: before reusing a retry/queue pattern, write down what the remote call does when it is
+repeated. If the answer is "creates something", the design needs (1) no automatic retry after an
+ambiguous outcome — park the row in an explicit `*_unconfirmed` state that only positive evidence
+(echo, status event) or a human resolves; (2) a lease that is longer than the worst-case batch and
+separate from the backoff; (3) every completion RPC conditional on the row's *current* state, so a
+concurrent cancel is never overwritten; (4) a "call attempted" marker written before the call so a
+crashed worker's row is parked, not re-sent. Corollary from the same review: put the dashboard
+lookup in the branch the dashboard actually calls — I added the dispatch banner to the HQ-only
+branch of `GetOrderDetails` and merchants never saw it.
+

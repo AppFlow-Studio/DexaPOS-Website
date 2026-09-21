@@ -1316,7 +1316,7 @@ function DeliveryDispatchBanner({
     const statusLabel = dispatch.delivery_status
       ? DISPATCH_STATUS_COPY[dispatch.delivery_status] ?? dispatch.delivery_status
       : "Courier booked";
-    const cancelRejected = dispatch.state === "dispatched" && Boolean(dispatch.last_error);
+    const cancelRejected = dispatch.state === "dispatched" && Boolean(dispatch.cancel_rejected_at);
     return (
       <Card className={cancelRejected ? "border-amber-400/60 bg-amber-50/60" : ""}>
         <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 py-4 text-sm">
@@ -1351,6 +1351,25 @@ function DeliveryDispatchBanner({
               The order was cancelled but OrderOut refused the courier cancellation — the driver already has the food.
             </p>
           )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (dispatch.state === "push_unconfirmed") {
+    return (
+      <Card className="border-amber-400/60 bg-amber-50/60">
+        <CardContent className="flex items-start gap-3 py-4">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+          <div className="space-y-1 text-sm">
+            <p className="font-semibold text-amber-900">Courier booking unconfirmed</p>
+            <p className="text-amber-800">
+              OrderOut did not answer when the courier was booked
+              {dispatch.last_error ? ` (${dispatch.last_error})` : ""}. Check the OrderOut dashboard for this
+              order: if it is there, this page updates itself once OrderOut confirms it; if not, arrange delivery
+              yourself. Nothing is re-sent automatically, so a courier can never be booked twice.
+            </p>
+          </div>
         </CardContent>
       </Card>
     );

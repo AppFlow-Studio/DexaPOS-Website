@@ -184,13 +184,16 @@ export async function fetchAndStoreQuotes(
   }
 
   priced.sort((a, b) => a.fee - b.fee || a.q.delivery_mins_from_now - b.q.delivery_mins_from_now)
+  // Selected by position, not by quote id: exactly one row per batch may be
+  // is_selected (unique partial index), and OrderOut's ids are not guaranteed
+  // distinct across providers.
   const winner = priced[0]
 
   const batchKey = crypto.randomUUID()
   const fetchedAt = new Date()
   const expiresAt = new Date(fetchedAt.getTime() + QUOTE_TTL_MINUTES * 60_000)
 
-  const rows = priced.map(({ q, fee }) => ({
+  const rows = priced.map(({ q, fee }, index) => ({
     location_id: eligibility.locationId,
     store_config_id: eligibility.storeConfigId,
     session_id: sessionId,
@@ -203,7 +206,7 @@ export async function fetchAndStoreQuotes(
     pickup_mins: q.pickup_mins_from_now,
     delivery_mins: q.delivery_mins_from_now,
     dropoff,
-    is_selected: q.id === winner.q.id,
+    is_selected: index === 0,
     fetched_at: fetchedAt.toISOString(),
     expires_at: expiresAt.toISOString(),
     raw_response: q as unknown as Record<string, unknown>,

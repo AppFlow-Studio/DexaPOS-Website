@@ -381,9 +381,12 @@ async function handleDirectEcho(
   })
 
   if (eventAction === 'cancelled') {
-    // Courier-side cancellation of our own order. The delivery failed; the
-    // order itself stays with the merchant to decide.
-    await supabase.rpc('apply_orderout_delivery_status', {
+    // "cancelled" echoed back is either OrderOut confirming OUR cancel (row is
+    // cancel_pending / cancelled — the RPC just closes it and returns false)
+    // or a courier-side cancellation of a live booking (row is dispatched —
+    // the RPC fails the delivery and returns true; the merchant must decide
+    // what happens to the food).
+    const { data: courierCancelled } = await supabase.rpc('apply_orderout_delivery_status', {
       p_dispatch_id: dispatch.id,
       p_status: 'cancelled',
       p_courier: {},
@@ -391,29 +394,38 @@ async function handleDirectEcho(
       p_tracking_url: null,
       p_raw: body,
     })
-    const { data: order } = await supabase
-      .from('orders')
-      .select('display_number')
-      .eq('id', dispatch.order_id)
-      .maybeSingle()
-    await notifyMerchantDispatch(supabase, {
-      merchantId: dispatch.merchant_id,
-      orderId: dispatch.order_id,
-      orderNumber: dispatch.oo_order_number,
-      displayNumber: (order as { display_number?: string | null } | null)?.display_number ?? null,
-      type: 'orderout_delivery_courier_cancelled',
-      detail: body.source?.deliveryCompany?.name ?? null,
-    })
-    return successResponse({ order_id: dispatch.order_id, linked: true }, 'Direct delivery cancel linked')
+    if (courierCancelled === true) {
+      const { data: order } = await supabase
+        .from('orders')
+        .select('display_number')
+        .eq('id', dispatch.order_id)
+        .maybeSingle()
+      await notifyMerchantDispatch(supabase, {
+        merchantId: dispatch.merchant_id,
+        orderId: dispatch.order_id,
+        orderNumber: dispatch.oo_order_number,
+        displayNumber: (order as { display_number?: string | null } | null)?.display_number ?? null,
+        type: 'orderout_delivery_courier_cancelled',
+        detail: body.source?.deliveryCompany?.name ?? null,
+      })
+    }
+    return successResponse(
+      { order_id: dispatch.order_id, linked: true, courier_cancelled: courierCancelled === true },
+      'Direct delivery cancel linked'
+    )
   }
 
-  await supabase
-    .from('orderout_delivery_dispatches')
-    .update({
-      echo_received_at: new Date().toISOString(),
-      oo_channel_order_id: dispatch.oo_channel_order_id ?? externalReferenceId,
-    })
-    .eq('id', dispatch.id)
+  // The echo is proof the order exists at OrderOut: confirms a pending /
+  // push_unconfirmed row, or turns a row whose order was cancelled meanwhile
+  // into cancel_pending so the courier gets cancelled.
+  const { data: linkedState, error: linkError } = await supabase.rpc('link_orderout_delivery_echo', {
+    p_dispatch_id: dispatch.id,
+    p_channel_order_id: externalReferenceId,
+    p_raw: body,
+  })
+  if (linkError) {
+    logEvent('ECHO', `link_orderout_delivery_echo failed for ${orderNumber}`, { error: linkError.message })
+  }
 
   if (dispatch.online_order_id && externalReferenceId) {
     await supabase
@@ -424,7 +436,7 @@ async function handleDirectEcho(
   }
 
   return successResponse(
-    { order_id: dispatch.order_id, online_order_id: dispatch.online_order_id, linked: true },
+    { order_id: dispatch.order_id, online_order_id: dispatch.online_order_id, linked: true, state: linkedState ?? null },
     'Direct delivery echo linked to existing order'
   )
 }

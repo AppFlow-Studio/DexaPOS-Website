@@ -406,6 +406,27 @@ export async function GetCustomerOrders(
   return (data as OrderResponse[]) || [];
 }
 
+/**
+ * OrderOut Direct courier booking (website delivery orders only). The table
+ * is service-role only, so it is read here — after the caller has already
+ * proven access to the order — rather than embedded in the order select.
+ */
+async function withDeliveryDispatch(order: OrderResponse): Promise<OrderResponse> {
+  if ((order as { order_type?: string }).order_type !== "delivery") return order;
+  const serviceRole = createServiceRoleClient();
+  const { data: dispatchRow } = await serviceRole
+    .from("orderout_delivery_dispatches")
+    .select(
+      "state, delivery_status, courier_name, courier_phone, tracking_url, eta, charged_fee, requote_delta, last_error, attempts, dispatched_at, cancel_rejected_at, failed_at"
+    )
+    .eq("order_id", order.id)
+    .maybeSingle();
+  return {
+    ...order,
+    orderout_delivery_dispatch: (dispatchRow as OrderResponse["orderout_delivery_dispatch"]) ?? null,
+  };
+}
+
 export async function GetOrderDetails(
   orderId: string,
   clerkOrgId?: string
@@ -470,7 +491,7 @@ export async function GetOrderDetails(
         return null;
       }
 
-      return order as OrderResponse;
+      return withDeliveryDispatch(order as OrderResponse);
     } else {
       // Fallback without merchant validation (RLS will handle it)
       console.warn("[GetOrderDetails] No clerkOrgId provided, relying on RLS");
@@ -512,22 +533,7 @@ export async function GetOrderDetails(
         return null;
       }
 
-      // OrderOut Direct courier booking (website delivery orders only). The
-      // table is service-role only, so it is read here rather than embedded.
-      let dispatch: OrderResponse["orderout_delivery_dispatch"] = null;
-      if ((order as { order_type?: string }).order_type === "delivery") {
-        const serviceRole = createServiceRoleClient();
-        const { data: dispatchRow } = await serviceRole
-          .from("orderout_delivery_dispatches")
-          .select(
-            "state, delivery_status, courier_name, courier_phone, tracking_url, eta, charged_fee, requote_delta, last_error, attempts, dispatched_at, failed_at"
-          )
-          .eq("order_id", orderId)
-          .maybeSingle();
-        dispatch = (dispatchRow as OrderResponse["orderout_delivery_dispatch"]) ?? null;
-      }
-
-      return { ...(order as OrderResponse), orderout_delivery_dispatch: dispatch };
+      return withDeliveryDispatch(order as OrderResponse);
     }
   } catch (error) {
     console.error("[GetOrderDetails] Unexpected error:", error);
