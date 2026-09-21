@@ -113,7 +113,12 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
     // Order Types for Pie Chart (Revenue by Category proxy)
     const orderTypeData = useMemo(() => {
         if (!orderAnalytics?.orderTypeBreakdown) return []
-        const colors = ['hsl(var(--chart-1))', '#0C4FD1', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))']
+        // Two distinct hues, alternating. The `--chart-*` ramp is a single hue
+        // (~277°) varying only in lightness, so two of its steps read as one
+        // colour; these are separated in hue instead. Written as literal
+        // `oklch()` because the tokens are already `oklch(...)` — wrapping one
+        // in `hsl()` yields invalid CSS and Recharts falls back to black (C2).
+        const colors = ['oklch(0.5854 0.2041 277.1173)', 'oklch(0.7049 0.1528 196.7906)']
         return Object.entries(orderAnalytics.orderTypeBreakdown)
             .map(([type, value], index) => ({
                 name: type === 'qr_dine_in' ? 'QR Table' : type.replace(/_/g, ' '),
@@ -324,9 +329,9 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
                     <PanelSection label="Recent Orders" caption="Latest transactions">
                         <div className="mt-4 space-y-4">
                             {recentOrders && recentOrders.length > 0 ? recentOrders.map((order: any) => (
-                                <div key={order.id} className="flex items-center justify-between border-b pb-3 last:border-0 last:pb-0">
+                                <div key={order.id} className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className="h-8 w-8 rounded-full flex items-center justify-center bg-blue-100 text-blue-600">
+                                        <div className="h-8 w-8 rounded-full flex items-center justify-center bg-muted text-muted-foreground">
                                             <ShoppingCart className="h-4 w-4" />
                                         </div>
                                         <div>

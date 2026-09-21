@@ -14,33 +14,30 @@ interface OnboardingStatusCardProps {
   merchant: MerchantDetails
 }
 
+// One neutral badge for every state (D-03): colour is reserved for real
+// severity, and an onboarding status is not an alarm.
 const STATUS_META: Record<
   MerchantOnboardingStatus,
-  { label: string; badgeClass: string; description: string }
+  { label: string; description: string }
 > = {
   created: {
     label: 'Created',
-    badgeClass: 'bg-slate-100 text-slate-700 border-slate-300',
     description: 'Merchant created but setup has not started.',
   },
   onboarding: {
     label: 'Onboarding',
-    badgeClass: 'bg-amber-100 text-amber-700 border-amber-300',
     description: 'Merchant setup is in progress.',
   },
   active: {
     label: 'Active',
-    badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-300',
     description: 'Merchant is live and processing payments.',
   },
   suspended: {
     label: 'Suspended',
-    badgeClass: 'bg-red-100 text-red-700 border-red-300',
     description: 'Merchant access is temporarily suspended.',
   },
   cancelled: {
     label: 'Cancelled',
-    badgeClass: 'bg-zinc-200 text-zinc-700 border-zinc-300',
     description: 'Merchant account has been cancelled.',
   },
 }
@@ -49,7 +46,7 @@ function ChecklistRow({ label, done }: { label: string; done: boolean }) {
   return (
     <div className="flex items-center gap-2 text-sm">
       {done ? (
-        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+        <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
       ) : (
         <Circle className="h-4 w-4 text-muted-foreground" />
       )}
@@ -80,7 +77,12 @@ export function OnboardingStatusCard({ merchant }: OnboardingStatusCardProps) {
         label="Merchant Status"
         caption={
           <span className="flex flex-wrap items-center gap-2">
-            <Badge className={statusMeta.badgeClass}>{statusMeta.label}</Badge>
+            <Badge
+              variant="secondary"
+              className="w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium capitalize"
+            >
+              {statusMeta.label}
+            </Badge>
             <span>{statusMeta.description}</span>
           </span>
         }

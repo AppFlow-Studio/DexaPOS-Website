@@ -10,16 +10,19 @@ import {
   getMerchantTierStatus,
   getMerchantSubscriptions,
   getSubscriptionInvoices,
-  type MerchantSubscriptionRecord,
-  type SubscriptionInvoiceRecord,
-  type MerchantTierStatusRecord,
 } from '@/app/manage/actions/subscription-billing'
 import {
   getMerchantBillingProfiles,
   type MerchantBillingProfileRecord,
 } from '@/app/manage/actions/merchant-billing'
 
-type BadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive'
+/**
+ * One neutral badge for every billing state (D-03). The status word carries
+ * the meaning — "Past Due", "Failed" — so the fill does not need to shout it a
+ * second time in red. The per-status `variant` maps this replaced were the
+ * source of the solid red/blue pills in the status card.
+ */
+const STATUS_BADGE = 'w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium capitalize'
 
 function formatMoney(amount: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0)
@@ -30,47 +33,6 @@ function formatDate(date: string | null | undefined): string {
   const value = new Date(date)
   if (Number.isNaN(value.getTime())) return '—'
   return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function tierStatusVariant(status: MerchantTierStatusRecord['subscription_status']): BadgeVariant {
-  switch (status) {
-    case 'active':
-      return 'default'
-    case 'past_due':
-      return 'outline'
-    case 'suspended':
-      return 'destructive'
-    default:
-      return 'secondary'
-  }
-}
-
-function subscriptionStatusVariant(status: MerchantSubscriptionRecord['status']): BadgeVariant {
-  switch (status) {
-    case 'active':
-      return 'default'
-    case 'trial':
-      return 'outline'
-    case 'past_due':
-    case 'suspended':
-      return 'destructive'
-    default:
-      return 'secondary'
-  }
-}
-
-function invoiceStatusVariant(status: SubscriptionInvoiceRecord['status']): BadgeVariant {
-  switch (status) {
-    case 'paid':
-      return 'default'
-    case 'open':
-    case 'processing':
-      return 'outline'
-    case 'failed':
-      return 'destructive'
-    default:
-      return 'secondary'
-  }
 }
 
 function cardOnFileLabel(profiles: MerchantBillingProfileRecord[]): string | null {
@@ -167,7 +129,7 @@ export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscription
         <span className="text-muted-foreground">Tier</span>
         <span className="font-medium">{tier?.plan?.name ?? 'No tier'}</span>
         {tier?.subscription_status && (
-          <Badge variant={tierStatusVariant(tier.subscription_status)} className="capitalize">
+          <Badge variant="secondary" className={STATUS_BADGE}>
             {tier.subscription_status.replace('_', ' ')}
           </Badge>
         )}
@@ -187,7 +149,7 @@ export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscription
           <>
             <span className="font-medium">{formatMoney(Number(lastInvoice.total_amount))}</span>
             <span className="text-muted-foreground">· {formatDate(lastInvoice.paid_at || lastInvoice.created_at)}</span>
-            <Badge variant={invoiceStatusVariant(lastInvoice.status)} className="capitalize">
+            <Badge variant="secondary" className={STATUS_BADGE}>
               {lastInvoice.status}
             </Badge>
           </>
@@ -209,7 +171,7 @@ export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscription
               <li key={subscription.id} className="flex items-center justify-between gap-2 text-sm">
                 <span className="min-w-0 truncate">{subscription.location_name || 'Location'}</span>
                 <span className="flex shrink-0 items-center gap-2">
-                  <Badge variant={subscriptionStatusVariant(subscription.status)} className="capitalize">
+                  <Badge variant="secondary" className={STATUS_BADGE}>
                     {subscription.status.replace('_', ' ')}
                   </Badge>
                   <span className="font-medium">{formatMoney(Number(subscription.monthly_amount))}/mo</span>
