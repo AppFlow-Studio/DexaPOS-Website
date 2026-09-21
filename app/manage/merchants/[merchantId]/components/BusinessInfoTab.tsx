@@ -499,7 +499,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                 </div>
                                 <div className="space-y-2">
                                     <div className="text-sm font-medium text-muted-foreground">Status</div>
-                                    <Badge variant={merchantInfo?.onboarding_status === 'active' ? 'default' : 'secondary'}>
+                                    <Badge variant="secondary" className={LOCATION_STATUS_BADGE}>
                                         {merchantInfo?.onboarding_status || 'Unknown'}
                                     </Badge>
                                 </div>
@@ -642,14 +642,21 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
 
             {/* Edit Business Info Dialog */}
             <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-                <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
+                {/* `p-0` + `overflow-hidden` on the content, scrolling on the body
+                    only: with `overflow-y-auto` on DialogContent itself the track
+                    rendered inside its `p-6`, floating in a gutter and clipped by
+                    the rounded corner. Padding moves onto the header/body/footer
+                    so the scrollbar sits flush at the panel edge. `grid-rows` keeps
+                    the header and footer fixed while the body scrolls. */}
+                <DialogContent className="sm:max-w-3xl max-h-[90vh] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden p-0">
+                    <DialogHeader className="px-6 pt-6">
                         <DialogTitle>Edit Business Information</DialogTitle>
                         <DialogDescription>
                             Update the legal and registration details for this merchant.
                         </DialogDescription>
                     </DialogHeader>
 
+                    <div className="min-h-0 overflow-y-auto px-6">
                     <div className="grid gap-4 py-4 md:grid-cols-2">
                         <div className="space-y-2">
                             <Label htmlFor="legal_business_name">Legal Business Name</Label>
@@ -861,8 +868,9 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             />
                         </div>
                     </div>
+                    </div>
 
-                    <DialogFooter>
+                    <DialogFooter className="px-6 pb-6">
                         <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                             Cancel
                         </Button>
