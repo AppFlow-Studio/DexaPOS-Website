@@ -94,7 +94,12 @@ export async function resolveDirectEligibility(
     ...base,
     eligible: true,
     ooRestaurantId: restaurant.oo_restaurant_id,
-    pickupMinutes: restaurant.prep_time_minutes ?? store.estimated_prep_minutes ?? 20,
+    // Prefer the storefront "Preparation Lead Time" the merchant actually edits
+    // (online_store_config.estimated_prep_minutes) — it also drives the
+    // customer-facing ETA, so the courier pickup window stays in sync with it.
+    // orderout_restaurants.prep_time_minutes is NOT NULL DEFAULT 20 with no edit
+    // UI, so it only serves as a last resort before the hardcoded fallback.
+    pickupMinutes: store.estimated_prep_minutes ?? restaurant.prep_time_minutes ?? 20,
   }
 }
 

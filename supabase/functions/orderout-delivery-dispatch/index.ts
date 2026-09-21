@@ -284,7 +284,17 @@ async function handlePush(supabase: SupabaseClient, row: DispatchRow): Promise<O
 
   const addr = (typedOrder.delivery_address ?? {}) as Record<string, unknown>
   const str = (v: unknown) => (typeof v === 'string' ? v : '')
-  const pickupMinutes = activeQuote.pickup_mins ?? restaurant.prep_time_minutes ?? 20
+  // The quote's pickup_mins already reflects the pickup_minutes we sent at quote
+  // time (now the storefront estimated_prep_minutes). Only if OrderOut returned
+  // no pickup_mins do we fall back — and then to the same storefront setting the
+  // merchant edits, keeping the courier window aligned with the customer ETA.
+  const { data: storeCfg } = await supabase
+    .from('online_store_config')
+    .select('estimated_prep_minutes')
+    .eq('id', activeQuote.store_config_id)
+    .maybeSingle()
+  const pickupMinutes =
+    activeQuote.pickup_mins ?? storeCfg?.estimated_prep_minutes ?? restaurant.prep_time_minutes ?? 20
   const readyBy = new Date(Date.now() + pickupMinutes * 60_000).toISOString()
 
   const channelItems: ChannelOrderItem[] = typedItems.map((it) => ({
