@@ -117,13 +117,16 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
         // the `--chart-*` tokens are already `oklch(...)` — wrapping one in
         // `hsl()` yields invalid CSS and Recharts falls back to black (C2).
         const colors = ['oklch(0.5854 0.2041 293.5)', 'oklch(0.7900 0.1580 85.0)']
+        // Filter BEFORE indexing: colouring first and filtering after lets an
+        // empty order type consume a colour, so two visible slices could land
+        // on the same one (`0` and `2` both map to purple).
         return Object.entries(orderAnalytics.orderTypeBreakdown)
+            .filter(([, value]) => Number(value) > 0)
             .map(([type, value], index) => ({
                 name: type === 'qr_dine_in' ? 'QR Table' : type.replace(/_/g, ' '),
                 value,
                 color: colors[index % colors.length]
             }))
-            .filter(i => i.value > 0)
     }, [orderAnalytics])
 
     // Mirrors the loaded layout below — two stat sections (4 then 3 tiles) over
