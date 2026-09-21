@@ -137,6 +137,10 @@ export function OrderTypeSection({
             </div>
           )}
 
+          {selectedAddressId !== "new" && savedAddresses.length > 0 && (
+            <ZoneFeedback state={zoneCheckState} message={zoneCheckMessage} />
+          )}
+
           {(selectedAddressId === "new" || savedAddresses.length === 0) && (
             <div className="space-y-2">
               <AddressAutocomplete
@@ -184,49 +188,7 @@ export function OrderTypeSection({
                 autoComplete="off"
                 style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
               />
-              {/* Zone eligibility feedback */}
-              {zoneCheckState !== "idle" && (
-                <div
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
-                  style={
-                    zoneCheckState === "valid"
-                      ? {
-                          backgroundColor: "color-mix(in srgb, #22c55e 12%, var(--bg))",
-                          color: "#15803d",
-                          border: "1px solid color-mix(in srgb, #22c55e 40%, transparent)",
-                          borderRadius: "var(--radius)",
-                        }
-                      : zoneCheckState === "invalid"
-                        ? {
-                            backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
-                            color: "#dc2626",
-                            border: "1px solid color-mix(in srgb, #ef4444 40%, transparent)",
-                            borderRadius: "var(--radius)",
-                          }
-                        : {
-                            backgroundColor: "var(--card)",
-                            color: "var(--text-secondary)",
-                            border: "1px solid var(--border)",
-                            borderRadius: "var(--radius)",
-                          }
-                  }
-                >
-                  {zoneCheckState === "checking" && (
-                    <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                  )}
-                  {zoneCheckState === "valid" && (
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  )}
-                  {zoneCheckState === "invalid" && (
-                    <XCircle className="h-4 w-4 shrink-0" />
-                  )}
-                  <span>
-                    {zoneCheckState === "checking"
-                      ? "Checking delivery availability…"
-                      : zoneCheckMessage}
-                  </span>
-                </div>
-              )}
+              <ZoneFeedback state={zoneCheckState} message={zoneCheckMessage} />
 
               {isAuthenticated && onSaveNewAddressChange && (
                 <div className="flex items-center gap-2 pt-1">
@@ -249,5 +211,51 @@ export function OrderTypeSection({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Address eligibility / quote line. Under self-fulfilment this is the delivery
+ * zone check; under OrderOut Direct it shows the live courier fee and ETA.
+ */
+function ZoneFeedback({
+  state,
+  message,
+}: {
+  state: "idle" | "checking" | "valid" | "invalid";
+  message?: string;
+}) {
+  if (state === "idle") return null;
+  return (
+    <div
+      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
+      style={
+        state === "valid"
+          ? {
+              backgroundColor: "color-mix(in srgb, #22c55e 12%, var(--bg))",
+              color: "#15803d",
+              border: "1px solid color-mix(in srgb, #22c55e 40%, transparent)",
+              borderRadius: "var(--radius)",
+            }
+          : state === "invalid"
+            ? {
+                backgroundColor: "color-mix(in srgb, #ef4444 10%, var(--bg))",
+                color: "#dc2626",
+                border: "1px solid color-mix(in srgb, #ef4444 40%, transparent)",
+                borderRadius: "var(--radius)",
+              }
+            : {
+                backgroundColor: "var(--card)",
+                color: "var(--text-secondary)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+              }
+      }
+    >
+      {state === "checking" && <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}
+      {state === "valid" && <CheckCircle2 className="h-4 w-4 shrink-0" />}
+      {state === "invalid" && <XCircle className="h-4 w-4 shrink-0" />}
+      <span>{state === "checking" ? (message ?? "Checking delivery availability…") : message}</span>
+    </div>
   );
 }

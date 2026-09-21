@@ -59,13 +59,6 @@ import {
 } from "./actions";
 import { OnlineOrderingSkeleton } from "./OnlineOrderingSkeleton";
 
-// TEMP: online ordering is live with pickup + card only. The storefront hard-
-// disables delivery site-wide (see app/sites/actions.ts mapStoreConfigToSite),
-// so the merchant-facing delivery controls below are disabled to avoid offering
-// a setting that has no effect. Flip to false to restore delivery configuration
-// once the delivery flow goes live. Saved `accepts_delivery` values are preserved.
-const DELIVERY_TEMPORARILY_DISABLED = true;
-
 function SettingsToggleRow({
   title,
   description,
@@ -341,6 +334,11 @@ function CompletedSetupPanel({
   // connected". useClerkOrgId() returns the impersonated merchant's org.
   const orgId = useClerkOrgId();
   const { data: orderOutStatusResult } = useOrderOutStatus(orgId || "", selectedLocationId);
+  // OrderOut Direct delivery needs a live restaurant to quote from and pick up at.
+  const orderOutRestaurantActive = Boolean(
+    (orderOutStatusResult as any)?.data?.hasRestaurant &&
+      (orderOutStatusResult as any)?.data?.status === "active"
+  );
   const onboardMutation = useOnboardOrderOut(orgId || "");
   const [showOrderOutForm, setShowOrderOutForm] = useState(false);
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
@@ -1018,14 +1016,45 @@ function CompletedSetupPanel({
                 <SettingsToggleRow
                   title="Delivery"
                   description={
-                    DELIVERY_TEMPORARILY_DISABLED
-                      ? "Delivery is temporarily unavailable. Online ordering currently supports pickup only — this will be re-enabled soon."
-                      : "Allow customers to place delivery orders."
+                    settings.deliveryFulfillment === "orderout_direct"
+                      ? "Customers can order delivery. A courier is booked through OrderOut at the live quoted price."
+                      : "Delivery needs a fulfilment method. Choose OrderOut Direct below to offer it."
                   }
-                  checked={DELIVERY_TEMPORARILY_DISABLED ? false : settings.deliveryEnabled}
+                  checked={settings.deliveryFulfillment === "orderout_direct" && settings.deliveryEnabled}
                   onCheckedChange={(checked) => onUpdate({ deliveryEnabled: checked })}
-                  disabled={isSaving || DELIVERY_TEMPORARILY_DISABLED}
+                  disabled={isSaving || settings.deliveryFulfillment !== "orderout_direct"}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="merchant-online-store-delivery-fulfillment">Delivery fulfilment</Label>
+                <Select
+                  value={settings.deliveryFulfillment}
+                  onValueChange={(value) =>
+                    onUpdate({
+                      deliveryFulfillment: value === "orderout_direct" ? "orderout_direct" : "self",
+                      // Switching away from Direct hides delivery on the storefront regardless,
+                      // so keep the toggle honest.
+                      ...(value !== "orderout_direct" ? { deliveryEnabled: false } : {}),
+                    })
+                  }
+                  disabled={isSaving}
+                >
+                  <SelectTrigger id="merchant-online-store-delivery-fulfillment" className="w-full sm:max-w-md">
+                    <SelectValue placeholder="Choose who delivers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="self">None — delivery off</SelectItem>
+                    <SelectItem value="orderout_direct" disabled={!orderOutRestaurantActive}>
+                      OrderOut Direct — on-demand couriers{orderOutRestaurantActive ? "" : " (set up OrderOut first)"}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {settings.deliveryFulfillment === "orderout_direct"
+                    ? "Customers pay the live courier quote shown at checkout. Your flat delivery fee, free-delivery threshold and radius don't apply."
+                    : "OrderOut Direct requires an active OrderOut restaurant for this location (see the OrderOut tab)."}
+                </p>
               </div>
 
               <SettingsToggleRow
@@ -1102,8 +1131,9 @@ function CompletedSetupPanel({
                 </div>
               </div>
 
+              {settings.deliveryFulfillment !== "orderout_direct" && (
               <div className="grid gap-4 sm:grid-cols-3">
-                {/* Delivery-only fields — disabled while delivery is off (see DELIVERY_TEMPORARILY_DISABLED). */}
+                {/* Self-fulfilment delivery pricing. Not shown under OrderOut Direct: the customer pays the live quote. */}
                 <div className="space-y-2">
                   <Label>Delivery Fee ($)</Label>
                   <Input
@@ -1112,7 +1142,7 @@ function CompletedSetupPanel({
                     min={0}
                     step="0.01"
                     onChange={(e) => onUpdate({ baseDeliveryFee: Number(e.target.value) })}
-                    disabled={DELIVERY_TEMPORARILY_DISABLED}
+                    disabled={isSaving}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1123,7 +1153,7 @@ function CompletedSetupPanel({
                     min={0}
                     step="0.01"
                     onChange={(e) => onUpdate({ freeDeliveryThreshold: Number(e.target.value) })}
-                    disabled={DELIVERY_TEMPORARILY_DISABLED}
+                    disabled={isSaving}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1138,10 +1168,11 @@ function CompletedSetupPanel({
                         deliveryRadiusMiles: e.target.value === "" ? null : Number(e.target.value),
                       })
                     }
-                    disabled={DELIVERY_TEMPORARILY_DISABLED}
+                    disabled={isSaving}
                   />
                 </div>
               </div>
+              )}
 
               <div className="pt-6">
                 <div className="flex flex-col gap-4">
