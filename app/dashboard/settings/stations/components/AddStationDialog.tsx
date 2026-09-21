@@ -276,6 +276,16 @@ export function AddStationDialog({
           setCanUpdateKitchenStatus(false);
           setViewScope("own");
           break;
+        case "handheld":
+          // Mirrors set_station_capabilities(); the trigger re-applies these
+          // on insert regardless. Void stays off (manager PIN path).
+          setCanCreateOrders(true);
+          setCanProcessPayments(true);
+          setCanVoidOrders(false);
+          setCanApplyDiscounts(true);
+          setCanUpdateKitchenStatus(false);
+          setViewScope("location");
+          break;
       }
       // Auto-generate station number from query
       if (nextNumber) {
@@ -492,7 +502,8 @@ export function AddStationDialog({
             {/* Station Type Selection */}
             <div className="grid gap-2">
               <Label>Station Type</Label>
-              <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
+              {/* Five types: 3 + 2 on sm+ rather than a lone fifth tile. */}
+              <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3">
                 <StationTypeCard
                   type="register"
                   label="Register"
@@ -524,6 +535,14 @@ export function AddStationDialog({
                   icon={getStationTypeIcon("self_service")}
                   selected={stationType === "self_service"}
                   onClick={() => setStationType("self_service")}
+                />
+                <StationTypeCard
+                  type="handheld"
+                  label="Handheld"
+                  sublabel="Dexa Go"
+                  icon={getStationTypeIcon("handheld")}
+                  selected={stationType === "handheld"}
+                  onClick={() => setStationType("handheld")}
                 />
               </div>
             </div>

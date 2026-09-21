@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Loader2, Monitor, ShoppingCart, UtensilsCrossed, TabletSmartphone } from 'lucide-react'
+import { Loader2, Monitor, ShoppingCart, Smartphone, UtensilsCrossed, TabletSmartphone } from 'lucide-react'
 import { useAdminCreateStation, useAdminNextStationNumber } from '@/lib/queries/use-admin-stations'
 import type { StationType, CreateStationInput } from '@/app/manage/actions/admin-merchant/stations'
 import { toast } from 'sonner'
@@ -91,6 +91,20 @@ const stationTypes: StationTypeOption[] = [
             can_process_payments: true,
             can_void_orders: false,
             can_apply_discounts: false,
+            can_update_kitchen_status: false,
+        },
+    },
+    {
+        type: 'handheld',
+        label: 'Handheld',
+        description: 'Dexa Go portrait handheld for servers',
+        icon: <Smartphone className="h-6 w-6" />,
+        // Mirrors set_station_capabilities(); void stays off (manager PIN path).
+        defaultCapabilities: {
+            can_create_orders: true,
+            can_process_payments: true,
+            can_void_orders: false,
+            can_apply_discounts: true,
             can_update_kitchen_status: false,
         },
     },

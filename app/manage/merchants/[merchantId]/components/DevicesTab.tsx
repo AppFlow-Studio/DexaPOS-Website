@@ -74,6 +74,8 @@ const getStationTypeLabel = (type: StationType): string => {
             return 'Kitchen Display'
         case 'self_service':
             return 'Self-Service'
+        case 'handheld':
+            return 'Handheld'
         default:
             return type
     }
@@ -89,6 +91,8 @@ const getStationTypeIcon = (type: StationType): string => {
             return '🍳'
         case 'self_service':
             return '🖥️'
+        case 'handheld':
+            return '📟'
         default:
             return '📱'
     }

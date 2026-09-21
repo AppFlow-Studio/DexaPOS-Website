@@ -13,7 +13,8 @@ import { LogAuditEvent } from '@/app/dashboard/actions/audit-logs'
 // Types (duplicated from dashboard/actions/stations.ts for server action compatibility)
 // ============================================================================
 
-export type StationType = 'register' | 'checkout' | 'kds' | 'self_service'
+// Keep in step with chk_station_type — supabase/migrations/20260921120000_handheld_station_type.sql.
+export type StationType = 'register' | 'checkout' | 'kds' | 'self_service' | 'handheld'
 export type SyncRole = 'leader' | 'follower'
 export type ViewScope = 'own' | 'location'
 
@@ -263,6 +264,7 @@ export async function getAdminMerchantStationStats(
         checkout: stations.filter((s) => s.station_type === 'checkout').length,
         kds: stations.filter((s) => s.station_type === 'kds').length,
         self_service: stations.filter((s) => s.station_type === 'self_service').length,
+        handheld: stations.filter((s) => s.station_type === 'handheld').length,
       },
     }
 

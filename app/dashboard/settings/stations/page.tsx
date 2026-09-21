@@ -454,6 +454,7 @@ export default function StationsPage() {
               <SelectItem value="checkout">Checkout</SelectItem>
               <SelectItem value="kds">Kitchen Display</SelectItem>
               <SelectItem value="self_service">Self-Service</SelectItem>
+              <SelectItem value="handheld">Handheld</SelectItem>
             </SelectContent>
           </Select>
 

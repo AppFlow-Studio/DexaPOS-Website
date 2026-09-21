@@ -12,7 +12,14 @@ import { LogAuditEvent } from "./audit-logs";
 // Types
 // ============================================================================
 
-export type StationType = "register" | "checkout" | "kds" | "self_service";
+// Keep in step with chk_station_type and set_station_capabilities() —
+// supabase/migrations/20260921120000_handheld_station_type.sql.
+export type StationType =
+  | "register"
+  | "checkout"
+  | "kds"
+  | "self_service"
+  | "handheld";
 export type SyncRole = "leader" | "follower";
 export type ViewScope = "own" | "location";
 
