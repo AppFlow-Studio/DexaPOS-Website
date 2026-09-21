@@ -55,6 +55,11 @@ interface BusinessInfoTabProps {
     merchantInfo: MerchantDetails
 }
 
+// One neutral status pill for the locations table (D-03): foreground text on a
+// muted fill. The word carries the state; colour is reserved for real severity.
+const LOCATION_STATUS_BADGE =
+    'w-fit shrink-0 rounded-full border-0 bg-muted px-2.5 text-xs font-medium text-foreground'
+
 // Business type options. Keys MUST match the merchants_business_type_check DB
 // constraint (lowercase / snake_case); the label is display-only.
 const businessTypes = {
@@ -300,9 +305,13 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
 
     return (
         <Tabs defaultValue="legal" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="legal">Legal Information</TabsTrigger>
-                <TabsTrigger value="locations">Locations</TabsTrigger>
+            {/* Overridden locally rather than in `ui/tabs`: that strip is shared
+                app-wide. `rounded-full` on both the strip and the active pill
+                matches the panel radius; the active pill keeps the neutral
+                `bg-background` fill. */}
+            <TabsList className="grid h-10 w-full grid-cols-2 rounded-full p-1">
+                <TabsTrigger value="legal" className="rounded-full">Legal Information</TabsTrigger>
+                <TabsTrigger value="locations" className="rounded-full">Locations</TabsTrigger>
             </TabsList>
 
             {/* Legal Information Tab */}
@@ -543,7 +552,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             </Empty>
                         ) : (
                             <div className="overflow-x-auto">
-                            <Table variant="data">
+                            <Table variant="data" className="rounded-3xl">
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Location Name</TableHead>
@@ -562,7 +571,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                                     </div>
                                                     <div>
                                                         <div className="font-medium">{location.name}</div>
-                                                        <Badge variant={location.is_active ? "outline" : "secondary"} className="mt-1">
+                                                        <Badge variant="secondary" className={`mt-1 ${LOCATION_STATUS_BADGE}`}>
                                                             {location.is_active ? 'Active' : 'Inactive'}
                                                         </Badge>
                                                     </div>
@@ -575,11 +584,11 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                {location.is_accepting_orders ? (
-                                                     <Badge variant="outline" className="border-green-200 text-green-700 bg-green-50">Online</Badge>
-                                                ) : (
-                                                     <Badge variant="outline" className="border-amber-200 text-amber-700 bg-amber-50">Offline</Badge>
-                                                )}
+                                                {/* Neutral status pill (D-03): black text on a shaded
+                                                    fill, so the column does not read as a row of alarms. */}
+                                                <Badge variant="secondary" className={LOCATION_STATUS_BADGE}>
+                                                    {location.is_accepting_orders ? 'Online' : 'Offline'}
+                                                </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <Button

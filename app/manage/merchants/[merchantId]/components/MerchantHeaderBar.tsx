@@ -8,14 +8,10 @@ import { MerchantDetails } from '@/types/merchant'
 import { ImpersonateMerchantButton } from '@/components/admin/ImpersonateMerchantButton'
 import { MerchantLogoUpload } from './MerchantLogoUpload'
 
-const STATUS_CLASS: Record<string, string> = {
-    created: 'bg-slate-100 text-slate-700 border-slate-300',
-    onboarding: 'bg-amber-100 text-amber-800 border-amber-200',
-    active: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    suspended: 'bg-red-100 text-red-700 border-red-300',
-    cancelled: 'bg-zinc-200 text-zinc-700 border-zinc-300',
-    inactive: 'bg-red-100 text-red-700 border-red-300',
-}
+// One neutral pill for every merchant status (D-03): foreground text on a faded
+// fill. The status word carries the state.
+const STATUS_CLASS =
+    'w-fit shrink-0 rounded-full border-0 bg-muted px-2.5 text-xs font-medium capitalize text-foreground'
 
 export function MerchantHeaderBar({ merchant }: { merchant: MerchantDetails }) {
     const status = merchant.onboarding_status || merchant.derived_status
@@ -35,7 +31,7 @@ export function MerchantHeaderBar({ merchant }: { merchant: MerchantDetails }) {
                         <h1 className="text-[22px] leading-tight tracking-[-0.015em] text-foreground">
                             {merchant.name}
                         </h1>
-                        <Badge className={STATUS_CLASS[status] || STATUS_CLASS.onboarding}>
+                        <Badge variant="secondary" className={STATUS_CLASS}>
                             {status.replace('_', ' ')}
                         </Badge>
                     </div>
