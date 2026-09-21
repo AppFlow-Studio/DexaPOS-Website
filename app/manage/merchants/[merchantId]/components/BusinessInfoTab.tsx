@@ -1,6 +1,8 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -305,27 +307,23 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
 
             {/* Legal Information Tab */}
             <TabsContent value="legal" className="mt-6">
-                <div className="space-y-6">
-                    {/* Business Details Card */}
-                    <Card>
-                        <CardHeader>
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <CardTitle className="text-lg">Business Details</CardTitle>
-                                    <CardDescription>Legal business information and registration details</CardDescription>
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="self-start sm:self-auto shrink-0"
-                                    onClick={() => setIsEditDialogOpen(true)}
-                                >
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    Edit
-                                </Button>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
+                <Panel>
+                    {/* Business Details */}
+                    <PanelSection
+                        label="Business Details"
+                        caption="Legal business information and registration details"
+                        action={
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setIsEditDialogOpen(true)}
+                            >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                            </Button>
+                        }
+                    >
+                        <div className="mt-4 space-y-6">
                             <div className="grid gap-6 md:grid-cols-2 [&>*]:min-w-0">
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -416,17 +414,16 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     </div>
                                 </div>
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </PanelSection>
 
-                    {/* Owner & Contact Card — canonical merchants columns (used by Valor boarding) */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Owner &amp; Contact</CardTitle>
-                            <CardDescription>Primary contact used for payments boarding and account notices</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid gap-6 md:grid-cols-2 [&>*]:min-w-0">
+                    {/* Owner & Contact — canonical merchants columns (used by Valor boarding) */}
+                    <PanelSection
+                        label="Owner & Contact"
+                        caption="Primary contact used for payments boarding and account notices"
+                        divider
+                    >
+                        <div className="mt-4 grid gap-6 md:grid-cols-2 [&>*]:min-w-0">
                                 <div className="space-y-2">
                                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                                         <User className="h-4 w-4" />
@@ -455,17 +452,16 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     </div>
                                     <div className="text-base font-medium">{ownerPhone}</div>
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </PanelSection>
 
-                    {/* Business Address Card — canonical merchants columns (used by Valor boarding) */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Business Address</CardTitle>
-                            <CardDescription>Legal business address used for payments boarding</CardDescription>
-                        </CardHeader>
-                        <CardContent>
+                    {/* Business Address — canonical merchants columns (used by Valor boarding) */}
+                    <PanelSection
+                        label="Business Address"
+                        caption="Legal business address used for payments boarding"
+                        divider
+                    >
+                        <div className="mt-4">
                             {hasBusinessAddress ? (
                                 <div className="flex items-start gap-3">
                                     <MapPin className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
@@ -481,17 +477,16 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     No business address on file. Add one via Edit to enable payments boarding.
                                 </div>
                             )}
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </PanelSection>
 
-                    {/* Account Card — identifiers + status (read-only) */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Account</CardTitle>
-                            <CardDescription>Account status and identifiers</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid gap-4 md:grid-cols-2 [&>*]:min-w-0">
+                    {/* Account — identifiers + status (read-only) */}
+                    <PanelSection
+                        label="Account"
+                        caption="Account status and identifiers"
+                        divider
+                    >
+                        <div className="mt-4 grid gap-4 md:grid-cols-2 [&>*]:min-w-0">
                                 <div className="space-y-2 min-w-0">
                                     <div className="text-sm font-medium text-muted-foreground">Clerk Organization ID</div>
                                     <div className="text-sm font-mono break-all">{merchantInfo?.clerk_org_id || 'N/A'}</div>
@@ -502,30 +497,27 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                         {merchantInfo?.onboarding_status || 'Unknown'}
                                     </Badge>
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                        </div>
+                    </PanelSection>
+                </Panel>
             </TabsContent>
 
             {/* Locations Tab */}
             <TabsContent value="locations" className="mt-6">
-                <Card>
-                    <CardHeader>
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <CardTitle className="text-lg">Business Locations</CardTitle>
-                                <CardDescription>All locations associated with this merchant</CardDescription>
-                            </div>
-                            <Button variant="outline" size="sm" className="self-start sm:self-auto shrink-0" asChild>
+                <Panel>
+                    <PanelSection
+                        label="Business Locations"
+                        caption="All locations associated with this merchant"
+                        action={
+                            <Button variant="outline" size="sm" asChild>
                                 <Link href={`/manage/merchants/${merchantInfo.id}/locations/new`}>
                                     <MapPin className="h-4 w-4 mr-2" />
                                     Add Location
                                 </Link>
                             </Button>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
+                        }
+                    >
+                        <div className="mt-4">
                         {locationsLoading ? (
                             <div className="space-y-3">
                                 {[1, 2, 3].map((i) => (
@@ -607,52 +599,39 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             </Table>
                             </div>
                         )}
-                    </CardContent>
-                </Card>
+                        </div>
+                    </PanelSection>
 
-                {/* Location Statistics */}
-                {locationsList.length > 0 && (
-                    <div className="grid gap-4 grid-cols-2 md:grid-cols-3 mt-6">
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Total Locations</CardTitle>
-                                <Store className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{locationsList.length}</div>
-                                <p className="text-xs text-muted-foreground">
-                                    Registered locations
-                                </p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Primary Location</CardTitle>
-                                <MapPin className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-sm font-medium">{locationsList[0]?.name || 'N/A'}</div>
-                                <p className="text-xs text-muted-foreground">
-                                    {formatAddress(locationsList[0]) || 'No address'}
-                                </p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Active Locations</CardTitle>
-                                <Store className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">
-                                    {locationsList.filter((l: any) => l.is_active).length}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                    Accepting orders
-                                </p>
-                            </CardContent>
-                        </Card>
-                    </div>
-                )}
+                    {/* Location Statistics */}
+                    {locationsList.length > 0 && (
+                        <PanelSection label="Location Summary" divider>
+                            <StatRow columns={3} className="mt-6">
+                                <StatTile
+                                    label="Total Locations"
+                                    icon={<Store />}
+                                    value={locationsList.length}
+                                    meta="Registered locations"
+                                />
+                                <StatTile
+                                    label="Primary Location"
+                                    icon={<MapPin />}
+                                    value={
+                                        <span className="text-base font-medium">
+                                            {locationsList[0]?.name || 'N/A'}
+                                        </span>
+                                    }
+                                    meta={formatAddress(locationsList[0]) || 'No address'}
+                                />
+                                <StatTile
+                                    label="Active Locations"
+                                    icon={<Store />}
+                                    value={locationsList.filter((l: any) => l.is_active).length}
+                                    meta="Accepting orders"
+                                />
+                            </StatRow>
+                        </PanelSection>
+                    )}
+                </Panel>
             </TabsContent>
 
             {/* Edit Business Info Dialog */}

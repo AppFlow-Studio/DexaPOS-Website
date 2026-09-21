@@ -132,6 +132,35 @@ table's header rule computes to `0px` (§5.5).
 **Total: 44 routes.** Also in the tree: 9 `layout.tsx`, 9 `loading.tsx`
 (6 using `DataPageSkeleton` with `shell="plain"`, 3 hand-rolled).
 
+### Family 3 status (PRs 3a–3g, complete)
+
+All **51 reachable** files converted; no live file under
+`app/manage/merchants/[merchantId]` imports `@/components/ui/card` any more.
+The 56 unreachable files were deliberately not converted (see
+*Family 3 audit → Reachability* below) and are left for a separate cleanup
+ticket.
+
+| Sub-PR | Scope | Status | Notes |
+|---|---|---|---|
+| **3a** | tab host + overview | ✅ converted | `PageShell as="div"`; host `Card`/`CardContent` → `Panel`; `OnboardingStatusCard` → `Panel` > `PanelSection` (status badge → `caption`, Manage link → `action`); `OverviewTab`'s 7 KPI `Card`s → two `PanelSection`s ("Last 30 days", "Today") over `StatRow`/`StatTile`; 2 chart + 2 detail cards → `PanelGrid`. Red refunds numeral and green/red growth delta de-coloured (§4.6b) — neither encodes severity. Tab dispatch, `?tab=` resolution and permission gates untouched. |
+| **3b** | business-info | ✅ converted | Legal sub-tab's 4 sibling `Card`s → one `Panel` of 4 `divider`-separated `PanelSection`s; Locations sub-tab → `Panel` with Add Location as `action`, its 3 KPI cards → a "Location Summary" `StatRow`. `AdminLocationDetailSheet`'s 5 cards → one `Panel` per sheet tab; the three Settings cards' leading icons → `PanelSection icon`. |
+| **3c** | online-store | ✅ converted | Heaviest live file (1,854 L). The audit's "106 cards" is really **23 `<Card>` elements** — the proxy grep counts every `<Card*` tag. 14 converted by a structural script, 9 by hand (icon-badge + trailing-`Switch` headers → `icon`/`action`; conditional `CardContent` → conditional div). Two request-status cards keep their border colour: it encodes approval state (§6 ex. 2). |
+| **3d** | money tabs | ✅ mostly no change | **Re-dispositioned.** `SettlementsSection`, `DisputesSection`, `PaymentsTable` and the three Luqra tables contain **zero `<Card>`** — they are already table-led and needed no conversion. Only `PlatformBillingTab`'s single wrapper card → `Panel`. |
+| **3e** | devices + device detail | ✅ converted | 4 KPI cards → `StatRow`; tabs+search header → a bordered toolbar row (controls, no heading); device-detail identity header (image + name) stays a header row in `Panel padded`. **`StatRow` is 3-up, not 4**: this tab renders beside the merchant nav, leaving a 4th column ~100px that truncated "Payment Terminals"/"Connected Terminals" — recorded under §4.2 density rather than solved ad hoc. |
+| **3f** | menu route | ✅ converted | 8 cards by script, 7 by hand: 2 empty states → `Panel padded`; schedule list item → `Panel nested padded` (tier 2) keeping its Active/Inactive badge; Menu Status's conditional `CardDescription` → a caption expression; the OrderOut payload's clickable `CardHeader` → a real `<button>` with `aria-expanded` (better exposed than the div it replaced). `AdminPriceBreakdown` keeps its cascade-level styling — that UI is owned by the menu epic, so only its container changed. |
+| **3g** | notes + audit | ✅ converted | Note composer and list → `Panel` > `PanelSection`; the audit filter rail and table shell were plain containers, so they become `Panel`s and drop decorative `shadow-lg` / `backdrop-blur`. |
+
+**Defect filed, not fixed** (§7): the menu route's tab strip is clipped rather
+than scrolled at 375px, leaving the OrderOut tab unreachable on a phone —
+[`menu-route-tablist-mobile-ticket.md`](./menu-route-tablist-mobile-ticket.md).
+Pre-existing and byte-identical on the baseline. It is invisible to a
+document-level overflow check, because the content is clipped rather than
+scrollable; the acceptance check is that every tab is *reachable* at 375px.
+
+> Note on tab testing, confirmed again here: the merchant-detail nav and the
+> online-store inner tabs are controlled, so a synthetic `element.click()`
+> silently fails and reports an empty panel. Use trusted clicks.
+
 ## Conversion classification
 
 Per the ticket's four-way classification:
@@ -146,6 +175,80 @@ Per the ticket's four-way classification:
 - **Intentional HQ exception** — candidates: `/manage/unauthorized`;
   severity colour on `/manage/health` + DLQ (§14.3 HQ-2); command-centre
   composition on `/manage` (HQ-3).
+
+## Family 3 audit — merchant detail workspace
+
+Spec §5 estimates "99 files, 36 card importers" and defers sub-PR boundaries to
+this audit. Measured at commit `26dad585`: **107 `.ts(x)` files** under
+`app/manage/merchants/[merchantId]/`.
+
+### Reachability
+
+Boundaries are set by what the routes actually mount, not by file count. The
+static import graph was walked from every route entry (`page`/`layout`/
+`loading`/`error`). Family 3 contains **no dynamic `import()`**, so the static
+graph is complete.
+
+| | Files | Lines |
+|---|---:|---:|
+| Reachable from a route | **51** | 19,844 |
+| Unreachable | **56** | 21,301 |
+| Total | 107 | 41,145 |
+
+**Over half of Family 3 is unreachable from any route**, including its heaviest
+files: `SettingsTab.tsx` (1,089 L / 39 `<Card`), `MenuTab/MenusTable.tsx`
+(1,233 L), `StaffTab.tsx` (789 L), `OrdersTab.tsx` (646 L), `ProductsTab.tsx`
+(464 L), the whole `components/MenuTab/` host tree, and all of
+`components/subscription/` — the live `subscriptions` tab renders
+`HqSubscriptionsWorkspace` from `components/billing/` instead, so the
+co-located `subscription/` folder is a superseded duplicate.
+
+**Disposition: unreachable — no conversion.** Restyling pages no user can open
+spends review budget with no user-visible result, and deleting them is not a
+presentation change (§7). They are excluded from Family 3 and recorded for a
+separate cleanup ticket. Regenerate the list with `node scripts/hq-reachability.js`.
+
+### Live tab structure
+
+`app/manage/merchants/[merchantId]/page.tsx` is a tab host: a `NavItem` sidebar
+driving **16 tabs** via `activeTab` state (not Radix `Tabs`, and not URL-backed —
+so there are no per-tab deep links to preserve). Tabs map to:
+
+| Tab | Renders | Weight |
+|---|---|---|
+| `overview` | `OnboardingStatusCard` + `OverviewTab` | 52 `<Card` |
+| `business-info` | `BusinessInfoTab` → `AdminLocationDetailSheet` | 62 `<Card`, 13 `<Table` |
+| `notes` | `NotesTab` | 8 `<Card` |
+| `audit` | `AuditLogsTab` | 3 `<Card`, 31 `<Table` |
+| `mids` / `valor-boarding` | `MidsSection`, `ValorBoardingSection` | table-led |
+| `settlements` | `SettlementsSection` → 3 Luqra tables | 89 `<Table` |
+| `disputes` | `DisputesSection` | 29 `<Table` |
+| `billing` | `BillingTab` → `PaymentsTable` | 31 `<Table` |
+| `platform-billing` | `PlatformBillingTab` | 2 `<Card`, 17 `<Table` |
+| `subscriptions` | `HqSubscriptionsWorkspace` (**outside Family 3**) | — |
+| `online-store` | `OnlineStoreTab` | **106 `<Card`** |
+| `support` | `SupportTicketsSection` | — |
+| `devices` | `DevicesTab` → `ConnectedTerminalsPanel` | 19 `<Card`, 59 `<Table` |
+| `locations` | `LocationsSection` | — |
+
+23 of the 51 live files carry conversion work: **338 `<Card`, 453 `<Table`**.
+
+### Sub-PR boundaries
+
+Split by tab group, so each PR is one reviewable surface:
+
+| Sub-PR | Scope | Weight |
+|---|---|---:|
+| **3a** | Tab host shell + header + `overview` (`page.tsx`, `OnboardingStatusCard`, `OverviewTab`, `MerchantHeaderBar`) | 54 `<Card` |
+| **3b** | `business-info` (`BusinessInfoTab`, `AdminLocationDetailSheet`, `AddStationDialog`) | 62 `<Card` |
+| **3c** | `online-store` (`OnlineStoreTab` alone) | 106 `<Card` |
+| **3d** | Money tabs: `settlements`, `disputes`, `billing`, `platform-billing` | 2 `<Card`, 166 `<Table` |
+| **3e** | `devices` + device detail routes (`DevicesTab`, `ConnectedTerminalsPanel`, `[device_id]`, terminal `[serial]`) | 43 `<Card`, 189 `<Table` |
+| **3f** | `menu/[menuId]` route (`page.tsx`, `AdminMenuOrderOutTab`, `AdminPriceBreakdown`) | 60 `<Card`, 40 `<Table` |
+| **3g** | `notes` + `audit` (`NotesTab`, `AuditLogsTab`) | 11 `<Card`, 31 `<Table` |
+
+`orders/[orderId]`, `locations/new` and `billing/page.tsx` are thin wrappers
+(≤51 L, 0 cards) — folded into the nearest sub-PR as shell/header only.
 
 ## Regeneration
 

@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
@@ -124,14 +125,9 @@ export function NotesTab({ merchantId }: NotesTabProps) {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" />
-            Merchant Notes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <Panel>
+        <PanelSection icon={MessageSquare} label="Merchant Notes">
+          <div className="mt-4 space-y-3">
           <Textarea
             value={newNote}
             onChange={(event) => setNewNote(event.target.value)}
@@ -143,14 +139,13 @@ export function NotesTab({ merchantId }: NotesTabProps) {
               {addNoteMutation.isPending ? 'Adding...' : 'Add Note'}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+          </div>
+        </PanelSection>
+      </Panel>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Notes</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <Panel>
+        <PanelSection label="Recent Notes">
+          <div className="mt-4 space-y-3">
           {isLoading && (
             <>
               <Skeleton className="h-24 w-full" />
@@ -257,8 +252,9 @@ export function NotesTab({ merchantId }: NotesTabProps) {
               )}
             </div>
           ))}
-        </CardContent>
-      </Card>
+          </div>
+        </PanelSection>
+      </Panel>
     </div>
   )
 }

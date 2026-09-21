@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { ArrowUpRight, CheckCircle2, Circle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import type { MerchantDetails, MerchantOnboardingChecklist, MerchantOnboardingStatus } from '@/types/merchant'
 import { MerchantSubscriptionSummary } from './MerchantSubscriptionSummary'
 
@@ -74,40 +75,40 @@ export function OnboardingStatusCard({ merchant }: OnboardingStatusCardProps) {
   )
 
   return (
-    <Card>
-      <CardHeader className="pb-4">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <CardTitle className="text-lg">Merchant Status</CardTitle>
-            <div className="mt-2 flex items-center gap-2">
-              <Badge className={statusMeta.badgeClass}>{statusMeta.label}</Badge>
-              <span className="text-sm text-muted-foreground">{statusMeta.description}</span>
-            </div>
-          </div>
-          <Button variant="ghost" size="sm" asChild className="shrink-0">
+    <Panel>
+      <PanelSection
+        label="Merchant Status"
+        caption={
+          <span className="flex flex-wrap items-center gap-2">
+            <Badge className={statusMeta.badgeClass}>{statusMeta.label}</Badge>
+            <span>{statusMeta.description}</span>
+          </span>
+        }
+        action={
+          <Button variant="ghost" size="sm" asChild>
             <Link href={`/manage/merchants/${merchant.clerk_org_id}?tab=subscriptions`}>
               Manage
               <ArrowUpRight className="ml-1 h-4 w-4" />
             </Link>
           </Button>
+        }
+      >
+        <div className="space-y-3">
+          <ChecklistRow label="Business info completed" done={checklist.businessInfo} />
+          <ChecklistRow label="Owner invited" done={checklist.ownerInvited} />
+          <ChecklistRow label="Billing method added" done={checklist.billingAdded} />
+          <ChecklistRow label="First location created" done={checklist.firstLocation} />
+          <ChecklistRow label="First payment processed" done={checklist.firstPayment} />
+
+          {merchant.activated_at && (
+            <div className="pt-1 text-xs text-muted-foreground">
+              Activated: {new Date(merchant.activated_at).toLocaleString()}
+            </div>
+          )}
+
+          <MerchantSubscriptionSummary merchantId={merchant.id} />
         </div>
-      </CardHeader>
-
-      <CardContent className="space-y-3">
-        <ChecklistRow label="Business info completed" done={checklist.businessInfo} />
-        <ChecklistRow label="Owner invited" done={checklist.ownerInvited} />
-        <ChecklistRow label="Billing method added" done={checklist.billingAdded} />
-        <ChecklistRow label="First location created" done={checklist.firstLocation} />
-        <ChecklistRow label="First payment processed" done={checklist.firstPayment} />
-
-        {merchant.activated_at && (
-          <div className="pt-1 text-xs text-muted-foreground">
-            Activated: {new Date(merchant.activated_at).toLocaleString()}
-          </div>
-        )}
-
-        <MerchantSubscriptionSummary merchantId={merchant.id} />
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   )
 }

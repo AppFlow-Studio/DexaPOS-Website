@@ -1,5 +1,5 @@
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Panel } from "@/components/dashboard/shell/Panel"
 import { Badge } from "@/components/ui/badge"
 import { DollarSign, Globe, Building2, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -31,14 +31,14 @@ export function AdminPriceBreakdown({
   const effectiveCashPrice = item.effective_cash_price ?? baseCashPrice;
 
   return (
-    <Card>
-      <CardHeader className="pb-3 border-b bg-muted/20">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
+    <Panel>
+      <div className="border-b bg-muted/20 px-4 py-3 sm:px-6">
+        <h4 className="flex items-center gap-2 text-sm font-medium">
           <DollarSign className="h-4 w-4 text-green-500" />
           Price Hierarchy
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 pt-4">
+        </h4>
+      </div>
+      <div className="space-y-3 px-4 py-4 sm:px-6">
         {/* Level 1 - Global Base */}
         <div
           className={cn(
@@ -167,7 +167,7 @@ export function AdminPriceBreakdown({
               </div>
             )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   );
 }

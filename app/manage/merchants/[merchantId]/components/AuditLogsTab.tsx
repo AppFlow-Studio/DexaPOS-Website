@@ -9,7 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent } from "@/components/ui/card";
+import { Panel } from "@/components/dashboard/shell/Panel";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -342,9 +342,8 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
         </div>
       </div>
 
-      {/* Filters Card */}
-      <Card className="border-none shadow-lg bg-card/80 backdrop-blur-sm">
-        <CardContent className="p-3 sm:p-6">
+      {/* Filters */}
+      <Panel className="p-3 sm:p-6">
           <div className="flex flex-col gap-4">
             {/* Top row - Search and Date Range */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
@@ -614,11 +613,10 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+      </Panel>
 
       {/* Logs Table */}
-      <Card className="border-none shadow-lg overflow-hidden">
+      <Panel>
         <div className="overflow-x-auto">
         <Table className="min-w-[640px]">
           <TableHeader className="bg-muted/50">
@@ -905,7 +903,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
           </TableBody>
         </Table>
         </div>
-      </Card>
+      </Panel>
       
       {/* Pagination (Simple for now) */}
       <div className="flex items-center justify-end gap-2">

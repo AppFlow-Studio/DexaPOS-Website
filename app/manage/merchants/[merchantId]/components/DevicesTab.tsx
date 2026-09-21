@@ -1,6 +1,8 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -310,61 +312,44 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                 </div>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Stations</CardTitle>
-                        <Monitor className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{stationStats?.total || 0}</div>
-                        <p className="text-xs text-muted-foreground">
-                            {stationStats?.active || 0} active
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Online Stations</CardTitle>
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-green-600">{stationStats?.online || 0}</div>
-                        <p className="text-xs text-muted-foreground">
-                            {stationStats?.offline || 0} offline
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Payment Terminals</CardTitle>
-                        <CreditCard className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{terminalStats?.total || 0}</div>
-                        <p className="text-xs text-muted-foreground">
-                            {terminalStats?.assigned || 0} assigned
-                        </p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Connected Terminals</CardTitle>
-                        <Wifi className="h-4 w-4 text-green-600" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-green-600">{terminalStats?.connected || 0}</div>
-                        <p className="text-xs text-muted-foreground">
-                            {terminalStats?.disconnected || 0} disconnected
-                        </p>
-                    </CardContent>
-                </Card>
-            </div>
+            {/* Device stats */}
+            <Panel>
+                <PanelSection label="Devices">
+                    {/* 3-up, not 4: this tab renders beside the merchant nav, which
+                        leaves a 4th column ~100px -- narrow enough to truncate
+                        "Payment Terminals" and "Connected Terminals". */}
+                    <StatRow columns={3} className="mt-6">
+                        <StatTile
+                            label="Total Stations"
+                            icon={<Monitor />}
+                            value={stationStats?.total || 0}
+                            meta={`${stationStats?.active || 0} active`}
+                        />
+                        <StatTile
+                            label="Online Stations"
+                            icon={<CheckCircle2 />}
+                            value={stationStats?.online || 0}
+                            meta={`${stationStats?.offline || 0} offline`}
+                        />
+                        <StatTile
+                            label="Payment Terminals"
+                            icon={<CreditCard />}
+                            value={terminalStats?.total || 0}
+                            meta={`${terminalStats?.assigned || 0} assigned`}
+                        />
+                        <StatTile
+                            label="Connected Terminals"
+                            icon={<Wifi />}
+                            value={terminalStats?.connected || 0}
+                            meta={`${terminalStats?.disconnected || 0} disconnected`}
+                        />
+                    </StatRow>
+                </PanelSection>
+            </Panel>
 
             {/* Tabs & Content */}
-            <Card>
-                <CardHeader>
+            <Panel>
+                <div className="border-b px-4 py-4 sm:px-6">
                     <div className="flex w-full min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'stations' | 'terminals')} className="min-w-0">
                             <div className="overflow-x-auto">
@@ -423,8 +408,8 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                             )}
                         </div>
                     </div>
-                </CardHeader>
-                <CardContent>
+                </div>
+                <div className="px-4 py-6 sm:px-6">
                     {isLoading ? (
                         <div className="flex items-center justify-center py-8">
                             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -713,8 +698,8 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                             )}
                         </>
                     )}
-                </CardContent>
-            </Card>
+                </div>
+            </Panel>
 
             {/* Add Station Dialog */}
             <AddStationDialog
