@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Phone } from "lucide-react";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { isValidPhone, formatPhoneForDisplay, normalizePhone } from "@/lib/phone";
+import { CHECKOUT_FIELD_RING, CHECKOUT_PHONE_RING } from "./field-styles";
 
 interface ContactSectionProps {
   isAuthenticated: boolean;
@@ -126,6 +127,7 @@ export function ContactSection({
             onChange={(e) => onFirstNameChange(e.target.value)}
             onBlur={() => setTouched((t) => ({ ...t, firstName: true }))}
             placeholder="First name"
+            className={CHECKOUT_FIELD_RING}
             style={{
               borderColor: firstNameError ? "#ef4444" : "var(--border)",
               backgroundColor: "var(--bg)",
@@ -145,6 +147,7 @@ export function ContactSection({
             value={lastName}
             onChange={(e) => onLastNameChange(e.target.value)}
             placeholder="Last name"
+            className={CHECKOUT_FIELD_RING}
             style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)" }}
           />
         </div>
@@ -161,6 +164,7 @@ export function ContactSection({
           onChange={(e) => onEmailChange(e.target.value)}
           onBlur={() => setTouched((t) => ({ ...t, email: true }))}
           placeholder="your@email.com"
+          className={CHECKOUT_FIELD_RING}
           style={{
             borderColor: emailError ? "#ef4444" : "var(--border)",
             backgroundColor: "var(--bg)",
@@ -180,7 +184,7 @@ export function ContactSection({
             onChange={(e164) => onPhoneChange(normalizePhone(e164) ?? e164)}
             onBlur={() => setTouched((t) => ({ ...t, phone: true }))}
             aria-invalid={!!phoneError}
-            className="[&_.react-international-phone-input]:!bg-[var(--bg)] [&_.react-international-phone-country-selector-button]:!bg-[var(--bg)]"
+            className={`[&_.react-international-phone-input]:!bg-[var(--bg)] [&_.react-international-phone-country-selector-button]:!bg-[var(--bg)] ${CHECKOUT_PHONE_RING}`}
           />
           {phoneError && <p className="text-xs text-red-500">{phoneError}</p>}
         </div>

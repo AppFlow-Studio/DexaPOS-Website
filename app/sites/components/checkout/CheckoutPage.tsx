@@ -15,6 +15,7 @@ import { AuthDialog } from "../AuthDialog";
 import { CheckoutHeader } from "./CheckoutHeader";
 import { ContactSection } from "./ContactSection";
 import { OrderTypeSection } from "./OrderTypeSection";
+import { CHECKOUT_FIELD_RING } from "./field-styles";
 import { PaymentProcessingOverlay } from "./PaymentProcessingOverlay";
 import { OrderDetailsSection } from "./OrderDetailsSection";
 import { TipSection } from "./TipSection";
@@ -26,10 +27,7 @@ import { PlaceOrderButton } from "./PlaceOrderButton";
 import { OrderConfirmation } from "./OrderConfirmation";
 import { PaymentCardForm, type PaymentCardFormHandle } from "./PaymentCardForm";
 import { PassageCheckout } from "@/lib/payments/valor/passageClient";
-import {
-  readPassageBillingDetails,
-  type PassageBillingDetails,
-} from "@/lib/payments/valor/passageBilling";
+import { type PassageBillingDetails } from "@/lib/payments/valor/passageBilling";
 import { ConfirmDialog } from "../ConfirmDialog";
 import {
   type PlaceOrderItem,
@@ -239,6 +237,11 @@ export function CheckoutPage({
     isDemo: boolean;
   } | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  // Card billing (AVS). Passage.js does not reliably surface its own
+  // showBillingAddress fields in onFormSubmit, so we own these two inputs to
+  // guarantee we can read + require them for the Valor sale.
+  const [cardBillingStreet, setCardBillingStreet] = useState("");
+  const [cardBillingZip, setCardBillingZip] = useState("");
   const [payCashInStore, setPayCashInStore] = useState(false);
   const valorPaymentTokenRef = useRef<string | null>(null);
   const valorSubmissionRef = useRef(false);
@@ -1028,19 +1031,78 @@ export function CheckoutPage({
                     card payment form always renders. Restore the toggle here to
                     re-enable paying with cash at pickup. */}
                 {!payCashInStore && valorBootstrap && (
+                  <>
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="card-billing-street"
+                        className="text-sm font-semibold"
+                        style={{ color: "var(--text)" }}
+                      >
+                        Billing Street Address
+                      </label>
+                      <input
+                        id="card-billing-street"
+                        type="text"
+                        value={cardBillingStreet}
+                        onChange={(e) => {
+                          setCardBillingStreet(e.target.value);
+                          if (paymentError) setPaymentError(null);
+                        }}
+                        placeholder="Street address on the card"
+                        autoComplete="billing address-line1"
+                        className={`w-full px-3 py-2 text-sm rounded-lg border-0 ${CHECKOUT_FIELD_RING}`}
+                        style={{
+                          backgroundColor: "var(--bg)",
+                          color: "var(--text)",
+                          borderRadius: "var(--radius)",
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="card-billing-zip"
+                        className="text-sm font-semibold"
+                        style={{ color: "var(--text)" }}
+                      >
+                        Billing ZIP Code
+                      </label>
+                      <input
+                        id="card-billing-zip"
+                        type="text"
+                        inputMode="numeric"
+                        value={cardBillingZip}
+                        onChange={(e) => {
+                          setCardBillingZip(e.target.value);
+                          if (paymentError) setPaymentError(null);
+                        }}
+                        placeholder="ZIP code on the card"
+                        autoComplete="billing postal-code"
+                        className={`w-full px-3 py-2 text-sm rounded-lg border-0 ${CHECKOUT_FIELD_RING}`}
+                        style={{
+                          backgroundColor: "var(--bg)",
+                          color: "var(--text)",
+                          borderRadius: "var(--radius)",
+                        }}
+                      />
+                      {cardBillingZip.trim().length > 0 &&
+                        !/^\d{5}(-\d{4})?$/.test(cardBillingZip.trim()) && (
+                          <p className="text-xs" style={{ color: "#ef4444" }}>
+                            Enter a valid 5-digit ZIP code.
+                          </p>
+                        )}
+                    </div>
                   <PassageCheckout
                     clientToken={valorBootstrap.clientToken}
                     epi={valorBootstrap.epi}
                     isDemo={valorBootstrap.isDemo}
                     formAction="/api/valor/passage-callback"
                     submitText={`Pay $${total.toFixed(2)}`}
-                    showBillingAddress
                     onTokenReceived={({ token }) => {
                       // Passage invokes onFormSubmit immediately after this callback;
                       // hold the token in a ref so it can be paired with AVS data.
                       valorPaymentTokenRef.current = token;
                     }}
-                    onFormSubmit={(formData) => {
+                    onFormSubmit={() => {
                       const token = valorPaymentTokenRef.current;
                       valorPaymentTokenRef.current = null;
 
@@ -1050,13 +1112,15 @@ export function CheckoutPage({
                         );
                         return;
                       }
-                      const billing = readPassageBillingDetails(formData);
-                      if (!billing.address1 || !billing.zip) {
+                      const address1 = cardBillingStreet.trim();
+                      const zip = cardBillingZip.trim();
+                      if (address1.length < 4 || !/^\d{5}(-\d{4})?$/.test(zip)) {
                         setPaymentError(
                           "Enter the billing street address and ZIP code for this card."
                         );
                         return;
                       }
+                      const billing: PassageBillingDetails = { address1, zip };
                       if (!token) {
                         setPaymentError(
                           "Card tokenization did not complete. Please try again."
@@ -1086,6 +1150,7 @@ export function CheckoutPage({
                       </div>
                     }
                   />
+                  </>
                 )}
                 {!payCashInStore && !valorBootstrap && tokenizationKey && (
                   <PaymentCardForm
@@ -1125,11 +1190,9 @@ export function CheckoutPage({
                 onChange={(e) => setSpecialInstructions(e.target.value)}
                 placeholder="Any notes for the restaurant..."
                 rows={2}
-                className="w-full px-3 py-2 text-sm rounded-lg resize-none"
+                className={`w-full px-3 py-2 text-sm rounded-lg resize-none border-0 ${CHECKOUT_FIELD_RING}`}
                 style={{
-                  borderColor: "var(--border)",
                   backgroundColor: "var(--bg)",
-                  border: "1px solid var(--border)",
                   color: "var(--text)",
                   borderRadius: "var(--radius)",
                 }}

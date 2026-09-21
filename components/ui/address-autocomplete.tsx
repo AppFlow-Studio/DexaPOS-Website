@@ -21,10 +21,24 @@ interface AddressAutocompleteProps {
   disabled?: boolean
   id?: string
   inputStyle?: React.CSSProperties
+  inputClassName?: string
 }
 
-// Singleton loader so we only ever load the script once per page.
+// Singleton loader so the Maps JS API <script> is only ever injected once per
+// page. A module-scoped guard alone isn't enough: HMR resets it, and if this
+// module is duplicated across bundle chunks each copy gets its own
+// `loaderPromise` — either path injects a second <script>, which makes Maps warn
+// "You have included the Google Maps JavaScript API multiple times." So the
+// in-flight load is published on `window`, and before injecting we also adopt any
+// <script> already in the DOM or an already-present `google` global.
 type LoadState = 'idle' | 'loading' | 'loaded' | 'failed'
+
+const GMAPS_SCRIPT_ID = 'dexa-google-maps-js'
+
+interface GmapsWindow extends Window {
+  google?: typeof google
+  __dexaGmapsLoader?: Promise<void>
+}
 
 let loaderPromise: Promise<void> | null = null
 let loadState: LoadState = 'idle'
@@ -35,9 +49,33 @@ function notify(state: LoadState) {
   for (const cb of loadSubscribers) cb(state)
 }
 
+// The new Places classes (AutocompleteSuggestion, AutocompleteSessionToken, …)
+// only exist after importLibrary('places') — the async bootstrap URL doesn't
+// eager-load them. importLibrary is itself idempotent, so calling it from any
+// code path is safe.
+function importPlaces(): Promise<void> {
+  return (window as GmapsWindow).google!.maps.importLibrary('places').then(() => {})
+}
+
 function ensureGoogleMapsLoaded(): Promise<void> | null {
   if (loadState === 'loaded') return Promise.resolve()
   if (loaderPromise) return loaderPromise
+
+  const w = window as GmapsWindow
+
+  // A load kicked off by another module instance (or a prior HMR cycle) is the
+  // single source of truth — adopt it instead of injecting our own <script>.
+  const shared = w.__dexaGmapsLoader
+  if (shared) {
+    loaderPromise = shared
+      .then(() => notify('loaded'))
+      .catch((err: unknown) => {
+        notify('failed')
+        loaderPromise = null
+        throw err
+      })
+    return loaderPromise
+  }
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
   if (!apiKey) {
@@ -50,34 +88,51 @@ function ensureGoogleMapsLoaded(): Promise<void> | null {
 
   notify('loading')
 
-  loaderPromise = new Promise<void>((resolve, reject) => {
-    // Use the async bootstrap URL (no `libraries` param) so the Maps JS SDK
-    // initialises without eagerly loading any legacy library bundle.
-    // We then call importLibrary("places") to get the new Places API classes
-    // (AutocompleteSuggestion, AutocompleteSessionToken, etc.) which are NOT
-    // available via the legacy `libraries=places` query-param load path.
+  const load = new Promise<void>((resolve, reject) => {
+    // Maps already on the page (e.g. HMR kept the old <script>): reuse it.
+    if (w.google?.maps) {
+      resolve()
+      return
+    }
+    // A <script> is in the DOM but hasn't finished loading: wait on it rather
+    // than adding a duplicate.
+    const existing = document.getElementById(GMAPS_SCRIPT_ID) as HTMLScriptElement | null
+    if (existing) {
+      existing.addEventListener('load', () => resolve(), { once: true })
+      existing.addEventListener(
+        'error',
+        () => reject(new Error('Failed to load Google Maps script')),
+        { once: true },
+      )
+      return
+    }
+    // Fresh injection. Use the async bootstrap URL (no `libraries` param) so the
+    // SDK initialises without eager-loading any legacy library bundle.
     const callbackName = `__gmapsReady_${Math.random().toString(36).slice(2)}`
-    ;(window as unknown as Record<string, unknown>)[callbackName] = () => {
-      delete (window as unknown as Record<string, unknown>)[callbackName]
+    ;(w as unknown as Record<string, unknown>)[callbackName] = () => {
+      delete (w as unknown as Record<string, unknown>)[callbackName]
       resolve()
     }
     const script = document.createElement('script')
+    script.id = GMAPS_SCRIPT_ID
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&loading=async&callback=${callbackName}`
     script.async = true
     script.onerror = () => reject(new Error('Failed to load Google Maps script'))
     document.head.appendChild(script)
-  })
-    .then(async () => {
-      // Bootstrap the new Places library so google.maps.places.AutocompleteSuggestion
-      // and AutocompleteSessionToken are available before we set state to 'loaded'.
-      await (window as unknown as { google: typeof google }).google.maps.importLibrary('places')
-      notify('loaded')
-    })
+  }).then(importPlaces)
+
+  // Publish the in-flight load synchronously so sibling instances mounting in the
+  // same tick reuse it instead of injecting their own <script>.
+  w.__dexaGmapsLoader = load
+
+  loaderPromise = load
+    .then(() => notify('loaded'))
     .catch((err: unknown) => {
       console.warn('[AddressAutocomplete] Failed to load Google Maps script:', err)
       notify('failed')
-      // Allow a future retry
+      // Allow a future attempt to retry from scratch.
       loaderPromise = null
+      delete w.__dexaGmapsLoader
       throw err
     })
 
@@ -130,6 +185,7 @@ function FallbackInput({
   disabled,
   id,
   inputStyle,
+  inputClassName,
 }: AddressAutocompleteProps) {
   return (
     <Input
@@ -138,7 +194,7 @@ function FallbackInput({
       onChange={(e) => onInputChange(e.target.value)}
       placeholder={placeholder}
       disabled={disabled}
-      className={cn(error && 'border-destructive')}
+      className={cn(error && 'border-destructive', inputClassName)}
       style={inputStyle}
     />
   )
@@ -162,6 +218,7 @@ function AddressAutocompleteInner({
   disabled,
   id,
   inputStyle,
+  inputClassName,
 }: AddressAutocompleteProps) {
   const [suggestions, setSuggestions] = React.useState<LocalSuggestion[]>([])
   const [open, setOpen] = React.useState(false)
@@ -316,7 +373,7 @@ function AddressAutocompleteInner({
         role="combobox"
         aria-autocomplete="list"
         aria-expanded={open}
-        className={cn(error && 'border-destructive')}
+        className={cn(error && 'border-destructive', inputClassName)}
         style={inputStyle}
       />
       {open && suggestions.length > 0 && (

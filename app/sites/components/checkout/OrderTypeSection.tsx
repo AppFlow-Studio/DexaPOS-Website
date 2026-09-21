@@ -7,6 +7,7 @@ import { MapPin, Plus, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StoreMapEmbed } from "./StoreMapEmbed";
+import { CHECKOUT_FIELD_RING } from "./field-styles";
 import type { SavedAddress } from "../../customer-actions";
 
 interface OrderTypeSectionProps {
@@ -157,6 +158,7 @@ export function OrderTypeSection({
                 }
                 placeholder="Street address"
                 inputStyle={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
+                inputClassName={CHECKOUT_FIELD_RING}
               />
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <Input
@@ -164,6 +166,7 @@ export function OrderTypeSection({
                   onChange={(e) => onNewAddressChange({ ...newAddress, city: e.target.value })}
                   placeholder="City"
                   autoComplete="address-level2"
+                  className={CHECKOUT_FIELD_RING}
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
                 />
                 <Input
@@ -171,6 +174,7 @@ export function OrderTypeSection({
                   onChange={(e) => onNewAddressChange({ ...newAddress, state: e.target.value })}
                   placeholder="State"
                   autoComplete="address-level1"
+                  className={CHECKOUT_FIELD_RING}
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
                 />
                 <Input
@@ -178,6 +182,7 @@ export function OrderTypeSection({
                   onChange={(e) => onNewAddressChange({ ...newAddress, zip: e.target.value })}
                   placeholder="ZIP"
                   autoComplete="postal-code"
+                  className={CHECKOUT_FIELD_RING}
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
                 />
               </div>
@@ -186,6 +191,7 @@ export function OrderTypeSection({
                 onChange={(e) => onNewAddressChange({ ...newAddress, notes: e.target.value })}
                 placeholder="Delivery notes (apt #, gate code...)"
                 autoComplete="off"
+                className={CHECKOUT_FIELD_RING}
                 style={{ borderColor: "var(--border)", backgroundColor: "var(--bg)", color: "var(--text)" }}
               />
               <ZoneFeedback state={zoneCheckState} message={zoneCheckMessage} />
