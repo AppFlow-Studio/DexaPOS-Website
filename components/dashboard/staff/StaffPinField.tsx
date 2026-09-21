@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
+import { useReverification } from "@clerk/nextjs";
+import { isReverificationCancelledError } from "@clerk/nextjs/errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,13 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ReauthDialog } from "./ReauthDialog";
 
-// Tracks last successful re-auth across all instances in the same page session.
-// Using module-level ref so it survives component unmounts (e.g. sheet close/open).
-let lastPinAuthAt: number | null = null;
-
-const REAUTH_TTL_MS = 5 * 60 * 1000;
 const AUTO_HIDE_SECONDS = 10;
 
 interface StaffPinFieldProps {
@@ -57,10 +53,27 @@ export function StaffPinField({
   const [revealState, setRevealState] = React.useState<RevealState>("hidden");
   const [pin, setPin] = React.useState<string | null>(null);
   const [countdown, setCountdown] = React.useState(AUTO_HIDE_SECONDS);
-  const [showReauth, setShowReauth] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
   const countdownRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Enhanced fetcher: if the reveal endpoint returns a Clerk reverification hint
+  // (stale first-factor verification), Clerk pops its own step-up modal — password
+  // for password users, email code for SSO/OAuth users — then retries automatically.
+  const revealPin = useReverification(async () => {
+    const res = await fetch(`/api/staff/${memberId}/reveal-pin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locationId }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) return body as { pin: string; expiresAt: string };
+    // Reverification hint → return as-is so useReverification intercepts + retries.
+    if (body?.clerk_error) return body;
+    throw Object.assign(new Error(body?.error ?? "Failed to reveal PIN"), {
+      status: res.status,
+    });
+  });
 
   const effectiveButtonLabel =
     buttonLabel ?? (hasPin ? "Generate New PIN" : "Generate PIN");
@@ -75,7 +88,6 @@ export function StaffPinField({
   // Reset to hidden when memberId/locationId changes (different staff opened)
   React.useEffect(() => {
     hide();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId, locationId]);
 
   function hide() {
@@ -109,40 +121,21 @@ export function StaffPinField({
     setRevealState("loading");
     setErrorMsg(null);
     try {
-      const res = await fetch(`/api/staff/${memberId}/reveal-pin`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locationId }),
-      });
-
-      if (res.status === 401) {
-        const body = await res.json();
-        if (body?.code === "REAUTH_REQUIRED") {
-          // Cookie expired on server — force re-auth
-          lastPinAuthAt = null;
-          setRevealState("hidden");
-          setShowReauth(true);
-          return;
-        }
-        setRevealState("error");
-        setErrorMsg("Session expired. Please refresh.");
-        return;
-      }
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setRevealState("error");
-        setErrorMsg(body?.error ?? "Failed to reveal PIN");
-        return;
-      }
-
-      const { pin: fetchedPin } = await res.json();
+      // Clerk handles any required step-up reverification inside revealPin().
+      const { pin: fetchedPin } = await revealPin();
       setPin(fetchedPin);
       setRevealState("revealed");
       startCountdown();
-    } catch {
+    } catch (err) {
+      // User closed the reverification modal — quietly return to hidden.
+      if (isReverificationCancelledError(err)) {
+        setRevealState("hidden");
+        return;
+      }
       setRevealState("error");
-      setErrorMsg("Network error. Please try again.");
+      setErrorMsg(
+        err instanceof Error ? err.message : "Failed to reveal PIN",
+      );
     }
   }
 
@@ -152,20 +145,6 @@ export function StaffPinField({
       return;
     }
     if (revealState === "loading") return;
-
-    const needsReauth =
-      lastPinAuthAt === null ||
-      Date.now() - lastPinAuthAt > REAUTH_TTL_MS;
-
-    if (needsReauth) {
-      setShowReauth(true);
-    } else {
-      fetchAndReveal();
-    }
-  }
-
-  function handleReauthSuccess() {
-    lastPinAuthAt = Date.now();
     fetchAndReveal();
   }
 
@@ -264,12 +243,6 @@ export function StaffPinField({
           {helperText}
         </p>
       </div>
-
-      <ReauthDialog
-        open={showReauth}
-        onOpenChange={setShowReauth}
-        onSuccess={handleReauthSuccess}
-      />
     </>
   );
 }

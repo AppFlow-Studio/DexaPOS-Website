@@ -136,6 +136,10 @@ export interface CreateKdsDisplayInput {
   show_online_orders?: boolean;
   online_order_priority?: boolean;
   show_ready_by_countdown?: boolean;
+  // Routing rules to persist alongside the display on create (e.g. prep_station
+  // assignments). Applied atomically in createStation so filters take effect
+  // immediately instead of via a separate client round-trip.
+  routing_rules?: { rule_type: string; rule_value: string }[];
 }
 
 export interface KdsRoutingRule {
@@ -543,35 +547,60 @@ export async function createStation(
     // If KDS station type and kds_config provided, create kds_displays record
     if (input.station_type === "kds" && input.kds_config) {
       const kdsConfig = input.kds_config;
-      const { error: kdsError } = await supabase.from("kds_displays").insert({
-        station_id: data.id,
-        merchant_id: merchant.id,
-        location_id: input.location_id,
-        display_name: kdsConfig.display_name,
-        display_color: kdsConfig.display_color || null,
-        display_mode: kdsConfig.display_mode || "ticket",
-        columns: kdsConfig.columns ?? 4,
-        font_scale: kdsConfig.font_scale ?? 1.0,
-        routing_mode: kdsConfig.routing_mode || "all",
-        show_all_items: kdsConfig.show_all_items ?? false,
-        warning_minutes: kdsConfig.warning_minutes ?? 5,
-        alert_minutes: kdsConfig.alert_minutes ?? 10,
-        auto_bump_minutes: kdsConfig.auto_bump_minutes ?? null,
-        sound_on_new_order: kdsConfig.sound_on_new_order ?? true,
-        sound_on_rush: kdsConfig.sound_on_rush ?? true,
-        show_order_source: kdsConfig.show_order_source ?? true,
-        show_server_name: kdsConfig.show_server_name ?? true,
-        show_order_notes: kdsConfig.show_order_notes ?? true,
-        show_allergy_flags: kdsConfig.show_allergy_flags ?? true,
-        show_online_orders: kdsConfig.show_online_orders ?? true,
-        online_order_priority: kdsConfig.online_order_priority ?? true,
-        show_ready_by_countdown: kdsConfig.show_ready_by_countdown ?? true,
-      });
+      const { data: kdsDisplay, error: kdsError } = await supabase
+        .from("kds_displays")
+        .insert({
+          station_id: data.id,
+          merchant_id: merchant.id,
+          location_id: input.location_id,
+          display_name: kdsConfig.display_name,
+          display_color: kdsConfig.display_color || null,
+          display_mode: kdsConfig.display_mode || "ticket",
+          columns: kdsConfig.columns ?? 4,
+          font_scale: kdsConfig.font_scale ?? 1.0,
+          routing_mode: kdsConfig.routing_mode || "all",
+          show_all_items: kdsConfig.show_all_items ?? false,
+          warning_minutes: kdsConfig.warning_minutes ?? 5,
+          alert_minutes: kdsConfig.alert_minutes ?? 10,
+          auto_bump_minutes: kdsConfig.auto_bump_minutes ?? null,
+          sound_on_new_order: kdsConfig.sound_on_new_order ?? true,
+          sound_on_rush: kdsConfig.sound_on_rush ?? true,
+          show_order_source: kdsConfig.show_order_source ?? true,
+          show_server_name: kdsConfig.show_server_name ?? true,
+          show_order_notes: kdsConfig.show_order_notes ?? true,
+          show_allergy_flags: kdsConfig.show_allergy_flags ?? true,
+          show_online_orders: kdsConfig.show_online_orders ?? true,
+          online_order_priority: kdsConfig.online_order_priority ?? true,
+          show_ready_by_countdown: kdsConfig.show_ready_by_countdown ?? true,
+        })
+        .select("id")
+        .single();
 
-      if (kdsError) {
+      if (kdsError || !kdsDisplay) {
         console.error("[createStation] KDS Display insert error:", kdsError);
         // Station was created but KDS config failed - don't fail the whole operation
         // but log the error so it can be configured later
+      } else if (kdsConfig.routing_rules && kdsConfig.routing_rules.length > 0) {
+        // Persist routing rules in the same call so filters (e.g. prep-station
+        // assignments) apply immediately. Previously the client re-fetched the
+        // display and saved rules separately, which silently dropped them if the
+        // fetch missed the just-created row.
+        const { error: rulesError } = await supabase
+          .from("kds_routing_rules")
+          .insert(
+            kdsConfig.routing_rules.map((r) => ({
+              kds_display_id: kdsDisplay.id,
+              rule_type: r.rule_type,
+              rule_value: r.rule_value,
+            }))
+          );
+
+        if (rulesError) {
+          console.error(
+            "[createStation] KDS routing rules insert error:",
+            rulesError
+          );
+        }
       }
     }
 

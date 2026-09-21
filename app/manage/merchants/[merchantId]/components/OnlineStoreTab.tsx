@@ -1561,47 +1561,6 @@ export function OnlineStoreTab({
                                             }
                                         />
                                     </div>
-                                    {localSettings.acceptOnlinePayments !== false && (
-                                        <div className="ml-8 space-y-2">
-                                            <Label>NMI Tokenization Key</Label>
-                                            <Input
-                                                value={localSettings.nmiTokenizationKey || ''}
-                                                onChange={(e) => updateSettings({ nmiTokenizationKey: e.target.value })}
-                                                placeholder="Enter NMI tokenization key"
-                                            />
-                                            <p className="text-xs text-muted-foreground">
-                                                This browser-safe key is sent to the storefront checkout to tokenize card details with NMI.
-                                            </p>
-                                            <Label className="pt-2">NMI Private API Key</Label>
-                                            <Input
-                                                type="password"
-                                                value={localSettings.nmiPrivateApiKey || ''}
-                                                onChange={(e) => updateSettings({ nmiPrivateApiKey: e.target.value })}
-                                                placeholder={
-                                                    localSettings.nmiConfigured
-                                                        ? 'Stored securely. Enter a new key only to rotate it.'
-                                                        : 'Enter NMI private API key'
-                                                }
-                                            />
-                                            <p className="text-xs text-muted-foreground">
-                                                This private key is stored securely and is never shown back in plain text. Enter a new value only when rotating the key.
-                                            </p>
-                                            <Label className="pt-2">NMI Webhook Signing Secret</Label>
-                                            <Input
-                                                type="password"
-                                                value={localSettings.nmiWebhookSecret || ''}
-                                                onChange={(e) => updateSettings({ nmiWebhookSecret: e.target.value })}
-                                                placeholder={
-                                                    localSettings.nmiWebhookConfigured
-                                                        ? 'Stored securely. Enter a new value only to rotate it.'
-                                                        : 'Enter NMI webhook signing secret'
-                                                }
-                                            />
-                                            <p className="text-xs text-muted-foreground">
-                                                Used to verify invoice-payment and storefront payment webhooks before updating payment state asynchronously.
-                                            </p>
-                                        </div>
-                                    )}
                                     <Separator />
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex items-center gap-3 min-w-0">
