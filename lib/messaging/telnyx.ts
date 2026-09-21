@@ -4,6 +4,8 @@ import { normalizePhone as normalizeToE164, isValidPhone as isValidPhoneShared }
 const apiKey = process.env.TELNYX_API_KEY;
 const fromPhone = process.env.TELNYX_FROM_NUMBER;
 const messagingProfileId = process.env.TELNYX_MESSAGING_PROFILE_ID;
+const webhookUrl = process.env.TELNYX_WEBHOOK_URL;
+const webhookFailoverUrl = process.env.TELNYX_WEBHOOK_FAILOVER_URL;
 
 if (!apiKey || (!fromPhone && !messagingProfileId)) {
   console.warn(
@@ -20,21 +22,10 @@ const client = apiKey ? new Telnyx({ apiKey }) : null;
 export async function sendSMS(
   to: string,
   body: string
-): Promise<{ id: string } | { error: string }> {
-  console.log("[telnyx.sendSMS] Starting SMS send:", {
-    to,
-    fromPhone,
-    hasClient: !!client,
-    hasProfile: !!messagingProfileId,
-  });
-
+): Promise<SmsSendResult> {
   if (!client) {
     const error = "Telnyx not configured";
-    console.error("[telnyx.sendSMS]", error, {
-      apiKey: apiKey ? "***" : "missing",
-      fromPhone,
-      messagingProfileId: messagingProfileId ? "***" : "missing",
-    });
+    console.error("[telnyx.sendSMS]", error);
     return { error };
   }
 
@@ -56,43 +47,82 @@ export async function sendSMS(
   try {
     const normalizedTo = normalizeToE164(to);
     if (!normalizedTo) {
-      return { error: `Invalid phone number: ${to}` };
+      return { error: "Invalid phone number" };
     }
-    console.log("[telnyx.sendSMS] Normalized phone number:", {
-      original: to,
-      normalized: normalizedTo,
-    });
 
     const params: {
       to: string;
       text: string;
       from?: string;
       messaging_profile_id?: string;
+      use_profile_webhooks?: boolean;
+      webhook_url?: string;
+      webhook_failover_url?: string;
     } = {
       to: normalizedTo,
       text: body,
+      use_profile_webhooks: true,
     };
     if (fromPhone) params.from = fromPhone;
-    if (messagingProfileId) params.messaging_profile_id = messagingProfileId;
+    else if (messagingProfileId) params.messaging_profile_id = messagingProfileId;
+    if (webhookUrl) params.webhook_url = webhookUrl;
+    if (webhookFailoverUrl) params.webhook_failover_url = webhookFailoverUrl;
 
     const response = await client.messages.send(params);
-    const id = (response as { data?: { id?: string } } | undefined)?.data?.id ?? "unknown";
-    console.log("[telnyx.sendSMS] Message sent successfully:", {
-      id,
-      to: normalizedTo,
-    });
-    return { id };
+    const data = response?.data;
+    if (!data?.id) return { error: "Telnyx response did not include a message ID" };
+
+    const responseFrom = data.from?.phone_number ?? fromPhone ?? null;
+    const responseProfile = data.messaging_profile_id ?? messagingProfileId ?? null;
+    const providerStatus = data.to?.[0]?.status ?? "sent";
+    if (["sending_failed", "delivery_failed"].includes(providerStatus)) {
+      const firstError = data.errors?.[0];
+      return {
+        error: firstError?.detail ?? firstError?.title ?? "Telnyx rejected the SMS",
+        errorCode: firstError?.code ?? null,
+        id: data.id,
+        status: providerStatus,
+        fromNumber: responseFrom,
+        messagingProfileId: responseProfile,
+      };
+    }
+
+    return {
+      id: data.id,
+      status: providerStatus,
+      fromNumber: responseFrom,
+      messagingProfileId: responseProfile,
+    };
   } catch (error: unknown) {
     const err = error as { message?: string; code?: string | number; status?: number };
     console.error("[telnyx.sendSMS] Exception:", {
-      message: err?.message,
       code: err?.code,
       status: err?.status,
-      full: String(error),
     });
-    return { error: err?.message || "Failed to send SMS" };
+    return {
+      error: err?.message || "Failed to send SMS",
+      errorCode: err?.code == null ? null : String(err.code),
+    };
   }
 }
+
+export interface SmsSendSuccess {
+  id: string;
+  status: string;
+  fromNumber: string | null;
+  messagingProfileId: string | null;
+}
+
+export interface SmsSendFailure {
+  error: string;
+  errorCode?: string | null;
+  id?: string;
+  status?: string;
+  fromNumber?: string | null;
+  messagingProfileId?: string | null;
+}
+
+export type SmsSendResult = SmsSendSuccess | SmsSendFailure;
 
 /** Re-export shared validation so existing imports keep working. */
 export const isValidPhoneNumber = isValidPhoneShared;

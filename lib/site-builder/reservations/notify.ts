@@ -1,6 +1,9 @@
 import "server-only";
 
-import { logOutboundMessage } from "@/lib/messaging/message-log";
+import {
+  logOutboundMessage,
+  logSmsSendResult,
+} from "@/lib/messaging/message-log";
 import { createAppNotification } from "@/lib/notifications/app-notifications";
 import { isValidEmail, sendEmail } from "@/lib/messaging/resend";
 import {
@@ -365,14 +368,12 @@ export async function notifyWebsiteReservationBooked({
         ? renderReservationRequestedText(brand, ctx)
         : renderReservationConfirmedText(brand, ctx);
       const sms = await sendSMS(reservation.phone, text);
-      await logOutboundMessage(supabase, {
+      const ledger = await logSmsSendResult(supabase, {
         merchantId: reservation.merchant_id,
         toNumber: reservation.phone,
         body: text,
-        telnyxMessageId: "error" in sms ? null : sms.id,
-        status: "error" in sms ? "failed" : "sent",
-        errorCode: "error" in sms ? sms.error : null,
-      });
+      }, sms);
+      if (!ledger.ok) result.errors.push(`SMS ledger: ${ledger.error}`);
       if ("error" in sms) result.errors.push(`SMS: ${sms.error}`);
       else result.guestSms = true;
     }
@@ -590,14 +591,12 @@ export async function notifyReservationRequestAnswered({
         ? renderReservationConfirmedText(brand, ctx)
         : renderReservationDeclinedText(brand, ctx);
       const sms = await sendSMS(reservation.phone, text);
-      await logOutboundMessage(supabase, {
+      const ledger = await logSmsSendResult(supabase, {
         merchantId: reservation.merchant_id,
         toNumber: reservation.phone,
         body: text,
-        telnyxMessageId: "error" in sms ? null : sms.id,
-        status: "error" in sms ? "failed" : "sent",
-        errorCode: "error" in sms ? sms.error : null,
-      });
+      }, sms);
+      if (!ledger.ok) result.errors.push(`SMS ledger: ${ledger.error}`);
       if ("error" in sms) result.errors.push(`SMS: ${sms.error}`);
       else result.guestSms = true;
     }
@@ -716,14 +715,12 @@ export async function notifyWebsiteReservationCancelled({
     if (reservation.phone && reservation.sms_opt_in !== false) {
       const text = renderReservationCancelledText(brand, ctx);
       const sms = await sendSMS(reservation.phone, text);
-      await logOutboundMessage(supabase, {
+      const ledger = await logSmsSendResult(supabase, {
         merchantId: reservation.merchant_id,
         toNumber: reservation.phone,
         body: text,
-        telnyxMessageId: "error" in sms ? null : sms.id,
-        status: "error" in sms ? "failed" : "sent",
-        errorCode: "error" in sms ? sms.error : null,
-      });
+      }, sms);
+      if (!ledger.ok) result.errors.push(`SMS ledger: ${ledger.error}`);
       if ("error" in sms) result.errors.push(`SMS: ${sms.error}`);
       else result.guestSms = true;
     }

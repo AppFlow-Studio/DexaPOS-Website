@@ -110,6 +110,7 @@
     }
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@tailwindcss/postcss": "^4.3.3",
     "@tanstack/eslint-plugin-query": "^5.101.4",
     "@types/google.maps": "^3.65.3",

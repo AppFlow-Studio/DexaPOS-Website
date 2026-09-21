@@ -2274,6 +2274,7 @@ export type Database = {
           referral_code: string | null
           referred_by_customer_id: string | null
           sms_opt_in: boolean | null
+          sms_consent_event_at: string | null
           sms_opt_in_at: string | null
           tags: string[] | null
           total_orders: number | null
@@ -2313,6 +2314,7 @@ export type Database = {
           referral_code?: string | null
           referred_by_customer_id?: string | null
           sms_opt_in?: boolean | null
+          sms_consent_event_at?: string | null
           sms_opt_in_at?: string | null
           tags?: string[] | null
           total_orders?: number | null
@@ -2352,6 +2354,7 @@ export type Database = {
           referral_code?: string | null
           referred_by_customer_id?: string | null
           sms_opt_in?: boolean | null
+          sms_consent_event_at?: string | null
           sms_opt_in_at?: string | null
           tags?: string[] | null
           total_orders?: number | null
@@ -23452,6 +23455,7 @@ export type Database = {
           created_at: string
           error_message: string | null
           event_type: string | null
+          external_event_id: string | null
           id: string
           max_retries: number
           next_retry_at: string | null
@@ -23466,6 +23470,7 @@ export type Database = {
           created_at?: string
           error_message?: string | null
           event_type?: string | null
+          external_event_id?: string | null
           id?: string
           max_retries?: number
           next_retry_at?: string | null
@@ -23480,6 +23485,7 @@ export type Database = {
           created_at?: string
           error_message?: string | null
           event_type?: string | null
+          external_event_id?: string | null
           id?: string
           max_retries?: number
           next_retry_at?: string | null
@@ -28483,6 +28489,7 @@ export type Database = {
           p_customer_id?: string
           p_error_code?: string
           p_from_number?: string
+          p_messaging_profile_id?: string
           p_merchant_id: string
           p_recipient_id?: string
           p_status?: string
@@ -29431,6 +29438,8 @@ export type Database = {
         Returns: Json
       }
       record_telnyx_message: { Args: { p_payload: Json }; Returns: Json }
+      repair_telnyx_outbound_ledger: { Args: { p_dlq_id: string }; Returns: string | null }
+      telnyx_phone_key: { Args: { p: string }; Returns: string }
       record_valor_batch_webhook: { Args: { p_payload: Json }; Returns: Json }
       record_waitlist_sms_result:
         | {

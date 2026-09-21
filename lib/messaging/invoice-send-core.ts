@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { sendSMS, isValidPhoneNumber } from "@/lib/messaging/telnyx";
+import { logSmsSendResult } from "@/lib/messaging/message-log";
 import { isValidEmail } from "@/lib/messaging/resend";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { resolveAppUrl } from "@/lib/messaging/app-url";
@@ -117,6 +118,13 @@ export async function dispatchInvoiceSend(
 
   const invoiceId = inv.id as string;
   const merchantId = inv.merchant_id as string | undefined;
+  if (!merchantId) {
+    return {
+      success: false,
+      message: "Invoice has no merchant assignment.",
+      results: [],
+    };
+  }
 
   if (inv.status === "paid") {
     return { success: false, message: "This invoice is already paid.", results: [] };
@@ -306,13 +314,24 @@ export async function dispatchInvoiceSend(
       const text = renderInvoiceText(templateData, payUrl || appUrl);
       const smsResult = await sendSMS(phoneRecipient, text);
       const failed = "error" in smsResult;
+      const ledger = await logSmsSendResult(supabase, {
+        merchantId,
+        customerId:
+          ((inv.customer as { id?: string } | null)?.id ?? null),
+        toNumber: phoneRecipient,
+        body: text,
+      }, smsResult);
 
       if (pendingRow) {
         await supabase
           .from("invoice_sends")
           .update({
             status: failed ? "failed" : "sent",
-            error_message: failed ? smsResult.error : null,
+            error_message: failed
+              ? smsResult.error
+              : ledger.ok
+                ? null
+                : `Ledger: ${ledger.error}`,
           })
           .eq("id", (pendingRow as { id: string }).id);
       }
