@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { Panel, PanelGrid } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
     DollarSign,
     ShoppingCart,
@@ -13,7 +14,6 @@ import {
     CreditCard,
     ArrowUpRight,
     ArrowDownRight,
-    Loader2,
     Store,
     MapPin,
     User,
@@ -113,12 +113,10 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
     // Order Types for Pie Chart (Revenue by Category proxy)
     const orderTypeData = useMemo(() => {
         if (!orderAnalytics?.orderTypeBreakdown) return []
-        // Two distinct hues, alternating. The `--chart-*` ramp is a single hue
-        // (~277°) varying only in lightness, so two of its steps read as one
-        // colour; these are separated in hue instead. Written as literal
-        // `oklch()` because the tokens are already `oklch(...)` — wrapping one
-        // in `hsl()` yields invalid CSS and Recharts falls back to black (C2).
-        const colors = ['oklch(0.5854 0.2041 277.1173)', 'oklch(0.7049 0.1528 196.7906)']
+        // Purple and yellow, alternating. Written as literal `oklch()` because
+        // the `--chart-*` tokens are already `oklch(...)` — wrapping one in
+        // `hsl()` yields invalid CSS and Recharts falls back to black (C2).
+        const colors = ['oklch(0.5854 0.2041 293.5)', 'oklch(0.7900 0.1580 85.0)']
         return Object.entries(orderAnalytics.orderTypeBreakdown)
             .map(([type, value], index) => ({
                 name: type === 'qr_dine_in' ? 'QR Table' : type.replace(/_/g, ' '),
@@ -128,10 +126,39 @@ export function OverviewTab({ merchantInfo }: OverviewTabProps) {
             .filter(i => i.value > 0)
     }, [orderAnalytics])
 
+    // Mirrors the loaded layout below — two stat sections (4 then 3 tiles) over
+    // a two-up chart row — so the tab does not reflow when data arrives. A
+    // centred spinner promised none of that shape and shifted the whole page.
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-96">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <div className="space-y-6">
+                <Panel>
+                    <PanelSection label="Last 30 days">
+                        <StatRow columns={4} className="mt-6">
+                            {Array.from({ length: 4 }).map((_, i) => (
+                                <StatTile key={i} isLoading label={<Skeleton className="h-3.5 w-24" />} value={null} />
+                            ))}
+                        </StatRow>
+                    </PanelSection>
+
+                    <PanelSection label="Today" divider>
+                        <StatRow columns={3} className="mt-6">
+                            {Array.from({ length: 3 }).map((_, i) => (
+                                <StatTile key={i} isLoading label={<Skeleton className="h-3.5 w-24" />} value={null} />
+                            ))}
+                        </StatRow>
+                    </PanelSection>
+                </Panel>
+
+                <PanelGrid columns={2}>
+                    {Array.from({ length: 2 }).map((_, i) => (
+                        <Panel key={i}>
+                            <PanelSection label={<Skeleton className="h-4 w-40" />}>
+                                <Skeleton className="mt-4 h-75 w-full" />
+                            </PanelSection>
+                        </Panel>
+                    ))}
+                </PanelGrid>
             </div>
         )
     }

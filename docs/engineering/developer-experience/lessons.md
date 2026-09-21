@@ -220,3 +220,36 @@ Two stacked bugs:
    an empty response body — recurring not confirmed; this EPI may not be provisioned for native
    recurring"). Meta-lesson: a payment integration must persist the raw processor response on failure
    — a generic fallback string with an empty body is undebuggable and hides double-charge risk.
+
+## A JSX comment cannot lead a `return (`
+
+Made this mistake twice in one session, in two different files
+(`MerchantSubscriptionSummary.tsx`, then `RiskStrip.tsx`), while adding an
+explanatory comment above a component's root element.
+
+```tsx
+// WRONG — TS1005 ')' expected
+return (
+  {/* why this element looks like this */}
+  <div className="…">
+)
+```
+
+`{/* … */}` is only valid as a *child* of a JSX element. At the top of a
+`return (`, the `{` starts an object literal, so the parser fails several lines
+later with a cascade of TS1005/TS1128 errors that point at the closing tag
+rather than the comment — easy to misread as a broken element.
+
+Use a plain `//` comment above the `return` instead:
+
+```tsx
+// why this element looks like this
+return (
+  <div className="…">
+)
+```
+
+Rule for myself: when a comment explains the root element, it goes *above*
+`return`, never inside the parens. Only put `{/* */}` between sibling elements.
+Meta-lesson: `tsc --noEmit` catches this instantly — run it after adding a
+comment to JSX, not just after changing logic.

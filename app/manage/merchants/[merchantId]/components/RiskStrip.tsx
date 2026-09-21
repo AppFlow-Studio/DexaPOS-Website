@@ -49,8 +49,11 @@ export function RiskStrip({ merchant }: { merchant: MerchantDetails }) {
         },
     ]
 
+    // `rounded-3xl` to match `Panel` (D-02 tier 1): this strip sits directly
+    // above the panels, so a tighter radius read as a different kind of
+    // container. `overflow-hidden` keeps the cell dividers inside the curve.
     return (
-        <div className="grid grid-cols-1 divide-y rounded-lg border bg-card sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x">
+        <div className="grid grid-cols-1 divide-y overflow-hidden rounded-3xl border bg-card sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x">
             {cells.map((c) => {
                 const Icon = c.icon
                 return (

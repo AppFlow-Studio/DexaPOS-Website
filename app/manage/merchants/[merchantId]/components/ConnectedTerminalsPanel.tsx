@@ -65,32 +65,39 @@ const timeAgo = (iso: string | null): string => {
     }
 }
 
+/**
+ * One neutral badge for every connection state (D-03). The icon and the word
+ * carry the state — a green "Online" pill beside a `Wifi` glyph says the same
+ * thing twice, and a column of saturated pills reads as a column of alarms.
+ */
+const CONNECTION_BADGE = 'w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium'
+
 function ConnectionBadge({ state }: { state: ConnectedTerminalRow['connection_state'] }) {
     switch (state) {
         case 'online':
             return (
-                <Badge className="bg-green-600 hover:bg-green-600">
+                <Badge variant="secondary" className={CONNECTION_BADGE}>
                     <Wifi className="h-3 w-3 mr-1" />
                     Online
                 </Badge>
             )
         case 'offline':
             return (
-                <Badge variant="secondary">
+                <Badge variant="secondary" className={CONNECTION_BADGE}>
                     <WifiOff className="h-3 w-3 mr-1" />
                     Offline
                 </Badge>
             )
         case 'stale':
             return (
-                <Badge className="bg-amber-500 hover:bg-amber-500">
+                <Badge variant="secondary" className={CONNECTION_BADGE}>
                     <Clock className="h-3 w-3 mr-1" />
                     Stale
                 </Badge>
             )
         default:
             return (
-                <Badge variant="outline">
+                <Badge variant="secondary" className={CONNECTION_BADGE}>
                     <Clock className="h-3 w-3 mr-1" />
                     Unknown
                 </Badge>

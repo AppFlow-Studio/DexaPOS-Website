@@ -2,8 +2,9 @@
 
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CreditCard, Loader2 } from 'lucide-react'
+import { CreditCard } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useAdminPermissions } from '@/lib/hooks/useAdminPermissions'
 import { subscriptionBillingScope } from '@/supabase/functions/_shared/subscription-billing-scope'
 import {
@@ -105,13 +106,19 @@ export function MerchantSubscriptionSummary({ merchantId }: MerchantSubscription
   // the Subscriptions tab and every getter above.
   if (!canView) return null
 
+  // Mirrors the loaded block: tier row, card-on-file row, last charge, then
+  // the location list — so the card keeps its height while loading.
   if (isLoading) {
     return (
-      <div className="border-t pt-3">
+      <div className="space-y-3 border-t pt-3">
         <p className="text-sm font-medium">Subscription</p>
-        <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Loading subscription…
+        <Skeleton className="h-4 w-52" />
+        <Skeleton className="h-4 w-44" />
+        <Skeleton className="h-4 w-60" />
+        <div className="space-y-1.5">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
         </div>
       </div>
     )

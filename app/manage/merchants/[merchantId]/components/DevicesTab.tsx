@@ -454,8 +454,8 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                             <div className="flex items-center gap-3">
                                                                 <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${
                                                                     station.is_online
-                                                                        ? 'bg-green-100 text-green-600'
-                                                                        : 'bg-gray-100 text-gray-600'
+                                                                        ? 'bg-muted text-foreground'
+                                                                        : 'bg-muted text-muted-foreground'
                                                                 }`}>
                                                                     <span className="text-lg">{getStationTypeIcon(station.station_type)}</span>
                                                                 </div>
@@ -600,8 +600,8 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                             <div className="flex items-center gap-3">
                                                                 <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${
                                                                     terminal.is_connected
-                                                                        ? 'bg-green-100 text-green-600'
-                                                                        : 'bg-gray-100 text-gray-600'
+                                                                        ? 'bg-muted text-foreground'
+                                                                        : 'bg-muted text-muted-foreground'
                                                                 }`}>
                                                                     <CreditCard className="h-5 w-5" />
                                                                 </div>
@@ -636,7 +636,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                         <TableCell>
                                                             <div className="flex items-center gap-2">
                                                                 {terminal.is_connected ? (
-                                                                    <Badge variant="default" className="bg-green-600">
+                                                                    <Badge variant="secondary">
                                                                         <Wifi className="h-3 w-3 mr-1" />
                                                                         Online
                                                                     </Badge>

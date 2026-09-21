@@ -421,7 +421,6 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                     <PanelSection
                         label="Owner & Contact"
                         caption="Primary contact used for payments boarding and account notices"
-                        divider
                     >
                         <div className="mt-4 grid gap-6 md:grid-cols-2 [&>*]:min-w-0">
                                 <div className="space-y-2">
@@ -459,7 +458,6 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                     <PanelSection
                         label="Business Address"
                         caption="Legal business address used for payments boarding"
-                        divider
                     >
                         <div className="mt-4">
                             {hasBusinessAddress ? (
@@ -484,7 +482,6 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                     <PanelSection
                         label="Account"
                         caption="Account status and identifiers"
-                        divider
                     >
                         <div className="mt-4 grid gap-4 md:grid-cols-2 [&>*]:min-w-0">
                                 <div className="space-y-2 min-w-0">
@@ -546,7 +543,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             </Empty>
                         ) : (
                             <div className="overflow-x-auto">
-                            <Table>
+                            <Table variant="data">
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Location Name</TableHead>
