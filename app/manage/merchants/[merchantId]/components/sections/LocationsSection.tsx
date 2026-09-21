@@ -32,7 +32,7 @@ export function LocationsSection({ locations }: { locations: LocationSummary[] }
     return (
         <div>
             <SectionHead title="Locations" sub={`${locations.length} total`} />
-            <div className="overflow-x-auto rounded-lg border bg-card">
+            <div className="overflow-x-auto rounded-3xl border bg-card">
                 <table className="w-full min-w-[560px] text-[12.5px]">
                     <thead className="bg-muted/40 text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">
                         <tr className="border-b">

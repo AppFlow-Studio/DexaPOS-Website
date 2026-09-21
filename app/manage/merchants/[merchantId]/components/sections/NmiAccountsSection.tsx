@@ -70,7 +70,7 @@ export function NmiAccountsSection({ merchantId }: { merchantId: string }) {
       ) : (
         <div className="space-y-3">
           {data.locations.map((row) => (
-            <div key={row.locationId} className="rounded-lg border bg-card p-4">
+            <div key={row.locationId} className="rounded-2xl border bg-card p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <div className="font-medium">{row.locationName}</div>

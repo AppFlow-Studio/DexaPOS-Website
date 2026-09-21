@@ -55,12 +55,10 @@ import { AuditCategory, AuditSeverity } from "@/types/audit-log";
 import { DateRange } from "react-day-picker";
 import { MerchantInfoModel } from "@/types/db-modles";
 
-const SEVERITY_COLORS: Record<AuditSeverity, string> = {
-  info: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  warning:
-    "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  critical: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
-};
+// One neutral pill for every severity (D-03): foreground text on a faded fill.
+// The per-severity icon in SEVERITY_ICONS still distinguishes them at a glance,
+// so the colour was saying the same thing a second time.
+const SEVERITY_BADGE = "bg-muted text-foreground";
 
 const SEVERITY_ICONS = {
   info: <Info className="h-3 w-3" />,
@@ -384,42 +382,66 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                     </span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto min-w-[280px] p-0" align="start">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
-                  />
-                  <div className="flex gap-2 p-3 border-t">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() =>
-                        setDateRange({
-                          from: subDays(new Date(), 7),
-                          to: new Date(),
-                        })
-                      }
-                    >
-                      Last 7 days
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() =>
-                        setDateRange({
-                          from: subDays(new Date(), 30),
-                          to: new Date(),
-                        })
-                      }
-                    >
-                      Last 30 days
-                    </Button>
+                {/* Matches `app/manage/components/DateRangePicker`: one panel,
+                    a single month in range mode. The old two-month layout had
+                    no collision padding, so the second month overflowed the
+                    viewport. `collisionPadding` keeps it off the edge and the
+                    panel is sized to the space between those gutters, which
+                    leaves Radix no room to favour a side. */}
+                <PopoverContent
+                  className="w-auto rounded-xl border p-0 shadow-lg"
+                  align="end"
+                  collisionPadding={16}
+                >
+                  <div className="w-[calc(100vw-2rem)] space-y-3 p-4 sm:w-[19rem]">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <label className="text-sm font-medium text-foreground">
+                        Select range
+                      </label>
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {dateRange?.from
+                          ? `${format(dateRange.from, 'MMM d')} - ${
+                              dateRange.to ? format(dateRange.to, 'MMM d') : '…'
+                            }`
+                          : 'Pick a start date'}
+                      </span>
+                    </div>
+                    <Calendar
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={1}
+                      className="p-0"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() =>
+                          setDateRange({
+                            from: subDays(new Date(), 7),
+                            to: new Date(),
+                          })
+                        }
+                      >
+                        Last 7 days
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() =>
+                          setDateRange({
+                            from: subDays(new Date(), 30),
+                            to: new Date(),
+                          })
+                        }
+                      >
+                        Last 30 days
+                      </Button>
+                    </div>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -620,7 +642,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
       {/* Logs Table */}
       <Panel>
         <div className="overflow-x-auto">
-        <Table className="min-w-[640px]">
+        <Table variant="data" className="min-w-[640px]">
           <TableHeader className="bg-muted/50">
             <TableRow>
               <TableHead className="w-45">
@@ -759,9 +781,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                         variant="secondary"
                         className={cn(
                           "text-[10px] h-6 px-2 gap-1.5 border-none",
-                          SEVERITY_COLORS[
-                            log.severity as keyof typeof SEVERITY_COLORS
-                          ],
+                          SEVERITY_BADGE,
                         )}
                       >
                         {
