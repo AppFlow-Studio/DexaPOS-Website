@@ -23,7 +23,7 @@ export function MerchantHeaderBar({ merchant }: { merchant: MerchantDetails }) {
     const locationLabel = `${merchant.total_locations} location${merchant.total_locations === 1 ? '' : 's'}`
 
     return (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-4 min-w-0">
                 <MerchantLogoUpload
                     merchantId={merchant.id}
@@ -51,7 +51,7 @@ export function MerchantHeaderBar({ merchant }: { merchant: MerchantDetails }) {
                 </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2 self-start">
+            <div className="flex shrink-0 items-center gap-2 self-start sm:self-center">
                 <Button
                     variant="outline"
                     size="sm"

@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Panel } from "@/components/dashboard/shell/Panel";
+import { PanelSection } from "@/components/dashboard/shell/PanelSection";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -298,49 +299,50 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Premium Header */}
-      {/* Standard Header */}
-      <div className="flex flex-col gap-4 pb-2">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Audit Logs</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Track all administrative actions for {merchantInfo.name}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge
-            variant="outline"
-            className="h-9 px-3 text-sm font-normal gap-2"
-          >
-            <Activity className="h-3.5 w-3.5 text-emerald-500" />
-            {total} logs
-          </Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="h-9"
-          >
-            <RefreshCw
-              className={cn("h-4 w-4 mr-2", isFetching && "animate-spin")}
-            />
-            Refresh
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExport}
-            disabled={isExporting || logs.length === 0}
-            className="h-9"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export CSV'}</span>
-            <span className="sm:hidden">Export</span>
-          </Button>
-        </div>
-      </div>
+      {/* This tab renders inside the merchant detail page, which already owns
+          the page `<h1>` via `MerchantHeaderBar`. The section heading is a
+          `PanelSection` label, not a second page title. */}
+      <Panel>
+        <PanelSection
+          icon={Activity}
+          label="Audit Logs"
+          caption={`Track all administrative actions for ${merchantInfo.name}`}
+          action={
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge
+                variant="outline"
+                className="h-9 px-3 text-sm font-normal gap-2"
+              >
+                <Activity className="h-3.5 w-3.5 text-emerald-500" />
+                {total} logs
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="h-9"
+              >
+                <RefreshCw
+                  className={cn("h-4 w-4 mr-2", isFetching && "animate-spin")}
+                />
+                Refresh
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={isExporting || logs.length === 0}
+                className="h-9"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export CSV'}</span>
+                <span className="sm:hidden">Export</span>
+              </Button>
+            </div>
+          }
+        />
+      </Panel>
 
       {/* Filters */}
       <Panel className="p-3 sm:p-6">
