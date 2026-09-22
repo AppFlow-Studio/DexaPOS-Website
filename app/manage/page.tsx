@@ -14,6 +14,8 @@ import { DeviceFleetMap } from './components/DeviceFleetMap'
 import { OrdersHeatmap } from './components/OrdersHeatmap'
 import { AlertsPanel } from './components/AlertsPanel'
 import { PlatformStatusLine } from './components/PlatformStatusLine'
+import { usePlatformActivityFeed } from '@/lib/queries/use-platform-dashboard'
+import { cn } from '@/lib/utils'
 import { HealthDashboard } from './components/HealthDashboard'
 import { AnalyticsContent } from './components/AnalyticsContent'
 
@@ -22,6 +24,9 @@ const DEXA_HQ_ORG_ID = process.env.NEXT_PUBLIC_DEXA_POS_INTERNAL_TEAM_ID ?? ''
 export default function Dashboard() {
   const [isAdminInviteOpen, setIsAdminInviteOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('dashboard')
+  // Served from cache — LiveActivityFeed below uses the same query.
+  const { data: activityEvents } = usePlatformActivityFeed()
+  const hasActivity = (activityEvents?.length ?? 0) > 0
 
   return (
     <PageShell as="div">
@@ -36,7 +41,7 @@ export default function Dashboard() {
         }
       />
 
-      <PlatformStatusLine />
+      <PlatformStatusLine onNavigate={() => setActiveTab('dashboard')} />
 
       {/* Tab Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -75,15 +80,29 @@ export default function Dashboard() {
           {/* Section 1A.5: Merchant Spotlight — top merchants by today's revenue */}
           <MerchantSpotlightSection />
 
-          {/* Section 1B & 1C: Live Feed + Device Fleet (2-column layout) */}
-          {/* `items-start` for the same reason as the row below: the feed was
-              stretched to the fleet panel's height, so an empty "Waiting for
-              activity…" held a full-height column. */}
+          {/* Section 1B & 1C: Live Feed + Device Fleet.
+              The feed gives up its column when it has nothing to show: an empty
+              "Waiting for activity…" was holding 5 of 12 columns while the
+              fleet panel — the one with the offline devices in it — was squeezed
+              into 7. `items-start` keeps each panel at its own height. */}
           <div className="grid items-start gap-6 md:grid-cols-12">
-            <div className="md:col-span-5">
+            {/* One instance, reordered rather than re-mounted: rendering the
+                feed in two branches would remount it (and refetch) each time
+                the last event aged out. */}
+            <div
+              className={
+                hasActivity ? 'md:order-1 md:col-span-5' : 'md:order-2 md:col-span-12'
+              }
+            >
               <LiveActivityFeed />
             </div>
-            <div className="md:col-span-7">
+            <div
+              id="fleet"
+              className={cn(
+                "scroll-mt-24",
+                hasActivity ? "md:order-2 md:col-span-7" : "md:order-1 md:col-span-12",
+              )}
+            >
               <DeviceFleetMap />
             </div>
           </div>
@@ -96,7 +115,7 @@ export default function Dashboard() {
             <div className="md:col-span-4">
               <OrdersHeatmap />
             </div>
-            <div className="md:col-span-8">
+            <div id="alerts" className="scroll-mt-24 md:col-span-8">
               <AlertsPanel />
             </div>
           </div>

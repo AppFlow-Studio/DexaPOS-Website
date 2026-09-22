@@ -63,9 +63,16 @@ export function OrdersHeatmap() {
       <PanelSection icon={Clock} label="Order Volume (24h)">
         {isLoading ? (
           <Skeleton className="h-[300px] w-full rounded-2xl" />
-        ) : chartData.length === 0 ? (
-          <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-            No order data available
+        ) : chartData.length === 0 || chartData.every((d) => d.count === 0) ? (
+          // The feed returns 24 hourly buckets whether or not anything happened,
+          // so a length check alone never fires and a day with no orders drew a
+          // full axis frame with no bars — a chart that looks broken rather than
+          // empty. Say so instead.
+          <div className="flex h-[300px] flex-col items-center justify-center gap-1 text-center">
+            <p className="text-sm font-medium">No orders in the last 24 hours</p>
+            <p className="text-xs text-muted-foreground">
+              Volume will appear here once merchants start taking orders.
+            </p>
           </div>
         ) : (
           <>

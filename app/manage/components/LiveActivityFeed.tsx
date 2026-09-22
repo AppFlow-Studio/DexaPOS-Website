@@ -47,9 +47,11 @@ export function LiveActivityFeed() {
             </p>
           </div>
         ) : !events || events.length === 0 ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">
-            Waiting for activity…
-          </div>
+          // Compact, not a `py-10` block: with nothing to show the panel drops
+          // to a single line and the page gives its column to the fleet panel.
+          <p className="text-sm text-muted-foreground">
+            No activity yet — orders and device events will appear here.
+          </p>
         ) : (
           // A chronological feed is genuinely a scroll surface — unlike the
           // alerts list, there is no "most important" item to page to, and the

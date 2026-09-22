@@ -12,7 +12,14 @@ import { usePlatformAlerts, usePlatformStationFleet } from '@/lib/queries/use-pl
  * It reads from the same two hooks the panels below already use, so React Query
  * serves both from cache — this adds no request.
  */
-export function PlatformStatusLine() {
+export function PlatformStatusLine({
+  onNavigate,
+}: {
+  /** Switches back to the Dashboard tab — the anchors live inside it, and Radix
+   *  unmounts inactive tabs, so a bare `#alerts` would do nothing from Health
+   *  or Analytics. */
+  onNavigate?: () => void
+}) {
   const { data: alerts, isLoading: alertsLoading } = usePlatformAlerts()
   const { data: fleet, isLoading: fleetLoading } = usePlatformStationFleet()
 
@@ -36,23 +43,46 @@ export function PlatformStatusLine() {
     )
   }
 
-  const parts = [
-    totalAlerts > 0
-      ? `${totalAlerts} active alert${totalAlerts === 1 ? '' : 's'}${
-          highAlerts > 0 ? ` (${highAlerts} high)` : ''
-        }`
-      : null,
-    offlineStations > 0
-      ? `${offlineStations} station${offlineStations === 1 ? '' : 's'} offline`
-      : null,
-  ].filter(Boolean)
+  // Each count jumps to the panel that can act on it, which is the whole
+  // triage value without adding a second control surface to the page.
+  const parts: { href: string; text: string }[] = []
+  if (totalAlerts > 0) {
+    parts.push({
+      href: '#alerts',
+      text: `${totalAlerts} active alert${totalAlerts === 1 ? '' : 's'}${
+        highAlerts > 0 ? ` (${highAlerts} high)` : ''
+      }`,
+    })
+  }
+  if (offlineStations > 0) {
+    parts.push({
+      href: '#fleet',
+      text: `${offlineStations} station${offlineStations === 1 ? '' : 's'} offline`,
+    })
+  }
 
   return (
     <p className="text-sm text-foreground">
       {parts.map((part, i) => (
-        <span key={part as string}>
+        <span key={part.href}>
           {i > 0 && <span className="mx-2 text-muted-foreground">·</span>}
-          <span className="tabular-nums">{part}</span>
+          <a
+            href={part.href}
+            onClick={(event) => {
+              if (!onNavigate) return
+              // Switch tabs first, then scroll once the target has mounted.
+              event.preventDefault()
+              onNavigate()
+              requestAnimationFrame(() => {
+                document
+                  .querySelector(part.href)
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              })
+            }}
+            className="tabular-nums underline-offset-4 hover:underline"
+          >
+            {part.text}
+          </a>
         </span>
       ))}
     </p>
