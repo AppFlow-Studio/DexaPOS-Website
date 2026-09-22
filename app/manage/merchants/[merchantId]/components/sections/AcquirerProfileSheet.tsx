@@ -149,7 +149,7 @@ function AcquirerForm({
     <>
       <div className="space-y-6 px-4 py-2">
           {multiLocation && (
-            <label className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3">
+            <label className="flex items-center justify-between gap-3 rounded-2xl border bg-card p-3">
               <div className="space-y-0.5">
                 <div className="text-sm font-medium">Use the same MID for all locations</div>
                 <div className="text-xs text-muted-foreground">
@@ -192,7 +192,7 @@ function AcquirerForm({
             <CollapsibleTrigger className="text-xs font-medium text-muted-foreground hover:text-foreground">
               ▸ Acquiring program (BIN, agent, processor…)
             </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2 rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
+            <CollapsibleContent className="mt-2 rounded-2xl border-0 bg-muted/45 p-3 text-xs text-muted-foreground">
               BIN, agent, agent bank, processor and program type are configured once at the
               ISO level (the DEXAPOS ISV / Mtech ISO) and applied automatically to every
               boarded account. Only the fields above are per-merchant.
@@ -252,7 +252,7 @@ function ScopeFields({
   }
 
   return (
-    <div className="rounded-lg border bg-card p-3">
+    <div className="rounded-2xl border bg-card p-3">
       <div className="mb-2 flex items-center justify-between">
         <div className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
           {title ?? 'Merchant identifiers'}

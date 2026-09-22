@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { ArrowUpRight, CheckCircle2, Circle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import type { MerchantDetails, MerchantOnboardingChecklist, MerchantOnboardingStatus } from '@/types/merchant'
 import { MerchantSubscriptionSummary } from './MerchantSubscriptionSummary'
 
@@ -13,33 +14,30 @@ interface OnboardingStatusCardProps {
   merchant: MerchantDetails
 }
 
+// One neutral badge for every state (D-03): colour is reserved for real
+// severity, and an onboarding status is not an alarm.
 const STATUS_META: Record<
   MerchantOnboardingStatus,
-  { label: string; badgeClass: string; description: string }
+  { label: string; description: string }
 > = {
   created: {
     label: 'Created',
-    badgeClass: 'bg-slate-100 text-slate-700 border-slate-300',
     description: 'Merchant created but setup has not started.',
   },
   onboarding: {
     label: 'Onboarding',
-    badgeClass: 'bg-amber-100 text-amber-700 border-amber-300',
     description: 'Merchant setup is in progress.',
   },
   active: {
     label: 'Active',
-    badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-300',
     description: 'Merchant is live and processing payments.',
   },
   suspended: {
     label: 'Suspended',
-    badgeClass: 'bg-red-100 text-red-700 border-red-300',
     description: 'Merchant access is temporarily suspended.',
   },
   cancelled: {
     label: 'Cancelled',
-    badgeClass: 'bg-zinc-200 text-zinc-700 border-zinc-300',
     description: 'Merchant account has been cancelled.',
   },
 }
@@ -48,7 +46,7 @@ function ChecklistRow({ label, done }: { label: string; done: boolean }) {
   return (
     <div className="flex items-center gap-2 text-sm">
       {done ? (
-        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+        <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
       ) : (
         <Circle className="h-4 w-4 text-muted-foreground" />
       )}
@@ -74,40 +72,45 @@ export function OnboardingStatusCard({ merchant }: OnboardingStatusCardProps) {
   )
 
   return (
-    <Card>
-      <CardHeader className="pb-4">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <CardTitle className="text-lg">Merchant Status</CardTitle>
-            <div className="mt-2 flex items-center gap-2">
-              <Badge className={statusMeta.badgeClass}>{statusMeta.label}</Badge>
-              <span className="text-sm text-muted-foreground">{statusMeta.description}</span>
-            </div>
-          </div>
-          <Button variant="ghost" size="sm" asChild className="shrink-0">
+    <Panel>
+      <PanelSection
+        label="Merchant Status"
+        caption={
+          <span className="flex flex-wrap items-center gap-2">
+            <Badge
+              variant="secondary"
+              className="w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium capitalize"
+            >
+              {statusMeta.label}
+            </Badge>
+            <span>{statusMeta.description}</span>
+          </span>
+        }
+        action={
+          <Button variant="ghost" size="sm" asChild>
             <Link href={`/manage/merchants/${merchant.clerk_org_id}?tab=subscriptions`}>
               Manage
               <ArrowUpRight className="ml-1 h-4 w-4" />
             </Link>
           </Button>
+        }
+      >
+        <div className="space-y-3">
+          <ChecklistRow label="Business info completed" done={checklist.businessInfo} />
+          <ChecklistRow label="Owner invited" done={checklist.ownerInvited} />
+          <ChecklistRow label="Billing method added" done={checklist.billingAdded} />
+          <ChecklistRow label="First location created" done={checklist.firstLocation} />
+          <ChecklistRow label="First payment processed" done={checklist.firstPayment} />
+
+          {merchant.activated_at && (
+            <div className="pt-1 text-xs text-muted-foreground">
+              Activated: {new Date(merchant.activated_at).toLocaleString()}
+            </div>
+          )}
+
+          <MerchantSubscriptionSummary merchantId={merchant.id} />
         </div>
-      </CardHeader>
-
-      <CardContent className="space-y-3">
-        <ChecklistRow label="Business info completed" done={checklist.businessInfo} />
-        <ChecklistRow label="Owner invited" done={checklist.ownerInvited} />
-        <ChecklistRow label="Billing method added" done={checklist.billingAdded} />
-        <ChecklistRow label="First location created" done={checklist.firstLocation} />
-        <ChecklistRow label="First payment processed" done={checklist.firstPayment} />
-
-        {merchant.activated_at && (
-          <div className="pt-1 text-xs text-muted-foreground">
-            Activated: {new Date(merchant.activated_at).toLocaleString()}
-          </div>
-        )}
-
-        <MerchantSubscriptionSummary merchantId={merchant.id} />
-      </CardContent>
-    </Card>
+      </PanelSection>
+    </Panel>
   )
 }

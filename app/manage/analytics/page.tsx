@@ -1,10 +1,14 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PageShell } from '@/components/dashboard/shell/PageShell'
+import { PageHeader } from '@/components/dashboard/shell/PageHeader'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
+import { AnalyticsTooltip, CHART_MARGIN, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
 import {
     BarChart3,
     TrendingDown,
@@ -30,7 +34,6 @@ import {
     BarChart2,
     MapPin,
     Utensils,
-    ShoppingBag,
     Cpu,
     Globe,
     BellRing,
@@ -48,6 +51,13 @@ import {
     ResponsiveContainer,
 } from 'recharts'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+    MobileColumnsButton,
+    initialHiddenColumns,
+    type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart'
@@ -79,8 +89,8 @@ import Link from 'next/link'
 // ── Chart config ──────────────────────────────────────────────────────────────
 
 const whaleChartConfig = {
-    gpvConcentration: { label: 'GPV Concentration', color: 'hsl(var(--chart-3))' },
-    equalLine: { label: 'Perfect Equality', color: 'hsl(var(--muted-foreground))' },
+    gpvConcentration: { label: 'GPV Concentration', color: 'var(--chart-3)' },
+    equalLine: { label: 'Perfect Equality', color: 'var(--muted-foreground)' },
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -90,6 +100,18 @@ function fmtGPV(n: number) {
     if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}k`
     return `$${n.toFixed(2)}`
 }
+
+// ── Tab pill ──────────────────────────────────────────────────────────────────
+
+/**
+ * `TAB_PILL` (DS-CTL-05), written out as a literal.
+ *
+ * ⚠️ Deliberately not imported from `components/dashboard/shell/tokens.ts`:
+ * Tailwind does not scan `.ts` files, so a class reaching a `.tsx` element only
+ * via a `.ts` module gets no CSS rule and renders unstyled (C7).
+ */
+const TAB_PILL_CLASS =
+    'shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[0.8125rem] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-border'
 
 // ── Tab label helper ──────────────────────────────────────────────────────────
 
@@ -111,14 +133,37 @@ function TabLabel({
 
 // ── Section divider ───────────────────────────────────────────────────────────
 
+/**
+ * A section heading above a group of panels.
+ *
+ * No rule beneath it: §5.5 bans horizontal lines as dividers — separation is
+ * carried by spacing and the panel surfaces below.
+ */
 function SectionHeader({ title, description }: { title: string; description?: string }) {
     return (
-        <div className="border-b pb-3 mb-5">
+        <div className="mb-5">
             <h2 className="text-base font-semibold">{title}</h2>
             {description && <p className="text-sm text-muted-foreground mt-0.5">{description}</p>}
         </div>
     )
 }
+
+/**
+ * Mobile column meta for the churn risk alert table.
+ *
+ * Merchant is locked (it is the row's identity) and Drop % is the reason the
+ * row is on the list, so those two are the mobile default. The GPV pair, the
+ * recency column and the action buttons are opt-in.
+ */
+const CHURN_RISK_COLUMNS: ReportColumn[] = [
+    { id: 'merchant', label: 'Merchant', locked: true },
+    { id: 'severity', label: 'Severity', defaultHidden: true },
+    { id: 'prevGpv', label: 'Prev 7d GPV', defaultHidden: true },
+    { id: 'lastGpv', label: 'Last 7d GPV', defaultHidden: true },
+    { id: 'drop', label: 'Drop %' },
+    { id: 'daysSince', label: 'Days Since Last Txn', defaultHidden: true },
+    { id: 'actions', label: 'Actions', defaultHidden: true },
+]
 
 // ============================================================================
 // PAGE
@@ -129,6 +174,43 @@ export default function AnalyticsPage() {
     const [whaleSortKey, setWhaleSortKey] = useState<'monthlyGPV' | 'percentOfTotal' | 'trend'>('monthlyGPV')
     const [whaleSortDir, setWhaleSortDir] = useState<'asc' | 'desc'>('desc')
     const [chartMetric, setChartMetric] = useState<'revenue' | 'orders'>('revenue')
+
+    const [activeTab, setActiveTab] = useState('overview')
+    const tabRailRef = useRef<HTMLDivElement>(null)
+
+    /**
+     * Keeps the selected tab pill within the scrolled rail.
+     *
+     * Scrolls the rail itself rather than calling `scrollIntoView` on the pill:
+     * that walks up to every scrollable ancestor, so on a phone it also drags
+     * the page vertically to bring the rail to the top of the viewport — the
+     * tab content jumps under your thumb just as you tap. Setting `scrollLeft`
+     * moves only this element, on the horizontal axis.
+     */
+    useEffect(() => {
+        const rail = tabRailRef.current
+        if (!rail) return
+        const pill = rail.querySelector<HTMLElement>(`[data-state="active"]`)
+        if (!pill) return
+
+        // Centre the pill when it can be centred; otherwise sit flush at the
+        // edge, so the first and last tabs don't leave a dead gap beside them.
+        const target = pill.offsetLeft - (rail.clientWidth - pill.offsetWidth) / 2
+        const max = rail.scrollWidth - rail.clientWidth
+        const left = Math.max(0, Math.min(target, max))
+        if (Math.abs(left - rail.scrollLeft) < 1) return
+
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        rail.scrollTo({ left, behavior: reduceMotion ? 'auto' : 'smooth' })
+    }, [activeTab])
+
+    const isMobile = useIsMobile()
+    const [churnHiddenCols, setChurnHiddenCols] = useState<Set<string>>(() =>
+        initialHiddenColumns(CHURN_RISK_COLUMNS)
+    )
+    // Hiding is mobile-only: the picker itself is `md:hidden`, so desktop must
+    // ignore the set rather than keep columns hidden with no way to restore them.
+    const showChurnCol = (id: string) => !isMobile || !churnHiddenCols.has(id)
 
     type SlackState = { status: 'idle' | 'sending' | 'sent' | 'error' | 'no_webhook' | 'no_critical'; message?: string }
     const [slackAlert, setSlackAlert] = useState<SlackState>({ status: 'idle' })
@@ -162,22 +244,29 @@ export default function AnalyticsPage() {
     const { data: kpiData, isLoading: kpiLoading } = usePlatformKPIs()
     const { data: salesTrend, isLoading: salesTrendLoading } = usePlatformSalesTrend()
 
+    /**
+     * Returns inline content, not a block: `StatTile`'s `meta` already renders a
+     * `<p>`, and nesting one inside another is invalid HTML the browser silently
+     * unnests — which breaks the tile's layout.
+     */
     function fmtTrend(change: number | undefined) {
-        if (change === undefined || change === null) return null
+        if (change === undefined || change === null) return undefined
         const isPos = change >= 0
         return (
-            <p className="text-xs text-muted-foreground">
+            <>
                 <span className={isPos ? 'text-green-600' : 'text-red-600'}>
                     {isPos ? '+' : ''}{change.toFixed(1)}%
                 </span>{' '}from prior period
-            </p>
+            </>
         )
     }
 
-    const riskConfig: Record<ConcentrationRisk, { label: string; variant: 'default' | 'secondary' | 'destructive'; icon: typeof ShieldCheck; colorClass: string }> = {
-        low: { label: 'Low Risk', variant: 'default', icon: ShieldCheck, colorClass: 'text-green-600' },
-        medium: { label: 'Medium Risk', variant: 'secondary', icon: ShieldMinus, colorClass: 'text-yellow-600' },
-        high: { label: 'High Risk', variant: 'destructive', icon: ShieldAlert, colorClass: 'text-red-600' },
+    // Label + icon only: §14.3 HQ-2 keeps severity colour to `/manage/health`
+    // and the DLQ, so the tier is carried by the words and the shield glyph.
+    const riskConfig: Record<ConcentrationRisk, { label: string; icon: typeof ShieldCheck }> = {
+        low: { label: 'Low Risk', icon: ShieldCheck },
+        medium: { label: 'Medium Risk', icon: ShieldMinus },
+        high: { label: 'High Risk', icon: ShieldAlert },
     }
 
     const currentRisk = gpvData ? riskConfig[gpvData.riskLevel] : null
@@ -196,14 +285,26 @@ export default function AnalyticsPage() {
         else { setWhaleSortKey(key); setWhaleSortDir('desc') }
     }
 
-    const churnSeverityConfig: Record<ChurnSeverity, { label: string; variant: 'default' | 'secondary' | 'destructive'; colorClass: string; bgClass: string }> = {
-        critical: { label: 'Critical', variant: 'destructive', colorClass: 'text-red-600', bgClass: 'bg-red-50 border-red-200' },
-        high: { label: 'High', variant: 'destructive', colorClass: 'text-orange-600', bgClass: 'bg-orange-50 border-orange-200' },
-        medium: { label: 'Medium', variant: 'secondary', colorClass: 'text-yellow-600', bgClass: 'bg-yellow-50 border-yellow-200' },
+    /** A sortable column header — ghost pill, never bare text (§5.2). */
+    const whaleSortHeader = (key: typeof whaleSortKey, label: string) => (
+        <Button
+            variant="ghost"
+            onClick={() => handleWhaleSort(key)}
+            className="-mr-2 ml-auto flex h-8 rounded-full px-2"
+        >
+            {label}
+            <ArrowUpDown className="ml-2 h-3 w-3" />
+        </Button>
+    )
+
+    const churnSeverityConfig: Record<ChurnSeverity, { label: string }> = {
+        critical: { label: 'Critical' },
+        high: { label: 'High' },
+        medium: { label: 'Medium' },
     }
 
     return (
-        <div className="space-y-6 min-w-0 overflow-x-hidden">
+        <PageShell as="div">
             <style>{`
         @media print {
           /* Hide navigation, sidebar, header, and action buttons */
@@ -223,140 +324,110 @@ export default function AnalyticsPage() {
         }
       `}</style>
 
-            {/* ══════════════════════════════════════════════════════════════════════
-          PAGE HEADER
-      ══════════════════════════════════════════════════════════════════════ */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
-                    <p className="text-muted-foreground">
-                        Platform-wide intelligence across all merchants, devices, and channels
-                    </p>
-                </div>
-                <div className="flex items-center space-x-2 no-print flex-shrink-0">
-                    <Button variant="outline" onClick={handleExportPDF}>Export Report</Button>
-                </div>
-            </div>
+            <PageHeader
+                title="Analytics"
+                subtitle="Platform-wide intelligence across all merchants, devices, and channels"
+                actions={
+                    <div className="no-print">
+                        <Button variant="outline" size="sm" onClick={handleExportPDF}>
+                            Export Report
+                        </Button>
+                    </div>
+                }
+            />
 
             {/* ══════════════════════════════════════════════════════════════════════
           PERSISTENT KPI HEADER — always visible above tabs
       ══════════════════════════════════════════════════════════════════════ */}
-            <div className="grid gap-4 grid-cols-2 lg:grid-cols-6">
-                <Card className="min-w-0 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total GPV (30d)</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
-                            <>
-                                <div className="text-2xl font-bold">{kpiData ? fmtGPV(kpiData.totalGPV30d) : '—'}</div>
-                                {fmtTrend(kpiData?.gpvChange)}
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-                <Card className="min-w-0 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Merchants (7d)</CardTitle>
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
-                            <>
-                                <div className="text-2xl font-bold">{kpiData?.activeMerchants7d.toLocaleString() ?? '—'}</div>
-                                <p className="text-xs text-muted-foreground">{kpiData?.totalMerchants.toLocaleString()} total</p>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-                <Card className="min-w-0 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Orders (30d)</CardTitle>
-                        <CreditCard className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
-                            <>
-                                <div className="text-2xl font-bold">{kpiData?.totalOrders30d.toLocaleString() ?? '—'}</div>
-                                {fmtTrend(kpiData?.ordersChange)}
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-                <Card className="min-w-0 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Avg Order Value</CardTitle>
-                        <Activity className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
-                            <>
-                                <div className="text-2xl font-bold">{kpiData?.avgOrderValue ? `$${kpiData.avgOrderValue.toFixed(2)}` : '—'}</div>
-                                <p className="text-xs text-muted-foreground">
-                                    <span className="text-green-600">{kpiData?.cashPercent ?? 0}%</span> cash ·{' '}
-                                    <span className="text-blue-600">{kpiData?.cardPercent ?? 0}%</span> card
-                                </p>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-                <Card className="min-w-0 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Active Devices</CardTitle>
-                        <Cpu className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
-                            <>
-                                <div className="text-2xl font-bold">{kpiData?.activeDevices?.toLocaleString() ?? '—'}</div>
-                                <p className="text-xs text-muted-foreground">Online now</p>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-                <Card className="min-w-0 overflow-hidden">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Locations</CardTitle>
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                        {kpiLoading ? <Skeleton className="h-8 w-28 max-w-full" /> : (
-                            <>
-                                <div className="text-2xl font-bold">{kpiData?.totalLocations?.toLocaleString() ?? '—'}</div>
-                                <p className="text-xs text-muted-foreground">Active locations</p>
-                            </>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
+            {/* Six figures, so two 3-up `StatRow`s rather than one row: `StatRow`
+                tops out at four columns, and six tiles on one line are unreadably
+                narrow on anything short of a wide desktop. */}
+            <Panel>
+                <PanelSection label="Platform totals" icon={BarChart3}>
+                    <div className="space-y-6">
+                        <StatRow columns={3}>
+                            <StatTile
+                                label="Total GPV (30d)"
+                                icon={<DollarSign />}
+                                isLoading={kpiLoading}
+                                value={kpiData ? fmtGPV(kpiData.totalGPV30d) : '—'}
+                                meta={fmtTrend(kpiData?.gpvChange)}
+                            />
+                            <StatTile
+                                label="Active Merchants (7d)"
+                                icon={<Users />}
+                                isLoading={kpiLoading}
+                                value={kpiData?.activeMerchants7d.toLocaleString() ?? '—'}
+                                meta={kpiData ? `${kpiData.totalMerchants.toLocaleString()} total` : undefined}
+                            />
+                            <StatTile
+                                label="Total Orders (30d)"
+                                icon={<CreditCard />}
+                                isLoading={kpiLoading}
+                                value={kpiData?.totalOrders30d.toLocaleString() ?? '—'}
+                                meta={fmtTrend(kpiData?.ordersChange)}
+                            />
+                        </StatRow>
+
+                        <StatRow columns={3}>
+                            <StatTile
+                                label="Avg Order Value"
+                                icon={<Activity />}
+                                isLoading={kpiLoading}
+                                value={kpiData?.avgOrderValue ? `$${kpiData.avgOrderValue.toFixed(2)}` : '—'}
+                                meta={`${kpiData?.cashPercent ?? 0}% cash · ${kpiData?.cardPercent ?? 0}% card`}
+                            />
+                            <StatTile
+                                label="Active Devices"
+                                icon={<Cpu />}
+                                isLoading={kpiLoading}
+                                value={kpiData?.activeDevices?.toLocaleString() ?? '—'}
+                                meta="Online now"
+                            />
+                            <StatTile
+                                label="Total Locations"
+                                icon={<MapPin />}
+                                isLoading={kpiLoading}
+                                value={kpiData?.totalLocations?.toLocaleString() ?? '—'}
+                                meta="Active locations"
+                            />
+                        </StatRow>
+                    </div>
+                </PanelSection>
+            </Panel>
 
             {/* ══════════════════════════════════════════════════════════════════════
           6-TAB ANALYTICS SUITE
       ══════════════════════════════════════════════════════════════════════ */}
-            <Tabs defaultValue="overview" className="space-y-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
 
-                {/* Tab bar */}
-                <TabsList className="flex-wrap h-auto gap-1 p-1">
-                    <TabsTrigger value="overview" className="gap-1.5">
-                        <TabLabel icon={BarChart3} label="Overview" />
-                    </TabsTrigger>
-                    <TabsTrigger value="revenue" className="gap-1.5">
-                        <TabLabel icon={DollarSign} label="Revenue & Risk" badge={churnData?.totalAtRisk || undefined} />
-                    </TabsTrigger>
-                    <TabsTrigger value="merchants" className="gap-1.5">
-                        <TabLabel icon={Building2} label="Merchant Health" />
-                    </TabsTrigger>
-                    <TabsTrigger value="operations" className="gap-1.5">
-                        <TabLabel icon={Utensils} label="Operations" />
-                    </TabsTrigger>
-                    <TabsTrigger value="fleet" className="gap-1.5">
-                        <TabLabel icon={Cpu} label="Device Fleet" />
-                    </TabsTrigger>
-                    <TabsTrigger value="growth" className="gap-1.5">
-                        <TabLabel icon={Globe} label="Growth" />
-                    </TabsTrigger>
-                </TabsList>
+                {/* Tab bar — DS-CTL-05. Scrolls rather than wraps: six labelled
+                    triggers do not fit a phone, and a wrapped rail reads as two
+                    rows of unrelated controls. The rail keeps the active pill in
+                    view itself (see `tabRailRef`), so the scrollbar is hidden —
+                    it would otherwise sit under the pills as a stray grey line. */}
+                <div ref={tabRailRef} className="no-scrollbar w-full min-w-0 overflow-x-auto pb-1">
+                    <TabsList className="inline-flex h-auto w-max flex-nowrap gap-0.5 rounded-full bg-muted/70 p-1">
+                        <TabsTrigger value="overview" className={TAB_PILL_CLASS}>
+                            <TabLabel icon={BarChart3} label="Overview" />
+                        </TabsTrigger>
+                        <TabsTrigger value="revenue" className={TAB_PILL_CLASS}>
+                            <TabLabel icon={DollarSign} label="Revenue & Risk" badge={churnData?.totalAtRisk || undefined} />
+                        </TabsTrigger>
+                        <TabsTrigger value="merchants" className={TAB_PILL_CLASS}>
+                            <TabLabel icon={Building2} label="Merchant Health" />
+                        </TabsTrigger>
+                        <TabsTrigger value="operations" className={TAB_PILL_CLASS}>
+                            <TabLabel icon={Utensils} label="Operations" />
+                        </TabsTrigger>
+                        <TabsTrigger value="fleet" className={TAB_PILL_CLASS}>
+                            <TabLabel icon={Cpu} label="Device Fleet" />
+                        </TabsTrigger>
+                        <TabsTrigger value="growth" className={TAB_PILL_CLASS}>
+                            <TabLabel icon={Globe} label="Growth" />
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
 
                 {/* ══════════════════════════════════════════════════════════════════
             TAB 1 — OVERVIEW
@@ -364,60 +435,67 @@ export default function AnalyticsPage() {
         ══════════════════════════════════════════════════════════════════ */}
                 <TabsContent value="overview" className="space-y-6">
 
-                    {/* Extended KPI mini-tiles */}
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                        {[
-                            { label: 'Void Rate', value: kpiData?.voidRate, suffix: '%' },
-                            { label: 'New Merchants', value: kpiData?.newMerchantsThisMonth, suffix: ' this mo.' },
-                            { label: 'Onboarding', value: kpiData?.merchantsOnboarding, suffix: '' },
-                            { label: 'Card Split', value: kpiData?.cardPercent, suffix: '%' },
-                        ].map(({ label, value, suffix }) => (
-                            <Card key={label} className="bg-muted/30">
-                                <CardContent className="pt-4 pb-3">
-                                    {kpiLoading ? <Skeleton className="h-6 w-16" /> : (
-                                        <div className="text-xl font-bold">
-                                            {value !== undefined ? `${value}${suffix}` : '—'}
-                                        </div>
-                                    )}
-                                    <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
+                    <Panel>
+                        <PanelSection label="Platform ratios" icon={BarChart2}>
+                            <StatRow columns={4}>
+                                {[
+                                    { label: 'Void Rate', value: kpiData?.voidRate, suffix: '%' },
+                                    { label: 'New Merchants', value: kpiData?.newMerchantsThisMonth, suffix: ' this mo.' },
+                                    { label: 'Onboarding', value: kpiData?.merchantsOnboarding, suffix: '' },
+                                    { label: 'Card Split', value: kpiData?.cardPercent, suffix: '%' },
+                                ].map(({ label, value, suffix }) => (
+                                    <StatTile
+                                        key={label}
+                                        label={label}
+                                        isLoading={kpiLoading}
+                                        value={value !== undefined ? `${value}${suffix}` : '—'}
+                                    />
+                                ))}
+                            </StatRow>
+                        </PanelSection>
+                    </Panel>
 
-                    {/* GPV Sales Trend */}
-                    <Card>
-                        <CardHeader>
-                            <div className="flex flex-wrap items-start gap-3 justify-between">
-                                <div className="min-w-0">
-                                    <CardTitle>GPV Trend (Last 30 Days)</CardTitle>
-                                    <CardDescription>Daily Gross Payment Volume with prior period overlay</CardDescription>
+                    <Panel>
+                        <PanelSection
+                            label="GPV trend (last 30 days)"
+                            caption="Daily Gross Payment Volume with prior period overlay"
+                            action={
+                                <div className="flex shrink-0 gap-1 p-0.5">
+                                    <Button size="sm" variant={chartMetric === 'revenue' ? 'default' : 'ghost'} className="h-7 rounded-full px-3 text-xs" onClick={() => setChartMetric('revenue')}>GPV</Button>
+                                    <Button size="sm" variant={chartMetric === 'orders' ? 'default' : 'ghost'} className="h-7 rounded-full px-3 text-xs" onClick={() => setChartMetric('orders')}>Order Count</Button>
                                 </div>
-                                <div className="flex gap-1 border rounded-md p-0.5 shrink-0">
-                                    <Button size="sm" variant={chartMetric === 'revenue' ? 'default' : 'ghost'} className="h-7 px-3 text-xs" onClick={() => setChartMetric('revenue')}>GPV</Button>
-                                    <Button size="sm" variant={chartMetric === 'orders' ? 'default' : 'ghost'} className="h-7 px-3 text-xs" onClick={() => setChartMetric('orders')}>Order Count</Button>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
+                            }
+                        >
                             {salesTrendLoading ? (
                                 <Skeleton className="h-72 w-full" />
                             ) : salesTrend && salesTrend.length > 0 ? (
                                 <ResponsiveContainer width="100%" height={300}>
-                                    <AreaChart data={salesTrend}>
+                                    <AreaChart data={salesTrend} margin={CHART_MARGIN}>
                                         <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                                         <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={d => d.slice(5)} />
-                                        <YAxis tick={{ fontSize: 11 }} tickFormatter={v => chartMetric === 'revenue' ? `$${(v / 1000).toFixed(0)}k` : String(v)} />
-                                        <Tooltip formatter={(v: number) => chartMetric === 'revenue' ? [`$${v.toLocaleString()}`, 'GPV'] : [v.toLocaleString(), 'Orders']} />
-                                        <Area type="monotone" dataKey={chartMetric === 'revenue' ? 'revenue' : 'orderCount'} name="Current" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.25} strokeWidth={2} />
-                                        <Area type="monotone" dataKey={chartMetric === 'revenue' ? 'prevRevenue' : 'prevOrderCount'} name="Prior Period" stroke="hsl(var(--muted-foreground))" fill="transparent" strokeWidth={1.5} strokeDasharray="4 2" />
+                                        <YAxis
+                                            tick={{ fontSize: 11 }}
+                                            width={isMobile ? valueAxisWidthMobile(4) : undefined}
+                                            tickFormatter={v => chartMetric === 'revenue' ? `$${(v / 1000).toFixed(0)}k` : String(v)}
+                                        />
+                                        <Tooltip
+                                            content={
+                                                <AnalyticsTooltip
+                                                    formatter={(v: number) =>
+                                                        chartMetric === 'revenue' ? `$${v.toLocaleString()}` : v.toLocaleString()
+                                                    }
+                                                />
+                                            }
+                                        />
+                                        <Area type="monotone" dataKey={chartMetric === 'revenue' ? 'revenue' : 'orderCount'} name="Current" stroke="var(--primary)" fill="var(--primary)" fillOpacity={0.25} strokeWidth={2} />
+                                        <Area type="monotone" dataKey={chartMetric === 'revenue' ? 'prevRevenue' : 'prevOrderCount'} name="Prior Period" stroke="var(--muted-foreground)" fill="transparent" strokeWidth={1.5} strokeDasharray="4 2" />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             ) : (
-                                <div className="h-72 flex items-center justify-center text-muted-foreground text-sm">No sales data available</div>
+                                <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">No sales data available</div>
                             )}
-                        </CardContent>
-                    </Card>
+                        </PanelSection>
+                    </Panel>
 
                     {/* Whale Watch lives in Revenue & Risk tab (T001) */}
                 </TabsContent>
@@ -434,110 +512,74 @@ export default function AnalyticsPage() {
                         description="Lorenz curve analysis across all merchants — identify concentration risk and high-value accounts"
                     />
 
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <Crown className="h-5 w-5 text-primary shrink-0" />
-                            <div className="min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <h2 className="text-lg font-semibold">Whale Watch</h2>
-                                    {!gpvLoading && currentRisk && (
-                                        <Badge variant={currentRisk.variant} className="flex items-center gap-1 shrink-0">
-                                            <currentRisk.icon className="h-3 w-3" />
-                                            {currentRisk.label}
-                                        </Badge>
-                                    )}
-                                </div>
-                                <p className="text-sm text-muted-foreground">GPV concentration risk analysis</p>
-                            </div>
-                        </div>
-                        <Select value={String(whaleWatchDays)} onValueChange={v => setWhaleWatchDays(Number(v))}>
-                            <SelectTrigger className="w-32 shrink-0">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="7">Last 7 Days</SelectItem>
-                                <SelectItem value="30">Last 30 Days</SelectItem>
-                                <SelectItem value="90">Last 90 Days</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* Whale KPI cards */}
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Total GPV</CardTitle>
-                                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                {gpvLoading ? <Skeleton className="h-8 w-28" /> : (
-                                    <>
-                                        <div className="text-2xl font-bold">${gpvData ? gpvData.totalGPV.toLocaleString() : '0'}</div>
-                                        <p className="text-xs text-muted-foreground mt-1">Last {whaleWatchDays} days</p>
-                                    </>
-                                )}
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Merchants Analyzed</CardTitle>
-                                <Building2 className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                {gpvLoading ? <Skeleton className="h-8 w-20" /> : (
-                                    <>
-                                        <div className="text-2xl font-bold">{gpvData?.totalMerchants.toLocaleString() || '0'}</div>
-                                        <p className="text-xs text-muted-foreground mt-1">With transaction activity</p>
-                                    </>
-                                )}
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Top 10% GPV Share</CardTitle>
-                                <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                {gpvLoading ? <Skeleton className="h-8 w-20" /> : (
-                                    <>
-                                        <div className={`text-2xl font-bold ${currentRisk?.colorClass || ''}`}>
-                                            {gpvData?.topTenPercentGPVShare || 0}%
-                                        </div>
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            {Math.max(1, Math.ceil((gpvData?.totalMerchants || 0) * 0.1))} merchant{Math.ceil((gpvData?.totalMerchants || 0) * 0.1) !== 1 ? 's' : ''} in top decile
-                                        </p>
-                                    </>
-                                )}
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Concentration Risk</CardTitle>
-                                {currentRisk ? <currentRisk.icon className={`h-4 w-4 ${currentRisk.colorClass}`} /> : <ShieldCheck className="h-4 w-4 text-muted-foreground" />}
-                            </CardHeader>
-                            <CardContent>
-                                {gpvLoading ? <Skeleton className="h-8 w-24" /> : currentRisk ? (
-                                    <>
-                                        <div className={`text-2xl font-bold ${currentRisk.colorClass}`}>{currentRisk.label.replace(' Risk', '')}</div>
-                                        <p className="text-xs text-muted-foreground mt-1">
-                                            {gpvData?.riskLevel === 'high' ? 'Diversification needed' : gpvData?.riskLevel === 'medium' ? 'Monitor closely' : 'Healthy distribution'}
-                                        </p>
-                                    </>
-                                ) : (
-                                    <div className="text-2xl font-bold text-muted-foreground">—</div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </div>
+                    <Panel>
+                        <PanelSection
+                            icon={Crown}
+                            label="Whale Watch"
+                            caption={
+                                !gpvLoading && currentRisk
+                                    ? `GPV concentration risk analysis · ${currentRisk.label}`
+                                    : 'GPV concentration risk analysis'
+                            }
+                            action={
+                                <Select value={String(whaleWatchDays)} onValueChange={v => setWhaleWatchDays(Number(v))}>
+                                    <SelectTrigger className="h-9 w-36 shrink-0 rounded-full border-0 bg-muted/60 px-3 shadow-none">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="7">Last 7 Days</SelectItem>
+                                        <SelectItem value="30">Last 30 Days</SelectItem>
+                                        <SelectItem value="90">Last 90 Days</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            }
+                        >
+                            <StatRow columns={4}>
+                                <StatTile
+                                    label="Total GPV"
+                                    icon={<DollarSign />}
+                                    isLoading={gpvLoading}
+                                    value={`$${gpvData ? gpvData.totalGPV.toLocaleString() : '0'}`}
+                                    meta={`Last ${whaleWatchDays} days`}
+                                />
+                                <StatTile
+                                    label="Merchants Analyzed"
+                                    icon={<Building2 />}
+                                    isLoading={gpvLoading}
+                                    value={gpvData?.totalMerchants.toLocaleString() || '0'}
+                                    meta="With transaction activity"
+                                />
+                                <StatTile
+                                    label="Top 10% GPV Share"
+                                    icon={<BarChart3 />}
+                                    isLoading={gpvLoading}
+                                    value={`${gpvData?.topTenPercentGPVShare || 0}%`}
+                                    meta={`${Math.max(1, Math.ceil((gpvData?.totalMerchants || 0) * 0.1))} merchant${Math.ceil((gpvData?.totalMerchants || 0) * 0.1) !== 1 ? 's' : ''} in top decile`}
+                                />
+                                <StatTile
+                                    label="Concentration Risk"
+                                    icon={currentRisk ? <currentRisk.icon /> : <ShieldCheck />}
+                                    isLoading={gpvLoading}
+                                    value={currentRisk ? currentRisk.label.replace(' Risk', '') : '—'}
+                                    meta={
+                                        gpvData?.riskLevel === 'high'
+                                            ? 'Diversification needed'
+                                            : gpvData?.riskLevel === 'medium'
+                                                ? 'Monitor closely'
+                                                : 'Healthy distribution'
+                                    }
+                                />
+                            </StatRow>
+                        </PanelSection>
+                    </Panel>
 
                     {/* Lorenz Curve + Whale List */}
                     <div className="grid gap-4 lg:grid-cols-7">
-                        <Card className="lg:col-span-4 min-w-0 overflow-hidden">
-                            <CardHeader>
-                                <CardTitle>GPV Distribution</CardTitle>
-                                <CardDescription>Lorenz curve — gap from diagonal indicates concentration</CardDescription>
-                            </CardHeader>
-                            <CardContent className="pl-2">
+                        <Panel className="lg:col-span-4">
+                            <PanelSection
+                                label="GPV distribution"
+                                caption="Lorenz curve — gap from diagonal indicates concentration"
+                            >
                                 {gpvLoading ? (
                                     <Skeleton className="h-80 w-full" />
                                 ) : gpvData && gpvData.totalMerchants >= 2 ? (
@@ -546,13 +588,13 @@ export default function AnalyticsPage() {
                                             <AreaChart data={gpvData.lorenzCurve}>
                                                 <defs>
                                                     <linearGradient id="concentrationGap" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="0%" stopColor="hsl(var(--chart-3))" stopOpacity={0.3} />
-                                                        <stop offset="100%" stopColor="hsl(var(--chart-3))" stopOpacity={0.05} />
+                                                        <stop offset="0%" stopColor="var(--chart-3)" stopOpacity={0.3} />
+                                                        <stop offset="100%" stopColor="var(--chart-3)" stopOpacity={0.05} />
                                                     </linearGradient>
                                                 </defs>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                                <XAxis dataKey="merchantPercentile" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={val => `${val}%`} label={{ value: '% of Merchants (ranked by volume)', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' } }} />
-                                                <YAxis tickLine={false} axisLine={false} tickFormatter={val => `${val}%`} label={{ value: '% of Total GPV', angle: -90, position: 'insideLeft', offset: 10, style: { fontSize: 11, fill: 'hsl(var(--muted-foreground))' } }} />
+                                                <XAxis dataKey="merchantPercentile" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={val => `${val}%`} label={{ value: '% of Merchants (ranked by volume)', position: 'insideBottom', offset: -4, style: { fontSize: 11, fill: 'var(--muted-foreground)' } }} />
+                                                <YAxis tickLine={false} axisLine={false} tickFormatter={val => `${val}%`} label={{ value: '% of Total GPV', angle: -90, position: 'insideLeft', offset: 10, style: { fontSize: 11, fill: 'var(--muted-foreground)' } }} />
                                                 <ChartTooltip content={({ active, payload }) => {
                                                     if (active && payload && payload.length) {
                                                         const d = payload[0].payload
@@ -565,8 +607,8 @@ export default function AnalyticsPage() {
                                                     }
                                                     return null
                                                 }} />
-                                                <Area type="linear" dataKey="equalityLine" stroke="hsl(var(--muted-foreground))" strokeDasharray="5 5" strokeOpacity={0.5} fill="none" strokeWidth={1.5} />
-                                                <Area type="monotone" dataKey="gpvPercentile" stroke="hsl(var(--chart-3))" fill="url(#concentrationGap)" strokeWidth={2.5} />
+                                                <Area type="linear" dataKey="equalityLine" stroke="var(--muted-foreground)" strokeDasharray="5 5" strokeOpacity={0.5} fill="none" strokeWidth={1.5} />
+                                                <Area type="monotone" dataKey="gpvPercentile" stroke="var(--chart-3)" fill="url(#concentrationGap)" strokeWidth={2.5} />
                                             </AreaChart>
                                         </ResponsiveContainer>
                                     </ChartContainer>
@@ -579,15 +621,14 @@ export default function AnalyticsPage() {
                                         </div>
                                     </div>
                                 )}
-                            </CardContent>
-                        </Card>
+                            </PanelSection>
+                        </Panel>
 
-                        <Card className="lg:col-span-3 min-w-0 overflow-hidden">
-                            <CardHeader>
-                                <CardTitle className="text-sm font-medium">Whale Merchants (&gt;$100k GPV)</CardTitle>
-                                <CardDescription>Last {whaleWatchDays} days — assign dedicated Account Managers</CardDescription>
-                            </CardHeader>
-                            <CardContent>
+                        <Panel className="lg:col-span-3">
+                            <PanelSection
+                                label="Whale merchants (>$100k GPV)"
+                                caption={`Last ${whaleWatchDays} days — assign dedicated Account Managers`}
+                            >
                                 {gpvLoading ? (
                                     <div className="space-y-3">
                                         {Array.from({ length: 5 }).map((_, i) => (
@@ -598,21 +639,15 @@ export default function AnalyticsPage() {
                                         ))}
                                     </div>
                                 ) : sortedWhaleList.length > 0 ? (
-                                    <div className="max-h-96 overflow-auto overflow-x-auto">
-                                        <Table>
-                                            <TableHeader>
+                                    <div className="max-h-96 overflow-auto">
+                                        <Table variant="data" className="min-w-[620px]">
+                                            <TableHeader className="[&_tr]:border-0">
                                                 <TableRow>
                                                     <TableHead>Merchant</TableHead>
-                                                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground" onClick={() => handleWhaleSort('monthlyGPV')}>
-                                                        <span className="flex items-center justify-end gap-1">GPV <ArrowUpDown className="h-3 w-3" /></span>
-                                                    </TableHead>
-                                                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground" onClick={() => handleWhaleSort('percentOfTotal')}>
-                                                        <span className="flex items-center justify-end gap-1">% Total <ArrowUpDown className="h-3 w-3" /></span>
-                                                    </TableHead>
+                                                    <TableHead className="text-right">{whaleSortHeader('monthlyGPV', 'GPV')}</TableHead>
+                                                    <TableHead className="text-right">{whaleSortHeader('percentOfTotal', '% Total')}</TableHead>
                                                     <TableHead className="text-right">Locs</TableHead>
-                                                    <TableHead className="text-right cursor-pointer select-none hover:text-foreground" onClick={() => handleWhaleSort('trend')}>
-                                                        <span className="flex items-center justify-end gap-1">Trend <ArrowUpDown className="h-3 w-3" /></span>
-                                                    </TableHead>
+                                                    <TableHead className="text-right">{whaleSortHeader('trend', 'Trend')}</TableHead>
                                                     <TableHead className="text-right">AM</TableHead>
                                                 </TableRow>
                                             </TableHeader>
@@ -620,24 +655,20 @@ export default function AnalyticsPage() {
                                                 {sortedWhaleList.map(whale => (
                                                     <TableRow key={whale.id}>
                                                         <TableCell>
-                                                            <Link href={`/manage/merchants/${whale.id}`} className="hover:underline font-medium text-sm">{whale.name}</Link>
-                                                            <p className="text-xs text-muted-foreground">{whale.transactions.toLocaleString()} txns</p>
+                                                            <Link href={`/manage/merchants/${whale.id}`} className="font-medium hover:underline">{whale.name}</Link>
+                                                            <p className="text-xs tabular-nums text-muted-foreground">{whale.transactions.toLocaleString()} txns</p>
                                                         </TableCell>
-                                                        <TableCell className="text-right font-medium text-sm">${whale.monthlyGPV.toLocaleString()}</TableCell>
-                                                        <TableCell className="text-right">
-                                                            <Badge variant="secondary" className="text-xs">{whale.percentOfTotal}%</Badge>
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <span className="text-sm text-muted-foreground">{whale.locationCount}</span>
-                                                        </TableCell>
+                                                        <TableCell className="text-right font-medium tabular-nums">${whale.monthlyGPV.toLocaleString()}</TableCell>
+                                                        <TableCell className="text-right tabular-nums text-muted-foreground">{whale.percentOfTotal}%</TableCell>
+                                                        <TableCell className="text-right tabular-nums text-muted-foreground">{whale.locationCount}</TableCell>
                                                         <TableCell className="text-right">
                                                             {whale.trend !== null ? (
-                                                                <span className={`flex items-center justify-end gap-0.5 text-xs font-medium ${whale.trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                <span className={`flex items-center justify-end gap-0.5 text-xs font-medium tabular-nums ${whale.trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                                                     {whale.trend >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                                                                     {whale.trend > 0 ? '+' : ''}{whale.trend}%
                                                                 </span>
                                                             ) : (
-                                                                <span className="text-xs text-muted-foreground flex items-center justify-end gap-0.5">
+                                                                <span className="flex items-center justify-end gap-0.5 text-xs text-muted-foreground">
                                                                     <Minus className="h-3 w-3" /> New
                                                                 </span>
                                                             )}
@@ -646,9 +677,9 @@ export default function AnalyticsPage() {
                                                             {whale.accountManager ? (
                                                                 <span className="text-xs text-muted-foreground">{whale.accountManager}</span>
                                                             ) : (
-                                                                <Badge variant="outline" className="text-xs text-yellow-600 border-yellow-300">
-                                                                    <User className="h-3 w-3 mr-1" />Unassigned
-                                                                </Badge>
+                                                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                                                    <User className="h-3 w-3" />Unassigned
+                                                                </span>
                                                             )}
                                                         </TableCell>
                                                     </TableRow>
@@ -666,34 +697,27 @@ export default function AnalyticsPage() {
                                     </div>
                                 )}
                                 {sortedWhaleList.length > 0 && (
-                                    <div className="mt-3 pt-3 border-t flex items-center justify-between text-xs text-muted-foreground">
+                                    <div className="mt-3 flex items-center justify-between pt-3 text-xs text-muted-foreground">
                                         <span>{sortedWhaleList.length} whale{sortedWhaleList.length !== 1 ? 's' : ''} identified</span>
-                                        <span>Total GPV: ${gpvData?.totalGPV.toLocaleString()}</span>
+                                        <span className="tabular-nums">Total GPV: ${gpvData?.totalGPV.toLocaleString()}</span>
                                     </div>
                                 )}
-                            </CardContent>
-                        </Card>
+                            </PanelSection>
+                        </Panel>
                     </div>
 
                     {/* Context summary */}
                     {!gpvLoading && gpvData && gpvData.totalMerchants > 0 && (
-                        <Card>
-                            <CardContent className="pt-6">
-                                <div className="grid gap-6 md:grid-cols-4">
-                                    {[
-                                        { label: 'Total Merchants', value: gpvData.totalMerchants.toLocaleString() },
-                                        { label: 'Total GPV', value: `$${gpvData.totalGPV.toLocaleString()}` },
-                                        { label: 'Avg Merchant GPV', value: `$${gpvData.averageGPV.toLocaleString()}` },
-                                        { label: 'Median Merchant GPV', value: `$${gpvData.medianGPV.toLocaleString()}` },
-                                    ].map(({ label, value }) => (
-                                        <div key={label} className="text-center">
-                                            <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
-                                            <p className="text-xl font-bold mt-1">{value}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <Panel>
+                            <PanelSection label="Distribution summary">
+                                <StatRow columns={4}>
+                                    <StatTile label="Total Merchants" value={gpvData.totalMerchants.toLocaleString()} />
+                                    <StatTile label="Total GPV" value={`$${gpvData.totalGPV.toLocaleString()}`} />
+                                    <StatTile label="Avg Merchant GPV" value={`$${gpvData.averageGPV.toLocaleString()}`} />
+                                    <StatTile label="Median Merchant GPV" value={`$${gpvData.medianGPV.toLocaleString()}`} />
+                                </StatRow>
+                            </PanelSection>
+                        </Panel>
                     )}
 
                     {/* ── T002: Churn Warning ───────────────────────────────────────── */}
@@ -702,117 +726,81 @@ export default function AnalyticsPage() {
                         description="Merchants with >30% week-over-week GPV drop — sorted by severity"
                     />
 
-                    {churnLoading && (
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center gap-3">
-                                    <Skeleton className="h-10 w-10 rounded-lg" />
-                                    <div className="space-y-2">
-                                        <Skeleton className="h-5 w-48" />
-                                        <Skeleton className="h-4 w-64" />
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-3">
-                                    {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
+                    {churnLoading && <Skeleton className="h-64 w-full rounded-3xl" />}
 
                     {!churnLoading && churnData && churnData.totalAtRisk === 0 && (
-                        <Card className="border-green-200 bg-linear-to-r from-green-50 to-emerald-50">
-                            <CardContent className="py-8">
-                                <div className="flex flex-col items-center justify-center text-center gap-3">
-                                    <div className="p-3 rounded-full bg-green-100">
-                                        <ShieldCheck className="h-8 w-8 text-green-600" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-green-900">All Clear</h3>
-                                        <p className="text-sm text-green-700 mt-1">No merchants showing significant GPV decline. Churn risk is minimal.</p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <Panel>
+                            <PanelSection icon={ShieldCheck} label="All clear">
+                                <p className="text-sm text-muted-foreground">
+                                    No merchants showing significant GPV decline. Churn risk is minimal.
+                                </p>
+                            </PanelSection>
+                        </Panel>
                     )}
 
                     {!churnLoading && churnData && churnData.totalAtRisk > 0 && (
-                        <Card className="border-red-200 bg-linear-to-r from-red-50 to-orange-50">
-                            <CardHeader className="pb-4">
-                                <div className="space-y-3">
-                                    {/* Title row */}
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 rounded-lg bg-red-100 shrink-0 mt-0.5">
-                                            <Siren className="h-5 w-5 text-red-600" />
-                                        </div>
-                                        <div className="min-w-0">
-                                            <CardTitle className="flex items-center gap-2 flex-wrap">
-                                                Churn Risk Alert
-                                                <Badge variant="destructive" className="text-xs shrink-0">{churnData.totalAtRisk} At Risk</Badge>
-                                            </CardTitle>
-                                            <CardDescription className="mt-1">Merchants with significant GPV drop (Week-over-Week comparison)</CardDescription>
-                                        </div>
+                        <Panel>
+                            <PanelSection
+                                icon={Siren}
+                                label={`Churn risk alert (${churnData.totalAtRisk} at risk)`}
+                                caption="Merchants with significant GPV drop (Week-over-Week comparison)"
+                                action={
+                                    <div className="text-right">
+                                        <p className="text-sm text-muted-foreground">Total GPV at Risk</p>
+                                        <p className="text-2xl font-semibold tabular-nums">
+                                            ${churnData.totalGPVAtRisk.toLocaleString()}
+                                        </p>
                                     </div>
-                                    {/* Actions row — button left, GPV right */}
-                                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                                        <div className="flex flex-col gap-1">
-                                            <Button
-                                                size="sm"
-                                                variant={slackAlert.status === 'sent' ? 'outline' : slackAlert.status === 'no_webhook' ? 'outline' : 'default'}
-                                                className={`h-8 text-xs gap-1.5 no-print${slackAlert.status === 'sent' ? ' border-green-400 text-green-700 hover:bg-green-50' :
-                                                        slackAlert.status === 'no_webhook' ? ' border-amber-400 text-amber-700 hover:bg-amber-50' :
-                                                            slackAlert.status === 'error' ? ' bg-destructive hover:bg-destructive/90' : ''
-                                                    }`}
-                                                disabled={slackAlert.status === 'sending' || slackAlert.status === 'sent'}
-                                                onClick={handleSlackAlert}
-                                                title={slackAlert.message}
-                                            >
-                                                {slackAlert.status === 'sending' && <><Loader2 className="h-3.5 w-3.5 animate-spin" />Sending…</>}
-                                                {slackAlert.status === 'sent' && <><CheckCircle2 className="h-3.5 w-3.5" />Alert Sent</>}
-                                                {slackAlert.status === 'error' && <><XCircle className="h-3.5 w-3.5" />Retry Alert</>}
-                                                {slackAlert.status === 'no_webhook' && <><BellRing className="h-3.5 w-3.5" />No Webhook Configured</>}
-                                                {(slackAlert.status === 'idle' || slackAlert.status === 'no_critical') && <><BellRing className="h-3.5 w-3.5" />Notify #merchant-health</>}
-                                            </Button>
-                                            {slackAlert.message && slackAlert.status !== 'idle' && (
-                                                <p className="text-[10px] text-muted-foreground max-w-48 leading-tight">{slackAlert.message}</p>
-                                            )}
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                            <p className="text-xs text-muted-foreground">Total GPV at Risk</p>
-                                            <p className="text-2xl font-bold text-red-600">${churnData.totalGPVAtRisk.toLocaleString()}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                                    {[
-                                        { label: 'Critical (>80% drop)', count: churnData.criticalCount, color: 'red', icon: AlertTriangle, bg: 'bg-red-100', border: 'border-red-100', text: 'text-red-600' },
-                                        { label: 'High (50-80% drop)', count: churnData.highCount, color: 'orange', icon: TrendingDown, bg: 'bg-orange-100', border: 'border-orange-100', text: 'text-orange-600' },
-                                        { label: 'Medium (30-50% drop)', count: churnData.mediumCount, color: 'yellow', icon: ArrowDownRight, bg: 'bg-yellow-100', border: 'border-yellow-100', text: 'text-yellow-600' },
-                                    ].map(({ label, count, bg, border, text, icon: Icon }) => (
-                                        <div key={label} className={`flex items-center gap-3 p-3 rounded-lg bg-white border ${border}`}>
-                                            <div className={`p-2 rounded-full ${bg}`}><Icon className={`h-4 w-4 ${text}`} /></div>
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">{label}</p>
-                                                <p className={`text-xl font-bold ${text}`}>{count}</p>
-                                            </div>
-                                        </div>
-                                    ))}
+                                }
+                            >
+                                <div className="mb-6 flex flex-col gap-1">
+                                    <Button
+                                        size="sm"
+                                        variant={slackAlert.status === 'sent' || slackAlert.status === 'no_webhook' ? 'outline' : 'default'}
+                                        className="no-print h-8 w-fit gap-1.5 rounded-full text-xs"
+                                        disabled={slackAlert.status === 'sending' || slackAlert.status === 'sent'}
+                                        onClick={handleSlackAlert}
+                                        title={slackAlert.message}
+                                    >
+                                        {slackAlert.status === 'sending' && <><Loader2 className="h-3.5 w-3.5 animate-spin" />Sending…</>}
+                                        {slackAlert.status === 'sent' && <><CheckCircle2 className="h-3.5 w-3.5" />Alert Sent</>}
+                                        {slackAlert.status === 'error' && <><XCircle className="h-3.5 w-3.5" />Retry Alert</>}
+                                        {slackAlert.status === 'no_webhook' && <><BellRing className="h-3.5 w-3.5" />No Webhook Configured</>}
+                                        {(slackAlert.status === 'idle' || slackAlert.status === 'no_critical') && <><BellRing className="h-3.5 w-3.5" />Notify #merchant-health</>}
+                                    </Button>
+                                    {slackAlert.message && slackAlert.status !== 'idle' && (
+                                        <p className="max-w-48 text-[10px] leading-tight text-muted-foreground">{slackAlert.message}</p>
+                                    )}
                                 </div>
 
-                                <div className="rounded-lg border bg-white overflow-x-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow className="bg-muted/50">
+                                <div className="mb-6">
+                                    <StatRow columns={3}>
+                                        <StatTile label="Critical (>80% drop)" icon={<AlertTriangle />} value={churnData.criticalCount} />
+                                        <StatTile label="High (50-80% drop)" icon={<TrendingDown />} value={churnData.highCount} />
+                                        <StatTile label="Medium (30-50% drop)" icon={<ArrowDownRight />} value={churnData.mediumCount} />
+                                    </StatRow>
+                                </div>
+
+                                <div>
+                                    <div className="mb-2 flex justify-start">
+                                        <MobileColumnsButton
+                                            columns={CHURN_RISK_COLUMNS}
+                                            hidden={churnHiddenCols}
+                                            onChange={setChurnHiddenCols}
+                                        />
+                                    </div>
+                                    {/* The min-width is what forces the sideways scroll, so it
+                                        has to lift on mobile or hiding columns changes nothing. */}
+                                    <Table variant="data" className={cn(!isMobile && 'min-w-[900px]')}>
+                                        <TableHeader className="[&_tr]:border-0">
+                                            <TableRow>
                                                 <TableHead>Merchant</TableHead>
-                                                <TableHead>Severity</TableHead>
-                                                <TableHead className="text-right">Prev 7d GPV</TableHead>
-                                                <TableHead className="text-right">Last 7d GPV</TableHead>
-                                                <TableHead className="text-right">Drop %</TableHead>
-                                                <TableHead className="text-right">Days Since Last Txn</TableHead>
-                                                <TableHead className="text-right">Actions</TableHead>
+                                                {showChurnCol('severity') && <TableHead>Severity</TableHead>}
+                                                {showChurnCol('prevGpv') && <TableHead className="text-right">Prev 7d GPV</TableHead>}
+                                                {showChurnCol('lastGpv') && <TableHead className="text-right">Last 7d GPV</TableHead>}
+                                                {showChurnCol('drop') && <TableHead className="text-right">Drop %</TableHead>}
+                                                {showChurnCol('daysSince') && <TableHead className="text-right">Days Since Last Txn</TableHead>}
+                                                {showChurnCol('actions') && <TableHead className="text-right">Actions</TableHead>}
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -822,50 +810,62 @@ export default function AnalyticsPage() {
                                                     (Date.now() - new Date(merchant.lastOrderDate).getTime()) / (1000 * 60 * 60 * 24)
                                                 )
                                                 return (
-                                                    <TableRow key={merchant.id} className={config.bgClass}>
+                                                    <TableRow key={merchant.id}>
                                                         <TableCell>
-                                                            <Link href={`/manage/merchants/${merchant.id}`} className="hover:underline font-medium text-sm flex items-center gap-2">
+                                                            <Link href={`/manage/merchants/${merchant.id}`} className="flex items-center gap-2 font-medium hover:underline">
                                                                 {merchant.name}
                                                                 <ExternalLink className="h-3 w-3 opacity-50" />
                                                             </Link>
-                                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                            <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
                                                                 {merchant.transactionsLast7Days} txns (was {merchant.transactionsPrev7Days})
                                                             </p>
                                                         </TableCell>
-                                                        <TableCell>
-                                                            <Badge variant={config.variant} className="flex items-center gap-1 w-fit">
-                                                                <AlertTriangle className="h-3 w-3" />
-                                                                {config.label}
-                                                            </Badge>
-                                                        </TableCell>
-                                                        <TableCell className="text-right font-medium text-sm">${merchant.prevSevenDaysGPV.toLocaleString()}</TableCell>
-                                                        <TableCell className="text-right font-medium text-sm">${merchant.lastSevenDaysGPV.toLocaleString()}</TableCell>
+                                                        {showChurnCol('severity') && (
+                                                            <TableCell>
+                                                                <span className="flex w-fit items-center gap-1 text-sm text-muted-foreground">
+                                                                    <AlertTriangle className="h-3 w-3" />
+                                                                    {config.label}
+                                                                </span>
+                                                            </TableCell>
+                                                        )}
+                                                        {showChurnCol('prevGpv') && (
+                                                            <TableCell className="text-right font-medium tabular-nums">${merchant.prevSevenDaysGPV.toLocaleString()}</TableCell>
+                                                        )}
+                                                        {showChurnCol('lastGpv') && (
+                                                            <TableCell className="text-right font-medium tabular-nums">${merchant.lastSevenDaysGPV.toLocaleString()}</TableCell>
+                                                        )}
+                                                        {showChurnCol('drop') && (
+                                                            <TableCell className="text-right font-semibold tabular-nums">
+                                                                -{merchant.dropPercentage}%
+                                                            </TableCell>
+                                                        )}
+                                                        {showChurnCol('daysSince') && (
+                                                            <TableCell className="text-right">
+                                                                <div className="flex items-center justify-end gap-1 whitespace-nowrap text-xs text-muted-foreground">
+                                                                    <Clock className="h-3 w-3" />
+                                                                    {daysSinceLastOrder === 0 ? 'Today' : `${daysSinceLastOrder}d ago`}
+                                                                </div>
+                                                            </TableCell>
+                                                        )}
+                                                        {showChurnCol('actions') && (
                                                         <TableCell className="text-right">
-                                                            <span className={`font-bold text-sm ${config.colorClass}`}>-{merchant.dropPercentage}%</span>
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
-                                                                <Clock className="h-3 w-3" />
-                                                                {daysSinceLastOrder === 0 ? 'Today' : `${daysSinceLastOrder}d ago`}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <div className="flex items-center justify-end gap-1 flex-wrap">
+                                                            <div className="flex flex-wrap items-center justify-end gap-1">
                                                                 <a href={`mailto:?subject=At-Risk%20Merchant%3A%20${encodeURIComponent(merchant.name)}&body=Hi%2C%0A%0AThis%20merchant%20has%20shown%20a%20${merchant.dropPercentage}%25%20GPV%20drop%20in%20the%20last%207%20days.%0A%0AMerchant%3A%20${encodeURIComponent(merchant.name)}%0ASeverity%3A%20${merchant.severity}%0APrev%207d%20GPV%3A%20%24${merchant.prevSevenDaysGPV.toLocaleString()}%0ALast%207d%20GPV%3A%20%24${merchant.lastSevenDaysGPV.toLocaleString()}%0A%0APlease%20follow%20up%20with%20this%20account.`}>
-                                                                    <Button size="sm" variant="outline" className="h-7 text-xs px-2 gap-1">
+                                                                    <Button size="sm" variant="outline" className="h-7 gap-1 rounded-full px-2 text-xs">
                                                                         <Mail className="h-3 w-3" />Email AM
                                                                     </Button>
                                                                 </a>
-                                                                <Button size="sm" variant="outline" className="h-7 text-xs px-2 gap-1">
+                                                                <Button size="sm" variant="outline" className="h-7 gap-1 rounded-full px-2 text-xs">
                                                                     <User className="h-3 w-3" />Log Call
                                                                 </Button>
                                                                 <Link href={`/manage/merchants/${merchant.id}`}>
-                                                                    <Button size="sm" variant="outline" className="h-7 text-xs">
-                                                                        <ExternalLink className="h-3 w-3 mr-1" />View
+                                                                    <Button size="sm" variant="outline" className="h-7 rounded-full px-2 text-xs">
+                                                                        <ExternalLink className="mr-1 h-3 w-3" />View
                                                                     </Button>
                                                                 </Link>
                                                             </div>
                                                         </TableCell>
+                                                        )}
                                                     </TableRow>
                                                 )
                                             })}
@@ -875,11 +875,13 @@ export default function AnalyticsPage() {
 
                                 {churnData.atRiskMerchants.length > 10 && (
                                     <div className="mt-3 text-center">
-                                        <Button variant="outline" size="sm">View All {churnData.totalAtRisk} At-Risk Merchants</Button>
+                                        <Button variant="outline" size="sm" className="rounded-full">
+                                            View All {churnData.totalAtRisk} At-Risk Merchants
+                                        </Button>
                                     </div>
                                 )}
-                            </CardContent>
-                        </Card>
+                            </PanelSection>
+                        </Panel>
                     )}
 
                     {/* ── T007: Payment Method Mix ──────────────────────────────────── */}
@@ -985,6 +987,6 @@ export default function AnalyticsPage() {
                 </TabsContent>
 
             </Tabs>
-        </div>
+        </PageShell>
     )
 }

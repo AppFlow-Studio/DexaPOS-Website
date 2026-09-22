@@ -146,7 +146,7 @@ export function DateTimePicker({
             day: "relative flex h-7 items-center justify-center p-0 text-center text-xs",
             day_button: cn(
               buttonVariants({ variant: "ghost" }),
-              "h-7 w-full min-h-0 rounded-full p-0 text-xs font-normal tabular-nums aria-selected:opacity-100",
+              "h-7 w-full min-h-0 rounded-md p-0 text-xs font-normal tabular-nums aria-selected:opacity-100",
             ),
           }}
           selected={isValid ? date : undefined}

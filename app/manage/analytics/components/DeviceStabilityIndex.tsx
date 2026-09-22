@@ -1,9 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
+import {
+    MobileColumnsButton,
+    initialHiddenColumns,
+    type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -29,10 +37,28 @@ import {
     ChevronRight,
 } from 'lucide-react'
 import { useDeviceStability, useVersionDrillDown } from '@/lib/queries/use-platform-analytics'
+import { valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
+
+/**
+ * Mobile column meta for the version summary table. Instability is the rate the
+ * whole panel exists to surface, so it stays beside the version number.
+ */
+const VERSION_DETAIL_COLUMNS: ReportColumn[] = [
+    { id: 'version', label: 'Version', locked: true },
+    { id: 'signals', label: 'Signals', defaultHidden: true },
+    { id: 'degraded', label: 'Degraded', defaultHidden: true },
+    { id: 'instability', label: 'Instability' },
+    { id: 'status', label: 'Status', defaultHidden: true },
+]
 
 export default function DeviceStabilityIndex() {
     const [days, setDays] = useState<number>(30)
     const [selectedVersion, setSelectedVersion] = useState<string | null>(null)
+    const isMobile = useIsMobile()
+    const [versionHiddenCols, setVersionHiddenCols] = useState<Set<string>>(() =>
+        initialHiddenColumns(VERSION_DETAIL_COLUMNS)
+    )
+    const showVersionCol = (id: string) => !isMobile || !versionHiddenCols.has(id)
 
     const { data: stabilityData, isLoading } = useDeviceStability(days)
     const { data: drillDownData, isLoading: drillDownLoading } = useVersionDrillDown(selectedVersion, days)
@@ -57,15 +83,15 @@ export default function DeviceStabilityIndex() {
                     </div>
                     {!isLoading && stabilityData && (
                         stabilityData.overallInstabilityRate <= INSTABILITY_THRESHOLD ? (
-                            <Badge variant="default" className="flex items-center gap-1 shrink-0 bg-green-600">
-                                <ShieldCheck className="h-3 w-3" />
+                            <span className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
+                                <ShieldCheck className="h-3.5 w-3.5" />
                                 Fleet Stable
-                            </Badge>
+                            </span>
                         ) : (
-                            <Badge variant="destructive" className="flex items-center gap-1 shrink-0">
-                                <ShieldAlert className="h-3 w-3" />
+                            <span className="flex shrink-0 items-center gap-1 text-sm font-medium">
+                                <ShieldAlert className="h-3.5 w-3.5" />
                                 {stabilityData.overallInstabilityRate}% Instability
-                            </Badge>
+                            </span>
                         )
                     )}
                 </div>
@@ -81,127 +107,78 @@ export default function DeviceStabilityIndex() {
                 </Select>
             </div>
 
-            {/* Rollout Warning Banner */}
+            {/* Rollout status note. Inset fill rather than a bordered, tinted
+                banner — §5.5 carries separation on surface, and §14.3 HQ-2 keeps
+                severity colour to `/manage/health` and the DLQ. */}
             {!isLoading && stabilityData?.rolloutWarning && (
-                <Card className="min-w-0 overflow-hidden border-red-200 bg-linear-to-r from-red-50 to-orange-50">
-                    <CardContent className="py-4">
-                        <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center">
-                            <div className="shrink-0 p-2 rounded-lg bg-red-100">
-                                <AlertTriangle className="h-5 w-5 text-red-600" />
-                            </div>
-                            <div className="min-w-0 break-words">
-                                <p className="font-semibold text-red-900">Rollout Hold Recommended</p>
-                                <p className="text-sm text-red-700">{stabilityData.rolloutWarning}</p>
-                            </div>
-                            <Badge variant="destructive" className="max-w-full whitespace-normal text-left sm:ml-auto sm:shrink-0">
-                                &gt;{INSTABILITY_THRESHOLD}% Threshold Breached
-                            </Badge>
+                <Panel>
+                    <PanelSection icon={AlertTriangle} label="Rollout hold recommended">
+                        <div className="flex min-w-0 flex-col gap-2">
+                            <p className="text-sm">{stabilityData.rolloutWarning}</p>
+                            <p className="text-sm text-muted-foreground">
+                                &gt;{INSTABILITY_THRESHOLD}% threshold breached
+                            </p>
                         </div>
-                    </CardContent>
-                </Card>
+                    </PanelSection>
+                </Panel>
             )}
 
-            {/* All Clear State — fleet is stable, no versions at risk */}
             {!isLoading && stabilityData && !stabilityData.rolloutWarning && stabilityData.versionBars.length > 0 &&
                 stabilityData.versionBars.every(v => v.instabilityRate <= INSTABILITY_THRESHOLD) && (
-                <Card className="border-green-200 bg-linear-to-r from-green-50 to-emerald-50">
-                    <CardContent className="py-4">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-green-100">
-                                <ShieldCheck className="h-5 w-5 text-green-600" />
-                            </div>
-                            <div>
-                                <p className="font-semibold text-green-900">Fleet Stable — Clear to Roll Out</p>
-                                <p className="text-sm text-green-700">
-                                    All {stabilityData.versionBars.length} versions are below the {INSTABILITY_THRESHOLD}% instability threshold.
-                                    Overall rate: {stabilityData.overallInstabilityRate}%.
-                                </p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                <Panel>
+                    <PanelSection icon={ShieldCheck} label="Fleet stable — clear to roll out">
+                        <p className="text-sm text-muted-foreground">
+                            All {stabilityData.versionBars.length} versions are below the {INSTABILITY_THRESHOLD}% instability threshold.
+                            Overall rate: {stabilityData.overallInstabilityRate}%.
+                        </p>
+                    </PanelSection>
+                </Panel>
             )}
 
-            {/* KPI Summary Cards */}
             {isLoading ? (
-                <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                        <Card key={i} className="min-w-0 overflow-hidden">
-                            <CardHeader className="pb-2"><Skeleton className="h-4 w-24 max-w-full" /></CardHeader>
-                            <CardContent><Skeleton className="h-8 w-20 max-w-full" /></CardContent>
-                        </Card>
-                    ))}
-                </div>
+                <Skeleton className="h-40 w-full rounded-3xl" />
             ) : stabilityData ? (
-                <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Total Devices</CardTitle>
-                            <Monitor className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{stabilityData.totalDevices}</div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Across {stabilityData.versionBars.length} version{stabilityData.versionBars.length !== 1 ? 's' : ''}
-                            </p>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Total Signals</CardTitle>
-                            <Cpu className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">{stabilityData.totalHeartbeats.toLocaleString()}</div>
-                            <p className="text-xs text-muted-foreground mt-1">Heartbeats + session events</p>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Overall Instability</CardTitle>
-                            {stabilityData.overallInstabilityRate > INSTABILITY_THRESHOLD
-                                ? <ShieldAlert className="h-4 w-4 text-red-500" />
-                                : <ShieldCheck className="h-4 w-4 text-green-500" />
-                            }
-                        </CardHeader>
-                        <CardContent>
-                            <div className={`text-2xl font-bold ${stabilityData.overallInstabilityRate > INSTABILITY_THRESHOLD ? 'text-red-600' : 'text-green-600'}`}>
-                                {stabilityData.overallInstabilityRate}%
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Target: &lt;{INSTABILITY_THRESHOLD}%
-                            </p>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Versions at Risk</CardTitle>
-                            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">
-                                {stabilityData.versionBars.filter(v => v.instabilityRate > INSTABILITY_THRESHOLD).length}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Above {INSTABILITY_THRESHOLD}% instability threshold
-                            </p>
-                        </CardContent>
-                    </Card>
-                </div>
+                <Panel>
+                    <PanelSection label="Fleet stability" icon={Monitor}>
+                        <StatRow columns={4}>
+                            <StatTile
+                                label="Total Devices"
+                                icon={<Monitor />}
+                                value={stabilityData.totalDevices}
+                                meta={`Across ${stabilityData.versionBars.length} version${stabilityData.versionBars.length !== 1 ? 's' : ''}`}
+                            />
+                            <StatTile
+                                label="Total Signals"
+                                icon={<Cpu />}
+                                value={stabilityData.totalHeartbeats.toLocaleString()}
+                                meta="Heartbeats + session events"
+                            />
+                            <StatTile
+                                label="Overall Instability"
+                                icon={stabilityData.overallInstabilityRate > INSTABILITY_THRESHOLD ? <ShieldAlert /> : <ShieldCheck />}
+                                value={`${stabilityData.overallInstabilityRate}%`}
+                                meta={`Target: <${INSTABILITY_THRESHOLD}%`}
+                            />
+                            <StatTile
+                                label="Versions at Risk"
+                                icon={<AlertTriangle />}
+                                value={stabilityData.versionBars.filter(v => v.instabilityRate > INSTABILITY_THRESHOLD).length}
+                                meta={`Above ${INSTABILITY_THRESHOLD}% instability threshold`}
+                            />
+                        </StatRow>
+                    </PanelSection>
+                </Panel>
             ) : null}
 
             {/* Main Chart + Drill-down */}
             <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-7">
 
                 {/* Stacked Bar Chart by Version */}
-                <Card className="min-w-0 overflow-hidden lg:col-span-4">
-                    <CardHeader>
-                        <CardTitle>Stability by App Version</CardTitle>
-                        <CardDescription>
-                            Click a version bar to drill down by hardware model
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="min-w-0 px-2 sm:px-6">
+                <Panel className="lg:col-span-4">
+                    <PanelSection
+                        label="Stability by app version"
+                        caption="Click a version bar to drill down by hardware model"
+                    >
                         {isLoading ? (
                             <Skeleton className="h-87.5 w-full" />
                         ) : stabilityData && stabilityData.versionBars.length > 0 ? (
@@ -229,6 +206,7 @@ export default function DeviceStabilityIndex() {
                                         axisLine={false}
                                         tickFormatter={(val) => val.toLocaleString()}
                                         fontSize={12}
+                                        width={isMobile ? valueAxisWidthMobile(4) : undefined}
                                     />
                                     <Tooltip
                                         content={({ active, payload, label }) => {
@@ -253,8 +231,8 @@ export default function DeviceStabilityIndex() {
                                                             <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" />
                                                             <span>Unhealthy: {unhealthy.toLocaleString()}</span>
                                                         </div>
-                                                        <p className="border-t pt-1 mt-1 text-muted-foreground">
-                                                            Instability Rate: <span className={`font-bold ${Number(rate) > INSTABILITY_THRESHOLD ? 'text-red-600' : 'text-green-600'}`}>{rate}%</span>
+                                                        <p className="mt-1 pt-1 text-muted-foreground">
+                                                            Instability Rate: <span className="font-bold text-foreground">{rate}%</span>
                                                         </p>
                                                         <p className="text-muted-foreground italic">Click to drill down</p>
                                                     </div>
@@ -263,13 +241,19 @@ export default function DeviceStabilityIndex() {
                                             return null
                                         }}
                                     />
+                                    {/* `height` is a fixed box Recharts reserves above the
+                                        plot — it does not grow with content. At phone width
+                                        these three long labels wrap onto three lines and, at
+                                        36px, the overflow painted straight over the bars.
+                                        Mobile gets a taller box and shorter labels so the
+                                        legend fits the space reserved for it. */}
                                     <Legend
                                         verticalAlign="top"
-                                        height={36}
+                                        height={isMobile ? 72 : 36}
                                         formatter={(value) => {
-                                            if (value === 'healthy') return <span className="text-xs text-muted-foreground">Healthy Heartbeats</span>
-                                            if (value === 'degraded') return <span className="text-xs text-muted-foreground">Degraded (Low Resources)</span>
-                                            return <span className="text-xs text-muted-foreground">Unhealthy (Offline + Kicks)</span>
+                                            if (value === 'healthy') return <span className="text-xs text-muted-foreground">{isMobile ? 'Healthy' : 'Healthy Heartbeats'}</span>
+                                            if (value === 'degraded') return <span className="text-xs text-muted-foreground">{isMobile ? 'Degraded' : 'Degraded (Low Resources)'}</span>
+                                            return <span className="text-xs text-muted-foreground">{isMobile ? 'Unhealthy' : 'Unhealthy (Offline + Kicks)'}</span>
                                         }}
                                     />
                                     <Bar
@@ -330,43 +314,40 @@ export default function DeviceStabilityIndex() {
                                 </div>
                             </div>
                         )}
-                    </CardContent>
-                </Card>
+                    </PanelSection>
+                </Panel>
 
                 {/* Drill-down Panel */}
-                <Card className="min-w-0 overflow-hidden lg:col-span-3">
-                    <CardHeader>
-                        {selectedVersion ? (
-                            <>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7"
-                                        onClick={() => setSelectedVersion(null)}
-                                    >
-                                        <ArrowLeft className="h-4 w-4" />
-                                    </Button>
-                                    <div>
-                                        <CardTitle className="text-sm font-medium">
-                                            Hardware Breakdown — {selectedVersion}
-                                        </CardTitle>
-                                        <CardDescription>
-                                            Which device models are affected?
-                                        </CardDescription>
-                                    </div>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <CardTitle className="text-sm font-medium">Version Details</CardTitle>
-                                <CardDescription>
-                                    Click a bar in the chart to see hardware model breakdown
-                                </CardDescription>
-                            </>
-                        )}
-                    </CardHeader>
-                    <CardContent className="min-w-0 px-2 sm:px-6">
+                <Panel className="lg:col-span-3">
+                    <PanelSection
+                        label={selectedVersion ? `Hardware breakdown — ${selectedVersion}` : 'Version details'}
+                        caption={
+                            selectedVersion
+                                ? 'Which device models are affected?'
+                                : 'Click a bar in the chart to see hardware model breakdown'
+                        }
+                        action={
+                            selectedVersion ? (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 gap-1.5 rounded-full px-2"
+                                    onClick={() => setSelectedVersion(null)}
+                                >
+                                    <ArrowLeft className="h-4 w-4" />
+                                    Back
+                                </Button>
+                            ) : (
+                                // Only in the summary view — the drill-down below is a
+                                // different table that this picker does not govern.
+                                <MobileColumnsButton
+                                    columns={VERSION_DETAIL_COLUMNS}
+                                    hidden={versionHiddenCols}
+                                    onChange={setVersionHiddenCols}
+                                />
+                            )
+                        }
+                    >
                         {!selectedVersion ? (
                             // Show version summary table when no version selected
                             isLoading ? (
@@ -377,14 +358,16 @@ export default function DeviceStabilityIndex() {
                                 </div>
                             ) : stabilityData && stabilityData.versionBars.length > 0 ? (
                                 <div className="max-h-95 max-w-full overflow-auto">
-                                    <Table>
-                                        <TableHeader>
+                                    {/* Min-width lifted on mobile so hidden columns actually
+                                        narrow the table instead of scrolling sideways. */}
+                                    <Table variant="data" className={cn(!isMobile && 'min-w-[520px]')}>
+                                        <TableHeader className="[&_tr]:border-0">
                                             <TableRow>
                                                 <TableHead>Version</TableHead>
-                                                <TableHead className="text-right">Signals</TableHead>
-                                                <TableHead className="text-right text-yellow-600">Degraded</TableHead>
-                                                <TableHead className="text-right">Instability</TableHead>
-                                                <TableHead className="text-right">Status</TableHead>
+                                                {showVersionCol('signals') && <TableHead className="text-right">Signals</TableHead>}
+                                                {showVersionCol('degraded') && <TableHead className="text-right">Degraded</TableHead>}
+                                                {showVersionCol('instability') && <TableHead className="text-right">Instability</TableHead>}
+                                                {showVersionCol('status') && <TableHead className="text-right">Status</TableHead>}
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -394,35 +377,39 @@ export default function DeviceStabilityIndex() {
                                                     className="cursor-pointer hover:bg-muted/50"
                                                     onClick={() => setSelectedVersion(bar.version)}
                                                 >
-                                                    <TableCell className="font-medium text-sm">
+                                                    <TableCell className="font-medium">
                                                         <span className="flex items-center gap-1">
                                                             {bar.version}
                                                             <ChevronRight className="h-3 w-3 text-muted-foreground" />
                                                         </span>
                                                     </TableCell>
-                                                    <TableCell className="text-right text-sm">
-                                                        {bar.total.toLocaleString()}
-                                                    </TableCell>
-                                                    <TableCell className="text-right text-sm">
-                                                        {bar.degraded > 0
-                                                            ? <span className="font-medium text-yellow-600">{bar.degraded.toLocaleString()}</span>
-                                                            : <span className="text-muted-foreground">—</span>
-                                                        }
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <span className={`text-sm font-medium ${bar.instabilityRate > INSTABILITY_THRESHOLD ? 'text-red-600' : 'text-green-600'}`}>
+                                                    {showVersionCol('signals') && (
+                                                        <TableCell className="text-right tabular-nums">
+                                                            {bar.total.toLocaleString()}
+                                                        </TableCell>
+                                                    )}
+                                                    {showVersionCol('degraded') && (
+                                                        <TableCell className="text-right tabular-nums">
+                                                            {bar.degraded > 0
+                                                                ? <span className="font-medium">{bar.degraded.toLocaleString()}</span>
+                                                                : <span className="text-muted-foreground">—</span>
+                                                            }
+                                                        </TableCell>
+                                                    )}
+                                                    {showVersionCol('instability') && (
+                                                        <TableCell className="text-right font-medium tabular-nums">
                                                             {bar.instabilityRate}%
-                                                        </span>
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {bar.instabilityRate > INSTABILITY_THRESHOLD ? (
-                                                            <Badge variant="destructive" className="text-xs">At Risk</Badge>
-                                                        ) : bar.degraded > 0 ? (
-                                                            <Badge variant="secondary" className="text-xs text-yellow-700">Degraded</Badge>
-                                                        ) : (
-                                                            <Badge variant="default" className="text-xs bg-green-600">Stable</Badge>
-                                                        )}
-                                                    </TableCell>
+                                                        </TableCell>
+                                                    )}
+                                                    {showVersionCol('status') && (
+                                                        <TableCell className="text-right text-sm text-muted-foreground">
+                                                            {bar.instabilityRate > INSTABILITY_THRESHOLD
+                                                                ? 'At Risk'
+                                                                : bar.degraded > 0
+                                                                    ? 'Degraded'
+                                                                    : 'Stable'}
+                                                        </TableCell>
+                                                    )}
                                                 </TableRow>
                                             ))}
                                         </TableBody>
@@ -445,28 +432,28 @@ export default function DeviceStabilityIndex() {
                             ) : drillDownData && drillDownData.models.length > 0 ? (
                                 <div className="space-y-4">
                                     {/* Drill-down summary */}
-                                    <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                                    <div className="flex items-center justify-between rounded-2xl bg-muted/60 p-3">
                                         <div>
                                             <p className="text-xs text-muted-foreground">Overall Instability</p>
-                                            <p className={`text-lg font-bold ${drillDownData.overallInstabilityRate > INSTABILITY_THRESHOLD ? 'text-red-600' : 'text-green-600'}`}>
+                                            <p className="text-lg font-semibold tabular-nums">
                                                 {drillDownData.overallInstabilityRate}%
                                             </p>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-xs text-muted-foreground">Devices</p>
-                                            <p className="text-lg font-bold">{drillDownData.totalDevices}</p>
+                                            <p className="text-lg font-semibold tabular-nums">{drillDownData.totalDevices}</p>
                                         </div>
                                     </div>
 
                                     {/* Model breakdown table */}
                                     <div className="max-h-75 overflow-auto">
-                                        <Table>
-                                            <TableHeader>
+                                        <Table variant="data" className="min-w-[620px]">
+                                            <TableHeader className="[&_tr]:border-0">
                                                 <TableRow>
                                                     <TableHead>Hardware Model</TableHead>
                                                     <TableHead className="text-right">Devices</TableHead>
                                                     <TableHead className="text-right">Healthy</TableHead>
-                                                    <TableHead className="text-right text-yellow-600">Degraded</TableHead>
+                                                    <TableHead className="text-right">Degraded</TableHead>
                                                     <TableHead className="text-right">Unhealthy</TableHead>
                                                     <TableHead className="text-right">Rate</TableHead>
                                                 </TableRow>
@@ -475,30 +462,25 @@ export default function DeviceStabilityIndex() {
                                                 {drillDownData.models.map((model) => (
                                                     <TableRow key={model.model}>
                                                         <TableCell>
-                                                            <span className="font-medium text-sm">{model.model}</span>
+                                                            <span className="font-medium">{model.model}</span>
                                                         </TableCell>
-                                                        <TableCell className="text-right text-sm">
+                                                        <TableCell className="text-right tabular-nums">
                                                             {model.deviceCount}
                                                         </TableCell>
-                                                        <TableCell className="text-right text-sm text-green-600">
+                                                        <TableCell className="text-right tabular-nums text-muted-foreground">
                                                             {model.healthy.toLocaleString()}
                                                         </TableCell>
-                                                        <TableCell className="text-right text-sm">
+                                                        <TableCell className="text-right tabular-nums">
                                                             {model.degraded > 0
-                                                                ? <span className="font-medium text-yellow-600">{model.degraded.toLocaleString()}</span>
+                                                                ? <span className="font-medium">{model.degraded.toLocaleString()}</span>
                                                                 : <span className="text-muted-foreground">—</span>
                                                             }
                                                         </TableCell>
-                                                        <TableCell className="text-right text-sm text-red-600">
+                                                        <TableCell className="text-right tabular-nums">
                                                             {model.unhealthy.toLocaleString()}
                                                         </TableCell>
-                                                        <TableCell className="text-right">
-                                                            <Badge
-                                                                variant={model.instabilityRate > INSTABILITY_THRESHOLD ? 'destructive' : 'default'}
-                                                                className={model.instabilityRate <= INSTABILITY_THRESHOLD ? 'bg-green-600' : ''}
-                                                            >
-                                                                {model.instabilityRate}%
-                                                            </Badge>
+                                                        <TableCell className="text-right font-medium tabular-nums">
+                                                            {model.instabilityRate}%
                                                         </TableCell>
                                                     </TableRow>
                                                 ))}
@@ -513,8 +495,8 @@ export default function DeviceStabilityIndex() {
                                 </div>
                             )
                         )}
-                    </CardContent>
-                </Card>
+                    </PanelSection>
+                </Panel>
             </div>
         </>
     )

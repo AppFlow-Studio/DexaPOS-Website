@@ -2,7 +2,8 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -120,38 +121,36 @@ export default function DeviceInfoPage() {
             </div>
 
             {/* Device Header */}
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
-                                {device.image ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={device.image} alt={device.name} className="h-full w-full object-cover" />
-                                ) : (
-                                    <DeviceIcon className="h-8 w-8 text-muted-foreground" />
-                                )}
-                            </div>
-                            <div>
-                                <CardTitle className="text-2xl font-semibold">{device.name}</CardTitle>
-                                <CardDescription className="text-base mt-1">{device.category}</CardDescription>
-                            </div>
+            <Panel padded>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex min-w-0 items-center gap-4">
+                        <div className="h-16 w-16 shrink-0 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+                            {device.image ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={device.image} alt={device.name} className="h-full w-full object-cover" />
+                            ) : (
+                                <DeviceIcon className="h-8 w-8 text-muted-foreground" />
+                            )}
                         </div>
-                        <Button variant="outline">
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                        </Button>
+                        <div className="min-w-0">
+                            <h2 className="text-2xl font-semibold">{device.name}</h2>
+                            <p className="mt-1 text-base text-muted-foreground">{device.category}</p>
+                        </div>
                     </div>
-                </CardHeader>
-            </Card>
+                    <Button variant="outline">
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
+                    </Button>
+                </div>
+            </Panel>
 
             {/* Device Details */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Device Details</CardTitle>
-                    <CardDescription>Core information about this device</CardDescription>
-                </CardHeader>
-                <CardContent>
+            <Panel>
+                <PanelSection
+                    label="Device Details"
+                    caption="Core information about this device"
+                >
+                    <div className="mt-4">
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                         <div className="space-y-1">
                             <div className="text-sm font-medium text-muted-foreground">Name</div>
@@ -210,16 +209,17 @@ export default function DeviceInfoPage() {
                             </Badge>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
+                    </div>
+                </PanelSection>
+            </Panel>
 
             {/* Manufacturer Support Lifecycle */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Manufacturer Support Lifecycle</CardTitle>
-                    <CardDescription>Device support and warranty information</CardDescription>
-                </CardHeader>
-                <CardContent>
+            <Panel>
+                <PanelSection
+                    label="Manufacturer Support Lifecycle"
+                    caption="Device support and warranty information"
+                >
+                    <div className="mt-4">
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
                         <div className="space-y-1">
                             <div className="text-sm font-medium text-muted-foreground">Manufacture Date</div>
@@ -244,16 +244,17 @@ export default function DeviceInfoPage() {
                             </Badge>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
+                    </div>
+                </PanelSection>
+            </Panel>
 
             {/* Security & OS Details */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Security & OS Details</CardTitle>
-                    <CardDescription>Security software and operating system information</CardDescription>
-                </CardHeader>
-                <CardContent>
+            <Panel>
+                <PanelSection
+                    label="Security & OS Details"
+                    caption="Security software and operating system information"
+                >
+                    <div className="mt-4">
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                         <div className="space-y-2">
                             <div className="text-sm font-medium text-muted-foreground">Antivirus</div>
@@ -287,24 +288,23 @@ export default function DeviceInfoPage() {
                             </div>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
+                    </div>
+                </PanelSection>
+            </Panel>
 
             {/* Documents Section */}
-            <Card>
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle>Documents</CardTitle>
-                            <CardDescription>Associated documents and files for this device</CardDescription>
-                        </div>
+            <Panel>
+                <PanelSection
+                    label="Documents"
+                    caption="Associated documents and files for this device"
+                    action={
                         <Button variant="outline" size="sm">
                             <Upload className="h-4 w-4 mr-2" />
                             Upload a document
                         </Button>
-                    </div>
-                </CardHeader>
-                <CardContent>
+                    }
+                >
+                <div className="mt-4">
                     {device.documents.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                             <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
@@ -330,7 +330,12 @@ export default function DeviceInfoPage() {
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">{doc.fileSize}</TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8"
+                                                    aria-label={`Download ${doc.name}`}
+                                                >
                                                     <Download className="h-4 w-4" />
                                                 </Button>
                                             </TableCell>
@@ -352,8 +357,9 @@ export default function DeviceInfoPage() {
                             )}
                         </>
                     )}
-                </CardContent>
-            </Card>
+                </div>
+                </PanelSection>
+            </Panel>
         </div>
     )
 }

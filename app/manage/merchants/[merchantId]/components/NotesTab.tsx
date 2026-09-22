@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
@@ -124,33 +125,28 @@ export function NotesTab({ merchantId }: NotesTabProps) {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" />
-            Merchant Notes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <Panel>
+        <PanelSection icon={MessageSquare} label="Merchant Notes">
+          <div className="mt-4 space-y-3">
           <Textarea
             value={newNote}
             onChange={(event) => setNewNote(event.target.value)}
             placeholder="Add an internal note about this merchant..."
             rows={4}
+            className="rounded-2xl border-0 bg-muted/45 dark:bg-muted/45"
           />
           <div className="flex justify-end">
             <Button onClick={() => void handleAddNote()} disabled={!newNote.trim() || addNoteMutation.isPending}>
               {addNoteMutation.isPending ? 'Adding...' : 'Add Note'}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+          </div>
+        </PanelSection>
+      </Panel>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Notes</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <Panel>
+        <PanelSection label="Recent Notes">
+          <div className="mt-4 space-y-3">
           {isLoading && (
             <>
               <Skeleton className="h-24 w-full" />
@@ -165,13 +161,13 @@ export function NotesTab({ merchantId }: NotesTabProps) {
           )}
 
           {!isLoading && !isError && (!notes || notes.length === 0) && (
-            <div className="rounded-md border bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
+            <div className="rounded-2xl border-0 bg-muted/45 px-3 py-6 text-center text-sm text-muted-foreground">
               No notes yet for this merchant.
             </div>
           )}
 
           {(notes as NoteRecord[] | undefined)?.map((note) => (
-            <div key={note.id} className="rounded-lg border p-3 space-y-2">
+            <div key={note.id} className="rounded-2xl border-0 bg-muted/45 p-3 space-y-2">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -191,7 +187,13 @@ export function NotesTab({ merchantId }: NotesTabProps) {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="shrink-0" disabled={isBusy}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0"
+                      disabled={isBusy}
+                      aria-label={`Actions for note by ${note.author_name}`}
+                    >
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -236,10 +238,14 @@ export function NotesTab({ merchantId }: NotesTabProps) {
 
               {editingNoteId === note.id ? (
                 <div className="space-y-2">
+                  {/* `bg-background`, not the card's muted fill: this textarea
+                      sits on top of a faded note card, so matching it would
+                      erase the edit affordance. */}
                   <Textarea
                     value={editingContent}
                     onChange={(event) => setEditingContent(event.target.value)}
                     rows={4}
+                    className="rounded-2xl border-0 bg-background dark:bg-background"
                   />
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" size="sm" onClick={handleCancelEdit}>
@@ -257,8 +263,9 @@ export function NotesTab({ merchantId }: NotesTabProps) {
               )}
             </div>
           ))}
-        </CardContent>
-      </Card>
+          </div>
+        </PanelSection>
+      </Panel>
     </div>
   )
 }

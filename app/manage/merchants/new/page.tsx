@@ -1,3 +1,4 @@
+import { PageHeader, PageShell } from '@/components/dashboard/shell'
 import { requireAdminAuth } from '@/lib/admin/auth'
 import { CreateMerchantWizard } from './wizard'
 
@@ -7,16 +8,19 @@ export default async function NewMerchantPage() {
     requiredLabel: 'merchants.create',
   })
 
+  /* A server component rendering the client shell primitives — standard App
+     Router usage (§3.3); only strings and nodes cross the boundary.
+     `width="narrow"` replaces the hand-rolled `mx-auto max-w-5xl`. */
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Create New Merchant</h1>
-        <p className="text-muted-foreground">
-          Onboarding flow for business profile and owner contact.
-        </p>
-      </div>
+    <PageShell as="div" width="narrow">
+      <PageHeader
+        title="Create New Merchant"
+        subtitle="Onboarding flow for business profile and owner contact."
+        backHref="/manage/merchants"
+        backLabel="Back to Merchants"
+      />
 
       <CreateMerchantWizard />
-    </div>
+    </PageShell>
   )
 }

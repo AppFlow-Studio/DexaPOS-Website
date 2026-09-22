@@ -155,7 +155,7 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
           {/* Step 1 — processing credentials (gates boarding) */}
           {acquirer && (
             <div
-              className={`mb-3 rounded-lg border p-4 ${
+              className={`mb-3 rounded-2xl border p-4 ${
                 acquirerReady ? 'bg-card' : 'border-amber-300 bg-amber-50 text-amber-900'
               }`}
             >
@@ -199,7 +199,7 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
           )}
 
           {/* Step 2 — board on Valor */}
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border bg-card p-4">
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl border bg-card p-4">
             <div className="space-y-1">
               <div className="font-medium">
                 <span className="text-muted-foreground">2 ·</span> Board on Valor
@@ -228,7 +228,7 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
           </div>
 
           {blockers && blockers.length > 0 && (
-            <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">
+            <div className="mb-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <AlertTriangle className="h-4 w-4" />
                 Resolve these before boarding
@@ -253,7 +253,7 @@ export function ValorBoardingSection({ merchantId }: { merchantId: string }) {
 
           <div className="space-y-3">
             {data.locations.map((row) => (
-              <div key={row.locationId} className="rounded-lg border bg-card p-4">
+              <div key={row.locationId} className="rounded-2xl border bg-card p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <div className="font-medium">{row.locationName}</div>

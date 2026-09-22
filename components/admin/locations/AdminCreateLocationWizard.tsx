@@ -477,8 +477,6 @@ export function AdminCreateLocationWizard({ merchantId, merchantName }: AdminCre
                             data={formData as LocationFormStep4}
                             onChange={updateFormData}
                             errors={errors}
-                            onBankSupportDocumentSelect={setBankSupportFile}
-                            onClearBankSupportDocument={() => setBankSupportFile(null)}
                         />
                         <div className="space-y-3 rounded-lg border bg-card p-4">
                             <div>

@@ -217,7 +217,7 @@ export function SupportTicketsSection({ merchantId }: { merchantId: string }) {
             </div>
 
             {/* Ticket list */}
-            <div className="overflow-hidden rounded-lg border bg-card">
+            <div className="overflow-hidden rounded-3xl border bg-card">
                 {isLoading ? (
                     <div className="divide-y">
                         {Array.from({ length: 4 }).map((_, i) => (

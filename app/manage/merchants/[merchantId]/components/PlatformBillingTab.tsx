@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Panel } from '@/components/dashboard/shell/Panel'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -102,8 +102,7 @@ export function PlatformBillingTab({ merchantId, locations }: PlatformBillingTab
         </Button>
       </div>
 
-      <Card className="shadow-none">
-        <CardContent className="p-0">
+      <Panel>
           {isLoading ? (
             <div className="space-y-3 p-6">
               {[...Array(4)].map((_, index) => (
@@ -156,7 +155,12 @@ export function PlatformBillingTab({ merchantId, locations }: PlatformBillingTab
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              aria-label={`Actions for invoice ${invoice.invoice_number}`}
+                            >
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -217,8 +221,7 @@ export function PlatformBillingTab({ merchantId, locations }: PlatformBillingTab
               </Table>
             </div>
           )}
-        </CardContent>
-      </Card>
+      </Panel>
 
       <PlatformInvoiceDialog
         merchantId={merchantId}

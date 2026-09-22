@@ -1,10 +1,19 @@
 'use client'
 
 import { MapPin, Globe, TrendingUp, AlertTriangle } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Panel } from '@/components/dashboard/shell/Panel'
+import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { StatRow, StatTile } from '@/components/dashboard/shell/StatTile'
+import { AnalyticsTooltip, valueAxisWidthMobile } from '@/app/manage/components/analytics-primitives'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  MobileColumnsButton,
+  initialHiddenColumns,
+  type ReportColumn,
+} from '@/components/dashboard/reports/MobileColumnsButton'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import {
   Tooltip,
   TooltipContent,
@@ -16,7 +25,7 @@ import {
 } from 'recharts'
 import { useLocationDensity } from '@/lib/queries/use-platform-analytics'
 import type { LocationDensityState } from '@/app/manage/actions/hq-platform/analytics'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -203,7 +212,9 @@ function USChoropleth({ byState, coverageGaps }: USChoroplethProps) {
                 <TooltipContent side="top" className="space-y-1">
                   <p className="font-semibold text-sm">{name}</p>
                   {isGap ? (
-                    <p className="text-xs text-red-500">No locations — sales whitespace</p>
+                    // No tint: inherits the tooltip's own foreground, so it stays
+                    // legible on the dark surface in either theme.
+                    <p className="text-xs">No locations — sales whitespace</p>
                   ) : count > 0 ? (
                     <>
                       <p className="text-xs">
@@ -250,17 +261,131 @@ function USChoropleth({ byState, coverageGaps }: USChoroplethProps) {
 // COMPONENT
 // ============================================================================
 
+/**
+ * Mobile column meta for the two geography tables. Both are read as "where are
+ * we concentrated", so Locations — the count each is sorted by — is the number
+ * kept beside the place name.
+ */
+const STATE_BREAKDOWN_COLUMNS: ReportColumn[] = [
+  { id: 'state', label: 'State', locked: true },
+  { id: 'locations', label: 'Locations' },
+  { id: 'merchants', label: 'Merchants', defaultHidden: true },
+  { id: 'gpv', label: '30d GPV', defaultHidden: true },
+  { id: 'topCities', label: 'Top Cities', defaultHidden: true },
+]
+
+const TOP_CITY_COLUMNS: ReportColumn[] = [
+  { id: 'city', label: 'City', locked: true },
+  { id: 'state', label: 'State', defaultHidden: true },
+  { id: 'locations', label: 'Locations' },
+  { id: 'merchants', label: 'Merchants', defaultHidden: true },
+  { id: 'gpv', label: '30d GPV', defaultHidden: true },
+]
+
 export function LocationDensityInsights() {
   const { data, isLoading } = useLocationDensity()
+  const isMobile = useIsMobile()
+  const [stateHiddenCols, setStateHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(STATE_BREAKDOWN_COLUMNS)
+  )
+  const showStateCol = (id: string) => !isMobile || !stateHiddenCols.has(id)
+  const [cityHiddenCols, setCityHiddenCols] = useState<Set<string>>(() =>
+    initialHiddenColumns(TOP_CITY_COLUMNS)
+  )
+  const showCityCol = (id: string) => !isMobile || !cityHiddenCols.has(id)
 
   if (isLoading) {
+    // Built from the same Panel/PanelSection/StatRow primitives as the loaded
+    // view rather than from loose rectangles: the headings, captions and tile
+    // labels are known before the data arrives, so they render for real and
+    // only the figures are skeletons. A hand-sized `h-24`/`h-64` stack drifts
+    // from the real layout every time either one changes — this cannot.
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}
+      <div className="space-y-6">
+        <Panel>
+          <PanelSection label="Location footprint" icon={MapPin}>
+            <StatRow columns={4}>
+              <StatTile isLoading label="Total Locations" icon={<MapPin />} value={null} meta="Active across the platform" />
+              <StatTile isLoading label="States Covered" icon={<Globe />} value={null} meta="Including D.C." />
+              <StatTile isLoading label="Whitespace States" icon={<AlertTriangle />} value={null} meta="States with no presence" />
+              <StatTile isLoading label="Top State" icon={<TrendingUp />} value={null} />
+            </StatRow>
+          </PanelSection>
+        </Panel>
+
+        <Panel>
+          <PanelSection
+            label="Geographic distribution"
+            caption="Location density by state — hover for details · red = no presence (sales whitespace)"
+          >
+            {/* Mirrors USChoropleth: the same 12×8 aspect-square tile grid and
+                the same legend row beneath it. */}
+            <div className="space-y-3">
+              <div
+                className="grid w-full gap-1"
+                style={{
+                  gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
+                  gridTemplateRows: `repeat(${GRID_ROWS}, 1fr)`,
+                }}
+              >
+                {Array.from({ length: GRID_ROWS * GRID_COLS }).map((_, i) => {
+                  const row = Math.floor(i / GRID_COLS)
+                  const col = i % GRID_COLS
+                  const occupied = Object.values(STATE_GRID).some(v => v.row === row && v.col === col)
+                  return occupied ? (
+                    <Skeleton key={i} className="aspect-square rounded" />
+                  ) : (
+                    <div key={i} />
+                  )
+                })}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <span className="text-xs text-muted-foreground">Locations:</span>
+                {LEGEND_TIERS.map(({ label }) => (
+                  <div key={label} className="flex items-center gap-1">
+                    <Skeleton className="h-4 w-4 rounded" />
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </PanelSection>
+        </Panel>
+
+        <Panel>
+          <PanelSection
+            label="Top 10 states by location count"
+            caption="Active locations per state — highest concentration markets"
+          >
+            <Skeleton className="h-60 w-full" />
+          </PanelSection>
+        </Panel>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Panel className="lg:col-span-2">
+            <PanelSection label="State breakdown" caption="All represented states sorted by location count">
+              <div className="space-y-3">
+                {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+              </div>
+            </PanelSection>
+          </Panel>
+
+          <Panel>
+            <PanelSection label="Coverage gaps" caption="States with zero active locations — sales targets">
+              <div className="flex flex-wrap gap-1.5">
+                {[...Array(14)].map((_, i) => <Skeleton key={i} className="h-5 w-10 rounded-full" />)}
+              </div>
+            </PanelSection>
+          </Panel>
         </div>
-        <Skeleton className="h-64 w-full" />
-        <Skeleton className="h-72 w-full" />
+
+        <Panel>
+          <PanelSection label="Top cities" caption="Highest concentration markets by city — top 20">
+            <div className="space-y-3">
+              {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-9 w-full" />)}
+            </div>
+          </PanelSection>
+        </Panel>
       </div>
     )
   }
@@ -285,208 +410,207 @@ export function LocationDensityInsights() {
   return (
     <div className="space-y-6">
 
-      {/* ── KPI Cards ────────────────────────────────────────────────────── */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Locations</CardTitle>
-            <MapPin className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.totalLocations.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground mt-1">Active across the platform</p>
-          </CardContent>
-        </Card>
+      <Panel>
+        <PanelSection label="Location footprint" icon={MapPin}>
+          <StatRow columns={4}>
+            <StatTile
+              label="Total Locations"
+              icon={<MapPin />}
+              value={data.totalLocations.toLocaleString()}
+              meta="Active across the platform"
+            />
+            <StatTile
+              label="States Covered"
+              icon={<Globe />}
+              value={
+                <>
+                  {data.totalStates}{' '}
+                  <span className="text-base font-normal text-muted-foreground">/ 51</span>
+                </>
+              }
+              meta="Including D.C."
+            />
+            <StatTile
+              label="Whitespace States"
+              icon={<AlertTriangle />}
+              value={data.coverageGaps.length}
+              meta="States with no presence"
+            />
+            <StatTile
+              label="Top State"
+              icon={<TrendingUp />}
+              value={topStateEntry?.stateName || '—'}
+              meta={topStateEntry ? `${topStateEntry.locationCount} location${topStateEntry.locationCount !== 1 ? 's' : ''}` : undefined}
+            />
+          </StatRow>
+        </PanelSection>
+      </Panel>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">States Covered</CardTitle>
-            <Globe className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{data.totalStates} <span className="text-base font-normal text-muted-foreground">/ 51</span></div>
-            <p className="text-xs text-muted-foreground mt-1">Including D.C.</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Whitespace States</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${data.coverageGaps.length > 10 ? 'text-red-600' : data.coverageGaps.length > 5 ? 'text-yellow-600' : 'text-green-600'}`}>
-              {data.coverageGaps.length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">States with no presence</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Top State</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{topStateEntry?.stateName || '—'}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {topStateEntry ? `${topStateEntry.locationCount} location${topStateEntry.locationCount !== 1 ? 's' : ''}` : ''}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── US Choropleth Tile Map ────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Geographic Distribution</CardTitle>
-          <CardDescription>
-            Location density by state — hover for details · red = no presence (sales whitespace)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection
+          label="Geographic distribution"
+          caption="Location density by state — hover for details · red = no presence (sales whitespace)"
+        >
           <USChoropleth byState={data.byState} coverageGaps={data.coverageGaps} />
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
-      {/* ── Top States Bar Chart ──────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Top 10 States by Location Count</CardTitle>
-          <CardDescription>Active locations per state — highest concentration markets</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <Panel>
+        <PanelSection
+          label="Top 10 states by location count"
+          caption="Active locations per state — highest concentration markets"
+        >
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={chartData} margin={{ bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="state" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <RechartsTooltip
-                formatter={(value: number, name: string) => [
-                  value.toLocaleString(),
-                  name === 'locations' ? 'Locations' : 'Merchants',
-                ]}
-              />
-              <Bar dataKey="locations" name="locations" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} width={isMobile ? valueAxisWidthMobile(3) : undefined} />
+              <RechartsTooltip content={<AnalyticsTooltip />} />
+              {/* `var(--chart-1)` bare, never `hsl(var(--chart-1))` (C2): the
+                  token is already an `oklch()` colour, so wrapping it in `hsl()`
+                  produced invalid CSS and the bars fell back to black. */}
+              <Bar dataKey="locations" name="Locations" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
       {/* ── State Breakdown Table + Coverage Gaps ────────────────────────── */}
       <div className="grid gap-4 lg:grid-cols-3">
 
         {/* State table */}
-        <Card className="lg:col-span-2 min-w-0 overflow-hidden">
-          <CardHeader>
-            <CardTitle>State Breakdown</CardTitle>
-            <CardDescription>All represented states sorted by location count</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
+        <Panel className="lg:col-span-2">
+          <PanelSection
+            label="State breakdown"
+            caption="All represented states sorted by location count"
+            action={
+              <MobileColumnsButton
+                columns={STATE_BREAKDOWN_COLUMNS}
+                hidden={stateHiddenCols}
+                onChange={setStateHiddenCols}
+              />
+            }
+          >
             <div className="max-h-80 overflow-auto">
-              <Table>
-                <TableHeader>
+              {/* Min-width lifted on mobile so hidden columns actually narrow the
+                  table instead of leaving it scrolling sideways. */}
+              <Table variant="data" className={cn(!isMobile && 'min-w-[620px]')}>
+                <TableHeader className="[&_tr]:border-0">
                   <TableRow>
                     <TableHead>State</TableHead>
-                    <TableHead className="text-right">Locations</TableHead>
-                    <TableHead className="text-right">Merchants</TableHead>
-                    <TableHead className="text-right whitespace-nowrap">30d GPV</TableHead>
-                    <TableHead className="hidden lg:table-cell">Top Cities</TableHead>
+                    {showStateCol('locations') && <TableHead className="text-right">Locations</TableHead>}
+                    {showStateCol('merchants') && <TableHead className="text-right">Merchants</TableHead>}
+                    {showStateCol('gpv') && <TableHead className="whitespace-nowrap text-right">30d GPV</TableHead>}
+                    {/* Top Cities was `hidden lg:table-cell`; the picker now owns
+                        that decision so there is one mechanism, not two fighting. */}
+                    {showStateCol('topCities') && <TableHead className="hidden lg:table-cell">Top Cities</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.byState.map(row => (
                     <TableRow key={row.state}>
                       <TableCell>
-                        <div className="font-medium text-sm">{row.stateName}</div>
+                        <div className="font-medium">{row.stateName}</div>
                         <div className="text-xs text-muted-foreground">{row.state}</div>
                       </TableCell>
-                      <TableCell className="text-right font-medium">{row.locationCount}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{row.merchantCount}</TableCell>
-                      <TableCell className="text-right text-sm">{fmtGPV(row.gpv30d)}</TableCell>
-                      <TableCell className="hidden lg:table-cell">
-                        <div className="flex flex-wrap gap-1">
-                          {row.topCities.slice(0, 2).map(city => (
-                            <Badge key={city} variant="secondary" className="text-xs font-normal">{city}</Badge>
-                          ))}
-                        </div>
-                      </TableCell>
+                      {showStateCol('locations') && (
+                        <TableCell className="text-right font-medium tabular-nums">{row.locationCount}</TableCell>
+                      )}
+                      {showStateCol('merchants') && (
+                        <TableCell className="text-right tabular-nums text-muted-foreground">{row.merchantCount}</TableCell>
+                      )}
+                      {showStateCol('gpv') && (
+                        <TableCell className="text-right tabular-nums">{fmtGPV(row.gpv30d)}</TableCell>
+                      )}
+                      {showStateCol('topCities') && (
+                        <TableCell className="hidden text-muted-foreground lg:table-cell">
+                          {row.topCities.slice(0, 2).join(' · ')}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
 
         {/* Coverage gaps */}
-        <Card className="min-w-0 overflow-hidden">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 flex-wrap">
-              Coverage Gaps
-              <Badge variant={data.coverageGaps.length > 0 ? 'destructive' : 'default'} className="text-xs shrink-0">
-                {data.coverageGaps.length} state{data.coverageGaps.length !== 1 ? 's' : ''}
-              </Badge>
-            </CardTitle>
-            <CardDescription>States with zero active locations — sales targets</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <Panel>
+          <PanelSection
+            label={`Coverage gaps (${data.coverageGaps.length} state${data.coverageGaps.length !== 1 ? 's' : ''})`}
+            caption="States with zero active locations — sales targets"
+          >
             {data.coverageGaps.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
-                <Globe className="h-8 w-8 text-green-500 opacity-70" />
-                <p className="text-sm font-medium text-green-700">Full Coverage</p>
+              <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+                <Globe className="h-8 w-8 text-muted-foreground opacity-70" />
+                <p className="text-sm font-medium">Full Coverage</p>
                 <p className="text-xs text-muted-foreground">Locations in all 51 states</p>
               </div>
             ) : (
-              <div className="flex flex-wrap gap-1.5 max-h-64 overflow-auto">
+              <div className="flex max-h-64 flex-wrap gap-1.5 overflow-auto">
                 {data.coverageGaps.map(code => (
-                  <Badge key={code} variant="outline" className="text-xs text-muted-foreground border-dashed">
+                  <span
+                    key={code}
+                    className="rounded-full bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+                  >
                     {code}
-                  </Badge>
+                  </span>
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </PanelSection>
+        </Panel>
       </div>
 
-      {/* ── Top Cities Table ─────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Top Cities</CardTitle>
-          <CardDescription>Highest concentration markets by city — top 20</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
+      <Panel>
+        <PanelSection
+          label="Top cities"
+          caption="Highest concentration markets by city — top 20"
+          action={
+            <MobileColumnsButton
+              columns={TOP_CITY_COLUMNS}
+              hidden={cityHiddenCols}
+              onChange={setCityHiddenCols}
+            />
+          }
+        >
           <div className="max-h-80 overflow-auto">
-            <Table>
-              <TableHeader>
+            {/* Min-width lifted on mobile so hidden columns actually narrow the
+                table instead of leaving it scrolling sideways. */}
+            <Table variant="data" className={cn(!isMobile && 'min-w-[620px]')}>
+              <TableHeader className="[&_tr]:border-0">
                 <TableRow>
-                  <TableHead className="w-8">#</TableHead>
                   <TableHead>City</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead className="text-right">Locations</TableHead>
-                  <TableHead className="text-right">Merchants</TableHead>
-                  <TableHead className="text-right">30d GPV</TableHead>
+                  {showCityCol('state') && <TableHead>State</TableHead>}
+                  {showCityCol('locations') && <TableHead className="text-right">Locations</TableHead>}
+                  {showCityCol('merchants') && <TableHead className="text-right">Merchants</TableHead>}
+                  {showCityCol('gpv') && <TableHead className="text-right">30d GPV</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.byCity.map((row, i) => (
+                {data.byCity.map(row => (
                   <TableRow key={`${row.city}-${row.state}`}>
-                    <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
-                    <TableCell className="font-medium text-sm">{row.city}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="text-xs font-normal">{row.state}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">{row.locationCount}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">{row.merchantCount}</TableCell>
-                    <TableCell className="text-right text-sm">{fmtGPV(row.gpv30d)}</TableCell>
+                    <TableCell className="font-medium">{row.city}</TableCell>
+                    {showCityCol('state') && (
+                      <TableCell className="text-muted-foreground">{row.state}</TableCell>
+                    )}
+                    {showCityCol('locations') && (
+                      <TableCell className="text-right font-medium tabular-nums">{row.locationCount}</TableCell>
+                    )}
+                    {showCityCol('merchants') && (
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{row.merchantCount}</TableCell>
+                    )}
+                    {showCityCol('gpv') && (
+                      <TableCell className="text-right tabular-nums">{fmtGPV(row.gpv30d)}</TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        </PanelSection>
+      </Panel>
 
     </div>
   )

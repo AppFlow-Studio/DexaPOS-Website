@@ -30,7 +30,7 @@ function MidCard({
 }) {
     const hasMid = !!row.luqra_mid
     return (
-        <div className="rounded-lg border bg-card">
+        <div className="rounded-3xl border bg-card">
             <div className="flex items-start justify-between gap-3 border-b px-4 py-3">
                 <div className="space-y-0.5 min-w-0">
                     <div className="flex items-center gap-2">
