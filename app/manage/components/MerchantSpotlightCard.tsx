@@ -68,6 +68,16 @@ export function MerchantSpotlightCard({ merchant }: { merchant: MerchantSpotligh
             <p className="truncate text-sm font-semibold leading-tight">
               {merchant.name ?? 'Unnamed merchant'}
             </p>
+            {/* Several merchants legitimately share a name (four "Charcoal
+                Gardenia" records ship today), and the spotlight payload carries
+                no city or org to separate them. The id prefix is the only
+                distinguishing value available without widening the query. */}
+            <p
+              className="truncate font-mono text-[10px] leading-tight text-muted-foreground"
+              title={merchant.id}
+            >
+              {merchant.id.slice(0, 8)}
+            </p>
             <span className={`mt-1 ${BADGE_SHELL}`}>{statusLabel}</span>
           </div>
         </div>

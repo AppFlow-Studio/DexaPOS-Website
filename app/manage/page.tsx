@@ -13,6 +13,7 @@ import { LiveActivityFeed } from './components/LiveActivityFeed'
 import { DeviceFleetMap } from './components/DeviceFleetMap'
 import { OrdersHeatmap } from './components/OrdersHeatmap'
 import { AlertsPanel } from './components/AlertsPanel'
+import { PlatformStatusLine } from './components/PlatformStatusLine'
 import { HealthDashboard } from './components/HealthDashboard'
 import { AnalyticsContent } from './components/AnalyticsContent'
 
@@ -34,6 +35,8 @@ export default function Dashboard() {
           </Button>
         }
       />
+
+      <PlatformStatusLine />
 
       {/* Tab Navigation */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

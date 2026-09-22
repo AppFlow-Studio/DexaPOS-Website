@@ -68,7 +68,7 @@ export function LiveActivityFeed() {
                   {event.link ? (
                     <Link
                       href={event.link}
-                      className="text-sm font-medium text-[#0C4FD1] hover:underline dark:text-[#6CA0FF]"
+                      className="text-sm font-medium text-foreground hover:underline"
                     >
                       <span dangerouslySetInnerHTML={{ __html: event.message }} />
                     </Link>

@@ -22,7 +22,8 @@ import { usePlatformDashboardKPIs } from '@/lib/queries/use-platform-dashboard'
 interface KPIProps {
   title: string
   value: string | number
-  change: number
+  /** `null` when no meaningful comparison exists — see `Delta`. */
+  change: number | null
   description: string
   icon: React.ComponentType<{ className?: string }>
   isLoading?: boolean
@@ -40,8 +41,15 @@ interface KPIProps {
  * real severity is what keeps the alarms legible (see `UI-DESIGN-SYSTEM.md`
  * §14.3 HQ-2). Direction is carried by the arrow glyph, which survives both
  * colour-blindness and a greyscale print.
+ *
+ * `null` means "no comparison available" — not zero. A percentage against a
+ * zero baseline is not a measurement: "↘ 100.0% vs last week" on $0 revenue
+ * only says last week had data and today has none, and "↗ 0.0%" renders a
+ * non-signal as a signal. Both are suppressed.
  */
-function Delta({ change }: { change: number }) {
+function Delta({ change }: { change: number | null }) {
+  if (change === null || Math.abs(change) < 0.05) return null
+
   const Arrow = change >= 0 ? ArrowUpRight : ArrowDownRight
 
   return (
@@ -51,6 +59,12 @@ function Delta({ change }: { change: number }) {
       <span className="sr-only">{change >= 0 ? 'increase' : 'decrease'}</span>
     </span>
   )
+}
+
+/** Percent change, or `null` when the baseline is zero (no comparison exists). */
+function percentChange(current: number, baseline: number): number | null {
+  if (!baseline) return null
+  return ((current - baseline) / baseline) * 100
 }
 
 function KPI({
@@ -94,13 +108,16 @@ export function PlatformPulseSection() {
   const { data: kpis, isLoading } = usePlatformDashboardKPIs()
 
   // Calculate trend percentages
+  // `Math.max(baseline, 1)` previously turned a zero baseline into 1, so $0 vs
+  // $0 produced a real-looking percentage against a denominator that never
+  // existed. `percentChange` returns null instead and the delta is omitted.
   const revenueChange = kpis
-    ? ((kpis.revenueToday - kpis.revenueLastWeekSameDay) / Math.max(kpis.revenueLastWeekSameDay, 1)) * 100
-    : 0
+    ? percentChange(kpis.revenueToday, kpis.revenueLastWeekSameDay)
+    : null
 
   const ordersChange = kpis
-    ? ((kpis.ordersToday - kpis.ordersLastWeekSameDay) / Math.max(kpis.ordersLastWeekSameDay, 1)) * 100
-    : 0
+    ? percentChange(kpis.ordersToday, kpis.ordersLastWeekSameDay)
+    : null
 
   return (
     <Panel>
@@ -133,7 +150,7 @@ export function PlatformPulseSection() {
             <KPI
               title="Avg. Order Value"
               value={`$${kpis?.avgOrderValue.toFixed(2) || '0.00'}`}
-              change={0}
+              change={null}
               description="Today"
               icon={TrendingUp}
               isLoading={isLoading}
@@ -141,21 +158,27 @@ export function PlatformPulseSection() {
             <KPI
               title="Active Orders"
               value={kpis?.activeOrdersNow || '0'}
-              change={0}
+              change={null}
               description="In progress"
               icon={Zap}
               isLoading={isLoading}
             />
           </StatRow>
 
-          {/* Row 2: Platform Health */}
-          <StatRow columns={4}>
+          {/* Row 2 is operational status, not headline trade. Labelling and
+              ruling it off gives the eight tiles the two tiers the layout
+              already implied but rendered at equal weight. */}
+          <div className="space-y-4 border-t border-border/60 pt-6">
+            <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-muted-foreground">
+              Platform health
+            </p>
+            <StatRow columns={4}>
             <KPI
               title="Stations Online"
               value={
                 kpis ? `${kpis.stationsOnline} of ${kpis.stationsTotalCount}` : '0 of 0'
               }
-              change={0}
+              change={null}
               description="Active"
               icon={Radio}
               isLoading={isLoading}
@@ -163,7 +186,7 @@ export function PlatformPulseSection() {
             <KPI
               title="Staff Clocked In"
               value={kpis?.staffClockedIn || '0'}
-              change={0}
+              change={null}
               description="Current shifts"
               icon={Users}
               isLoading={isLoading}
@@ -171,7 +194,7 @@ export function PlatformPulseSection() {
             <KPI
               title="Payment Success Rate"
               value={`${kpis?.paymentSuccessRate.toFixed(1) || '0.0'}%`}
-              change={0}
+              change={null}
               description="Today"
               icon={CreditCard}
               isLoading={isLoading}
@@ -180,13 +203,14 @@ export function PlatformPulseSection() {
             <KPI
               title="Support Tickets"
               value={kpis?.openSupportTickets ?? 0}
-              change={0}
+              change={null}
               hideChange
               description="Open"
               icon={Ticket}
               isLoading={isLoading}
             />
-          </StatRow>
+            </StatRow>
+          </div>
         </div>
       </PanelSection>
     </Panel>
