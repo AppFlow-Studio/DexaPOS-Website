@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { isOnlineDeliveryEnabled } from "./lib/delivery-flag";
 
 async function broadcastOrderStatus(orderId: string, status: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -128,6 +129,15 @@ export async function placeOrder(
 ): Promise<PlaceOrderResult> {
   if (!sessionToken) {
     return { success: false, error: "Not authenticated" };
+  }
+
+  // Defense-in-depth for the global delivery kill-switch: even if a stale client
+  // somehow submits a delivery order, reject it while delivery is turned off.
+  if (details.orderType === "delivery" && !isOnlineDeliveryEnabled()) {
+    return {
+      success: false,
+      error: "Delivery isn't available right now. Please choose pickup.",
+    };
   }
 
   const supabase = createServiceRoleClient();

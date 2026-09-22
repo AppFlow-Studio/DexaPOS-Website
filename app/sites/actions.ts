@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { isOnlineDeliveryEnabled } from "./lib/delivery-flag";
 import {
   filterMenusVisibleOnline,
   isMissingMenuVisibilitySchema,
@@ -148,6 +149,9 @@ async function resolveDeliveryFulfillment(
   const cfg = site.online_ordering_config;
   if (!cfg) return;
   cfg.deliveryEnabled = false;
+  // Global kill-switch: delivery stays dark site-wide until we finish
+  // integrating it, no matter what the merchant configured. See delivery-flag.ts.
+  if (!isOnlineDeliveryEnabled()) return;
   if (!storeConfig.accepts_delivery) return;
   if (storeConfig.delivery_fulfillment !== "orderout_direct") return;
 
