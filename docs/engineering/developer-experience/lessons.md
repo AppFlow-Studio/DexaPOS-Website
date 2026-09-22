@@ -253,3 +253,46 @@ Rule for myself: when a comment explains the root element, it goes *above*
 `return`, never inside the parens. Only put `{/* */}` between sibling elements.
 Meta-lesson: `tsc --noEmit` catches this instantly — run it after adding a
 comment to JSX, not just after changing logic.
+
+---
+
+## Never `git stash` a tree containing someone else's uncommitted work
+
+**What I did:** To get a "baseline" type-error count, I ran `git stash` →
+`tsc` → `git stash pop`. The pop collided with a *pre-existing, unrelated*
+stash from another branch and left ~130 files in a `UU` conflicted state.
+Cleaning up, I ran `git checkout --ours .` — which reverted every unstaged
+file in the repo to HEAD, destroying both my own work and the user's
+uncommitted `DeviceFleetMap.tsx` changes. Not recoverable from `git fsck` or
+VSCode local history. (The user restored it from their own backup.)
+
+**Two distinct mistakes:**
+
+1. **Stashing a dirty tree I didn't own.** The working tree had changes that
+   predated my session. `git stash` is *not* read-only — it mutates shared
+   state, and `pop` can conflict against stashes I never inspected.
+2. **`git checkout --ours .` as cleanup.** A bulk, whole-directory,
+   irreversible command run to fix a mess I had just created. Panic-cleanup
+   is exactly when destructive commands are most dangerous.
+
+**Rules for myself:**
+
+- To compare against a baseline, **never stash**. Either:
+  - filter the current output to the files I touched
+    (`tsc --noEmit | grep -E "MyFile\.tsx"` — empty means clean), or
+  - compare against a *separate* checkout (`git worktree add`), never the
+    live working tree.
+- A whole-repo error count is not a metric I need. "Zero errors in the files
+  I changed" is the actual gate, and it requires no stashing at all.
+- Before any `git` command that can discard working-tree state
+  (`checkout --`, `checkout --ours/--theirs`, `reset --hard`, `clean`),
+  run `git status` first and **name the specific paths** — never `.`.
+- If `git stash pop` conflicts: `git checkout --merge` / `git stash apply`
+  are recoverable; `checkout --ours .` is not. Prefer `git reset -q` (clears
+  the index, keeps the tree) and resolve per-file.
+- `git status` being "clean" **at session start** does not mean it is clean
+  now. Re-check before touching git state.
+
+**Meta-lesson:** the harness rule "before deleting or overwriting, look at the
+target" applies to git commands, not just file writes. `checkout --ours .`
+*is* an overwrite of every file in the repo.
