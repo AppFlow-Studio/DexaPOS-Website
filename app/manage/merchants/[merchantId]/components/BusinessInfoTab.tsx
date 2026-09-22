@@ -552,7 +552,7 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                             </Empty>
                         ) : (
                             <div className="overflow-x-auto">
-                            <Table variant="data" className="rounded-3xl">
+                            <Table variant="data" className="rounded-3xl" containerClassName="hidden lg:block">
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Location Name</TableHead>
@@ -603,6 +603,39 @@ export function BusinessInfoTab({ merchantInfo }: BusinessInfoTabProps) {
                                     ))}
                                 </TableBody>
                             </Table>
+
+                            {/* Mirrors the table's `hidden lg:block` (§5.3). */}
+                            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+                                {locationsList.map((location: any) => (
+                                    <button
+                                        key={location.id}
+                                        type="button"
+                                        onClick={() => handleViewLocationDetails(location.id)}
+                                        className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4 text-left transition-colors hover:bg-muted"
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex min-w-0 items-center gap-3">
+                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                                                    <Store className="h-5 w-5 text-muted-foreground" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="truncate font-semibold">{location.name}</p>
+                                                    <p className="truncate text-xs text-muted-foreground">
+                                                        {formatAddress(location) || 'No address'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <Badge variant="secondary" className={LOCATION_STATUS_BADGE}>
+                                                {location.is_accepting_orders ? 'Online' : 'Offline'}
+                                            </Badge>
+                                        </div>
+
+                                        <Badge variant="secondary" className={`mt-3 ${LOCATION_STATUS_BADGE}`}>
+                                            {location.is_active ? 'Active' : 'Inactive'}
+                                        </Badge>
+                                    </button>
+                                ))}
+                            </div>
                             </div>
                         )}
                         </div>
