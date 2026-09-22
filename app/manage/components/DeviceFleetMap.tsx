@@ -40,7 +40,7 @@ const STATUS_PILL =
 export function DeviceFleetMap() {
   const { data: fleet, isLoading, error } = usePlatformStationFleet()
   const router = useRouter()
-  // Undefined = use the default (open when the merchant has an offline station).
+  // Undefined = use the default (collapsed).
   const [expandedMerchants, setExpandedMerchants] = useState<Record<string, boolean>>({})
 
   return (
@@ -72,12 +72,17 @@ export function DeviceFleetMap() {
           // every merchant expanded at once buried the ones with problems.
           // Groups with an offline station open by default — those are the ones
           // worth looking at.
-          <div className="min-w-0 space-y-3">
+          <div className="min-w-0 space-y-1.5">
             {fleet.map((merchant) => {
               const offlineCount = merchant.stations.filter(
                 (s) => s.status !== 'green',
               ).length
-              const isOpen = expandedMerchants[merchant.merchantId] ?? offlineCount > 0
+              // Collapsed by default. Auto-opening every merchant with an
+              // offline station re-created the original problem — on a platform
+              // where most merchants have one, nearly all of them opened at
+              // once. The header's "17 of 17 offline" carries the state, so the
+              // closed list is the summary and opening is opt-in.
+              const isOpen = expandedMerchants[merchant.merchantId] ?? false
 
               return (
               <div key={merchant.merchantId} className="min-w-0 space-y-2">
@@ -102,7 +107,16 @@ export function DeviceFleetMap() {
                       {merchant.merchantName}
                     </span>
                   </span>
-                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                  {/* With every group closed this line is the only signal, so
+                      a merchant with devices down reads at full strength while
+                      a healthy one stays quiet. Weight, not colour (D-03). */}
+                  <span
+                    className={
+                      offlineCount > 0
+                        ? 'shrink-0 text-xs font-medium tabular-nums text-foreground'
+                        : 'shrink-0 text-xs tabular-nums text-muted-foreground'
+                    }
+                  >
                     {offlineCount > 0
                       ? `${offlineCount} of ${merchant.stations.length} offline`
                       : `${merchant.stations.length} online`}
