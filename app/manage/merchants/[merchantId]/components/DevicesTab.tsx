@@ -517,7 +517,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                             {canManageDevices ? (
                                                                 <DropdownMenu>
                                                                     <DropdownMenuTrigger asChild>
-                                                                        <Button variant="ghost" size="icon">
+                                                                        <Button variant="ghost" size="icon" aria-label={`Actions for ${station.station_name}`}>
                                                                             <MoreHorizontal className="h-4 w-4" />
                                                                         </Button>
                                                                     </DropdownMenuTrigger>
@@ -652,7 +652,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                             {canManageDevices ? (
                                                                 <DropdownMenu>
                                                                     <DropdownMenuTrigger asChild>
-                                                                        <Button variant="ghost" size="icon">
+                                                                        <Button variant="ghost" size="icon" aria-label={`Actions for ${terminal.terminal_name}`}>
                                                                             <MoreHorizontal className="h-4 w-4" />
                                                                         </Button>
                                                                     </DropdownMenuTrigger>

@@ -187,7 +187,13 @@ export function NotesTab({ merchantId }: NotesTabProps) {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="shrink-0" disabled={isBusy}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0"
+                      disabled={isBusy}
+                      aria-label={`Actions for note by ${note.author_name}`}
+                    >
                       <MoreHorizontal className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>

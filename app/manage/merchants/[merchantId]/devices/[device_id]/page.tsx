@@ -330,7 +330,12 @@ export default function DeviceInfoPage() {
                                             </TableCell>
                                             <TableCell className="text-muted-foreground">{doc.fileSize}</TableCell>
                                             <TableCell className="text-right">
-                                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8"
+                                                    aria-label={`Download ${doc.name}`}
+                                                >
                                                     <Download className="h-4 w-4" />
                                                 </Button>
                                             </TableCell>

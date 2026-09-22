@@ -706,6 +706,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                         size="sm"
                         className="h-4 w-4 p-0 hover:bg-transparent"
                         onClick={() => handleFilterChange("search", "")}
+                        aria-label="Clear search filter"
                       >
                         <X className="h-3 w-3" />
                       </Button>
@@ -724,6 +725,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                         onClick={() =>
                           handleFilterChange("action_category", "")
                         }
+                        aria-label="Clear category filter"
                       >
                         <X className="h-3 w-3" />
                       </Button>
@@ -740,6 +742,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                         size="sm"
                         className="h-4 w-4 p-0 hover:bg-transparent"
                         onClick={() => handleFilterChange("severity", "")}
+                        aria-label="Clear severity filter"
                       >
                         <X className="h-3 w-3" />
                       </Button>

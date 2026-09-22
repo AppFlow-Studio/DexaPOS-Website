@@ -258,3 +258,46 @@ bash scripts/hq-audit.sh
 
 Numbers are counts of literal `<Card` / `<Table` / `<h1` occurrences — a proxy
 for conversion weight, not a work order. Confirm by reading the file.
+
+## Follow-ups found by tooling (not fixed here)
+
+Two findings from a `ui-ux-pro-max` / `design-system` audit of the converted
+Family 3 surface. Both are recorded rather than fixed: the first touches shared
+primitives every converted family depends on, and the second is a layout change
+beyond a presentation refactor.
+
+### 1. The brand accent bypasses the token layer
+
+`components/dashboard/shell/tokens.ts:36` and `PanelSection.tsx:57` both hardcode
+`text-[#0C4FD1] dark:text-[#6CA0FF]`, while `app/globals.css:70` already defines
+`--primary: #0c4fd1` — the same colour, as a token. Changing the brand blue
+therefore means editing two `.tsx` files instead of one variable.
+
+The existing literal is deliberate and documented (`tokens.ts:28`): Tailwind does
+not scan `.ts`, so a class composed there gets no CSS rule. That constraint
+argues for a literal *class string*, not for bypassing the token — `text-brand`
+is literal and scannable. The blocker is the dark variant: `#6CA0FF` exists
+because `#0C4FD1` fails contrast on dark cards, and `--primary` has no dark
+override. A fix needs a `--brand` token pair with a dark value first.
+
+**Deferred because** `components/dashboard/shell/` is a dependency of every
+converted page in Families 1-3, so a token refactor there ripples across
+signed-off work for no user-visible change.
+
+Verified non-issues: the token validator flags 22 hex values under
+`merchants/[merchantId]`, but 14 are colour-picker defaults for the *merchant's*
+storefront theme (user data, correctly not tokenised) and the remaining 8 are in
+unreachable files. **Live Family 3 code has zero genuine token violations.**
+
+### 2. Mobile: 23 tables, one card fallback
+
+Family 2 established the responsive pattern — a `lg:hidden` card grid beside a
+`hidden lg:block` table (`app/manage/organizations/page.tsx:440`). Family 3's
+tables never got it, so at 375px they are horizontal-scroll wells with
+`min-w-[640px]`. Highest-value targets: the audit log and devices tables.
+
+Measured contrast (canvas-resolved, since the tokens are `oklch`): the D-03
+neutral badge is **13.29:1**, better than the coloured pills it replaced; body
+text 13.98:1; captions 4.62:1; the `PanelSection` blue label 6.87:1. The diff's struck-through previous value measures **4.83:1** against the card
+surface it actually renders on, so it passes AA as well — an earlier 4.39:1
+reading used the wrong backdrop (`--muted` rather than `--card`).
