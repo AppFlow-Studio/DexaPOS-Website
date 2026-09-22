@@ -29,7 +29,6 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import {
   Search,
-  Filter,
   Calendar as CalendarIcon,
   User,
   MapPin,
@@ -436,10 +435,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                 onValueChange={(val) => handleFilterChange("location_id", val)}
               >
                 <SelectTrigger className="h-10 w-full min-w-0 bg-background/50">
-                  <div className="flex min-w-0 items-center gap-2 [&>span]:truncate">
-                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 hidden lg:block" />
-                    <SelectValue placeholder="All Locations" />
-                  </div>
+                  <SelectValue placeholder="All Locations" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Locations</SelectItem>
@@ -462,10 +458,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                 }
               >
                 <SelectTrigger className="h-10 w-full min-w-0 bg-background/50">
-                  <div className="flex min-w-0 items-center gap-2 [&>span]:truncate">
-                    <Filter className="h-4 w-4 text-muted-foreground shrink-0 hidden lg:block" />
-                    <SelectValue placeholder="All Categories" />
-                  </div>
+                  <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all_categories">All Categories</SelectItem>
@@ -497,10 +490,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                 }
               >
                 <SelectTrigger className="h-10 w-full min-w-0 bg-background/50">
-                  <div className="flex min-w-0 items-center gap-2 [&>span]:truncate">
-                    <AlertCircle className="h-4 w-4 text-muted-foreground shrink-0 hidden lg:block" />
-                    <SelectValue placeholder="All Severities" />
-                  </div>
+                  <SelectValue placeholder="All Severities" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all_severities">All Severities</SelectItem>
@@ -521,10 +511,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                 }
               >
                 <SelectTrigger className="h-10 w-full min-w-0 bg-background/50">
-                  <div className="flex min-w-0 items-center gap-2 [&>span]:truncate">
-                    <User className="h-4 w-4 text-muted-foreground shrink-0 hidden lg:block" />
-                    <SelectValue placeholder="All Staff" />
-                  </div>
+                  <SelectValue placeholder="All Staff" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all_actors">All Staff</SelectItem>
