@@ -96,6 +96,16 @@ const getStationTypeIcon = (type: StationType): string => {
     }
 }
 
+/** One labelled field inside a mobile device card. */
+function DeviceCardField({ label, value }: { label: string; value: string | number }) {
+    return (
+        <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="truncate font-medium">{value}</p>
+        </div>
+    )
+}
+
 const getTerminalTypeLabel = (type: string): string => {
     switch (type) {
         case 'dejavoo':
@@ -435,7 +445,10 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                         </Empty>
                                     ) : (
                                         <div className="overflow-x-auto">
-                                        <Table>
+                                        {/* §5.3: a card grid below `lg`, never a
+                                            scrolling table. This table has 7 columns,
+                                            so at 375px it was a scroll well. */}
+                                        <Table variant="data" containerClassName="hidden lg:block">
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead>Station</TableHead>
@@ -553,6 +566,63 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                 ))}
                                             </TableBody>
                                         </Table>
+
+                                        {/* Mirrors the table's `hidden lg:block`. Same
+                                            data, stacked: identity and status lead, the
+                                            rest drops into a two-column field grid. */}
+                                        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+                                            {filteredStations.map((station: Station & { location_name: string }) => (
+                                                <div
+                                                    key={station.id}
+                                                    className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
+                                                >
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="flex min-w-0 items-center gap-3">
+                                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                                                                <span className="text-lg">{getStationTypeIcon(station.station_type)}</span>
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="truncate font-semibold">{station.station_name}</p>
+                                                                {station.station_code && (
+                                                                    <p className="truncate text-xs text-muted-foreground">
+                                                                        Code: {station.station_code}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <Badge variant="secondary" className="w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium">
+                                                            {station.is_online ? 'Online' : 'Offline'}
+                                                        </Badge>
+                                                    </div>
+
+                                                    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                                        <DeviceCardField
+                                                            label="Type"
+                                                            value={`${getStationTypeLabel(station.station_type)}${station.station_number ? ` #${station.station_number}` : ''}`}
+                                                        />
+                                                        <DeviceCardField label="Location" value={station.location_name} />
+                                                        <DeviceCardField
+                                                            label="Device"
+                                                            value={station.device_name || station.hardware_model || '—'}
+                                                        />
+                                                        <DeviceCardField
+                                                            label="Last heartbeat"
+                                                            value={
+                                                                station.last_heartbeat_at
+                                                                    ? formatDistanceToNow(new Date(station.last_heartbeat_at), { addSuffix: true })
+                                                                    : 'Never'
+                                                            }
+                                                        />
+                                                    </div>
+
+                                                    {!station.is_active && (
+                                                        <Badge variant="secondary" className="mt-3 w-fit rounded-full border-0 px-2.5 text-xs font-medium">
+                                                            Deactivated
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                         </div>
                                     )}
                                 </>
@@ -582,7 +652,7 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                         </Empty>
                                     ) : (
                                         <div className="overflow-x-auto">
-                                        <Table>
+                                        <Table variant="data" containerClassName="hidden lg:block">
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead>Terminal</TableHead>
@@ -692,6 +762,39 @@ export function DevicesTab({ merchantInfo }: DevicesTabProps) {
                                                 ))}
                                             </TableBody>
                                         </Table>
+
+                                        {/* Mirrors the table's `hidden lg:block`. */}
+                                        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:hidden">
+                                            {filteredTerminals.map((terminal: PaymentTerminal & { location_name: string; station_name: string | null }) => (
+                                                <div
+                                                    key={terminal.id}
+                                                    className="min-w-0 rounded-2xl border-0 bg-muted/45 p-4"
+                                                >
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div className="flex min-w-0 items-center gap-3">
+                                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+                                                                <CreditCard className="h-5 w-5 text-muted-foreground" />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="truncate font-semibold">{terminal.terminal_name}</p>
+                                                                <p className="truncate text-xs text-muted-foreground">
+                                                                    {getTerminalTypeLabel(terminal.terminal_type)}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <Badge variant="secondary" className="w-fit shrink-0 rounded-full border-0 px-2.5 text-xs font-medium">
+                                                            {terminal.is_connected ? 'Online' : 'Offline'}
+                                                        </Badge>
+                                                    </div>
+
+                                                    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                                        <DeviceCardField label="Serial" value={terminal.serial_number || '—'} />
+                                                        <DeviceCardField label="Location" value={terminal.location_name} />
+                                                        <DeviceCardField label="Station" value={terminal.station_name || 'Unassigned'} />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                         </div>
                                     )}
                                 </>

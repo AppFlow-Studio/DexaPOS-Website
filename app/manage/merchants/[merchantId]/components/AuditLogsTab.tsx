@@ -298,6 +298,68 @@ const RenderDiff = ({
 // One neutral pill for every category (D-03), same as SEVERITY_BADGE: the
 // CATEGORY_ICONS glyph below already distinguishes them, and an 11-colour map
 // made the column read as a rainbow rather than as data.
+/**
+ * The expanded detail for one audit entry. Shared by the desktop table row and
+ * the mobile card so the two views cannot drift apart.
+ */
+const AuditLogDetail = ({ log }: { log: any }) => (
+<div className="space-y-6 p-6">
+  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+    <span className="font-bold uppercase tracking-wider">Action Details</span>
+    <span aria-hidden>·</span>
+    <span className="capitalize text-foreground">
+      {log.action_category.replace("_", " ")}
+    </span>
+    {log.resource_type && (
+      <>
+        <span aria-hidden>·</span>
+        <span className="capitalize text-foreground">
+          {log.resource_type}
+        </span>
+      </>
+    )}
+  </div>
+
+  <div className="space-y-2">
+    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+      Data Changes
+    </h4>
+    <div className="rounded-2xl border-0 bg-background/80 px-4 py-1">
+      {log.changes ? (
+        (log.changes as any).after ||
+        (log.changes as any).before ? (
+          <RenderDiff
+            before={(log.changes as any).before}
+            after={(log.changes as any).after}
+          />
+        ) : (
+          <div className="py-3">
+            <RenderObject data={log.changes} />
+          </div>
+        )
+      ) : (
+        <div className="py-6 text-center text-sm text-muted-foreground">
+          This action didn&apos;t change any data.
+        </div>
+      )}
+    </div>
+  </div>
+
+  {log.metadata &&
+    Object.keys(log.metadata).length > 0 && (
+      <div className="space-y-2">
+        <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Metadata
+        </h4>
+        <div className="rounded-2xl border-0 bg-background/80 p-4">
+          <RenderMetadata
+            data={log.metadata as Record<string, unknown>}
+          />
+        </div>
+      </div>
+    )}
+</div>
+);
 const CATEGORY_BADGE = "bg-muted text-foreground";
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
@@ -765,7 +827,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
       {/* Logs Table */}
       <Panel>
         <div className="overflow-x-auto">
-        <Table variant="data" className="min-w-[640px]">
+        <Table variant="data" className="min-w-[640px]" containerClassName="hidden lg:block">
           <TableHeader className="bg-muted/50">
             <TableRow>
               <TableHead className="w-45">
@@ -925,71 +987,8 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                   </TableRow>
                   {expandedRow === log.id && (
                     <TableRow className="bg-muted/20 border-none">
-                      <TableCell
-                        colSpan={isAllLocations ? 7 : 6}
-                        className="p-0"
-                      >
-                        {/* Full width, not a two-column split: the old layout
-                            showed `before` and `after` as two separate lists,
-                            so reading what changed meant diffing two boxes by
-                            eye, and the split left long values (coordinates, a
-                            user agent) nowhere to go and clipping at the edge. */}
-                        <div className="space-y-6 p-6">
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                            <span className="font-bold uppercase tracking-wider">Action Details</span>
-                            <span aria-hidden>·</span>
-                            <span className="capitalize text-foreground">
-                              {log.action_category.replace("_", " ")}
-                            </span>
-                            {log.resource_type && (
-                              <>
-                                <span aria-hidden>·</span>
-                                <span className="capitalize text-foreground">
-                                  {log.resource_type}
-                                </span>
-                              </>
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                              Data Changes
-                            </h4>
-                            <div className="rounded-2xl border-0 bg-background/80 px-4 py-1">
-                              {log.changes ? (
-                                (log.changes as any).after ||
-                                (log.changes as any).before ? (
-                                  <RenderDiff
-                                    before={(log.changes as any).before}
-                                    after={(log.changes as any).after}
-                                  />
-                                ) : (
-                                  <div className="py-3">
-                                    <RenderObject data={log.changes} />
-                                  </div>
-                                )
-                              ) : (
-                                <div className="py-6 text-center text-sm text-muted-foreground">
-                                  This action didn&apos;t change any data.
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {log.metadata &&
-                            Object.keys(log.metadata).length > 0 && (
-                              <div className="space-y-2">
-                                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                                  Metadata
-                                </h4>
-                                <div className="rounded-2xl border-0 bg-background/80 p-4">
-                                  <RenderMetadata
-                                    data={log.metadata as Record<string, unknown>}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                        </div>
+                      <TableCell colSpan={isAllLocations ? 7 : 6} className="p-0">
+                        <AuditLogDetail log={log} />
                       </TableCell>
                     </TableRow>
                   )}
@@ -998,6 +997,70 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
             )}
           </TableBody>
         </Table>
+
+        {/* Mirrors the table's `hidden lg:block`. Each card is the row plus the
+            same expandable detail, so mobile loses no information. */}
+        <div className="grid min-w-0 grid-cols-1 gap-3 lg:hidden">
+          {isLoading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-28 w-full rounded-2xl" />
+            ))
+          ) : logs.length === 0 ? (
+            <div className="rounded-2xl bg-muted/45 py-10 text-center text-sm text-muted-foreground">
+              No audit logs found
+            </div>
+          ) : (
+            logs.map((log) => (
+              <div key={log.id} className="min-w-0 overflow-hidden rounded-2xl bg-muted/45">
+                <button
+                  type="button"
+                  onClick={() => setExpandedRow(expandedRow === log.id ? null : log.id)}
+                  aria-expanded={expandedRow === log.id}
+                  className="flex w-full min-w-0 items-start justify-between gap-3 p-4 text-left"
+                >
+                  <div className="min-w-0 space-y-1.5">
+                    <p className="truncate font-medium">{log.action}</p>
+                    {log.resource_name && (
+                      <p className="truncate text-xs text-muted-foreground">
+                        {log.resource_type}: {log.resource_name}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <Badge
+                        variant="secondary"
+                        className={cn("h-6 gap-1.5 border-none px-2 text-[10px] capitalize", CATEGORY_BADGE)}
+                      >
+                        {CATEGORY_ICONS[log.action_category]}
+                        {log.action_category.replace("_", " ")}
+                      </Badge>
+                      <Badge
+                        variant="secondary"
+                        className={cn("h-6 gap-1.5 border-none px-2 text-[10px]", SEVERITY_BADGE)}
+                      >
+                        {SEVERITY_ICONS[log.severity as keyof typeof SEVERITY_ICONS]}
+                        <span className="capitalize">{log.severity}</span>
+                      </Badge>
+                    </div>
+                    <p className="pt-0.5 text-xs text-muted-foreground">
+                      {format(new Date(log.created_at), "MMM d, yyyy HH:mm")} · {log.actor_name}
+                    </p>
+                  </div>
+                  {expandedRow === log.id ? (
+                    <ChevronUp className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  )}
+                </button>
+
+                {expandedRow === log.id && (
+                  <div className="border-t border-border/60 bg-background/60">
+                    <AuditLogDetail log={log} />
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
         </div>
       </Panel>
       
