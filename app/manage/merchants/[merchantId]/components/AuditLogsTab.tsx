@@ -128,6 +128,80 @@ const RenderObject = ({
   );
 };
 
+/** Renders one scalar audit value, or a nested object via RenderObject. */
+const DiffValue = ({ value, muted }: { value: unknown; muted?: boolean }) => {
+  if (value === null || value === undefined || value === "") {
+    return <span className="text-sm italic text-muted-foreground">empty</span>;
+  }
+  if (typeof value === "object") {
+    return <RenderObject data={value} className="grid-cols-1 gap-y-2" />;
+  }
+  return (
+    <span
+      className={cn(
+        // `break-words`, not `break-all`: a user agent string should wrap at
+        // spaces rather than mid-token and run off the panel.
+        "font-mono text-sm break-words",
+        muted ? "text-muted-foreground line-through" : "text-foreground",
+      )}
+    >
+      {String(value)}
+    </span>
+  );
+};
+
+/**
+ * A before -> after diff, one row per field.
+ *
+ * `buildAuditChanges` on the write side already drops unchanged fields and
+ * keeps the two sides' keys aligned, so every row here is a real change. The
+ * key union still guards the cases it cannot: `sanitizeAuditRecord` can strip a
+ * key from one side only, and rows written before that diffing existed carry
+ * full snapshots.
+ */
+const RenderDiff = ({
+  before,
+  after,
+}: {
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+}) => {
+  const keys = Array.from(
+    new Set([...Object.keys(before || {}), ...Object.keys(after || {})]),
+  );
+  if (keys.length === 0) return null;
+
+  return (
+    <div className="divide-y divide-border/60">
+      {keys.map((key) => {
+        const from = before?.[key];
+        const to = after?.[key];
+        const changed = JSON.stringify(from) !== JSON.stringify(to);
+        const hasBefore = before && key in before;
+
+        return (
+          <div key={key} className="grid gap-1 py-3 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)] sm:gap-4">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground sm:pt-0.5">
+              {formatKey(key)}
+            </span>
+            {/* Stacks below `sm` so a long value never forces a horizontal
+                scroll on a phone; inline with an arrow from `sm` up. */}
+            <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-2">
+              {changed && hasBefore && (
+                <>
+                  <DiffValue value={from} muted />
+                  <span aria-hidden className="text-muted-foreground">→</span>
+                </>
+              )}
+              <DiffValue value={to !== undefined ? to : from} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // One neutral pill for every category (D-03), same as SEVERITY_BADGE: the
 // CATEGORY_ICONS glyph below already distinguishes them, and an 11-colour map
 // made the column read as a rainbow rather than as data.
@@ -759,115 +833,65 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                         colSpan={isAllLocations ? 7 : 6}
                         className="p-0"
                       >
-                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 animate-in slide-in-from-top-2 duration-200">
-                          {/* Changes Section */}
-                          <div className="space-y-3">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
-                              Action Details
-                            </h4>
-                            <div className="rounded-xl border bg-background/80 p-5 space-y-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">
-                                    Action Category
-                                  </p>
-                                  <Badge
-                                    variant="outline"
-                                    className="capitalize"
-                                  >
-                                    {log.action_category.replace("_", " ")}
-                                  </Badge>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">
-                                    Resource Type
-                                  </p>
-                                  <Badge
-                                    variant="outline"
-                                    className="capitalize"
-                                  >
-                                    {log.resource_type || "N/A"}
-                                  </Badge>
-                                </div>
-                              </div>
-                              {/* Resource ID hidden - managers don't need to see raw UUIDs */}
-                              {log.metadata &&
-                                Object.keys(log.metadata).length > 0 && (
-                                  <div>
-                                    <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-2">
-                                      Metadata
-                                    </p>
-                                    <div className="p-4 rounded-xl border border-dashed">
-                                      <RenderObject
-                                        data={log.metadata}
-                                        className="grid-cols-1 sm:grid-cols-1"
-                                      />
-                                    </div>
-                                  </div>
-                                )}
-                            </div>
+                        {/* Full width, not a two-column split: the old layout
+                            showed `before` and `after` as two separate lists,
+                            so reading what changed meant diffing two boxes by
+                            eye, and the split left long values (coordinates, a
+                            user agent) nowhere to go and clipping at the edge. */}
+                        <div className="space-y-6 p-6 animate-in slide-in-from-top-2 duration-200">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                            <span className="font-bold uppercase tracking-wider">Action Details</span>
+                            <span aria-hidden>·</span>
+                            <span className="capitalize text-foreground">
+                              {log.action_category.replace("_", " ")}
+                            </span>
+                            {log.resource_type && (
+                              <>
+                                <span aria-hidden>·</span>
+                                <span className="capitalize text-foreground">
+                                  {log.resource_type}
+                                </span>
+                              </>
+                            )}
                           </div>
 
-                          {/* Data Changes */}
-                          <div className="space-y-3">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4">
+                          <div className="space-y-2">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                               Data Changes
                             </h4>
-                            <div className="rounded-xl border bg-background/80 overflow-hidden">
+                            <div className="rounded-2xl border-0 bg-background/80 px-4 py-1">
                               {log.changes ? (
-                                <div className="p-5">
-                                  {/* Check for before/after structure or flat object */}
-                                  {(log.changes as any).after ||
-                                  (log.changes as any).before ? (
-                                    <div className="space-y-6">
-                                      {(log.changes as any).after && (
-                                        <div className="space-y-2">
-                                          <div className="flex items-center gap-2">
-                                            <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                                            <h5 className="text-[10px] uppercase font-bold text-muted-foreground">
-                                              New Values
-                                            </h5>
-                                          </div>
-                                          <div className="bg-emerald-500/5 p-4 rounded-lg border border-emerald-500/10">
-                                            <RenderObject
-                                              data={(log.changes as any).after}
-                                            />
-                                          </div>
-                                        </div>
-                                      )}
-                                      {(log.changes as any).before &&
-                                        Object.keys(
-                                          (log.changes as any).before || {},
-                                        ).length > 0 && (
-                                          <div className="space-y-2">
-                                            <div className="flex items-center gap-2">
-                                              <div className="h-2 w-2 rounded-full bg-amber-500" />
-                                              <h5 className="text-[10px] uppercase font-bold text-muted-foreground">
-                                                Previous Values
-                                              </h5>
-                                            </div>
-                                            <div className="bg-amber-500/5 p-4 rounded-lg border border-amber-500/10 opacity-75">
-                                              <RenderObject
-                                                data={
-                                                  (log.changes as any).before
-                                                }
-                                              />
-                                            </div>
-                                          </div>
-                                        )}
-                                    </div>
-                                  ) : (
+                                (log.changes as any).after ||
+                                (log.changes as any).before ? (
+                                  <RenderDiff
+                                    before={(log.changes as any).before}
+                                    after={(log.changes as any).after}
+                                  />
+                                ) : (
+                                  <div className="py-3">
                                     <RenderObject data={log.changes} />
-                                  )}
-                                </div>
+                                  </div>
+                                )
                               ) : (
-                                <div className="p-8 text-center text-muted-foreground italic text-sm">
+                                <div className="py-6 text-center text-sm italic text-muted-foreground">
                                   No structured data changes recorded for this
                                   action.
                                 </div>
                               )}
                             </div>
                           </div>
+
+                          {log.metadata &&
+                            Object.keys(log.metadata).length > 0 && (
+                              <div className="space-y-2">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                  Metadata
+                                </h4>
+                                <div className="rounded-2xl border-0 bg-background/80 p-4">
+                                  <RenderObject data={log.metadata} />
+                                </div>
+                              </div>
+                            )}
                         </div>
                       </TableCell>
                     </TableRow>
