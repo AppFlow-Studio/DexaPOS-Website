@@ -1,8 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
-import { Radio, Wifi, WifiOff, Battery, BatteryLow, BatteryWarning, AlertCircle } from 'lucide-react'
+import { Radio, Wifi, WifiOff, Battery, BatteryLow, BatteryWarning, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react'
 
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
@@ -39,6 +40,8 @@ const STATUS_PILL =
 export function DeviceFleetMap() {
   const { data: fleet, isLoading, error } = usePlatformStationFleet()
   const router = useRouter()
+  // Undefined = use the default (open when the merchant has an offline station).
+  const [expandedMerchants, setExpandedMerchants] = useState<Record<string, boolean>>({})
 
   return (
     <Panel className="h-full">
@@ -64,11 +67,52 @@ export function DeviceFleetMap() {
             No active stations found
           </div>
         ) : (
-          <div className="max-h-[500px] min-w-0 space-y-5 overflow-y-auto">
-            {fleet.map((merchant) => (
+          // Collapsible groups rather than a `max-h` scroll well: a nested
+          // scroll region inside the outer page scroll is hard to reach, and
+          // every merchant expanded at once buried the ones with problems.
+          // Groups with an offline station open by default — those are the ones
+          // worth looking at.
+          <div className="min-w-0 space-y-3">
+            {fleet.map((merchant) => {
+              const offlineCount = merchant.stations.filter(
+                (s) => s.status !== 'green',
+              ).length
+              const isOpen = expandedMerchants[merchant.merchantId] ?? offlineCount > 0
+
+              return (
               <div key={merchant.merchantId} className="min-w-0 space-y-2">
-                <h4 className="text-sm font-semibold">{merchant.merchantName}</h4>
-                <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedMerchants((prev) => ({
+                      ...prev,
+                      [merchant.merchantId]: !isOpen,
+                    }))
+                  }
+                  aria-expanded={isOpen}
+                  className="flex w-full min-w-0 items-center justify-between gap-3 rounded-2xl bg-muted/40 px-3 py-2 text-left transition-colors hover:bg-muted/70"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    {isOpen ? (
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="truncate text-sm font-semibold">
+                      {merchant.merchantName}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                    {offlineCount > 0
+                      ? `${offlineCount} of ${merchant.stations.length} offline`
+                      : `${merchant.stations.length} online`}
+                  </span>
+                </button>
+                {/* 2 columns, not 3: at this panel width a third column left
+                    ~130px per tile, which truncated almost every device name
+                    ("Front ...", "Kitche...") to the point of ambiguity. */}
+                {isOpen && (
+                <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
                   {merchant.stations.map((station) => {
                     const tone = STATUS[station.status as FleetStatus] ?? STATUS.grey
                     const { Icon } = tone
@@ -87,7 +131,10 @@ export function DeviceFleetMap() {
                           <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
-                              <div className="min-w-0 truncate text-sm font-semibold">
+                              <div
+                                className="min-w-0 truncate text-sm font-semibold"
+                                title={station.name}
+                              >
                                 {station.name}
                               </div>
                               <span className={STATUS_PILL}>{tone.label}</span>
@@ -130,8 +177,10 @@ export function DeviceFleetMap() {
                     )
                   })}
                 </div>
+                )}
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </PanelSection>

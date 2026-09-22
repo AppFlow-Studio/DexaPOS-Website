@@ -83,7 +83,10 @@ export default function Dashboard() {
           </div>
 
           {/* Section 1D & 1E: Heatmap + Alerts (2-column layout) */}
-          <div className="grid gap-6 md:grid-cols-12">
+          {/* `items-start`: grid items stretch by default, so the chart was
+              padded out to whatever height the alerts list happened to be.
+              Each panel now takes its own content height. */}
+          <div className="grid items-start gap-6 md:grid-cols-12">
             <div className="md:col-span-4">
               <OrdersHeatmap />
             </div>
