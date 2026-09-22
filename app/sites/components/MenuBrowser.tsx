@@ -94,6 +94,7 @@ export function MenuBrowser({
   const [selectedCategoryItems, setSelectedCategoryItems] = useState<StorefrontItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResultsMinHeight, setSearchResultsMinHeight] = useState<number | null>(null);
   const [dietaryFilter, setDietaryFilter] = useState<DietaryFilter | null>(null);
   const [searchSuggestions, setSearchSuggestions] = useState<StorefrontItem[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -106,6 +107,7 @@ export function MenuBrowser({
   const desktopMenuRef = useRef<HTMLDivElement>(null);
   const mobilePillsRef = useRef<HTMLDivElement>(null);
   const desktopPillsRef = useRef<HTMLDivElement>(null);
+  const browseResultsRef = useRef<HTMLDivElement>(null);
   // While a pill click is smooth-scrolling, lock the highlight to the target so
   // the scroll-spy doesn't flicker through sections passed en route. Released
   // when the user next scrolls meaningfully away from where the scroll settles.
@@ -194,11 +196,33 @@ export function MenuBrowser({
       const inDesktop = desktopSuggestionsRef.current?.contains(e.target as Node);
       if (!inMobile && !inDesktop) {
         setShowSuggestions(false);
-        setSearchQuery("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSearchChange = useCallback((nextQuery: string) => {
+    if (!searchQuery.trim() && nextQuery.trim()) {
+      const results = browseResultsRef.current;
+      const currentHeight = results?.offsetHeight ?? 0;
+      const resultsTop = results?.getBoundingClientRect().top ?? window.innerHeight;
+      // Keep enough content below the viewport to prevent browser scroll clamping.
+      const viewportFloor = Math.max(0, window.innerHeight - resultsTop);
+      const preservedHeight = Math.min(currentHeight, viewportFloor);
+      setSearchResultsMinHeight(preservedHeight > 0 ? preservedHeight : null);
+    } else if (!nextQuery.trim()) {
+      setSearchResultsMinHeight(null);
+    }
+
+    setSearchQuery(nextQuery);
+    setShowSuggestions(true);
+  }, [searchQuery]);
+
+  const clearSearch = useCallback(() => {
+    setSearchQuery("");
+    setSearchResultsMinHeight(null);
+    setShowSuggestions(false);
   }, []);
 
   const handleItemClick = useCallback((item: StorefrontItem) => {
@@ -446,7 +470,7 @@ export function MenuBrowser({
               type="text"
               placeholder="Search menu..."
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
+              onChange={(e) => handleSearchChange(e.target.value)}
               onFocus={() => searchQuery.trim().length >= 2 && setShowSuggestions(true)}
               className="pl-10 pr-8 h-9"
               style={{ backgroundColor: "#F9FAFB", borderColor: "#E5E7EB", color: "#111827" }}
@@ -454,7 +478,7 @@ export function MenuBrowser({
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => { setSearchQuery(""); setShowSuggestions(false); }}
+                onClick={clearSearch}
                 className="absolute right-3 top-1/2 -translate-y-1/2"
                 style={{ color: "#9CA3AF" }}
               >
@@ -518,13 +542,13 @@ export function MenuBrowser({
               type="text"
               placeholder="Search menu..."
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
+              onChange={(e) => handleSearchChange(e.target.value)}
               onFocus={() => searchQuery.trim().length >= 2 && setShowSuggestions(true)}
               className="pl-10 pr-10 h-11 min-h-[44px] w-full"
               style={{ backgroundColor: "#F9FAFB", borderColor: "#E5E7EB", color: "#111827" }}
             />
             {searchQuery && (
-              <button type="button" onClick={() => { setSearchQuery(""); setShowSuggestions(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 min-w-[44px] min-h-[44px] flex items-center justify-center -m-2" style={{ color: "#9CA3AF" }}>
+              <button type="button" onClick={clearSearch} className="absolute right-3 top-1/2 -translate-y-1/2 min-w-[44px] min-h-[44px] flex items-center justify-center -m-2" style={{ color: "#9CA3AF" }}>
                 <X className="h-4 w-4" />
               </button>
             )}
@@ -633,7 +657,12 @@ export function MenuBrowser({
         </div>
       </nav>
 
-      <div className="min-w-0 w-full space-y-12 pb-24 lg:pb-12">
+      <div
+        ref={browseResultsRef}
+        data-testid="menu-browse-results"
+        className="min-w-0 w-full space-y-12 pb-24 lg:pb-12"
+        style={{ minHeight: searchQuery.trim() && searchResultsMinHeight ? searchResultsMinHeight : undefined }}
+      >
           <AnimatePresence mode="wait">
             <motion.div
               key={activeMenu.id}
