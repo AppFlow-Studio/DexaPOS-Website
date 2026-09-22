@@ -128,6 +128,99 @@ const RenderObject = ({
   );
 };
 
+/**
+ * Turn a raw user agent into something a reviewer can read at a glance —
+ * "Chrome 152 on Windows" rather than 120 characters of tokens. Deliberately
+ * approximate: this is an at-a-glance label, and the raw string stays available
+ * on hover via `title`, so a wrong guess costs nothing.
+ */
+const describeUserAgent = (ua: string): string | null => {
+  const os =
+    /Windows NT 10/.test(ua) ? "Windows" :
+    /Windows/.test(ua) ? "Windows" :
+    /iPhone|iPad/.test(ua) ? "iOS" :
+    /Android/.test(ua) ? "Android" :
+    /Mac OS X/.test(ua) ? "macOS" :
+    /Linux/.test(ua) ? "Linux" : null;
+
+  // Order matters: Edge and Opera both carry "Chrome" in their UA string, and
+  // Chrome carries "Safari", so the more specific brands are tested first.
+  const browser =
+    /Edg\/(\d+)/.exec(ua) ? `Edge ${/Edg\/(\d+)/.exec(ua)![1]}` :
+    /OPR\/(\d+)/.exec(ua) ? `Opera ${/OPR\/(\d+)/.exec(ua)![1]}` :
+    /Firefox\/(\d+)/.exec(ua) ? `Firefox ${/Firefox\/(\d+)/.exec(ua)![1]}` :
+    /Chrome\/(\d+)/.exec(ua) ? `Chrome ${/Chrome\/(\d+)/.exec(ua)![1]}` :
+    /Version\/(\d+).*Safari/.exec(ua) ? `Safari ${/Version\/(\d+)/.exec(ua)![1]}` :
+    null;
+
+  if (!browser && !os) return null;
+  if (!browser) return os;
+  return os ? `${browser} on ${os}` : browser;
+};
+
+/** Loopback and private ranges mean "this server" / "internal network". */
+const describeIpAddress = (ip: string): string | null => {
+  if (ip === "::1" || ip === "127.0.0.1") return "Local machine";
+  if (/^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(ip)) {
+    return "Internal network";
+  }
+  return null;
+};
+
+/**
+ * Metadata rendered for people rather than machines: a plain-language label,
+ * with the raw value kept underneath (and in `title`) so nothing is lost for
+ * anyone who needs the exact string.
+ */
+const FRIENDLY_METADATA: Record<string, (v: string) => string | null> = {
+  ip_address: describeIpAddress,
+  user_agent: describeUserAgent,
+};
+
+const RenderMetadata = ({ data }: { data: Record<string, unknown> }) => (
+  <div className="grid gap-4 sm:grid-cols-2">
+    {Object.entries(data).map(([key, value]) => {
+      if (value === null || value === undefined) return null;
+      if (typeof value === "object") {
+        return (
+          <div key={key} className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              {formatKey(key)}
+            </span>
+            <RenderObject data={value} className="grid-cols-1 gap-y-2" />
+          </div>
+        );
+      }
+
+      const raw = String(value);
+      const friendly = FRIENDLY_METADATA[key]?.(raw) ?? null;
+
+      return (
+        <div key={key} className="flex min-w-0 flex-col gap-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            {formatKey(key)}
+          </span>
+          {friendly ? (
+            <div className="min-w-0">
+              <p className="text-sm text-foreground">{friendly}</p>
+              <p
+                className="mt-0.5 font-mono text-xs break-words text-muted-foreground"
+                title={raw}
+              >
+                {raw}
+              </p>
+            </div>
+          ) : (
+            <span className="font-mono text-sm break-words text-foreground">
+              {raw}
+            </span>
+          )}
+        </div>
+      );
+    })}
+  </div>
+);
+
 /** Renders one scalar audit value, or a nested object via RenderObject. */
 const DiffValue = ({ value, muted }: { value: unknown; muted?: boolean }) => {
   if (value === null || value === undefined || value === "") {
@@ -741,7 +834,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                 <React.Fragment key={log.id}>
                   <TableRow
                     className={cn(
-                      "group cursor-pointer hover:bg-muted/30 transition-colors",
+                      "cursor-pointer hover:bg-muted/30",
                       expandedRow === log.id && "bg-muted/40",
                     )}
                     onClick={() =>
@@ -823,7 +916,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                       {expandedRow === log.id ? (
                         <ChevronUp className="h-4 w-4 text-muted-foreground" />
                       ) : (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
                       )}
                     </TableCell>
                   </TableRow>
@@ -838,7 +931,7 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                             so reading what changed meant diffing two boxes by
                             eye, and the split left long values (coordinates, a
                             user agent) nowhere to go and clipping at the edge. */}
-                        <div className="space-y-6 p-6 animate-in slide-in-from-top-2 duration-200">
+                        <div className="space-y-6 p-6">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                             <span className="font-bold uppercase tracking-wider">Action Details</span>
                             <span aria-hidden>·</span>
@@ -873,9 +966,8 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                                   </div>
                                 )
                               ) : (
-                                <div className="py-6 text-center text-sm italic text-muted-foreground">
-                                  No structured data changes recorded for this
-                                  action.
+                                <div className="py-6 text-center text-sm text-muted-foreground">
+                                  This action didn&apos;t change any data.
                                 </div>
                               )}
                             </div>
@@ -888,7 +980,9 @@ export function AuditLogsTab({ merchantInfo }: AuditLogsTabProps) {
                                   Metadata
                                 </h4>
                                 <div className="rounded-2xl border-0 bg-background/80 p-4">
-                                  <RenderObject data={log.metadata} />
+                                  <RenderMetadata
+                                    data={log.metadata as Record<string, unknown>}
+                                  />
                                 </div>
                               </div>
                             )}
