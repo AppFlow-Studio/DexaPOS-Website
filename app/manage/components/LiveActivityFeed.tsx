@@ -51,7 +51,11 @@ export function LiveActivityFeed() {
             Waiting for activity…
           </div>
         ) : (
-          <div className="max-h-[500px] min-w-0 space-y-1 overflow-y-auto">
+          // A chronological feed is genuinely a scroll surface — unlike the
+          // alerts list, there is no "most important" item to page to, and the
+          // server caps it at 50. The cap is viewport-relative rather than a
+          // fixed 500px so it does not dominate a short window.
+          <div className="max-h-[min(60vh,32rem)] min-w-0 space-y-1 overflow-y-auto">
             {events.map((event) => (
               <div
                 key={event.id}

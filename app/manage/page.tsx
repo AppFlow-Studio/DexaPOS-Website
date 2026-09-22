@@ -73,7 +73,10 @@ export default function Dashboard() {
           <MerchantSpotlightSection />
 
           {/* Section 1B & 1C: Live Feed + Device Fleet (2-column layout) */}
-          <div className="grid gap-6 md:grid-cols-12">
+          {/* `items-start` for the same reason as the row below: the feed was
+              stretched to the fleet panel's height, so an empty "Waiting for
+              activity…" held a full-height column. */}
+          <div className="grid items-start gap-6 md:grid-cols-12">
             <div className="md:col-span-5">
               <LiveActivityFeed />
             </div>
