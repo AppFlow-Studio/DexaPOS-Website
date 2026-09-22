@@ -133,6 +133,7 @@ async function orderOutRequest<T = unknown>(
 
 const api = {
   post: <T = unknown>(path: string, body: unknown) => orderOutRequest<T>('POST', path, body),
+  put: <T = unknown>(path: string, body: unknown) => orderOutRequest<T>('PUT', path, body),
 }
 
 // ============================================================================
@@ -153,6 +154,8 @@ interface OnboardRequest {
   restaurant_manager_firstname: string
   restaurant_manager_lastname: string
   restaurant_manager_phone: string
+  /** Store's public phone. Optional; falls back to the manager phone. */
+  restaurant_phone?: string
 }
 
 // ============================================================================
@@ -258,6 +261,23 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   if (!ooAccountId) {
     return errorResponse('OrderOut returned a response but no account_id was found', 502, responseData)
+  }
+
+  // ── Set the restaurant's phone number ──
+  // /onboarding/ takes restaurant_manager_phone but leaves the restaurant record's
+  // own phone_number empty, and OrderOut Direct refuses to quote a delivery from a
+  // restaurant without one ("Invalid 'phone_number'"). Best-effort: a failure here
+  // must not fail onboarding — it's recoverable via Update Restaurant later.
+  if (ooRestaurantId) {
+    const restaurantPhone = (body.restaurant_phone || body.restaurant_manager_phone).replace(/\D/g, '')
+    const phoneResult = await api.put(`/pos/restaurant/${ooRestaurantId}`, {
+      phone_number: restaurantPhone,
+    })
+    if (!phoneResult.ok) {
+      logError('ONBOARD', 'Failed to set restaurant phone_number on OrderOut', phoneResult)
+    } else {
+      logEvent('ONBOARD', 'Restaurant phone_number set', { oo_restaurant_id: ooRestaurantId })
+    }
   }
 
   // ── Store account in DB (upsert — create if first location, reuse if exists) ──

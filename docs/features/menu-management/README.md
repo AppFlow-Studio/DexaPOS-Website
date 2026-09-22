@@ -5,6 +5,7 @@ Menus, categories, items, modifiers, recipes, ordering, and POS menu synchroniza
 ## Documents
 
 - [FEATURE-2026-08-21-PER-LOCATION-MENU-CHANNEL-VISIBILITY-WEB.md](FEATURE-2026-08-21-PER-LOCATION-MENU-CHANNEL-VISIBILITY-WEB.md) - Per-Location Menu Visibility by Platform - Website
+- [FEATURE-2026-09-19-PER-STATION-MENU-SCOPE-WEB.md](FEATURE-2026-09-19-PER-STATION-MENU-SCOPE-WEB.md) - Per-Station Menu Scope (All menus / Selected menus on the station editor) - Website
 
 - [category-flow-bugfix-changelog.md](category-flow-bugfix-changelog.md) - Category & Menu Flow â€” Bug Fixes & Changes Changelog
 - [HANDOFF-2026-06-04-MODIFIER-DISPLAY-ORDER-FRONTEND.md](HANDOFF-2026-06-04-MODIFIER-DISPLAY-ORDER-FRONTEND.md) - Modifier Display Order Frontend Handoff

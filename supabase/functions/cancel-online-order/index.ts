@@ -66,6 +66,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
         ? 'system'
         : 'customer'
 
+    // Resolved by whichever auth path runs; the credential access logs below
+    // need it on both. Declared here so the system path (no session) has it too.
+    let storeConfigId: string | null = null
+
     // Customer-initiated cancels must present a valid, unexpired session that owns
     // the order. System sweeps skip this — they're already service-role trusted.
     if (!isSystemCall) {
@@ -83,6 +87,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       if (session.order_id !== body.order_id) {
         return jsonResponse({ success: false, error: 'Order does not belong to this session' }, 403)
       }
+
+      storeConfigId = session.store_config_id
     }
 
     const { data: order, error: orderError } = await supabase
@@ -93,6 +99,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     if (orderError || !order) {
       return jsonResponse({ success: false, error: 'Order not found' }, 404)
+    }
+
+    if (!storeConfigId) {
+      const { data: storeConfig } = await supabase
+        .from('online_store_config')
+        .select('id')
+        .eq('location_id', order.location_id)
+        .maybeSingle()
+      storeConfigId = storeConfig?.id ?? null
     }
 
     if (order.status !== 'pending') {
@@ -210,7 +225,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         await supabase.from('merchant_payment_credential_access_log').insert({
           merchant_id: order.merchant_id,
           function_name: 'cancel-online-order',
-          store_config_id: session.store_config_id,
+          store_config_id: storeConfigId,
           actor_user_id: null,
           metadata: {
             order_id: body.order_id,
@@ -308,7 +323,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         await supabase.from('payment_credential_access_log').insert({
           device_id: paymentDeviceId,
           function_name: 'cancel-online-order',
-          store_config_id: session.store_config_id,
+          store_config_id: storeConfigId,
           actor_user_id: null,
           metadata: {
             order_id: body.order_id,

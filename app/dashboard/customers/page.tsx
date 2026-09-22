@@ -2,14 +2,13 @@
 
 import { useCustomerProfile, useCustomers } from "./hooks/useCustomers";
 import { CustomerList } from "./components/CustomerList";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Plus, Megaphone, Users } from "lucide-react";
-import { CustomerProfileSheet } from "./components/CustomerProfileSheet";
-import { CreateCustomerDialog } from "./components/CreateCustomerDialog";
-import { CreateCampaignDialog } from "./components/campaigns/CreateCampaignDialog";
+import CustomersLoading from "./loading";
 import type { CustomerListItem } from "@/types/customer";
 import { PaginationBar } from "@/components/dashboard/PaginationBar";
 import { buildPaginationMeta } from "@/lib/pagination";
@@ -21,7 +20,16 @@ import {
   PanelSection,
 } from "@/components/dashboard/shell";
 
+// Load the profile's charts, order details and editors only when requested.
+const CustomerProfileSheet = dynamic(() => import("./components/CustomerProfileSheet").then((module) => module.CustomerProfileSheet));
+const CreateCustomerDialog = dynamic(() => import("./components/CreateCustomerDialog").then((module) => module.CreateCustomerDialog));
+const CreateCampaignDialog = dynamic(() => import("./components/campaigns/CreateCampaignDialog").then((module) => module.CreateCampaignDialog));
+
 export default function CustomersPage() {
+  return <Suspense fallback={<CustomersLoading />}><CustomersWorkspace /></Suspense>;
+}
+
+function CustomersWorkspace() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -35,6 +43,8 @@ export default function CustomersPage() {
     data: customerResult,
     isLoading,
     isFetching,
+    isError,
+    refetch,
   } = useCustomers({
     page,
     pageSize,
@@ -162,11 +172,15 @@ export default function CustomersPage() {
             />
           </div>
 
-          <CustomerList
+          {isError ? <div role="alert" className="rounded-2xl bg-muted/50 p-6">
+            <p className="font-medium">We couldn’t load your customers.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Check your connection and try again.</p>
+            <Button variant="secondary" className="mt-4 rounded-full" onClick={() => void refetch()} disabled={isFetching}>Try again</Button>
+          </div> : <CustomerList
             customers={customers}
             isLoading={isLoading}
             onViewProfile={handleViewProfile}
-          />
+          />}
           <PaginationBar
             pagination={pagination}
             onPageChange={setPage}
@@ -176,22 +190,22 @@ export default function CustomersPage() {
         </PanelSection>
       </Panel>
 
-      <CustomerProfileSheet
+      {isProfileOpen && <CustomerProfileSheet
         key={selectedCustomer?.id ?? "none"}
         customer={selectedCustomer}
         open={isProfileOpen}
         onOpenChange={setIsProfileOpen}
-      />
+      />}
 
-      <CreateCustomerDialog
+      {isCreateOpen && <CreateCustomerDialog
         open={isCreateOpen}
         onOpenChange={setIsCreateOpen}
-      />
+      />}
 
-      <CreateCampaignDialog
+      {isCampaignOpen && <CreateCampaignDialog
         open={isCampaignOpen}
         onOpenChange={setIsCampaignOpen}
-      />
+      />}
     </PageShell>
   );
 }

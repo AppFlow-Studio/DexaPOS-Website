@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { isOnlineDeliveryEnabled } from "./lib/delivery-flag";
 import {
   filterMenusVisibleOnline,
   isMissingMenuVisibilitySchema,
@@ -81,12 +82,13 @@ function mapStoreConfigToSite(config: any): Site {
     operatingHours: config.operating_hours,
     menuLayout: config.menu_layout || "cards",
     pickupEnabled: config.accepts_pickup,
-    // TEMP: online ordering is live with pickup + card only. Delivery is
-    // disabled site-wide (checkout order-type, StoreInfoBar, InfoPanel,
-    // MarketLayout all read this) until the delivery flow goes live. The
-    // merchant's saved `accepts_delivery` value is preserved in the DB — to
-    // re-enable, restore: deliveryEnabled: config.accepts_delivery.
+    // Delivery is only offered when a fulfilment path exists. The mapper is
+    // pure, so the caller resolves the OrderOut restaurant check and overrides
+    // this via resolveDeliveryFulfillment(); here it is the DB-only part.
+    // Under 'self' delivery stays hidden site-wide exactly as before.
     deliveryEnabled: false,
+    deliveryFulfillment:
+      config.delivery_fulfillment === "orderout_direct" ? "orderout_direct" : "self",
     deliveryPricingEnabled: config.delivery_pricing_enabled ?? true,
     minimumOrderAmount: Number(config.min_order ?? 0),
     preparationLeadTime: config.estimated_prep_minutes,
@@ -128,6 +130,42 @@ function mapStoreConfigToSite(config: any): Site {
   };
 }
 
+/**
+ * Decide whether the storefront may offer Delivery, and stamp the result on
+ * the mapped site. Three conditions, all required:
+ *   1. the merchant switched delivery on (accepts_delivery)
+ *   2. the store is on OrderOut Direct fulfilment
+ *   3. the location has an active OrderOut restaurant (the OrderOut paywall
+ *      grandfathers any merchant with a restaurant row, so this doubles as
+ *      the entitlement check)
+ * A store on 'self' never gets delivery from this — there is no fulfilment
+ * path for it yet.
+ */
+async function resolveDeliveryFulfillment(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  site: Site,
+  storeConfig: { accepts_delivery?: boolean | null; delivery_fulfillment?: string | null; location_id: string }
+): Promise<void> {
+  const cfg = site.online_ordering_config;
+  if (!cfg) return;
+  cfg.deliveryEnabled = false;
+  // Global kill-switch: delivery stays dark site-wide until we finish
+  // integrating it, no matter what the merchant configured. See delivery-flag.ts.
+  if (!isOnlineDeliveryEnabled()) return;
+  if (!storeConfig.accepts_delivery) return;
+  if (storeConfig.delivery_fulfillment !== "orderout_direct") return;
+
+  const { data: restaurant } = await supabase
+    .from("orderout_restaurants")
+    .select("id, status, oo_restaurant_id")
+    .eq("location_id", storeConfig.location_id)
+    .maybeSingle();
+
+  cfg.deliveryEnabled = Boolean(
+    restaurant && restaurant.status === "active" && restaurant.oo_restaurant_id
+  );
+}
+
 export async function getStorefrontData(
   slugOrId: string
 ): Promise<StorefrontData> {
@@ -158,6 +196,7 @@ export async function getStorefrontData(
   }
 
   const site = mapStoreConfigToSite(storeConfig);
+  await resolveDeliveryFulfillment(supabase, site, storeConfig);
   const locationId = storeConfig.location_id;
 
   // 2. Fetch location
@@ -220,6 +259,7 @@ export async function getStorefrontMetaData(
   }
 
   const site = mapStoreConfigToSite(storeConfig);
+  await resolveDeliveryFulfillment(supabase, site, storeConfig);
 
   const { data: location, error: locationError } = await supabase
     .from("locations")

@@ -6,7 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useUserInfo } from "@/app/manage/hooks/useUserInfo.";
+import { useClerkOrgId } from "@/app/dashboard/hooks/useLocationScoped";
 import {
   GetCustomers,
   GetCustomerProfile,
@@ -41,15 +41,6 @@ import type { PaginatedResult, PaginationParams } from "@/types/pagination";
 // =============================================================================
 // Helper Hook: Get Clerk Org ID
 // =============================================================================
-
-function useClerkOrgId(): string {
-  const { data: userInfo } = useUserInfo();
-  return (
-    userInfo?.members?.[0]?.organizations?.clerk_org_id ||
-    userInfo?.members?.[0]?.organizations?.merchants?.clerk_org_id ||
-    ""
-  );
-}
 
 // =============================================================================
 // Customer List Hooks

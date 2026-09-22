@@ -11,6 +11,8 @@ interface TipSectionProps {
   onSelectCustom: () => void;
   onSelectNoTip: () => void;
   onCustomTipChange: (value: string) => void;
+  /** Defaults to "Add a Tip". OrderOut Direct delivery uses "Add a driver tip". */
+  title?: string;
 }
 
 export function TipSection({
@@ -22,12 +24,13 @@ export function TipSection({
   onSelectCustom,
   onSelectNoTip,
   onCustomTipChange,
+  title = "Add a Tip",
 }: TipSectionProps) {
   return (
     <section className="space-y-3">
       <div className="flex items-baseline gap-2">
         <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)", color: "var(--text)" }}>
-          Add a Tip
+          {title}
         </h2>
         <span className="text-xs" style={{ color: "var(--text-secondary)" }}>on subtotal</span>
       </div>

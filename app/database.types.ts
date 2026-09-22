@@ -23359,6 +23359,7 @@ export type Database = {
           created_at: string
           error_message: string | null
           event_type: string | null
+          external_event_id: string | null
           id: string
           max_retries: number
           next_retry_at: string | null
@@ -23373,6 +23374,7 @@ export type Database = {
           created_at?: string
           error_message?: string | null
           event_type?: string | null
+          external_event_id?: string | null
           id?: string
           max_retries?: number
           next_retry_at?: string | null
@@ -23387,6 +23389,7 @@ export type Database = {
           created_at?: string
           error_message?: string | null
           event_type?: string | null
+          external_event_id?: string | null
           id?: string
           max_retries?: number
           next_retry_at?: string | null
@@ -28338,6 +28341,7 @@ export type Database = {
           p_customer_id?: string
           p_error_code?: string
           p_from_number?: string
+          p_messaging_profile_id?: string
           p_merchant_id: string
           p_recipient_id?: string
           p_status?: string

@@ -71,6 +71,9 @@ interface CreateOnlineOrderRequest {
     delivery_notes?: string
   } | null
   requested_time?: string | null  // ISO 8601 or null for ASAP
+  // OrderOut Direct: our orderout_delivery_quotes.id returned by
+  // orderout-delivery-quote. The fee charged is that row's stored price.
+  delivery_quote_id?: string | null
   tip: number                     // dollars
   special_instructions?: string
   card_token?: string             // for returning customers with saved cards
@@ -676,6 +679,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
   let deliveryFeeCents = 0
   let deliveryMinOrderCents = 0
   let deliveryFreeThresholdCents: number | null = null
+  // OrderOut Direct: the validated quote row, carried to the dispatch insert
+  // after the order exists.
+  let directQuote: { id: string; price: number; provider: string } | null = null
+  const isDirectDelivery =
+    fulfillmentOrderType === 'delivery' && storeConfig.delivery_fulfillment === 'orderout_direct'
 
   if (fulfillmentOrderType === 'delivery') {
     if (!storeConfig.accepts_delivery) {
@@ -693,12 +701,104 @@ Deno.serve(async (req: Request): Promise<Response> => {
         400
       )
     }
+  }
 
+  if (isDirectDelivery) {
+    // Direct delivery bypasses zones and flat fees entirely: the customer pays
+    // the live courier quote that orderout-delivery-quote stored server-side.
+    // Everything below is a server-side trust check on that stored row —
+    // nothing about the fee comes from the request body.
+    if (payCashInStore) {
+      // The courier is pushed as PAID and the food leaves the store: there is
+      // no "pay when you collect" moment. Card only.
+      return errorResponse(
+        'Delivery orders must be paid online.',
+        'delivery_cash_payment_not_supported',
+        422
+      )
+    }
+    if (body.requested_time) {
+      return errorResponse(
+        'Scheduled delivery is not available yet. Please choose ASAP.',
+        'scheduled_delivery_not_supported',
+        422
+      )
+    }
+
+    if (!body.delivery_quote_id) {
+      return errorResponse(
+        'A delivery quote is required for delivery orders',
+        'delivery_quote_required',
+        422,
+        { requote: true }
+      )
+    }
+
+    const { data: quote } = await supabase
+      .from('orderout_delivery_quotes')
+      .select('id, store_config_id, session_id, is_selected, expires_at, price, provider, dropoff')
+      .eq('id', body.delivery_quote_id)
+      .maybeSingle()
+
+    const quoteDropoff = (quote?.dropoff ?? {}) as Record<string, unknown>
+    const norm = (v: unknown) => String(v ?? '').trim().toLowerCase()
+    const addr = body.delivery_address!
+    const addressMatches =
+      norm(quoteDropoff.street) === norm(addr.street) &&
+      norm(quoteDropoff.city) === norm(addr.city) &&
+      norm(quoteDropoff.state) === norm(addr.state) &&
+      norm(quoteDropoff.zip) === norm(addr.zip).replace(/-\d{4}$/, '')
+    // A quote taken under an authenticated session must be redeemed by it.
+    // Guest quotes carry no session (the guest session is created above, after
+    // the quote), so a null session on the quote is accepted.
+    const sessionMatches =
+      !quote?.session_id || !session?.id || quote.session_id === session.id
+
+    if (
+      !quote ||
+      quote.store_config_id !== storeConfigId ||
+      !quote.is_selected ||
+      !addressMatches ||
+      !sessionMatches
+    ) {
+      logEvent('DELIVERY', 'Rejected delivery quote', {
+        quoteId: body.delivery_quote_id,
+        found: Boolean(quote),
+        addressMatches,
+        sessionMatches,
+      })
+      return errorResponse(
+        'This delivery quote is no longer valid. Please re-enter your address.',
+        'delivery_quote_invalid',
+        422,
+        { requote: true }
+      )
+    }
+
+    if (new Date(quote.expires_at).getTime() <= Date.now()) {
+      return errorResponse(
+        'Your delivery quote has expired. Please confirm the updated delivery fee.',
+        'delivery_quote_expired',
+        422,
+        { requote: true }
+      )
+    }
+
+    directQuote = { id: quote.id, price: Number(quote.price), provider: quote.provider }
+    deliveryFeeCents = Math.round(Number(quote.price) * 100)
+    deliveryMinOrderCents = Math.round((storeConfig.min_order ?? 0) * 100)
+    deliveryFreeThresholdCents = null // flat fees and free-delivery thresholds do not apply
+    logEvent('DELIVERY', 'Direct delivery quote accepted', {
+      quoteId: quote.id,
+      provider: quote.provider,
+      feeCents: deliveryFeeCents,
+    })
+  } else if (fulfillmentOrderType === 'delivery') {
     const zoneResult = await validateDeliveryZone(
       supabase,
       storeConfigId,
       storeConfig.address,
-      body.delivery_address,
+      body.delivery_address!,
       storeConfig.delivery_radius_miles,
       Math.round((storeConfig.delivery_fee ?? 0) * 100),
       Math.round((storeConfig.min_order ?? 0) * 100),
@@ -1149,6 +1249,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
       table_label: session?.table_label ?? null,
       floor_plan_object_id: session?.floor_plan_object_id ?? null,
       table_qr_code_id: session?.table_qr_code_id ?? null,
+      // Recorded atomically with the order so sweep_orderout_delivery_dispatches()
+      // can rebuild the dispatch row from the exact quote the card was charged.
+      ...(directQuote
+        ? { delivery_quote_id: directQuote.id, delivery_fee: toDollars(deliveryFeeCents) }
+        : {}),
     },
   }
 
@@ -1413,6 +1518,42 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     if (orderBindingError) {
       logError('ORDER', 'Failed to bind online session / QR metadata to created order', orderBindingError)
+    }
+  }
+
+  // ---- Step 11.5: OrderOut Direct dispatch outbox row ----
+  // The card is already charged. This row is what guarantees a courier gets
+  // booked once the merchant accepts (trigger flips it to pending). Insert
+  // failure is logged, not fatal: sweep_orderout_delivery_dispatches() rebuilds
+  // it from the session's selected quote within 5 minutes.
+  if (isDirectDelivery && directQuote) {
+    const { data: onlineOrderRow } = await supabase
+      .from('online_orders')
+      .select('id')
+      .eq('order_id', orderResult.order_id)
+      .maybeSingle()
+
+    const { error: dispatchError } = await supabase
+      .from('orderout_delivery_dispatches')
+      .upsert(
+        {
+          order_id: orderResult.order_id,
+          online_order_id: onlineOrderRow?.id ?? null,
+          location_id: locationId,
+          merchant_id: merchantId,
+          quote_id: directQuote.id,
+          charged_fee: toDollars(deliveryFeeCents),
+          driver_tip: toDollars(tipCents),
+          oo_order_number: orderResult.order_number,
+          state: 'awaiting_accept',
+        },
+        { onConflict: 'order_id', ignoreDuplicates: true }
+      )
+
+    if (dispatchError) {
+      logError('DISPATCH', 'Failed to insert OrderOut Direct dispatch row (sweep will recover)', dispatchError)
+    } else {
+      logEvent('DISPATCH', 'Dispatch row created', { orderId: orderResult.order_id, quoteId: directQuote.id })
     }
   }
 
