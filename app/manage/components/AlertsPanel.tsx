@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { X, AlertCircle, AlertTriangle, Info, ChevronDown, ChevronRight } from 'lucide-react'
+import { X, AlertCircle, AlertTriangle, Info, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { Panel } from '@/components/dashboard/shell/Panel'
 import { PanelSection } from '@/components/dashboard/shell/PanelSection'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePlatformAlerts } from '@/lib/queries/use-platform-dashboard'
 import { PlatformAlert } from '@/app/manage/actions/hq-platform/dashboard'
@@ -47,11 +48,15 @@ function SeverityIcon({ severity }: { severity: string }) {
   )
 }
 
+/** Alerts shown per page. Severity-sorted, so page 1 is always the worst 10. */
+const ALERTS_PER_PAGE = 10
+
 export function AlertsPanel() {
   const { data: allAlerts, isLoading, error } = usePlatformAlerts()
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set())
   const [alerts, setAlerts] = useState<PlatformAlert[]>([])
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [page, setPage] = useState(0)
 
   // Load dismissed alerts from localStorage
   useEffect(() => {
@@ -87,6 +92,16 @@ export function AlertsPanel() {
 
     setAlerts(filtered)
   }, [allAlerts, dismissedAlerts])
+
+  const pageCount = Math.max(1, Math.ceil(alerts.length / ALERTS_PER_PAGE))
+  // Dismissing the last alert on the final page would otherwise strand the user
+  // on an empty page, and the alert list is re-derived per request, so its
+  // length can shrink between renders.
+  const safePage = Math.min(page, pageCount - 1)
+  const pageAlerts = alerts.slice(
+    safePage * ALERTS_PER_PAGE,
+    safePage * ALERTS_PER_PAGE + ALERTS_PER_PAGE,
+  )
 
   const dismissAlert = (alertId: string) => {
     const newDismissed = new Set(dismissedAlerts)
@@ -132,8 +147,12 @@ export function AlertsPanel() {
             <p className="mt-1 text-xs text-muted-foreground">You&apos;re up to date</p>
           </div>
         ) : (
-          <div className="max-h-[500px] min-w-0 space-y-2 overflow-y-auto">
-            {alerts.map((alert) => {
+          // Paged rather than an inner `overflow-y-auto` well: a nested scroll
+          // region inside the outer page scroll is hard to reach and hides how
+          // many alerts there are. Sorted by severity above, so page 1 is
+          // always the most urgent ten.
+          <div className="min-w-0 space-y-2">
+            {pageAlerts.map((alert) => {
               const isGrouped = (alert.groupedDevices?.length ?? 0) > 0
               const isExpanded = expandedGroups.has(alert.id)
               return (
@@ -212,6 +231,40 @@ export function AlertsPanel() {
                 </div>
               )
             })}
+
+            {pageCount > 1 && (
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <p className="text-xs tabular-nums text-muted-foreground">
+                  {safePage * ALERTS_PER_PAGE + 1}–
+                  {safePage * ALERTS_PER_PAGE + pageAlerts.length} of {alerts.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-full"
+                    onClick={() => setPage(safePage - 1)}
+                    disabled={safePage === 0}
+                    aria-label="Previous page of alerts"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="px-1 text-xs tabular-nums text-muted-foreground">
+                    {safePage + 1} / {pageCount}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-full"
+                    onClick={() => setPage(safePage + 1)}
+                    disabled={safePage >= pageCount - 1}
+                    aria-label="Next page of alerts"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </PanelSection>
