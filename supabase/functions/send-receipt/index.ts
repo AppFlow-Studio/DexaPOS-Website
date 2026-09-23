@@ -289,11 +289,26 @@ serve(async (req: Request) => {
         receipt_template_id: receipt_template_id ?? null,
         status: 'pending',
         created_by: userId,
+        // Flags a confirmation send (kiosk payment / order-placed) vs a POS
+        // "text me a receipt". Backs the partial unique index
+        // uq_receipt_sends_confirmation_sms so a confirmation SMS is sent AT MOST
+        // ONCE per order, whether it comes from the kiosk client fire-and-forget
+        // or the server-side order->preparing trigger.
+        is_confirmation: confirmation === true,
       })
       .select('id, send_token')
       .single();
 
     if (pendingErr || !pendingRow) {
+      // 23505 = the confirmation dedup index: a confirmation SMS for this order
+      // is already pending/sent (the other of the trigger / kiosk-client pair won
+      // the race). Skip silently — success, NOT a duplicate send.
+      if ((pendingErr as { code?: string } | null)?.code === '23505') {
+        return jsonResp({
+          success: true,
+          message: 'Confirmation receipt already sent for this order',
+        });
+      }
       return jsonResp({
         success: false,
         message: 'Failed to initialise receipt send record.',
