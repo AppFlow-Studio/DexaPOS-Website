@@ -21,6 +21,8 @@ import {
   SERIES,
   CategoryTick,
   CATEGORY_AXIS_WIDTH,
+  DATE_AXIS_TICK_GAP,
+
   monthAwareDateTick,
   valueAxisWidthMobile,
 } from './analytics-primitives'
@@ -72,11 +74,6 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
                   ? '—'
                   : `${data.avgTimeToFirstOrder.toFixed(1)} days`
               }
-              meta={
-                data && data.timeToFirstOrderPending > 0
-                  ? `${data.timeToFirstOrderPending} of ${data.timeToFirstOrderCohort} yet to order`
-                  : undefined
-              }
             />
             <StatTile
               label="Retention Rate"
@@ -102,6 +99,7 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
             <XAxis
               dataKey="period"
               tickFormatter={monthAwareDateTick(acquisitionRows, 'period')}
+              minTickGap={DATE_AXIS_TICK_GAP}
               tick={CHART_TICK}
               tickLine={false}
               axisLine={false}

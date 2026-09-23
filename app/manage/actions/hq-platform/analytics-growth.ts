@@ -24,12 +24,20 @@ export interface GrowthMetrics {
   }[]
   /**
    * Null when no merchant in the cohort has placed a recognized order yet —
-   * which is NOT the same as "they ordered instantly". Render it as unknown,
-   * never as 0. See `timeToFirstOrderPending` for how much of the cohort is
-   * still unresolved.
+   * which is NOT the same as "they ordered instantly". Render it as unknown
+   * (an em dash), never as 0.
    */
   avgTimeToFirstOrder: number | null
-  /** Cohort size, and how many of them have yet to place a recognized order. */
+  /**
+   * Cohort size, and how many of them have yet to place a recognized order.
+   *
+   * Nothing renders these today: the tile deliberately shows the em dash on its
+   * own. They are carried because the RPC already returns them for free and
+   * they are the only way to tell "no merchants signed up in this range" from
+   * "six signed up and none has ordered" — the two cases behind an identical
+   * dash. Keep them to hand for a tooltip or the empty state, not as dead
+   * weight: drop them if a year passes with no reader.
+   */
   timeToFirstOrderCohort: number
   timeToFirstOrderPending: number
   onboardingFunnel: {

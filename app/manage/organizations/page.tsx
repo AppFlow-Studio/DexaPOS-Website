@@ -101,7 +101,8 @@ export default function OrganizationsPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-2">
                     <div className="h-7 w-48 animate-pulse rounded-md bg-muted" />
-                    <div className="h-4 w-72 max-w-full animate-pulse rounded-md bg-muted" />
+                    {/* Matches the header: no subtitle below `sm`. */}
+                    <div className="hidden h-4 w-72 max-w-full animate-pulse rounded-md bg-muted sm:block" />
                 </div>
                 <div className="h-9 w-32 animate-pulse rounded-full bg-muted" />
             </div>
@@ -124,7 +125,8 @@ export default function OrganizationsPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 space-y-2">
                     <div className="h-5 w-40 animate-pulse rounded-md bg-muted" />
-                    <div className="h-4 w-64 max-w-full animate-pulse rounded-md bg-muted" />
+                    {/* Matches the toolbar: no section subtitle below `sm`. */}
+                    <div className="hidden h-4 w-64 max-w-full animate-pulse rounded-md bg-muted sm:block" />
                 </div>
                 <div className="flex min-w-0 items-center gap-2">
                     <div className="h-9 min-w-0 flex-1 animate-pulse rounded-full bg-muted sm:w-72 sm:flex-none" />
@@ -179,6 +181,9 @@ export default function OrganizationsPage() {
             <PageHeader
                 title="Organizations"
                 subtitle="Manage your partner organizations and their performance"
+                /* The title says it; on a phone this line only pushed the KPIs
+                   and the list further down. It returns at `sm`. */
+                subtitleClassName="hidden sm:block"
                 actions={
                     <Button asChild className="h-9 px-4">
                         <Link href="/manage/organizations/create-organization">
@@ -245,7 +250,9 @@ export default function OrganizationsPage() {
                     <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                         Partner Organizations
                     </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    {/* Same reasoning as the page subtitle: the heading above and
+                        the cards below already say this. */}
+                    <p className="mt-1 hidden text-sm text-muted-foreground sm:block">
                         Manage and monitor your partner organizations
                     </p>
                 </div>

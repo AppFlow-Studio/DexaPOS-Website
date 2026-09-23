@@ -34,6 +34,8 @@ import {
   AnalyticsPanel,
   AnalyticsTooltip,
   SERIES,
+  DATE_AXIS_TICK_GAP,
+
   monthAwareDateTick,
 } from './analytics-primitives'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -186,6 +188,7 @@ export function PaymentsSection({ from, to }: PaymentsSectionProps) {
             <XAxis
               dataKey="date"
               tickFormatter={monthAwareDateTick(combinedData)}
+              minTickGap={DATE_AXIS_TICK_GAP}
               tick={CHART_TICK}
               tickLine={false}
               axisLine={false}

@@ -64,8 +64,73 @@ export function valueAxisWidthMobile(chars: number): number {
  * half of it: enough that the plot reads as centred in its card and the last
  * x tick is not clipped, without wasting the width the axis already paid for.
  * Spread it as `margin={CHART_MARGIN}`.
+ *
+ * `right` is 24, not 16. A tick label is centred on its tick, so the last one
+ * overhangs the plot by half its width and the margin has to cover that half.
+ * 16px was sized when every label was two characters (`23` — 7px of overhang).
+ * `monthAwareDateTick` now names the month on the first tick of each month, so
+ * the final label can be `Sep 1` at ~35px wide, overhanging ~18px, and the
+ * last date was being clipped by the card edge. 24 covers it with room to
+ * spare and costs 8px of plot.
  */
-export const CHART_MARGIN = { top: 4, right: 16, left: 0, bottom: 0 } as const
+export const CHART_MARGIN = { top: 4, right: 24, left: 0, bottom: 0 } as const
+
+/**
+ * Minimum horizontal gap between drawn ticks on a date axis.
+ *
+ * Recharts defaults `minTickGap` to **5px** and decides tick spacing from the
+ * DATA, never from how wide the rendered labels turn out to be. That was
+ * survivable while every tick read `26` (two characters), but
+ * `monthAwareDateTick` now names the month on the first tick of each month, so
+ * a 6-character `Jun 25` lands in a slot budgeted for two — and the labels
+ * collide into `26Jul 310  18  26Aug 2`, which is worse than the ambiguity it
+ * was meant to cure.
+ *
+ * 44px is measured, not guessed: the 12px tick font renders `Sep 23` at ~38px,
+ * plus a 6px breathing gap. Erring wide costs a few dropped day labels; erring
+ * narrow costs legibility on every tick at once. Sibling dashboards set 24-60
+ * by the same reasoning (`minTickGap={32}` in SalesChart, `={60}` in
+ * FinancialHeroChart, whose labels are wider still).
+ *
+ * Spread onto a date `<XAxis>` alongside `tickFormatter={monthAwareDateTick(…)}`.
+ */
+export const DATE_AXIS_TICK_GAP = 44
+
+/**
+ * Show a dot only where a datapoint has no neighbour to draw a line to.
+ *
+ * `dot={false}` is right for a dense series — a dot per day is noise. But on a
+ * sparse one it silently HIDES data: a day whose neighbours are both null has
+ * nothing to connect to, so Recharts draws a zero-length line, which is to say
+ * nothing at all. The table-turn trend on staging has 10 days of data in a
+ * 91-day window, of which 6 are isolated — so the chart was rendering two
+ * short lines and dropping 60% of its own points on the floor.
+ *
+ * This keeps lines clean where the data is continuous and makes a lone reading
+ * visible as a dot. Pass as `dot={<IsolatedPointDot dataKey="avg_minutes" />}`.
+ *
+ * `index` and the series `data` both arrive on the props Recharts spreads onto
+ * a custom dot, which is what makes the neighbour test possible.
+ */
+export function IsolatedPointDot(props: {
+  cx?: number
+  cy?: number
+  index?: number
+  dataKey?: string
+  stroke?: string
+  // Recharts passes the full series through; typed loosely because its own
+  // dot-prop type is `any` and varies by chart.
+  points?: { payload?: Record<string, unknown> }[]
+}) {
+  const { cx, cy, index, dataKey, stroke, points } = props
+  if (cx == null || cy == null || index == null || !points || !dataKey) return null
+
+  const valueAt = (i: number) => points[i]?.payload?.[dataKey]
+  const isolated = valueAt(index - 1) == null && valueAt(index + 1) == null
+  if (!isolated) return null
+
+  return <circle cx={cx} cy={cy} r={2.5} fill={stroke} stroke="none" />
+}
 
 /**
  * Tick formatter for a daily date axis, naming the month only on its first day.
@@ -98,12 +163,17 @@ export const CHART_MARGIN = { top: 4, right: 16, left: 0, bottom: 0 } as const
  * `YYYY-MM-DD` calendar days from SQL, and parsing them to a `Date` would
  * shift them a day backwards for anyone behind UTC.
  */
+const MONTH_ABBR = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+] as const
+
 export function monthAwareDateTick<T extends Record<string, unknown>>(
   rows: readonly T[],
   key: keyof T = 'date' as keyof T
 ) {
-  // `YYYY-MM` → the smallest `YYYY-MM-DD` seen for it. String comparison is
-  // safe and sort-free on a zero-padded ISO date.
+  // The EARLIEST date each month, as `YYYY-MM` → `YYYY-MM-DD`. String
+  // comparison is safe and sort-free on a zero-padded ISO date.
   const firstOfMonth = new Map<string, string>()
   for (const row of rows) {
     const raw = String(row[key] ?? '')
@@ -113,7 +183,13 @@ export function monthAwareDateTick<T extends Record<string, unknown>>(
     if (seen === undefined || raw < seen) firstOfMonth.set(month, raw)
   }
 
-  return (value: string): string => {
+  // Row order as drawn, so a tick's neighbours can be found by index.
+  const dates = rows
+    .map((r) => String(r[key] ?? ''))
+    .filter((d) => d.length >= 10)
+    .sort()
+
+  return (value: string, index?: number): string => {
     const raw = String(value)
     const [, rawMonth, rawDay] = raw.split('-')
 
@@ -123,10 +199,52 @@ export function monthAwareDateTick<T extends Record<string, unknown>>(
     const day = Number(rawDay)
     if (!Number.isFinite(month) || !Number.isFinite(day)) return raw
 
-    // Day-first (`27/6`). A month-first `6/27` was being misread as a day on
-    // the month-boundary ticks that carry a low day number — `8/4` reads as
-    // "8 April" just as readily as "August 4th".
-    return firstOfMonth.get(raw.slice(0, 7)) === raw ? `${day}/${month}` : `${day}`
+    const monthKey = raw.slice(0, 7)
+
+    // WHY NOT `firstOfMonth.get(monthKey) === raw`, WHICH IS WHAT THIS DID.
+    //
+    // That labelled exactly one date per month. It worked while the series
+    // carried only days WITH DATA, because the chart drew nearly every point.
+    // Once `fillDateGaps` began materialising every calendar day, a 90-day
+    // range became ~91 points in a ~280px panel and Recharts thinned the axis
+    // to roughly every 7th tick. The month boundaries then sat at indices
+    // 0, 6, 37, 68 and only ONE of them fell on a drawn tick: every other
+    // label was computed and discarded, leaving `26 3 10 18 26 2 8` — an axis
+    // with no month on it at all, where June and September look identical.
+    //
+    // The rule now is "first DRAWN tick of its month". Recharts passes the
+    // tick's index, and thins at a constant stride, so the previous drawn tick
+    // is `index - stride` and a month change between the two is what earns a
+    // label. Deriving the stride from the first two calls keeps this a PURE
+    // function of (value, index): `tickFormatter` is invoked from more than one
+    // place in CartesianAxis (measurement as well as render), so anything that
+    // accumulated state across calls would label correctly on one pass and
+    // blank on the next.
+    if (index == null) {
+      // No index (a caller outside Recharts, or a future version): fall back to
+      // the exact-date rule. Labels at most one tick per month and never lies.
+      return firstOfMonth.get(monthKey) === raw
+        ? `${MONTH_ABBR[month - 1] ?? month} ${day}`
+        : `${day}`
+    }
+
+    const here = dates.indexOf(raw)
+    if (here <= 0) {
+      // First drawn tick of the whole axis always carries its month.
+      return `${MONTH_ABBR[month - 1] ?? month} ${day}`
+    }
+
+    // The tick drawn immediately before this one. `index` counts drawn ticks,
+    // `here` counts data rows, so their ratio is the thinning stride.
+    const stride = Math.max(1, Math.round(here / index))
+    const prev = dates[here - stride]
+    if (prev === undefined) return `${day}`
+
+    // `Jun 26`, not `26/6`. The numeric form was ambiguous exactly where it
+    // mattered: `8/4` reads as "8 April" as readily as "August 4th".
+    return prev.slice(0, 7) !== monthKey
+      ? `${MONTH_ABBR[month - 1] ?? month} ${day}`
+      : `${day}`
   }
 }
 

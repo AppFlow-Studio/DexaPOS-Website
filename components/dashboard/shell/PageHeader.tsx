@@ -10,6 +10,12 @@ import { cn } from '@/lib/utils'
 interface PageHeaderProps {
   title: string
   subtitle?: string
+  /**
+   * Extra classes for the subtitle. Mainly a responsive escape hatch: a page
+   * whose subtitle is redundant on a phone can drop it with `hidden sm:block`
+   * without the caller branching on viewport width in JS.
+   */
+  subtitleClassName?: string
   /** Renders a ghost "Back to X" pill above the title (D-04). */
   backHref?: string
   backLabel?: string
@@ -43,6 +49,7 @@ interface PageHeaderProps {
 export function PageHeader({
   title,
   subtitle,
+  subtitleClassName,
   backHref,
   backLabel = 'Back',
   indicator,
@@ -93,7 +100,11 @@ export function PageHeader({
         )}
       </div>
 
-      {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+      {subtitle && (
+        <p className={cn('mt-1 text-sm text-muted-foreground', subtitleClassName)}>
+          {subtitle}
+        </p>
+      )}
     </div>
   )
 }

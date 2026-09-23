@@ -192,15 +192,13 @@ export const MerchantsTable = ({ merchants }: { merchants: MerchantsModel[] }) =
                         className="min-w-0 cursor-pointer rounded-2xl border-0 bg-muted/45 p-4 transition-colors hover:bg-muted"
                         onClick={() => router.push(`/manage/merchants/${merchant.clerk_org_id}`)}
                     >
+                        {/* The logo and the raw org id are both dropped here:
+                            neither is actionable on a phone, and together they
+                            cost the card a 32px column and a second line under
+                            every name. The desktop table still carries the id. */}
                         <div className="flex items-start justify-between gap-2">
-                            <div className="flex min-w-0 items-center gap-3">
-                                <MerchantLogo merchant={merchant} />
-                                <div className="min-w-0">
-                                    <p className="truncate font-semibold">{merchant.name}</p>
-                                    <p className="truncate text-xs text-muted-foreground">
-                                        ID: {merchant.clerk_org_id}
-                                    </p>
-                                </div>
+                            <div className="min-w-0">
+                                <p className="truncate font-semibold">{merchant.name}</p>
                             </div>
                             <div className="flex shrink-0 items-center gap-1">
                                 <StatusBadge status={merchant.status} />

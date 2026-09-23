@@ -28,6 +28,7 @@ import { RemoveUserPopup } from './components/RemoveUserPopup'
 import { ResendAdminInvitePopup } from './components/ResendAdminInvitePopup'
 import { AddMerchantButton } from './components/AddMerchantButtons'
 import { MerchantsTable } from './components/MerchantsTable'
+import { OrganizationAuditLogs } from './components/OrganizationAuditLogs'
 import { DeleteOrganizationDialog } from './components/DeleteOrganizationDialog'
 import { AdminInviteWizard } from './components/AdminInviteWizard'
 /**
@@ -196,7 +197,6 @@ export default function OrganizationInfoPage() {
     const org: any = data
     const orgName = org?.name || 'Organization'
     const orgId = org?.id
-    const orgImage = org?.imageURL
     const orgDomain = org?.domain || org?.domains?.[0]
     const createdAt = org?.created_at
     const members = org?.members || []
@@ -230,38 +230,30 @@ export default function OrganizationInfoPage() {
                 }
             />
 
-            {/* Identity row: the logo and the org's metadata badges. Previously
-                this was a `CardHeader` whose `CardTitle` competed with the page
-                title; the name now lives in `PageHeader` and this row carries
-                only the identifiers. */}
-            <div className="flex min-w-0 items-center gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-primary/10">
-                    {orgImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={orgImage} alt={orgName} className="h-full w-full object-cover" />
-                    ) : (
-                        <Shield className="h-6 w-6 text-primary" />
-                    )}
-                </div>
-                <div className="min-w-0 flex-1">
-                    {orgId && (
-                        <Badge
-                            variant="secondary"
-                            className="flex max-w-full rounded-full border-0 font-mono text-xs sm:max-w-none"
-                        >
-                            <span className="block truncate">{orgId}</span>
+            {/* Identity row: the org's metadata badges. Previously this was a
+                `CardHeader` whose `CardTitle` competed with the page title; the
+                name now lives in `PageHeader` and this row carries only the
+                identifiers. The logo was dropped as well — the page title
+                already names the org, so the mark was decoration paying for a
+                12px row of vertical space on a phone. */}
+            <div className="min-w-0">
+                {orgId && (
+                    <Badge
+                        variant="secondary"
+                        className="flex max-w-full rounded-full border-0 font-mono text-xs sm:max-w-none"
+                    >
+                        <span className="block truncate">{orgId}</span>
+                    </Badge>
+                )}
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                    {orgDomain && (
+                        <Badge variant="secondary" className="rounded-full border-0 px-2.5 text-xs font-medium">
+                            {orgDomain}
                         </Badge>
                     )}
-                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
-                        {orgDomain && (
-                            <Badge variant="secondary" className="rounded-full border-0 px-2.5 text-xs font-medium">
-                                {orgDomain}
-                            </Badge>
-                        )}
-                        {createdAt && (
-                            <span className="text-xs text-muted-foreground">Created {new Date(createdAt).toLocaleDateString()}</span>
-                        )}
-                    </div>
+                    {createdAt && (
+                        <span className="text-xs text-muted-foreground">Created {new Date(createdAt).toLocaleDateString()}</span>
+                    )}
                 </div>
             </div>
 
@@ -290,16 +282,22 @@ export default function OrganizationInfoPage() {
                     <Panel>
                         <div className="px-4 py-6 sm:px-6">
                             <StatRow columns={2}>
+                                {/* Captions hidden on phones: "Stores" and
+                                    "Members" are self-evident, and each gloss
+                                    cost a line above the fold. They return at
+                                    `sm`, where the space is free. */}
                                 <StatTile
                                     label="Stores"
                                     value={org?.stores_count ?? 0}
                                     meta="Total active POS locations"
+                                    metaClassName="hidden sm:block"
                                     icon={<Building2 />}
                                 />
                                 <StatTile
                                     label="Members"
                                     value={members?.length ?? 0}
                                     meta="Includes owners, managers and cashiers"
+                                    metaClassName="hidden sm:block"
                                     icon={<Users />}
                                 />
                             </StatRow>
@@ -315,7 +313,10 @@ export default function OrganizationInfoPage() {
                                 <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">
                                     Organization roles
                                 </h2>
-                                <p className="mt-1 text-sm text-muted-foreground">Assign POS roles to manage access for merchants and staff.</p>
+                                {/* The heading plus the role list below carry this
+                                    already; on a phone the gloss cost two lines
+                                    above the first role. */}
+                                <p className="mt-1 hidden text-sm text-muted-foreground sm:block">Assign POS roles to manage access for merchants and staff.</p>
                             </div>
                             <div className="flex min-w-0 flex-wrap items-center gap-2">
                                 <Button variant="outline" size="sm" onClick={() => router.push('/manage/roles-permissions')}>Edit priority</Button>
@@ -368,8 +369,10 @@ export default function OrganizationInfoPage() {
                                 >
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0">
+                                            {/* The role name plus the slug and
+                                                permissions below identify the role;
+                                                the gloss cost a line on every card. */}
                                             <p className="truncate font-semibold">{r.name}</p>
-                                            <p className="text-xs text-muted-foreground">{r.desc}</p>
                                         </div>
                                         <div className="shrink-0">
                                             <RoleRowMenu />
@@ -556,7 +559,10 @@ export default function OrganizationInfoPage() {
                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                     <div className="min-w-0">
                                         <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Merchants</h2>
-                                        <p className="mt-1 text-sm text-muted-foreground">Manage and view all merchants associated with this carrier.</p>
+                                        {/* The "Merchants" heading plus the list
+                                            below say this already; on a phone the
+                                            gloss pushed the first card off-screen. */}
+                                        <p className="mt-1 hidden text-sm text-muted-foreground sm:block">Manage and view all merchants associated with this carrier.</p>
                                     </div>
                                     <div className="min-w-0 max-w-full">
                                         <AddMerchantButton carrierId={carrierId as string} organizationId={organizationId as string} refetch={refetchOrganizationInfo} />
@@ -571,10 +577,20 @@ export default function OrganizationInfoPage() {
                         {/* Invites */}
                         <TabsContent value="invites" className="mt-6">
                             <div className="space-y-6">
+                                {/* On a phone the title and the invite button share
+                                    the top row and the search field sits beneath
+                                    them; from `sm` up the original single-row
+                                    layout returns. "Pending invitations" is gone —
+                                    the list states each invite's status itself. */}
                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                        <div className="min-w-0">
+                                        <div className="flex min-w-0 items-center justify-between gap-2 sm:justify-start">
                                             <h2 className="text-[1.0625rem] font-semibold text-[#0C4FD1] dark:text-[#6CA0FF]">Invites</h2>
-                                            <p className="mt-1 text-sm text-muted-foreground">Pending invitations</p>
+                                            <div className="shrink-0 sm:hidden">
+                                                {org.members.length > 1 ?
+                                                    <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' /> :
+                                                    <SendAdminInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' />
+                                                }
+                                            </div>
                                         </div>
                                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                                             <Input
@@ -583,10 +599,12 @@ export default function OrganizationInfoPage() {
                                                 value={inviteSearch}
                                                 onChange={(e) => setInviteSearch(e.target.value)}
                                             />
-                                            {org.members.length > 1 ?
-                                                <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' /> :
-                                                <SendAdminInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' />
-                                            }
+                                            <div className="hidden sm:block">
+                                                {org.members.length > 1 ?
+                                                    <SendOrganizationMembersInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' /> :
+                                                    <SendAdminInviteButton organizationId={organizationId as string} refetch={refetchOrganizationInfo} role_types='carrier' />
+                                                }
+                                            </div>
                                         </div>
                                 </div>
                                 <div className="min-w-0">
@@ -613,7 +631,10 @@ export default function OrganizationInfoPage() {
                                                 {filteredAdminInvites.map((inv: PendingOrgAdminInvitesModel) => (
                                                     <div key={inv.id} className="flex min-w-0 items-start justify-between gap-3 rounded-2xl bg-muted/45 p-4">
                                                         <div className="flex min-w-0 items-center gap-3">
-                                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium">
+                                                            {/* The initial disc is decorative — the email
+                                                                beneath identifies the invitee — so it gives
+                                                                up its 40px column on a phone. */}
+                                                            <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium sm:flex">
                                                                 {(inv.email?.[0] || 'A').toUpperCase()}
                                                             </div>
                                                             <div className="min-w-0">
@@ -707,9 +728,15 @@ export default function OrganizationInfoPage() {
                             <Panel>
                                 <PanelSection
                                     label="Audit logs"
-                                    caption="Security activity for this organization"
+                                    caption="Activity across this organization's merchants"
+                                    /* The heading plus the merchant column on each
+                                       row already say this; on a phone it cost two
+                                       lines above the search field. */
+                                    captionClassName="hidden sm:block"
                                 >
-                                    <p className="text-sm text-muted-foreground">No events to display.</p>
+                                    <OrganizationAuditLogs
+                                        merchants={org?.carriers?.merchants as MerchantsModel[]}
+                                    />
                                 </PanelSection>
                             </Panel>
                         </TabsContent>

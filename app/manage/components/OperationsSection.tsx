@@ -19,6 +19,12 @@ import {
   AnalyticsTooltip,
   SERIES,
   fillDateGaps,
+  CHART_MARGIN,
+
+  DATE_AXIS_TICK_GAP,
+
+  IsolatedPointDot,
+
   monthAwareDateTick,
   valueAxisWidthMobile,
 } from './analytics-primitives'
@@ -96,6 +102,25 @@ export function OperationsSection({ from, to }: OperationsSectionProps) {
   // where the data actually stops. See `fillDateGaps`.
   const kitchenTrend = fillDateGaps(data?.kitchenTrend ?? [], ['avg_minutes'])
   const tableTurnTrend = fillDateGaps(data?.tableTurnTrend ?? [], ['avg_minutes'])
+
+  /**
+   * "Median of N days with data" — say how thin the series is.
+   *
+   * These charts can look broken when they are merely sparse. On staging the
+   * kitchen trend plots 20 real days across a 91-day window: three narrow
+   * spikes adrift in white space, which reads as a rendering fault rather than
+   * as an honest picture of a platform that only trades some days. The reader
+   * cannot tell the difference without being told, so the panel tells them.
+   *
+   * The count is of days the RPC could MEASURE, not days in the range. A day
+   * whose every ticket was abandoned is omitted upstream (see the migration
+   * 20260923120000) precisely so it is not drawn as a zero.
+   */
+  const coverage = (rows: readonly { avg_minutes: number | null }[]) => {
+    const withData = rows.filter((r) => r.avg_minutes != null).length
+    if (withData === 0) return undefined
+    return `Median per day · ${withData} of ${rows.length} days have measurable data`
+  }
 
   return (
     <div className="min-w-0 space-y-6">
@@ -213,13 +238,14 @@ export function OperationsSection({ from, to }: OperationsSectionProps) {
       </AnalyticsPanel>
 
       <div className="grid min-w-0 gap-6 md:grid-cols-2">
-        <AnalyticsPanel title="Kitchen Time Trend">
+        <AnalyticsPanel title="Kitchen Time Trend" caption={coverage(kitchenTrend)}>
           <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={kitchenTrend}>
+            <LineChart data={kitchenTrend} margin={CHART_MARGIN}>
               <CartesianGrid {...CHART_GRID} />
               <XAxis
                 dataKey="date"
                 tickFormatter={monthAwareDateTick(kitchenTrend)}
+                minTickGap={DATE_AXIS_TICK_GAP}
                 tick={CHART_TICK}
                 tickLine={false}
                 axisLine={false}
@@ -234,20 +260,21 @@ export function OperationsSection({ from, to }: OperationsSectionProps) {
                 dataKey="avg_minutes"
                 stroke={SERIES[0]}
                 strokeWidth={2}
-                dot={false}
+                dot={<IsolatedPointDot dataKey="avg_minutes" />}
                 name="Kitchen Time"
               />
             </LineChart>
           </ResponsiveContainer>
         </AnalyticsPanel>
 
-        <AnalyticsPanel title="Table Turn Time Trend">
+        <AnalyticsPanel title="Table Turn Time Trend" caption={coverage(tableTurnTrend)}>
           <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={tableTurnTrend}>
+            <LineChart data={tableTurnTrend} margin={CHART_MARGIN}>
               <CartesianGrid {...CHART_GRID} />
               <XAxis
                 dataKey="date"
                 tickFormatter={monthAwareDateTick(tableTurnTrend)}
+                minTickGap={DATE_AXIS_TICK_GAP}
                 tick={CHART_TICK}
                 tickLine={false}
                 axisLine={false}
@@ -262,7 +289,7 @@ export function OperationsSection({ from, to }: OperationsSectionProps) {
                 dataKey="avg_minutes"
                 stroke={SERIES[1]}
                 strokeWidth={2}
-                dot={false}
+                dot={<IsolatedPointDot dataKey="avg_minutes" />}
                 name="Table Turn Time"
               />
             </LineChart>

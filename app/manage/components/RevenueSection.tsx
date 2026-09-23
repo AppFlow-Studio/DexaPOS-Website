@@ -35,6 +35,8 @@ import {
   CategoryTick,
   CATEGORY_AXIS_WIDTH,
   CHART_MARGIN,
+  DATE_AXIS_TICK_GAP,
+
   monthAwareDateTick,
   valueAxisWidthMobile,
 } from './analytics-primitives'
@@ -150,6 +152,7 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
             <XAxis
               dataKey="date"
               tickFormatter={monthAwareDateTick(gmvByDay)}
+              minTickGap={DATE_AXIS_TICK_GAP}
               tick={CHART_TICK}
               tickLine={false}
               axisLine={false}
@@ -292,6 +295,7 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
               <XAxis
                 dataKey="date"
                 tickFormatter={monthAwareDateTick(avgTicketByDay)}
+                minTickGap={DATE_AXIS_TICK_GAP}
                 tick={{ ...CHART_TICK, fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
@@ -326,6 +330,7 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
               <XAxis
                 dataKey="date"
                 tickFormatter={monthAwareDateTick(tipRateByDay)}
+                minTickGap={DATE_AXIS_TICK_GAP}
                 tick={{ ...CHART_TICK, fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
@@ -357,6 +362,7 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
               <XAxis
                 dataKey="date"
                 tickFormatter={monthAwareDateTick(refundRateByDay)}
+                minTickGap={DATE_AXIS_TICK_GAP}
                 tick={{ ...CHART_TICK, fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
