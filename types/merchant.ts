@@ -170,9 +170,25 @@ export interface UpdateMerchantStatusResult {
 // MERCHANT HEALTH GRID
 // ============================================================================
 
+/**
+ * `unscored` is a real tier, not a styling variant.
+ *
+ * A merchant with no locations, no devices and no staff has not failed any
+ * health check — there is nothing yet to check. Scoring one anyway produced
+ * this dashboard's worst bug: a red "Critical 58" card whose own detail line
+ * read "All systems optimal", because the score was dragged down by zero
+ * order activity while the alert generators found no stations to report on.
+ *
+ * When the tier is `unscored`, `healthScore` is null: there is no number to
+ * show, to sort by, or to threshold against, and making that unrepresentable
+ * is the point. Consumers branch on the tier rather than reading a sentinel
+ * score that would quietly re-enter the ranking.
+ */
+export type MerchantHealthTier = 'green' | 'yellow' | 'red' | 'unscored'
+
 export interface MerchantHealthSummary extends MerchantSummary {
-  healthScore: number
-  healthTier: 'green' | 'yellow' | 'red'
+  healthScore: number | null
+  healthTier: MerchantHealthTier
   alerts: string[]
   totalStations: number
   onlineStations: number

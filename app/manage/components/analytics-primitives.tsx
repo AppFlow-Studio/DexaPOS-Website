@@ -68,6 +68,134 @@ export function valueAxisWidthMobile(chars: number): number {
 export const CHART_MARGIN = { top: 4, right: 16, left: 0, bottom: 0 } as const
 
 /**
+ * Tick formatter for a daily date axis, naming the month only on its first day.
+ *
+ * The axis used to print `MM-DD` on every tick, so a 90-day range repeated the
+ * same month across a dozen labels ("06-26 07-01 07-06 07-11 …") — the two
+ * most prominent characters on each tick were the two that hardly ever
+ * changed. A label now carries only the day number, except on the earliest
+ * rendered day of each month, which suffixes it: `26/6 · 1 · 6 … 1/7 · 6`.
+ *
+ * Numeric month (`26/6`), not a name: `26 Jun` is wider, and at three charts
+ * per row on a phone the names collided. Day-first, so a low day number on a
+ * boundary tick cannot be misread as the month.
+ *
+ * The decision is made up-front against the data, NOT from the `index`
+ * Recharts passes the formatter. That index is the ordinal of the *visible*
+ * tick, and Recharts drops ticks that would collide — so on a dense axis
+ * `rows[index - 1]` points at an unrelated early row and the month reappears
+ * on nearly every label. Instead the first calendar day present for each
+ * month is resolved once here, and the formatter just asks whether this
+ * value is one of them. That also makes the result independent of how many
+ * ticks Recharts chooses to draw.
+ *
+ * Pass the same array the chart is given; `key` names the date field when it
+ * is not `date`. Rows need not be sorted or gap-free — these series come from
+ * `GROUP BY DATE(...)`, so days without data are simply absent, and the
+ * earliest present day of a month is the one that gets named.
+ *
+ * Dates are compared as text, never through `new Date(…)`: these are
+ * `YYYY-MM-DD` calendar days from SQL, and parsing them to a `Date` would
+ * shift them a day backwards for anyone behind UTC.
+ */
+export function monthAwareDateTick<T extends Record<string, unknown>>(
+  rows: readonly T[],
+  key: keyof T = 'date' as keyof T
+) {
+  // `YYYY-MM` → the smallest `YYYY-MM-DD` seen for it. String comparison is
+  // safe and sort-free on a zero-padded ISO date.
+  const firstOfMonth = new Map<string, string>()
+  for (const row of rows) {
+    const raw = String(row[key] ?? '')
+    const month = raw.slice(0, 7)
+    if (raw.length < 10) continue
+    const seen = firstOfMonth.get(month)
+    if (seen === undefined || raw < seen) firstOfMonth.set(month, raw)
+  }
+
+  return (value: string): string => {
+    const raw = String(value)
+    const [, rawMonth, rawDay] = raw.split('-')
+
+    // Guard on parseability, not just presence: a non-date string splits into
+    // pieces that `Number()` turns into NaN, which would render as "a NaN".
+    const month = Number(rawMonth)
+    const day = Number(rawDay)
+    if (!Number.isFinite(month) || !Number.isFinite(day)) return raw
+
+    // Day-first (`27/6`). A month-first `6/27` was being misread as a day on
+    // the month-boundary ticks that carry a low day number — `8/4` reads as
+    // "8 April" just as readily as "August 4th".
+    return firstOfMonth.get(raw.slice(0, 7)) === raw ? `${day}/${month}` : `${day}`
+  }
+}
+
+/**
+ * Fill calendar gaps in a daily series with explicit `null` values.
+ *
+ * Analytics RPCs OMIT days that have no measurable sample — a kitchen day where
+ * every ticket was abandoned has no median, and inventing a 0 for it would
+ * claim food came out instantly. Omission is correct at the data layer, but it
+ * lies at the chart layer: these `LineChart`s use a CATEGORICAL x-axis (no
+ * `type="number"`), which spaces whatever rows it is given evenly and connects
+ * them. A three-week hole then renders as one ordinary line segment between
+ * neighbouring ticks, reading as continuous data that simply moved.
+ *
+ * Recharts breaks a line wherever the `dataKey` is `null`, so materialising the
+ * missing days with a null value turns a silent compression into a visible gap.
+ * The x-axis also regains a true time scale, so slopes mean what they look like.
+ *
+ * Dates are stepped as TEXT via UTC arithmetic and re-formatted by hand, never
+ * through a local-time `Date`, matching `monthAwareDateTick` above: these are
+ * `YYYY-MM-DD` calendar days, and a local parse shifts them a day backwards for
+ * anyone behind UTC.
+ *
+ * Returns rows of `{ [key]: 'YYYY-MM-DD', ...valueKeys: null }` interleaved with
+ * the originals, in ascending date order. A series of 0 or 1 rows is returned
+ * untouched — there is nothing to bridge.
+ */
+export function fillDateGaps<T extends Record<string, unknown>>(
+  rows: readonly T[],
+  valueKeys: readonly (keyof T)[],
+  key: keyof T = 'date' as keyof T
+): T[] {
+  if (rows.length < 2) return [...rows]
+
+  const sorted = [...rows].sort((a, b) =>
+    String(a[key]).localeCompare(String(b[key]))
+  )
+
+  // Guard: anything that is not a well-formed calendar day would make the step
+  // loop below non-terminating, so bail out rather than hang the render.
+  const isDay = (v: unknown) => /^\d{4}-\d{2}-\d{2}$/.test(String(v ?? ''))
+  if (!sorted.every((r) => isDay(r[key]))) return sorted
+
+  const toUTC = (d: string) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10))
+  const fmt = (ms: number) => {
+    const d = new Date(ms)
+    const p = (n: number) => String(n).padStart(2, '0')
+    return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`
+  }
+
+  const DAY = 86_400_000
+  const blank = Object.fromEntries(valueKeys.map((k) => [k, null]))
+  const out: T[] = []
+
+  for (let i = 0; i < sorted.length; i++) {
+    out.push(sorted[i])
+    if (i === sorted.length - 1) break
+    let cursor = toUTC(String(sorted[i][key])) + DAY
+    const next = toUTC(String(sorted[i + 1][key]))
+    while (cursor < next) {
+      out.push({ ...blank, [key]: fmt(cursor) } as unknown as T)
+      cursor += DAY
+    }
+  }
+
+  return out
+}
+
+/**
  * Wrapping tick for a category axis.
  *
  * Recharts renders a tick as a single `<text>` that it will happily let
@@ -191,7 +319,24 @@ export function AnalyticsPanel({
 }) {
   return (
     <Panel>
-      <PanelSection icon={icon} label={title} caption={caption} action={action}>
+      <PanelSection
+        icon={icon}
+        label={title}
+        // Captions are desktop-only. On a phone every one of these restates
+        // its own title in more words ("Platform GMV Trend" / "Daily gross
+        // merchandise value"), and that line plus its margin is vertical space
+        // the chart itself needs — a stack of eight panels paid it eight
+        // times. Hidden with CSS rather than a JS breakpoint so the server and
+        // client render the same markup, and so the text stays available to
+        // screen readers and to find-in-page at every width.
+        //
+        // `captionClassName` hides the whole `<p>`, not just its text: wrapping
+        // the contents instead would leave the paragraph's own `mt-1` behind
+        // as a phantom 4px gap.
+        caption={caption}
+        captionClassName="hidden sm:block"
+        action={action}
+      >
         {children}
       </PanelSection>
     </Panel>

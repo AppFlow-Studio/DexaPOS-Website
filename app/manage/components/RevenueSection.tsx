@@ -34,6 +34,9 @@ import {
   SERIES,
   CategoryTick,
   CATEGORY_AXIS_WIDTH,
+  CHART_MARGIN,
+  monthAwareDateTick,
+  valueAxisWidthMobile,
 } from './analytics-primitives'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -53,7 +56,6 @@ const legendLabel = (value: string) => (
 export function RevenueSection({ from, to }: RevenueSectionProps) {
   const { data, isLoading } = usePlatformRevenueMetrics(from, to)
   const isMobile = useIsMobile()
-  const axisWidth = isMobile ? CATEGORY_AXIS_WIDTH.mobile : CATEGORY_AXIS_WIDTH.desktop
 
   // Height scales with the row count instead of a flat 300px. At 10 merchants
   // that gave each row ~26px, which a wrapped two/three-line merchant name
@@ -66,6 +68,34 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
     merchantRows.length * (isMobile ? 44 : 34) + 40
   )
 
+  // Recharts reserves ~60px for a numeric Y axis whatever the labels measure,
+  // so a `0%`–`28%` axis left ~40px of empty gutter between the panel edge and
+  // the plot — the blank strip down the left of these charts. Each axis is
+  // sized to its own longest tick instead: one width cannot serve both `7%`
+  // and `$60,000`.
+  //
+  // Sized at BOTH widths, not just mobile. Leaving desktop on the ~60px
+  // default is what left the gutter visible on a full-size screen.
+  //
+  // Measured rather than padded: `CHART_TICK` is a 12px font, whose digits are
+  // ~6.7px wide, so `valueAxisWidthMobile`'s 7px/char plus 10px is already
+  // generous at desktop — adding a character on top of it made the widest axis
+  // ($60,000 → 66px) LARGER than the 60px default it was meant to replace.
+  // The same character count is used at both sizes; the tick font only steps
+  // from 10px to 12px, which the built-in 10px of slack absorbs.
+  const axisW = (chars: number) => valueAxisWidthMobile(chars)
+  const pctAxisWidth = axisW(3) // "28%"     -> 31px
+  const moneyAxisWidth = axisW(6) // "$1,234"  -> 52px
+  const gmvAxisWidth = axisW(7) // "$60,000" -> 59px
+  // Cash vs Card totals the whole period rather than a single day, so its
+  // ticks run an order of magnitude higher than the GMV trend's — "$269,291"
+  // is 8 characters. Sized separately so the widest label is not clipped.
+  const totalAxisWidth = axisW(8) // "$269,291" -> 66px
+  // The merchant-name gutter. Trimmed from the 120px desktop default, which
+  // was sized for a full-width chart; this one sits in a half-width panel, so
+  // that much of it was the empty left strip rather than name.
+  const merchantAxisWidth = isMobile ? CATEGORY_AXIS_WIDTH.mobile : 96
+
   if (isLoading) {
     return (
       <div className="min-w-0 space-y-6">
@@ -77,6 +107,11 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
   }
 
   const gmvByDay = data?.gmvByDay || []
+  // Hoisted so the axis formatter and the chart read the same array — the
+  // formatter needs the previous row to decide whether to name the month.
+  const avgTicketByDay = data?.avgTicketByDay || []
+  const tipRateByDay = data?.tipRateByDay || []
+  const refundRateByDay = data?.refundRateByDay || []
   const totalRevenue = gmvByDay.reduce((sum, day) => sum + day.revenue, 0)
   const totalOrders = gmvByDay.reduce((sum, day) => sum + (day.order_count || 0), 0)
 
@@ -85,28 +120,26 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
       <Panel>
         <PanelSection label="Revenue Overview">
           <StatRow columns={3}>
-            <StatTile
-              label="Total GMV"
-              value={usd(totalRevenue)}
-              meta="Selected period"
-            />
+            {/* No `meta` lines here. "Selected period", "Per day" and "All
+                orders" each restated their own label — the range bar already
+                states the period, "Avg Daily" already says per-day, and
+                "Total Orders" already says all of them. Three lines of type
+                that added nothing but made the row twice as tall. `meta` is
+                for a figure that needs qualifying, as in the Payments row's
+                conditional "Above 5% threshold". */}
+            <StatTile label="Total GMV" value={usd(totalRevenue)} />
             <StatTile
               label="Avg Daily GMV"
               value={`$${(totalRevenue / (gmvByDay.length || 1)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
-              meta="Per day"
             />
-            <StatTile
-              label="Total Orders"
-              value={totalOrders.toLocaleString()}
-              meta="All orders"
-            />
+            <StatTile label="Total Orders" value={totalOrders.toLocaleString()} />
           </StatRow>
         </PanelSection>
       </Panel>
 
       <AnalyticsPanel title="Platform GMV Trend" caption="Daily gross merchandise value">
         <ResponsiveContainer width="100%" height={350}>
-          <AreaChart data={gmvByDay}>
+          <AreaChart data={gmvByDay} margin={CHART_MARGIN}>
             <defs>
               <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={SERIES[0]} stopOpacity={0.3} />
@@ -116,12 +149,13 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
             <CartesianGrid {...CHART_GRID} />
             <XAxis
               dataKey="date"
-              tickFormatter={(v) => v.slice(5)}
+              tickFormatter={monthAwareDateTick(gmvByDay)}
               tick={CHART_TICK}
               tickLine={false}
               axisLine={false}
             />
             <YAxis
+              width={gmvAxisWidth}
               tick={CHART_TICK}
               tickLine={false}
               axisLine={false}
@@ -146,16 +180,22 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
             {/* No `margin.left` here: the YAxis `width` already reserves the
                 label gutter, so an extra 80px margin indented the whole plot a
                 second time and left the bars a sliver of a phone screen. */}
-            <BarChart data={merchantRows} layout="vertical">
+            <BarChart data={merchantRows} layout="vertical" margin={CHART_MARGIN}>
               <CartesianGrid {...CHART_GRID} horizontal={false} />
               <XAxis type="number" tick={CHART_TICK} tickLine={false} axisLine={false} />
+              {/* Unlike the value axes above, this gutter holds merchant names
+                  — real content, so it is not shrunk to nothing. It is only
+                  trimmed from the 120px desktop default, which was sized for a
+                  full-width chart and is too generous inside a half-width
+                  panel; `CategoryTick` wraps a long name into whatever it
+                  gets. */}
               <YAxis
                 dataKey="merchant_name"
                 type="category"
-                tick={<CategoryTick width={axisWidth} />}
+                tick={<CategoryTick width={merchantAxisWidth} />}
                 tickLine={false}
                 axisLine={false}
-                width={axisWidth}
+                width={merchantAxisWidth}
               />
               <Tooltip content={<AnalyticsTooltip formatter={usd} />} cursor={{ fill: CHART_CURSOR_FILL }} />
               <Bar dataKey="revenue" radius={[0, 4, 4, 0]}>
@@ -213,7 +253,11 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
 
         <AnalyticsPanel title="Cash vs Card Split" caption="By pricing mode">
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data?.cashVsCardSplit || []} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+            {/* `margin.left` was 20px on top of the axis's own ~60px gutter —
+                the plot was indented twice, which is what left the bars
+                hanging off to the right of an empty strip. The axis `width`
+                below is the only left inset now. */}
+            <BarChart data={data?.cashVsCardSplit || []} margin={CHART_MARGIN}>
               <CartesianGrid {...CHART_GRID} />
               <XAxis
                 dataKey="pricing_mode"
@@ -222,6 +266,7 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
                 axisLine={false}
               />
               <YAxis
+                width={totalAxisWidth}
                 tick={CHART_TICK}
                 tickLine={false}
                 axisLine={false}
@@ -242,16 +287,17 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
       <div className="grid min-w-0 gap-6 md:grid-cols-3">
         <AnalyticsPanel title="Avg Ticket Size" caption="Daily trend">
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={data?.avgTicketByDay || []}>
+            <LineChart data={avgTicketByDay} margin={CHART_MARGIN}>
               <CartesianGrid {...CHART_GRID} />
               <XAxis
                 dataKey="date"
-                tickFormatter={(v) => v.slice(5)}
+                tickFormatter={monthAwareDateTick(avgTicketByDay)}
                 tick={{ ...CHART_TICK, fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
               />
               <YAxis
+                width={moneyAxisWidth}
                 tick={{ ...CHART_TICK, fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
@@ -275,16 +321,17 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
 
         <AnalyticsPanel title="Tip Rate %" caption="Daily average">
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={data?.tipRateByDay || []}>
+            <LineChart data={tipRateByDay} margin={CHART_MARGIN}>
               <CartesianGrid {...CHART_GRID} />
               <XAxis
                 dataKey="date"
-                tickFormatter={(v) => v.slice(5)}
+                tickFormatter={monthAwareDateTick(tipRateByDay)}
                 tick={{ ...CHART_TICK, fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
               />
               <YAxis
+                width={pctAxisWidth}
                 tick={{ ...CHART_TICK, fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
@@ -305,16 +352,17 @@ export function RevenueSection({ from, to }: RevenueSectionProps) {
 
         <AnalyticsPanel title="Refund Rate %" caption="Daily (target 5%)">
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={data?.refundRateByDay || []}>
+            <LineChart data={refundRateByDay} margin={CHART_MARGIN}>
               <CartesianGrid {...CHART_GRID} />
               <XAxis
                 dataKey="date"
-                tickFormatter={(v) => v.slice(5)}
+                tickFormatter={monthAwareDateTick(refundRateByDay)}
                 tick={{ ...CHART_TICK, fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
               />
               <YAxis
+                width={pctAxisWidth}
                 tick={{ ...CHART_TICK, fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}

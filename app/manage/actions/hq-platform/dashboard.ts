@@ -57,6 +57,17 @@ export interface PlatformAlert {
   id: string
   severity: 'high' | 'medium' | 'low'
   message: string
+  /**
+   * A terse variant of `message` for narrow viewports, where the full string
+   * wraps to four lines and buries the merchant the alert is about.
+   *
+   * Built here rather than by trimming `message` in the component: the
+   * location and merchant names are separate values at this point and become
+   * unrecoverable once interpolated into prose — a client-side regex on
+   * "... at X (Y)" would break on any merchant name containing a bracket.
+   * Absent when the full message is already short.
+   */
+  shortMessage?: string
   resourceType: 'station' | 'merchant' | 'order' | 'payment' | 'support' | 'location'
   resourceId?: string
   link?: string
@@ -442,6 +453,10 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
             id: `offline-location-${locationId}`,
             severity: 'high',
             message: `${bucket.offline.length} of ${bucket.total} devices offline at ${bucket.locationName} (${bucket.merchantName})`,
+            // The count is already carried by the "N devices" badge beside it,
+            // and the location is one tap away through `link` — on a phone the
+            // merchant is what identifies the alert.
+            shortMessage: `${bucket.offline.length} of ${bucket.total} devices offline · ${bucket.merchantName}`,
             resourceType: 'location',
             resourceId: locationId,
             locationId,
@@ -460,6 +475,7 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
               id: `offline-${s.id}`,
               severity: 'high',
               message: `Station "${s.station_name}" at ${bucket.locationName} (${bucket.merchantName}) went offline`,
+              shortMessage: `${s.station_name} offline · ${bucket.merchantName}`,
               resourceType: 'station',
               resourceId: s.id,
               locationId,
@@ -566,6 +582,7 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
       id: `outdated-${station.id}`,
       severity: 'low',
       message: `Station "${station.station_name}" running app v${station.app_version} (current: v${CURRENT_APP_VERSION})`,
+      shortMessage: `${station.station_name} on v${station.app_version}`,
       resourceType: 'station',
       resourceId: station.id,
       link: `/manage/merchants/${station.merchant_id}?tab=devices`,
@@ -586,6 +603,7 @@ export async function getPlatformAlerts(): Promise<PlatformAlert[]> {
       id: `low-battery-${station.id}`,
       severity: 'low',
       message: `Station "${station.station_name}" at ${station.locations?.name} battery at ${station.battery_level}%`,
+      shortMessage: `${station.station_name} battery ${station.battery_level}%`,
       resourceType: 'station',
       resourceId: station.id,
       link: `/manage/merchants/${station.merchant_id}?tab=devices`,

@@ -30,14 +30,27 @@ export default function Dashboard() {
 
   return (
     <PageShell as="div">
+      {/* Inviting an admin is a Dashboard-tab action, not a reporting one.
+          Carried into Analytics it was a prominent primary button offering
+          something unrelated to anything on screen, while the tab had no
+          action of its own — so the header cost its full height to say
+          nothing. It is withheld outside the Dashboard rather than moved,
+          because Health has no use for it either.
+
+          `PlatformStatusLine` below deliberately stays on every tab: it is a
+          platform-wide incident indicator, and its counts link back into the
+          Dashboard tab (switching tabs before scrolling, since Radix unmounts
+          inactive ones). Hiding it per-tab would break that path. */}
       <PageHeader
         title="Mission Control"
         subtitle="Platform dashboard and real-time monitoring"
         actions={
-          <Button size="sm" onClick={() => setIsAdminInviteOpen(true)}>
-            <UserPlus2 className="h-4 w-4 mr-2" />
-            Invite Admin
-          </Button>
+          activeTab === 'dashboard' ? (
+            <Button size="sm" onClick={() => setIsAdminInviteOpen(true)}>
+              <UserPlus2 className="h-4 w-4 mr-2" />
+              Invite Admin
+            </Button>
+          ) : undefined
         }
       />
 
@@ -73,19 +86,29 @@ export default function Dashboard() {
         </TabsList>
 
         {/* Dashboard Tab */}
-        <TabsContent value="dashboard" className="space-y-6 mt-6">
+        {/* A flex column rather than plain block flow: the alerts row is
+            ordered ahead of the feed, fleet and spotlight on a phone, where
+            those four blocks stacked put the page's only actionable panel
+            roughly five screens down. `md:` restores the authored order, so
+            the desktop page is unchanged. `space-y-6` does not apply across
+            reordered flex children — the gap carries the rhythm instead. */}
+        <TabsContent value="dashboard" className="mt-6 flex flex-col gap-6">
           {/* Section 1A: Platform Pulse (KPIs) */}
-          <PlatformPulseSection />
+          <div className="order-1">
+            <PlatformPulseSection />
+          </div>
 
           {/* Section 1A.5: Merchant Spotlight — top merchants by today's revenue */}
-          <MerchantSpotlightSection />
+          <div className="order-3 md:order-2">
+            <MerchantSpotlightSection />
+          </div>
 
           {/* Section 1B & 1C: Live Feed + Device Fleet.
               The feed gives up its column when it has nothing to show: an empty
               "Waiting for activity…" was holding 5 of 12 columns while the
               fleet panel — the one with the offline devices in it — was squeezed
               into 7. `items-start` keeps each panel at its own height. */}
-          <div className="grid items-start gap-6 md:grid-cols-12">
+          <div className="order-4 grid items-start gap-6 md:order-3 md:grid-cols-12">
             {/* One instance, reordered rather than re-mounted: rendering the
                 feed in two branches would remount it (and refetch) each time
                 the last event aged out. */}
@@ -111,11 +134,15 @@ export default function Dashboard() {
           {/* `items-start`: grid items stretch by default, so the chart was
               padded out to whatever height the alerts list happened to be.
               Each panel now takes its own content height. */}
-          <div className="grid items-start gap-6 md:grid-cols-12">
-            <div className="md:col-span-4">
+          <div className="order-2 grid items-start gap-6 md:order-4 md:grid-cols-12">
+            {/* Alerts lead on a phone. Stacked, the chart is a full screen of
+                scrolling in front of the one panel an admin opens this page to
+                act on, so the two swap order below `md` and the desktop
+                arrangement is restored at `md` unchanged. */}
+            <div className="order-2 md:order-1 md:col-span-4">
               <OrdersHeatmap />
             </div>
-            <div id="alerts" className="scroll-mt-24 md:col-span-8">
+            <div id="alerts" className="order-1 scroll-mt-24 md:order-2 md:col-span-8">
               <AlertsPanel />
             </div>
           </div>

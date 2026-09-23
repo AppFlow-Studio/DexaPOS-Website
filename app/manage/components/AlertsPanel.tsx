@@ -48,6 +48,23 @@ function SeverityIcon({ severity }: { severity: string }) {
   )
 }
 
+/**
+ * The alert's text, terse on phones and full from `sm` up.
+ *
+ * Falls back to the full message when the server sent no short variant —
+ * most alert kinds are already one short line and need no second version.
+ */
+function AlertText({ alert }: { alert: PlatformAlert }) {
+  if (!alert.shortMessage) return <>{alert.message}</>
+
+  return (
+    <>
+      <span className="sm:hidden">{alert.shortMessage}</span>
+      <span className="hidden sm:inline">{alert.message}</span>
+    </>
+  )
+}
+
 /** Alerts shown per page. Severity-sorted, so page 1 is always the worst 10. */
 const ALERTS_PER_PAGE = 10
 
@@ -161,7 +178,10 @@ export function AlertsPanel() {
                   className="flex min-w-0 flex-col gap-2 rounded-2xl bg-muted/40 p-3 transition-colors hover:bg-muted/60"
                 >
                   <div className="flex min-w-0 gap-3">
-                    <div className="mt-0.5 shrink-0">
+                    {/* Desktop-only. The severity word sits in the badge right
+                        beside it, so on a phone the glyph is a second copy of
+                        the same signal costing ~28px of a 4-line message. */}
+                    <div className="mt-0.5 hidden shrink-0 sm:block">
                       <SeverityIcon severity={alert.severity} />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -169,21 +189,37 @@ export function AlertsPanel() {
                         <span className={BADGE_SHELL}>
                           {SEVERITY_LABEL[alert.severity] ?? alert.severity}
                         </span>
+                        {/* The count is already in the short message on a
+                            phone ("2 of 2 devices offline · …"), so the badge
+                            would repeat it. */}
+                        {/* Wrapped, not `hidden` on the badge: BADGE_SHELL
+                            carries `inline-flex`, and two display utilities on
+                            one element are resolved by CSS source order, so
+                            the badge would stay visible on phones. */}
                         {isGrouped && (
-                          <span className={BADGE_SHELL}>
-                            {alert.groupedDevices!.length} devices
-                          </span>
+                          <div className="hidden sm:block">
+                            <span className={BADGE_SHELL}>
+                              {alert.groupedDevices!.length} devices
+                            </span>
+                          </div>
                         )}
                       </div>
+                      {/* Both variants are rendered and swapped in CSS rather
+                          than picked in JS: a breakpoint read during render
+                          would not match what the server produced and would
+                          hydrate wrong. `AlertText` keeps the two spans from
+                          being duplicated across the link/plain branches. */}
                       {alert.link ? (
                         <Link
                           href={alert.link}
                           className="text-sm hover:underline"
                         >
-                          {alert.message}
+                          <AlertText alert={alert} />
                         </Link>
                       ) : (
-                        <p className="text-sm">{alert.message}</p>
+                        <p className="text-sm">
+                          <AlertText alert={alert} />
+                        </p>
                       )}
                       {isGrouped && (
                         <button
@@ -195,7 +231,10 @@ export function AlertsPanel() {
                               return next
                             })
                           }
-                          className="mt-1 inline-flex items-center gap-1 text-xs text-[#0C4FD1] hover:underline dark:text-[#6CA0FF]"
+                          // Desktop-only: the per-device list is a triage
+                          // detail, and the whole row already links through to
+                          // the devices tab where that list is the page.
+                          className="mt-1 hidden items-center gap-1 text-xs text-[#0C4FD1] hover:underline dark:text-[#6CA0FF] sm:inline-flex"
                         >
                           {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                           {isExpanded ? 'Hide devices' : 'Show devices'}
@@ -213,7 +252,11 @@ export function AlertsPanel() {
                   {isGrouped && isExpanded && (
                     // Indented rather than ruled: §5.5 takes no dividing lines,
                     // and the indent already reads as "belongs to the alert above".
-                    <ul className="ml-7 space-y-1 text-xs text-muted-foreground">
+                    // Hidden on phones alongside its toggle: the toggle is the
+                    // only way to collapse this, so leaving the list visible
+                    // below `sm` would strand an expanded group open with no
+                    // control to close it.
+                    <ul className="ml-7 hidden space-y-1 text-xs text-muted-foreground sm:block">
                       {alert.groupedDevices!.map((d) => (
                         <li key={d.stationId} className="flex flex-wrap justify-between gap-x-3 gap-y-0.5">
                           <span className="min-w-0 truncate font-medium text-foreground">

@@ -113,7 +113,8 @@ export default function OrganizationsPage() {
                         <div key={i} className="min-w-0">
                             <div className="h-4 w-24 max-w-full animate-pulse rounded-md bg-muted" />
                             <div className="mt-2 h-7 w-28 max-w-full animate-pulse rounded-md bg-muted" />
-                            <div className="mt-2 h-3 w-40 max-w-full animate-pulse rounded-md bg-muted" />
+                            {/* Matches the tiles: no delta line below `sm`. */}
+                            <div className="mt-2 hidden h-3 w-40 max-w-full animate-pulse rounded-md bg-muted sm:block" />
                         </div>
                     ))}
                 </div>
@@ -200,28 +201,37 @@ export default function OrganizationsPage() {
             <Panel>
                 <div className="px-4 py-6 sm:px-6">
                     <StatRow columns={4}>
+                        {/* The deltas are hidden on phones: at half-width a tile
+                            truncates them to "+12.5% from last …", which states
+                            nothing the reader can use and costs a line per tile.
+                            They return at `sm`, where the tile is wide enough to
+                            show the comparison in full. */}
                         <StatTile
                             label="Total Partners"
                             value="1,234"
                             meta="+12.5% from last month"
+                            metaClassName="hidden sm:block"
                             icon={<Building2 />}
                         />
                         <StatTile
                             label="Total Sales"
                             value="$2.4M"
                             meta="+8.2% from last month"
+                            metaClassName="hidden sm:block"
                             icon={<DollarSign />}
                         />
                         <StatTile
                             label="Avg. Conversion"
                             value="11.2%"
                             meta="+2.1% from last month"
+                            metaClassName="hidden sm:block"
                             icon={<Target />}
                         />
                         <StatTile
                             label="Active Partners"
                             value="1,156"
                             meta="+5.3% from last month"
+                            metaClassName="hidden sm:block"
                             icon={<Users />}
                         />
                     </StatRow>
@@ -321,10 +331,7 @@ export default function OrganizationsPage() {
                             {filteredOrganizations.map((org) => (
                                 <TableRow key={org.id} className='cursor-pointer' onClick={() => router.push(`/manage/organizations/${org.clerk_org_id}`)}>
                                     <TableCell className="font-medium">
-                                        <div>
-                                            <div className="font-semibold">{org.name}</div>
-                                            <div className="text-sm text-muted-foreground">ID: {org.clerk_org_id}</div>
-                                        </div>
+                                        <div className="font-semibold">{org.name}</div>
                                     </TableCell>
                                     {/* <TableCell>
                                         <Badge variant="outline">{org.domain}</Badge>
@@ -447,9 +454,6 @@ export default function OrganizationsPage() {
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0">
                                         <p className="truncate font-semibold">{org.name}</p>
-                                        <p className="truncate text-xs text-muted-foreground">
-                                            ID: {org.clerk_org_id}
-                                        </p>
                                     </div>
                                     {visibleFields.directorySync && org.directorySync && (
                                         <Badge

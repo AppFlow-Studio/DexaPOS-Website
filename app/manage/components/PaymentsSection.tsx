@@ -30,7 +30,12 @@ import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { usePlatformPaymentMetrics } from '@/lib/queries/use-platform-analytics-layer2'
-import { AnalyticsPanel, AnalyticsTooltip, SERIES } from './analytics-primitives'
+import {
+  AnalyticsPanel,
+  AnalyticsTooltip,
+  SERIES,
+  monthAwareDateTick,
+} from './analytics-primitives'
 import { useIsMobile } from '@/hooks/use-mobile'
 
 interface PaymentsSectionProps {
@@ -44,6 +49,33 @@ const count = (v: number) => v.toLocaleString()
 const legendLabel = (value: string) => (
   <span className="text-xs text-muted-foreground">{value}</span>
 )
+
+// An empty range still draws a full axis frame with no marks, which reads as a
+// broken chart rather than an honest "nothing happened". A row whose measures
+// are all zero is just as empty as no row at all, so both count.
+function isEmptySeries<T>(rows: T[], ...measures: ((row: T) => number)[]) {
+  return rows.length === 0 || rows.every((row) => measures.every((m) => !m(row)))
+}
+
+function ChartEmpty({
+  height,
+  title,
+  hint,
+}: {
+  height: number
+  title: string
+  hint: string
+}) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-1 text-center"
+      style={{ height }}
+    >
+      <p className="text-sm font-medium">{title}</p>
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+  )
+}
 
 export function PaymentsSection({ from, to }: PaymentsSectionProps) {
   const { data, isLoading } = usePlatformPaymentMetrics(from, to)
@@ -84,6 +116,18 @@ export function PaymentsSection({ from, to }: PaymentsSectionProps) {
   const adopted = data?.dualPricingAdoption.adopted_merchants || 0
   const totalMerchants = data?.dualPricingAdoption.total_merchants || 0
 
+  // These arrays are RPC rows passed straight through, so an empty range gives
+  // an empty array — but a zero-count row would draw just as blank a chart.
+  const volumeEmpty = isEmptySeries(combinedData, (d) => d.txn_count)
+  const chargebacksEmpty = isEmptySeries(
+    data?.chargebacksByMonth || [],
+    (d) => d.chargeback_count
+  )
+  const terminalsEmpty = isEmptySeries(
+    data?.terminalDistribution || [],
+    (d) => d.terminal_count
+  )
+
   return (
     <div className="min-w-0 space-y-6">
       <Panel>
@@ -122,6 +166,16 @@ export function PaymentsSection({ from, to }: PaymentsSectionProps) {
         title="Transaction Volume & Failure Rate"
         caption="Daily transactions and failure rate trend"
       >
+        {volumeEmpty ? (
+          // Without transactions the failure-rate line and 5% threshold have
+          // nothing to sit against, so the whole frame goes rather than
+          // implying a 0% failure rate that was never measured.
+          <ChartEmpty
+            height={350}
+            title="No transactions in this period"
+            hint="Volume and failure rate will appear once merchants start taking payments."
+          />
+        ) : (
         <ResponsiveContainer width="100%" height={350}>
           {/* Dual-axis chart: each YAxis already reserves its own gutter, so the
               extra left/right margin was pure dead space — ~50px of a phone
@@ -131,7 +185,7 @@ export function PaymentsSection({ from, to }: PaymentsSectionProps) {
             <CartesianGrid {...CHART_GRID} />
             <XAxis
               dataKey="date"
-              tickFormatter={(v) => v.slice(5)}
+              tickFormatter={monthAwareDateTick(combinedData)}
               tick={CHART_TICK}
               tickLine={false}
               axisLine={false}
@@ -187,10 +241,20 @@ export function PaymentsSection({ from, to }: PaymentsSectionProps) {
             />
           </ComposedChart>
         </ResponsiveContainer>
+        )}
       </AnalyticsPanel>
 
       <div className="grid min-w-0 gap-6 md:grid-cols-2">
         <AnalyticsPanel title="Chargeback Volume" caption="By month">
+          {chargebacksEmpty ? (
+            // No chargebacks is good news, so say it plainly rather than
+            // drawing an empty grid that looks like a failed load.
+            <ChartEmpty
+              height={300}
+              title="No chargebacks in this period"
+              hint="Disputed transactions will appear here if any are filed."
+            />
+          ) : (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data?.chargebacksByMonth || []} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid {...CHART_GRID} />
@@ -205,9 +269,17 @@ export function PaymentsSection({ from, to }: PaymentsSectionProps) {
               <Bar dataKey="chargeback_count" fill={SERIES[4]} radius={[4, 4, 0, 0]} name="Chargebacks" />
             </BarChart>
           </ResponsiveContainer>
+          )}
         </AnalyticsPanel>
 
         <AnalyticsPanel title="Terminal Distribution">
+          {terminalsEmpty ? (
+            <ChartEmpty
+              height={350}
+              title="No terminals reporting"
+              hint="Device types will appear here once terminals are registered."
+            />
+          ) : (
           <ResponsiveContainer width="100%" height={350}>
             <PieChart>
               <Pie
@@ -226,6 +298,7 @@ export function PaymentsSection({ from, to }: PaymentsSectionProps) {
               <Legend verticalAlign="bottom" height={36} iconType="circle" formatter={legendLabel} />
             </PieChart>
           </ResponsiveContainer>
+          )}
         </AnalyticsPanel>
       </div>
 

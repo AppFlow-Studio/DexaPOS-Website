@@ -27,6 +27,10 @@ export function MerchantSpotlightSection() {
         icon={Building2}
         label="Merchant Spotlight"
         caption={`Top merchants by today's revenue · ${total} total`}
+        // Phone: the label alone carries the panel. `captionClassName` hides
+        // the whole `<p>` rather than wrapping the text in a hidden span,
+        // which would leave the paragraph's `mt-1` behind as a stray 4px.
+        captionClassName="hidden sm:block"
         action={
           <Button asChild variant="ghost" size="sm" className="rounded-full">
             <Link href="/manage/merchants">

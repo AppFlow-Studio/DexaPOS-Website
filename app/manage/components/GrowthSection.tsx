@@ -21,6 +21,8 @@ import {
   SERIES,
   CategoryTick,
   CATEGORY_AXIS_WIDTH,
+  monthAwareDateTick,
+  valueAxisWidthMobile,
 } from './analytics-primitives'
 
 interface GrowthSectionProps {
@@ -32,6 +34,10 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
   const { data, isLoading } = usePlatformGrowthMetrics(from, to)
   const isMobile = useIsMobile()
   const axisWidth = isMobile ? CATEGORY_AXIS_WIDTH.mobile : CATEGORY_AXIS_WIDTH.desktop
+  // Recharts reserves ~60px for a numeric axis whatever the labels measure, so
+  // a single-digit merchant count left most of that gutter blank. Acquisition
+  // counts are small — 2 characters covers them.
+  const countAxisWidth = isMobile ? valueAxisWidthMobile(2) : undefined
 
   if (isLoading) {
     return (
@@ -44,6 +50,7 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
   }
 
   const churnRisk = data?.churnRisk ?? []
+  const acquisitionRows = data?.merchantAcquisition ?? []
 
   return (
     <div className="min-w-0 space-y-6">
@@ -51,10 +58,25 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
       <Panel>
         <PanelSection label="Growth Overview">
           <StatRow columns={3}>
+            {/* An em dash, not "0 days". `avgTimeToFirstOrder` is null when no
+                merchant in the cohort has placed a recognized order yet, and
+                rendering that as 0.0 claimed instant onboarding on the strength
+                of no data at all. The old `.toFixed(1) || 0` also collapsed a
+                genuine 0.0 to the same string, so the tile could not tell
+                "instant" from "unknown" either way. */}
             <StatTile
               label="Time to First Order"
               icon={<TrendingUp />}
-              value={`${data?.avgTimeToFirstOrder.toFixed(1) || 0} days`}
+              value={
+                data?.avgTimeToFirstOrder == null
+                  ? '—'
+                  : `${data.avgTimeToFirstOrder.toFixed(1)} days`
+              }
+              meta={
+                data && data.timeToFirstOrderPending > 0
+                  ? `${data.timeToFirstOrderPending} of ${data.timeToFirstOrderCohort} yet to order`
+                  : undefined
+              }
             />
             <StatTile
               label="Retention Rate"
@@ -75,16 +97,21 @@ export function GrowthSection({ from, to }: GrowthSectionProps) {
         caption="New merchants and locations per week"
       >
         <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={data?.merchantAcquisition || []}>
+          <LineChart data={acquisitionRows}>
             <CartesianGrid {...CHART_GRID} />
             <XAxis
               dataKey="period"
-              tickFormatter={(v) => v.slice(5)}
+              tickFormatter={monthAwareDateTick(acquisitionRows, 'period')}
               tick={CHART_TICK}
               tickLine={false}
               axisLine={false}
             />
-            <YAxis tick={CHART_TICK} tickLine={false} axisLine={false} />
+            <YAxis
+              width={countAxisWidth}
+              tick={CHART_TICK}
+              tickLine={false}
+              axisLine={false}
+            />
             <Tooltip content={<AnalyticsTooltip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
             <Line
               type="monotone"

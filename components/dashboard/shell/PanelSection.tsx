@@ -21,6 +21,7 @@ export function PanelSection({
   label,
   value,
   caption,
+  captionClassName,
   isLoading,
   action,
   children,
@@ -31,6 +32,12 @@ export function PanelSection({
   label: React.ReactNode
   value?: React.ReactNode
   caption?: React.ReactNode
+  /**
+   * Extra classes on the caption paragraph — used to hide it responsively.
+   * Applied to the `<p>` itself so a `hidden` variant takes its margin with
+   * it, rather than leaving a phantom gap where the text used to be.
+   */
+  captionClassName?: string
   isLoading?: boolean
   /** Right-aligned control on the heading row. */
   action?: React.ReactNode
@@ -70,7 +77,9 @@ export function PanelSection({
           )}
 
           {caption && (
-            <p className="mt-1 text-sm text-muted-foreground">{caption}</p>
+            <p className={cn('mt-1 text-sm text-muted-foreground', captionClassName)}>
+              {caption}
+            </p>
           )}
         </div>
 

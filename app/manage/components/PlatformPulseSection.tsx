@@ -52,8 +52,13 @@ function Delta({ change }: { change: number | null }) {
 
   const Arrow = change >= 0 ? ArrowUpRight : ArrowDownRight
 
+  // Hidden outright on phones rather than shrunk: a half-width tile has room
+  // for the figure or the comparison, not both, and the figure is the thing
+  // being read. `hidden` (not `sr-only`) so assistive tech drops it too —
+  // announcing a trend that no sighted reader can see would be a different
+  // page, not the same one.
   return (
-    <span className="inline-flex items-center gap-0.5 tabular-nums">
+    <span className="hidden items-center gap-0.5 tabular-nums sm:inline-flex">
       <Arrow className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       {Math.abs(change).toFixed(1)}%
       <span className="sr-only">{change >= 0 ? 'increase' : 'decrease'}</span>
@@ -95,7 +100,10 @@ function KPI({
         </span>
       }
       meta={
-        <span className="inline-flex items-center gap-1.5">
+        // The whole line goes on phones, not just the delta: "vs last week"
+        // without the percentage it qualifies is a dangling fragment, and
+        // "Today"/"In progress" restate what the panel heading already says.
+        <span className="hidden items-center gap-1.5 sm:inline-flex">
           {!hideChange && <Delta change={change} />}
           <span>{description}</span>
         </span>
@@ -121,11 +129,25 @@ export function PlatformPulseSection() {
 
   return (
     <Panel>
+      {/* Caption and timestamp are desktop-only. On a phone they are two lines
+          of chrome above the figures that say nothing the heading and the
+          live values do not already convey.
+
+          Done in CSS rather than with `useIsMobile`: that hook breaks at
+          768px while every other rule in this section uses Tailwind's `sm`
+          (640px), so a JS gate would hide the caption at 700px while the
+          tiles still wore their desktop treatment.
+
+          `captionClassName` hides the whole `<p>`, which also reclaims the 4px
+          `mt-1` that a hidden inner `<span>` used to leave behind. */}
       <PanelSection
         label="Platform Pulse"
         caption="Real-time platform metrics"
+        captionClassName="hidden sm:block"
         action={
-          <span className="text-xs text-muted-foreground">Updated just now</span>
+          <span className="hidden text-xs text-muted-foreground sm:inline">
+            Updated just now
+          </span>
         }
       >
         <div className="space-y-8">
@@ -169,7 +191,9 @@ export function PlatformPulseSection() {
               ruling it off gives the eight tiles the two tiers the layout
               already implied but rendered at equal weight. */}
           <div className="space-y-4 border-t border-border/60 pt-6">
-            <p className="text-[0.6875rem] font-bold uppercase tracking-wider text-muted-foreground">
+            {/* The rule above still separates the two tiers on a phone; the
+                caption restating it is the part that costs a line. */}
+            <p className="hidden text-[0.6875rem] font-bold uppercase tracking-wider text-muted-foreground sm:block">
               Platform health
             </p>
             <StatRow columns={4}>

@@ -52,33 +52,50 @@ export function MerchantSpotlightCard({ merchant }: { merchant: MerchantSpotligh
       {/* `nested`: tier 2, because this sits inside the section's own Panel. */}
       <Panel nested className="h-full p-4 transition-colors hover:bg-muted/40">
         <div className="mb-3 flex items-start gap-3">
+          {/* Logo and fallback plate are desktop-only: 40px plus its gap is a
+              seventh of the card's width on a phone, and it identifies nothing
+              the name beside it does not. */}
           {merchant.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={merchant.logo_url}
               alt=""
-              className="h-10 w-10 shrink-0 rounded-xl bg-muted object-cover"
+              className="hidden h-10 w-10 shrink-0 rounded-xl bg-muted object-cover sm:block"
             />
           ) : (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/60">
+            <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/60 sm:flex">
               <Building2 className="h-5 w-5 text-muted-foreground" />
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold leading-tight">
-              {merchant.name ?? 'Unnamed merchant'}
-            </p>
+            {/* Name and status share a row on a phone and stack from `sm` up,
+                where the badge sits under the id line as before. `min-w-0` on
+                the name lets it truncate rather than push the badge out. */}
+            <div className="flex items-center gap-2 sm:block">
+              <p className="min-w-0 flex-1 truncate text-sm font-semibold leading-tight sm:flex-none">
+                {merchant.name ?? 'Unnamed merchant'}
+              </p>
+              <span className={`${BADGE_SHELL} sm:hidden`}>{statusLabel}</span>
+            </div>
             {/* Several merchants legitimately share a name (four "Charcoal
                 Gardenia" records ship today), and the spotlight payload carries
                 no city or org to separate them. The id prefix is the only
-                distinguishing value available without widening the query. */}
+                distinguishing value available without widening the query — so
+                it stays on desktop and gives way on a phone, where the row is
+                too narrow to carry it beside the status. */}
             <p
-              className="truncate font-mono text-[10px] leading-tight text-muted-foreground"
+              className="hidden truncate font-mono text-[10px] leading-tight text-muted-foreground sm:block"
               title={merchant.id}
             >
               {merchant.id.slice(0, 8)}
             </p>
-            <span className={`mt-1 ${BADGE_SHELL}`}>{statusLabel}</span>
+            {/* Wrapped rather than `hidden` on the badge itself: BADGE_SHELL
+                already carries `inline-flex`, and two display utilities on one
+                element are decided by CSS source order, not class order — the
+                badge stayed visible on phones and the status rendered twice. */}
+            <div className="mt-1 hidden sm:block">
+              <span className={BADGE_SHELL}>{statusLabel}</span>
+            </div>
           </div>
         </div>
 
@@ -126,7 +143,11 @@ function Stat({
 }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      {/* Desktop-only. Each glyph costs ~22px of a half-card column, and the
+          label directly beneath already names the figure — "Today", "Orders",
+          "Staff", "Locations" are not ambiguous enough to need a second
+          encoding. The currency value keeps its own "$". */}
+      <Icon className="hidden h-3.5 w-3.5 shrink-0 text-muted-foreground sm:block" />
       <div className="min-w-0">
         <p className="text-[10px] leading-none text-muted-foreground">{label}</p>
         <p className="truncate text-sm font-semibold leading-tight tabular-nums">{value}</p>
@@ -139,7 +160,9 @@ export function MerchantSpotlightCardSkeleton() {
   return (
     <Panel nested className="h-full p-4">
       <div className="mb-3 flex items-start gap-3">
-        <Skeleton className="h-10 w-10 rounded-xl" />
+        {/* Matches the card: no logo slot on a phone, so the skeleton does not
+            promise a plate that never arrives. */}
+        <Skeleton className="hidden h-10 w-10 rounded-xl sm:block" />
         <div className="flex-1 space-y-1.5">
           <Skeleton className="h-4 w-3/4" />
           <Skeleton className="h-3 w-16" />

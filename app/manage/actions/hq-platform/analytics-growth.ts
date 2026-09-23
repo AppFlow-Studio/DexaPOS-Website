@@ -22,7 +22,16 @@ export interface GrowthMetrics {
     current_revenue: number
     change_pct: number
   }[]
-  avgTimeToFirstOrder: number
+  /**
+   * Null when no merchant in the cohort has placed a recognized order yet —
+   * which is NOT the same as "they ordered instantly". Render it as unknown,
+   * never as 0. See `timeToFirstOrderPending` for how much of the cohort is
+   * still unresolved.
+   */
+  avgTimeToFirstOrder: number | null
+  /** Cohort size, and how many of them have yet to place a recognized order. */
+  timeToFirstOrderCohort: number
+  timeToFirstOrderPending: number
   onboardingFunnel: {
     stage: string
     merchant_count: number
@@ -53,7 +62,13 @@ export async function getPlatformGrowthMetrics(
       retention_rate: 0,
     },
     churnRisk: (churnRisk.data as any[]) ?? [],
-    avgTimeToFirstOrder: (timeToFirstOrder.data as any[])?.[0]?.avg_days ?? 0,
+    // `?? 0` here used to turn "nobody has ordered yet" into "0.0 days", i.e. a
+    // claim of instant onboarding — the strongest possible reading of the
+    // weakest possible data. The RPC returns NULL for that case on purpose, so
+    // the null is carried through to the UI, which renders it as unknown.
+    avgTimeToFirstOrder: (timeToFirstOrder.data as any[])?.[0]?.avg_days ?? null,
+    timeToFirstOrderCohort: (timeToFirstOrder.data as any[])?.[0]?.merchant_count ?? 0,
+    timeToFirstOrderPending: (timeToFirstOrder.data as any[])?.[0]?.pending_count ?? 0,
     onboardingFunnel: (funnel.data as any[]) ?? [],
   }
 }

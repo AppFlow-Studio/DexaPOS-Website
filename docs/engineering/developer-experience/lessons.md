@@ -293,6 +293,101 @@ VSCode local history. (The user restored it from their own backup.)
 - `git status` being "clean" **at session start** does not mean it is clean
   now. Re-check before touching git state.
 
+**Repeat offence (2026-09-23) — the pop can fail for reasons unrelated to
+git.** I ran the same stash→`tsc`→pop baseline trick again, on a tree holding
+~22 files of someone else's uncommitted work. This time the pop failed with
+`fatal: ... index.lock write error. Out of diskspace` — the volume was at
+100% (0 bytes free). The stash had already stripped the tree, so *every*
+uncommitted change on the branch was live only inside `stash@{0}`, and git
+could not write the index needed to restore it. Recovery meant freeing space
+first (`rm -rf $TEMP/next-* $TEMP/turbo-*` → 8.6G) and only then popping.
+
+- A stash is not a safe round-trip — it is two operations, and the second one
+  can fail on disk, locks, or conflicts while the tree is already empty.
+- **Check `df -h .` before any git operation that parks work in a stash.** On
+  a full disk, git cannot write `.git/index.lock` and the restore is blocked.
+- The per-file gate makes all of this unnecessary:
+  `npx tsc --noEmit 2>&1 | grep -c "^<path>"` per edited file. Zero errors in
+  the files I touched is the real bar; a whole-repo baseline count never was.
+
 **Meta-lesson:** the harness rule "before deleting or overwriting, look at the
 target" applies to git commands, not just file writes. `checkout --ours .`
-*is* an overwrite of every file in the repo.
+*is* an overwrite of every file in the repo. And a lesson already written in
+this file does not protect you — re-read it *before* reaching for the
+command, not while recovering from it.
+
+---
+
+## Don't attribute a visible symptom to a fix you just read
+
+**Context:** Reviewing external (Codex) feedback on the HQ Mission Control
+mobile view. The screenshots showed `↘ 100.0% vs last week` on `$0` revenue.
+I had just read `percentChange()` in `PlatformPulseSection.tsx`, which returns
+`null` on a zero baseline, and `c4a4f7a2` ("fix misleading KPI deltas") was
+that same day. I told the user the screenshots were stale and the deltas were
+already fixed.
+
+**What was actually true:** the deltas were correct and live. The baseline is
+*last week's* revenue, which is non-zero; today is $0. `percentChange(0, 4200)`
+is -100%, and rendering it is exactly what the code is supposed to do. The
+guard only suppresses a **zero denominator**, not a zero numerator. Nothing
+was stale — I had confirmed a build artifact was missing (`.next/BUILD_ID`)
+and let that unrelated fact corroborate a conclusion it had no bearing on.
+
+**Rules for myself:**
+
+- A guard I just read tells me what it *prevents*, not that the symptom
+  on screen is the thing it prevents. Trace the actual runtime values —
+  here, one `sed -n` on `dashboard.ts` showed the baseline came from a
+  different day's query and settled it in seconds.
+- "Zero-looking number on screen" is ambiguous: zero *numerator* and zero
+  *denominator* produce different correct behaviours. Name which one I mean
+  before claiming a fix covers it.
+- Two facts landing the same day (a fix commit, a missing build) are not
+  evidence for each other. Verify the causal link or state neither.
+- When a claim of mine is contradicted by the running app, correct it in one
+  plain sentence and move on — don't re-litigate whether the original
+  reasoning was defensible.
+
+**Meta-lesson:** CLAUDE.md's "Verification Before Done" applies to *claims
+about existing behaviour*, not just to code I write. I asserted "already
+fixed" from reading alone, when the browser was already open and could have
+answered it.
+
+---
+
+## `hidden` loses to a display utility baked into a shared class constant
+
+**Context:** Hiding the status badge on mobile in `MerchantSpotlightCard` and
+the device-count badge in `AlertsPanel`. Both render
+`<span className={`hidden ${BADGE_SHELL} sm:inline-flex`}>`, where
+`BADGE_SHELL` is a shared constant that already begins with `inline-flex`.
+Both badges stayed visible on phones — the spotlight card rendered "Active"
+**twice**, once from the mobile row and once from the supposedly-hidden
+desktop badge.
+
+**Why:** `hidden` and `inline-flex` are both `display` declarations at the
+same specificity, so the winner is decided by **order in the generated CSS
+file**, not by order in the `className` string. Tailwind emits `inline-flex`
+after `hidden`, so `inline-flex` always wins. Interpolating a shared shell
+constant hides the conflict: nothing at the call site reads as a display
+utility.
+
+**Rules for myself:**
+
+- Before adding `hidden`/`sm:hidden` to an element whose classes come partly
+  from a shared constant, read the constant. If it sets `display`
+  (`inline-flex`, `flex`, `grid`, `block`, `inline`), the `hidden` is dead.
+- Fix by wrapping, not by reordering: put the responsive visibility on a
+  plain `<div className="hidden sm:block">` around the styled element. Class
+  order in the string will never fix it.
+- Any shared `*_SHELL` / `*_CLASSES` constant that starts with a display
+  utility is a trap for every future responsive tweak — `BADGE_SHELL` in
+  `AlertsPanel.tsx` and `MerchantSpotlightCard.tsx` both qualify.
+- Verify a hide by counting **visible** elements in the DOM
+  (`getBoundingClientRect().width > 0`), not by reading the JSX. The
+  duplicate "Active" was invisible in code review and obvious in one query.
+
+**Meta-lesson:** "I added `hidden`" is not evidence the thing is hidden. For
+CSS changes the browser is the only authority, and the check costs one
+`evaluate_script`.

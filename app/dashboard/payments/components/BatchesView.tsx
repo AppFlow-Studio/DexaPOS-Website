@@ -186,6 +186,38 @@ function getOriginBadge(origin?: string | null) {
   }
 }
 
+// How the batch was settled — distinguishes an automatic settle from a manual one.
+function getOriginBadge(origin?: string | null) {
+  switch (origin) {
+    case "valor_webhook":
+      return (
+        <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700">
+          Auto · Webhook
+        </Badge>
+      );
+    case "pos_auto":
+      return (
+        <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700">
+          Auto
+        </Badge>
+      );
+    case "hq_manual":
+      return (
+        <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-600">
+          Manual · HQ
+        </Badge>
+      );
+    case "pos_manual":
+      return (
+        <Badge variant="outline" className="border-slate-300 bg-slate-50 text-slate-600">
+          Manual
+        </Badge>
+      );
+    default:
+      return null;
+  }
+}
+
 // ============================================================================
 // Computed batches from payment data
 // ============================================================================

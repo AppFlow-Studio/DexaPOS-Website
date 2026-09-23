@@ -3,10 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { subDays } from 'date-fns'
-import { BarChart3 } from 'lucide-react'
 
-import { Panel } from '@/components/dashboard/shell/Panel'
-import { PanelSection } from '@/components/dashboard/shell/PanelSection'
 import { DateRangePicker } from './DateRangePicker'
 import { GrowthSection } from './GrowthSection'
 import { RevenueSection } from './RevenueSection'
@@ -25,8 +22,13 @@ import { PaymentsSection } from './PaymentsSection'
 // alignment lets the row fill the panel and scroll from its true left edge.
 const TAB_LIST =
   'flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-full bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+// A white pill on a `bg-muted/60` track was too quiet to find at a glance —
+// the only difference between selected and not was a near-white fill and a
+// hairline shadow. The active tab now also takes the brand blue and the
+// weight, which is the same accent `PanelSection` uses for a heading, so the
+// selected section and its heading read as the same thing.
 const TAB_TRIGGER =
-  'shrink-0 rounded-full px-4 py-2 text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm'
+  'shrink-0 rounded-full px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-[#0C4FD1] data-[state=active]:shadow-sm dark:data-[state=active]:text-[#6CA0FF]'
 
 const TABS = [
   { value: 'growth', label: 'Growth' },
@@ -108,19 +110,19 @@ export function AnalyticsContent() {
 
   return (
     <div className="min-w-0 space-y-6">
-      <Panel>
-        <PanelSection
-          icon={BarChart3}
-          label="Analytics"
-          caption="Comprehensive insights into platform growth, revenue, operations, and payments"
-        />
-      </Panel>
+      {/* No title card here. A full bordered `Panel` whose entire payload was
+          the word "Analytics" and a caption listing "growth, revenue,
+          operations, and payments" cost a screen-third of the first viewport
+          to restate what the tab strip immediately below already says — as
+          tabs. The page is reached by a tab labelled Analytics, so the heading
+          was the third statement of the same fact. Removed rather than
+          shrunk: the sections below carry their own headings. */}
 
-      {/* The range controls sit OUTSIDE the title panel so they can pin for the
-          whole scroll. Nested inside it they would unpin the moment the panel
-          itself left the viewport — sticky only travels within its own parent —
-          which is exactly the case that matters here, reading a figure far down
-          the page and needing to know whether it is 7D or 90D.
+      {/* The range controls pin for the whole scroll, so a figure read far
+          down the page can still be attributed to 7D or 90D. Sticky only
+          travels within its own parent, so this stays at the top level rather
+          than nested in any panel, which would unpin it the moment that panel
+          left the viewport.
 
           Sticky, not fixed: the offset parent is `#main-content` (the layout's
           `overflow-y-auto` pane), so `top-0` lands under the app header without
@@ -138,12 +140,15 @@ export function AnalyticsContent() {
           a chart sliding under a 75%-opaque bar stays legible enough to read
           as a glitch.
 
-          `[&>div]:justify-center` centres the picker's own flex row from here
-          rather than in `DateRangePicker`, which other routes also render and
-          which should stay left-aligned there. No bottom rule: the design
+          Left-aligned. This previously forced `[&>div]:justify-center`, which
+          left the controls floating mid-row with the empty space either side
+          reading as a gap in the page. The `-mx-4 px-4` / `sm:-mx-6 sm:px-6`
+          pair cancels the pane's own `p-4 sm:p-6` exactly, so the toolbar's
+          left edge now lands flush with the tab strip and the cards below it —
+          one alignment down the whole column. No bottom rule: the design
           language has no dividing lines (§0), and the opaque background is
           already enough of an edge once content scrolls beneath it. */}
-      <div className="sticky -top-4 z-20 -mx-4 -mt-4 bg-background px-4 pb-3 pt-4 [&>div]:justify-center sm:-top-6 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6">
+      <div className="sticky -top-4 z-20 -mx-4 -mt-4 bg-background px-4 pb-2 pt-4 sm:-top-6 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6">
         <DateRangePicker
           from={dateRange.from}
           to={dateRange.to}
@@ -151,10 +156,15 @@ export function AnalyticsContent() {
         />
       </div>
 
+      {/* `-mt-3` pulls the tab strip up against the range toolbar, cancelling
+          most of the parent `space-y-6`. Sitting in that full 24px rhythm the
+          toolbar was equidistant from the page header above and the tabs
+          below, so it read as a detached band belonging to neither. The range
+          scopes everything in these tabs, so it belongs WITH them. */}
       <Tabs
         value={activeTab}
         onValueChange={setActiveTab}
-        className="min-w-0 space-y-4"
+        className="min-w-0 -mt-3 space-y-4"
       >
         <TabsList ref={tabListRef} className={TAB_LIST}>
           {TABS.map(({ value, label }) => (

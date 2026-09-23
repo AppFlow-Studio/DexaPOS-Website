@@ -18,6 +18,7 @@ export function StatTile({
   label,
   value,
   meta,
+  metaClassName,
   icon,
   isLoading,
   className,
@@ -28,6 +29,12 @@ export function StatTile({
   value: React.ReactNode
   /** A small line beneath the figure — a comparison, a count, a share. */
   meta?: React.ReactNode
+  /**
+   * Extra classes for the meta line. Mainly a responsive escape hatch: a tile
+   * whose meta is noise on a phone can drop it with `hidden sm:block` without
+   * the caller having to branch on viewport width in JS.
+   */
+  metaClassName?: string
   icon?: React.ReactNode
   isLoading?: boolean
   className?: string
@@ -50,8 +57,14 @@ export function StatTile({
           isActive ? 'font-medium text-foreground' : 'text-muted-foreground'
         )}
       >
+        {/* Decorative on a phone and expensive: the glyph plus its gap costs
+            ~22px of a ~147px tile, which is the difference between "Avg. Order
+            Value" reading in full and truncating to "Avg. Order Va…". The
+            label already names the metric, so the icon is what gives way. */}
         {icon && (
-          <span className="shrink-0 [&_svg]:h-4 [&_svg]:w-4">{icon}</span>
+          <span className="hidden shrink-0 sm:inline [&_svg]:h-4 [&_svg]:w-4">
+            {icon}
+          </span>
         )}
         <span className="truncate">{label}</span>
       </div>
@@ -59,13 +72,24 @@ export function StatTile({
       {isLoading ? (
         <Skeleton className="mt-2 h-8 w-28" />
       ) : (
-        <p className="mt-1 text-[1.75rem] font-medium leading-tight tracking-[-0.02em] tabular-nums">
+        // A phone tile is half-width (~147px at 375px), and the widest
+        // realistic figure — "$123,456.78" — measures exactly that at the full
+        // 1.75rem. Rather than let a seven-figure total wrap to two lines and
+        // knock the row out of alignment, the figure steps down one size on
+        // phones and takes its authored size from `sm` up, where the tile is
+        // wide enough for it.
+        <p className="mt-1 text-2xl font-medium leading-tight tracking-[-0.02em] tabular-nums sm:text-[1.75rem]">
           {value}
         </p>
       )}
 
       {meta && (
-        <p className="mt-0.5 truncate text-[0.8125rem] text-muted-foreground">
+        <p
+          className={cn(
+            'mt-0.5 truncate text-[0.8125rem] text-muted-foreground',
+            metaClassName
+          )}
+        >
           {meta}
         </p>
       )}
@@ -99,6 +123,13 @@ export function StatTile({
  * Once the row stacks on a phone the rules are dropped entirely — spacing
  * alone separates the tiles, so the column reads as one clean group instead of
  * a ladder of horizontal lines.
+ *
+ * Phones get two columns, not one. A single column turned an eight-tile row
+ * into two full screens of scrolling before any actionable content — the
+ * figures are short and `tabular-nums`, so they pair comfortably at half
+ * width. `columns={2}` is the exception: those rows carry the longest values
+ * (currency with cents, "x of y" counts) and are already only two tiles, so
+ * stacking them costs one screen-row and buys the value room to breathe.
  */
 export function StatRow({
   children,
@@ -112,7 +143,10 @@ export function StatRow({
   return (
     <div
       className={cn(
-        'grid min-w-0 grid-cols-1 gap-y-6 sm:gap-x-10',
+        'grid min-w-0 gap-y-6 sm:gap-x-10',
+        // Base column count. The `sm:` rules below re-establish the wide
+        // layout, so this only governs phones.
+        columns === 2 ? 'grid-cols-1' : 'grid-cols-2 gap-x-4',
         // Rules and indents are applied per *column position*, not per child.
         // `divide-x` + `:first-child` only clears the very first tile, so the
         // tile that starts each wrapped row kept a stray rule and a 40px

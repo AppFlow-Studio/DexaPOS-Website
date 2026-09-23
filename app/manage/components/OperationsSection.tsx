@@ -13,7 +13,15 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { usePlatformOperationalMetrics } from '@/lib/queries/use-platform-analytics-layer2'
-import { AnalyticsPanel, AnalyticsTooltip, SERIES } from './analytics-primitives'
+import { useIsMobile } from '@/hooks/use-mobile'
+import {
+  AnalyticsPanel,
+  AnalyticsTooltip,
+  SERIES,
+  fillDateGaps,
+  monthAwareDateTick,
+  valueAxisWidthMobile,
+} from './analytics-primitives'
 
 interface OperationsSectionProps {
   from: string
@@ -56,6 +64,12 @@ function getHeatmapColor(intensity: number) {
 
 export function OperationsSection({ from, to }: OperationsSectionProps) {
   const { data, isLoading } = usePlatformOperationalMetrics(from, to)
+  // Called before the early return below — a hook after a conditional return
+  // would change hook order between the loading and loaded renders.
+  const isMobile = useIsMobile()
+  // Sized to the longest tick rather than Recharts' ~60px default, which left
+  // a blank gutter down the left of the plot. "3253" is 4 characters.
+  const minuteAxisWidth = isMobile ? valueAxisWidthMobile(4) : undefined
 
   if (isLoading) {
     return (
@@ -74,6 +88,14 @@ export function OperationsSection({ from, to }: OperationsSectionProps) {
   }
 
   const maxOrderCount = Math.max(...(data?.peakHoursHeatmap || []).map((h) => h.order_count), 1)
+  const busiestLocations = data?.busiestLocations ?? []
+  // The RPCs omit days with no measurable sample rather than reporting a zero
+  // (a day where every ticket was abandoned has no median). On a categorical
+  // x-axis those omissions would close up silently, drawing a straight segment
+  // across a three-week hole. Materialising them as nulls makes the line break
+  // where the data actually stops. See `fillDateGaps`.
+  const kitchenTrend = fillDateGaps(data?.kitchenTrend ?? [], ['avg_minutes'])
+  const tableTurnTrend = fillDateGaps(data?.tableTurnTrend ?? [], ['avg_minutes'])
 
   return (
     <div className="min-w-0 space-y-6">
@@ -81,8 +103,13 @@ export function OperationsSection({ from, to }: OperationsSectionProps) {
           that encoded nothing — purple being the framework --primary, not the
           DEXA brand (C5). They are now quiet muted glyphs. */}
       <Panel>
-        <PanelSection label="Operations Overview">
-          <StatRow columns={4}>
+        {/* Five figures, and `StatRow` tops out at four columns — so one row
+            always orphaned the fifth tile onto a line of its own. They split on
+            meaning rather than arbitrarily 3+2: two service-timing averages in
+            minutes, then the three adoption rates, which share a unit (%) and a
+            denominator (all merchants) and so read as one comparable set. */}
+        <PanelSection label="Service Timing">
+          <StatRow columns={2}>
             <StatTile
               label="Avg Kitchen Time"
               icon={<Clock />}
@@ -93,8 +120,21 @@ export function OperationsSection({ from, to }: OperationsSectionProps) {
               icon={<Clock />}
               value={`${data?.avgTableTurnMinutes.toFixed(1) || 0} min`}
             />
+          </StatRow>
+        </PanelSection>
+
+        {/* Caption is desktop-only, like the chart panels'. This is a direct
+            `PanelSection` rather than an `AnalyticsPanel`, so it does not
+            inherit that wrapper's `captionClassName` and has to opt in. */}
+        <PanelSection
+          label="Feature Adoption"
+          caption="Share of merchants using each feature"
+          captionClassName="hidden sm:block"
+          divider
+        >
+          <StatRow columns={3}>
             <StatTile
-              label="KDS Adoption"
+              label="KDS"
               icon={<Zap />}
               value={`${adoptionRates.kds?.adoption_pct.toFixed(1) || 0}%`}
             />
@@ -175,16 +215,16 @@ export function OperationsSection({ from, to }: OperationsSectionProps) {
       <div className="grid min-w-0 gap-6 md:grid-cols-2">
         <AnalyticsPanel title="Kitchen Time Trend">
           <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={data?.kitchenTrend || []}>
+            <LineChart data={kitchenTrend}>
               <CartesianGrid {...CHART_GRID} />
               <XAxis
                 dataKey="date"
-                tickFormatter={(v) => v.slice(5)}
+                tickFormatter={monthAwareDateTick(kitchenTrend)}
                 tick={CHART_TICK}
                 tickLine={false}
                 axisLine={false}
               />
-              <YAxis tick={CHART_TICK} tickLine={false} axisLine={false} />
+              <YAxis width={minuteAxisWidth} tick={CHART_TICK} tickLine={false} axisLine={false} />
               <Tooltip
                 content={<AnalyticsTooltip formatter={(v: number) => `${v} min`} />}
                 cursor={CURSOR_LINE}
@@ -203,16 +243,16 @@ export function OperationsSection({ from, to }: OperationsSectionProps) {
 
         <AnalyticsPanel title="Table Turn Time Trend">
           <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={data?.tableTurnTrend || []}>
+            <LineChart data={tableTurnTrend}>
               <CartesianGrid {...CHART_GRID} />
               <XAxis
                 dataKey="date"
-                tickFormatter={(v) => v.slice(5)}
+                tickFormatter={monthAwareDateTick(tableTurnTrend)}
                 tick={CHART_TICK}
                 tickLine={false}
                 axisLine={false}
               />
-              <YAxis tick={CHART_TICK} tickLine={false} axisLine={false} />
+              <YAxis width={minuteAxisWidth} tick={CHART_TICK} tickLine={false} axisLine={false} />
               <Tooltip
                 content={<AnalyticsTooltip formatter={(v: number) => `${v} min`} />}
                 cursor={CURSOR_LINE}
@@ -230,27 +270,49 @@ export function OperationsSection({ from, to }: OperationsSectionProps) {
         </AnalyticsPanel>
       </div>
 
-      <AnalyticsPanel title="Busiest Locations" caption="Top 10 by order count">
-        <Table variant="data" className="min-w-[360px]">
-          <TableHeader className="[&_tr]:border-0">
-            <TableRow>
-              <TableHead className="text-xs font-medium">Location</TableHead>
-              <TableHead className="text-xs font-medium">Merchant</TableHead>
-              <TableHead className="text-right text-xs font-medium">Orders</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(data?.busiestLocations || []).map((location, idx) => (
-              <TableRow key={idx}>
-                <TableCell className="text-sm font-medium">{location.location_name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{location.merchant_name}</TableCell>
-                <TableCell className="text-right text-sm font-semibold tabular-nums">
-                  {location.order_count}
-                </TableCell>
+      {/* The RPC is already `ORDER BY count DESC LIMIT 10`, so a short table
+          means only that few locations took an order in the range — not that
+          rows were dropped. A fixed "Top 10" caption over three rows reads as a
+          bug, so it states the count it actually rendered. */}
+      <AnalyticsPanel
+        title="Busiest Locations"
+        caption={
+          busiestLocations.length === 0
+            ? 'By order count'
+            : busiestLocations.length < 10
+              ? `All ${busiestLocations.length} ${busiestLocations.length === 1 ? 'location' : 'locations'} with orders in this range`
+              : 'Top 10 by order count'
+        }
+      >
+        {busiestLocations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
+            <p className="text-sm font-medium">No locations took orders in this range</p>
+            <p className="text-xs text-muted-foreground">
+              Try a longer date range, or check back once merchants start trading.
+            </p>
+          </div>
+        ) : (
+          <Table variant="data" className="min-w-[360px]">
+            <TableHeader className="[&_tr]:border-0">
+              <TableRow>
+                <TableHead className="text-xs font-medium">Location</TableHead>
+                <TableHead className="text-xs font-medium">Merchant</TableHead>
+                <TableHead className="text-right text-xs font-medium">Orders</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {busiestLocations.map((location) => (
+                <TableRow key={location.location_id}>
+                  <TableCell className="text-sm font-medium">{location.location_name}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{location.merchant_name}</TableCell>
+                  <TableCell className="text-right text-sm font-semibold tabular-nums">
+                    {location.order_count}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </AnalyticsPanel>
     </div>
   )

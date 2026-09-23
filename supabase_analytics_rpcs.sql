@@ -1,6 +1,37 @@
 -- ============================================================================
 -- ANALYTICS LAYER 2 — RPC FUNCTIONS
--- Paste all of this into Supabase SQL Editor and run
+-- ============================================================================
+--
+-- ⚠️  DO NOT PASTE THIS WHOLE FILE AND RUN IT. It used to say to do exactly
+-- that, and doing so today would silently REVERT seven deployed bug fixes.
+--
+-- This file is the original source for 24 HQ analytics RPCs. Seven of them have
+-- since been superseded by migrations and the definitions BELOW ARE THE OLD,
+-- BROKEN ONES. They are kept only so the file still reads as a complete record
+-- of what was originally written.
+--
+-- SUPERSEDED — the deployed version lives in supabase/migrations/, not here:
+--
+--   20260923120000_analytics_duration_plausibility.sql
+--     get_avg_kitchen_time          (below: unbounded AVG, reported ~34 h)
+--     get_avg_table_turn_time       (below: unbounded AVG, reported ~40 h)
+--
+--   20260923120100_analytics_recognized_order_gate.sql
+--     get_platform_gmv_by_day       (below: no payment gate, +36% GMV)
+--     get_avg_ticket_by_day         (below: no payment gate, mean only)
+--     get_tip_rate_by_day           (below: void/pending in denominator)
+--     get_refund_rate_by_day        (below: void/pending in denominator)
+--     get_avg_time_to_first_order   (below: double-bounded window, returns NULL)
+--
+-- The other 17 functions in this file ARE current, and this file is their only
+-- source in the repo — which is why it is corrected rather than deleted. If you
+-- need to redeploy one of those, run THAT FUNCTION'S statement alone.
+--
+-- A stray `--sda` line and a `CCREATE OR REPLACE FUNCTION` typo (which made the
+-- file fail to parse at all) were fixed on 2026-09-23.
+--
+-- New analytics RPCs should be added as numbered migrations under
+-- supabase/migrations/, not appended here.
 -- ============================================================================
 
 -- SECTION 2A: GROWTH METRICS
@@ -411,8 +442,7 @@ BEGIN
   LIMIT 10;
 END;
 $$ LANGUAGE plpgsql;
---sda
-CCREATE OR REPLACE FUNCTION get_avg_kitchen_time(
+CREATE OR REPLACE FUNCTION get_avg_kitchen_time(
   p_from TIMESTAMPTZ,
   p_to   TIMESTAMPTZ
 )

@@ -13,18 +13,22 @@ import { usePlatformStationFleet } from '@/lib/queries/use-platform-dashboard'
 type FleetStatus = 'green' | 'yellow' | 'red' | 'grey'
 
 /**
- * Status is text-led, not colour-coded (`UI-DESIGN-SYSTEM.md` §4.6b,
- * `DS-CTL-09` / D-12): one neutral pill per tile, the **word** carrying the
- * meaning.
+ * Status is still text-led, not colour-coded (`UI-DESIGN-SYSTEM.md` §4.6b,
+ * `DS-CTL-09` / D-12) — but the word is now `sr-only` rather than a visible
+ * pill.
  *
  * This panel renders on `/manage` only, so HQ exception 2 (§14.3 HQ-2) does
  * not apply — that exception is scoped to `/manage/health` and the DLQ, and
  * ends "everywhere else in HQ, status stays text-led".
  *
- * The coloured dot it replaces was the panel's second mark for one fact: a
- * neutral glyph on the left and a hued dot on the right, so the glyph was
- * decoration and the dot was a colour key the operator had to learn. Naming
- * the state costs a few pixels and removes the legend entirely.
+ * The visible pill was dropped because the group header states the same fact
+ * ("17 of 17 offline") directly above the rows it labels, so in the common
+ * all-offline group it repeated once per device. These glyphs stay neutral —
+ * none of them is a colour key — and the label rides along for assistive tech.
+ *
+ * ⚠️ The trade-off: in a *mixed* group ("3 of 17 offline") a sighted reader now
+ * tells the states apart by glyph alone. If that becomes a real complaint,
+ * bring the pill back for non-`red` rows rather than for all of them.
  */
 const STATUS: Record<FleetStatus, { Icon: typeof Wifi; label: string }> = {
   green: { Icon: Wifi, label: 'Online' },
@@ -32,10 +36,6 @@ const STATUS: Record<FleetStatus, { Icon: typeof Wifi; label: string }> = {
   red: { Icon: WifiOff, label: 'Offline' },
   grey: { Icon: AlertCircle, label: 'Inactive' },
 }
-
-/** §4.6b `DS-CTL-09`, minus the horizontal padding a tile this dense can't spare. */
-const STATUS_PILL =
-  'inline-flex shrink-0 items-center rounded-full border-0 bg-muted/60 px-2 py-0.5 text-[0.6875rem] font-medium text-muted-foreground'
 
 export function DeviceFleetMap() {
   const { data: fleet, isLoading, error } = usePlatformStationFleet()
@@ -117,9 +117,20 @@ export function DeviceFleetMap() {
                         : 'shrink-0 text-xs tabular-nums text-muted-foreground'
                     }
                   >
-                    {offlineCount > 0
-                      ? `${offlineCount} of ${merchant.stations.length} offline`
-                      : `${merchant.stations.length} online`}
+                    {/* "N offline" on a phone rather than "N of M offline":
+                        the denominator competes with the merchant name for a
+                        narrow row, and the count of what is broken is the
+                        part being scanned for. Full ratio returns at `sm`. */}
+                    {offlineCount > 0 ? (
+                      <>
+                        <span className="sm:hidden">{offlineCount} offline</span>
+                        <span className="hidden sm:inline">
+                          {offlineCount} of {merchant.stations.length} offline
+                        </span>
+                      </>
+                    ) : (
+                      `${merchant.stations.length} online`
+                    )}
                   </span>
                 </button>
                 {/* 2 columns, not 3: at this panel width a third column left
@@ -142,7 +153,21 @@ export function DeviceFleetMap() {
                         className="min-w-0 rounded-2xl bg-muted/40 p-3 text-left transition-colors hover:bg-muted/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <div className="flex min-w-0 items-start gap-2">
-                          <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                          {/* `title` on the wrapper, not the icon: with the pill
+                              gone this glyph is the only visible status mark,
+                              so it names the state on hover. Lucide's prop type
+                              takes no children, so a nested <title> would not
+                              typecheck. The icon stays `aria-hidden` — the
+                              `sr-only` label below is what gets announced. */}
+                          <span
+                            className="mt-0.5 flex shrink-0"
+                            title={tone.label}
+                          >
+                            <Icon
+                              className="h-3.5 w-3.5 text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          </span>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2">
                               <div
@@ -151,9 +176,24 @@ export function DeviceFleetMap() {
                               >
                                 {station.name}
                               </div>
-                              <span className={STATUS_PILL}>{tone.label}</span>
+                              {/* The pill is gone at every width. In a group
+                                  headed "N of M offline" it restated the row's
+                                  state on every line, and the leading glyph
+                                  (Wifi / WifiOff / BatteryWarning / AlertCircle)
+                                  already distinguishes the four states.
+
+                                  That glyph was `aria-hidden` while the pill
+                                  carried the state for assistive tech, so the
+                                  label moves into it rather than disappearing —
+                                  removing both would leave a screen reader with
+                                  a device name and no status at all. */}
+                              <span className="sr-only">{tone.label}</span>
                             </div>
-                            <div className="truncate text-xs text-muted-foreground">
+                            {/* Desktop-only: the group this row sits inside is
+                                already the merchant, and the row links through
+                                to the devices tab where the location is shown
+                                in full. */}
+                            <div className="hidden truncate text-xs text-muted-foreground sm:block">
                               {station.locationName}
                             </div>
                             <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -178,8 +218,18 @@ export function DeviceFleetMap() {
                                 )}
                               </span>
                             </div>
+                            {/* Labelled, not a bare relative time: "6 months
+                                ago" next to an Offline pill reads as the age of
+                                the alert when it is actually the device's last
+                                check-in — the difference between a recent
+                                outage and a terminal that has been dead since
+                                spring. `title` carries the exact timestamp. */}
                             {station.lastHeartbeatAt && (
-                              <div className="mt-1 text-xs text-muted-foreground">
+                              <div
+                                className="mt-1 hidden truncate text-xs text-muted-foreground sm:block"
+                                title={new Date(station.lastHeartbeatAt).toLocaleString()}
+                              >
+                                Last seen{' '}
                                 {formatDistanceToNow(new Date(station.lastHeartbeatAt), {
                                   addSuffix: true,
                                 })}

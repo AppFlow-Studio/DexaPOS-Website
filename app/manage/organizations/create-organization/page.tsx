@@ -6,7 +6,6 @@ import { useForm, type UseFormReturn } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useUser } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -85,17 +84,17 @@ export default function CreateOrganizationPage() {
                 subtitle="Add a new partner organization"
                 backHref="/manage/organizations"
                 backLabel="Back to Organizations"
-                actions={
-                    <Button variant="outline" asChild>
-                        <Link href="/manage/organizations">Cancel</Link>
-                    </Button>
-                }
             />
 
             <Panel>
                 <PanelSection
                     label="Organization Details"
                     caption="Provide the organization name and upload a square logo (recommended 512x512)"
+                    /* The two fields below are self-describing, and on a phone
+                       this caption plus the name field's description cost three
+                       lines before the first input. Both step aside under `sm`;
+                       the logo's size hint moves onto its label so it survives. */
+                    captionClassName="hidden sm:block"
                 >
                     <Form {...(form as unknown as UseFormReturn)}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-6 md:grid-cols-2">
@@ -108,7 +107,7 @@ export default function CreateOrganizationPage() {
                                         <FormControl>
                                             <Input placeholder="Acme Corporation" {...field} />
                                         </FormControl>
-                                        <FormDescription>
+                                        <FormDescription className="hidden sm:block">
                                             The public display name for this organization.
                                         </FormDescription>
                                         <FormMessage />
@@ -121,7 +120,15 @@ export default function CreateOrganizationPage() {
                                 name="organizationImage"
                                 render={({ field }: { field: any }) => (
                                     <FormItem>
-                                        <FormLabel>Organization Logo</FormLabel>
+                                        <FormLabel>
+                                            Organization Logo{' '}
+                                            {/* Carries the size hint that the panel
+                                                caption drops on phones. Quiet weight
+                                                so it reads as guidance, not label. */}
+                                            <span className="font-normal text-muted-foreground">
+                                                (recommended 512x512)
+                                            </span>
+                                        </FormLabel>
                                         <FormControl>
                                             <div>
                                                 <FileUpload

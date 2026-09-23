@@ -18,6 +18,7 @@ import type {
   UpdateMerchantStatusResult,
   ToggleLocationResult,
   MerchantHealthSummary,
+  MerchantHealthTier,
 } from '@/types/merchant'
 
 async function getScopedMerchantIds(
@@ -936,6 +937,118 @@ export async function getMerchantHealthGrid(
     }
   })
 
+  // 3b. Fetch each merchant's own recent order volume, to judge today against.
+  //
+  // `orderActivity` used to be `min(100, orders_today * 5)`, an absolute scale
+  // that silently encoded "20 orders a day is healthy". A quiet neighbourhood
+  // cafe doing its normal 6 orders scored 30 on a quarter of the total weight
+  // and sat permanently in amber, while a high-volume merchant that crashed
+  // from 400 orders to 25 still scored a perfect 100. The signal was measuring
+  // merchant size, not merchant health.
+  //
+  // Comparing a merchant to its own 28-day median instead makes it a real
+  // anomaly detector: "quiet for you" is what an admin wants flagged. The
+  // window skips today so an in-progress day cannot drag its own baseline
+  // down. Volume is counted the same way `admin_merchant_summary.orders_today`
+  // counts it (excluding only cancelled/draft) so today's numerator and the
+  // historical denominator are on the same footing.
+  const BASELINE_DAYS = 28
+  const baselineStart = new Date(today)
+  baselineStart.setDate(baselineStart.getDate() - BASELINE_DAYS)
+
+  const { data: historyData, error: historyError } = await supabase
+    .from('orders')
+    .select('merchant_id, created_at')
+    .gte('created_at', baselineStart.toISOString())
+    .lt('created_at', today.toISOString())
+    .not('status', 'in', '(cancelled,draft)')
+
+  if (historyError) {
+    console.error('[getMerchantHealthGrid] Order history error:', historyError)
+  }
+
+  // merchant -> (YYYY-MM-DD -> order count), so each trading day is one sample.
+  const dailyCountsByMerchant = new Map<string, Map<string, number>>()
+  // Orders per hour-of-day across the window, used to judge how much of a
+  // normal trading day has elapsed.
+  const ordersByHour = new Array<number>(24).fill(0)
+
+  historyData?.forEach((order: any) => {
+    if (!order.merchant_id || !order.created_at) return
+    const day = order.created_at.slice(0, 10)
+    let days = dailyCountsByMerchant.get(order.merchant_id)
+    if (!days) {
+      days = new Map<string, number>()
+      dailyCountsByMerchant.set(order.merchant_id, days)
+    }
+    days.set(day, (days.get(day) ?? 0) + 1)
+
+    const hour = new Date(order.created_at).getHours()
+    if (hour >= 0 && hour < 24) ordersByHour[hour]++
+  })
+
+  /**
+   * Share of a normal trading day that has already happened, 0-1.
+   *
+   * Derived from when orders actually land across the platform rather than a
+   * hardcoded "9 to 5", so it reflects real trading hours — including late
+   * dinner services — and shifts with the business rather than needing
+   * maintenance.
+   *
+   * Platform-wide rather than per-merchant on purpose: a per-merchant curve
+   * would need far more history to be stable, and the pro-rating only has to
+   * be roughly right to remove the morning cliff. Falls back to 1 (treat today
+   * as complete) when there is no history to learn from, which is the
+   * conservative choice — it cannot manufacture a false alarm.
+   */
+  const totalHistoricalOrders = ordersByHour.reduce((sum, n) => sum + n, 0)
+  const currentHour = new Date().getHours()
+  const elapsedShare =
+    totalHistoricalOrders === 0
+      ? 1
+      : ordersByHour.slice(0, currentHour + 1).reduce((sum, n) => sum + n, 0) /
+        totalHistoricalOrders
+
+  /**
+   * Below this share of the trading day, order volume is not yet evidence of
+   * anything.
+   *
+   * Early morning is genuinely uninformative: a merchant that normally does
+   * 100 orders might have 1 by 7am, and whether it has 1 or 3 says nothing
+   * about its health. Clamping `dayProgress` to a floor did not fix this — it
+   * still divided a near-zero numerator by a small expectation and produced
+   * "activity 7" for a perfectly healthy merchant, i.e. a false alarm at
+   * exactly the hour an admin checks first.
+   *
+   * So below the threshold the signal is withheld rather than guessed: see
+   * `orderActivityIsMeaningful`.
+   */
+  const MIN_INFORMATIVE_DAY_SHARE = 0.25
+  const orderActivityIsMeaningful = elapsedShare >= MIN_INFORMATIVE_DAY_SHARE
+  const dayProgress = elapsedShare
+
+  /**
+   * Typical orders on a day this merchant actually traded.
+   *
+   * The median, not the mean: a single catering blowout or a one-off festival
+   * day would drag a mean upward and then mark every ordinary day afterwards
+   * as a shortfall. Closed days are excluded rather than counted as zero —
+   * a merchant shut on Sundays should not have its weekday baseline halved.
+   *
+   * Returns null when there are too few trading days to say anything; the
+   * caller falls back rather than inventing a baseline from one sample.
+   */
+  const MIN_BASELINE_DAYS = 5
+  function baselineOrdersFor(merchantId: string): number | null {
+    const days = dailyCountsByMerchant.get(merchantId)
+    if (!days || days.size < MIN_BASELINE_DAYS) return null
+    const counts = [...days.values()].sort((a, b) => a - b)
+    const mid = Math.floor(counts.length / 2)
+    const median =
+      counts.length % 2 === 0 ? (counts[mid - 1] + counts[mid]) / 2 : counts[mid]
+    return median > 0 ? median : null
+  }
+
   // 4. Compute health scores
   const healthData: MerchantHealthSummary[] = merchants
     .map((merchant: MerchantSummary) => {
@@ -953,16 +1066,44 @@ export async function getMerchantHealthGrid(
       }).length
 
       // Calculate individual signals (0-100)
-      const orderActivity = Math.min(100, merchant.orders_today * 5)
+      // Today measured against this merchant's own normal, pro-rated for how
+      // much of the trading day has actually happened.
+      //
+      // Comparing a partial day against a full-day median would mark *every*
+      // merchant Critical each morning — at 9am a merchant trading exactly its
+      // normal pace has maybe 40% of its daily orders in, and would score 40.
+      // That is a worse signal than the absolute scale it replaces, so the
+      // baseline is scaled by the share of a typical trading day elapsed.
+      //
+      // Merchants too new or too sporadic for a baseline keep the old absolute
+      // scale. It is a poor signal, but inventing a baseline from one or two
+      // samples is worse, and a brand-new merchant should not be marked
+      // Critical for having no history yet.
+      const baselineOrders = baselineOrdersFor(merchant.id)
+      const expectedByNow =
+        baselineOrders === null ? null : baselineOrders * dayProgress
+
+      const orderActivity =
+        expectedByNow === null || expectedByNow <= 0
+          ? Math.min(100, merchant.orders_today * 5)
+          : Math.max(
+              0,
+              Math.min(100, (merchant.orders_today / expectedByNow) * 100)
+            )
 
       const deviceHealth =
         totalStations > 0 ? (healthyStations / totalStations) * 100 : 100
 
+      // Every signal here is on a 0-100 scale so the weights below sum to a
+      // 0-100 score. This one used to end in `/ 100`, which put it on 0-1 and
+      // made its 15% weight contribute at most 0.15 points instead of 15 —
+      // silently capping every merchant on the platform at ~85 and making a
+      // green "Optimal" score unreachable. The other 50 is menu + payment
+      // terminal, still hardcoded pending real setup signals.
       const setupCompleteness =
-        ((merchant.active_staff_count > 0 ? 25 : 0) +
-          (totalStations > 0 ? 25 : 0) +
-          50) /
-        100 // Menu + payment terminal hardcoded to 50
+        (merchant.active_staff_count > 0 ? 25 : 0) +
+        (totalStations > 0 ? 25 : 0) +
+        50
 
       const paymentStats = paymentsByMerchant.get(merchant.id)
       const paymentHealth =
@@ -981,20 +1122,56 @@ export async function getMerchantHealthGrid(
             100
           : 100
 
-      // Compute weighted health score
-      const healthScore = Math.round(
-        orderActivity * 0.25 +
-          deviceHealth * 0.2 +
-          setupCompleteness * 0.15 +
-          paymentHealth * 0.15 +
-          issueVolume * 0.1 +
-          supportActivity * 0.1 +
-          appCurrency * 0.05
-      )
+      // A merchant with nothing provisioned has not failed a health check —
+      // there is nothing to check. Three of the signals above (deviceHealth,
+      // paymentHealth, appCurrency) default to a perfect 100 when their data
+      // is absent, so such a merchant scored as if healthy on those while
+      // orderActivity's 25% weight pulled it into the red. The result was a
+      // "Critical" card reading "All systems optimal". Gate it out instead of
+      // dressing up the number.
+      const isUnconfigured =
+        totalStations === 0 &&
+        merchant.active_locations === 0 &&
+        merchant.active_staff_count === 0
+
+      // Compute weighted health score.
+      //
+      // Signals are weighted then renormalised by the weight actually present,
+      // so a withheld signal drops out rather than scoring zero. Early in the
+      // trading day `orderActivity` carries no information (see
+      // `orderActivityIsMeaningful`); fixing its weight at 0.25 regardless
+      // would deduct up to 25 points from every merchant on the platform each
+      // morning — the same class of bug as scoring an unconfigured merchant.
+      const signals: Array<{ value: number; weight: number }> = [
+        { value: deviceHealth, weight: 0.2 },
+        { value: setupCompleteness, weight: 0.15 },
+        { value: paymentHealth, weight: 0.15 },
+        { value: issueVolume, weight: 0.1 },
+        { value: supportActivity, weight: 0.1 },
+        { value: appCurrency, weight: 0.05 },
+      ]
+
+      if (orderActivityIsMeaningful) {
+        signals.push({ value: orderActivity, weight: 0.25 })
+      }
+
+      const totalWeight = signals.reduce((sum, s) => sum + s.weight, 0)
+
+      const healthScore = isUnconfigured
+        ? null
+        : Math.round(
+            signals.reduce((sum, s) => sum + s.value * s.weight, 0) / totalWeight
+          )
 
       // Determine health tier
-      const healthTier: 'green' | 'yellow' | 'red' =
-        healthScore >= 80 ? 'green' : healthScore >= 60 ? 'yellow' : 'red'
+      const healthTier: MerchantHealthTier =
+        healthScore === null
+          ? 'unscored'
+          : healthScore >= 80
+            ? 'green'
+            : healthScore >= 60
+              ? 'yellow'
+              : 'red'
 
       // Generate alerts
       const alerts: string[] = []
@@ -1012,8 +1189,33 @@ export async function getMerchantHealthGrid(
         )
       }
 
-      if (merchant.orders_today === 0 && merchant.active_locations > 0) {
+      // Gated on the day being informative: at 7am "No orders today" is true
+      // of nearly every merchant on the platform and means nothing. Firing it
+      // then trains admins to ignore the alert by the time it does matter.
+      if (
+        orderActivityIsMeaningful &&
+        merchant.orders_today === 0 &&
+        merchant.active_locations > 0
+      ) {
         alerts.push('No orders today')
+      } else if (
+        orderActivityIsMeaningful &&
+        expectedByNow !== null &&
+        merchant.orders_today > 0 &&
+        merchant.orders_today < expectedByNow * 0.5
+      ) {
+        // A busy merchant collapsing to a fraction of its normal volume is the
+        // case the old absolute scale could not see at all: 25 orders still
+        // scored a perfect 100 whether the merchant normally did 20 or 400.
+        // Stated with both numbers so the admin can judge it without leaving
+        // the row.
+        // Quotes the pro-rated expectation, not the full-day median, because
+        // that is the number actually being compared against — "12 vs ~40 by
+        // now" is checkable at 2pm, whereas "12 vs ~80 typical" invites the
+        // admin to dismiss it as "the day isn't over yet".
+        alerts.push(
+          `Orders well below normal (${merchant.orders_today} so far vs ~${Math.round(expectedByNow)} expected by now)`
+        )
       }
 
       return {
@@ -1025,7 +1227,17 @@ export async function getMerchantHealthGrid(
         onlineStations,
       }
     })
-    .sort((a, b) => a.healthScore - b.healthScore) // Sort by health score ascending (worst first)
+    // Worst first, with unscored merchants last. Subtracting the scores
+    // directly would yield NaN for a null, and an inconsistent comparator
+    // leaves the whole list in an arbitrary order — not just the null rows.
+    .sort((a, b) => {
+      if (a.healthScore === null && b.healthScore === null) {
+        return a.name.localeCompare(b.name)
+      }
+      if (a.healthScore === null) return 1
+      if (b.healthScore === null) return -1
+      return a.healthScore - b.healthScore
+    })
 
   return healthData
 }
