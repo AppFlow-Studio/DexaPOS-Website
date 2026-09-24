@@ -17,6 +17,7 @@ import {
   Globe,
   Power,
   PowerOff,
+  Tag,
   Utensils,
 } from "lucide-react";
 import {
@@ -38,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { SchedulesModel, ScheduleTimeSlotsModel } from "@/types/db-modles";
 import { DAYS_OF_WEEK } from "@/components/dashboard/menu/ScheduleCard";
 import { AssignMenusSheet } from "./AssignMenusSheet";
+import { AssignCategoriesSheet } from "./AssignCategoriesSheet";
 import { DeleteScheduleDialog } from "./DeleteScheduleDialog";
 import { Panel, StatRow, StatTile } from "@/components/dashboard/shell";
 
@@ -60,6 +62,8 @@ export function MenuSchedulesView() {
   const [deletingSchedule, setDeletingSchedule] =
     useState<ScheduleWithSlots | null>(null);
   const [assigningSchedule, setAssigningSchedule] =
+    useState<ScheduleWithSlots | null>(null);
+  const [assigningCategoriesSchedule, setAssigningCategoriesSchedule] =
     useState<ScheduleWithSlots | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -373,6 +377,14 @@ export function MenuSchedulesView() {
                             <Utensils className="h-4 w-4 mr-2" />
                             Assign to Menus
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              setAssigningCategoriesSchedule(schedule)
+                            }
+                          >
+                            <Tag className="h-4 w-4 mr-2" />
+                            Assign to Categories
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => setDeletingSchedule(schedule)}
@@ -406,6 +418,13 @@ export function MenuSchedulesView() {
         open={!!assigningSchedule}
         onOpenChange={(open) => !open && setAssigningSchedule(null)}
         schedule={assigningSchedule}
+      />
+
+      {/* Assign Categories Sheet */}
+      <AssignCategoriesSheet
+        open={!!assigningCategoriesSchedule}
+        onOpenChange={(open) => !open && setAssigningCategoriesSchedule(null)}
+        schedule={assigningCategoriesSchedule}
       />
 
       {/* Delete Confirmation Dialog */}

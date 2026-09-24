@@ -420,6 +420,32 @@ export async function GetCategorySchedules(
   return schedules;
 }
 
+/**
+ * Category ids a schedule is assigned to — one query, for the
+ * "Assign to Categories" sheet.
+ */
+export async function GetScheduleCategoryIds(
+  scheduleId: string,
+): Promise<string[]> {
+  if (!scheduleId) {
+    return [];
+  }
+
+  const supabase = createServerSupabaseClient();
+
+  const { data, error } = await supabase
+    .from("category_schedules")
+    .select("category_id")
+    .eq("schedule_id", scheduleId);
+
+  if (error) {
+    console.error("Error getting schedule categories:", error);
+    return [];
+  }
+
+  return (data ?? []).map((row) => row.category_id as string);
+}
+
 export async function AssignScheduleToMenu(
   menuId: string,
   scheduleId: string,
@@ -530,12 +556,28 @@ export async function AssignScheduleToCategory(
     return { success: true, data: existing };
   }
 
+  // The category's merchant owns the assignment. category_schedules RLS
+  // (insert: is_merchant_admin(merchant_id), read: user_belongs_to_merchant)
+  // keys on this column, so inserting without it is rejected for merchant
+  // users and leaves an invisible row for anyone else.
+  const { data: category, error: categoryError } = await supabase
+    .from("categories")
+    .select("name, merchant_id")
+    .eq("id", categoryId)
+    .single();
+
+  if (categoryError || !category) {
+    console.error("Error loading category for schedule assignment:", categoryError);
+    return { error: "Category not found" };
+  }
+
   // Create new assignment
   const { data, error } = await supabase
     .from("category_schedules")
     .insert({
       category_id: categoryId,
       schedule_id: scheduleId,
+      merchant_id: category.merchant_id,
     })
     .select()
     .single();
@@ -546,31 +588,26 @@ export async function AssignScheduleToCategory(
   }
 
   // Fetch details for audit log
-  const [{ data: category }, { data: schedule }] = await Promise.all([
-    supabase
-      .from("categories")
-      .select("category, merchant_id")
-      .eq("id", categoryId)
-      .single(),
-    supabase.from("schedules").select("name").eq("id", scheduleId).single(),
-  ]);
+  const { data: schedule } = await supabase
+    .from("schedules")
+    .select("name")
+    .eq("id", scheduleId)
+    .single();
 
   // Log audit event
-  if (category) {
-    await LogAuditEvent({
-      merchantId: category.merchant_id,
-      action: `Assigned Schedule "${schedule?.name}" to Category "${category.category}"`,
-      actionCategory: "settings",
-      resourceType: "schedule",
-      resourceId: scheduleId,
-      resourceName: schedule?.name,
-      locationId: locationId,
-      metadata: {
-        category_id: categoryId,
-        category_name: category.category,
-      },
-    });
-  }
+  await LogAuditEvent({
+    merchantId: category.merchant_id,
+    action: `Assigned Schedule "${schedule?.name}" to Category "${category.name}"`,
+    actionCategory: "settings",
+    resourceType: "schedule",
+    resourceId: scheduleId,
+    resourceName: schedule?.name,
+    locationId: locationId,
+    metadata: {
+      category_id: categoryId,
+      category_name: category.name,
+    },
+  });
 
   return { success: true, data };
 }
@@ -662,7 +699,7 @@ export async function RemoveScheduleFromCategory(
   const [{ data: category }, { data: schedule }] = await Promise.all([
     supabase
       .from("categories")
-      .select("category, merchant_id")
+      .select("name, merchant_id")
       .eq("id", categoryId)
       .single(),
     supabase.from("schedules").select("name").eq("id", scheduleId).single(),
@@ -671,7 +708,7 @@ export async function RemoveScheduleFromCategory(
   if (category) {
     await LogAuditEvent({
       merchantId: category.merchant_id,
-      action: `Removed Schedule "${schedule?.name}" from Category "${category.category}"`,
+      action: `Removed Schedule "${schedule?.name}" from Category "${category.name}"`,
       actionCategory: "settings",
       resourceType: "schedule",
       resourceId: scheduleId,
@@ -679,7 +716,7 @@ export async function RemoveScheduleFromCategory(
       locationId: locationId,
       metadata: {
         category_id: categoryId,
-        category_name: category.category,
+        category_name: category.name,
       },
     });
   }
