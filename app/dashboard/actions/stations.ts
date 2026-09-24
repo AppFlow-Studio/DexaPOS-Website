@@ -7,6 +7,10 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { StationMenuScope } from "@/lib/stations/station-menu-scope";
+import {
+  normalizeStationKioskSettings,
+  type StationKioskSettings,
+} from "@/lib/stations/station-kiosk-settings";
 import { LogAuditEvent } from "./audit-logs";
 
 // ============================================================================
@@ -77,6 +81,12 @@ export interface Station {
    * (20260919120000_station_menu_scope.sql); absent reads as `all`.
    */
   menu_scope?: StationMenuScope;
+  /**
+   * Self-service kiosk ordering settings (order types + seat selection).
+   * Optional: absent before 20260923130000_station_kiosk_settings.sql; read
+   * through normalizeStationKioskSettings, never raw.
+   */
+  kiosk_settings?: Record<string, unknown>;
 
   // Status
   is_active: boolean;
@@ -211,6 +221,7 @@ export interface UpdateStationInput {
   can_void_orders?: boolean;
   can_apply_discounts?: boolean;
   can_update_kitchen_status?: boolean;
+  kiosk_settings?: StationKioskSettings;
 }
 
 // ============================================================================
@@ -732,6 +743,20 @@ export async function updateStation(
       updateData.can_apply_discounts = input.can_apply_discounts;
     if (input.can_update_kitchen_status !== undefined)
       updateData.can_update_kitchen_status = input.can_update_kitchen_status;
+    if (input.kiosk_settings !== undefined) {
+      if (currentStation.station_type !== "self_service") {
+        return {
+          success: false,
+          error: "Kiosk settings only apply to self-service kiosk stations",
+          data: null,
+        };
+      }
+      // Re-normalise server-side: never trust the client's shape.
+      updateData.kiosk_settings = normalizeStationKioskSettings(
+        input.kiosk_settings,
+      );
+      input = { ...input, kiosk_settings: updateData.kiosk_settings as StationKioskSettings };
+    }
 
     const { data, error } = await supabase
       .from("stations")
@@ -761,14 +786,14 @@ export async function updateStation(
         // Strict equality check might fail for null/undefined vs optional, but let's be safe
         // Also need to handle type mismatch if any (e.g. number vs string), but TypeScript helps.
         // We cast to any to compare values loosely or strictly.
-        if (
-          (currentStation as any)[inputKey] !== (input as any)[inputKey] &&
-          // Handle null vs undefined vs empty string potentially
-          !(
-            (currentStation as any)[inputKey] === null &&
-            (input as any)[inputKey] === null
-          )
-        ) {
+        const before = (currentStation as any)[inputKey];
+        const after = (input as any)[inputKey];
+        // jsonb columns compare by value, not reference.
+        const changed =
+          typeof after === "object" && after !== null
+            ? JSON.stringify(before ?? null) !== JSON.stringify(after)
+            : before !== after && !(before === null && after === null);
+        if (changed) {
           changedFields.push(inputKey);
           beforeLog[inputKey] = (currentStation as any)[inputKey];
           afterLog[inputKey] = (input as any)[inputKey];
