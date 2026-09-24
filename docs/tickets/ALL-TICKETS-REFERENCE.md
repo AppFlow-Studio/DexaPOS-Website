@@ -1,5 +1,15 @@
 # All Tickets Reference
 
+## Menu + Category Scheduling on POS and Kiosk
+
+- POS plan, evidence and QA: `Dexa-POS/docs/features/menu-management/category-scheduling.md`
+- Shared migration owner: POS repository, `utils/supabase/migrations/20260924120000_pos_schedules_v3.sql`. The copy in `supabase/migrations/` here is synchronization-only and must not be executed again.
+- Website change: `AssignScheduleToCategory` (`app/dashboard/actions/schedules.ts`) writes `category_schedules.merchant_id`. Before this, the insert either failed RLS for merchant users or left a row the dashboard could not read. The migration backfills existing NULL rows.
+- Assigning existing schedules:
+  - The menu page schedules tab (`MenuSchedulesTab` + `app/dashboard/menu/[menuId]/page.tsx`) now has **Assign existing**, a picker of the location's schedules that leaves out ones already on the menu. It replaces the old paste-a-UUID sheet, which no button ever opened.
+  - `CategoryFormSheet` now assigns schedules picked while *creating* a category. They were dropped before.
+- Current status: code written. Staging migration, simulator QA and second-reviewer sign-off pending.
+
 ## Per-Location Menu Visibility by Platform
 
 - Website implementation and QA: `docs/features/menu-management/FEATURE-2026-08-21-PER-LOCATION-MENU-CHANNEL-VISIBILITY-WEB.md`

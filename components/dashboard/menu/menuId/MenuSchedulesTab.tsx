@@ -5,7 +5,7 @@ import { Panel, PanelSection } from '@/components/dashboard/shell'
 import { Button } from '@/components/ui/button'
 import { Empty } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Calendar, Plus } from 'lucide-react'
+import { Calendar, Link2, Plus } from 'lucide-react'
 import { WeeklyScheduleView } from '../WeeklyScheduleView'
 import { ScheduleCard } from '../ScheduleCard'
 import { SchedulesModel, ScheduleTimeSlotsModel } from '@/types/db-modles'
@@ -65,14 +65,24 @@ export function MenuSchedulesTab({
                     label="Assigned Schedule"
                     action={
                         menuSchedules.length > 0 ? (
-                            <Button
-                                variant="outline"
-                                onClick={onOpenScheduleSheet}
-                                className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
-                            >
-                                <Plus className="mr-1.5 h-4 w-4" />
-                                Create schedule
-                            </Button>
+                            <div className="flex flex-wrap gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={onAddSchedule}
+                                    className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                                >
+                                    <Link2 className="mr-1.5 h-4 w-4" />
+                                    Assign existing
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={onOpenScheduleSheet}
+                                    className="h-9 rounded-full px-4 text-[0.8125rem] font-medium shadow-sm"
+                                >
+                                    <Plus className="mr-1.5 h-4 w-4" />
+                                    Create schedule
+                                </Button>
+                            </div>
                         ) : undefined
                     }
                     caption={
@@ -98,10 +108,16 @@ export function MenuSchedulesTab({
                             title="No schedules assigned"
                             description="Add schedules to control when this menu is available to customers"
                             action={
-                                <Button onClick={onOpenScheduleSheet} className="rounded-full">
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Add Schedule
-                                </Button>
+                                <div className="flex flex-wrap justify-center gap-2">
+                                    <Button variant="outline" onClick={onAddSchedule} className="rounded-full">
+                                        <Link2 className="h-4 w-4 mr-2" />
+                                        Assign existing
+                                    </Button>
+                                    <Button onClick={onOpenScheduleSheet} className="rounded-full">
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Create schedule
+                                    </Button>
+                                </div>
                             }
                         />
                     ) : (

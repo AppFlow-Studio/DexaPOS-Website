@@ -7,8 +7,6 @@ import { useUserInfo } from "../../../manage/hooks/useUserInfo.";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Utensils,
   Clock,
@@ -17,6 +15,7 @@ import {
   ChevronDown,
   DollarSign,
   Truck,
+  Check,
   CheckSquare,
   CircleSlash,
   RotateCcw,
@@ -92,6 +91,7 @@ import { MenuPreviewModal } from "@/components/dashboard/menu/menuId/MenuPreview
 import { MenuOrderOutTab } from "@/components/dashboard/menu/menuId/MenuOrderOutTab";
 import { useClerkOrgId } from "../../hooks/useLocationScoped";
 import { useMenuSchedulesScoped } from "../../hooks/useMenuSchedules";
+import { useLocationScopedSchedules } from "../../hooks/useLocationScopedSchedules";
 import { useMerchantCdnImageUpload } from "@/lib/cdn/use-merchant-cdn-image-upload";
 import { useOrderOutStatus } from "../../online-ordering/hooks/useOrderOutStatus";
 import {
@@ -760,6 +760,11 @@ export default function MenuDetailPage() {
     isLoading: isLoadingScopedSchedules,
   } = useMenuSchedulesScoped(menuId);
 
+  // Every schedule visible in the current location scope — the pool the
+  // "Assign existing" picker offers (minus what this menu already has).
+  const { data: locationSchedules, isLoading: isLoadingLocationSchedules } =
+    useLocationScopedSchedules();
+
   type TransformedSchedule = SchedulesModel & {
     schedule_time_slots: ScheduleTimeSlotsModel[];
     time_slots: Array<{
@@ -786,6 +791,13 @@ export default function MenuDetailPage() {
       } as TransformedSchedule;
     });
   }, [scopedMenuSchedules]);
+
+  const assignableSchedules = useMemo(() => {
+    const assigned = new Set(menuSchedules.map((schedule) => schedule.id));
+    return (locationSchedules ?? []).filter(
+      (schedule: any) => !assigned.has(schedule.id),
+    );
+  }, [locationSchedules, menuSchedules]);
 
   const locationNameById = useMemo(() => {
     const map: Record<string, string> = {};
@@ -1666,26 +1678,72 @@ export default function MenuDetailPage() {
       {/* Schedule Wizard */}
       <SheetDialog
         open={isScheduleWizardOpen}
-        onOpenChange={setIsScheduleWizardOpen}
+        onOpenChange={(open) => {
+          setIsScheduleWizardOpen(open);
+          if (!open) setScheduleWizardId(null);
+        }}
       >
         <SheetContent>
           <SheetHeader>
-            <SheetTitle>Add Schedule to Menu</SheetTitle>
+            <SheetTitle>Assign Existing Schedule</SheetTitle>
             <SheetDescription>
-              Attach an existing schedule to control availability.
+              Pick a schedule you already created to control when this menu is
+              available.
             </SheetDescription>
           </SheetHeader>
-          <div className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label>Schedule ID</Label>
-              <Input
-                value={scheduleWizardId ?? ""}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setScheduleWizardId(e.target.value)
-                }
-                placeholder="Schedule UUID"
-              />
-            </div>
+          <div className="mt-4 max-h-[50vh] space-y-2 overflow-y-auto">
+            {isLoadingLocationSchedules ? (
+              <Skeleton className="h-16 w-full rounded-2xl" />
+            ) : assignableSchedules.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                {(locationSchedules?.length ?? 0) === 0
+                  ? "No schedules yet. Create one first."
+                  : "Every schedule is already assigned to this menu."}
+              </p>
+            ) : (
+              assignableSchedules.map((schedule: any) => {
+                const isSelected = scheduleWizardId === schedule.id;
+                return (
+                  <button
+                    key={schedule.id}
+                    type="button"
+                    onClick={() => setScheduleWizardId(schedule.id)}
+                    className={cn(
+                      "flex w-full items-center justify-between gap-3 rounded-2xl p-3 text-left transition-colors",
+                      isSelected ? "bg-primary/10" : "bg-muted/50 hover:bg-muted",
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium">
+                          {schedule.name}
+                        </span>
+                        {!schedule.is_active && (
+                          <Badge variant="outline" className="text-xs">
+                            Inactive
+                          </Badge>
+                        )}
+                      </div>
+                      {schedule.description && (
+                        <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                          {schedule.description}
+                        </p>
+                      )}
+                    </div>
+                    <span
+                      className={cn(
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2",
+                        isSelected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-muted-foreground",
+                      )}
+                    >
+                      {isSelected && <Check className="h-3 w-3" />}
+                    </span>
+                  </button>
+                );
+              })
+            )}
           </div>
           <SheetFooter className="mt-4">
             <Button
@@ -1696,7 +1754,7 @@ export default function MenuDetailPage() {
             </Button>
             <Button
               onClick={handleAddScheduleToMenu}
-              disabled={isSavingScheduleWizard}
+              disabled={isSavingScheduleWizard || !scheduleWizardId}
               className="gap-2"
             >
               {isSavingScheduleWizard && (

@@ -38,8 +38,8 @@ export default function SchedulesPage() {
   return (
     <PageShell>
       <PageHeader
-        title="Staff Scheduling"
-        subtitle="Build team schedules, review labor coverage, and manage menu availability."
+        title="Schedules"
+        subtitle="Build team schedules, review labor coverage, and control when menus and categories are available."
       />
 
       <Tabs value={activeSection} onValueChange={setActiveSection} className="min-w-0">

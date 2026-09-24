@@ -34,6 +34,7 @@ import {
   CreateCategory,
   UpdateCategory,
 } from "@/app/dashboard/actions/categories";
+import { AssignScheduleToCategory } from "@/app/dashboard/actions/schedules";
 import { MenusModel, SchedulesModel } from "@/types/db-modles";
 import {
   useSelectedLocation,
@@ -348,6 +349,36 @@ export function CategoryFormSheet({
           description: result.error,
         });
         return;
+      }
+
+      // Schedules picked while creating are only held in local state (there
+      // was no category to attach them to yet) — assign them now. Editing
+      // assigns on each toggle, so this is create-only.
+      if (
+        !editCategory &&
+        selectedSchedules.length > 0 &&
+        "data" in result &&
+        result.data?.id
+      ) {
+        const newCategoryId = result.data.id;
+        const assignResults = await Promise.all(
+          selectedSchedules.map((scheduleId) =>
+            AssignScheduleToCategory(
+              newCategoryId,
+              scheduleId,
+              selectedLocation?.id ?? null,
+            ),
+          ),
+        );
+        const failed = assignResults.filter(
+          (r) => "error" in r && r.error,
+        ).length;
+        if (failed > 0) {
+          toast.warning("Some schedules weren't assigned", {
+            description: `${failed} of ${selectedSchedules.length} couldn't be attached. Open the category's Availability section to try again.`,
+          });
+        }
+        queryClient.invalidateQueries({ queryKey: ["category-schedules"] });
       }
 
       toast.success(editCategory ? "Category Updated" : "Category Created", {
