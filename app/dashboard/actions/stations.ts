@@ -8,6 +8,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { StationMenuScope } from "@/lib/stations/station-menu-scope";
 import {
+  isStationKioskSettingsDirty,
   normalizeStationKioskSettings,
   type StationKioskSettings,
 } from "@/lib/stations/station-kiosk-settings";
@@ -788,10 +789,14 @@ export async function updateStation(
         // We cast to any to compare values loosely or strictly.
         const before = (currentStation as any)[inputKey];
         const after = (input as any)[inputKey];
-        // jsonb columns compare by value, not reference.
+        // kiosk_settings compares by value: jsonb comes back with its own key
+        // order, so a string compare would log unchanged settings as changed.
         const changed =
-          typeof after === "object" && after !== null
-            ? JSON.stringify(before ?? null) !== JSON.stringify(after)
+          inputKey === "kiosk_settings"
+            ? isStationKioskSettingsDirty(
+                normalizeStationKioskSettings(before),
+                after as StationKioskSettings,
+              )
             : before !== after && !(before === null && after === null);
         if (changed) {
           changedFields.push(inputKey);

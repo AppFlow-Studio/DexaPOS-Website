@@ -18,8 +18,8 @@
 -- lists. Why not pos_config_overrides: set_station_pos_config_overrides_v1
 -- whitelists only display/notifications.
 --
--- Shape is validated in the web server action (zod) and normalised tolerantly
--- on the device; the DB only guarantees it is a JSON object so a malformed
+-- Shape is normalised in the web server action (normalizeStationKioskSettings)
+-- and again, tolerantly, on the device; the DB only guarantees it is a JSON object so a malformed
 -- write can never crash the kiosk's parser. Older POS builds ignore the column.
 
 ALTER TABLE public.stations
