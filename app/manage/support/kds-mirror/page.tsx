@@ -28,16 +28,13 @@ import { KdsDisplayHealthCards } from "./components/KdsDisplayHealthCards";
 import { KdsDeviceTruthTimeline } from "./components/KdsDeviceTruthTimeline";
 import { KdsDivergenceList } from "./components/KdsDivergenceList";
 import {
-  KdsMirrorTimeline,
   TIMELINE_WINDOWS,
   type TimelineWindowKey,
-} from "./components/KdsMirrorTimeline";
+} from "./components/timelineWindows";
 import {
   kdsMirrorKeys,
-  useKdsBoardSnapshot,
   useKdsDisplays,
   useKdsMirror,
-  useKdsMirrorSnapshots,
   useKdsRoutingHealth,
   useSupportLocations,
 } from "./hooks/useKdsMirror";
@@ -46,37 +43,6 @@ import {
   useKdsDeviceTruthHealth,
   useKdsDeviceTruthWindow,
 } from "./hooks/useKdsDeviceTruth";
-
-/**
- * Anchor the replay window to a 30-second grid.
- *
- * The window bounds are part of the snapshot query key. Deriving them from a
- * raw Date.now() on every render would mint a new key each time and refetch
- * forever; rounding gives a key that is stable for 30s and then advances on
- * its own, which is close enough to "now" for a support timeline.
- */
-const ANCHOR_GRID_MS = 30_000;
-
-function useWindowAnchor(paused: boolean) {
-  const [anchor, setAnchor] = React.useState(
-    () => Math.floor(Date.now() / ANCHOR_GRID_MS) * ANCHOR_GRID_MS
-  );
-
-  // While scrubbing history the window is frozen: advancing it would shift the
-  // snapshot query key, refetch the list under the user, and the empty-data
-  // blip would clamp the scrubber back to live -- "undoing where I was". Only
-  // advance when following the board, and snap back to "now" on resume.
-  React.useEffect(() => {
-    if (paused) return;
-    setAnchor(Math.floor(Date.now() / ANCHOR_GRID_MS) * ANCHOR_GRID_MS);
-    const id = window.setInterval(() => {
-      setAnchor(Math.floor(Date.now() / ANCHOR_GRID_MS) * ANCHOR_GRID_MS);
-    }, ANCHOR_GRID_MS);
-    return () => window.clearInterval(id);
-  }, [paused]);
-
-  return anchor;
-}
 
 /**
  * The device-truth tab's own honesty notice: a display that has never reported
@@ -136,18 +102,9 @@ function KdsMirrorPageInner() {
   const displayId =
     displayParam && displayParam !== "all" ? displayParam : null;
 
-  const [windowKey, setWindowKey] = React.useState<TimelineWindowKey>("1h");
-  const [selectedIndex, setSelectedIndex] = React.useState<number | null>(null);
-  const isLive = selectedIndex === null;
-  // Freeze the timeline window while scrubbing history; only advance it when
-  // following the board live. Otherwise the 30s anchor tick refetches the
-  // snapshot list mid-replay and kicks the scrubber back to live.
-  const anchor = useWindowAnchor(!isLive);
-
-  // Device-truth tab: its own window selector (independent of the board's
-  // snapshot scrubber), anchored on mount / selection only — the bounds are
-  // part of the truth-window query key, so deriving them from Date.now()
-  // during render would refetch forever.
+  // Device-truth tab: its own window selector, anchored on mount / selection
+  // only — the bounds are part of the truth-window query key, so deriving
+  // them from Date.now() during render would refetch forever.
   const [truthWindowKey, setTruthWindowKey] =
     React.useState<TimelineWindowKey>("6h");
   const [truthWindowEndMs, setTruthWindowEndMs] = React.useState(() =>
@@ -193,42 +150,9 @@ function KdsMirrorPageInner() {
   const health = useKdsRoutingHealth(locationId);
 
   const realtime = useKdsMirrorRealtime(locationId);
-  const liveBoard = useKdsMirror(locationId, displayId);
-
-  const windowMs =
-    TIMELINE_WINDOWS.find((w) => w.key === windowKey)?.ms ??
-    TIMELINE_WINDOWS[0].ms;
-  const fromIso = React.useMemo(
-    () => new Date(anchor - windowMs).toISOString(),
-    [anchor, windowMs]
-  );
-  const toIso = React.useMemo(() => new Date(anchor).toISOString(), [anchor]);
-
-  const snapshots = useKdsMirrorSnapshots(displayId, fromIso, toIso);
-  const snapshotList = snapshots.data ?? [];
-
-  // Clamp the scrubber whenever the window shrinks or a refetch returns fewer
-  // ticks than the current position.
-  React.useEffect(() => {
-    if (selectedIndex === null) return;
-    if (snapshotList.length === 0) {
-      setSelectedIndex(null);
-    } else if (selectedIndex > snapshotList.length - 1) {
-      setSelectedIndex(snapshotList.length - 1);
-    }
-  }, [selectedIndex, snapshotList.length]);
-
-  const selectedSnapshotId = isLive
-    ? null
-    : (snapshotList[selectedIndex]?.id ?? null);
-  const snapshotDetail = useKdsBoardSnapshot(selectedSnapshotId);
-
-  const boardTickets = isLive
-    ? (liveBoard.data ?? [])
-    : (snapshotDetail.data?.board ?? []);
-  const boardLoading = isLive
-    ? liveBoard.isLoading
-    : snapshotDetail.isLoading;
+  const liveBoard = useKdsMirror(locationId, displayId, {
+    pushLive: realtime.status === "live",
+  });
 
   const selectedDisplay =
     (displays.data ?? []).find((d) => d.id === displayId) ?? null;
@@ -239,12 +163,11 @@ function KdsMirrorPageInner() {
     });
     // The device-truth tab shares the same Refresh button.
     void queryClient.invalidateQueries({ queryKey: ["hq-kds-device-truth"] });
-    void snapshots.refetch();
     // Re-anchor the ledger + unsent windows to now and refetch their current
     // windows. No-ops when the tab isn't mounted (ref is null).
     ledgerRef.current?.refresh();
     unsentRef.current?.refresh();
-  }, [queryClient, locationId, displayId, snapshots]);
+  }, [queryClient, locationId, displayId]);
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
@@ -270,7 +193,6 @@ function KdsMirrorPageInner() {
         locationId={locationId}
         displayId={displayId}
         onMerchantChange={(value) => {
-          setSelectedIndex(null);
           setParams({
             merchant: value,
             location: null,
@@ -279,11 +201,9 @@ function KdsMirrorPageInner() {
           });
         }}
         onLocationChange={(value) => {
-          setSelectedIndex(null);
           setParams({ location: value, display: null, order: null });
         }}
         onDisplayChange={(value) => {
-          setSelectedIndex(null);
           setParams({ display: value === "all" ? null : value });
         }}
         realtimeStatus={realtime.status}
@@ -334,29 +254,6 @@ function KdsMirrorPageInner() {
             </p>
           )}
 
-          {locationId && displayId && (
-            <KdsMirrorTimeline
-              snapshots={snapshotList}
-              isLoading={snapshots.isLoading}
-              selectedIndex={selectedIndex}
-              onSelectIndex={setSelectedIndex}
-              windowKey={windowKey}
-              onWindowChange={(key) => {
-                setWindowKey(key);
-                setSelectedIndex(null);
-              }}
-              isLive={isLive}
-              onReturnToLive={() => setSelectedIndex(null)}
-            />
-          )}
-
-          {locationId && !displayId && (
-            <p className="text-xs text-muted-foreground">
-              Replay is per-station. Pick a specific KDS display to scrub its
-              history.
-            </p>
-          )}
-
           {!locationId ? (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
               <Monitor className="mb-3 h-8 w-8 text-muted-foreground" />
@@ -367,19 +264,11 @@ function KdsMirrorPageInner() {
             </div>
           ) : (
             <KdsStationBoard
-              tickets={boardTickets}
+              tickets={liveBoard.data ?? []}
               display={selectedDisplay}
-              isLoading={boardLoading}
+              isLoading={liveBoard.isLoading}
               highlightOrderId={highlightOrderId}
             />
-          )}
-
-          {!isLive && (
-            <p className="text-xs text-muted-foreground">
-              Viewing a stored snapshot, not the live board. Snapshots are
-              written when items arrive, are marked ready, or are served, and
-              are kept for 14 days.
-            </p>
           )}
         </TabsContent>
 

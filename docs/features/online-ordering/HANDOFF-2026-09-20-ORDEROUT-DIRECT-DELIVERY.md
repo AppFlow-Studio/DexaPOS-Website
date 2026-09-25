@@ -1,5 +1,7 @@
 # Handoff — OrderOut Direct Delivery (website checkout)
 
+> **Update 2026-09-25:** the per-job cron schedules named below (`orderout-status-relay-drain`, `orderout-delivery-dispatch-drain`, `orderout-delivery-dispatch-sweep`) are replaced by one job, `frequent-jobs`, which calls `public.run_frequent_jobs()` every minute and runs the same functions (the sweep at minutes ≡ 2 mod 5). Check it with `select jobname, schedule, active from cron.job where jobname = 'frequent-jobs';`. Migration: `supabase/migrations/20260925121000_connection_hardening.sql`.
+
 **Date:** 2026-09-20
 **Ticket:** [WEB-FEAT · OrderOut Direct Delivery on the online ordering website](https://app.notion.com/p/WEB-FEAT-OrderOut-Direct-Delivery-on-the-online-ordering-website-checkout-quotes-dispatch-on-acce-3de8280c1b1d81e495c4f1451ba40990) — owner Ali Awdi; co-owners Haidar Saleh (UI polish), Temur (OrderOut liaison)
 **Branch:** `feat/orderout-direct-delivery` off `dexaposwebsite-preview` (base `3d885f4a`) — **uncommitted working tree, 25 files changed + 11 new**

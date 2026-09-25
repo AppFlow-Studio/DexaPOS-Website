@@ -1,5 +1,7 @@
 # HQ KDS Board Mirror and Board Snapshots
 
+> **Update 2026-09-25: board snapshots and the replay scrubber are removed.** `kds_board_snapshots` had grown to 1.09 GB (45% of the database) and its capture ran on every send and bump. The live board mirror, send ledger, unsent items, device truth, divergence list and routing health are unchanged. Migration: `supabase/migrations/20260925120000_remove_kds_board_snapshots.sql`. Plan: `Dexa-POS/docs/engineering/database/SUPABASE-CONNECTIONS-AND-STORAGE-2026-09-24.md` (Phase 2). The snapshot sections below are historical.
+
 ## Summary
 
 HQ support can now open a live, faithful reconstruction of any kitchen display

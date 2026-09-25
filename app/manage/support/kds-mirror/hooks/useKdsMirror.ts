@@ -3,8 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   hqGetKdsBoardMirror,
-  hqGetKdsBoardSnapshot,
-  hqGetKdsBoardSnapshots,
   hqGetKdsRoutingHealth,
   hqGetKdsSendLedger,
   hqGetKdsUnsentItems,
@@ -12,8 +10,6 @@ import {
   hqGetSupportMerchantById,
   hqGetSupportMerchantLocations,
   hqSearchSupportMerchants,
-  type KdsBoardSnapshotDetail,
-  type KdsBoardSnapshotIndexEntry,
   type KdsDisplaySummary,
   type KdsMirrorTicket,
   type KdsRoutingHealth,
@@ -31,9 +27,11 @@ import {
  * publication, so there is no table-level change feed to subscribe to and the
  * order broadcast is the only push we get. This interval covers the gap when
  * the socket is down -- which, given that a dropped socket is one of the
- * failure modes under investigation, is not a hypothetical.
+ * failure modes under investigation, is not a hypothetical. While push is
+ * live the poll is only a slow safety net.
  */
 const MIRROR_POLL_MS = 5_000;
+const MIRROR_POLL_PUSH_LIVE_MS = 30_000;
 
 export const kdsMirrorKeys = {
   merchantSearch: (query: string) =>
@@ -46,10 +44,6 @@ export const kdsMirrorKeys = {
     ["hq-kds-mirror", "displays", locationId] as const,
   board: (locationId: string, displayId: string | null) =>
     ["hq-kds-mirror", "board", locationId, displayId ?? "all"] as const,
-  snapshots: (displayId: string, fromIso: string, toIso: string) =>
-    ["hq-kds-mirror", "snapshots", displayId, fromIso, toIso] as const,
-  snapshot: (snapshotId: string | null) =>
-    ["hq-kds-mirror", "snapshot", snapshotId ?? "none"] as const,
   health: (locationId: string) =>
     ["hq-kds-mirror", "health", locationId] as const,
   sendLedger: (
@@ -148,9 +142,10 @@ export function useKdsDisplays(locationId: string | null) {
 export function useKdsMirror(
   locationId: string | null,
   kdsDisplayId: string | null,
-  options?: { enabled?: boolean }
+  options?: { enabled?: boolean; pushLive?: boolean }
 ) {
   const enabled = Boolean(locationId) && options?.enabled !== false;
+  const pollMs = options?.pushLive ? MIRROR_POLL_PUSH_LIVE_MS : MIRROR_POLL_MS;
 
   return useQuery<KdsMirrorTicket[]>({
     queryKey: kdsMirrorKeys.board(locationId ?? "", kdsDisplayId),
@@ -158,40 +153,8 @@ export function useKdsMirror(
       (await hqGetKdsBoardMirror(locationId!, kdsDisplayId).then(unwrap)) ?? [],
     enabled,
     staleTime: 0,
-    refetchInterval: enabled ? MIRROR_POLL_MS : false,
+    refetchInterval: enabled ? pollMs : false,
     refetchOnWindowFocus: true,
-  });
-}
-
-export function useKdsMirrorSnapshots(
-  kdsDisplayId: string | null,
-  fromIso: string,
-  toIso: string,
-  options?: { enabled?: boolean }
-) {
-  return useQuery<KdsBoardSnapshotIndexEntry[]>({
-    queryKey: kdsMirrorKeys.snapshots(kdsDisplayId ?? "", fromIso, toIso),
-    queryFn: async () =>
-      (await hqGetKdsBoardSnapshots(kdsDisplayId!, fromIso, toIso).then(
-        unwrap
-      )) ?? [],
-    enabled: Boolean(kdsDisplayId) && options?.enabled !== false,
-    staleTime: 15 * 1000,
-    // Keep the current list on screen while a refetch (or the anchor
-    // advancing back in live mode) is in flight, so the scrubber position
-    // never blips to an empty list and gets clamped back to live.
-    placeholderData: (previous) => previous,
-  });
-}
-
-export function useKdsBoardSnapshot(snapshotId: string | null) {
-  return useQuery<KdsBoardSnapshotDetail | null>({
-    queryKey: kdsMirrorKeys.snapshot(snapshotId),
-    queryFn: async () => await hqGetKdsBoardSnapshot(snapshotId!).then(unwrap),
-    enabled: Boolean(snapshotId),
-    // Snapshots are append-only and never change once written.
-    staleTime: Infinity,
-    gcTime: 10 * 60 * 1000,
   });
 }
 
