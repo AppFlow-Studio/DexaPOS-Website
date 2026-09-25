@@ -88,8 +88,7 @@ export function MerchantCard({ merchant, onClick }: MerchantCardProps) {
         )}
       </div>
 
-      {/* Centred on a phone, right-aligned from `sm` up. */}
-      <div className="mt-3 flex justify-center sm:justify-end">
+      <div className="mt-3 flex justify-center">
         <ImpersonateMerchantButton
           merchantId={merchant.id}
           merchantName={merchant.name}

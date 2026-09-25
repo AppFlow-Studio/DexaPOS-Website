@@ -28,6 +28,8 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { AddressAutocomplete } from '@/components/ui/address-autocomplete'
 import { PhoneInput } from '@/components/ui/phone-input'
+import { DatePopover } from '@/components/ui/date-popover'
+import { format } from 'date-fns'
 import { isValidPhone, normalizePhone, formatPhoneForDisplay, hasNationalDigits } from '@/lib/phone'
 import { ImagePlus, X, Loader2 } from 'lucide-react'
 import {
@@ -560,40 +562,15 @@ export function CreateMerchantWizard() {
                 <div className="rounded-2xl bg-muted/40 p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-4 sm:gap-6">
                     <div className="flex-1 min-w-0 space-y-1">
-                      <Label className="text-sm font-semibold">
-                        Business Logo{' '}
+                      {/* Title on one line, "(Optional)" beneath it — inline, the
+                          pair wrapped mid-title ("Business / Logo") on a phone. */}
+                      <Label className="flex flex-col items-start gap-0.5 text-sm font-semibold">
+                        <span className="whitespace-nowrap">Business Logo</span>
                         <span className="text-muted-foreground font-normal">(Optional)</span>
                       </Label>
                       <p className="text-xs text-muted-foreground">
                         PNG, JPG, WEBP, or SVG — max 5 MB, recommended 512×512 px.
                       </p>
-                      {!logoPreview ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="mt-3 gap-1.5"
-                          onClick={() => logoInputRef.current?.click()}
-                        >
-                          <ImagePlus className="h-4 w-4" />
-                          Choose File
-                        </Button>
-                      ) : (
-                        <div className="flex items-center gap-2 pt-2 min-w-0">
-                          <span className="text-sm text-muted-foreground truncate max-w-50 sm:max-w-65">
-                            {logoFile?.name}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-destructive hover:text-destructive shrink-0"
-                            onClick={removeLogo}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      )}
                     </div>
                     <button
                       type="button"
@@ -612,6 +589,35 @@ export function CreateMerchantWizard() {
                         <ImagePlus className="h-7 w-7 text-muted-foreground/40" />
                       )}
                     </button>
+                  </div>
+                  <div className="mt-4 flex justify-center">
+                    {!logoPreview ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => logoInputRef.current?.click()}
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        Choose File
+                      </Button>
+                    ) : (
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm text-muted-foreground truncate max-w-50 sm:max-w-65">
+                          {logoFile?.name}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-destructive hover:text-destructive shrink-0"
+                          onClick={removeLogo}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <input
                     ref={logoInputRef}
@@ -668,7 +674,13 @@ export function CreateMerchantWizard() {
                       <FormItem>
                         <FormLabel>Owner Date of Birth <span className="text-destructive">*</span></FormLabel>
                         <FormControl>
-                          <Input {...field} type="date" />
+                          <DatePopover
+                            value={field.value}
+                            onChange={(v) => field.onChange(v ?? '')}
+                            max={format(new Date(), 'yyyy-MM-dd')}
+                            captionLayout="dropdown"
+                            placeholder="Select date of birth"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1057,9 +1069,12 @@ function ReviewRow({
   value: React.ReactNode
 }) {
   return (
-    <div className="flex gap-1.5 text-sm min-w-0">
-      <span className="font-medium text-foreground shrink-0">{label}:</span>
-      <span className="text-muted-foreground truncate">{value}</span>
-    </div>
+    // Inline flow, not flex: a long value wraps back to the left edge instead
+    // of hanging-indented under itself. Wraps rather than truncates — the
+    // review step exists so the full address / file name can be checked.
+    <p className="min-w-0 break-words text-sm">
+      <span className="font-medium text-foreground">{label}:</span>{' '}
+      <span className="text-muted-foreground">{value}</span>
+    </p>
   )
 }

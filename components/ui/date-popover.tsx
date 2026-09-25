@@ -25,6 +25,8 @@ interface DatePopoverProps {
   max?: string;
   /** Horizontal alignment for the calendar relative to its trigger. */
   align?: "start" | "center" | "end";
+  /** "dropdown" adds month/year selects — for far-off dates like a birthday. */
+  captionLayout?: "label" | "dropdown";
   className?: string;
 }
 
@@ -39,6 +41,7 @@ export function DatePopover({
   min,
   max,
   align = "start",
+  captionLayout = "label",
   className,
 }: DatePopoverProps) {
   const [open, setOpen] = useState(false);
@@ -88,6 +91,11 @@ export function DatePopover({
           }}
           defaultMonth={selected ?? maxDate ?? minDate}
           disabled={disabledDays.length > 0 ? disabledDays : undefined}
+          captionLayout={captionLayout}
+          {...(captionLayout === "dropdown" && {
+            startMonth: minDate ?? new Date(1900, 0),
+            endMonth: maxDate ?? new Date(),
+          })}
           autoFocus
         />
       </PopoverContent>

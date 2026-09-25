@@ -37,6 +37,7 @@ import {
 import { useMerchants, useMerchantStats } from '@/lib/queries/use-merchants'
 import { useDebounce } from '@/lib/hooks/useDebounce'
 import { MerchantCard } from '@/components/admin/MerchantCard'
+import { ImpersonateMerchantButton } from '@/components/admin/ImpersonateMerchantButton'
 import { useAdminAuth } from '@/lib/hooks/useAdminAuth'
 import { useAdminMerchantAccess } from '@/app/manage/hooks/useAdminMerchantAccess'
 import { PermissionGate } from '@/components/admin/PermissionGate'
@@ -414,7 +415,7 @@ function MerchantListView({
             <Table
                 variant="data"
                 containerClassName="hidden md:block"
-                className="min-w-[900px]"
+                className="min-w-[1060px]"
             >
                 <TableHeader className="[&_tr]:border-0">
                     <TableRow>
@@ -427,6 +428,7 @@ function MerchantListView({
                         <TableHead className="text-right">Revenue Today</TableHead>
                         <TableHead className="text-right">Notes</TableHead>
                         <TableHead>Created</TableHead>
+                        <TableHead className="text-center">View as</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -504,6 +506,15 @@ function MerchantListView({
                                 <TableCell className="text-muted-foreground">
                                     {new Date(merchant.created_at).toLocaleDateString()}
                                 </TableCell>
+                                <TableCell className="text-center">
+                                    {/* `card` variant stops propagation so the row's
+                                        click-through doesn't also fire. */}
+                                    <ImpersonateMerchantButton
+                                        merchantId={merchant.id}
+                                        merchantName={merchant.name}
+                                        variant="card"
+                                    />
+                                </TableCell>
                             </TableRow>
                         )
                     })}
@@ -558,6 +569,14 @@ function MerchantListView({
                             <p className="mt-3 text-xs text-muted-foreground">
                                 Created {new Date(merchant.created_at).toLocaleDateString()}
                             </p>
+
+                            <div className="mt-3 flex justify-center">
+                                <ImpersonateMerchantButton
+                                    merchantId={merchant.id}
+                                    merchantName={merchant.name}
+                                    variant="card"
+                                />
+                            </div>
                         </div>
                     )
                 })}

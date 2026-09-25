@@ -14,9 +14,7 @@ export default async function NewMerchantPage() {
   return (
     <PageShell as="div" width="narrow">
       <PageHeader
-        title="Create New Merchant"
-        subtitle="Onboarding flow for business profile and owner contact."
-        backHref="/manage/merchants"
+        title="Create New Merchant"        backHref="/manage/merchants"
         backLabel="Back to Merchants"
       />
 
